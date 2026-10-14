@@ -6,11 +6,11 @@
  * Auth is handled by Supabase via useAuth() — no session provider needed.
  */
 
-import { ReactNode, useEffect } from 'react';
+import { Fragment, ReactNode, useEffect } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster, toast as dsToast } from '@patina/design-system';
-import { queryClient } from '@/lib/react-query';
+import { queryClient, nextSubjectQueryClient } from '@/lib/react-query';
 import { setToastFunction, type ToastOptions } from '@/lib/error-handler';
 import { PostHogAnalyticsProvider } from '@/lib/analytics/PostHogProvider';
 import { useSessionSubjectBoundary } from '@/hooks/use-session-subject-boundary';
@@ -29,8 +29,10 @@ const VARIANT_MAP: Record<
 };
 
 export function Providers({ children }: { children: ReactNode }) {
-  // US-34 F1 — no cached read or open channel outlives its signed-in subject.
-  useSessionSubjectBoundary(queryClient);
+  // US-34 F1 — no cached read, queued write or open channel outlives its
+  // signed-in subject: each subject gets its own client, and the app remounts
+  // under it. Analytics and the Toaster sit outside the key and stay mounted.
+  const { client, epoch } = useSessionSubjectBoundary(queryClient, nextSubjectQueryClient);
 
   useEffect(() => {
     setToastFunction(
@@ -46,8 +48,10 @@ export function Providers({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <PostHogAnalyticsProvider>{children}</PostHogAnalyticsProvider>
+    <QueryClientProvider client={client}>
+      <PostHogAnalyticsProvider>
+        <Fragment key={epoch}>{children}</Fragment>
+      </PostHogAnalyticsProvider>
       <Toaster />
       {/* Keep development chrome out of the protected paper/mobile regimes;
           it can otherwise sit over the single edge owner at tablet widths.

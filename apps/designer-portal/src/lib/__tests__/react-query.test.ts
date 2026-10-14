@@ -43,7 +43,7 @@ jest.mock('../../hooks/use-feature-flags', () => ({
 }));
 
 import { waitFor } from '@testing-library/react';
-import { queryClient } from '../react-query';
+import { nextSubjectQueryClient, queryClient } from '../react-query';
 import {
   firedOn,
   resetTeachingBoundaries,
@@ -432,5 +432,35 @@ describe('Return teaching tagged boundaries', () => {
     expect(mockTeachingPatch).not.toHaveBeenCalled();
     expect(mockInvalidateTeachingSignals).not.toHaveBeenCalled();
     expect(queryClient.getQueryData(['teaching-note-state'])).toBeUndefined();
+  });
+
+  // Keep last: it moves the module's current client on to the next subject's.
+  it('US-34 F1: a boundary that lands after a change of subject stays in its own retired client', async () => {
+    const retired = queryClient;
+    let succeedLate!: (value: string) => void;
+    const lateResult = new Promise<string>((resolve) => (succeedLate = resolve));
+    const late = retired
+      .getMutationCache()
+      .build(retired, {
+        mutationFn: () => lateResult,
+        meta: { errorSurface: 'inline', teachingBoundary: true, boundaryKey: 'invoice_sent' },
+      })
+      .execute(undefined);
+
+    retired.clear();
+    const next = nextSubjectQueryClient();
+    expect(queryClient).toBe(next);
+    cacheVisit(5 * MIN);
+    const nextSubjectRow = next.getQueryData(['teaching-note-state']);
+
+    succeedLate('ok');
+    await late;
+    await waitFor(() => expect(mockInvalidateTeachingSignals).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Identity, not equality: two QueryClients compare equal field by field.
+    expect(mockInvalidateTeachingSignals.mock.calls[0][0]).toBe(retired);
+    expect(mockTeachingPatch).not.toHaveBeenCalled();
+    expect(next.getQueryData(['teaching-note-state'])).toBe(nextSubjectRow);
   });
 });

@@ -45,7 +45,7 @@ declare module '@tanstack/react-query' {
 }
 
 // Create query cache with error handling
-const queryCache = new QueryCache({
+const createQueryCache = () => new QueryCache({
   onError: (error, query) => {
     const appError = handleApiError(error);
 
@@ -148,7 +148,7 @@ export function enterInlineErrorSurface(): () => void {
 export const isInlineErrorSurface = (): boolean => inlineErrorSurfaces > 0;
 
 // Create mutation cache with error handling
-const mutationCache = new MutationCache({
+const createMutationCache = () => new MutationCache({
   // PQ15 / O3 — under the default networkMode 'online' an offline mutation
   // pauses and runs by itself on reconnect. Ticks and edits may wait like
   // that; a send or a money write must not fire minutes later. This runs
@@ -220,7 +220,7 @@ const mutationCache = new MutationCache({
     // Show error toast (mutations should always show errors to user)
     showErrorToast(appError);
   },
-  onSuccess: (_data, _variables, _context, mutation) => {
+  onSuccess: (_data, _variables, _context, mutation, { client }) => {
     // You can add global success handling here if needed
     // For example, invalidating certain queries or showing success messages
     if (mutation.meta?.successMessage) {
@@ -229,7 +229,7 @@ const mutationCache = new MutationCache({
     // Return teaching counts only tagged completion acts; autosaves and
     // untagged mutations do nothing here.
     if (mutation.meta?.teachingBoundary === true && mutation.meta.boundaryKey) {
-      onTeachingBoundary(mutation.meta.boundaryKey);
+      onTeachingBoundary(mutation.meta.boundaryKey, client);
     }
   },
 });
@@ -244,8 +244,11 @@ const mutationCache = new MutationCache({
  * many modules that import `queryKeys` from this file do not pull PostHog,
  * Sanity and the teaching backend into their graph.
  * Teaching is background context: a failure here is logged, never surfaced.
+ * `client` is the one whose mutation crossed the boundary, not the current
+ * one: a late boundary from a previous subject reads and writes only that
+ * subject's retired client (US-34 F1).
  */
-function onTeachingBoundary(boundaryKey: TeachingBoundaryKey): void {
+function onTeachingBoundary(boundaryKey: TeachingBoundaryKey, client: QueryClient): void {
   const at = Date.now();
   recordTeachingBoundary({ boundaryKey, at, surfaceKey: getCurrentTeachingSurface() });
   void import('@/hooks/use-feature-flags')
@@ -257,21 +260,21 @@ function onTeachingBoundary(boundaryKey: TeachingBoundaryKey): void {
         import('@patina/supabase'),
         import('./teaching/select'),
       ]);
-      void teaching.invalidateTeachingSignals(queryClient);
-      const cached = queryClient.getQueryData<TeachingNoteState>(teaching.TEACHING_NOTE_STATE_KEY);
+      void teaching.invalidateTeachingSignals(client);
+      const cached = client.getQueryData<TeachingNoteState>(teaching.TEACHING_NOTE_STATE_KEY);
       if (!cached || select.isNewVisit(cached, at)) return;
       const backend = helpSystem.createSupabaseTeachingNoteBackend(supabase.createBrowserClient());
       const state = await backend.patch(['visit', 'lastActiveAt'], new Date(at).toISOString());
-      queryClient.setQueryData(teaching.TEACHING_NOTE_STATE_KEY, state);
+      client.setQueryData(teaching.TEACHING_NOTE_STATE_KEY, state);
     })
     .catch((error: unknown) => {
       console.warn('[teaching] boundary follow-up failed', error);
     });
 }
 
-export const queryClient = new QueryClient({
-  queryCache,
-  mutationCache,
+const createQueryClient = () => new QueryClient({
+  queryCache: createQueryCache(),
+  mutationCache: createMutationCache(),
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes
@@ -305,6 +308,20 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+/**
+ * The QueryClient of the signed-in subject on screen. US-34 F1 gives every
+ * new subject a fresh one (`nextSubjectQueryClient`, called by
+ * use-session-subject-boundary), so this binding is reassigned: read it when
+ * you use it, never copy it into a module-level constant.
+ */
+export let queryClient = createQueryClient();
+
+/** A fresh client for the next signed-in subject; `queryClient` now names it. */
+export function nextSubjectQueryClient(): QueryClient {
+  queryClient = createQueryClient();
+  return queryClient;
+}
 
 // Query key factory for consistent cache management
 export const queryKeys = {

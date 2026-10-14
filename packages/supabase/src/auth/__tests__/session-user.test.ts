@@ -12,6 +12,9 @@ const h = vi.hoisted(() => {
     getSession: vi.fn(),
     getUser: vi.fn(),
     onAuthStateChange: vi.fn(),
+    // The shared auth cookie, as the client's storage adapter reads it.
+    storageKey: 'sb-test-auth-token',
+    storage: { getItem: vi.fn() },
   };
   return { state, auth };
 });
@@ -34,10 +37,24 @@ vi.mock('react', async (importOriginal) => ({
 const session = (id: string | null) => (id ? { user: { id } } : null);
 const emit = (event: string, id: string | null) => h.state.emit!(event, session(id));
 
+/** What another portal leaves in the shared cookie: a full stored session. */
+const cookie = (id: string | null) =>
+  id
+    ? JSON.stringify({
+        access_token: `jwt-${id}`,
+        refresh_token: `refresh-${id}`,
+        expires_at: 4102444800,
+        user: { id },
+      })
+    : null;
+const storeCookie = (id: string | null) => h.auth.storage.getItem.mockResolvedValue(cookie(id));
+
 async function loadStore() {
   vi.resetModules();
   return import('../session-user');
 }
+
+let doc: EventTarget & { visibilityState: string };
 
 beforeEach(() => {
   h.state.emit = null;
@@ -47,10 +64,15 @@ beforeEach(() => {
     h.state.emit = cb;
     return { data: { subscription: { unsubscribe: vi.fn() } } };
   });
-  vi.stubGlobal('window', {});
+  h.auth.storage.getItem.mockReset();
+  storeCookie('user-a');
+  doc = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+  vi.stubGlobal('window', new EventTarget());
+  vi.stubGlobal('document', doc);
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -135,6 +157,68 @@ describe('session-user store (browser)', () => {
 
     await expect(store.getSessionUserId()).resolves.toBeNull();
     expect(h.auth.getUser).not.toHaveBeenCalled();
+  });
+
+  it('follows a cookie another portal swapped or cleared when the tab is shown or focused', async () => {
+    const store = await loadStore();
+    const changes: Array<[string | null, string | null]> = [];
+    store.onSessionSubjectChange((prev, next) => changes.push([prev, next]));
+    await expect(store.getSessionUserId()).resolves.toBe('user-a');
+    storeCookie('user-b');
+
+    doc.visibilityState = 'hidden';
+    doc.dispatchEvent(new Event('visibilitychange'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(h.auth.storage.getItem).not.toHaveBeenCalled();
+
+    doc.visibilityState = 'visible';
+    doc.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => expect(changes).toEqual([['user-a', 'user-b']]));
+    await expect(store.getSessionUserId()).resolves.toBe('user-b');
+
+    storeCookie(null);
+    window.dispatchEvent(new Event('focus'));
+    await vi.waitFor(() => expect(changes).toEqual([['user-a', 'user-b'], ['user-b', null]]));
+    await expect(store.getSessionUserId()).resolves.toBeNull();
+
+    // Storage only: no auth call, so no lock and no network.
+    expect(h.auth.storage.getItem).toHaveBeenCalledWith('sb-test-auth-token');
+    expect(h.auth.getSession).toHaveBeenCalledTimes(1);
+    expect(h.auth.getUser).not.toHaveBeenCalled();
+  });
+
+  it('re-reads the cookie on a read at most once per 2 s', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const store = await loadStore();
+    const changes: Array<[string | null, string | null]> = [];
+    store.onSessionSubjectChange((prev, next) => changes.push([prev, next]));
+    await expect(store.getSessionUserId()).resolves.toBe('user-a');
+    storeCookie('user-b');
+
+    now.mockReturnValue(1_001_999);
+    await expect(store.getSessionUserId()).resolves.toBe('user-a');
+    expect(h.auth.storage.getItem).not.toHaveBeenCalled();
+
+    now.mockReturnValue(1_002_000);
+    await expect(store.getSessionUserId()).resolves.toBe('user-b');
+    expect(changes).toEqual([['user-a', 'user-b']]);
+    await store.getSessionUserId();
+    expect(h.auth.storage.getItem).toHaveBeenCalledTimes(1);
+    expect(h.auth.getSession).toHaveBeenCalledTimes(1);
+    expect(h.auth.getUser).not.toHaveBeenCalled();
+  });
+
+  it('lets an auth event that lands during a re-read win over what it read', async () => {
+    const store = await loadStore();
+    await store.getSessionUserId();
+    let finishRead!: (value: string | null) => void;
+    h.auth.storage.getItem.mockReturnValue(new Promise((resolve) => (finishRead = resolve)));
+
+    window.dispatchEvent(new Event('focus'));
+    emit('SIGNED_IN', 'user-c');
+    finishRead(cookie('user-b'));
+
+    await expect(store.getSessionUserId()).resolves.toBe('user-c');
   });
 });
 

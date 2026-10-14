@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { notifyManager, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient, onSessionSubjectChange } from '@patina/supabase';
 
@@ -9,25 +9,59 @@ import { createBrowserClient, onSessionSubjectChange } from '@patina/supabase';
  *
  * Reads now take the user id from the session store instead of asking
  * `auth.getUser()` each time, so nothing in a query key says whose data a
- * cache entry holds. When the subject changes (sign-in, sign-out, or user A
- * to user B with no SIGNED_OUT between, e.g. another tab), everything cached
- * or listening under the previous subject goes:
+ * cache entry holds. When the subject changes from someone to someone else or
+ * to no one (sign-out, another tab, or another portal swapping the shared
+ * cookie), nothing of the previous subject's may reach the next:
  *
- * - every query is reset, which cancels its in-flight read silently, so a late
- *   response for the previous subject resolves into nothing; queries nobody
- *   is watching are then removed;
- * - every realtime channel open at that moment is removed (they were joined
- *   for the previous subject; hooks keyed on the user re-open theirs);
- * - when someone is signed in, the queries on screen fetch again for them.
+ * - the previous subject's QueryClient is retired. Both of its caches are
+ *   cleared, so an in-flight read is cancelled silently and a paused or
+ *   queued mutation is dropped, never resumed; and it is unmounted from the
+ *   focus and online managers;
+ * - the next subject gets a fresh client and the subtree remounts under it
+ *   (key it on `epoch`). A hook that took the retired client from
+ *   `useQueryClient()` writes its late `onSuccess`/`onError` into a cache
+ *   nothing reads any more, and every subscription effect runs again;
+ * - every realtime channel open at that moment is removed; the remount opens
+ *   the next subject's.
+ *
+ * The first sign-in (no one to someone) keeps the client and the mount. A
+ * signed-out portal shows only its auth pages, which open no channel and run
+ * no mutation, so there is no previous subject to fence, and a remount there
+ * would drop the sign-in page's own success step before it navigates. What
+ * was read signed out is reset and read again; open channels stay, since
+ * supabase-js hands them the new token on SIGNED_IN.
  */
-export function crossSessionSubject(client: QueryClient, next: string | null): void {
-  const cache = client.getQueryCache();
-  notifyManager.batch(() => {
-    for (const query of cache.getAll()) {
-      query.reset();
-      if (query.getObserversCount() === 0) cache.remove(query);
-    }
-  });
+export function useSessionSubjectBoundary(
+  first: QueryClient,
+  nextClient: () => QueryClient,
+): { client: QueryClient; epoch: number } {
+  const [subject, setSubject] = useState(() => ({ client: first, epoch: 0 }));
+  // The listener runs outside React; it must retire the client on screen even
+  // when two changes land before a render.
+  const current = useRef(subject.client);
+
+  useEffect(
+    () =>
+      onSessionSubjectChange((prev) => {
+        if (prev === null) {
+          readAgain(current.current);
+          return;
+        }
+        retire(current.current);
+        const client = nextClient();
+        current.current = client;
+        setSubject(({ epoch }) => ({ client, epoch: epoch + 1 }));
+      }),
+    [nextClient],
+  );
+
+  return subject;
+}
+
+function retire(client: QueryClient): void {
+  // QueryClient.clear() clears the query cache and the mutation cache.
+  client.clear();
+  client.unmount();
 
   const supabase = createBrowserClient();
   // One by one, not removeAllChannels(): that clears the list after its
@@ -35,14 +69,16 @@ export function crossSessionSubject(client: QueryClient, next: string | null): v
   for (const channel of supabase.getChannels()) {
     void supabase.removeChannel(channel);
   }
-
-  if (next !== null) void client.refetchQueries({ type: 'active' });
 }
 
-/** Wires `crossSessionSubject` to the session store for this client. */
-export function useSessionSubjectBoundary(client: QueryClient): void {
-  useEffect(
-    () => onSessionSubjectChange((_prev, next) => crossSessionSubject(client, next)),
-    [client],
-  );
+function readAgain(client: QueryClient): void {
+  const cache = client.getQueryCache();
+  notifyManager.batch(() => {
+    for (const query of cache.getAll()) {
+      // Cancels an in-flight read silently, so its late response lands nowhere.
+      query.reset();
+      if (query.getObserversCount() === 0) cache.remove(query);
+    }
+  });
+  void client.refetchQueries({ type: 'active' });
 }
