@@ -6,6 +6,13 @@ let orderCalls: Array<{ leg: string; args: unknown[] }> = [];
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({ from: fromMock }),
+  docKeys: {
+    all: ['document-state'],
+    desk: (organizationId?: string) => ['document-state', 'desk', ...(organizationId ? [organizationId] : [])],
+    engagement: (id: string) => ['document-state', 'engagement', id],
+    sectionTasks: (projectId: string | null) => ['section-tasks', projectId],
+    sectionGates: (projectId: string | null) => ['section-gates', projectId],
+  },
 }));
 
 jest.mock('@tanstack/react-query', () => ({
