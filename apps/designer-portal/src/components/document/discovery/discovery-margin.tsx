@@ -13,6 +13,7 @@ import { useDiscoveryMarginNotes } from '@/hooks/use-discovery-margin';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import { MarginItem } from '../margin-item';
 import { DocumentAction, DocumentActionRow } from '../document-action';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 export function DiscoveryMargin({
   designerClientId,
@@ -100,6 +101,11 @@ export function DiscoveryMargin({
               Discard
             </DocumentAction>
           </DocumentActionRow>
+          <ActFailLine
+            error={createNote.error}
+            onRetry={save}
+            retryKey="retry-save-discovery-note"
+          />
         </div>
       )}
 

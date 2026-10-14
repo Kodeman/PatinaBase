@@ -14,7 +14,9 @@ import type { TeachingBoundaryKey, TeachingNoteState } from './teaching/types';
 /**
  * R83 — the error grammar. Mutations on (document) surfaces render failures as
  * a quiet inline band at the act site (terracotta, with the reason and a retry
- * act) and must NOT also raise the global red toast. `meta: { errorSurface:
+ * act) and must NOT also raise the global red toast. Since US-34 N12b that
+ * holds for every mutation that fails while a (document) surface is mounted
+ * (see `enterInlineErrorSurface`). Elsewhere, `meta: { errorSurface:
  * 'inline' }` opts out when the caller renders its own alert; supporting
  * background mutations use `'silent'`. The MutationCache logs both without
  * toasting, while mutations without metadata keep the legacy toast behavior.
@@ -119,6 +121,32 @@ export class OfflineRefusal extends Error {
   }
 }
 
+/**
+ * US-34 N12b (PQ11) — the (document) route group answers every failed
+ * mutation inline, so no mutation fired there raises the global red toast.
+ *
+ * Gated by route group, not by meta: most (document) acts call shared
+ * @patina/supabase hooks that also run on toast surfaces, so a hook cannot
+ * know where it is used. The (document) layout mounts `InlineErrorSurface`
+ * (components/feedback), which holds this count above zero while the group
+ * is on screen. Elsewhere the count is zero and untagged mutations keep the
+ * toast. `meta.errorSurface` still works on its own anywhere.
+ */
+let inlineErrorSurfaces = 0;
+
+/** Enter the inline error surface; the returned function leaves it. */
+export function enterInlineErrorSurface(): () => void {
+  inlineErrorSurfaces += 1;
+  let left = false;
+  return () => {
+    if (left) return;
+    left = true;
+    inlineErrorSurfaces -= 1;
+  };
+}
+
+export const isInlineErrorSurface = (): boolean => inlineErrorSurfaces > 0;
+
 // Create mutation cache with error handling
 const mutationCache = new MutationCache({
   // PQ15 / O3 — under the default networkMode 'online' an offline mutation
@@ -133,8 +161,10 @@ const mutationCache = new MutationCache({
     const appError = handleApiError(error);
 
     // R83 — mutations that render their own inline error band opt out of the
-    // global toast (see the meta contract at the top of this file).
-    const inlineErrorSurface = mutation.meta?.errorSurface === 'inline';
+    // global toast (see the meta contract at the top of this file), and so
+    // does every mutation that fails while a (document) surface is mounted.
+    const inlineErrorSurface =
+      mutation.meta?.errorSurface === 'inline' || isInlineErrorSurface();
     const silentErrorSurface = mutation.meta?.errorSurface === 'silent';
 
     // Log error for monitoring

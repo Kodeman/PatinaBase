@@ -40,6 +40,7 @@ import { AccountDevicesPage } from './account-devices-page';
 import { AccountExtensionPage } from './account-extension-page';
 import { AccountStudioPage } from './account-studio-page';
 import { DocumentAction } from '../document-action';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const STATUS_META: Record<
   AvailabilityStatus,
@@ -243,6 +244,8 @@ export function AccountSheet() {
               );
             })}
           </div>
+          {/* N12b (R83) — the status buttons are the retry. */}
+          <ActFailLine error={setAvailability.error} />
         </div>
 
         {/* R28 page links — DM-mono, never tabs. */}

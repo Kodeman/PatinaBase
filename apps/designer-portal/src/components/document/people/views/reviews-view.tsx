@@ -25,6 +25,7 @@ import { Avatar } from '../person-bits';
 import { ReviewRequestSheet } from '../ops/review-request-sheet';
 import type { PeopleViewProps } from '../types';
 import { DocumentAction } from '../../document-action';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 type ReviewTab = 'pending' | 'collected' | 'queued';
 
@@ -179,6 +180,7 @@ export function ReviewsView({ notify }: PeopleViewProps) {
                 </>
               }
               action={
+                <>
                 <DocumentAction
                   actionKey={
                     r.published_to_portfolio
@@ -211,6 +213,14 @@ export function ReviewsView({ notify }: PeopleViewProps) {
                     ? 'On portfolio'
                     : 'Show on portfolio'}
                 </DocumentAction>
+                <ActFailLine
+                  error={
+                    togglePublish.variables?.reviewId === r.id
+                      ? togglePublish.error
+                      : null
+                  }
+                />
+                </>
               }
             />
           ))}

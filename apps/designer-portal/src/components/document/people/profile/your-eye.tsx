@@ -30,6 +30,7 @@ import {
   type StyleConfidenceRow,
   type TasteProfileRow,
 } from '@patina/supabase';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 // ─── Vocabulary ──────────────────────────────────────────────────────────────
 
@@ -162,6 +163,7 @@ export function YourEyePanel() {
         ) : (
           <EmptyLine text="None named yet — signature moves emerge once your judgments accumulate." />
         )}
+        <ActFailLine error={updateBiases.error} />
       </section>
 
       {/* 3. Confidence by style */}

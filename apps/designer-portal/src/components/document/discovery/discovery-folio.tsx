@@ -14,6 +14,7 @@ import {
   folioSignedUrl,
   type FolioFile,
 } from '@/hooks/use-folio';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 function Clip({ file }: { file: FolioFile }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -67,6 +68,8 @@ export function DiscoveryFolio({ designerClientId }: { designerClientId: string 
           />
         </label>
       </div>
+      {/* N12b (R83) — "Add a pin" is the retry: the file must be picked again. */}
+      <ActFailLine error={upload.error} />
     </div>
   );
 }

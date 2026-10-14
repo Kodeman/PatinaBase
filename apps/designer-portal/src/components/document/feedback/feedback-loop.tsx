@@ -14,6 +14,7 @@ import {
   useSetFeedbackStatus,
   type Feedback,
 } from '@patina/supabase';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 export function ShippedCard({ note }: { note: Feedback }) {
   const react = useReactToFeedback();
@@ -39,6 +40,7 @@ export function ShippedCard({ note }: { note: Feedback }) {
       <p className="mt-2 font-heading text-[15px] leading-snug text-[var(--color-charcoal)]">
         {note.resolution ?? 'This shipped.'}
       </p>
+      <ActFailLine error={react.error ?? reopen.error} />
       <div className="mt-3 flex items-center gap-2">
         {reopening ? (
           <ReopenBox

@@ -1,5 +1,6 @@
 "use client";
 
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -1686,6 +1687,15 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                                                     In {editionWord.toLowerCase()}
                                                   </label>
                                                 )}
+                                                {/* N12b (R83) — the box is the retry. */}
+                                                <ActFailLine
+                                                  error={
+                                                    item.setting &&
+                                                    updateSetting.variables?.settingId === item.setting.id
+                                                      ? updateSetting.error
+                                                      : null
+                                                  }
+                                                />
                                               </>
                                             }
                                           />

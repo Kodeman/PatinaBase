@@ -40,6 +40,7 @@ import {
   useTickInk,
   useTickPending,
 } from '../work-block';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const todayYmd = () => new Date().toISOString().slice(0, 10);
 
@@ -343,6 +344,18 @@ export function CoordinationWork({
           </DocumentAction>
         </div>
       )}
+      {/* N12b (R83) — the field clears on Add, so Try again re-sends the
+          same task. */}
+      <ActFailLine
+        className="px-3 pb-1.5"
+        error={ink ? null : createTask.error}
+        onRetry={
+          createTask.variables
+            ? () => createTask.mutate(createTask.variables!)
+            : undefined
+        }
+        retryKey="retry-add-task"
+      />
     </div>
   );
 }

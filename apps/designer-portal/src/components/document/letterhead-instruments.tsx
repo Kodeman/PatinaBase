@@ -64,6 +64,7 @@ import {
 } from './document-action';
 import { ProposalPreview } from './proposal-preview';
 import { HouseholdSheet, useNoLoginRepair } from './overlays/household-sheet';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 /** The control focus returns to when the composer is cancelled: whatever was
  *  pressed to open it, or (a Next landing, FR4 Fix 2: Safari does not focus a
@@ -833,6 +834,9 @@ export function LetterheadInstruments({
           </DocumentActionRow>
         </div>
       )}
+      {/* N12b (R83) — outside the composer, which closes on Send. A message
+          reaches the client: no Try again (§5.1 S4). */}
+      <ActFailLine error={sendNote.error} />
 
       {mirrorOpen &&
         (projectId ? (

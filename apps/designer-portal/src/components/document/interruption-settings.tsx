@@ -16,6 +16,7 @@ import {
   type InterruptionKind,
 } from '@/hooks/use-interruption-rules';
 import { marginAccent } from '@/lib/document/margin-derivation';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const KINDS: { key: InterruptionKind; label: string; blurb: string }[] = [
   {
@@ -113,6 +114,8 @@ export function InterruptionSettings() {
             );
           })}
         </ul>
+        {/* N12b (R83) — the switch itself is the retry. */}
+        <ActFailLine error={setRule.error} />
       </div>
     </DocSheet>
   );

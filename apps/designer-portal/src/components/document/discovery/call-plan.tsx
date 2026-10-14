@@ -12,6 +12,7 @@ import { DocPaperSheet } from '../overlays/doc-paper-sheet';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import type { BlockKey } from '@/lib/document/discovery-readiness';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const CHECKLIST: { block: BlockKey; q: string; sub: string }[] = [
   {
@@ -163,6 +164,11 @@ export function CallPlan({
             Done — back to the document
           </DocumentAction>
         </DocumentActionGroup>
+        <ActFailLine
+          error={createNote.error}
+          onRetry={saveNote}
+          retryKey="retry-save-discovery-call-note"
+        />
       </div>
     </DocPaperSheet>
   );

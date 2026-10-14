@@ -56,6 +56,7 @@ import { familyLabel } from '@/lib/document/family-label';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { ClientLetterLine } from '../people/directory/client-letter-line';
 import { DocSheet } from './doc-sheet';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 /**
  * FR4 524-a — the control a relationship paper's no-login household can
@@ -581,6 +582,12 @@ export function HouseholdSheet({
                     Cancel
                   </DocumentAction>
                 </DocumentActionGroup>
+                <ActFailLine
+                  error={updateContact.error}
+                  onRetry={saveDetails}
+                  retryKey="retry-save-household-details"
+                />
+
               </div>
             )}
           </div>

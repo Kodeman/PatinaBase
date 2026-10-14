@@ -24,6 +24,7 @@ import {
   ResolveShell,
   type ResolvePanelProps,
 } from '../open-item-sheet';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 export function ResolveSelection({
   item,
@@ -146,6 +147,7 @@ export function ResolveSelection({
           Recorded — the pick becomes the order. The FF&E line re-sorts.
         </QuietConfirm>
       )}
+      <ActFailLine error={resolve.error} onRetry={record} retryKey="retry-record-selection" />
     </ResolveShell>
   );
 }

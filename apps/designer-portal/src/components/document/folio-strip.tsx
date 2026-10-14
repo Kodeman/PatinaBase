@@ -27,6 +27,7 @@ import {
 import { DocFileViewer } from './overlays/doc-file-viewer';
 import { fmtDay } from '@/lib/document/format';
 import { DocumentAction } from './document-action';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const SECTION_LABELS: Record<string, string> = {
   brief: 'Brief',
@@ -246,6 +247,8 @@ export function FolioStrip({
           }}
         />
       </div>
+      {/* N12b (R83) — "+ File" is the retry: the file must be picked again. */}
+      <ActFailLine error={upload.error ?? setVisibility.error} />
       {viewing && (
         <DocFileViewer file={viewing} onClose={() => setViewing(null)} />
       )}
@@ -331,6 +334,7 @@ export function ProposalFolioStrip({ proposalId }: { proposalId: string }) {
           }}
         />
       </div>
+      <ActFailLine error={upload.error ?? setVisibility.error} />
       {viewing && (
         <DocFileViewer file={viewing} onClose={() => setViewing(null)} />
       )}
@@ -419,6 +423,7 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
           ))}
         </div>
       )}
+      <ActFailLine error={setVisibility.error} />
       {viewing && (
         <DocFileViewer file={viewing} onClose={() => setViewing(null)} />
       )}

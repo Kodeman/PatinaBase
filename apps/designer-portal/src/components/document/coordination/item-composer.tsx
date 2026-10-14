@@ -63,6 +63,7 @@ import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { PartyMiniRow } from '../roster/party-mini-row';
 import { RolodexPicker } from '../roster/rolodex-picker';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const NEW_ITEM_TYPE_ORDER = ITEM_TYPE_ORDER.filter(
   (kind) => kind !== 'signoff',
@@ -881,6 +882,11 @@ export function ItemComposer({
           {landsHint}
         </span>
       </DocumentActionGroup>
+      {/* N12b (R83) — no Try again: Publish reaches the client (§5.1 S4);
+          the acts above stay in reach. */}
+      <ActFailLine
+        error={createItem.error ?? updateItem.error ?? publishItem.error ?? deleteItem.error}
+      />
     </div>
   );
 }

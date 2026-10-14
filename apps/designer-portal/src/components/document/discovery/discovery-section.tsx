@@ -51,6 +51,7 @@ import { CallPlan } from './call-plan';
 import { DiscoveryScheduleLine } from './discovery-schedule-line';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { suppressNextArrival } from '@/lib/arrival/nav';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 /** D7 — the undo always points at a sentence saying what it does; when the
  *  door is shut that sentence is the server's refusal instead. */
@@ -544,6 +545,10 @@ export function DiscoverySection({
           {b.node}
         </FacetSection>
       ))}
+
+      {/* N12b (R83) — a blur-save that failed. No Try again: the patch that
+          failed is not kept, so the honest retry is editing the field again. */}
+      <ActFailLine error={upsert.error} />
 
       <CallPlan
         open={callOpen}

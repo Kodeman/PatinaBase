@@ -21,6 +21,7 @@ import {
   ResolveTextarea,
   type ResolvePanelProps,
 } from '../open-item-sheet';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 export function ResolveRfi({ item, projectId, onResolved }: ResolvePanelProps) {
   const resolve = useResolveCoordinationItem(projectId);
@@ -80,6 +81,8 @@ export function ResolveRfi({ item, projectId, onResolved }: ResolvePanelProps) {
           Answered — the GC is unblocked. Downstream work re-sorts.
         </QuietConfirm>
       )}
+      {/* N12b (R83) — an answer goes to the asker: no Try again (§5.1 S4). */}
+      <ActFailLine error={resolve.error} />
     </ResolveShell>
   );
 }

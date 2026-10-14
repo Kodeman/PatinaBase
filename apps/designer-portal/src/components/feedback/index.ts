@@ -8,3 +8,5 @@ export {
 } from './act-still-line';
 export { SavingBand, usePendingWritesGuard, SAVING_WORD, OFFLINE_WAITING } from './saving-band';
 export { OfflineRefusal, OFFLINE_NOT_SENT } from '@/lib/react-query';
+export { ActFailLine, actFailMessage, TRY_AGAIN } from './act-fail-line';
+export { InlineErrorSurface } from './inline-error-surface';

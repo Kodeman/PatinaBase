@@ -33,6 +33,7 @@ import {
 } from '@/lib/document/feedback';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { GithubHint, hasGithubHint } from './github-issue-hint';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 function fmtWhen(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -229,6 +230,8 @@ export function FeedbackDetail({
           Couldn&rsquo;t save your reaction.
         </InkAlert>
       )}
+      {/* The reaction fails on its own InkAlert above (N1); this line is for the status act. */}
+      <ActFailLine error={setStatus.error} />
 
       {/* Reply — author + admin can add to the thread. */}
       <div className="mt-4 flex items-center gap-2">
@@ -254,6 +257,8 @@ export function FeedbackDetail({
           Send
         </DocumentAction>
       </div>
+      {/* N12b (R83) — a reply reaches the thread: no Try again (§5.1 S4). */}
+      <ActFailLine error={reply.error} />
     </div>
   );
 }

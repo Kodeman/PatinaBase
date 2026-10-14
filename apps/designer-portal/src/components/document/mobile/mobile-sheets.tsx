@@ -69,6 +69,7 @@ import {
   DOCUMENT_INDEX_LABELS,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const SHEET_FOCUSABLE = [
   'a[href]:not([tabindex="-1"])',
@@ -906,6 +907,8 @@ export function MobileSheets({
             </div>
           ))
         )}
+        {/* N12b (R83) — a nudge reaches the client: no Try again (§5.1 S4). */}
+        <ActFailLine className="px-4" error={decisionReminder.error} />
       </Sheet>
     );
   }
@@ -1029,6 +1032,11 @@ export function MobileSheets({
             Discard
           </DocumentAction>
         </DocumentActionRow>
+        <ActFailLine
+          error={createNote.error}
+          onRetry={saveNote}
+          retryKey="retry-save-margin-note"
+        />
       </Sheet>
     );
   }

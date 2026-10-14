@@ -125,6 +125,7 @@ import {
   quietStateSentence,
   scheduleQuietStatus,
 } from '@/lib/document/lens-quiet-status';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 /**
  * OD-12 — the quiet height, held at EVERY density so a body shorter than its
@@ -1080,6 +1081,15 @@ export function ScheduleSpine({
                       }
                       onUnpinMilestoneAnchor={handleUnpinMilestone}
                     />
+                    {/* N12b (R83) — an unpin that failed; the pin is the retry. */}
+                    <ActFailLine
+                      error={
+                        updateChain.variables?.phaseId === entry.phase.id &&
+                        updateChain.variables?.anchorDate === null
+                          ? updateChain.error
+                          : null
+                      }
+                    />
                     {entry.phase.id === installEntryPhaseId && (
                       <InstallWindowCeremony projectId={projectId} />
                     )}
@@ -1089,6 +1099,14 @@ export function ScheduleSpine({
               {entries.length > 0 && todayIdx === entries.length && (
                 <TodayRule today={today} />
               )}
+              {/* N12b (R83) — a milestone unpin that failed. */}
+              <ActFailLine
+                error={
+                  updateMilestone.variables?.anchorDate === null
+                    ? updateMilestone.error
+                    : null
+                }
+              />
 
               {/* The ongoing +add — the same ghost line, joining the main lane.
                   A completed project has no next phase to name, so the line

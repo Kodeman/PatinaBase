@@ -30,6 +30,7 @@ import { ArrivalMount } from '@/components/document/arrival/arrival-mount';
 import { ArrivalRoute } from '@/components/document/arrival/arrival-route';
 import { NeedActSheetProvider } from '@/components/document/acts/need-act-sheet';
 import { SavingBand } from '@/components/feedback/saving-band';
+import { InlineErrorSurface } from '@/components/feedback/inline-error-surface';
 import '@/lib/arrival/arrival.css';
 
 export const metadata: Metadata = {
@@ -55,10 +56,13 @@ export const metadata: Metadata = {
  * the DESIGN-SYSTEM toast is a different layer, and its <Toaster/> is mounted
  * globally in providers/providers.tsx, OUTSIDE this route group — so it does
  * render over document surfaces. The react-query caches in lib/react-query.ts
- * fire it for any query or mutation error that has not declared its surface.
- * A hook used on a (document) surface must therefore carry
- * `meta: { errorSurface: 'inline' }` (mutations) or `'silent'` (supporting
- * queries), or its failure is reported twice — once inline, once in red.
+ * fire it for any query error that has not declared its surface, so a query
+ * used here carries `meta: { errorSurface: 'silent' }` when it is supporting
+ * context. Mutations are covered by route group (US-34 N12b, PQ11):
+ * <InlineErrorSurface/> below keeps every mutation that fails while this group
+ * is mounted out of the toast, and the act shows its own R83 line
+ * (components/feedback ActFailLine). An act with no line fails silently, so
+ * every act that fires a mutation here must render one.
  *
  * ReturnToLeadUndo below is not a reversal of R83: it is one band for one act,
  * mounted because "Accept · begin" navigates away from the surface that fired
@@ -82,6 +86,8 @@ export default function DocumentLayout({
           beforeunload guard while a write is pending. Outside the route
           boundary so the bare /board/* render keeps the guard too. */}
       <SavingBand />
+      {/* US-34 N12b (PQ11) — no global toast for a mutation failing here. */}
+      <InlineErrorSurface />
       <DocumentRouteBoundary bare={children}>
         <div className="document-route-shell min-h-screen bg-[var(--bg-primary)]">
         {/* One time system above the Desk and every document (R4): the

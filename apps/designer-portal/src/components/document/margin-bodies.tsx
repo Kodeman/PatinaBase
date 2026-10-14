@@ -57,6 +57,7 @@ import {
   DocumentActionGroup,
   DocumentActionRow,
 } from './document-action';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 type AnyRecord = any;
 
@@ -371,6 +372,8 @@ export function DecisionBody({
               {isExpired ? 'Extend & reopen' : 'Extend'}
             </DocumentAction>
           </DocumentActionRow>
+          {/* N12b (R83) — a nudge reaches the client: no Try again (§5.1 S4). */}
+          <ActFailLine error={reminder.error} />
 
           {/* R51/R83 quiet confirmation / inline failure — at the act, no toast. */}
           {extendNote && (
@@ -451,6 +454,7 @@ export function DecisionBody({
                 : 'Record the pick'}
             </DocumentAction>
           </DocumentActionRow>
+          <ActFailLine error={override.error} />
         </div>
       )}
 

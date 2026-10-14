@@ -81,6 +81,7 @@ import {
   groupMarginRows,
   marginListable,
 } from '@/lib/document/margin-groups';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 /**
  * Ask the margin to open. Between 1180px and 1440px the rail is a closed,
@@ -777,6 +778,11 @@ export function MarginRail({
               Discard
             </DocumentAction>
           </DocumentActionRow>
+          <ActFailLine
+            error={createNote.error}
+            onRetry={saveNote}
+            retryKey="retry-save-margin-note"
+          />
         </div>
       )}
 

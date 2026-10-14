@@ -20,6 +20,7 @@ import {
   DocumentActionGroup,
   DocumentActionRow,
 } from './document-action';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -207,6 +208,8 @@ export function DocColophon({
           </DocumentActionRow>
         </div>
       )}
+      {/* N12b (R83) — hold, resume or archive refused; the acts stay in reach. */}
+      <ActFailLine error={setStatus.error} />
 
     </footer>
   );

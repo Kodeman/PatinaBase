@@ -46,6 +46,7 @@ import { ACT_TARGET_IDS } from '@/lib/document/act-names';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { offerReturnToLeadUndo } from './return-to-lead-undo';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 type Variant = 'desk' | 'brief';
 
@@ -211,9 +212,18 @@ export function TriageBar({
             Cancel
           </DocumentAction>
         </DocumentActionGroup>
+        <ActFailLine error={nurture.error} />
       </div>
     );
   }
+
+  // N12b (R83) — the triage acts stay in reach as the retry; Accept on the
+  // ceremony path writes to the client, so no Try again (§5.1 S4).
+  const failLine = (
+    <ActFailLine
+      error={beginDiscovery.error ?? acceptRequest.error ?? decline.error ?? nurture.error}
+    />
+  );
 
   // FR5 F5-9 (529-1, `one-voice`) — the group the band's press lands in
   // carries the act's name on the Brief. FR6 F6-11 (D25) — and prints it, a
@@ -260,7 +270,14 @@ export function TriageBar({
       </DocumentAction>
     </DocumentActionGroup>
   );
-  if (!named) return group;
+  if (!named) {
+    return (
+      <>
+        {group}
+        {failLine}
+      </>
+    );
+  }
   return (
     <div className={wrapClass}>
       {/* The group's `aria-label` already speaks this name. */}
@@ -272,6 +289,7 @@ export function TriageBar({
         {INQUIRY_ACT}
       </p>
       {group}
+      {failLine}
     </div>
   );
 }

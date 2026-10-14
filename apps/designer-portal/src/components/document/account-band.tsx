@@ -39,6 +39,7 @@ import { AccountsQueryFailure } from './accounts/accounts-query-failure';
 import { SectionLoadingLine } from './section-loading-line';
 import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const SAGE_INK = 'var(--color-sage-ink)';
 const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
@@ -202,6 +203,8 @@ function MilestoneRow({
           Could not draft the invoice — {invoiceNote}
         </p>
       )}
+      {/* N12b (R83) — a trigger change that failed; the selects are the retry. */}
+      <ActFailLine className="col-span-full" error={updateTrigger.error} />
     </div>
   );
 }

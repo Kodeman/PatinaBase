@@ -31,6 +31,7 @@ import {
   ResolveTextarea,
   type ResolvePanelProps,
 } from '../open-item-sheet';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const REV_STATUS_LABEL: Record<string, string> = {
   submitted: 'Submitted',
@@ -176,6 +177,10 @@ export function ResolveSubmittal({
       )}
 
       {confirm && <QuietConfirm>{confirm}</QuietConfirm>}
+      {/* N12b (R83) — Approve may be tried again; a send-back reaches the
+          submitter, so it never offers Try again (§5.1 S4). */}
+      <ActFailLine error={resolve.error} onRetry={approve} retryKey="retry-approve-submittal" />
+      <ActFailLine error={revise.error} />
     </ResolveShell>
   );
 }

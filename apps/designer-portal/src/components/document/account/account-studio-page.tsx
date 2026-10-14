@@ -64,6 +64,7 @@ import { AgreementLibraryCard } from './agreement-library-card';
 import { LicensingAttestationCard } from './licensing-attestation-card';
 import { studioEvents } from '@/lib/analytics/studio-events';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 import { RolodexSeedSheet } from '../people/directory/rolodex-seed-sheet';
 import { useTeachingHold } from '@/lib/teaching/hold-registry';
 
@@ -1786,6 +1787,14 @@ export function AccountStudioPage() {
                     {feedback.message}
                   </p>
                 )}
+                {/* N12b (R83) — the role select and Remove stay in reach as the retry. */}
+                <ActFailLine
+                  className="pl-11"
+                  error={
+                    (updateRole.variables?.memberId === m.id ? updateRole.error : null) ??
+                    (removeMember.variables === m.id ? removeMember.error : null)
+                  }
+                />
               </li>
             );
           })}

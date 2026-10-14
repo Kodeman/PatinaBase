@@ -32,6 +32,7 @@ import { GuidedEmptyState } from './guided-empty-state';
 import { SectionLoadingLine } from './section-loading-line';
 import { FolioPopover, FolioCalendar, type FolioSelection } from './date';
 import { ScheduleThreadPanel } from './schedule-thread-panel';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 // The gate's Golden-Hour stamp (HTML §1 .stamp.st-gh) — a gate IS a decision,
 // and the section's closing line wears the stamp the client will grant.
@@ -732,6 +733,18 @@ export function WorkBlock({
           </DocumentAction>
         </DocumentActionRow>
       )}
+      {/* N12b (R83) — the field clears on Add, so Try again re-sends the
+          same task. */}
+      <ActFailLine
+        className="px-3 pb-1.5"
+        error={ink ? null : createTask.error}
+        onRetry={
+          createTask.variables
+            ? () => createTask.mutate(createTask.variables!)
+            : undefined
+        }
+        retryKey="retry-create-task"
+      />
 
       {gate && (
         <div className={GATE_ROW}>

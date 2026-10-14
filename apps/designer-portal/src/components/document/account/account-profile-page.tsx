@@ -21,6 +21,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { AUTOSTART_ENABLED } from '@/hooks/document-time-provider';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 import { StrataMark } from '../strata-mark';
 import { monogramOf } from '@/lib/document/account-identity';
 
@@ -119,6 +120,11 @@ export function AccountProfilePage() {
               e.target.value = '';
             }}
           />
+          <ActFailLine
+            error={uploadAvatar.error}
+            onRetry={() => fileRef.current?.click()}
+            retryKey="retry-profile-photo"
+          />
         </div>
       </div>
 
@@ -167,6 +173,11 @@ export function AccountProfilePage() {
         >
           Save profile
         </DocumentAction>
+        <ActFailLine
+          error={updateProfile.error}
+          onRetry={handleSaveProfile}
+          retryKey="retry-save-profile"
+        />
       </div>
 
       <div className="my-6">
@@ -278,6 +289,11 @@ export function AccountProfilePage() {
             </span>
           )}
         </DocumentActionGroup>
+        <ActFailLine
+          error={updatePassword.error}
+          onRetry={handleUpdatePassword}
+          retryKey="retry-update-password"
+        />
       </div>
     </div>
   );

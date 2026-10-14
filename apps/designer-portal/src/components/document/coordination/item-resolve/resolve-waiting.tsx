@@ -36,6 +36,7 @@ import {
   ResolveShell,
   type ResolvePanelProps,
 } from '../open-item-sheet';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 export function ResolveWaiting({
   item,
@@ -226,6 +227,9 @@ export function ResolveWaiting({
       )}
 
       {confirm && <QuietConfirm>{confirm}</QuietConfirm>}
+      {/* N12b (R83) — a nudge and a reassignment reach someone, so no Try
+          again here; the act stays in reach. */}
+      <ActFailLine error={nudge.error ?? extend.error ?? reassign.error} />
     </ResolveShell>
   );
 }

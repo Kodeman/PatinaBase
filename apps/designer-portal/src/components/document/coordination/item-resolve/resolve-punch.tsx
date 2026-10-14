@@ -29,6 +29,7 @@ import {
   ResolveTextarea,
   type ResolvePanelProps,
 } from '../open-item-sheet';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 export function ResolvePunch({
   item,
@@ -94,6 +95,7 @@ export function ResolvePunch({
           Verified — the punch item is closed. Closeout re-reads.
         </QuietConfirm>
       )}
+      <ActFailLine error={resolve.error} onRetry={verify} retryKey="retry-verify-punch" />
     </ResolveShell>
   );
 }

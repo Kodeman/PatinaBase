@@ -1,5 +1,6 @@
 "use client";
 
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 /**
  * "Leave a note on the client’s page" (spec §6, Lane 6; "Write to your
  * client" until SQ-860, which kept "Message the client" the paper's one
@@ -415,6 +416,11 @@ function ClientNoteComposerInner({
             Take it down
           </DocumentAction>
         </DocumentActionRow>
+        <ActFailLine
+          error={retireNote.error}
+          onRetry={retire}
+          retryKey="retry-retire-client-note"
+        />
       </div>
     );
   }

@@ -52,6 +52,7 @@ import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { DocumentAction } from './document-action';
 import { useStudioMoney } from '@/hooks/use-studio-money';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 type BookPage = 'ledger' | 'week' | 'receiving' | 'vendors';
 
@@ -344,6 +345,8 @@ export function OrdersLedger({
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] });
       void qc.invalidateQueries({ queryKey: ['project-ffe-items'] });
       void qc.invalidateQueries({ queryKey: ['document-state'] });
+    } catch {
+      // N12b — updateEta.error carries the failure to the line by the act.
     } finally {
       setBatchBusy(false);
     }
@@ -989,6 +992,9 @@ export function OrdersLedger({
                   >
                     Update ETA
                   </DocumentAction>
+                  {/* N12b (R83) — no Try again: some POs may already carry
+                      the new ETA, and each write adds a note. */}
+                  <ActFailLine error={updateEta.error} />
                 </>
               )}
             </div>
