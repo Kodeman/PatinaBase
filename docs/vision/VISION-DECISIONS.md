@@ -584,4 +584,40 @@ Both start with a design spike: specimens, then the build.
 
 **Addendum, 2026-10-13.** Follow-through (Kody): R7 cap = $50 per studio per month across all features, enforced now (00788); the pricing page section is written and held for V2. R3 applies to product surfaces only — marketing canon and the website keep 'Designer-Taught Intelligence' as the thesis. R6: once R2's log and Undo ship, field-parse switches on with a $5/day cap; companion stays off pending its own review.
 
-*Entries add: … · V18 · V19 · V20 (US-28) · V21 (Founding Circle) · V22 · V23 · last id = V23*
+### V24 · The portal answers at once: US-33 responsiveness rulings — Kody 2026-10-14
+
+**All recommendations accepted** from `artifacts/portal-responsiveness-2026-10-14/synthesis/plan.md` §6, PQ1–PQ20, as revised by the SQ-963 fix pass. Published review: https://claude.ai/artifact/N13N2zKNNK4p9xaWNyycSB. The design canon was waived for the review; the departures below are now canon.
+- **Budgets (PQ1).** B1–B4 are ratified, with B3 split in two:
+  - B1: a visible change ≤100 ms after any click.
+  - B2: a shaped placeholder ≤200 ms after navigation. On a hard load this is read as "at first paint".
+  - B3a: SPA navigation usable ≤1.5 s p75.
+  - B3b: hard load usable ≤3.5 s p75 (lab and RUM).
+  - B4: middleware adds ≤100 ms.
+  - Cold Worker TTFB p75 is watched through RUM.
+- **Loading (PQ2–PQ8).** Q "Quiet paper", with arrival option C: the placeholder becomes the arrival; the paper is not hidden.
+  - Navigation shows an ink rule at 300 ms.
+  - Placeholders breathe on R15; reduced motion stills them.
+  - StrataSweep is used only for work whose shape is unknown.
+  - The prose loading lines are retired.
+  - Thresholds: 150 ms placeholder · 300 ms rule · 400 ms pending word, held ≥500 ms · 4 s slow · 8 s still working (writes) · 10 s stall.
+- **Action feedback (PQ9, PQ11–PQ16).**
+  - Optimistic ink for internal toggles, edits, creates and reorder.
+  - Never optimistic: external sends, money, deletes without Undo, server-decided outcomes.
+  - Send failures keep three outcomes: refused / unconfirmed / sent-but-unrecorded.
+  - The global red "Error" toast is retired for `(document)` mutations; every action gets an R83 inline line instead.
+  - One quiet band-level `saving…`.
+  - Undo replaces `window.confirm` for folio image remove and swatch delete.
+  - Offline: edits wait; sends and money refuse before any call.
+  - "Nothing is sent twice." is shown only if idempotency is proven (O4).
+- **Rollout (PQ10).** Fix-now ships unflagged.
+  - `optimistic-ink` and `loading-register` are PostHog flags. Verify each before enabling. Roll each out to Leah's studio by user id first, then to 100% after a week clean.
+  - Never target a flag by email.
+- **Scope (PQ17–PQ20).**
+  - Coordination tables stay unpublished to realtime for now.
+  - The Document reads this job's scoped needs, not the whole Desk.
+  - Three read-only prod checks are authorised: realtime publication, the token header plus `jwt_expiry`, and p95 list sizes.
+  - The designer-role Custom Access Token Hook is deferred.
+
+**Build:** US-34.
+
+*Entries add: … · V18 · V19 · V20 (US-28) · V21 (Founding Circle) · V22 · V23 · V24 (US-33) · last id = V24*
