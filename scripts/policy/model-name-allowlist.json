@@ -1,0 +1,12 @@
+[
+  {
+    "path": "apps/designer-portal/src/data/mock-designer-data.ts",
+    "text": "Aesthete Labs",
+    "reason": "Mock catalog brand name; not a model-feature label."
+  },
+  {
+    "path": "packages/email/src/templates/onboarding-aesthete.tsx",
+    "text": "Aesthete",
+    "reason": "Email copy is explicitly out of scope for R3 and is handled by ticket E."
+  }
+]
