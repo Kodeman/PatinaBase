@@ -32,6 +32,7 @@ jest.mock('../studio-payment-methods', () => ({ StudioPaymentMethodsCard: () => 
 jest.mock('../studio-margin-visibility', () => ({ StudioMarginVisibilityCard: () => null }));
 // C-32: the release gate card has its own suite (studio-release-gate.test.tsx).
 jest.mock('../studio-release-gate', () => ({ StudioReleaseGateCard: () => null }));
+jest.mock('../studio-teaching-sharing', () => ({ StudioTeachingSharingCard: () => null }));
 // Locations have their own suite (people/studio-locations-editor.test.tsx).
 jest.mock('../../people/studio-locations-editor', () => ({ StudioLocationsEditor: () => null }));
 
