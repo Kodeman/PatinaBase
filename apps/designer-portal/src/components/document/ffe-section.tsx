@@ -912,6 +912,7 @@ function AddRoomInline({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [budget, setBudget] = useState('');
+  const [failed, setFailed] = useState(false);
 
   if (!open) {
     // SP4 (I137): the room list's own constructive verb, printed in flow at its
@@ -931,24 +932,34 @@ function AddRoomInline({ projectId }: { projectId: string }) {
     );
   }
 
+  // F15a: the typed name and budget stay in the inputs until the room is
+  // written; a refused write keeps them and says so where the act is.
   const save = () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed || addRoom.isPending) return;
     const cents = budget
       ? Math.round(parseFloat(budget.replace(/[^0-9.]/g, '')) * 100)
       : null;
-    addRoom.mutate({
-      name: trimmed,
-      budgetCents: cents && cents > 0 ? cents : 0,
-    });
-    setName('');
-    setBudget('');
-    setOpen(false);
+    setFailed(false);
+    addRoom.mutate(
+      {
+        name: trimmed,
+        budgetCents: cents && cents > 0 ? cents : 0,
+      },
+      {
+        onSuccess: () => {
+          setName('');
+          setBudget('');
+          setOpen(false);
+        },
+        onError: () => setFailed(true),
+      },
+    );
   };
 
   return (
     <div
-      className="mt-3 flex items-center gap-2 border-b border-dashed border-[var(--color-pearl)] pb-1.5"
+      className="mt-3 flex flex-wrap items-center gap-2 border-b border-dashed border-[var(--color-pearl)] pb-1.5"
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.stopPropagation();
@@ -978,9 +989,16 @@ function AddRoomInline({ projectId }: { projectId: string }) {
         variant="secondary"
         onClick={save}
         disabled={!name.trim()}
+        loading={addRoom.isPending}
+        loadingLabel="Adding…"
       >
         Add
       </DocumentAction>
+      {failed && (
+        <p role="alert" className="w-full text-[11px] text-[var(--color-terracotta-ink)]">
+          Couldn&rsquo;t add the room
+        </p>
+      )}
     </div>
   );
 }

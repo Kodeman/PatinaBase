@@ -41,31 +41,53 @@ export function PaletteSwatchEditor({
   const [name, setName] = useState(swatch.name ?? '');
   const [role, setRole] = useState<PaletteSwatchRole | ''>((swatch.role ?? '') as PaletteSwatchRole | '');
 
+  const [saveFailed, setSaveFailed] = useState(false);
+
   const upsert = useUpsertSwatch();
   const remove = useDeleteSwatch();
   const isLinkedToBrand = !!(swatch.paint_color_id && swatch.brand && swatch.brand_code);
+  // F15c: a delete has no Undo yet (N15), so it is pending-only. The row stays,
+  // reading "Removing…", until the server confirms; it leaves on the refetch.
+  const removing = remove.isPending || remove.isSuccess;
 
   const handleNameBlur = () => {
     if ((swatch.name ?? '') === name) return;
-    upsert.mutate({
-      proposalId,
-      paletteId: swatch.palette_id,
-      swatchId: swatch.id,
-      hex: swatch.hex,
-      name: name || null,
-    });
+    setSaveFailed(false);
+    // A refused name keeps the typed words in the field (no lost words).
+    upsert.mutate(
+      {
+        proposalId,
+        paletteId: swatch.palette_id,
+        swatchId: swatch.id,
+        hex: swatch.hex,
+        name: name || null,
+      },
+      { onError: () => setSaveFailed(true) },
+    );
   };
 
   const handleRoleChange = (next: string) => {
     const value = next === '' ? null : (next as PaletteSwatchRole);
+    const serverRole = (swatch.role ?? '') as PaletteSwatchRole | '';
     setRole((value ?? '') as PaletteSwatchRole | '');
-    upsert.mutate({
-      proposalId,
-      paletteId: swatch.palette_id,
-      swatchId: swatch.id,
-      hex: swatch.hex,
-      role: value,
-    });
+    setSaveFailed(false);
+    upsert.mutate(
+      {
+        proposalId,
+        paletteId: swatch.palette_id,
+        swatchId: swatch.id,
+        hex: swatch.hex,
+        role: value,
+      },
+      {
+        // F15b: a refused role rolls the select back to the server value, so
+        // it never shows a state the database lacks.
+        onError: () => {
+          setRole(serverRole);
+          setSaveFailed(true);
+        },
+      },
+    );
   };
 
   const handleDelete = () => {
@@ -78,81 +100,94 @@ export function PaletteSwatchEditor({
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
-      {/* Drag handle */}
-      <button
-        type="button"
-        aria-label="Drag swatch"
-        {...(dragHandleProps ?? {})}
-        className="cursor-grab text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-          <circle cx="9" cy="6" r="1.5" />
-          <circle cx="9" cy="12" r="1.5" />
-          <circle cx="9" cy="18" r="1.5" />
-          <circle cx="15" cy="6" r="1.5" />
-          <circle cx="15" cy="12" r="1.5" />
-          <circle cx="15" cy="18" r="1.5" />
-        </svg>
-      </button>
-
-      {/* Swatch tile */}
-      <div
-        className="h-10 w-10 shrink-0 rounded border border-[var(--border-default)]"
-        style={{ backgroundColor: swatch.hex }}
-        title={swatch.hex}
-      />
-
-      {/* Hex code */}
-      <div className="font-mono text-xs uppercase text-[var(--text-muted)]" style={{ minWidth: '5.5rem' }}>
-        {swatch.hex.toUpperCase()}
-      </div>
-
-      {/* Name input */}
-      <Input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={handleNameBlur}
-        placeholder="Name (optional)"
-        className="min-w-0 flex-1"
-      />
-
-      {/* Role select */}
-      <Select
-        value={role}
-        onChange={(e) => handleRoleChange(e.target.value)}
-        wrapperClassName="w-auto"
-      >
-        <option value="">Role…</option>
-        {ROLE_OPTIONS.map((r) => (
-          <option key={r.value} value={r.value}>
-            {r.label}
-          </option>
-        ))}
-      </Select>
-
-      {/* Brand badge */}
-      {isLinkedToBrand && (
-        <span
-          className="rounded-full border border-[var(--border-default)] px-2 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]"
-          title={`${swatch.brand} ${swatch.brand_code}`}
+    <div aria-busy={removing || undefined}>
+      <div className="flex items-center gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
+        {/* Drag handle */}
+        <button
+          type="button"
+          aria-label="Drag swatch"
+          {...(dragHandleProps ?? {})}
+          className="cursor-grab text-[var(--text-muted)] hover:text-[var(--text-primary)]"
         >
-          {swatch.brand_code}
-        </span>
-      )}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <circle cx="9" cy="6" r="1.5" />
+            <circle cx="9" cy="12" r="1.5" />
+            <circle cx="9" cy="18" r="1.5" />
+            <circle cx="15" cy="6" r="1.5" />
+            <circle cx="15" cy="12" r="1.5" />
+            <circle cx="15" cy="18" r="1.5" />
+          </svg>
+        </button>
 
-      {/* Delete */}
-      <IconButton
-        label="Delete swatch"
-        variant="ghost"
-        size="sm"
-        onClick={handleDelete}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-        </svg>
-      </IconButton>
+        {/* Swatch tile */}
+        <div
+          className="h-10 w-10 shrink-0 rounded border border-[var(--border-default)]"
+          style={{ backgroundColor: swatch.hex }}
+          title={swatch.hex}
+        />
+
+        {/* Hex code */}
+        <div className="font-mono text-xs uppercase text-[var(--text-muted)]" style={{ minWidth: '5.5rem' }}>
+          {swatch.hex.toUpperCase()}
+        </div>
+
+        {/* Name input */}
+        <Input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={handleNameBlur}
+          placeholder="Name (optional)"
+          className="min-w-0 flex-1"
+        />
+
+        {/* Role select */}
+        <Select
+          value={role}
+          onChange={(e) => handleRoleChange(e.target.value)}
+          wrapperClassName="w-auto"
+        >
+          <option value="">Role…</option>
+          {ROLE_OPTIONS.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
+          ))}
+        </Select>
+
+        {/* Brand badge */}
+        {isLinkedToBrand && (
+          <span
+            className="rounded-full border border-[var(--border-default)] px-2 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]"
+            title={`${swatch.brand} ${swatch.brand_code}`}
+          >
+            {swatch.brand_code}
+          </span>
+        )}
+
+        {/* Delete */}
+        {removing ? (
+          <span role="status" className="shrink-0 text-xs text-[var(--text-muted)]">
+            Removing…
+          </span>
+        ) : (
+          <IconButton
+            label="Delete swatch"
+            variant="ghost"
+            size="sm"
+            onClick={handleDelete}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </IconButton>
+        )}
+      </div>
+      {(saveFailed || remove.isError) && (
+        <p role="alert" className="mt-1 text-xs text-[var(--color-terracotta-ink)]">
+          {remove.isError ? 'Couldn’t remove the swatch' : 'Couldn’t save'}
+        </p>
+      )}
     </div>
   );
 }

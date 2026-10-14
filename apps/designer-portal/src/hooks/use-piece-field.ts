@@ -24,8 +24,15 @@ import { createBrowserClient } from '@patina/supabase';
 
 export type PieceFieldUpdate = Record<string, unknown>;
 
-export function usePieceField(productId: string) {
+export function usePieceField(
+  productId: string,
+  /** `optimistic: false` = pending-only: the cache takes the write only once
+   *  the server confirms it (a delete with no Undo, F15c). */
+  { optimistic = true }: { optimistic?: boolean } = {},
+) {
   const qc = useQueryClient();
+  const merge = (updates: PieceFieldUpdate) => (old: unknown) =>
+    old && typeof old === 'object' ? { ...(old as object), ...updates } : old;
 
   return useMutation({
     mutationFn: async (updates: PieceFieldUpdate) => {
@@ -63,11 +70,14 @@ export function usePieceField(productId: string) {
 
     onMutate: async (updates) => {
       await qc.cancelQueries({ queryKey: ['product', productId] });
+      if (!optimistic) return { previous: undefined };
       const previous = qc.getQueryData(['product', productId]);
-      qc.setQueryData(['product', productId], (old: unknown) =>
-        old && typeof old === 'object' ? { ...(old as object), ...updates } : old,
-      );
+      qc.setQueryData(['product', productId], merge(updates));
       return { previous };
+    },
+
+    onSuccess: (_data, updates) => {
+      if (!optimistic) qc.setQueryData(['product', productId], merge(updates));
     },
 
     onError: (_err, _updates, context) => {

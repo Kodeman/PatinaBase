@@ -30,10 +30,18 @@ export function PieceFolio({
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const save = usePieceField(productId);
+  // F15c: a remove has no Undo yet (N15), so it is pending-only. The image
+  // stays, reading "Removing…", until the server confirms.
+  const removeSave = usePieceField(productId, { optimistic: false });
+  const [removingIdx, setRemovingIdx] = useState<number | null>(null);
+  const removing = removingIdx !== null;
 
   const heroIdx = Math.min(hero, Math.max(0, list.length - 1));
 
   const persist = (next: string[]) => {
+    // Every folio write sends the whole array; one built while a remove is
+    // pending would put the removed image back.
+    if (removing) return;
     setErr(null);
     save
       .mutateAsync({ images: next })
@@ -89,11 +97,21 @@ export function PieceFolio({
   // ── Editable folio ────────────────────────────────────────────────────────
   const addUrl = () => {
     const url = draft.trim();
-    if (!url) return;
+    if (!url || removing) return;
     setDraft('');
     persist([...list, url]);
   };
-  const remove = (i: number) => persist(list.filter((_, j) => j !== i));
+  const remove = (i: number) => {
+    if (removing) return;
+    setErr(null);
+    setRemovingIdx(i);
+    removeSave
+      .mutateAsync({ images: list.filter((_, j) => j !== i) })
+      .catch((e) =>
+        setErr(e instanceof Error ? e.message : 'Could not remove the image.'),
+      )
+      .finally(() => setRemovingIdx(null));
+  };
   const makePrimary = (i: number) => {
     if (i === 0) return;
     const next = [list[i], ...list.filter((_, j) => j !== i)];
@@ -174,6 +192,7 @@ export function PieceFolio({
           {list.map((src, i) => (
             <div
               key={`${src}-${i}`}
+              aria-busy={i === removingIdx || undefined}
               className={`relative h-[72px] w-[72px] overflow-hidden rounded-[6px] border ${
                 i === 0
                   ? 'border-[var(--color-clay)]'
@@ -194,20 +213,30 @@ export function PieceFolio({
                   primary
                 </span>
               )}
-              <button
-                type="button"
-                aria-label={`Remove image ${i + 1}`}
-                onClick={() => remove(i)}
-                className="absolute right-0 top-0 bg-[rgba(44,41,38,0.65)] px-1 font-mono text-[11px] text-white hover:bg-[var(--color-terracotta)]"
-              >
-                ✕
-              </button>
+              {i === removingIdx ? (
+                <span
+                  role="status"
+                  className="absolute inset-x-0 top-0 bg-[rgba(44,41,38,0.65)] px-1 text-center font-mono text-[11px] text-white"
+                >
+                  Removing…
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  aria-label={`Remove image ${i + 1}`}
+                  onClick={() => remove(i)}
+                  disabled={removing}
+                  className="absolute right-0 top-0 bg-[rgba(44,41,38,0.65)] px-1 font-mono text-[11px] text-white hover:bg-[var(--color-terracotta)] disabled:opacity-30"
+                >
+                  ✕
+                </button>
+              )}
               <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-[rgba(44,41,38,0.55)] py-0.5">
                 <button
                   type="button"
                   aria-label={`Move image ${i + 1} left`}
                   onClick={() => move(i, -1)}
-                  disabled={i === 0}
+                  disabled={i === 0 || removing}
                   className="font-mono text-[11px] text-white disabled:opacity-30"
                 >
                   ←
@@ -217,6 +246,7 @@ export function PieceFolio({
                     type="button"
                     aria-label={`Set image ${i + 1} as primary`}
                     onClick={() => makePrimary(i)}
+                    disabled={removing}
                     className="font-mono text-[11px] text-white hover:text-[var(--color-golden-hour)]"
                   >
                     ★
@@ -226,7 +256,7 @@ export function PieceFolio({
                   type="button"
                   aria-label={`Move image ${i + 1} right`}
                   onClick={() => move(i, 1)}
-                  disabled={i === list.length - 1}
+                  disabled={i === list.length - 1 || removing}
                   className="font-mono text-[11px] text-white disabled:opacity-30"
                 >
                   →
@@ -255,7 +285,7 @@ export function PieceFolio({
           actionKey="add-image-url"
           variant="secondary"
           onClick={addUrl}
-          disabled={!draft.trim()}
+          disabled={!draft.trim() || removing}
         >
           + add
         </DocumentAction>
@@ -264,6 +294,7 @@ export function PieceFolio({
           variant="primary"
           onClick={() => fileRef.current?.click()}
           loading={uploading}
+          disabled={removing}
           loadingLabel="Uploading…"
         >
           Upload
@@ -281,7 +312,7 @@ export function PieceFolio({
         />
       </DocumentActionRow>
       {err && (
-        <p className="mt-2 text-[0.7rem] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="mt-2 text-[0.7rem] text-[var(--color-terracotta-ink)]">
           {err}
         </p>
       )}
