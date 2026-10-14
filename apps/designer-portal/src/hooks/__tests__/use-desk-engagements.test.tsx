@@ -29,6 +29,13 @@ jest.mock('@patina/supabase', () => ({
     auth: { getSession: (...args: unknown[]) => mockGetSession(...args) },
   })),
   fetchHeldPurchaseOrders: (...args: unknown[]) => mockFetchHeld(...(args as [])),
+  docKeys: {
+    all: ['document-state'],
+    desk: (organizationId?: string) => ['document-state', 'desk', ...(organizationId ? [organizationId] : [])],
+    engagement: (id: string) => ['document-state', 'engagement', id],
+    sectionTasks: (projectId: string | null) => ['section-tasks', projectId],
+    sectionGates: (projectId: string | null) => ['section-gates', projectId],
+  },
 }));
 
 // ---- analytics rail ------------------------------------------------------

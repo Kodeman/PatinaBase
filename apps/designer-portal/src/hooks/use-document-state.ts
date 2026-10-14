@@ -27,7 +27,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { createBrowserClient, docKeys } from '@patina/supabase';
 import type { DocumentStateRow } from '@/lib/document/desk-derivation';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,7 +46,7 @@ export type DocumentResolution =
 
 export function useDocumentEngagement(id: string) {
   return useQuery<DocumentResolution>({
-    queryKey: ['document-state', 'engagement', id],
+    queryKey: docKeys.engagement(id),
     enabled: UUID_RE.test(id),
     queryFn: async () => {
       const supabase = getSupabase();

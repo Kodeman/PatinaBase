@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { docKeys } from '../query-keys';
 import type { Database } from '../database.types';
 import type { Json } from '../database.types';
 
@@ -52,7 +53,10 @@ export function useDiscardOutboundDraft() {
       if (error) throw error;
       return data as OutboundDraft;
     },
-    onSuccess: () => invalidate(client),
+    onSuccess: () => {
+      invalidate(client);
+      client.invalidateQueries({ queryKey: docKeys.desk() });
+    },
   });
 }
 
@@ -64,7 +68,10 @@ export function useSendOutboundDrafts() {
       if (error) throw error;
       return data as { results: Array<{ id: string; ok: boolean; error?: string }> };
     },
-    onSettled: () => invalidate(client),
+    onSettled: () => {
+      invalidate(client);
+      client.invalidateQueries({ queryKey: docKeys.desk() });
+    },
   });
 }
 

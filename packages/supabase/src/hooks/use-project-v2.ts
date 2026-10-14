@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { docKeys } from '../query-keys';
 import type { Database } from '../database.types';
 import { invalidateFfeCaches } from './use-procurement';
 import { invalidateProjectWorkflow } from './use-project-workflow';
@@ -638,7 +639,8 @@ export function useUpdateProjectPhaseStatus() {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      queryClient.invalidateQueries({ queryKey: docKeys.engagement(projectId) });
+      queryClient.invalidateQueries({ queryKey: docKeys.desk(), refetchType: 'none' });
       void invalidateProjectWorkflow(queryClient, projectId);
     },
   });

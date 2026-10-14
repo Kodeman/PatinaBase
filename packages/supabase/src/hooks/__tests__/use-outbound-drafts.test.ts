@@ -7,6 +7,7 @@ vi.mock('@tanstack/react-query', () => ({
   useMutation: (config: unknown) => config,
   useQueryClient: () => ({ invalidateQueries }),
 }));
+import { docKeys } from '../../query-keys';
 import { outboundDraftKeys, useOutboundDrafts, useDiscardOutboundDraft, useSendOutboundDrafts } from '../use-outbound-drafts';
 
 beforeEach(() => { from.mockReset(); rpc.mockReset(); invoke.mockReset(); invalidateQueries.mockReset(); });
@@ -28,14 +29,16 @@ describe('outbound draft hooks', () => {
     expect(invoke).toHaveBeenCalledWith('outbound-draft-send', { body: { draftIds: ['d1'] } });
     mutation.onSettled();
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: outboundDraftKeys.all });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: docKeys.desk() });
   });
 
-  it('discards via the guarded RPC and invalidates cached drafts', async () => {
+  it('discards via the guarded RPC and invalidates cached drafts and the Desk', async () => {
     rpc.mockResolvedValue({ data: { id: 'd1', status: 'discarded' }, error: null });
     const mutation: any = useDiscardOutboundDraft();
     await mutation.mutationFn('d1');
     expect(rpc).toHaveBeenCalledWith('discard_outbound_draft', { p_id: 'd1' });
     mutation.onSuccess();
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: outboundDraftKeys.all });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: docKeys.desk() });
   });
 });

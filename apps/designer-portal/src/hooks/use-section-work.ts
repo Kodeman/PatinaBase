@@ -12,6 +12,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
+  docKeys,
   invalidateProjectWorkflow,
 } from '@patina/supabase';
 import type { SectionKey } from '@/lib/document/desk-derivation';
@@ -86,7 +87,7 @@ export function gateState(gate: SectionGate): 'requested' | 'approved' | 'declin
 
 export function useSectionTasks(projectId: string | null) {
   return useQuery<SectionTask[]>({
-    queryKey: ['section-tasks', projectId],
+    queryKey: docKeys.sectionTasks(projectId),
     enabled: Boolean(projectId),
     queryFn: async () => {
       const { data, error } = await getSupabase()
@@ -131,9 +132,9 @@ export function useCreateSectionTask(projectId: string | null) {
       return data;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['section-tasks', projectId] });
-      // A dued task is a Desk input (R23) — the folder re-derives.
-      void qc.invalidateQueries({ queryKey: ['document-state'] });
+      void qc.invalidateQueries({ queryKey: docKeys.sectionTasks(projectId) });
+      void qc.invalidateQueries({ queryKey: docKeys.engagement(projectId) });
+      void qc.invalidateQueries({ queryKey: docKeys.desk(), refetchType: 'none' });
     },
   });
 }
@@ -153,8 +154,9 @@ export function useToggleSectionTask(projectId: string | null) {
       if (error) throw error;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['section-tasks', projectId] });
-      void qc.invalidateQueries({ queryKey: ['document-state'] });
+      void qc.invalidateQueries({ queryKey: docKeys.sectionTasks(projectId) });
+      void qc.invalidateQueries({ queryKey: docKeys.engagement(projectId) });
+      void qc.invalidateQueries({ queryKey: docKeys.desk(), refetchType: 'none' });
       void invalidateProjectWorkflow(qc, projectId);
     },
   });
@@ -162,7 +164,7 @@ export function useToggleSectionTask(projectId: string | null) {
 
 export function useSectionGates(projectId: string | null) {
   return useQuery<SectionGate[]>({
-    queryKey: ['section-gates', projectId],
+    queryKey: docKeys.sectionGates(projectId),
     enabled: Boolean(projectId),
     queryFn: async () => {
       const { data, error } = await getSupabase()

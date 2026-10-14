@@ -28,6 +28,7 @@ import { useRef } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import {
   createBrowserClient,
+  docKeys,
   fetchHeldPurchaseOrders,
   type HeldPurchaseOrder,
   type Invoice,
@@ -692,7 +693,7 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
   const previousResultRef = useRef<DeskData | null>(null);
 
   return useQuery<DeskQueryData, Error, DeskData>({
-    queryKey: ['document-state', 'desk'],
+    queryKey: docKeys.desk(),
     enabled: options.enabled ?? true,
     refetchInterval: 60_000,
     // A background refetch (the 60s tick) never flashes an empty desk over
