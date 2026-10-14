@@ -26,7 +26,7 @@ import {
   AddressDto,
 } from './dto';
 import { Address, CreateShipmentOptions, Parcel } from './carriers/carrier.interface';
-import { generateIdentifierSuffix } from '@patina/utils';
+import { generateIdentifierSuffix } from '@patina/utils/dist/crypto';
 import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 @Injectable()

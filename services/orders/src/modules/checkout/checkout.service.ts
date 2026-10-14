@@ -3,7 +3,7 @@ import { PrismaClient } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { v4 as uuidv4 } from 'uuid';
-import { generateIdentifierSuffix } from '@patina/utils';
+import { generateIdentifierSuffix } from '@patina/utils/dist/crypto';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { assertStripeConfigured } from '../../config/stripe.module';
