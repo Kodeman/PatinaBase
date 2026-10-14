@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ColorPicker,
   ImagePaletteExtractor,
@@ -488,9 +488,29 @@ function SwatchList({
   swatches: NonNullable<ReturnType<typeof usePalette>['data']>['swatches'];
 }) {
   const reorder = useReorderSwatches();
+  // US-34 N15: a swatch whose Undo row is open stays at its old place after
+  // the delete's receipt drops it from the palette. Once its editor lets go
+  // (restored, or the delete was refused), the entry stays until the palette
+  // holds the swatch again, so the row never unmounts in between.
+  const [retained, setRetained] = useState<
+    Array<{ swatch: (typeof swatches)[number]; index: number; released?: boolean }>
+  >([]);
+  const rows = useMemo(() => {
+    let out = swatches;
+    for (const { swatch, index } of retained) {
+      if (swatch.palette_id !== paletteId || out.some((s) => s.id === swatch.id)) continue;
+      out = [...out.slice(0, index), swatch, ...out.slice(index)];
+    }
+    return out;
+  }, [swatches, retained, paletteId]);
+  useEffect(() => {
+    const settled = (e: (typeof retained)[number]) =>
+      e.released === true && swatches.some((s) => s.id === e.swatch.id);
+    if (retained.some(settled)) setRetained((prev) => prev.filter((e) => !settled(e)));
+  }, [swatches, retained]);
 
   // Simple list (no DnD wiring for first pass — host can extend later via useDragDrop).
-  if (swatches.length === 0) {
+  if (rows.length === 0) {
     return (
       <p className="mt-4 text-sm text-[var(--text-muted)]">
         No swatches yet. Use the tabs above to add colors.
@@ -500,11 +520,18 @@ function SwatchList({
 
   return (
     <div className="mt-4 space-y-2">
-      {swatches.map((swatch) => (
+      {rows.map((swatch, i) => (
         <PaletteSwatchEditor
           key={swatch.id}
           proposalId={proposalId}
           swatch={swatch}
+          retain={(keep) =>
+            setRetained((prev) =>
+              keep
+                ? [...prev.filter((e) => e.swatch.id !== swatch.id), { swatch, index: i }]
+                : prev.map((e) => (e.swatch.id === swatch.id ? { ...e, released: true } : e)),
+            )
+          }
         />
       ))}
       <ReorderHint

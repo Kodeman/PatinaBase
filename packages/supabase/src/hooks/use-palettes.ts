@@ -353,6 +353,71 @@ export function useDeleteSwatch() {
   });
 }
 
+/** Server order of a palette's swatches (usePalette): sort_order, then created_at. */
+function swatchBefore(a: PaletteSwatch, b: PaletteSwatch): boolean {
+  return a.sort_order !== b.sort_order
+    ? a.sort_order < b.sort_order
+    : a.created_at < b.created_at;
+}
+
+/**
+ * Undo a swatch delete (US-34 N15): insert the removed row again with its own
+ * id, sort_order and created_at, so it returns to its old place. Only that row
+ * goes back into the CURRENT cached list, never a whole earlier list: an edit
+ * to another swatch made before the Undo survives it (triage R5).
+ */
+export function useRestoreSwatch() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
+    mutationFn: async ({
+      swatch,
+    }: {
+      swatch: PaletteSwatch;
+      proposalId: string;
+    }): Promise<PaletteSwatch> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('palette_swatches')
+        .insert({
+          id: swatch.id,
+          palette_id: swatch.palette_id,
+          hex: swatch.hex,
+          name: swatch.name,
+          role: swatch.role,
+          paint_color_id: swatch.paint_color_id,
+          brand: swatch.brand,
+          brand_code: swatch.brand_code,
+          source_pixel: swatch.source_pixel,
+          sort_order: swatch.sort_order,
+          created_at: swatch.created_at,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('The swatch was not restored.');
+      return data as PaletteSwatch;
+    },
+    onSuccess: async (restored, variables) => {
+      queryClient.setQueryData<PaletteWithSwatches | null>(
+        ['proposal-palette', restored.palette_id],
+        (current) => {
+          if (!current || current.swatches.some((s) => s.id === restored.id)) return current;
+          const at = current.swatches.findIndex((s) => swatchBefore(restored, s));
+          const swatches = [...current.swatches];
+          swatches.splice(at < 0 ? swatches.length : at, 0, restored);
+          return { ...current, swatches };
+        },
+      );
+      queryClient.invalidateQueries({ queryKey: ['proposal-palettes'] });
+      await invalidateProposalClientQueries(queryClient, variables.proposalId);
+    },
+  });
+}
+
 /**
  * Reorder the exact swatch set on a palette. The 00389 RPC validates that the
  * supplied ids contain every palette swatch exactly once and assigns the whole

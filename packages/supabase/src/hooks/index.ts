@@ -1740,6 +1740,7 @@ export {
   useDeletePalette,
   useUpsertSwatch,
   useDeleteSwatch,
+  useRestoreSwatch,
   useReorderSwatches,
 } from "./use-palettes";
 export type {

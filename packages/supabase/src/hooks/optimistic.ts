@@ -200,8 +200,10 @@ export function useOptimisticMutation<
  * Hooks that must never call useOptimisticMutation (plan §5.2 plus the SQ-965
  * send/money inventory). A test greps their bodies. Folio image remove has no
  * hook of its own: it goes through the generic usePieceField, so F15c holds it
- * pending-only at the call site. useDeleteSwatch leaves this list only when
- * N15 gives it an Undo.
+ * pending-only at the call site. N15 gives swatch delete an Undo
+ * (useRestoreSwatch) but the delete itself stays pending-only: the row reads
+ * "Removing…" until the receipt, and with the flag off it has no Undo at all.
+ * So useDeleteSwatch stays listed.
  */
 export const NEVER_OPTIMISTIC = [
   // External sends

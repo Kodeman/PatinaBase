@@ -7,10 +7,16 @@
  * the shelf thumbnail read images[0]). Reorder is arrow buttons, not drag —
  * keyboard-reachable and automatable (HTML5 DnD isn't). Saves the whole `images`
  * array on every change via the self-save hook. Zero shadows (D4).
+ *
+ * US-34 N15 (`optimistic-ink` on): a remove answers at once with an in-flow
+ * Undo row ("Removing…", then "Removed" on the receipt). Undo puts only that
+ * image back into the CURRENT list, so a change made in between survives it.
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { usePieceField } from '@/hooks/use-piece-field';
 import { DocumentAction, DocumentActionRow } from '../../document-action';
 
@@ -30,18 +36,49 @@ export function PieceFolio({
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const save = usePieceField(productId);
-  // F15c: a remove has no Undo yet (N15), so it is pending-only. The image
-  // stays, reading "Removing…", until the server confirms.
+  // F15c: a remove is pending-only. The image stays, reading "Removing…",
+  // until the server confirms. N15's Undo restore goes the same way.
   const removeSave = usePieceField(productId, { optimistic: false });
   const [removingIdx, setRemovingIdx] = useState<number | null>(null);
   const removing = removingIdx !== null;
+  const ink = useFeatureFlag('optimistic-ink').value === true;
+  const qc = useQueryClient();
+  // N15: the last remove, open for Undo until Undo lands, the remove is
+  // refused, or a later remove replaces it.
+  const [undo, setUndo] = useState<{
+    src: string;
+    index: number;
+    deleting: Promise<unknown>;
+    removed: boolean;
+  } | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [focusSrc, setFocusSrc] = useState<string | null>(null);
+  const undoRef = useRef<HTMLButtonElement>(null);
+  const thumbsRef = useRef<HTMLDivElement>(null);
+  const busy = removing || restoring;
+  const undoKey = undo?.deleting;
+
+  useEffect(() => {
+    if (undoKey) undoRef.current?.focus();
+  }, [undoKey]);
+
+  // After an Undo, focus the restored image once its thumbnail renders.
+  useEffect(() => {
+    if (focusSrc === null) return;
+    const restored = Array.from(
+      thumbsRef.current?.querySelectorAll<HTMLButtonElement>('button[data-folio-preview]') ?? [],
+    ).find((b) => b.dataset.folioPreview === focusSrc);
+    if (!restored) return;
+    restored.focus();
+    setFocusSrc(null);
+  }, [focusSrc, images]);
 
   const heroIdx = Math.min(hero, Math.max(0, list.length - 1));
 
   const persist = (next: string[]) => {
     // Every folio write sends the whole array; one built while a remove is
     // pending would put the removed image back.
-    if (removing) return;
+    if (busy) return;
     setErr(null);
     save
       .mutateAsync({ images: next })
@@ -97,20 +134,53 @@ export function PieceFolio({
   // ── Editable folio ────────────────────────────────────────────────────────
   const addUrl = () => {
     const url = draft.trim();
-    if (!url || removing) return;
+    if (!url || busy) return;
     setDraft('');
     persist([...list, url]);
   };
   const remove = (i: number) => {
-    if (removing) return;
+    if (busy) return;
     setErr(null);
     setRemovingIdx(i);
-    removeSave
-      .mutateAsync({ images: list.filter((_, j) => j !== i) })
-      .catch((e) =>
-        setErr(e instanceof Error ? e.message : 'Could not remove the image.'),
+    const deleting = removeSave.mutateAsync({ images: list.filter((_, j) => j !== i) });
+    if (ink) setUndo({ src: list[i], index: i, deleting, removed: false });
+    deleting
+      .then(() =>
+        setUndo((u) => (u?.deleting === deleting ? { ...u, removed: true } : u)),
       )
+      .catch((e) => {
+        setUndo((u) => (u?.deleting === deleting ? null : u));
+        setErr(e instanceof Error ? e.message : 'Could not remove the image.');
+      })
       .finally(() => setRemovingIdx(null));
+  };
+  // N15 Undo puts back only the removed image, into the list as it is now
+  // (the cache, not this render's props), at its old index or else at the
+  // end. Re-sending the whole earlier list would erase a change made since.
+  const undoRemove = async () => {
+    if (!undo || restoring) return;
+    setRestoring(true);
+    setErr(null);
+    try {
+      await undo.deleting;
+    } catch {
+      setRestoring(false);
+      return;
+    }
+    const current =
+      qc.getQueryData<{ images?: string[] | null }>(['product', productId])?.images ?? list;
+    const next = current.includes(undo.src)
+      ? current
+      : [...current.slice(0, undo.index), undo.src, ...current.slice(undo.index)];
+    try {
+      await removeSave.mutateAsync({ images: next });
+      setUndo(null);
+      setFocusSrc(undo.src);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not restore the image.');
+    } finally {
+      setRestoring(false);
+    }
   };
   const makePrimary = (i: number) => {
     if (i === 0) return;
@@ -188,7 +258,7 @@ export function PieceFolio({
 
       {/* Thumbnails with controls */}
       {list.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div ref={thumbsRef} className="mt-2 flex flex-wrap gap-2">
           {list.map((src, i) => (
             <div
               key={`${src}-${i}`}
@@ -203,6 +273,7 @@ export function PieceFolio({
                 type="button"
                 onClick={() => setHero(i)}
                 className="block h-full w-full"
+                data-folio-preview={src}
                 aria-label={`Preview image ${i + 1} of ${list.length}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -215,7 +286,8 @@ export function PieceFolio({
               )}
               {i === removingIdx ? (
                 <span
-                  role="status"
+                  // With the flag on, the Undo row is the one live region.
+                  role={ink ? undefined : 'status'}
                   className="absolute inset-x-0 top-0 bg-[rgba(44,41,38,0.65)] px-1 text-center font-mono text-[11px] text-white"
                 >
                   Removing…
@@ -225,7 +297,7 @@ export function PieceFolio({
                   type="button"
                   aria-label={`Remove image ${i + 1}`}
                   onClick={() => remove(i)}
-                  disabled={removing}
+                  disabled={busy}
                   className="absolute right-0 top-0 bg-[rgba(44,41,38,0.65)] px-1 font-mono text-[11px] text-white hover:bg-[var(--color-terracotta)] disabled:opacity-30"
                 >
                   ✕
@@ -236,7 +308,7 @@ export function PieceFolio({
                   type="button"
                   aria-label={`Move image ${i + 1} left`}
                   onClick={() => move(i, -1)}
-                  disabled={i === 0 || removing}
+                  disabled={i === 0 || busy}
                   className="font-mono text-[11px] text-white disabled:opacity-30"
                 >
                   ←
@@ -246,7 +318,7 @@ export function PieceFolio({
                     type="button"
                     aria-label={`Set image ${i + 1} as primary`}
                     onClick={() => makePrimary(i)}
-                    disabled={removing}
+                    disabled={busy}
                     className="font-mono text-[11px] text-white hover:text-[var(--color-golden-hour)]"
                   >
                     ★
@@ -256,7 +328,7 @@ export function PieceFolio({
                   type="button"
                   aria-label={`Move image ${i + 1} right`}
                   onClick={() => move(i, 1)}
-                  disabled={i === list.length - 1 || removing}
+                  disabled={i === list.length - 1 || busy}
                   className="font-mono text-[11px] text-white disabled:opacity-30"
                 >
                   →
@@ -264,6 +336,25 @@ export function PieceFolio({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* N15 Undo row: in flow, no shadow; it takes focus when it opens */}
+      {undo && (
+        <div className="mt-2 flex min-h-[44px] items-center gap-3 rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] pl-3">
+          <span role="status" className="flex-1 text-[0.8rem] text-[var(--color-charcoal)]">
+            Image {undo.index + 1}: {undo.removed ? 'Removed' : 'Removing…'}
+          </span>
+          <button
+            ref={undoRef}
+            type="button"
+            onClick={() => void undoRemove()}
+            aria-disabled={restoring || undefined}
+            aria-busy={restoring || undefined}
+            className="min-h-[44px] min-w-[44px] px-3 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:underline"
+          >
+            {restoring ? 'Restoring…' : 'Undo'}
+          </button>
         </div>
       )}
 
@@ -285,7 +376,7 @@ export function PieceFolio({
           actionKey="add-image-url"
           variant="secondary"
           onClick={addUrl}
-          disabled={!draft.trim() || removing}
+          disabled={!draft.trim() || busy}
         >
           + add
         </DocumentAction>
@@ -294,7 +385,7 @@ export function PieceFolio({
           variant="primary"
           onClick={() => fileRef.current?.click()}
           loading={uploading}
-          disabled={removing}
+          disabled={busy}
           loadingLabel="Uploading…"
         >
           Upload
