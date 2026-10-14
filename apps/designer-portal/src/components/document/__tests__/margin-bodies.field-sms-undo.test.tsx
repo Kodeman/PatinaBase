@@ -10,10 +10,12 @@ import { FieldSmsBody } from '../margin-bodies';
 
 const mockRevert = jest.fn();
 const mockUseModelApplies = jest.fn();
+const mockRefetchApplies = jest.fn();
 const mockState: {
   applies: Array<Record<string, unknown>>;
+  historyError: boolean;
   outcome: 'restored' | 'conflict' | 'already' | 'error';
-} = { applies: [], outcome: 'restored' };
+} = { applies: [], historyError: false, outcome: 'restored' };
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({}),
@@ -37,6 +39,8 @@ jest.mock('@patina/supabase', () => ({
         filter.enabled === false
           ? undefined
           : mockState.applies.filter((apply) => !filter.sourceId || apply.source_id === filter.sourceId),
+      isError: mockState.historyError,
+      refetch: mockRefetchApplies,
     };
   },
   useRevertModelApply: () => ({
@@ -113,7 +117,9 @@ const undoButton = () => screen.queryByRole('button', { name: /^Undo/ });
 beforeEach(() => {
   mockRevert.mockReset();
   mockUseModelApplies.mockReset();
+  mockRefetchApplies.mockReset();
   mockState.applies = [apply()];
+  mockState.historyError = false;
   mockState.outcome = 'restored';
 });
 
@@ -180,6 +186,17 @@ describe('FieldSmsBody — quiet Undo on an applied text', () => {
   it('offers no Undo on a needs-review text', () => {
     render(<FieldSmsBody row={smsRow(null, 'needs_review')} />);
     expect(screen.getByText('Proposed · Move Rough-in plumbing to Tue')).toBeInTheDocument();
+    expect(undoButton()).toBeNull();
+  });
+
+  it('history read error keeps the Applied summary, offers retry, and withholds Undo', () => {
+    mockState.historyError = true;
+    render(<FieldSmsBody row={smsRow()} />);
+
+    expect(screen.getByText(`Applied · ${SUMMARY}`)).toBeInTheDocument();
+    expect(screen.getByText('Could not load applied texts.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockRefetchApplies).toHaveBeenCalledTimes(1);
     expect(undoButton()).toBeNull();
   });
 

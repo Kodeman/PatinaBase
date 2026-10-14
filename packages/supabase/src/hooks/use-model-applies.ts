@@ -62,18 +62,57 @@ export function useModelApplies(filter: ModelAppliesFilter = {}) {
     refetchInterval: 30_000,
     queryFn: async (): Promise<ModelApplyRow[]> => {
       const supabase = getSupabase();
-      let query = supabase
+      const baseQuery = (includeSince = true) => {
+        let query = supabase
+          .from('model_applies')
+          .select(
+            'id, studio_id, project_id, source, source_id, effect_type, target_table, target_id, inserted, summary, applied_at, reverted_at, revert_outcome, project:projects(id, name)',
+          )
+          .eq('source', 'sms')
+          .order('applied_at', { ascending: false });
+        if (projectId) query = query.eq('project_id', projectId);
+        if (includeSince && since) query = query.gte('applied_at', since);
+        if (sourceId) query = query.eq('source_id', sourceId);
+        return query;
+      };
+
+      if (sourceId || !since) {
+        const { data, error } = await baseQuery();
+        if (error) throw error;
+        return data ?? [];
+      }
+
+      // Discover at most 50 recent SMS groups, then load every row in those
+      // groups separately so PostgREST's row cap cannot split a displayed text.
+      let idsQuery = supabase
         .from('model_applies')
-        .select(
-          'id, studio_id, project_id, source, source_id, effect_type, target_table, target_id, inserted, summary, applied_at, reverted_at, revert_outcome, project:projects(id, name)',
-        )
-        .order('applied_at', { ascending: false });
-      if (projectId) query = query.eq('project_id', projectId);
-      if (since) query = query.gte('applied_at', since);
-      if (sourceId) query = query.eq('source_id', sourceId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return data ?? [];
+        .select('source_id')
+        .eq('source', 'sms')
+        .order('applied_at', { ascending: false })
+        .gte('applied_at', since)
+        .limit(1000);
+      if (projectId) idsQuery = idsQuery.eq('project_id', projectId);
+      const { data: idRows, error: idsError } = await idsQuery;
+      if (idsError) throw idsError;
+      const sourceIds = [...new Set((idRows ?? []).map((row) => row.source_id).filter((id): id is string => !!id))].slice(0, 50);
+      if (sourceIds.length === 0) return [];
+
+      const groups = await Promise.all(
+        sourceIds.map(async (id) => {
+          const rows: ModelApplyRow[] = [];
+          for (let offset = 0; ; offset += 1000) {
+            const { data, error } = await baseQuery(false)
+              .eq('source_id', id)
+              .range(offset, offset + 999);
+            if (error) throw error;
+            const page = data ?? [];
+            rows.push(...page);
+            if (page.length < 1000) break;
+          }
+          return rows;
+        }),
+      );
+      return groups.flat();
     },
   });
 }

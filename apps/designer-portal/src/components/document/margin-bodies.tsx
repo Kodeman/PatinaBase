@@ -949,7 +949,8 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
     sourceId: row.item_id,
     enabled: !needsReview && !!row.project_id,
   });
-  const ownApplies = needsReview ? [] : (appliesQuery.data ?? []);
+  const historyError = !needsReview && appliesQuery.isError;
+  const ownApplies = needsReview || historyError ? [] : (appliesQuery.data ?? []);
   const textUndo = useTextUndo(row.item_id, row.project_id);
   const revertedOnLoad =
     applied?.reverted === true ||
@@ -996,7 +997,7 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
           >
             {lineText}
           </p>
-          {canUndo && (
+          {canUndo && !historyError && (
             <TextUndoAct
               label={effectLine}
               pending={textUndo.pending}
@@ -1004,6 +1005,18 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
             />
           )}
         </div>
+      )}
+      {historyError && (
+        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-error)]">
+          Could not load applied texts.{' '}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => void appliesQuery.refetch()}
+          >
+            Try again
+          </button>
+        </p>
       )}
       <TextUndoFailed failed={textUndo.failed} />
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
