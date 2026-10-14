@@ -417,7 +417,6 @@ export function usePlaceProductConfiguration() {
         queryClient.invalidateQueries({
           queryKey: ["project", input.projectId],
         }),
-        queryClient.invalidateQueries({ queryKey: ["projects"] }),
         queryClient.invalidateQueries({
           queryKey: ["projects", input.projectId],
         }),
@@ -465,7 +464,6 @@ export function useReviseProjectFFEConfiguration() {
         queryClient.invalidateQueries({
           queryKey: ["project", result.projectId],
         }),
-        queryClient.invalidateQueries({ queryKey: ["projects"] }),
         queryClient.invalidateQueries({
           queryKey: ["projects", result.projectId],
         }),

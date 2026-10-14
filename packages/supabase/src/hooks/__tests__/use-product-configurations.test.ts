@@ -192,7 +192,6 @@ describe("product configuration RPC hooks", () => {
       expect.arrayContaining([
         ["project-ffe-items", "project-1"],
         ["project", "project-1"],
-        ["projects"],
         ["projects", "project-1"],
         ["procurement-items"],
       ]),
