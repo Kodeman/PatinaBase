@@ -31,6 +31,7 @@ beforeEach(() => {
   insert.mockClear();
   select.mockClear();
   limit.mockReset();
+  limit.mockResolvedValue({ data: [{ sort_order: 9 }], error: null });
   single.mockReset();
   single.mockImplementation(async () => ({ data: { id: 'row' }, error: null }));
 });
