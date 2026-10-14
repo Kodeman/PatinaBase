@@ -69,9 +69,12 @@ function BuildRoom({ docId }: { docId: string }) {
   const row = resolution?.kind === "engagement" ? resolution.row : null;
   const projectId = row?.project_id ?? null;
 
-  const { data: rooms } = useDocumentRooms(projectId);
-  const { data: lines } = useProjectFFEItems(projectId ?? "");
-  const { data: placements } = useProjectRoomPlacements(projectId);
+  const { data: rooms, isPending: roomsPending } = useDocumentRooms(projectId);
+  const { data: lines, isPending: linesPending } = useProjectFFEItems(
+    projectId ?? "",
+  );
+  const { data: placements, isPending: placementsPending } =
+    useProjectRoomPlacements(projectId);
   const { data: removed } = useRemovedProjectLines(projectId ?? "");
   const { data: palettes } = useProjectPalettes(projectId ?? "");
   const addRoom = useAddDocumentRoom(projectId);
@@ -151,6 +154,16 @@ function BuildRoom({ docId }: { docId: string }) {
         </a>
       </main>
     );
+  }
+
+  // SQ-1012 (N14) — the sheet is composed from three reads: the rooms (the
+  // rail's rows and the lens's room tables), the lines and their placements.
+  // Printed as each one answered, every line first stood under "Not in a room
+  // yet", the room tables then landed above it (a 300px push) and the
+  // placements then emptied it (CLS 0.18). The shaped placeholder holds until
+  // all three have answered; a failed read stops holding.
+  if (roomsPending || linesPending || placementsPending) {
+    return <PiecesSkeleton />;
   }
 
   return (

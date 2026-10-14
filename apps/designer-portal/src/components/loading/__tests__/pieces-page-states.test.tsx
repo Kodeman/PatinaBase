@@ -10,6 +10,11 @@ import BuildRoomPage from "@/app/(document)/doc/[id]/pieces/page";
 
 const DOC_ID = "6f1c1b6e-8a0e-4c47-9a39-2f3f1c2b9d10";
 const mockEngagement = jest.fn();
+type Read = { data: unknown[] | undefined; isPending: boolean };
+const answered = (): Read => ({ data: [], isPending: false });
+const mockRooms = jest.fn(answered);
+const mockLines = jest.fn(answered);
+const mockPlacements = jest.fn(answered);
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
@@ -21,14 +26,14 @@ jest.mock("@/hooks/use-document-state", () => ({
 }));
 
 jest.mock("@patina/supabase", () => ({
-  useProjectFFEItems: () => ({ data: undefined }),
+  useProjectFFEItems: () => mockLines(),
   useProjectPalettes: () => ({ data: undefined }),
-  useProjectRoomPlacements: () => ({ data: undefined }),
+  useProjectRoomPlacements: () => mockPlacements(),
   useRemovedProjectLines: () => ({ data: undefined }),
 }));
 
 jest.mock("@/hooks/use-document-rooms", () => ({
-  useDocumentRooms: () => ({ data: undefined }),
+  useDocumentRooms: () => mockRooms(),
   useAddDocumentRoom: () => ({ mutateAsync: jest.fn() }),
 }));
 
@@ -117,5 +122,50 @@ describe("the Build room before its document resolves", () => {
       await screen.findByText("This document could not be found."),
     ).toBeInTheDocument();
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+});
+
+/**
+ * SQ-1012 (N14) — once the document resolves, the sheet is composed from three
+ * reads. Printed as each answered, the lines first stood unplaced, the room
+ * tables landed above them and the placements emptied them: CLS 0.18 on a hard
+ * load. The shaped sheet holds until all three have answered.
+ */
+describe("the Build room while its sheet's reads are in flight", () => {
+  const inFlight = (): Read => ({ data: undefined, isPending: true });
+  beforeEach(() => {
+    mockEngagement.mockReturnValue({
+      data: { kind: "engagement", row: { project_id: "proj-1", title: "Aspen Loft" } },
+      isError: false,
+      fetchStatus: "idle",
+    });
+  });
+  afterEach(() => {
+    mockRooms.mockImplementation(answered);
+    mockLines.mockImplementation(answered);
+    mockPlacements.mockImplementation(answered);
+  });
+
+  it.each([
+    ["the rooms", mockRooms],
+    ["the lines", mockLines],
+    ["the placements", mockPlacements],
+  ])("keeps the shaped sheet while %s are still in flight", async (_, read) => {
+    read.mockImplementation(inFlight);
+    await renderPage();
+    expect(await screen.findByText("Loading the pieces.")).toBeInTheDocument();
+    expect(screen.queryByTestId("build-room")).toBeNull();
+  });
+
+  it("prints the sheet once all three have answered", async () => {
+    await renderPage();
+    expect(await screen.findByTestId("build-room")).toBeInTheDocument();
+    expect(screen.queryByText("Loading the pieces.")).toBeNull();
+  });
+
+  it("stops holding when a read fails", async () => {
+    mockPlacements.mockImplementation(() => ({ data: undefined, isPending: false }));
+    await renderPage();
+    expect(await screen.findByTestId("build-room")).toBeInTheDocument();
   });
 });

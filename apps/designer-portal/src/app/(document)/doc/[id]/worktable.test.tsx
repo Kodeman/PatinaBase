@@ -119,6 +119,12 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
 jest.mock('@/components/document/approvals/project-approval-document', () => ({
   ProjectApprovalDocument: () => <div data-index-region="approvals" />,
 }));
+// SQ-1012 — the band's status line reads the mutation cache; this page renders
+// without a QueryClientProvider, so it stands in as nothing.
+jest.mock('@/components/feedback/saving-band', () => ({
+  ...jest.requireActual('@/components/feedback/saving-band'),
+  BandStatusLine: () => null,
+}));
 jest.mock('@/components/document/schedule/schedule-spine', () => ({
   ScheduleSpine: () => <div data-index-region="schedule" />,
 }));

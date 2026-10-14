@@ -22,7 +22,7 @@
  * yield) with a different geometry, and is not a substitute for this one.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
   LENS_ANNOUNCE_DEDUPE_MS,
@@ -144,8 +144,12 @@ export function LensBand({
   onActed,
   onStandingOpened,
   openActSheet,
+  statusLine,
 }: {
   model: LensBandModel;
+  /** SQ-1012 — a status line the page prints in the band's own flow, under
+   *  line 2 (the offline line), so it can never print over the band's text. */
+  statusLine?: ReactNode;
   readingStop?: LensReadingStop | null;
   docId: string;
   /** H4 — the one reversing act, on the household. */
@@ -606,6 +610,7 @@ export function LensBand({
           </span>
         </p>
         )}
+        {statusLine}
       </section>
       <StandingSheet
         open={sheetOpen}

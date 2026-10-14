@@ -127,6 +127,24 @@ describe('LensBand · the box and the sentinel (C-5)', () => {
     expect(band()).toHaveAttribute('data-lens-open', 'false');
   });
 
+  // SQ-1012 — the offline line prints in the band's own flow, after line 2,
+  // never as an overlay on its text.
+  it('prints a status line in its own flow, after line 2', () => {
+    render(
+      <LensBand
+        model={model()}
+        docId="doc-1"
+        statusLine={<p data-testid="status-line">Offline.</p>}
+      />,
+    );
+    const line = screen.getByTestId('status-line');
+    expect(line.parentElement).toBe(band());
+    expect(band().lastElementChild).toBe(line);
+    expect(band().querySelector('[data-lens-line="2"]')!.compareDocumentPosition(line)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it('never writes data-lens-state — that attribute is the shell’s (C-01)', () => {
     render(<LensBand model={model()} docId="doc-1" />);
     expect(band()).not.toHaveAttribute('data-lens-state');

@@ -208,6 +208,7 @@ import {
   useRoomLens,
 } from '@/components/document/room-lens-context';
 import { LensBand } from '@/components/document/lens-band';
+import { BandStatusLine } from '@/components/feedback/saving-band';
 import { BandTourNote } from '@/components/document/margin-note';
 import { BandLeadsContext } from '@/components/document/region/region-head';
 import {
@@ -3520,6 +3521,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             onActed={onLensActed}
             onStandingOpened={onLensStandingOpened}
             openActSheet={openActSheet}
+            // SQ-1012 — `saving…` and the offline line print on a line of the
+            // band's own, in its flow: never over line 1's right slot or line
+            // 2, never under the right rail; the fixed corner (SavingBand)
+            // yields them here. The line keeps its one-line box while quiet
+            // (11px × 1.4, as line 1's), so the word coming and going never
+            // moves the band's text; at 1440 the three lines fit the declared
+            // 56px. Wraps, never truncates.
+            statusLine={
+              <BandStatusLine className="m-0 min-h-[15.4px] whitespace-normal font-mono text-[11px] leading-[1.4] text-[var(--text-muted)] [overflow-wrap:anywhere]" />
+            }
           />
         )}
         {/* US-19 D8 — the one-note tour, in flow under the band. */}

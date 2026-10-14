@@ -19,7 +19,7 @@ import { useOptimisticMutation } from '@patina/supabase';
 import { queryClient as portalClient, OFFLINE_NOT_SENT, OfflineRefusal } from '@/lib/react-query';
 import { isWordShowing, useActFeedback, type ActLike } from '../use-act-feedback';
 import { ActStillLine, NOTHING_SENT_TWICE, STILL_SENDING, STILL_WORKING } from '../act-still-line';
-import { OFFLINE_WAITING, SAVING_WORD, SavingBand } from '../saving-band';
+import { BandStatusLine, OFFLINE_WAITING, SAVING_WORD, SavingBand } from '../saving-band';
 
 function deferred<T = unknown>() {
   let resolve!: (value: T) => void;
@@ -353,5 +353,48 @@ describe('SavingBand — the one quiet band', () => {
     expect(write).toHaveBeenCalledTimes(1);
     await advance(500);
     expect(band()).toBeEmptyDOMElement();
+  });
+
+  // SQ-1012 — the lens band's own line (the corner yields to it by CSS where a
+  // lens band is mounted) says the same words on the same clock.
+  describe('BandStatusLine', () => {
+    const line = () => document.querySelector('[data-band-status]') as HTMLElement;
+
+    it('is a silent status line that keeps its box: quiet, saving… past 400 ms, held, quiet', async () => {
+      const receipt = deferred();
+      mount(freshClient(), <><BandStatusLine /><Write write={() => receipt.promise} /></>);
+      expect(line()).toHaveAttribute('role', 'status');
+      expect(line()).toHaveAttribute('aria-live', 'off');
+      expect(line()).toHaveAttribute('data-band-status', 'quiet');
+      expect(line()).toBeEmptyDOMElement();
+      fireEvent.click(screen.getByRole('button', { name: 'write' }));
+      await advance(399);
+      expect(line()).toBeEmptyDOMElement();
+      await advance(1);
+      expect(line()).toHaveTextContent(SAVING_WORD);
+      expect(line()).toHaveAttribute('data-band-status', 'saving');
+      expect(band()).toHaveAttribute('data-saving-band', 'saving');
+      await act(async () => receipt.resolve('ok'));
+      await advance(0);
+      expect(line()).toHaveTextContent(SAVING_WORD);
+      await advance(500);
+      expect(line()).toBeEmptyDOMElement();
+      expect(line()).toHaveAttribute('data-band-status', 'quiet');
+    });
+
+    it('offline, prints the offline sentence until the write saves on reconnect', async () => {
+      const write = jest.fn(async () => 'ok');
+      onlineManager.setOnline(false);
+      mount(freshClient(), <><BandStatusLine /><Write write={write} /></>);
+      fireEvent.click(screen.getByRole('button', { name: 'write' }));
+      await advance(0);
+      expect(line()).toHaveTextContent(OFFLINE_WAITING);
+      expect(line()).toHaveAttribute('data-band-status', 'offline');
+      act(() => onlineManager.setOnline(true));
+      await advance(0);
+      expect(write).toHaveBeenCalledTimes(1);
+      await advance(500);
+      expect(line()).toBeEmptyDOMElement();
+    });
   });
 });

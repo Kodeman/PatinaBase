@@ -1471,6 +1471,15 @@ button.da-press[aria-busy='true'] {
   top: var(--doc-band-height);
 }
 
+/* SQ-1012 — where the lens band is mounted it prints `saving…` and the offline
+   line on a line of its own (the Document page's <BandStatusLine/>), so the
+   fixed corner yields both: there the offline sentence printed over the band's
+   right slot and line 2 (1440) and line 2's lead (390), and at 1440 `saving…`
+   sat under the right rail, unseen. */
+html:has([data-lens-band]) [data-saving-band] {
+  display: none;
+}
+
 /* Every region root the band's rows and the running index land on stands clear
    of the band, not the Money one alone: `scrollToRegion` lands each of them at
    `block: start`, and the band is what is holding that top. FF&E's own 4rem
