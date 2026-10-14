@@ -582,4 +582,6 @@ Both start with a design spike: specimens, then the build.
 
 **Source:** Kody's multiple-choice interview of 2026-10-13.
 
+**Addendum, 2026-10-13.** Follow-through (Kody): R7 cap = $50 per studio per month across all features, enforced now (00788); the pricing page section is written and held for V2. R3 applies to product surfaces only — marketing canon and the website keep 'Designer-Taught Intelligence' as the thesis. R6: once R2's log and Undo ship, field-parse switches on with a $5/day cap; companion stays off pending its own review.
+
 *Entries add: … · V18 · V19 · V20 (US-28) · V21 (Founding Circle) · V22 · V23 · last id = V23*
