@@ -53,7 +53,7 @@ source. Keep `|` out of cells.
 | C22 | Mydoma charges a one-time onboarding fee on its annual plan. | https://mydomastudio.com/pricing/ via 05-competitor-activation.md line 52 (competitor price; pricing has changed over time) | todo |
 | C23 | The Founding 50 is a circle of 50 working designers shaping Patina; Kody and Leah read every application at patina.cloud/designers. | https://patina.cloud/designers (hero and application sections, read 2026-10-08) | verified |
 | C24 | Patina's app and marketplace are pre-launch. | https://patina.cloud (status line, read 2026-10-08) | verified |
-| C25 | Model work included up to $50 per studio per month; no usage billing. | docs/vision/VISION-DECISIONS.md V23 R7 and migration 00788 (cap enforcement); publish only with the pricing page (V2) | todo |
+| C40 | Model work included up to $50 per studio per month; no usage billing. | docs/vision/VISION-DECISIONS.md V23 R7 and migration 00788 (cap enforcement); publish only with the pricing page (V2) | todo |
 
 ## Never claim (not ledger rows; lint cannot catch all of these)
 
