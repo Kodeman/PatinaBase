@@ -317,7 +317,7 @@ function MatchesError({ error, onRetry }: { error: Error; onRetry: () => void })
     return (
       <CenteredNote>
         <p className="type-body text-[var(--text-body)]">
-          The Engine has heard from you a lot in the last hour. Give it a little while and try again.
+          We've heard from you a lot in the last hour. Give it a little while and try again.
         </p>
       </CenteredNote>
     );
@@ -478,7 +478,7 @@ export function ResultsView() {
           )}
 
           <p className="mt-12 border-t border-[var(--border-subtle)] pt-5 type-meta text-[var(--text-muted)]">
-            Matches come from Designer-Taught Intelligence — working designers teach the catalog what
+            Matches come from working designers who teach the catalog what
             things are; your answers do the rest.
           </p>
         </section>

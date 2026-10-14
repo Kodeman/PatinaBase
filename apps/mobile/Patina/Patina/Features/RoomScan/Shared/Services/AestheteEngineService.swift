@@ -21,10 +21,10 @@ public enum AestheteEngineError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .notImplemented:   return "Aesthete Engine HTTP client not yet implemented"
+        case .notImplemented:   return "Couldn't read this room's style. Try again."
         case .transport(let e): return "Network error: \(e.localizedDescription)"
         case .decoding(let e):  return "Could not decode aesthete response: \(e.localizedDescription)"
-        case .invalidResponse:  return "Aesthete Engine returned an invalid response"
+        case .invalidResponse:  return "Couldn't read this room's style. Try again."
         }
     }
 }

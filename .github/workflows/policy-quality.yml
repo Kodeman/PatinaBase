@@ -35,6 +35,9 @@ jobs:
       - name: Check outbound send authority chokepoints
         run: node scripts/policy/check-send-authority.mjs
 
+      - name: Check model-feature names in product copy
+        run: node scripts/policy/check-model-names.mjs
+
       - name: Test the policy engine
         run: node --test scripts/hooks/*.test.mjs
 

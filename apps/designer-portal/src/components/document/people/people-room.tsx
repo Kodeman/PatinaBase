@@ -543,7 +543,7 @@ export function PeopleRoom() {
       case "nurture":
         nav.goView("nurture");
         notify(
-          "The Engine surfaced who is drifting out of touch — see the Nurture queue.",
+          "Who's drifting out of touch is in the Nurture queue.",
         );
         break;
       case "directory": {

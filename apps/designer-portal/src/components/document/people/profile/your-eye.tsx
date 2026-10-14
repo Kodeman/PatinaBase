@@ -124,8 +124,7 @@ export function YourEyePanel() {
 
       {profile?.drift_flag && (
         <p className="border-l-2 border-[var(--color-clay,#C4A57B)] pl-3 font-body text-[0.8rem] text-[var(--text-primary)]">
-          Your eye is shifting — recent choices lean differently than last year&apos;s. The Engine
-          is following the newer you.
+          Your eye is following the newer you.
         </p>
       )}
 
@@ -147,7 +146,7 @@ export function YourEyePanel() {
       <section>
         <SectionHead
           title="Signature preferences"
-          note="Named leans the Engine has noticed. Confirm the true ones, soften or mute the rest — your edits never rewrite what was learned."
+          note="Named leans noticed in your choices. Confirm the true ones, soften or mute the rest — your edits never rewrite what was learned."
         />
         {biases && biases.length > 0 ? (
           <ul className="mt-4 space-y-4">
@@ -265,7 +264,7 @@ function BiasRow({
           {bias.name}
         </span>
         <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-          {bias.status === 'proposed' ? 'the Engine proposes' : bias.status}
+          {bias.status === 'proposed' ? 'proposed' : bias.status}
         </span>
       </div>
       {bias.description && (

@@ -410,9 +410,9 @@ export const PEOPLE_SUB_ROOM_SURFACES: StudioSurface[] = [
   {
     key: 'the-engine',
     kind: 'room',
-    label: 'The Engine',
+    label: 'Keep in touch',
     subLabel: 'relationship follow-ups',
-    aliases: ['engine', 'nurture', 'follow-ups', 'follow up', 'dormant', 'reconnect'],
+    aliases: ['engine', 'keep in touch', 'nurture', 'follow-ups', 'follow up', 'dormant', 'reconnect'],
     icon: Users,
     weight: 'room',
     scope: 'global',

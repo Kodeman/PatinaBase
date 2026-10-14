@@ -310,7 +310,7 @@ export default function CollectionDetailPage({
                     <SelectContent>
                       <SelectItem value="manual">Curated</SelectItem>
                       <SelectItem value="rule">Dynamic</SelectItem>
-                      <SelectItem value="smart">AI-Powered</SelectItem>
+                      <SelectItem value="smart">Suggested</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

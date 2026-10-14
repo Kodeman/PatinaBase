@@ -82,7 +82,7 @@ export function AskBar({
         {value.trim() && (
           <button
             type="submit"
-            aria-label="Ask the Engine"
+            aria-label="Ask about your people"
             className="doc-type-control flex min-h-11 min-w-11 shrink-0 items-center justify-center text-[var(--text-primary)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)] motion-reduce:transition-none"
           >
             →

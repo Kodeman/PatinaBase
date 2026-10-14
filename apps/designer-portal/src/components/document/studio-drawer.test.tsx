@@ -152,8 +152,8 @@ describe('StudioDrawer', () => {
       within(rooms)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['Client relations', 'Studio marketing', 'The Engine']);
-    fireEvent.click(within(rooms).getByRole('button', { name: 'The Engine' }));
+    ).toEqual(['Client relations', 'Studio marketing', 'Keep in touch']);
+    fireEvent.click(within(rooms).getByRole('button', { name: 'Keep in touch' }));
     expect(mockPush).toHaveBeenCalledWith('/people?view=nurture');
     expect(
       screen.queryByRole('group', { name: 'From Studio contacts' }),

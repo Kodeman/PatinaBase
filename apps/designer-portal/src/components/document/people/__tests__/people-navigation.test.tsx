@@ -32,7 +32,7 @@ const EXPECTED_ROOMS = [
     name: 'Studio marketing',
     views: ['portfolio', 'outreach', 'your-eye'],
   },
-  { key: 'the-engine', name: 'The Engine', views: ['nurture'] },
+  { key: 'the-engine', name: 'Keep in touch', views: ['nurture'] },
 ] as const;
 
 describe('People sub-rooms', () => {

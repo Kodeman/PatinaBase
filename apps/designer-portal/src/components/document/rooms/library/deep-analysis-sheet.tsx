@@ -99,7 +99,7 @@ export function DeepAnalysisSheet({
       </p>
       {prefill.source === 'draft' && (
         <p className="mb-4 border-l-2 border-[var(--color-clay)] pl-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
-          The spectrum starts at the Engine&apos;s first read of this piece —
+          The spectrum starts at a first read of this piece —
           adjust anything and save to confirm it in your hand.
         </p>
       )}

@@ -78,7 +78,7 @@ export default function CollectionsPage() {
     { value: 'all', label: 'All Types' },
     { value: 'manual', label: 'Curated' },
     { value: 'rule', label: 'Dynamic' },
-    { value: 'smart', label: 'AI-Powered' },
+    { value: 'smart', label: 'Suggested' },
   ];
 
   const handleCreate = async () => {
@@ -104,7 +104,7 @@ export default function CollectionsPage() {
     switch (type) {
       case 'manual': return 'Curated';
       case 'rule': return 'Dynamic';
-      case 'smart': return 'AI-Powered';
+      case 'smart': return 'Suggested';
     }
   };
 
@@ -304,7 +304,7 @@ export default function CollectionsPage() {
                 <SelectContent>
                   <SelectItem value="manual">Curated (Manual)</SelectItem>
                   <SelectItem value="rule">Dynamic (Rule-based)</SelectItem>
-                  <SelectItem value="smart">AI-Powered (Smart)</SelectItem>
+                  <SelectItem value="smart">Suggested (Smart)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -1167,7 +1167,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               </DocumentAction>
               {p.quality_score != null && (
                 <span className="doc-type-meta uppercase tracking-[0.06em]">
-                  Aesthete read · {p.quality_score}
+                  Read · {p.quality_score}
                 </span>
               )}
             </DocumentActionGroup>
@@ -1538,7 +1538,7 @@ function Colophon({ p }: { p: PieceProduct }) {
     ["Updated", fmt(p.updated_at)],
     ["Published", fmt(p.published_at)],
     ["Promoted", fmt(p.promoted_at)],
-    ["Aesthete read", p.quality_score != null ? String(p.quality_score) : null],
+    ["Read", p.quality_score != null ? String(p.quality_score) : null],
     ["Embedding refreshed", fmt(p.embedding_updated_at)],
   ];
 

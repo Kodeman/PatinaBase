@@ -38,7 +38,7 @@ export function NurtureView({ openPerson, notify }: PeopleViewProps) {
     <>
       <ViewHeader
         title="Nurture"
-        sub="The relationships that need tending — surfaced by the Engine, so no one drifts away unnoticed."
+        sub="The relationships that need tending are surfaced so no one drifts away unnoticed."
       />
 
       {isLoading ? (
@@ -47,8 +47,7 @@ export function NurtureView({ openPerson, notify }: PeopleViewProps) {
         </p>
       ) : empty ? (
         <EmptyTeach>
-          Every relationship is current — nothing to tend. The Engine surfaces someone here the
-          moment a tie begins to drift.
+          Every relationship is current — nothing to tend. Someone appears here the moment a tie begins to drift.
         </EmptyTeach>
       ) : (
         <>

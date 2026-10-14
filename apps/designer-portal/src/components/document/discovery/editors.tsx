@@ -215,7 +215,7 @@ export function StyleEditor({
   };
   return (
     <div className="space-y-3">
-      <Field label="Style tags (the Aesthete vocabulary)">
+      <Field label="Style tags">
         <ChipMultiSelect options={styleOptions} selected={draft.style_tag_ids} onToggle={toggle} />
       </Field>
       <Field label="In their words">

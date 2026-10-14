@@ -3,7 +3,7 @@ import { ResultsView } from './results-view';
 
 export const metadata: Metadata = {
   title: 'Your Style Profile · Patina',
-  description: 'Your style profile and the pieces that fit it — from Designer-Taught Intelligence.',
+  description: 'Your style profile and the pieces that fit it.',
 };
 
 /**

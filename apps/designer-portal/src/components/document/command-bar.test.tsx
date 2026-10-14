@@ -820,7 +820,7 @@ describe('F37 / F13 / F17 — the order, the titles, and the renamed room', () =
 
   it("US-28 — opens Studio contacts' three rooms at their own address", () => {
     openPalette();
-    for (const name of ['Client relations', 'Studio marketing', 'The Engine']) {
+    for (const name of ['Client relations', 'Studio marketing', 'Keep in touch']) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
     fireEvent.click(screen.getByText('Client relations').closest('button')!);

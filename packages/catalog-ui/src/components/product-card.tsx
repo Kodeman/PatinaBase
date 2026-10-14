@@ -141,9 +141,6 @@ export function ProductCard({
         {statusLabel && (
           <span className={`type-meta-small ${statusLabel.className}`}>{statusLabel.text}</span>
         )}
-        {aiScore !== undefined && (
-          <span className="type-meta-small text-[var(--accent-primary)]">AI {aiScore}%</span>
-        )}
         {showProjectTags && projectTag && (
           <span className="type-meta-small text-[var(--color-dusty-blue,#8B9CAD)]">
             · {projectTag}

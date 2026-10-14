@@ -333,9 +333,9 @@ describe('the More menu · Ledgers (C20)', () => {
     ).toEqual([
       ['Client relations', '/people?view=threads'],
       ['Studio marketing', '/people?view=portfolio'],
-      ['The Engine', '/people?view=nurture'],
+      ['Keep in touch', '/people?view=nurture'],
     ]);
-    fireEvent.click(within(rooms).getByRole('link', { name: /The Engine/ }));
+    fireEvent.click(within(rooms).getByRole('link', { name: /Keep in touch/ }));
     expect(
       screen.queryByRole('group', { name: 'More studio actions' }),
     ).not.toBeInTheDocument();

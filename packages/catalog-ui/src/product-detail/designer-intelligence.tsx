@@ -36,7 +36,7 @@ interface DesignerIntelligenceProps {
 export function DesignerIntelligence({
   onTeach,
   spectrum = DEFAULT_SPECTRUM,
-  title = 'Designer Intelligence',
+  title = 'Designer notes',
   badge = 'Designer Only',
   hidden = false,
 }: DesignerIntelligenceProps) {
@@ -63,7 +63,7 @@ export function DesignerIntelligence({
       </div>
 
       {draft.aiScore !== undefined ? (
-        <TeachPanel title="Aesthete Intelligence">
+        <TeachPanel title="Style read">
           <div className="mb-4 flex items-center justify-between">
             <span className="type-meta">Intelligence score based on teaching sessions</span>
             <ScoreCircle score={draft.aiScore} label="Score" size="sm" />
@@ -87,7 +87,7 @@ export function DesignerIntelligence({
           {isEditable && (
             <div className="rounded-md border border-[rgba(139,156,173,0.12)] bg-[rgba(139,156,173,0.04)] p-4">
               <span className="mb-2 block font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-dusty-blue)]">
-                Aesthete Panel
+                Style panel
               </span>
               <p className="mb-3 font-body text-[0.82rem] text-[var(--text-muted)]">
                 Adjust spectrum sliders above to refine this product&apos;s style profile. Changes
@@ -109,7 +109,7 @@ export function DesignerIntelligence({
           )}
         </TeachPanel>
       ) : (
-        <TeachPanel title="Aesthete Intelligence">
+        <TeachPanel title="Style read">
           <p className="mb-4 font-body text-[0.85rem] italic text-[var(--text-muted)]">
             This product hasn&apos;t been taught yet. Teaching adds style classification, client
             matching, and designer notes that improve future recommendations.
