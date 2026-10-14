@@ -23,18 +23,26 @@ import {
 // mocks returned.
 const mockPathname = jest.fn(() => '/desk');
 const mockPush = jest.fn();
+const mockRouterPrefetch = jest.fn();
+const mockPrefetchQuery = jest.fn();
+jest.mock('next/navigation', () => ({
+  usePathname: () => mockPathname(),
+  useRouter: () => ({ push: mockPush, prefetch: mockRouterPrefetch, replace: jest.fn() }),
+}));
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQueryClient: () => ({ prefetchQuery: mockPrefetchQuery }),
+}));
 // Return teaching's in-place and act notes: jest cannot load @patina/help-system
 // behind the real hook, and nothing here is taught.
 jest.mock('@/hooks/use-teaching-note', () => ({
   useTeachingNoteFor: () => ({ note: null, bind: null }),
 }));
 
-jest.mock('next/navigation', () => ({
-  usePathname: () => mockPathname(),
-  useRouter: () => ({ push: mockPush, replace: jest.fn() }),
-}));
-
 jest.mock('@patina/supabase', () => ({
+  docKeys: {
+    engagement: (id: string) => ['document-state', 'engagement', id],
+  },
   usePeopleDirectory: () => ({ data: undefined }),
   useRecentBoards: () => ({ data: [] }),
 }));
@@ -158,6 +166,23 @@ describe('the Find anything → command bar circuit', () => {
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
 
     expect(screen.getByRole('dialog', { name: 'Studio search' })).toBeInTheDocument();
+  });
+
+  it('prefetches a Desk document when its row receives keyboard focus', () => {
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] });
+    mockRouterPrefetch.mockClear();
+    mockPrefetchQuery.mockClear();
+    render(<><FindAnythingButton /><CommandBar /></>);
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+    const row = screen.getByRole('option', { name: /Ellsworth Residence/ });
+    fireEvent.focus(row);
+    fireEvent.pointerEnter(row);
+    expect(mockRouterPrefetch).toHaveBeenCalledTimes(1);
+    expect(mockRouterPrefetch).toHaveBeenCalledWith('/doc/eng-1');
+    expect(mockPrefetchQuery).toHaveBeenCalledTimes(1);
+    expect(mockPrefetchQuery.mock.calls[0][0].queryKey).toEqual([
+      'document-state', 'engagement', 'eng-1',
+    ]);
   });
 
   it('keeps Desk as one historical alias for Studio overview without duplicating its destination', () => {
