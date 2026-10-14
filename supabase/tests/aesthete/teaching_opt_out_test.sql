@@ -131,8 +131,9 @@ SELECT set_config('request.jwt.claims', '{"sub": "79000000-0000-4000-8000-000000
 SET LOCAL ROLE authenticated;
 SELECT is(public.set_studio_teaching_sharing('79000000-0000-4000-8000-000000000011', false), false,
           'the owner turns studio A''s sharing off');
+SELECT set_config('app.teaching_sharing_setter', 'on', true);
 SELECT throws_ok($$UPDATE public.organizations SET share_teaching = true WHERE id = '79000000-0000-4000-8000-000000000011'$$,
-                 '42501', NULL, 'direct owner UPDATE cannot change share_teaching');
+                 '42501', NULL, 'an owner cannot bypass the setter by setting the GUC');
 RESET ROLE;
 
 SELECT set_config('request.jwt.claims', '{"sub": "79000000-0000-4000-8000-000000000002", "role": "authenticated"}', true);

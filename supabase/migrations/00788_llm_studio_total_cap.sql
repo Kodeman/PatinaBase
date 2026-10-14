@@ -5,16 +5,27 @@
 -- monthly caps remain independent limits and are never replaced by an override.
 -- ═══════════════════════════════════════════════════════════════════════════
 
-ALTER TABLE public.llm_controls
-  ADD COLUMN IF NOT EXISTS studio_monthly_cap_usd numeric(12,2)
-  CHECK (studio_monthly_cap_usd IS NULL OR studio_monthly_cap_usd >= 0);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'llm_controls'
+       AND column_name = 'studio_monthly_cap_usd'
+  ) THEN
+    ALTER TABLE public.llm_controls
+      ADD COLUMN studio_monthly_cap_usd numeric(12,2)
+      CHECK (studio_monthly_cap_usd IS NULL OR studio_monthly_cap_usd >= 0);
+    UPDATE public.llm_controls
+       SET studio_monthly_cap_usd = 50
+     WHERE studio_monthly_cap_usd IS NULL;
+  END IF;
+END;
+$$;
+
 ALTER TABLE public.llm_controls
   ALTER COLUMN studio_monthly_cap_usd SET DEFAULT 50;
-
--- SET DEFAULT affects future inserts only; initialize the existing singleton.
-UPDATE public.llm_controls
-   SET studio_monthly_cap_usd = 50
- WHERE studio_monthly_cap_usd IS NULL;
 
 CREATE OR REPLACE FUNCTION public.llm_reserve(
   p_feature text, p_studio_id uuid, p_user_id uuid, p_est_usd numeric,

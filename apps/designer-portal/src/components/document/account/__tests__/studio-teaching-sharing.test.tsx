@@ -26,7 +26,7 @@ describe('StudioTeachingSharingCard (R5)', () => {
     expect(screen.getByRole('group', { name: 'Teaching' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Your studio's corrections help Patina read pieces better for every studio. Turn this off and new corrections stay with your studio.",
+        "Your studio's corrections help Patina read pieces better for every studio. Turn this off and new corrections stop shaping suggestions for other studios; style tags on shared catalog pieces stay visible.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Share our teaching' })).toBeChecked();
@@ -43,7 +43,8 @@ describe('StudioTeachingSharingCard (R5)', () => {
     expect(screen.getByText("Couldn't load this setting.")).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Share our teaching' })).toBeDisabled();
     expect(container).not.toHaveTextContent('Shared with every studio.');
-    expect(container).not.toHaveTextContent('New corrections kept to this studio.');
+    expect(container).not.toHaveTextContent("New corrections kept out of other studios' suggestions.");
+    expect(screen.getByRole('button', { name: 'Try again' })).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mockRefetch).toHaveBeenCalled();
   });
@@ -51,7 +52,7 @@ describe('StudioTeachingSharingCard (R5)', () => {
   it('shows the updated false-state copy to a member', () => {
     mockUseStudioTeachingSharing.mockReturnValue({ data: false, isLoading: false, isError: false, refetch: mockRefetch });
     render(<StudioTeachingSharingCard studioId="studio-1" canManage={false} />);
-    expect(screen.getByText('New corrections kept to this studio.')).toBeInTheDocument();
+    expect(screen.getByText("New corrections kept out of other studios' suggestions.")).toBeInTheDocument();
   });
 
   it('lets an owner or admin turn it off, and back on', () => {
@@ -72,7 +73,7 @@ describe('StudioTeachingSharingCard (R5)', () => {
     render(<StudioTeachingSharingCard studioId="studio-1" canManage={false} />);
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByText('Teaching')).toBeInTheDocument();
-    expect(screen.getByText('New corrections kept to this studio.')).toBeInTheDocument();
+    expect(screen.getByText("New corrections kept out of other studios' suggestions.")).toBeInTheDocument();
     expect(screen.getByText('Owners and admins change this.')).toBeInTheDocument();
     expect(mockSetSharing).not.toHaveBeenCalled();
   });

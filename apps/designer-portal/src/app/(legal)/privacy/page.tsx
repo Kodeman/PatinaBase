@@ -133,7 +133,7 @@ export default function PrivacyPage() {
           >
             hello@patina.cloud
           </a>
-          . From then on, your studio&rsquo;s new corrections stay with your studio; what Patina already learned from earlier ones isn&rsquo;t removed.
+          . From then on, your studio&rsquo;s new corrections stop shaping suggestions for other studios. Style tags you add to a shared catalog piece stay visible to anyone who sees that piece, and what Patina already learned from earlier corrections isn&rsquo;t removed.
         </p>
       </Section>
 

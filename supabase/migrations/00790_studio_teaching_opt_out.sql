@@ -64,8 +64,7 @@ SET search_path = public, pg_temp
 AS $fn$
 BEGIN
   IF NEW.share_teaching IS DISTINCT FROM OLD.share_teaching
-     AND current_user NOT IN ('postgres', 'service_role')
-     AND current_setting('app.teaching_sharing_setter', true) IS DISTINCT FROM 'on' THEN
+     AND current_user NOT IN ('postgres', 'service_role') THEN
     RAISE EXCEPTION 'share_teaching must be changed through set_studio_teaching_sharing'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -184,12 +183,10 @@ BEGIN
   END IF;
 
   IF v_old IS DISTINCT FROM p_share THEN
-    PERFORM set_config('app.teaching_sharing_setter', 'on', true);
     UPDATE public.organizations
        SET share_teaching = p_share,
            updated_at = now()
      WHERE id = p_studio_id;
-    PERFORM set_config('app.teaching_sharing_setter', 'off', true);
 
     INSERT INTO public.audit_logs
       (user_id, organization_id, action, resource_type, resource_id, old_values, new_values)
