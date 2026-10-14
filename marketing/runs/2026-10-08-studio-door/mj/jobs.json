@@ -1,0 +1,140 @@
+[
+  {
+    "id": "J01",
+    "kind": "still",
+    "channel": "instagram-4x5",
+    "pieceIds": [
+      "P01",
+      "P05",
+      "P06"
+    ],
+    "variants": 4,
+    "paste": "a designer's hands opening a drawing set beside a single handwritten client page on a white oak work table, graphite pencil notes, a walnut veneer chip and a cup of coffee gone cold at the drafting side, soft north window light at eight in the morning, 50mm at eye level, quiet and unhurried, a small design studio in a 1920s storefront in Madison's Vilas neighborhood --ar 4:5 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J01"
+  },
+  {
+    "id": "J02",
+    "kind": "still",
+    "channel": "linkedin-landscape",
+    "pieceIds": [
+      "P02"
+    ],
+    "variants": 3,
+    "paste": "a studio owner seen from behind stepping away from a long work table toward a drafting board, leaving a drawing set, a marked-up page and walnut samples for the new hire whose hands rest at the near end, plaster walls and plank floors, overcast daylight from tall warehouse windows, 35mm wide from the doorway with both figures near the centre of frame, a calm handoff, a converted brick warehouse studio in Milwaukee's Third Ward --ar 191:100 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J02"
+  },
+  {
+    "id": "J03",
+    "kind": "still",
+    "channel": "pinterest-2x3",
+    "pieceIds": [
+      "P03"
+    ],
+    "variants": 3,
+    "paste": "a close crop of unbleached linen and a quartersawn white oak sample resting on a handwritten page of pencil notes with a fabric tag pinned at its corner, raw linen, oak grain and graphite, soft diffuse light from a north window, 100mm macro from above, tactile and settled, a sample table in a Madison design studio --ar 2:3 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J03"
+  },
+  {
+    "id": "J04",
+    "kind": "still",
+    "channel": "email",
+    "pieceIds": [
+      "P04"
+    ],
+    "variants": 3,
+    "paste": "a tape measure, a fabric ring and a folded drawing resting on a deep painted-pine window sill, cotton, steel and old paint, early morning frost light through wavy old glass, 85mm at sill height, the quiet start of a workday, a century-old house turned design studio on Madison's near east side --ar 3:2 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J04"
+  },
+  {
+    "id": "J05",
+    "kind": "still",
+    "channel": "deck-16x9",
+    "pieceIds": [
+      "P06"
+    ],
+    "variants": 3,
+    "paste": "a small design studio mid-job seen wide from the corner, a sample board half-pinned with linen and walnut chips, a drawing set with notes on the long work table and a single upholstered chair under a drop cloth by the window, plaster, white oak and unbleached linen, overcast daylight from a long window, 28mm from the corner with bare plaster wall open at the upper left, in progress and calm, a studio above a Main Street storefront in Mineral Point, Wisconsin --ar 16:9 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J05"
+  },
+  {
+    "id": "J06",
+    "kind": "still",
+    "channel": "poster-18x24",
+    "pieceIds": [
+      "P08",
+      "P06"
+    ],
+    "variants": 3,
+    "paste": "an open studio doorway seen from a dim hall, a work table beyond with a single page and a drawing set laid out and a sample board on the far wall, painted pine door frame, plaster and plank floors, low late afternoon sun across the floor through the door, 35mm from the hall at standing height with quiet shadow across the upper third, invitation and quiet, a design studio in a 1910s brick building in Milwaukee's Bay View --ar 3:4 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J06"
+  },
+  {
+    "id": "J07",
+    "kind": "still",
+    "channel": "video-9x16",
+    "pieceIds": [
+      "P09"
+    ],
+    "variants": 2,
+    "paste": "a designer's hands pressing the last brass pin into a sample board beside an unbleached linen swatch and walnut veneer chips, linen, walnut and brass, soft north window light with dust in the air, 50mm at eye level with the hands low in the vertical frame, focused and quiet, a converted brick warehouse studio in Milwaukee's Third Ward --ar 9:16 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J07"
+  },
+  {
+    "id": "J08",
+    "kind": "still",
+    "channel": "video-9x16",
+    "pieceIds": [
+      "P09"
+    ],
+    "variants": 2,
+    "paste": "a second pair of hands settling a single handwritten client page flat on a white oak work table, a drawing set and a brass scale ruler beside it, graphite and paper, soft morning light from a tall window, 85mm close crop from above with open paper through the middle of the frame, picking up where someone left off, a small design studio in Madison's Vilas neighborhood --ar 9:16 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J08"
+  },
+  {
+    "id": "J09",
+    "kind": "still",
+    "channel": "video-9x16",
+    "pieceIds": [
+      "P09"
+    ],
+    "variants": 2,
+    "paste": "a half-finished dining room with drop cloths, raw plaster walls and a white oak table waiting in place under a tall window, wool, plaster and hand-oiled oak, diffuse late-autumn light across plank floors, 28mm from the doorway, anticipation and calm, a 1920s bungalow in Madison's Shorewood Hills --ar 9:16 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J09"
+  },
+  {
+    "id": "J10",
+    "kind": "video",
+    "channel": "video-9x16",
+    "pieceIds": [
+      "P09"
+    ],
+    "variants": 2,
+    "startFrom": "J07",
+    "paste": "one slow push-in toward the sample board as the hand finishes pressing the last brass pin, dust drifting in the window light, nothing else moves --ar 9:16 --motion low --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J10"
+  },
+  {
+    "id": "J11",
+    "kind": "video",
+    "channel": "video-9x16",
+    "pieceIds": [
+      "P09"
+    ],
+    "variants": 2,
+    "startFrom": "J08",
+    "paste": "one slow tilt down from the window light onto the table as the hands settle the page flat, the light steady, nothing else moves --ar 9:16 --motion low --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J11"
+  },
+  {
+    "id": "J12",
+    "kind": "video",
+    "channel": "video-9x16",
+    "pieceIds": [
+      "P09"
+    ],
+    "variants": 2,
+    "startFrom": "J09",
+    "paste": "one slow lateral slide across the doorway, the edge of a drop cloth lifting slightly in a draft, the light steady, nothing else moves --ar 9:16 --motion low --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/mj/inbox/J12"
+  }
+]

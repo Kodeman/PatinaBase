@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "runId": "2026-10-12-founding-circle-madison",
+  "contentTest": {
+    "pass": true,
+    "audience": "A Madison-area homeowner (Madison, Middleton, Waunakee, Verona, Sun Prairie, the near west side) who cares how her home is furnished, values a designer's eye and Midwest makers, and would like a hand in what Patina becomes. Addressed directly about her own home under VISION-DECISIONS V21 (amends V17 beyond the homepage) and voice.md §1 (Founding Circle campaigns). She is not addressed as Patina's customer: the studio remains the customer (VISION §2, V21 'unchanged'); membership is an invitation into the building of Patina, never a sale. No shop line, no products, no prices or fees (not even 'free'), no discount, no urgency beyond the published cap of 200 [C33]. First reached through Leah's own past and current clients (VISION §2 names Middle West's active clients as the first homeowner cohort) and then Madison-area press, 1:1, never SEO strangers.",
+    "moment": "Fall in Madison: the season she looks around her own rooms and starts planning what comes next, a room she wants to finish, a piece she wants made to last. Per V21 the studio-moment check reads as the homeowner's moment, and it still has a studio behind it: Middle West Studio, Leah's, inviting its own clients to help shape what Patina brings in before the app launches. Surfaces served, in VISION's ranking: the iOS app, the studio's front door, which founding members are first through at launch [C34]; and the marketplace, the till, whose makers and styles founding members help choose [C35]. Not The Document, which stays the studio's working surface and is never shown or sold here.",
+    "stream": "margin",
+    "promise": "The Founding Circle's own promise, as the live page states it: a place at the table. Founding members help choose which makers and styles Patina brings in [C35], hear from Kody and Leah as it takes shape [C36], are first through the door when the app launches [C34], are credited by name at launch and stay founders for good [C37], and begin with a first letter from Kody [C38]. Underneath it sits VISION §4's homeowner promise, one agreed direction with her designer, told through her own home and the people behind it, never through engagement, dashboards or a funnel.",
+    "reason": "Passes under VISION-DECISIONS V21 (Kody, 2026-10-12), the ruling VISION §8 says governs a change like this, and the user's own request names exactly this batch. The reader is a homeowner, but she is not Patina's customer and the batch never treats her as one: nothing is sold, nothing is priced, no product or catalog appears, and the only ask in every piece is to join the Founding Circle at patina.cloud/founding [C38], an invitation into the building of Patina. Studio moment: Leah's studio bringing its own clients in first, the cohort VISION §2 names, with Madison-area press second; acquisition is 1:1 through Leah's network and Madison, never SEO strangers. Stream: margin, since the Founding Circle is the homeowner side of the designer-led projects through which furniture is eventually sold (VISION §3); no Pledge language rides on it. Promise: the five membership benefits on the live page [C34–C37] plus Kody's first letter [C38], all verified claims. Surfaces: the iOS app's front door and the marketplace's makers, both ranked below The Document and neither optimized for engagement. Honesty held as hard rules on every piece: the app and marketplace are pre-launch [C24]; the only scarcity is the published cap of 200 [C33] and no piece implies a count of places left; never 'AI', no Pledge, no time-saved figures, no claim that any studio besides Middle West uses Patina, no mention of the Moll Drive house or any project running on Patina; byline 'Kody and Leah', names only, no titles; the tagline at most once in the whole batch, never a headline, and it is assigned to a single piece (P06's footer) so no other piece may use it; every image is a generated illustration, never captioned as a real home, client or maker; membership is open wherever she lives [C39] while this batch's places and imagery stay Madison and nearby."
+  },
+  "concept": {
+    "name": "A place at the table",
+    "idea": "It is fall in Madison and she is looking at her own rooms again: the living room that never got finished, the dining table she wants made to last. Patina is being built a few miles from her, by Kody and Leah at Middle West Studio [C01], around a real designer's eye and Midwest makers, and it is not open yet [C24]. The Founding Circle is her seat at that table while it is still being built: a monthly say in which makers and styles come in [C35], word from Kody and Leah as it takes shape [C36], first through the door when the app launches [C34], her name on it at launch and a founder for good [C37], beginning with a first letter from Kody [C38]. Two hundred seats [C33], open wherever she lives [C39]. Nothing to buy, nothing to shop; the one ask in every piece is to join at patina.cloud/founding. Three angles, one per social post and echoed across the print and letter pieces: the room she keeps looking at (her home, a sample held to the window with her designer); who makes it (a modern Midwest workshop, and her say in which makers come in); built in Madison, in the open (Kody and Leah, the studio where it is being made, hearing from them as it takes shape). Leah's letter speaks to her own clients in her own voice; the PR pitch gives a Madison editor the checkable facts and one ask; the poster and one-pager carry the invitation into a cafe or design shop and home from it.",
+    "artDirection": "Lived-in Madison-area homes in fall light: low afternoon sun through tall windows, maples turning outside, a sample or a sketch in a homeowner's hand with her designer beside her, candid and mid-conversation, faces at a natural distance and never looking into the lens. A maker's workshop that reads modern and bright: tall windows, a laptop, a CNC in the background, a white oak board against a printed drawing; no antique tools, no grime, no worn hands as the subject. A contemporary Madison design studio with its sample library, laptop and monitor, printed plans pinned. Materials up close as supporting shots (white oak, walnut, linen, a pencil sketch). Furniture only in the background, never the subject; every generated image carries the word 'Illustration' where a caption or credit would sit and is never described as a real home, client, studio or maker. Paper ground (#EDE9E4), Playfair Display headlines in sentence case, Inter body, DM Mono eyebrows for place and date lines (Madison · Fall 2026). Instagram: image owns the top two thirds, headline on paper below, text out of the outer 64 px. Pinterest: tall image, headline over a paper band at the foot. Email: letter first, from Leah, one image at most under the opening paragraph, readable with images off. One-pager: eyebrow, Playfair title, one image band, four single-column sections, CTA at the foot, print-safe. Poster: one image, one Playfair line readable from six feet, no QR-first design. Flat paper, ink and clay-beige hairlines; no gradients, badges, red/green, product screenshots or Patina mark as hero. Midjourney house style per art-direction.md §5 (--v 8.2 --style raw --s 40 --p m7507783415631638492); {{SREF}} stays unset. No coastal signifiers; Madison, Middleton, Waunakee, Verona, Sun Prairie and the near west side are the place cues."
+  },
+  "pieces": [
+    {
+      "id": "P01",
+      "kind": "social",
+      "channel": "instagram-4x5",
+      "angle": "The room you keep looking at: a sample held up to the fall light with your designer, and a seat at the table where Patina decides what comes in.",
+      "brief": "Instagram 4:5, the batch's opening post (Mon Oct 19 or when Kody sets it). Lead with something she can see or touch: a fall afternoon, the living room she keeps meaning to finish, a linen or wood sample held up to the window beside her designer. One idea: she can have a hand in what Patina becomes. Founding members get monthly questions on which makers to bring in and which styles to explore [C35]; the app and marketplace are pre-launch [C24]. The one ask: join the Founding Circle at patina.cloud/founding [C38]; say the address plainly, no link-in-bio begging. Headline ≤ 8 words, caption 40–90 words with her home in the first line, 0–4 specific hashtags (#madisoninteriors, #madisonwi, #midwestmakers; never generic walls). Hard rules: no products, no prices or fees (not even 'free'), no discount framing, no fake urgency, no count of places left (the cap of 200 [C33] may be stated, never a remainder); never 'AI'; no Pledge; no time-saved figures; no Moll Drive; no claim another studio uses Patina; no tagline (it belongs to P06 alone); byline, if any, 'Kody and Leah'. Alt text describes the illustration plainly for a screen reader (a woman and her designer holding a fabric sample up to window light in a living room) and never calls it a real home or client.",
+      "claims": ["C24", "C35", "C38"],
+      "visuals": ["J01"]
+    },
+    {
+      "id": "P02",
+      "kind": "social",
+      "channel": "instagram-4x5",
+      "angle": "Who makes it: a Midwest workshop that reads modern, a piece made to last, and your say in which makers Patina brings in.",
+      "brief": "Instagram 4:5, second post, midweek after P01. Lead with the material and the place: a white oak board checked against a drawing in a bright Wisconsin workshop, a piece she wants made to last. One idea: the makers Patina brings in are chosen with its founding members; members get monthly questions on which makers to bring in and which styles to explore [C35]. Honor the maker's craft (grain, kiln-dried, hand-built, provenance) without selling a maker or a product to her; name no real maker and no real piece. Honest that Patina's app and marketplace are pre-launch [C24]. The one ask: patina.cloud/founding [C38]. Headline ≤ 8 words, caption 40–90 words, 0–4 specific hashtags. Hard rules as P01: no products, prices, discounts, urgency or places-left counts; never 'AI'; no Pledge; no time-saved; no Moll Drive; no other-studio claim; no tagline; no 'curated', 'luxury' or 'bespoke'. Alt text: a maker at a bright workshop bench checking a white oak board against a printed drawing, an illustration, never a real maker.",
+      "claims": ["C24", "C35", "C38"],
+      "visuals": ["J02"]
+    },
+    {
+      "id": "P03",
+      "kind": "social",
+      "channel": "instagram-4x5",
+      "angle": "Built in Madison, in the open: Kody and Leah are making Patina a few miles from your house, and founding members hear from them as it takes shape.",
+      "brief": "Instagram 4:5, third post, the following week. Lead with the place where it is being made: a Madison studio, sample library, plans pinned, a laptop open to a floor plan, late fall light. One idea: it is being built here, in the open, and founding members are in the room. Patina is a venture of Middle West Studio in Madison, Wisconsin [C01]; members get updates from Kody and Leah as Patina takes shape [C36], are first through the door when the app launches [C34], and are credited by name at launch, founders for good [C37]. The Founding Circle is limited to 200 founding members [C33] (state the cap only; never a count of places left). The one ask: patina.cloud/founding [C38]. Byline 'Kody and Leah', names only, no titles, no 'co-founder'. Headline ≤ 8 words, caption 40–90 words, 0–4 specific hashtags. Hard rules as P01: no products, prices, discounts or urgency; never 'AI' (if the thesis must be named, it is Designer-Taught Intelligence, and in this post it need not be named at all); no Pledge; no time-saved; no Moll Drive; no claim that any studio besides Middle West uses Patina; no tagline. Alt text: a bright design studio with fabric, tile and wood samples on open shelves and a laptop showing a floor plan, no people, an illustration, never a real studio.",
+      "claims": ["C01", "C24", "C33", "C34", "C36", "C37", "C38"],
+      "visuals": ["J03"]
+    },
+    {
+      "id": "P04",
+      "kind": "pin",
+      "channel": "pinterest-2x3",
+      "angle": "A place at the table: a white oak sample and a linen swatch on a pencil sketch of her room, and the invitation worth saving.",
+      "brief": "Pinterest 2:3, one pin. Tighter than social: headline ≤ 6 words, caption ≤ 50 words, one sensory lead (white oak, linen, a pencil sketch on the kitchen counter in fall morning light), a reason to save it (she is planning a room this fall; the Founding Circle is where she helps choose which makers and styles Patina brings in [C35]). Honest that the app and marketplace are pre-launch [C24]. The one ask: patina.cloud/founding [C38]. ≤ 4 specific hashtags. Headline sits over a paper band at the foot, never over the image. Hard rules as P01: no products, prices, discounts, urgency or places-left counts; never 'AI'; no Pledge; no time-saved; no Moll Drive; no other-studio claim; no tagline; no 'curated' or 'luxury'. Alt text: a white oak sample and a linen swatch laid on a pencil sketch on a kitchen counter in morning light, an illustration.",
+      "claims": ["C24", "C35", "C38"],
+      "visuals": ["J04"]
+    },
+    {
+      "id": "P05",
+      "kind": "email",
+      "channel": "email",
+      "angle": "A short personal letter from Leah to her own past and current clients: what she and Kody are building, and a seat at the table for the people whose homes taught her.",
+      "brief": "Email, 600 px, a DRAFT ONLY; the pipeline sends nothing. A letter, not a newsletter, from Leah to her own past and current clients, signed 'Leah' (names only, no titles; never 'The Patina Team'). Greeting ⟨FILL: first name⟩. Subject ≤ 60 characters, plain, no clickbait, no emoji; preheader finishes the subject's thought. Body 120–220 words, readable with images off, exactly one ask: join the Founding Circle at patina.cloud/founding [C38]. Ends 'Reply here; it comes straight to me.' Facts she may state: Patina is a venture of Middle West Studio in Madison, which she and Kody are building [C01]; it is pre-launch [C24], which is why she is writing now and not later; founding members get monthly questions on which makers to bring in and which styles to explore [C35], hear from her and Kody as it takes shape [C36], are first through the door when the app launches [C34], are credited by name at launch and stay founders for good [C37]; it begins with a first letter from Kody [C38]; it is limited to 200 [C33], stated once and plainly, never as a count left. Voice: warm, not chummy; her clients' own rooms (a named material, a named room) rather than Patina's insides; she may say their homes are what taught her eye. Hard rules: no products, no prices or fees (not even 'free'), no discount, no fake urgency; never 'AI'; no Pledge; no time-saved figures; no Moll Drive house or any project described as having run on Patina; no claim that any studio besides Middle West uses Patina; no tagline (P06 alone carries it); no surname 'Hartwell'. At most one image (J05) under the opening paragraph, labelled 'Illustration', never captioned as a client's home.",
+      "claims": ["C01", "C24", "C33", "C34", "C35", "C36", "C37", "C38"],
+      "visuals": ["J05"]
+    },
+    {
+      "id": "P06",
+      "kind": "one-pager",
+      "channel": "one-pager-letter",
+      "angle": "A place at the table: the take-home that lists the five membership benefits and the first letter from Kody.",
+      "brief": "One-pager, letter, print-ready PDF, margins ≥ 0.75 in, print-safe (no full-bleed dark ground). Title 'A place at the table' in Playfair; DM Mono eyebrow 'Madison · Fall 2026 · The Founding Circle'. Four sections, each a heading and ≤ 70 words: (1) the moment: fall in Madison, she is looking at her own rooms, a room to finish, a piece to be made to last, and the people behind a home like that, a real designer's eye and Midwest makers; (2) what the Founding Circle is: an invitation into the building of Patina, not a purchase; Patina's app and marketplace are pre-launch [C24]; then the five membership benefits as the live page names them, each in a line: First access, first through the door when the app launches and first to test it as it is built [C34]; Real influence, monthly questions on which makers to bring in and which styles to explore [C35]; Behind the curtain, updates from Kody and Leah as Patina takes shape [C36]; Your name at launch and Always a founder, credited by name at launch, founding-member status never expires [C37]; (3) who is building it: Kody and Leah at Middle West Studio in Madison, Wisconsin [C01]; Patina starts with studios in Madison and Milwaukee and grows outward through Leah's network [C08]; open wherever she calls home, rooted in Madison [C39]; (4) what it asks of her: join at patina.cloud/founding, where membership begins with a first letter from Kody [C38]; the circle is limited to 200 founding members [C33], stated as the cap only. One CTA at the foot: patina.cloud/founding. This is the ONE piece in the batch that may carry 'Where Time Adds Value', once, as a footer line, never a headline; every other piece omits it. Byline 'Kody and Leah', names only. Hard rules: no products, no prices or fees (not even 'free'), no discount, no fake urgency, no count of places left; never 'AI'; no Pledge; no time-saved; no Moll Drive; no claim that any studio besides Middle West uses Patina; no feature grid, no comparison table. One image band (J06) labelled 'Illustration', never captioned as a real home or client.",
+      "claims": ["C01", "C08", "C24", "C33", "C34", "C35", "C36", "C37", "C38", "C39"],
+      "visuals": ["J06"]
+    },
+    {
+      "id": "P07",
+      "kind": "poster",
+      "channel": "poster-18x24",
+      "angle": "A place at the table: the cafe and design-shop wall poster that invites a Madison homeowner into the building of Patina.",
+      "brief": "Poster 18×24 in, 300 dpi, 0.125 in bleed, print-ready PDF, for a Madison cafe or design-shop wall. Readable from six feet: headline ≤ 6 words (working headline 'A place at the table'), subhead ≤ 14 words, body ≤ 35 words, one image (J07), one idea. The words carry it; no QR-code-first design (a small address line is fine). Body: Patina is being built in Madison by Kody and Leah [C01] and is pre-launch [C24]; founding members help choose which makers and styles come in [C35] and are first through the door at launch [C34]; join at patina.cloud/founding [C38]. The cap of 200 [C33] may appear once as the cap, never a remainder. Byline 'Kody and Leah', names only. Hard rules: no products, no prices or fees, no discount, no urgency; never 'AI'; no Pledge; no time-saved; no Moll Drive; no other-studio claim; no tagline (P06 alone). The image carries a small 'Illustration' label and is never described as a real home or client. Typography: Playfair headline, Inter body, DM Mono eyebrow with the place line 'Madison · Fall 2026'.",
+      "claims": ["C01", "C24", "C33", "C34", "C35", "C38"],
+      "visuals": ["J07"]
+    },
+    {
+      "id": "P08",
+      "kind": "pr-pitch",
+      "channel": "email",
+      "angle": "A factual pitch to a Madison-area editor or lifestyle writer: a Madison studio is building a furnishings venture in the open and inviting two hundred local homeowners to shape it.",
+      "brief": "PR pitch, email, a DRAFT ONLY, never sent. Recipient ⟨FILL: editor or writer name, publication: Madison Magazine, Isthmus or Wisconsin State Journal⟩. The outreach rule: body ≤ 150 words; the first two sentences make a specific, checkable observation about the recipient's own work, left as ⟨FILL: a story they ran, with its headline and month⟩ and never invented; one ask only (a call, or a visit to Middle West Studio mid-job with Leah); zero flattery filler; no attachments promised; never the word 'exclusive'. Subject ≤ 60 characters, plain. Facts: Patina is a venture of Middle West Studio in Madison, Wisconsin [C01], built by Kody and Leah (names only, no titles); its app and marketplace are pre-launch [C24]; it starts with studios in Madison and Milwaukee and grows through Leah's network [C08]; the Founding Circle invites homeowners to help choose which makers and styles Patina brings in [C35], is limited to 200 founding members [C33], and is open wherever they live [C39], joining at patina.cloud/founding [C38]. Signed by Kody, or Leah, as a person. Hard rules: factual, no pitch adjectives; no products, no prices or fees, no discount, no urgency; never 'AI' (if the thesis must be named, it is Designer-Taught Intelligence, a real designer's eye); no Pledge; no time-saved figures; no Moll Drive; no claim that any studio besides Middle West uses Patina; no tagline; no 'disrupt', 'revolutionize' or 'game-changing'. No image.",
+      "claims": ["C01", "C08", "C24", "C33", "C35", "C38", "C39"],
+      "visuals": []
+    }
+  ],
+  "jobs": [
+    {
+      "id": "J01",
+      "pieceIds": ["P01"],
+      "kind": "still",
+      "channel": "instagram-4x5",
+      "source": "midjourney",
+      "prompt": "a homeowner in her forties and her interior designer standing at the tall window of a lived-in living room, the homeowner holding a linen fabric sample up to the light while the designer holds a pencil sketch and a white oak sample, sofa and bookshelves soft in the background, low fall afternoon sun with maples turning outside, 35mm at eye level, candid and mid-conversation, a near west side house in Madison, Wisconsin",
+      "params": "--ar 4:5 --style raw --v 8.2 --s 40 --p m7507783415631638492 --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a homeowner and her designer at a tall living room window holding a linen fabric sample up to low fall afternoon light, a pencil sketch and a wood sample in hand, sofa soft in the background, 35mm candid, a house in Madison, Wisconsin",
+      "note": "An illustration; the post labels it so and never calls it a real home or client. Furniture stays in the background, never the subject. Faces at a natural distance, no one looking into the lens. Pick for the top two thirds of a 1080x1350 post with the sample and the window mid-frame."
+    },
+    {
+      "id": "J02",
+      "pieceIds": ["P02"],
+      "kind": "still",
+      "channel": "instagram-4x5",
+      "source": "midjourney",
+      "prompt": "a furniture maker in his thirties at a bright modern workshop bench checking a planed white oak board against a printed drawing, a laptop open beside him and a CNC router in the background, a clean bright shop, overcast fall daylight through tall windows, 50mm over the shoulder, focused and mid-task, a maker's workshop in southern Wisconsin",
+      "params": "--ar 4:5 --style raw --v 8.2 --s 40 --p m7507783415631638492 --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a furniture maker at a bright modern workshop bench checking a white oak board against a printed drawing, laptop beside him, tall windows, overcast daylight, 50mm over the shoulder, a workshop in Wisconsin",
+      "note": "The workshop must read modern and bright (laptop, CNC, tall windows), never old-workshop nostalgia; hands are not the subject. No finished chair or table as the subject. An illustration, never a real maker or a real piece."
+    },
+    {
+      "id": "J03",
+      "pieceIds": ["P03"],
+      "kind": "still",
+      "channel": "instagram-4x5",
+      "source": "midjourney",
+      "prompt": "a bright contemporary design studio with a sample library of fabric books, tile and wood samples on open shelves, a laptop and a large monitor on a white oak desk showing a floor plan, printed plans pinned to the wall and a scheme of samples laid out on the table, late fall afternoon light through tall windows, 35mm from the doorway, quiet and mid-work with no people, a working studio in Madison, Wisconsin",
+      "params": "--ar 4:5 --style raw --v 8.2 --s 40 --p m7507783415631638492 --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a bright design studio with fabric books, tile and wood samples on open shelves, a laptop and a large monitor showing a floor plan, printed plans pinned to the wall, late afternoon light, 35mm from the doorway, no people, Madison, Wisconsin",
+      "note": "No people by design: the post names Kody and Leah and no generated figure may stand in for either of them (no likeness of a real person). Screens show a plan with no legible words. An illustration, never a real studio."
+    },
+    {
+      "id": "J04",
+      "pieceIds": ["P04"],
+      "kind": "still",
+      "channel": "pinterest-2x3",
+      "source": "midjourney",
+      "prompt": "a white oak sample and a natural linen swatch laid on a pencil sketch of a living room on a kitchen counter, a pencil and a cup of coffee beside them, soft fall morning light from a window, 85mm close from slightly above, quiet and unhurried, a kitchen in Middleton, Wisconsin",
+      "params": "--ar 2:3 --style raw --v 8.2 --s 40 --p m7507783415631638492 --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a white oak sample and a linen swatch laid on a pencil sketch on a kitchen counter, soft morning light, 85mm close from slightly above, quiet, a kitchen in Wisconsin",
+      "note": "One material close-up beats a whole room on Pinterest. The sketch must hold no legible words. Pick a tall frame with clear paper at the foot for the headline band. An illustration."
+    },
+    {
+      "id": "J05",
+      "pieceIds": ["P05"],
+      "kind": "still",
+      "channel": "email",
+      "source": "midjourney",
+      "prompt": "a corner of a lived-in living room with a sample board of linen and wood swatches and a printed sketch resting on an ottoman, an armchair and a floor lamp soft in the background, warm fall afternoon light through a tall window with maples turning outside, 35mm from across the room at seated height, settled and quiet with no people, a house on the near west side of Madison, Wisconsin",
+      "params": "--ar 3:2 --style raw --v 8.2 --s 40 --p m7507783415631638492 --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a corner of a lived-in living room with a sample board and a printed sketch on an ottoman, armchair soft in the background, warm fall afternoon window light, 35mm from across the room, no people, Madison, Wisconsin",
+      "note": "Optional: the letter runs with images off and may drop this. Full width at 600 px under the opening paragraph, labelled 'Illustration', never captioned as a client's home. Furniture in the background only; the sample board and sketch are the subject."
+    },
+    {
+      "id": "J06",
+      "pieceIds": ["P06"],
+      "kind": "still",
+      "channel": "one-pager-letter",
+      "source": "midjourney",
+      "prompt": "a homeowner and her interior designer standing in a kitchen mid-renovation looking at the same drawing on a tablet, cabinet boxes in place and the island waiting for its top, drywall and a painted cabinet door sample leaning against it, overcast fall daylight through a new rear window, 35mm documentary at a natural distance, intent and mid-conversation, a house in Verona, Wisconsin",
+      "params": "--ar 4:5 --style raw --v 8.2 --s 40 --p m7507783415631638492 --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a homeowner and her designer in a kitchen mid-renovation looking at the same drawing on a tablet, cabinet boxes in place, overcast daylight through a new window, 35mm documentary, a house in Wisconsin",
+      "note": "Crops to a wide image band on the letter page, so pick a frame whose two figures and tablet sit in the middle third vertically. The tablet shows a plan with no legible words. Labelled 'Illustration', never a real home or client."
+    },
+    {
+      "id": "J07",
+      "pieceIds": ["P07"],
+      "kind": "still",
+      "channel": "poster-18x24",
+      "source": "midjourney",
+      "prompt": "a homeowner seen from behind at a natural distance holding a walnut sample up to the tall window of her own dining room, a pencil sketch on the table beside her, chairs and a sideboard soft in the background, low fall afternoon sun with maples turning outside, 50mm at eye level, quiet and considering, a house in Waunakee, Wisconsin",
+      "params": "--ar 3:4 --style raw --v 8.2 --s 40 --p m7507783415631638492 --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a homeowner seen from behind holding a walnut sample up to a tall dining room window, a pencil sketch on the table, low fall afternoon sun, 50mm, quiet, a house in Wisconsin",
+      "note": "Readable from six feet: one figure, one window, one sample; the dining table and chairs stay soft and in the background, never the subject. Upscale the pick to 5400x7200 px for print; leave the bottom quarter calm for subhead and body. Labelled 'Illustration' on the print, never a real home or client."
+    }
+  ]
+}

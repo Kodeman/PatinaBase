@@ -1,0 +1,354 @@
+{
+  "version": 1,
+  "runId": "2026-10-09-same-page",
+  "contentTest": {
+    "pass": true,
+    "audience": "The principal of a small Midwest residential design studio (Madison, Milwaukee and outward) adding her first designer or assistant while the workload doubles. The client, the contractor, the trades and the makers appear only as people on the studio's job: the client as the studio's client, the trades as the studio's vendors. Nobody but the studio is addressed as Patina's customer.",
+    "moment": "The month the jobs double and every question on every job still comes to her phone: the client wants the latest, the contractor wants the elevation, the new hire wants to know what was agreed. She is the switchboard, and she is hiring so she can stop being one (VISION section 2, the trigger).",
+    "stream": "subscription",
+    "promise": "You won't notice Patina: everyone on the job reads from the studio's one page per client, the studio stays in charge of it, and the client stays on one agreed direction (VISION section 4). Surface: The Document (VISION section 1, surface 1). Ask: apply to the Founding 50 with one live project.",
+    "reason": "Passes VISION's feature test on all four counts: surface = The Document; moment = the first hire while the workload doubles, told as the month every call still routes through the principal; stream = the studio subscription (floor); promise = the studio won't notice Patina and the client sees one agreed direction. The reader is a studio throughout; the client, contractor and trades are shown only as seat-holders on the studio's job (C31), never as Patina's customer. No Pledge language, no held tagline, no prices, fees or time-saved figures. All fourteen claims the brief cites (C01, C03, C04, C05, C06, C08, C09, C10, C11, C12, C23, C24, C31, C32) are verified rows. The ask is 1:1 (a Founding 50 application Kody and Leah read), not SEO. Two notes for the copy and critique steps. First, what each party sees must stay inside the verified rows: the client sees the same page (C05); the contractor and trades hold a seat on the job whose access ends with the job (C31); a trade sends its certificate, W-9 and licence through a link the studio confirms (C32). Do not describe any further contractor- or trade-facing capability. Second, as in the first round, the pin and the two social posts are broadcast channels against VISION's 1:1 acquisition; they stay because the brief asks for every Press output, and each carries the same personal ask rather than funnel copy."
+  },
+  "concept": {
+    "name": "Same page",
+    "idea": "The switchboard stops. Today every call on every job comes to the principal: the client wants the latest, the contractor wants the elevation, the new hire wants to know what was agreed, and she is the only one holding all three versions. Every piece shows the moment that changes: two or three people on a job looking at the same page, in the studio or on site, with nobody asking which version it is. The studio keeps one living page per client from brief to install (C04). The client sees that page (C05). The contractor and the trades hold a seat on the job and their access ends when the job does (C31); a trade sends its paperwork through a link and the studio confirms it (C32). The new hire opens the page and knows what was agreed. The principal goes back to the drawings. Patina is never called a CRM, a portal or a platform, and never shown as a hero screenshot; where the page appears it is on a laptop, a tablet or paper in a working room. Every piece ends on the same small ask: apply to the Founding 50 at patina.cloud/designers and bring one live project (C23), with the honest line that the app and marketplace are pre-launch (C24).",
+    "artDirection": "Paper, ink and one clay accent (art-direction section 1). Playfair headlines in sentence case, Inter body, DM Mono eyebrows for place and date lines ('Madison, WI', 'Founding 50'). Imagery follows art-direction section 3 as revised 2026-10-09: a bright, current residential studio with laptops and a large monitor on the desk, printed plans pinned, and a sample library of fabric books, tile, stone and wood on open shelves; and the house mid-build (framing, drywall, cabinet boxes, an island waiting for its top) with a drawing set or tablet open and the designer, the contractor and the client reading it together. People are working adults of mixed ages, dressed for a studio or a site, caught mid-task and looking at the work, in groups of two or three around one set of plans or one screen; faces at a natural distance, nobody looking into the lens. Never: antique workshops, hand tools, worn hands as the subject, sepia or grime, a studio without a computer, stock smiles, handshakes, a lone laptop on marble, gradients, the glossy-render look. Every image is a generated illustration and is never captioned as a real project, client, studio or maker. Places: Madison (Monroe Street, Shorewood Hills, the near east side), Middleton, Verona, Sun Prairie, Milwaukee (Third Ward, Bay View, Wauwatosa). The Patina mark appears once per piece, small, at the end or the foot."
+  },
+  "pieces": [
+    {
+      "id": "P01",
+      "kind": "social",
+      "channel": "instagram-4x5",
+      "angle": "Plans on site: the designer, the contractor and the client stand in the framed kitchen looking at the same page, and nobody asks which version it is.",
+      "brief": "Lead with what you can see: three people in a framed-out kitchen, one tablet between them, cabinet boxes stacked behind. Headline 8 words or fewer. Caption 40-90 words, the studio moment in the first line (the week every question on every job came to her phone). Say in plain words what each party reads: the studio keeps one living page per client, brief to install [C04]; the client sees the same page [C05]; the contractor and the trades hold a seat on the job, and it ends when the job does [C31]. Close on the ask: apply to the Founding 50 at patina.cloud/designers and bring one live project [C23]. Up to 4 specific hashtags (#madisoninteriors, #milwaukeedesign, #wisconsinhomes). Alt text describes the image plainly: three people, a tablet, a kitchen under construction. Never call Patina a CRM, portal or platform. The image is an illustration; do not caption it as a real house.",
+      "claims": [
+        "C04",
+        "C05",
+        "C31",
+        "C23"
+      ],
+      "visuals": [
+        "J01"
+      ]
+    },
+    {
+      "id": "P02",
+      "kind": "social",
+      "channel": "linkedin-landscape",
+      "angle": "The switchboard: 'This isn't a hiring problem. It's a systems problem.' The hire does not fix the phone; the page does.",
+      "brief": "Open on the quote with attribution: 'This isn't a hiring problem. It's a systems problem.' (Interior Designers Hub) [C12]. Then the studio's version: she hired, and every call still comes to her, because the job lives in her head and on her phone. Patina is built for the year a studio brings on its first designer or assistant [C03]: one living page per client the new hire can read [C04]; the contractor and the trades hold a seat on that job [C31]; no dashboards, no task manager, no tab bars [C06]. Headline 8 words or fewer. Caption 40-90 words, plain-spoken. Be honest that the app and marketplace are pre-launch [C24]. One ask: Founding 50 at patina.cloud/designers, bring one live project [C23]. Up to 4 hashtags. Image left, words right on paper (art-direction section 4). Never 'platform', 'CRM' or 'portal'.",
+      "claims": [
+        "C12",
+        "C03",
+        "C04",
+        "C31",
+        "C06",
+        "C24",
+        "C23"
+      ],
+      "visuals": [
+        "J02"
+      ]
+    },
+    {
+      "id": "P03",
+      "kind": "pin",
+      "channel": "pinterest-2x3",
+      "angle": "The sample library to the site: the scheme laid out on the studio table is the one the client approved and the one the contractor builds to.",
+      "brief": "Headline 6 words or fewer. Caption 50 words or fewer with one sensory lead (a fabric book open on the table, a tile, a white oak door sample, the printed plan under them). The reason to save it: the scheme on the table and the page the client approved are the same page [C05], one living page per client from brief to install [C04]. Studio reader only; no homeowner address, no 'shop'. Ask in one short line: Founding 50 at patina.cloud/designers [C23]. Up to 4 specific hashtags. Alt text plain. Headline over the paper band at the foot, never over the image.",
+      "claims": [
+        "C05",
+        "C04",
+        "C23"
+      ],
+      "visuals": [
+        "J03"
+      ]
+    },
+    {
+      "id": "P04",
+      "kind": "email",
+      "channel": "email",
+      "angle": "A short letter from Leah to a studio owner in the month the jobs doubled and the phone did not stop.",
+      "brief": "Subject 60 characters or fewer, plain. Preheader finishes its thought. Body 120-220 words, a letter not a newsletter, signed 'Leah, Middle West Studio' with Kody named as the one who builds it [C01]. Leah writes from her own studio: the month she realized she was the switchboard, and every question on every job came to her phone. What she wanted instead, in plain words for each party: one living page per client, brief to install [C04]; the client looking at that same page [C05]; the contractor and the trades holding a seat on the job that ends when the job does [C31]; a trade sending its insurance certificate and W-9 through a link she confirms [C32]; no dashboards, no task manager, no tab bars [C06]. Honest status: the app and marketplace are pre-launch [C24]; what a studio gets today is the page per client and a seat at the table. Exactly one ask: apply to the Founding 50 at patina.cloud/designers and bring one live project; Kody and Leah read every application [C23]. End: 'Reply here; it comes straight to me.' At most one image, under the opening paragraph, full width, readable with images off. No prices, no time saved, no Pledge. Never 'CRM', 'portal' or 'platform'.",
+      "claims": [
+        "C01",
+        "C04",
+        "C05",
+        "C31",
+        "C32",
+        "C06",
+        "C24",
+        "C23"
+      ],
+      "visuals": [
+        "J04"
+      ]
+    },
+    {
+      "id": "P05",
+      "kind": "one-pager",
+      "channel": "one-pager-letter",
+      "angle": "For a table at a Madison or Milwaukee design event: who is on the job, what each of them reads, and what it asks of the studio.",
+      "brief": "Eyebrow 'Founding 50 · Madison, WI'. Playfair title, one image band (J01), three or four sections each 70 words or fewer, single column, CTA at the foot, print-safe. Section 1 names the moment: the year the studio brings on its first designer or assistant and the workload doubles [C03], told as the month every call still came to one phone. Section 2, 'Who reads the page': the studio keeps one living page per client, brief to install [C04]; the client sees the same page, one agreed direction [C05]; the contractor and the trades hold a seat on the job, ending when the job does [C31]; a trade sends its insurance certificate, W-9 and licence through a link and the studio confirms them [C32]. Section 3, what it is not: no dashboards, no task manager, no tab bars [C06]; a venture of Middle West Studio in Madison [C01], starting with Madison and Milwaukee studios and growing outward through Leah's network [C08]; honest that the app and marketplace are pre-launch [C24]. Section 4 answers 'what does it ask of me?': apply to the Founding 50 at patina.cloud/designers and bring one live project; Kody and Leah read every application [C23]. One CTA. No feature grid, no comparison table, no prices. Byline 'Kody and Leah, Middle West Studio'. Caption the image as an illustration.",
+      "claims": [
+        "C03",
+        "C04",
+        "C05",
+        "C31",
+        "C32",
+        "C06",
+        "C01",
+        "C08",
+        "C24",
+        "C23"
+      ],
+      "visuals": [
+        "J01"
+      ]
+    },
+    {
+      "id": "P06",
+      "kind": "deck",
+      "channel": "deck-16x9",
+      "angle": "Six to eight slides for a first sit-down with a studio owner: the switchboard, the page, who reads it, the honest status, the ask.",
+      "brief": "Six to eight slides, one sentence headline each that stands alone, body 40 words or fewer, evidence before claims, a sourced number or none (prefer none). Suggested arc: (1) the moment: the year you bring on your first designer and the workload doubles [C03], and every call still comes to your phone; (2) the symptom in someone else's words: 'It would've been quicker to do it myself.' (Interior Designers Hub) [C11] and 'If your process only exists in your head, it's not really a process; it's a habit.' (IDCO Studio) [C09]; (3) the turn: 'You can't duplicate yourself. But you can duplicate a well-built process.' (IDCO Studio) [C10]; (4) what the studio keeps: one living page per client, brief to install [C04]; (5) who reads it: the client sees the same page, one agreed direction [C05]; the contractor and the trades hold a seat that ends when the job does [C31]; a trade sends its certificate, W-9 and licence through a link the studio confirms [C32]; (6) what it is not: no dashboards, no task manager, no tab bars [C06]; (7) who we are and where we stand: Middle West Studio, Madison [C01], Madison and Milwaukee first, outward through Leah's network [C08]; app and marketplace pre-launch [C24]; (8) the ask: Founding 50, one live project, Kody and Leah read every application [C23]. Headline top-left, generous paper, images full bleed (J05 open, J01 for 'who reads it', J07 for the house mid-build) or none. DM Mono footer line for sources on quote slides. No progress bars, no big lone numbers, no prices. Never 'CRM', 'portal' or 'platform'.",
+      "claims": [
+        "C03",
+        "C11",
+        "C09",
+        "C10",
+        "C04",
+        "C05",
+        "C31",
+        "C32",
+        "C06",
+        "C01",
+        "C08",
+        "C24",
+        "C23"
+      ],
+      "visuals": [
+        "J05",
+        "J01",
+        "J07"
+      ]
+    },
+    {
+      "id": "P07",
+      "kind": "pr-pitch",
+      "channel": "email",
+      "angle": "A draft note to a Madison or Milwaukee design editor: the one page a studio, its client and its contractor all read on a house they already photograph. Never sent.",
+      "brief": "Body 150 words or fewer. The first two sentences are a specific, checkable observation about the recipient's own work; the copy step leaves a clearly marked placeholder (e.g. '[a Wauwatosa kitchen remodel you ran this summer]') rather than inventing one. Then the angle: the magazine shows the finished room; behind it a small studio, its client, its contractor and its trades were reading one page on that house [C04], each with a seat on the job [C31]. Patina is a venture of Middle West Studio in Madison [C01], starting with Madison and Milwaukee studios [C08]; the app and marketplace are pre-launch [C24]. One ask only: a visit to a studio mid-job, or a twenty-minute call. No attachments promised, no 'exclusive', no flattery filler. Subject plain, 60 characters or fewer. Signed by Kody with Leah named. Mark the draft NOT SENT. Midwest editor only.",
+      "claims": [
+        "C04",
+        "C31",
+        "C01",
+        "C08",
+        "C24"
+      ],
+      "visuals": []
+    },
+    {
+      "id": "P08",
+      "kind": "poster",
+      "channel": "poster-18x24",
+      "angle": "Same page: the designer, the contractor and the client over one set of plans on the island that has no top yet.",
+      "brief": "One image (J06), one Playfair line readable from six feet: headline 6 words or fewer, worked from 'Same page'. Subhead 14 words or fewer: everyone on the job reads from the studio's one page per client [C04]. Body 35 words or fewer in the bottom quarter: the client sees the same page [C05]; the contractor and the trades hold a seat on the job [C31]; Middle West Studio, Madison [C01]; the ask, Founding 50 at patina.cloud/designers [C23]. Words carry it; no QR-first design. Bleed 0.125 in. For a studio wall or a table at a Midwest design event. Caption line in DM Mono marks the image as an illustration.",
+      "claims": [
+        "C04",
+        "C05",
+        "C31",
+        "C01",
+        "C23"
+      ],
+      "visuals": [
+        "J06"
+      ]
+    },
+    {
+      "id": "P09",
+      "kind": "video",
+      "channel": "video-9x16",
+      "angle": "Thirty seconds, three clips: the scheme laid out in the sample library, the desk where every call used to land, the framed kitchen where three people read one page.",
+      "brief": "30 s at 9:16 as three clips of 10 s or less (J11, J12, J13), opening on the work in the first two seconds (the sample library), never a logo. On-screen text in the middle third, 7 words or fewer per scene, Inter. VO spoken, one breath per line: the month the jobs doubled and every call came to her phone; the studio keeps one living page per client, brief to install [C04]; the client is looking at the same page [C05]; the contractor and the trades hold a seat on the job [C31]; nobody asks which version it is. Close on the ask on paper: Founding 50, patina.cloud/designers, bring one live project [C23]. The Patina mark once, at the end, on paper. No music cue that promises drama. Each scene lists seconds, its visual job id, on-screen text and VO.",
+      "claims": [
+        "C04",
+        "C05",
+        "C31",
+        "C23"
+      ],
+      "visuals": [
+        "J11",
+        "J12",
+        "J13",
+        "J08",
+        "J09",
+        "J10"
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "id": "J01",
+      "pieceIds": [
+        "P01",
+        "P05",
+        "P06"
+      ],
+      "kind": "still",
+      "channel": "instagram-4x5",
+      "prompt": "an interior designer in her forties holding a tablet with a floor plan on it while a contractor in his fifties in a canvas work jacket and a homeowner in her thirties in a quilted vest lean in and talk it over, standing in a framed-out kitchen, bare studs, stacked drywall and cabinet boxes still in their wrap around them, soft overcast daylight through new window openings, 35mm documentary at eye level with the three faces and the tablet in the middle third of the frame, candid and mid-conversation, true-to-life color, a new-build house outside Madison, Wisconsin",
+      "params": "--ar 4:5 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 4,
+      "fluxPrompt": "an interior designer holding a tablet with a floor plan while a contractor in a canvas work jacket and a homeowner lean in and talk it over, framed-out kitchen, bare studs, drywall stacks and cabinet boxes, overcast daylight through new window openings, 35mm documentary, faces and tablet in the middle of the frame, candid, new-build house"
+    },
+    {
+      "id": "J02",
+      "pieceIds": [
+        "P02"
+      ],
+      "kind": "still",
+      "channel": "linkedin-landscape",
+      "prompt": "a studio principal in her forties and her new junior designer seated side by side at a white oak desk looking at one large monitor showing a kitchen elevation, a laptop open beside it, printed plans and a stack of tile samples by the keyboard and a phone face down at the edge, white walls, a pale oak floor and open shelves of fabric books and tile behind them, clean daylight from tall windows and soft overhead light, 50mm over the shoulder with both figures and the monitor in the centre of the frame, focused and unhurried, true-to-life color, a bright modern design studio in Milwaukee, Wisconsin",
+      "params": "--ar 191:100 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "two designers seated side by side at a white oak desk looking at one large monitor showing a kitchen elevation, a laptop, printed plans and tile samples by the keyboard, a phone face down, white walls and shelves of fabric books behind, clean daylight from tall windows, 50mm over the shoulder, figures centred, focused, bright modern design studio"
+    },
+    {
+      "id": "J03",
+      "pieceIds": [
+        "P03"
+      ],
+      "kind": "still",
+      "channel": "pinterest-2x3",
+      "prompt": "a scheme being laid out on a large white studio table by the hands of a designer in a cream knit sweater, an open fabric book of oatmeal linen, a ceramic tile, a quartersawn white oak door sample and a quartz chip resting on a printed kitchen plan, a tablet at the table's edge, open shelves of fabric books and tile samples softly out of focus behind, bright even daylight from large windows, 50mm from slightly above with the materials in the upper two thirds and the printed plan running into the lower third of the tall frame, in progress, true-to-life color, a modern design studio in Madison, Wisconsin",
+      "params": "--ar 2:3 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a designer's hands in a cream knit sleeve laying out a scheme on a white studio table, an open fabric book of oatmeal linen, a ceramic tile, a white oak door sample and a quartz chip on a printed kitchen plan, a tablet at the edge, shelves of fabric books and tile behind, bright daylight, 50mm from slightly above, modern design studio, vertical"
+    },
+    {
+      "id": "J04",
+      "pieceIds": [
+        "P04"
+      ],
+      "kind": "still",
+      "channel": "email",
+      "prompt": "a phone with a dark screen and a printed drawing set open on a plywood kitchen island under construction, a tape measure, a painted cabinet door sample and a quartz chip beside them, cabinet boxes and taped drywall seams behind, bright morning light from a rear window wall, 85mm close at island height, the start of a site visit, true-to-life color, a new-build house outside Madison, Wisconsin",
+      "params": "--ar 3:2 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a phone and a printed drawing set open on a plywood kitchen island under construction, a tape measure, a painted cabinet door sample and a quartz chip, cabinet boxes and drywall behind, bright morning light from a window wall, 85mm close, start of a site visit, new-build house"
+    },
+    {
+      "id": "J05",
+      "pieceIds": [
+        "P06"
+      ],
+      "kind": "still",
+      "channel": "deck-16x9",
+      "prompt": "a bright modern design studio seen wide from the doorway, two designers at a long white oak table laying out fabric, tile and a wood door sample over printed plans while a laptop sits open at the end, a large monitor on a desk behind showing a floor plan, white walls and open shelves of fabric books, tile and stone samples along the right, bright even daylight from tall windows, 28mm from the doorway with clear white wall at the upper left, collaborative and in progress, true-to-life color, a design studio in Milwaukee, Wisconsin",
+      "params": "--ar 16:9 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a bright modern design studio seen wide, two designers at a long white oak table laying out fabric, tile and a wood door sample over printed plans with a laptop open at the end, a large monitor behind, white walls, shelves of fabric books and tile along the right, bright daylight from tall windows, 28mm with clear wall at the upper left, collaborative"
+    },
+    {
+      "id": "J06",
+      "pieceIds": [
+        "P08"
+      ],
+      "kind": "still",
+      "channel": "poster-18x24",
+      "prompt": "a designer in her forties, a contractor in a canvas work jacket and a homeowner in a quilted vest leaning over one printed drawing set spread across a plywood kitchen island that has no top yet, the contractor pointing at a wall, cabinet boxes in place and a printed elevation taped to the drywall behind, bright daylight from a rear window wall, 35mm from across the island at standing height with plain drywall and ceiling filling the upper third, three people reading one page, true-to-life color, a new-build house outside Madison, Wisconsin",
+      "params": "--ar 3:4 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a designer, a contractor in a canvas work jacket and a homeowner leaning over one printed drawing set spread on a plywood kitchen island with no top yet, the contractor pointing at a wall, cabinet boxes and drywall behind, bright daylight from a window wall, 35mm across the island with plain drywall in the upper third, three people reading one page, vertical"
+    },
+    {
+      "id": "J07",
+      "pieceIds": [
+        "P06"
+      ],
+      "kind": "still",
+      "channel": "deck-16x9",
+      "prompt": "a kitchen mid-install with cabinet boxes in place, the island waiting for its top and a printed elevation taped to the drywall, a tablet and a tape measure resting on the plywood island, painted cabinetry, bare drywall and a plywood subfloor, daylight from a rear window wall, 28mm from the doorway with plain drywall open at the upper left, work in progress with nobody in the room, true-to-life color, a new home outside Madison, Wisconsin",
+      "params": "--ar 16:9 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a kitchen mid-install with cabinet boxes in place, the island waiting for its top and a printed elevation taped to the drywall, a tablet and a tape measure on the plywood island, painted cabinetry and bare drywall, daylight from a rear window wall, 28mm from the doorway with the upper left open, nobody in the room, work in progress"
+    },
+    {
+      "id": "J08",
+      "pieceIds": [
+        "P09"
+      ],
+      "kind": "still",
+      "channel": "video-9x16",
+      "prompt": "an interior designer in her thirties in a knit sweater pulling a fabric book from the open shelves of a studio sample library, rows of fabric books, tile, stone and wood samples filling the white shelves behind her, a laptop open on the work table in the lower foreground, bright even daylight from large windows, 35mm at eye level with the shelves filling the tall frame, candid and mid-task, true-to-life color, a modern design studio in Madison, Wisconsin",
+      "params": "--ar 9:16 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 2,
+      "fluxPrompt": "a designer pulling a fabric book from the open shelves of a studio sample library, rows of fabric books, tile, stone and wood samples on white shelves behind her, a laptop open on the table in the foreground, bright daylight from large windows, 35mm at eye level, candid, modern design studio, vertical"
+    },
+    {
+      "id": "J09",
+      "pieceIds": [
+        "P09"
+      ],
+      "kind": "still",
+      "channel": "video-9x16",
+      "prompt": "a studio principal in her forties at a white oak desk working between a laptop and a large monitor showing a floor plan, printed plans and a tile sample beside the keyboard, a phone face down at the far edge of the desk, clean daylight from a tall window and soft overhead light, 50mm over the shoulder with the monitor in the upper half and the printed plans in the lower half of the tall frame, focused, true-to-life color, a bright modern design studio in Milwaukee, Wisconsin",
+      "params": "--ar 9:16 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 2,
+      "fluxPrompt": "a designer at a white oak desk between a laptop and a large monitor showing a floor plan, printed plans and a tile sample beside the keyboard, a phone face down at the far edge, clean daylight from a tall window, 50mm over the shoulder, monitor above and plans below, focused, bright modern studio, vertical"
+    },
+    {
+      "id": "J10",
+      "pieceIds": [
+        "P09"
+      ],
+      "kind": "still",
+      "channel": "video-9x16",
+      "prompt": "an interior designer in her forties holding a tablet with a floor plan while a contractor in his fifties in a canvas work jacket and a homeowner in her thirties in a quilted vest stand close and look down at it, in a framed-out kitchen, studs and cabinet boxes rising around them and a bare stud wall to one side, overcast daylight through new window openings, 35mm documentary at eye level with the three figures in the middle of the tall frame, mid-conversation, true-to-life color, a new-build house outside Madison, Wisconsin",
+      "params": "--ar 9:16 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 2,
+      "fluxPrompt": "an interior designer holding a tablet with a floor plan while a contractor in a canvas work jacket and a homeowner stand close and look down at it, framed-out kitchen, studs, cabinet boxes and a bare stud wall to one side, overcast daylight through new window openings, 35mm documentary, mid-conversation, new-build house, vertical"
+    },
+    {
+      "id": "J11",
+      "pieceIds": [
+        "P09"
+      ],
+      "kind": "video",
+      "channel": "video-9x16",
+      "prompt": "one slow push-in toward the shelves as the designer draws the fabric book out and turns toward the table, the laptop and the light steady, nothing else moves",
+      "params": "--ar 9:16 --motion low --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 2,
+      "fluxPrompt": "",
+      "startFrom": "J08"
+    },
+    {
+      "id": "J12",
+      "pieceIds": [
+        "P09"
+      ],
+      "kind": "video",
+      "channel": "video-9x16",
+      "prompt": "one slow tilt down from the monitor onto the printed plans as she turns a page, the camera settling on the plans, the phone untouched at the edge, the light steady, nothing else moves",
+      "params": "--ar 9:16 --motion low --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 2,
+      "fluxPrompt": "",
+      "startFrom": "J09"
+    },
+    {
+      "id": "J13",
+      "pieceIds": [
+        "P09"
+      ],
+      "kind": "video",
+      "channel": "video-9x16",
+      "prompt": "one slow lateral slide across the framed kitchen as the contractor points at the stud wall and the designer and the homeowner look up from the tablet toward it, the light steady, nothing else moves",
+      "params": "--ar 9:16 --motion low --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 2,
+      "fluxPrompt": "",
+      "startFrom": "J10"
+    }
+  ]
+}

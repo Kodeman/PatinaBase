@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "bucket": "patina-marketing",
+  "prefix": "runs/2026-10-09-moll-drive-homeowners/",
+  "files": {
+    "board.html": {
+      "sha256": "481d2674de886e66f451b777262ea024da5ac4571c0550a14e1dbe8380cc3f81",
+      "bytes": 1305734,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P01/image.png": {
+      "sha256": "54b0e222aebb076d2a7c13b25a847f664a30d861c11f1bd6e627f3ca79405395",
+      "bytes": 2255397,
+      "contentType": "image/png"
+    },
+    "compose/P01/index.html": {
+      "sha256": "c67a7c46d52cd740a9a9e4d5e613e6e7a6932f4312079583b29173800a02e283",
+      "bytes": 4669,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P04/image.png": {
+      "sha256": "816b16f8dc3ab40d491012b252d1f6f52827072face50330d322d7cf99b18cf3",
+      "bytes": 8438463,
+      "contentType": "image/png"
+    },
+    "compose/P04/index.html": {
+      "sha256": "9f062ecd2dd5a705c297ee7cd3bd7d9dda64b14adc20cb66decb5d23290d78a9",
+      "bytes": 4829,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P06/image.png": {
+      "sha256": "54b0e222aebb076d2a7c13b25a847f664a30d861c11f1bd6e627f3ca79405395",
+      "bytes": 2255397,
+      "contentType": "image/png"
+    },
+    "compose/P06/index.html": {
+      "sha256": "659f439b9d6f232944a7eb5f3f23e08e23e2f5b37f190155b86559ea8c8677b8",
+      "bytes": 5439,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P07/image.png": {
+      "sha256": "54b0e222aebb076d2a7c13b25a847f664a30d861c11f1bd6e627f3ca79405395",
+      "bytes": 2255397,
+      "contentType": "image/png"
+    },
+    "compose/P07/index.html": {
+      "sha256": "208576e62e3e82d12653d7d301bc407b3d065f3cdb93323e4e30a478812b4690",
+      "bytes": 5196,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "mj/inbox/J01/moll-drive-rendering-kippley-listing.png": {
+      "sha256": "54b0e222aebb076d2a7c13b25a847f664a30d861c11f1bd6e627f3ca79405395",
+      "bytes": 2255397,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J03/moll-drive-rendering-kippley-listing.png": {
+      "sha256": "54b0e222aebb076d2a7c13b25a847f664a30d861c11f1bd6e627f3ca79405395",
+      "bytes": 2255397,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J04/u1631848796_warm_oak_grain_and_a_soft_brass_pull_on_a_plain_cab_4556b3fe-2a0a-44d0-a215-5debce8981ac.png": {
+      "sha256": "8e20ce5db405b88df6f4be4db4d47137b7e178afc0787b323029aa718f64c02f",
+      "bytes": 8210708,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J04/u1631848796_warm_oak_grain_and_a_soft_brass_pull_on_a_plain_cab_9d5f40d0-d80f-452a-a174-2716a16601db.png": {
+      "sha256": "817eeab11c07fd0e5eb935c69d6822587bf1b7e935d20d54509d04d45c1fdb3e",
+      "bytes": 7407262,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J04/u1631848796_warm_oak_grain_and_a_soft_brass_pull_on_a_plain_cab_f3fe39a4-6d2d-4655-bb5f-7603b33b22cf.png": {
+      "sha256": "816b16f8dc3ab40d491012b252d1f6f52827072face50330d322d7cf99b18cf3",
+      "bytes": 8438463,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J06/moll-drive-rendering-kippley-listing.png": {
+      "sha256": "54b0e222aebb076d2a7c13b25a847f664a30d861c11f1bd6e627f3ca79405395",
+      "bytes": 2255397,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J07/moll-drive-rendering-kippley-listing.png": {
+      "sha256": "54b0e222aebb076d2a7c13b25a847f664a30d861c11f1bd6e627f3ca79405395",
+      "bytes": 2255397,
+      "contentType": "image/png"
+    },
+    "out/P01/P01.alt.txt": {
+      "sha256": "e540696ca3a935cda0204810e093a8ab63208a3b82d09aea0aa102a25f78ad6d",
+      "bytes": 151,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "out/P01/P01.caption.txt": {
+      "sha256": "c341eac220e87f0995e99e20226effd8071815460ad94d94f64f844a98c9d51a",
+      "bytes": 508,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "out/P01/P01.png": {
+      "sha256": "dbaf22bbe31c89b36b6169b1b0e5558966983f72f1860973e9b0bb869b1c7b08",
+      "bytes": 1152066,
+      "contentType": "image/png"
+    },
+    "out/P04/P04-preview.png": {
+      "sha256": "b298eb1093aa70fff12ef9e80f6dc03be3b16ba8f8606f409dbdb84e8eb1bda0",
+      "bytes": 4811909,
+      "contentType": "image/png"
+    },
+    "out/P04/P04.pdf": {
+      "sha256": "cf1983f160bb095215d5f220d8ebd62380daebf0b890d1f2742c5b7ff664b8f3",
+      "bytes": 8208828,
+      "contentType": "application/pdf"
+    },
+    "out/P06/P06-preview.png": {
+      "sha256": "495814d81a9b51b7e95738dcbaee2bbebf68bdfca4bb5c1368c161d4089574ab",
+      "bytes": 382869,
+      "contentType": "image/png"
+    },
+    "out/P06/P06.pdf": {
+      "sha256": "63ee5a63060057901ab33bbcf7a0c3c913da863e6679d963ca76dc946ebfe057",
+      "bytes": 2231351,
+      "contentType": "application/pdf"
+    },
+    "out/P07/P07-preview.png": {
+      "sha256": "c029a0c8283f857cb84619cf17faa64e1e9646be6af1221b3d2e08f97e9c18ae",
+      "bytes": 367684,
+      "contentType": "image/png"
+    },
+    "out/P07/P07.pdf": {
+      "sha256": "e5cb0245daca387389e18ae81271b46d7788498036f0172bef850f235647d453",
+      "bytes": 2232421,
+      "contentType": "application/pdf"
+    }
+  }
+}

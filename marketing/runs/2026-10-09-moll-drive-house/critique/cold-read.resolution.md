@@ -1,0 +1,16 @@
+# Cold read: resolution (Press A4)
+
+P01 #1: accept: "a brief, a sample board" describes how this job was run, which P01's own honesty note says the post never does, so the line now reads "Every room holds decisions you can't see from the doorway."
+P02 #1: accept: the line read as this piece's own history, which is not established; it now speaks to the reader's next job ("On your next job, the drawing, the finish sample and the question from the site should sit where your first hire can find them"), in studio voice rather than the critic's first-person "I".
+P02 #2: accept: "the one page we're building to hold them" is an unchecked capability claim, so it now says only what C04 states: "We're building Patina around one living page per client, from brief to install [C04]."
+P03 #1: reject: the fix would remove ⟨FILL: day and hours⟩, which the campaign rules require to stay until C30 is verified; the marker already blocks posting, and no day or time is stated or guessed.
+P04 #1: reject: "Every room began as a brief" is the seed's headline and the poster's one idea, it holds for any designed room, and it does not say the house ran in Patina; the critic's replacement drops the idea for a vaguer line.
+P04 #2: accept: the body was at the 35-word poster limit and "the next one can run from" implied a working capability, so it now reads "Designers: this house is the kind of job we're building Patina for. For your next job: one living page per client, from brief to install [C04]. Pre-launch [C24]. Start at patina.cloud/designers."
+P05 #1: reject: the fix would remove ⟨FILL: day and hours⟩, which must stay until C30 is verified; the email is not sent until Leah fills it.
+P05 #2: accept: C25 says Kippley employs its own carpenters, not who worked on this house, so it is now stated as a fact about the builder in the opening paragraph; the same fix went into P01's matching line.
+P06 #1: accept: "Your new hire and the crew work from it" read as a working arrangement today, so it now reads "We're building it so your new hire and the crew can work from it, and your client sees the same page: one agreed direction [C05]."
+P06 #2: accept: "the way most studios run a house" guessed at this job's process and at other studios, so it now says only "so it did not run on Patina."
+P06 #3: reject: "one live project" is Patina's own ask (docs/vision/recruiting-one-liners.md, "The ask") and the seed's wording; it is an invitation, not a factual claim, and it matches the CTA kept from the seed.
+P07 #1: reject: the line is the seed's, it is true of any designed room, and the next sentence says plainly the house was designed before Patina was ready; the critic's replacement would turn the flyer's designer section into a reflection exercise and weaken its single ask.
+Batch #1: reject: every ⟨FILL⟩ marker must stay in the finals by campaign rule; they are left for Leah, the delivered photographs and the permissions, and compose badges them so nothing renders as finished copy.
+Batch #2: accept: the bridge from the house to Patina now speaks only to the reader's next job in P01, P02, P04, P05 and P06; the seed's "began as a brief" lines in P04 and P07 stay because each piece says the house did not run in Patina (see P04 #1 and P07 #1).

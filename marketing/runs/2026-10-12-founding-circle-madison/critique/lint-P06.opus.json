@@ -1,0 +1,12 @@
+{
+  "file": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/copy/P06.opus.md",
+  "kind": "one-pager",
+  "errors": [],
+  "warnings": [
+    {
+      "rule": "tagline",
+      "match": "Where Time Adds Value",
+      "line": 71
+    }
+  ]
+}
