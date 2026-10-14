@@ -9,6 +9,12 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 
 const mockPathname = jest.fn(() => '/doc/eng-chen');
 const mockPush = jest.fn();
+const mockRouterPrefetch = jest.fn();
+const mockPrefetchQuery = jest.fn();
+
+jest.mock('@/lib/react-query', () => ({
+  queryClient: { get prefetchQuery() { return mockPrefetchQuery; } },
+}));
 
 jest.mock('@/hooks/use-teaching-note', () => ({
   useTeachingNoteFor: () => ({ note: null, bind: null }),
@@ -16,12 +22,13 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname(),
-  useRouter: () => ({ push: mockPush, replace: jest.fn() }),
+  useRouter: () => ({ push: mockPush, prefetch: mockRouterPrefetch, replace: jest.fn() }),
 }));
 
 const mockUseProjectFFEItems = jest.fn();
 let mockInvoices: Record<string, unknown>[] = [];
 jest.mock('@patina/supabase', () => ({
+  docKeys: { engagement: (id: string) => ['document-state', 'engagement', id] },
   usePeopleDirectory: () => ({ data: [] }),
   useRecentBoards: () => ({ data: [] }),
   useProjectFFEItems: (...args: unknown[]) => mockUseProjectFFEItems(...args),
