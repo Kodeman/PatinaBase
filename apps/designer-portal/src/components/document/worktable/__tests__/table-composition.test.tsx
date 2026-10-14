@@ -44,6 +44,13 @@ jest.mock('@patina/supabase', () => ({
   useAddScopeRoom: () => ({ mutate: jest.fn(), isPending: false }),
 }));
 
+// The rail reads pending room creates for its ghost rows (US-34 N4).
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQueryClient: () => ({ setQueryData: jest.fn() }),
+  useMutationState: () => [],
+}));
+
 jest.mock('@/lib/analytics', () => ({
   proposalEvents: { scopeUpdated: jest.fn() },
 }));
