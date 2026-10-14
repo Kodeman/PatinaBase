@@ -2617,3 +2617,14 @@ export * from "./use-add-to-the-job";
 
 // US-21 W2: the pieces primitives — room placements, batch needs, build fields, restore, labor lines.
 export * from "./use-pieces";
+
+// US-34 N2: optimistic ink for internal records, and the never-optimistic list.
+export {
+  useOptimisticMutation,
+  optimisticMutationKey,
+  ZeroRowReceiptError,
+  NEVER_OPTIMISTIC,
+  type OptimisticReceipt,
+  type OptimisticContext,
+  type UseOptimisticMutationOptions,
+} from "./optimistic";
