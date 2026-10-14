@@ -9,22 +9,26 @@ SELECT no_plan();
 
 -- ─── fixtures ──────────────────────────────────────────────────────────────
 -- u1 = designer, owner of studio s1. u2 = owner of another studio s2.
+-- u3 = a member of s1 who later leaves it.
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
   ('78700000-0000-4000-8000-000000000001','ma-owner@test.invalid','',now(),now(),now(),'00000000-0000-0000-0000-000000000000','authenticated','authenticated'),
-  ('78700000-0000-4000-8000-000000000002','ma-outsider@test.invalid','',now(),now(),now(),'00000000-0000-0000-0000-000000000000','authenticated','authenticated')
+  ('78700000-0000-4000-8000-000000000002','ma-outsider@test.invalid','',now(),now(),now(),'00000000-0000-0000-0000-000000000000','authenticated','authenticated'),
+  ('78700000-0000-4000-8000-000000000003','ma-member@test.invalid','',now(),now(),now(),'00000000-0000-0000-0000-000000000000','authenticated','authenticated')
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
 VALUES
   ('78700000-0000-4000-8000-000000000001','ma-owner@test.invalid','MA Owner',now(),now()),
-  ('78700000-0000-4000-8000-000000000002','ma-outsider@test.invalid','MA Outsider',now(),now())
+  ('78700000-0000-4000-8000-000000000002','ma-outsider@test.invalid','MA Outsider',now(),now()),
+  ('78700000-0000-4000-8000-000000000003','ma-member@test.invalid','MA Member',now(),now())
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO organizations (id,type,name,slug) VALUES
   ('78700000-0000-4000-8000-000000000011','design_studio','MA Studio','ma-studio-787-test'),
   ('78700000-0000-4000-8000-000000000012','design_studio','MA Other Studio','ma-other-studio-787-test');
 INSERT INTO organization_members (id,user_id,organization_id,role,status,joined_at) VALUES
   ('78700000-0000-4000-8000-000000000021','78700000-0000-4000-8000-000000000001','78700000-0000-4000-8000-000000000011','owner','active',now()),
-  ('78700000-0000-4000-8000-000000000022','78700000-0000-4000-8000-000000000002','78700000-0000-4000-8000-000000000012','owner','active',now());
+  ('78700000-0000-4000-8000-000000000022','78700000-0000-4000-8000-000000000002','78700000-0000-4000-8000-000000000012','owner','active',now()),
+  ('78700000-0000-4000-8000-000000000023','78700000-0000-4000-8000-000000000003','78700000-0000-4000-8000-000000000011','member','active',now());
 INSERT INTO projects (id,name,designer_id,created_by,studio_id)
 VALUES ('78700000-0000-4000-8000-000000000031','MA project','78700000-0000-4000-8000-000000000001','78700000-0000-4000-8000-000000000001','78700000-0000-4000-8000-000000000011');
 INSERT INTO designer_clients (id, designer_id, client_name, status)
@@ -34,11 +38,14 @@ VALUES ('78700000-0000-4000-8000-000000000051','78700000-0000-4000-8000-00000000
 
 -- d1: an RFI whose date the trade pushes. d2: a signoff t6 waits on.
 -- e3: a signoff an FF&E line (b1) and two tasks wait on; da also waits on d2.
+-- e4: a signoff two todo tasks (dc, dd) are linked to. e5: a signoff de waits on.
 INSERT INTO client_decisions (id, designer_client_id, designer_id, project_id, title, context, due_date, decision_type, coordination_kind, court, court_party_id, blocks_kind, status)
 VALUES
   ('78700000-0000-4000-8000-0000000000e1','78700000-0000-4000-8000-000000000041','78700000-0000-4000-8000-000000000001','78700000-0000-4000-8000-000000000031','Tile spec','Ctx','2026-11-05T00:00:00Z','product','rfi','designer',NULL,'none','pending'),
   ('78700000-0000-4000-8000-0000000000e2','78700000-0000-4000-8000-000000000041','78700000-0000-4000-8000-000000000001','78700000-0000-4000-8000-000000000031','Rough-in signoff',NULL,NULL,'approval','signoff','sub','78700000-0000-4000-8000-000000000051','task','pending'),
-  ('78700000-0000-4000-8000-0000000000e3','78700000-0000-4000-8000-000000000041','78700000-0000-4000-8000-000000000001','78700000-0000-4000-8000-000000000031','Panel signoff',NULL,NULL,'approval','signoff','sub','78700000-0000-4000-8000-000000000051','task','pending');
+  ('78700000-0000-4000-8000-0000000000e3','78700000-0000-4000-8000-000000000041','78700000-0000-4000-8000-000000000001','78700000-0000-4000-8000-000000000031','Panel signoff',NULL,NULL,'approval','signoff','sub','78700000-0000-4000-8000-000000000051','task','pending'),
+  ('78700000-0000-4000-8000-0000000000e4','78700000-0000-4000-8000-000000000041','78700000-0000-4000-8000-000000000001','78700000-0000-4000-8000-000000000031','Framing signoff',NULL,NULL,'approval','signoff','sub','78700000-0000-4000-8000-000000000051','task','pending'),
+  ('78700000-0000-4000-8000-0000000000e5','78700000-0000-4000-8000-000000000041','78700000-0000-4000-8000-000000000001','78700000-0000-4000-8000-000000000031','Header signoff',NULL,NULL,'approval','signoff','sub','78700000-0000-4000-8000-000000000051','task','pending');
 
 INSERT INTO project_tasks (id, project_id, title, owner, owner_party_id, status, description, due_date, blocked_by_item_id)
 VALUES
@@ -51,7 +58,10 @@ VALUES
   ('78700000-0000-4000-8000-0000000000d7','78700000-0000-4000-8000-000000000031','Hang shelves','sub','78700000-0000-4000-8000-000000000051','todo',NULL,NULL,NULL),
   ('78700000-0000-4000-8000-0000000000d8','78700000-0000-4000-8000-000000000031','Mount TV','sub','78700000-0000-4000-8000-000000000051','todo',NULL,NULL,NULL),
   ('78700000-0000-4000-8000-0000000000d9','78700000-0000-4000-8000-000000000031','Fit panel','sub','78700000-0000-4000-8000-000000000051','blocked',NULL,NULL,'78700000-0000-4000-8000-0000000000e3'),
-  ('78700000-0000-4000-8000-0000000000db','78700000-0000-4000-8000-000000000031','Tape seams','sub','78700000-0000-4000-8000-000000000051','todo',NULL,NULL,NULL);
+  ('78700000-0000-4000-8000-0000000000db','78700000-0000-4000-8000-000000000031','Tape seams','sub','78700000-0000-4000-8000-000000000051','todo',NULL,NULL,NULL),
+  ('78700000-0000-4000-8000-0000000000dc','78700000-0000-4000-8000-000000000031','Sister joists','sub','78700000-0000-4000-8000-000000000051','todo',NULL,NULL,'78700000-0000-4000-8000-0000000000e4'),
+  ('78700000-0000-4000-8000-0000000000dd','78700000-0000-4000-8000-000000000031','Shim plates','sub','78700000-0000-4000-8000-000000000051','todo',NULL,NULL,'78700000-0000-4000-8000-0000000000e4'),
+  ('78700000-0000-4000-8000-0000000000de','78700000-0000-4000-8000-000000000031','Set header','sub','78700000-0000-4000-8000-000000000051','blocked',NULL,NULL,'78700000-0000-4000-8000-0000000000e5');
 INSERT INTO project_tasks (id, project_id, title, owner, owner_party_id, status, blocked_by_item_id, seq_after_task_id)
 VALUES ('78700000-0000-4000-8000-0000000000da','78700000-0000-4000-8000-000000000031','Trim panel','sub','78700000-0000-4000-8000-000000000051','blocked','78700000-0000-4000-8000-0000000000e3','78700000-0000-4000-8000-0000000000d2');
 INSERT INTO project_ffe_items (id, project_id, name, blocked, blocked_reason, blocked_by_decision_id)
@@ -62,7 +72,7 @@ VALUES ('78700000-0000-4000-8000-0000000000f0','+15550000787','+15557870001','78
 INSERT INTO sms_messages (id, conversation_id, direction, body, party_id, project_id, needs_review, twilio_sid)
 SELECT ('78700000-0000-4000-8000-0000000000f' || to_hex(n))::uuid, '78700000-0000-4000-8000-0000000000f0', 'inbound', 'msg ' || n,
        '78700000-0000-4000-8000-000000000051', '78700000-0000-4000-8000-000000000031', false, 'SM787test' || n
-FROM generate_series(1, 12) AS n;
+FROM generate_series(1, 15) AS n;
 
 -- ─── apply: one autonomous SMS per intent ──────────────────────────────────
 DO $$
@@ -164,9 +174,10 @@ SELECT is((SELECT count(*)::int FROM model_applies WHERE target_id='78700000-000
 SELECT ok(NOT has_table_privilege('authenticated','public.model_applies','INSERT,UPDATE,DELETE'),
   'authenticated cannot write the log directly');
 SELECT ok(NOT has_function_privilege('anon','public.revert_model_apply(uuid)','EXECUTE')
-      AND has_function_privilege('authenticated','public.revert_model_apply(uuid)','EXECUTE')
+      AND NOT has_function_privilege('authenticated','public.revert_model_apply(uuid)','EXECUTE')
+      AND NOT has_function_privilege('anon','public.revert_model_apply_group(uuid)','EXECUTE')
       AND has_function_privilege('authenticated','public.revert_model_apply_group(uuid)','EXECUTE'),
-  'revert RPCs: authenticated only');
+  'revert: members reach only the group RPC, never one row alone (SQ-941 N2)');
 
 -- ─── capture enrichment ────────────────────────────────────────────────────
 INSERT INTO field_captures (id, client_capture_id, designer_id, project_id, category, subcategory, finish)
@@ -192,8 +203,7 @@ SELECT is((SELECT jsonb_build_object('source',min(source),'studio',min(studio_id
 -- A member of another studio is refused.
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000002',true);
-SELECT throws_ok(
-  $$SELECT public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000f2'))$$,
+SELECT throws_ok($$SELECT public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f2')$$,
   '42501', NULL, 'another studio cannot revert');
 SELECT throws_ok($$SELECT public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f4')$$,
   '42501', NULL, 'another studio cannot revert a group');
@@ -206,11 +216,11 @@ SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
 SELECT is((SELECT count(*)::int FROM model_applies WHERE project_id='78700000-0000-4000-8000-000000000031') > 0, true,
   'a studio member reads the log');
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000f2'))->>'outcome',
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f2')->>'outcome',
   'restored', 'report_delay task: restored');
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000f2'))->>'outcome',
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f2')->>'outcome',
   'already', 'double revert: already');
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000f3'))->>'outcome',
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f3')->>'outcome',
   'restored', 'report_delay coordination: restored');
 RESET ROLE;
 SELECT is((SELECT jsonb_build_object('due',due_date,'desc',description) FROM project_tasks WHERE id='78700000-0000-4000-8000-0000000000d2'),
@@ -227,7 +237,7 @@ SELECT is((SELECT applied_effect->>'reverted' FROM sms_messages WHERE id='787000
 UPDATE project_tasks SET status='blocked' WHERE id='78700000-0000-4000-8000-0000000000d1';
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000f1'))->>'outcome',
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f1')->>'outcome',
   'conflict', 'edited since: conflict');
 RESET ROLE;
 SELECT is((SELECT jsonb_build_object('status',t.status,'kept',t.completed_at IS NOT NULL,'reverted',m.reverted_at,'outcome',m.revert_outcome)
@@ -237,7 +247,7 @@ SELECT is((SELECT jsonb_build_object('status',t.status,'kept',t.completed_at IS 
 -- An inserted punch item is withdrawn, not deleted.
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000f5'))->>'outcome',
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f5')->>'outcome',
   'restored', 'punch_report: restored');
 RESET ROLE;
 SELECT is((SELECT d.status FROM client_decisions d JOIN model_applies m ON m.target_id=d.id WHERE m.source_id='78700000-0000-4000-8000-0000000000f5'),
@@ -281,10 +291,10 @@ SELECT is((SELECT jsonb_build_object('item',d.status,'answer',d.answer,'court',d
 -- Enrichment fill reverts to the empty value it found.
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE target_id='78700000-0000-4000-8000-0000000000c1' AND after ? 'category'))->>'outcome',
-  'restored', 'enrichment: category restored');
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE target_id='78700000-0000-4000-8000-0000000000c1' AND after ? 'finish'))->>'outcome',
-  'restored', 'enrichment: finish restored');
+SELECT is(public.revert_model_apply_group(
+            (SELECT DISTINCT source_id FROM model_applies WHERE target_id='78700000-0000-4000-8000-0000000000c1'))
+          - 'sourceId',
+  '{"outcome":"restored","restored":2}'::jsonb, 'enrichment: both fills of the run restored together');
 RESET ROLE;
 SELECT is((SELECT jsonb_build_object('category',category,'subcategory',subcategory,'finish',finish) FROM field_captures WHERE id='78700000-0000-4000-8000-0000000000c1'),
   '{"category":null,"subcategory":"Existing","finish":""}'::jsonb, 'enrichment: prior empty values back, kept column untouched');
@@ -294,10 +304,10 @@ UPDATE sms_messages SET applied_effect = applied_effect - 'reverted' - 'reverted
  WHERE id IN ('78700000-0000-4000-8000-0000000000f2','78700000-0000-4000-8000-0000000000f4');
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000f2'))->>'outcome',
-  'already', 'stamp lost: single revert says already');
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f2')->>'outcome',
+  'already', 'stamp lost: one-row SMS says already');
 SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f4')->>'outcome',
-  'already', 'stamp lost: group revert says already');
+  'already', 'stamp lost: two-row SMS says already');
 RESET ROLE;
 SELECT is((SELECT jsonb_agg(applied_effect->>'reverted' ORDER BY id) FROM sms_messages
             WHERE id IN ('78700000-0000-4000-8000-0000000000f2','78700000-0000-4000-8000-0000000000f4')),
@@ -393,7 +403,7 @@ UPDATE client_decisions SET title='Pantry door hinge', updated_at=now()
 SELECT set_config('app.client_decision_write_id', '', true);
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000f7'))->>'outcome',
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f7')->>'outcome',
   'conflict', 'retitled punch item: conflict (F2)');
 RESET ROLE;
 SELECT is((SELECT jsonb_build_object('status',d.status,'title',d.title,'reverted',m.reverted_at)
@@ -413,8 +423,6 @@ SELECT is((public.update_coordination_item(
   'pending', 'the designer attaches another task to the RFI');
 SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000f8')->>'outcome',
   'conflict', 'RFI with another task attached: group conflict (F2)');
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000f8' AND inserted))->>'outcome',
-  'conflict', 'RFI with another task attached: single conflict (F2)');
 RESET ROLE;
 SELECT is((SELECT jsonb_build_object('rfi',d.status,'d7',t7.status,'d8',t8.status,
                                      'reverted',(SELECT count(*) FROM model_applies WHERE source_id=m.source_id AND reverted_at IS NOT NULL))
@@ -425,16 +433,24 @@ SELECT is((SELECT jsonb_build_object('rfi',d.status,'d7',t7.status,'d8',t8.statu
             WHERE m.source_id='78700000-0000-4000-8000-0000000000f8' AND m.inserted),
   '{"rfi":"pending","d7":"blocked","d8":"blocked","reverted":0}'::jsonb, 'attached task: nothing written');
 
--- The SMS's own task put back first: the RFI is still untouched.
+-- ─── SQ-941 N2: a member puts back the whole SMS, never one row alone ──────
+-- Withdrawing fa's RFI alone would leave db blocked by an expired item.
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000fa' AND NOT inserted))->>'outcome',
-  'restored', 'flag_blocker: its task put back on its own first');
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000fa' AND inserted))->>'outcome',
-  'restored', 'flag_blocker: its RFI is still withdrawn after that');
+SELECT throws_ok(
+  $$SELECT public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000fa' AND inserted))$$,
+  '42501', NULL, 'a member cannot withdraw the RFI alone (N2)');
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000fa')->>'outcome',
+  'restored', 'flag_blocker: the RFI and its task put back together');
 RESET ROLE;
+SELECT is((SELECT jsonb_build_object('task',t.status,'blocked_by',t.blocked_by_item_id,'rfi',d.status)
+             FROM model_applies m
+             JOIN client_decisions d ON d.id=m.target_id
+             JOIN project_tasks t ON t.id='78700000-0000-4000-8000-0000000000db'
+            WHERE m.source_id='78700000-0000-4000-8000-0000000000fa' AND m.inserted),
+  '{"task":"todo","blocked_by":null,"rfi":"expired"}'::jsonb, 'flag_blocker: no task left waiting on the withdrawn RFI');
 
--- ─── SQ-937 F7: both reverts lock the SMS message before anything else ─────
+-- ─── SQ-937 F7: a revert locks the SMS message before anything else ────────
 -- apply_field_effect locked f1..fa itself, and that lock rides onto every
 -- later version of the row, so the two conflicted groups above (f7, f8) are
 -- moved onto fb and fc, which nothing in this transaction has locked. xmax on
@@ -447,14 +463,14 @@ SELECT is((SELECT jsonb_agg(xmax::text ORDER BY id) FROM sms_messages
   '["0","0"]'::jsonb, 'fresh messages carry no lock');
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
-SELECT is(public.revert_model_apply((SELECT id FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000fb'))->>'outcome',
-  'conflict', 'single revert on the moved punch item: still a conflict');
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000fb')->>'outcome',
+  'conflict', 'group revert on the moved punch item: still a conflict');
 SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000fc')->>'outcome',
   'conflict', 'group revert on the moved RFI: still a conflict');
 RESET ROLE;
 SELECT is((SELECT jsonb_agg(xmax::text <> '0' ORDER BY id) FROM sms_messages
             WHERE id IN ('78700000-0000-4000-8000-0000000000fb','78700000-0000-4000-8000-0000000000fc')),
-  '[true,true]'::jsonb, 'single and group revert lock the SMS message (F7)');
+  '[true,true]'::jsonb, 'group revert locks the SMS message, conflict or not (F7)');
 
 -- ─── SQ-937 F8: a fill with no studio belongs to its owner only ────────────
 INSERT INTO field_captures (id, client_capture_id, designer_id, project_id, category)
@@ -477,18 +493,132 @@ SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000002',true);
 SELECT is((SELECT count(*)::int FROM model_applies WHERE target_id='78700000-0000-4000-8000-0000000000c3'), 0,
   'private capture fill: hidden from anyone else (F8)');
-SELECT throws_ok($$SELECT public.revert_model_apply(current_setting('test.private_apply')::uuid)$$,
-  '42501', NULL, 'private capture fill: anyone else cannot revert it (F8)');
 SELECT throws_ok($$SELECT public.revert_model_apply_group(current_setting('test.private_run')::uuid)$$,
-  '42501', NULL, 'private capture fill: anyone else cannot revert its group (F8)');
+  '42501', NULL, 'private capture fill: anyone else cannot revert it (F8)');
 SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
 SELECT is((SELECT count(*)::int FROM model_applies WHERE target_id='78700000-0000-4000-8000-0000000000c3'), 1,
   'private capture fill: its owner reads it (F8)');
-SELECT is(public.revert_model_apply(current_setting('test.private_apply')::uuid)->>'outcome',
+SELECT is(public.revert_model_apply_group(current_setting('test.private_run')::uuid)->>'outcome',
   'restored', 'private capture fill: its owner reverts it (F8)');
 RESET ROLE;
 SELECT is((SELECT category FROM field_captures WHERE id='78700000-0000-4000-8000-0000000000c3'), NULL,
   'private capture fill: the empty category is back');
+
+-- ─── SQ-941 F1: every linked task is locked before its status is read ──────
+-- dc and dd are linked to e4 but todo, so its resolve has nothing to unblock.
+-- A trigger on e4's resolve (the legacy core's first write) plays a writer
+-- that flips dd to blocked while the SMS runs; the cascade then unblocks it.
+-- Candidates picked by status before any lock would leave out both tasks,
+-- dd's change unlogged and dc unlocked.
+CREATE FUNCTION public._ma_test_flip_dd() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  UPDATE public.project_tasks SET status = 'blocked'
+   WHERE id = '78700000-0000-4000-8000-0000000000dd' AND status = 'todo'
+     AND blocked_by_item_id = '78700000-0000-4000-8000-0000000000e4';
+  RETURN NULL;
+END $fn$;
+CREATE TRIGGER ma_test_flip_dd AFTER UPDATE ON client_decisions
+  FOR EACH ROW WHEN (NEW.id = '78700000-0000-4000-8000-0000000000e4' AND NEW.status = 'responded')
+  EXECUTE FUNCTION public._ma_test_flip_dd();
+DO $$
+BEGIN
+  PERFORM public.apply_field_effect('78700000-0000-4000-8000-000000000051',
+    '{"type":"mark_done","target":{"kind":"coordination","id":"78700000-0000-4000-8000-0000000000e4"}}',
+    'sms', '78700000-0000-4000-8000-0000000000fd');
+END $$;
+DROP TRIGGER ma_test_flip_dd ON client_decisions;
+SELECT is((SELECT jsonb_build_object('before',before,'after',after) FROM model_applies
+            WHERE source_id='78700000-0000-4000-8000-0000000000fd' AND target_id='78700000-0000-4000-8000-0000000000dd'),
+  '{"before":{"blocked_by_item_id":"78700000-0000-4000-8000-0000000000e4"},"after":{"blocked_by_item_id":null}}'::jsonb,
+  'a linked task flipped to blocked mid-apply does not escape the log (F1)');
+SELECT is((SELECT jsonb_build_object('status',status,'logged',(SELECT count(*) FROM model_applies WHERE target_id=t.id),'locked',xmax::text <> '0')
+             FROM project_tasks t WHERE id='78700000-0000-4000-8000-0000000000dc'),
+  '{"status":"todo","logged":0,"locked":true}'::jsonb,
+  'a linked todo task is locked as a candidate, then left alone (F1)');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000fd')->>'outcome',
+  'restored', 'group: the resolve and the relinked task restored');
+RESET ROLE;
+SELECT is((SELECT jsonb_build_object('item',d.status,'dd',t.blocked_by_item_id) FROM client_decisions d, project_tasks t
+            WHERE d.id='78700000-0000-4000-8000-0000000000e4' AND t.id='78700000-0000-4000-8000-0000000000dd'),
+  '{"item":"pending","dd":"78700000-0000-4000-8000-0000000000e4"}'::jsonb,
+  'group: e4 reopened, dd linked to it again');
+
+-- ─── SQ-941 N3: Undo never hangs a task back on a closed item ──────────────
+-- de waits on e5. A text flags a new blocker on it, and the RFI replaces e5.
+DO $$
+BEGIN
+  PERFORM public.apply_field_effect('78700000-0000-4000-8000-000000000051',
+    '{"type":"flag_blocker","note":"No studs","target":{"kind":"task","id":"78700000-0000-4000-8000-0000000000de"}}',
+    'sms', '78700000-0000-4000-8000-0000000000fe');
+END $$;
+SELECT is((SELECT before FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000fe' AND target_table='project_tasks'),
+  '{"blocked_by_item_id":"78700000-0000-4000-8000-0000000000e5"}'::jsonb,
+  'flag_blocker on a waiting task: before keeps the item it waited on');
+-- The designer then resolves e5.
+SELECT set_config('app.client_decision_write_id', '78700000-0000-4000-8000-0000000000e5', true);
+UPDATE client_decisions SET status='responded', responded_at=now(), updated_at=now()
+ WHERE id='78700000-0000-4000-8000-0000000000e5';
+SELECT set_config('app.client_decision_write_id', '', true);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000fe') - 'sourceId',
+  jsonb_build_object('outcome','conflict','conflicts',
+    (SELECT jsonb_agg(id) FROM model_applies WHERE source_id='78700000-0000-4000-8000-0000000000fe' AND target_table='project_tasks')),
+  'restoring a link to a resolved item: the task is the conflict (N3)');
+RESET ROLE;
+SELECT is((SELECT jsonb_build_object('task',t.status,'on_rfi',t.blocked_by_item_id=d.id,'rfi',d.status,
+                                     'reverted',(SELECT count(*) FROM model_applies WHERE source_id=m.source_id AND reverted_at IS NOT NULL))
+             FROM model_applies m
+             JOIN client_decisions d ON d.id=m.target_id
+             JOIN project_tasks t ON t.id='78700000-0000-4000-8000-0000000000de'
+            WHERE m.source_id='78700000-0000-4000-8000-0000000000fe' AND m.inserted),
+  '{"task":"blocked","on_rfi":true,"rfi":"pending","reverted":0}'::jsonb, 'resolved old blocker: nothing written (N3)');
+-- Reopened, the same Undo goes through.
+SELECT set_config('app.client_decision_write_id', '78700000-0000-4000-8000-0000000000e5', true);
+UPDATE client_decisions SET status='pending', responded_at=NULL, updated_at=now()
+ WHERE id='78700000-0000-4000-8000-0000000000e5';
+SELECT set_config('app.client_decision_write_id', '', true);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
+SELECT is(public.revert_model_apply_group('78700000-0000-4000-8000-0000000000fe')->>'outcome',
+  'restored', 'old blocker still open: restored');
+RESET ROLE;
+SELECT is((SELECT blocked_by_item_id FROM project_tasks WHERE id='78700000-0000-4000-8000-0000000000de'),
+  '78700000-0000-4000-8000-0000000000e5'::uuid, 'the task waits on its open item again');
+
+-- ─── SQ-941 N1: putting back needs the right to change the target now ──────
+-- u3 owns c4 in s1's inbox, so its fill is logged to s1.
+INSERT INTO field_captures (id, client_capture_id, designer_id, project_id, organization_id, category)
+VALUES ('78700000-0000-4000-8000-0000000000c4', gen_random_uuid(), '78700000-0000-4000-8000-000000000003',
+        NULL, '78700000-0000-4000-8000-000000000011', NULL);
+DO $$
+DECLARE v_run uuid;
+BEGIN
+  v_run := public.enqueue_capture_enrichment('field_capture', '78700000-0000-4000-8000-0000000000c4', 0);
+  PERFORM public.claim_capture_enrichment_run(v_run, 0);
+  PERFORM public.record_capture_enrichment_result(v_run, '{"category":"Rugs"}', '{}', 'ready');
+  PERFORM set_config('test.moved_run', v_run::text, true);
+END $$;
+SELECT is((SELECT jsonb_build_object('studio',min(studio_id::text),'owner',min(owner_user_id::text))
+             FROM model_applies WHERE target_id='78700000-0000-4000-8000-0000000000c4'),
+  '{"studio":"78700000-0000-4000-8000-000000000011","owner":"78700000-0000-4000-8000-000000000003"}'::jsonb,
+  'studio inbox fill: logged to the studio');
+-- u3 takes the capture private (the 00530 resync) and leaves s1.
+UPDATE field_captures SET organization_id = NULL WHERE id='78700000-0000-4000-8000-0000000000c4';
+UPDATE organization_members SET status = 'removed' WHERE id='78700000-0000-4000-8000-000000000023';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','78700000-0000-4000-8000-000000000001',true);
+SELECT is((SELECT count(*)::int FROM model_applies WHERE target_id='78700000-0000-4000-8000-0000000000c4'), 1,
+  'a remaining member still reads the old fill');
+SELECT is(public.revert_model_apply_group(current_setting('test.moved_run')::uuid)->>'outcome',
+  'conflict', 'capture moved out of the studio: a remaining member cannot put it back (N1)');
+RESET ROLE;
+SELECT is((SELECT jsonb_build_object('category',c.category,'reverted',m.reverted_at)
+             FROM field_captures c JOIN model_applies m ON m.target_id=c.id
+            WHERE c.id='78700000-0000-4000-8000-0000000000c4'),
+  '{"category":"Rugs","reverted":null}'::jsonb, 'moved capture: nothing written (N1)');
 
 SELECT * FROM finish();
 ROLLBACK;

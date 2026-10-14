@@ -38,15 +38,22 @@
 --   never deleted: while untouched (its `fingerprint` — every column a
 --   designer can edit and the work waiting on it — unchanged) it is withdrawn
 --   to 'expired', the closed status expire_client_decision (pending → expired)
---   uses.
+--   uses. A link `before` would restore (a task's blocked_by_item_id, an FF&E
+--   line's blocked_by_decision_id) must point at a decision still pending, or
+--   one the same Undo reopens; otherwise that row is a conflict too.
 --
--- Who may read and put back a row: an active member of its studio, or, for a
---   row with no studio (a private capture), its owner_user_id — the designer
---   who owns the capture or project. Never a guessed studio.
+-- Who may read a row: an active member of its studio, or, for a row with no
+--   studio (a private capture), its owner_user_id — the designer who owns the
+--   capture or project. Never a guessed studio. Putting a row back also needs
+--   the right to change its target now, checked under the target's lock
+--   (_model_apply_may_write); without it the row is a conflict. Members put
+--   back a whole SMS or run (revert_model_apply_group); the single-row
+--   revert_model_apply is not granted to them.
 --
 -- Lock order, everywhere here: the SMS message, the log rows, then targets —
---   client_decisions, project_ffe_items, project_tasks, field_captures, each
---   by id. update_coordination_item and the resolve cascade lock in the same
+--   client_decisions (including every decision a revert links a row back
+--   to), project_ffe_items, project_tasks, field_captures, each by id.
+--   update_coordination_item and the resolve cascade lock in the same
 --   decision → FF&E → task order.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -85,6 +92,9 @@ CREATE INDEX IF NOT EXISTS model_applies_project_applied_idx
   ON public.model_applies (project_id, applied_at DESC);
 CREATE INDEX IF NOT EXISTS model_applies_source_idx
   ON public.model_applies (source, source_id);
+-- The Desk's slice: a studio's SMS applies for one day.
+CREATE INDEX IF NOT EXISTS model_applies_sms_studio_applied_idx
+  ON public.model_applies (studio_id, applied_at DESC) WHERE source = 'sms';
 
 ALTER TABLE public.model_applies ENABLE ROW LEVEL SECURITY;
 
@@ -361,11 +371,16 @@ BEGIN
       IF p_effect->>'type' = 'mark_done' THEN
         -- The item is locked first, so no more work can be linked to it.
         PERFORM 1 FROM public.client_decisions WHERE id = v_target_id FOR UPDATE;
-        -- The resolve cascade (resolve_coordination_item) unblocks these.
-        -- ORDER BY puts FF&E before tasks, each by id: the lock order.
+        -- The resolve cascade (resolve_coordination_item) unblocks some of
+        -- these. Every linked row is taken, whatever its status: which ones
+        -- the cascade moves is decided only once the snapshot below has
+        -- locked them, so a task flipped to blocked meanwhile is either in
+        -- its before or waits for this SMS. A row the cascade leaves alone
+        -- logs nothing. ORDER BY puts FF&E before tasks, each by id: the
+        -- lock order.
         FOR v_log_rec IN
           SELECT 'project_tasks'::text AS tbl, t.id FROM public.project_tasks t
-           WHERE t.blocked_by_item_id = v_target_id AND t.status = 'blocked'
+           WHERE t.blocked_by_item_id = v_target_id
           UNION ALL
           SELECT 'project_ffe_items'::text, f.id FROM public.project_ffe_items f
            WHERE f.blocked_by_decision_id = v_target_id
@@ -538,24 +553,85 @@ COMMENT ON FUNCTION public.record_capture_enrichment_result(uuid, jsonb, jsonb, 
 
 -- ─── 5. Revert ──────────────────────────────────────────────────────────────
 
--- True while the target still holds exactly what the model wrote. Locks the
--- target row. An inserted decision must also be untouched: still pending (its
--- after values), its fingerprint unchanged, no comment or revision posted
--- against it, and nothing waiting on it but the work this same SMS blocked.
-CREATE OR REPLACE FUNCTION public._model_apply_is_current(p_apply public.model_applies)
+-- Whether the caller may change this row now: the predicate the table's RLS
+-- applies today, never the log's historical studio. A capture: its designer
+-- or a studio co-member of the designer (00530/00584). A task, FF&E line or
+-- decision: an active member of its project's current studio, or, when the
+-- project has no studio, the project's designer.
+CREATE OR REPLACE FUNCTION public._model_apply_may_write(p_table text, p_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT COALESCE(CASE p_table
+    WHEN 'field_captures' THEN
+      (SELECT public.is_studio_comember(fc.designer_id)
+         FROM public.field_captures AS fc WHERE fc.id = p_id)
+    ELSE
+      (SELECT CASE WHEN pr.studio_id IS NOT NULL THEN public.is_active_org_member(pr.studio_id)
+                   ELSE pr.designer_id = auth.uid() END
+         FROM public.projects AS pr
+        WHERE pr.id = CASE p_table
+                WHEN 'project_tasks' THEN
+                  (SELECT t.project_id FROM public.project_tasks AS t WHERE t.id = p_id)
+                WHEN 'project_ffe_items' THEN
+                  (SELECT f.project_id FROM public.project_ffe_items AS f WHERE f.id = p_id)
+                WHEN 'client_decisions' THEN
+                  (SELECT d.project_id FROM public.client_decisions AS d WHERE d.id = p_id)
+              END)
+  END, false);
+$$;
+
+-- True while the target still holds exactly what the model wrote and the
+-- caller may still change it. Locks the decision `before` links the row back
+-- to, then the target row. That decision must be pending once this revert is
+-- done: pending now, or, in a group revert (p_group), put back to pending by
+-- the same Undo. An inserted decision must also be untouched: still pending
+-- (its after values), its fingerprint unchanged, no comment or revision
+-- posted against it, and nothing waiting on it but the work this same SMS
+-- blocked.
+-- The first local draft of this file had no p_group.
+DROP FUNCTION IF EXISTS public._model_apply_is_current(public.model_applies);
+CREATE OR REPLACE FUNCTION public._model_apply_is_current(
+  p_apply public.model_applies,
+  p_group boolean
+)
 RETURNS boolean
 LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_current  jsonb := public._model_apply_snapshot(p_apply.target_table, p_apply.target_id, true);
+  v_parent   uuid := NULLIF(COALESCE(p_apply.before ->> 'blocked_by_item_id',
+                                     p_apply.before ->> 'blocked_by_decision_id'), '')::uuid;
+  v_current  jsonb;
   v_now      jsonb;
   v_released integer;
 BEGIN
+  -- Parent first: the restore's foreign key would otherwise lock it after
+  -- the target, against update_coordination_item's decision → task order.
+  -- A group revert already holds it.
+  IF v_parent IS NOT NULL THEN
+    PERFORM 1 FROM public.client_decisions WHERE id = v_parent FOR UPDATE;
+  END IF;
+  v_current := public._model_apply_snapshot(p_apply.target_table, p_apply.target_id, true);
   IF v_current IS NULL OR EXISTS (
     SELECT 1 FROM jsonb_object_keys(p_apply.after) AS k
      WHERE (v_current -> k) IS DISTINCT FROM (p_apply.after -> k)
   ) THEN
+    RETURN false;
+  END IF;
+  IF NOT public._model_apply_may_write(p_apply.target_table, p_apply.target_id) THEN
+    RETURN false;
+  END IF;
+  -- 'pending' is the open blocker task_blocked_state reads.
+  IF v_parent IS NOT NULL AND COALESCE(
+       (SELECT g.before ->> 'status' FROM public.model_applies AS g
+         WHERE p_group AND g.source = p_apply.source AND g.source_id = p_apply.source_id
+           AND g.target_table = 'client_decisions' AND g.target_id = v_parent
+           AND g.reverted_at IS NULL),
+       (SELECT d.status FROM public.client_decisions AS d WHERE d.id = v_parent))
+     IS DISTINCT FROM 'pending' THEN
     RETURN false;
   END IF;
   IF NOT p_apply.inserted THEN
@@ -660,7 +736,9 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public._model_apply_is_current(public.model_applies)
+REVOKE ALL ON FUNCTION public._model_apply_may_write(text, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public._model_apply_is_current(public.model_applies, boolean)
   FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public._model_apply_restore(public.model_applies)
   FROM PUBLIC, anon, authenticated, service_role;
@@ -685,7 +763,8 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
   -- Lock order: the message (one SMS is put back by one caller at a time),
-  -- the log row, then the target (_model_apply_is_current).
+  -- the log row, then the decision it links back to and the target
+  -- (_model_apply_is_current).
   IF v_apply.source = 'sms' AND v_apply.source_id IS NOT NULL THEN
     PERFORM 1 FROM public.sms_messages WHERE id = v_apply.source_id FOR UPDATE;
   END IF;
@@ -694,7 +773,7 @@ BEGIN
     PERFORM public._model_apply_mark_source_reverted(v_apply.source, v_apply.source_id);
     RETURN jsonb_build_object('outcome', 'already', 'applyId', v_apply.id);
   END IF;
-  IF NOT public._model_apply_is_current(v_apply) THEN
+  IF NOT public._model_apply_is_current(v_apply, false) THEN
     RETURN jsonb_build_object('outcome', 'conflict', 'applyId', v_apply.id);
   END IF;
   PERFORM public._model_apply_restore(v_apply);
@@ -733,6 +812,8 @@ BEGIN
   -- decisions, FF&E lines, tasks, captures, each by target_id (the order
   -- update_coordination_item and the resolve cascade use), never by log id:
   -- the first loop below locks each target as it checks it, in v_rows order.
+  -- The decisions are all taken together first, by id: the ones put back
+  -- and every one a `before` links a task or FF&E line back to.
   IF v_rows[1].source = 'sms' THEN
     PERFORM 1 FROM public.sms_messages WHERE id = p_source_id FOR UPDATE;
   END IF;
@@ -745,9 +826,18 @@ BEGIN
     INTO v_rows
     FROM public.model_applies AS ma
    WHERE ma.source_id = p_source_id;
+  PERFORM 1 FROM public.client_decisions
+    WHERE id IN (SELECT r.target_id FROM unnest(v_rows) AS r
+                  WHERE r.reverted_at IS NULL AND r.target_table = 'client_decisions'
+                 UNION
+                 SELECT NULLIF(COALESCE(r.before ->> 'blocked_by_item_id',
+                                        r.before ->> 'blocked_by_decision_id'), '')::uuid
+                   FROM unnest(v_rows) AS r
+                  WHERE r.reverted_at IS NULL)
+    ORDER BY id FOR UPDATE;
 
   FOREACH v_apply IN ARRAY v_rows LOOP
-    IF v_apply.reverted_at IS NULL AND NOT public._model_apply_is_current(v_apply) THEN
+    IF v_apply.reverted_at IS NULL AND NOT public._model_apply_is_current(v_apply, true) THEN
       v_conflicts := v_conflicts || v_apply.id;
     END IF;
   END LOOP;
@@ -772,19 +862,23 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.revert_model_apply(uuid) FROM PUBLIC, anon, service_role;
+-- One row alone can leave the rest of its SMS inconsistent (an RFI withdrawn
+-- while the task it blocks stays blocked), so members only put back a whole
+-- source. The single-row function stays for the database owner.
+REVOKE ALL ON FUNCTION public.revert_model_apply(uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.revert_model_apply_group(uuid) FROM PUBLIC, anon, service_role;
-GRANT EXECUTE ON FUNCTION public.revert_model_apply(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.revert_model_apply_group(uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.revert_model_apply(uuid) IS
   'Puts back one model_applies row for an active member of its studio, or its '
-  'owner when it has no studio (00787). '
+  'owner when it has no studio, who may still change its target (00787). '
+  'Not granted to authenticated: members use revert_model_apply_group. '
   'Returns {outcome: restored | conflict | already}. Conflict (the target moved '
-  'since the model wrote it) writes nothing. An inserted decision is withdrawn '
-  'to expired, never deleted.';
+  'since the model wrote it, or is out of the caller''s reach) writes nothing. '
+  'An inserted decision is withdrawn to expired, never deleted.';
 COMMENT ON FUNCTION public.revert_model_apply_group(uuid) IS
-  'Puts back every model_applies row of one source (an SMS) in one transaction '
-  '(00787). Any conflict wins and nothing is written.';
+  'Puts back every model_applies row of one source (an SMS or enrichment run) '
+  'in one transaction (00787), for a caller who may still change every target. '
+  'Any conflict wins and nothing is written.';
 
 COMMIT;

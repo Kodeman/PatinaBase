@@ -22334,7 +22334,13 @@ END $g$;
 
 -- 00787_model_apply_log.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._model_apply_is_current(public.model_applies) FROM PUBLIC, anon, authenticated, service_role;
+  REVOKE ALL ON FUNCTION public._model_apply_may_write(text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._model_apply_is_current(public.model_applies, boolean) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -22352,19 +22358,13 @@ END $g$;
 
 -- 00787_model_apply_log.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.revert_model_apply(uuid) FROM PUBLIC, anon, service_role;
+  REVOKE ALL ON FUNCTION public.revert_model_apply(uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00787_model_apply_log.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.revert_model_apply_group(uuid) FROM PUBLIC, anon, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00787_model_apply_log.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.revert_model_apply(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
