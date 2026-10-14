@@ -168,7 +168,7 @@ describe('useProjectFFEItems configuration handoff', () => {
     });
 
     expect(lifecycleConfig.queryKey).toEqual(ordinaryConfig.queryKey);
-    expect(ordinaryConfig.queryKey).toEqual(['project-ffe-items', 'project-1', undefined]);
+    expect(ordinaryConfig.queryKey).toEqual(['project-ffe-items', 'project-1']);
 
     await ordinaryConfig.queryFn();
     const ordinarySelection = String(

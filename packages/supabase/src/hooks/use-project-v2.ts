@@ -158,7 +158,9 @@ const PURCHASE_ORDER_EMBED =
 
 export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) {
   return useQuery({
-    queryKey: ['project-ffe-items', projectId, filters],
+    queryKey: filters
+      ? ['project-ffe-items', projectId, filters]
+      : ['project-ffe-items', projectId],
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;

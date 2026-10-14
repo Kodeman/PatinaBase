@@ -357,12 +357,24 @@ export function useProjectFFEItems(projectId: string | null) {
         .from('project_ffe_items')
         .select(`
           *,
+          ffe_line_stage,
+          ffe_line_authorization,
           room:project_rooms!project_room_id(id, name),
-          product:products!product_id(id, name, images, brand)
+          product:products!product_id(id, name, images, brand),
+          blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
+          item_claims:damage_claims!ffe_item_id(id, state, created_at, inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey(photo_asset_ids)),
+          spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
+            readiness_status,
+            configuration_id, configuration_snapshot,
+            configuration_snapshot_hash, configuration_locked_at
+          ),
+          purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at, delivered_date, carrier, tracking_number, bol_document_path, shipped_on, eta_history, vendor:vendors!purchase_orders_vendor_id_fkey(name), payments:po_payments(kind, state, due_date, paid_date))
         `)
         .eq('project_id', projectId)
         .is('removed_at', null)
-        .order('sort_order', { ascending: true });
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
       if (error) throw error;
       return data ?? [];
     },
