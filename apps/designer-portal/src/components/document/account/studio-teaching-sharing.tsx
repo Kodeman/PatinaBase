@@ -15,7 +15,7 @@ const LABEL =
 const HELP = 'mt-1 text-[11px] leading-relaxed text-[var(--color-aged-oak)]';
 
 const BODY =
-  "Your studio's corrections help Patina read pieces better for every studio. Turn this off to keep them to yourselves.";
+  "Your studio's corrections help Patina read pieces better for every studio. Turn this off and new corrections stay with your studio.";
 
 export function StudioTeachingSharingCard({
   studioId,
@@ -24,9 +24,10 @@ export function StudioTeachingSharingCard({
   studioId: string;
   canManage: boolean;
 }) {
-  const { data, isLoading } = useStudioTeachingSharing(studioId);
+  const { data, isLoading, isError, refetch } = useStudioTeachingSharing(studioId);
   const setSharing = useSetStudioTeachingSharing();
-  const sharing = data !== false;
+  const available = typeof data === 'boolean' && !isLoading && !isError;
+  const sharing = data === true;
 
   if (!canManage) {
     return (
@@ -34,8 +35,11 @@ export function StudioTeachingSharingCard({
         <dl className="max-w-md" data-teaching-sharing-readonly>
           <dt className={`${LABEL} mb-3`}>Teaching</dt>
           <dd className="text-[13px] text-[var(--color-charcoal)]">
-            {isLoading ? '—' : sharing ? 'Shared with every studio.' : 'Kept to this studio.'}
+            {isLoading ? '—' : available ? (sharing ? 'Shared with every studio.' : 'New corrections kept to this studio.') : "Couldn't load this setting."}
           </dd>
+          {!isLoading && !available && (
+            <dd><button type="button" className={HELP} onClick={() => void refetch()}>Try again</button></dd>
+          )}
           <dd className={HELP}>Owners and admins change this.</dd>
         </dl>
       </div>
@@ -44,9 +48,15 @@ export function StudioTeachingSharingCard({
 
   return (
     <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
-      <fieldset disabled={isLoading || setSharing.isPending} data-teaching-sharing>
+      <fieldset disabled={!available || setSharing.isPending} data-teaching-sharing>
         <legend className={`${LABEL} mb-3`}>Teaching</legend>
         <p className={`${HELP} mb-3 mt-0 max-w-md`}>{BODY}</p>
+        {!isLoading && !available && (
+          <p className={`${HELP} mb-2`}>
+            Couldn't load this setting.{' '}
+            <button type="button" className={HELP} onClick={() => void refetch()}>Try again</button>
+          </p>
+        )}
         <label className="flex min-h-11 items-center gap-2 text-[13px] text-[var(--color-charcoal)]">
           <input
             type="checkbox"

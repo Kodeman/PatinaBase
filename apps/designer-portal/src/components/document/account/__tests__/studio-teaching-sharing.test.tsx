@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 const mockUseStudioTeachingSharing = jest.fn();
 const mockSetSharing = jest.fn();
 const mockMutation = { mutate: mockSetSharing, isPending: false, isError: false };
+const mockRefetch = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   useStudioTeachingSharing: (id: string) => mockUseStudioTeachingSharing(id),
@@ -14,7 +15,8 @@ import { StudioTeachingSharingCard } from '../studio-teaching-sharing';
 beforeEach(() => {
   mockSetSharing.mockClear();
   mockMutation.isError = false;
-  mockUseStudioTeachingSharing.mockReturnValue({ data: true, isLoading: false });
+  mockUseStudioTeachingSharing.mockReturnValue({ data: true, isLoading: false, isError: false, refetch: mockRefetch });
+  mockRefetch.mockClear();
 });
 
 describe('StudioTeachingSharingCard (R5)', () => {
@@ -24,12 +26,32 @@ describe('StudioTeachingSharingCard (R5)', () => {
     expect(screen.getByRole('group', { name: 'Teaching' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Your studio's corrections help Patina read pieces better for every studio. Turn this off to keep them to yourselves.",
+        "Your studio's corrections help Patina read pieces better for every studio. Turn this off and new corrections stay with your studio.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Share our teaching' })).toBeChecked();
     // R3 and the copy law: no feature or model names, never "AI".
     expect(container.textContent).not.toMatch(/\bAI\b|Engine|Aesthete|Designer-Taught|Claude/);
+  });
+
+  it.each([
+    ['query error', { data: undefined, isLoading: false, isError: true }],
+    ['null data', { data: null, isLoading: false, isError: false }],
+  ])('shows an unavailable setting after %s without asserting a privacy state', (_case, query) => {
+    mockUseStudioTeachingSharing.mockReturnValue({ ...query, refetch: mockRefetch });
+    const { container } = render(<StudioTeachingSharingCard studioId="studio-1" canManage />);
+    expect(screen.getByText("Couldn't load this setting.")).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Share our teaching' })).toBeDisabled();
+    expect(container).not.toHaveTextContent('Shared with every studio.');
+    expect(container).not.toHaveTextContent('New corrections kept to this studio.');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockRefetch).toHaveBeenCalled();
+  });
+
+  it('shows the updated false-state copy to a member', () => {
+    mockUseStudioTeachingSharing.mockReturnValue({ data: false, isLoading: false, isError: false, refetch: mockRefetch });
+    render(<StudioTeachingSharingCard studioId="studio-1" canManage={false} />);
+    expect(screen.getByText('New corrections kept to this studio.')).toBeInTheDocument();
   });
 
   it('lets an owner or admin turn it off, and back on', () => {
@@ -50,7 +72,7 @@ describe('StudioTeachingSharingCard (R5)', () => {
     render(<StudioTeachingSharingCard studioId="studio-1" canManage={false} />);
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByText('Teaching')).toBeInTheDocument();
-    expect(screen.getByText('Kept to this studio.')).toBeInTheDocument();
+    expect(screen.getByText('New corrections kept to this studio.')).toBeInTheDocument();
     expect(screen.getByText('Owners and admins change this.')).toBeInTheDocument();
     expect(mockSetSharing).not.toHaveBeenCalled();
   });

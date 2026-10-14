@@ -133,7 +133,7 @@ export default function PrivacyPage() {
           >
             hello@patina.cloud
           </a>
-          ; your corrections then stay with your studio only.
+          . From then on, your studio&rsquo;s new corrections stay with your studio; what Patina already learned from earlier ones isn&rsquo;t removed.
         </p>
       </Section>
 
