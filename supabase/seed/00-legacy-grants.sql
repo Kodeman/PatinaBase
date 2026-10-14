@@ -22284,6 +22284,90 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.model_applies FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.model_applies TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._model_apply_columns(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._model_apply_snapshot(text, uuid, boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._record_model_apply( text, uuid, uuid, uuid, text, text, uuid, boolean, jsonb, jsonb, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._model_apply_is_current(public.model_applies) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._model_apply_restore(public.model_applies) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._model_apply_mark_source_reverted(text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revert_model_apply(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revert_model_apply_group(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revert_model_apply(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revert_model_apply_group(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00788_llm_studio_total_cap.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric, text, text) FROM PUBLIC, anon, authenticated;
@@ -22317,6 +22401,66 @@ END $g$;
 -- 00788_llm_studio_total_cap.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.llm_set_controls(boolean, numeric, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00790_studio_teaching_opt_out.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._teaching_shareable(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00790_studio_teaching_opt_out.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._teaching_visible_to(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00790_studio_teaching_opt_out.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.teaching_row_visible(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00790_studio_teaching_opt_out.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.teaching_row_visible(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00790_studio_teaching_opt_out.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_studio_teaching_sharing(uuid, boolean) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00790_studio_teaching_opt_out.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_studio_teaching_sharing(uuid, boolean) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00790_studio_teaching_opt_out.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION _aesthete_product_spectrum(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00790_studio_teaching_opt_out.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION _aesthete_primary_archetype(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00790_studio_teaching_opt_out.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION _aesthete_phi(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00790_studio_teaching_opt_out.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION _aesthete_taste_term(real[], uuid, uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
