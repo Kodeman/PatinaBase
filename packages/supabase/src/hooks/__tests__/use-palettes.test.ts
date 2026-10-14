@@ -109,6 +109,7 @@ import {
   useDeleteSwatch,
   useReorderSwatches,
 } from '../use-palettes';
+import { ZeroRowReceiptError } from '../optimistic';
 
 beforeEach(() => {
   Object.keys(builderQueues).forEach((k) => delete builderQueues[k]);
@@ -331,8 +332,8 @@ describe('useUpsertSwatch', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useDeleteSwatch', () => {
-  it('issues delete by swatch id', async () => {
-    const builder = pushTableResult('palette_swatches', { data: null, error: null });
+  it('issues delete by swatch id and asks for the deleted row', async () => {
+    const builder = pushTableResult('palette_swatches', { data: [{ id: 'sw-1' }], error: null });
     const config = useDeleteSwatch() as unknown as {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mutationFn: (input: any) => Promise<any>;
@@ -341,6 +342,19 @@ describe('useDeleteSwatch', () => {
 
     expect(builder.__chain.find((c) => c.method === 'delete')).toBeTruthy();
     expect(builder.__chain.find((c) => c.method === 'eq')?.args).toEqual(['id', 'sw-1']);
+    expect(builder.__chain.find((c) => c.method === 'select')?.args).toEqual(['id']);
+  });
+
+  it('R6: a delete that removes no row (RLS-hidden or already gone) fails', async () => {
+    pushTableResult('palette_swatches', { data: [], error: null });
+    const config = useDeleteSwatch() as unknown as {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mutationFn: (input: any) => Promise<any>;
+    };
+
+    await expect(config.mutationFn({ swatchId: 'sw-1', paletteId: 'pal-1' })).rejects.toBeInstanceOf(
+      ZeroRowReceiptError,
+    );
   });
 });
 

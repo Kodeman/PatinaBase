@@ -8,6 +8,7 @@ import {
   invalidateProposalClientQueries,
   PROPOSAL_CLIENT_MUTATION_KEY,
 } from '../lib/proposal-client-query-invalidation';
+import { ZeroRowReceiptError } from './optimistic';
 
 const getSupabase = () => createBrowserClient();
 
@@ -342,8 +343,14 @@ export function useDeleteSwatch() {
     }): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { error } = await supabase.from('palette_swatches').delete().eq('id', swatchId);
+      const { data, error } = await supabase
+        .from('palette_swatches')
+        .delete()
+        .eq('id', swatchId)
+        .select('id');
       if (error) throw error;
+      // An RLS-hidden or already-removed row deletes nothing (R6).
+      if (!data?.length) throw new ZeroRowReceiptError();
     },
     onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-palette', variables.paletteId] });

@@ -45026,6 +45026,10 @@ export type Database = {
         }
         Returns: Json
       }
+      restore_product_image: {
+        Args: { p_index: number; p_product_id: string; p_src: string }
+        Returns: string[]
+      }
       restore_project_selection: {
         Args: { p_ffe_item_id: string }
         Returns: Json

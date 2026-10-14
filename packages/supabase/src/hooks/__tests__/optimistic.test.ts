@@ -336,3 +336,69 @@ describe('useOptimisticMutation (US-34 N2)', () => {
     expect(built.mutationKey).toEqual(optimisticMutationKey('tasks:p1'));
   });
 });
+
+describe('useOptimisticMutation settles onto the last confirmed value (SQ-1004)', () => {
+  /** Tick (A) then untick (B) the same row in one scope; both patch before either settles. */
+  function tickThenUntick() {
+    const client = new QueryClient();
+    client.setQueryData<Task[]>(TASKS, [{ id: 'a', status: 'todo' }]);
+    const writes = [deferred<Task | null>(), deferred<Task | null>()];
+    let sent = 0;
+    const row = observe(client, {
+      ...tickOptions('task:a', () => writes[sent++].promise),
+      merge: mergeRow,
+    });
+    const tick = row.mutate({ id: 'a', status: 'done' }).catch((e: unknown) => e);
+    const untick = row.mutate({ id: 'a', status: 'todo' }).catch((e: unknown) => e);
+    const status = () => rowIn(client.getQueryData<Task[]>(TASKS), 'a')?.status;
+    return { client, writes, tick, untick, status, sent: () => sent };
+  }
+
+  it('tick then untick, both fail: the row ends at todo, as the server holds', async () => {
+    const { client, writes, tick, untick, status, sent } = tickThenUntick();
+    await flush();
+    expect(status()).toBe('todo');
+
+    writes[0].reject(new Error('500'));
+    expect(((await tick) as Error).message).toBe('500');
+    // The untick is still pending, so its patch stays on.
+    expect(status()).toBe('todo');
+    await flush();
+    expect(sent()).toBe(2);
+
+    // Its own snapshot holds the tick's unconfirmed 'done'; the rollback must not.
+    writes[1].reject(new Error('500'));
+    expect(((await untick) as Error).message).toBe('500');
+    expect(client.getQueryData(TASKS)).toEqual([{ id: 'a', status: 'todo' }]);
+  });
+
+  it('tick fails, untick succeeds: the row ends at the untick receipt', async () => {
+    const { client, writes, tick, untick, status } = tickThenUntick();
+    await flush();
+
+    writes[0].reject(new Error('500'));
+    await tick;
+    expect(status()).toBe('todo');
+    await flush();
+
+    writes[1].resolve({ id: 'a', status: 'todo', completed_at: undefined });
+    await untick;
+    expect(client.getQueryData(TASKS)).toEqual([{ id: 'a', status: 'todo', completed_at: undefined }]);
+  });
+
+  it('tick succeeds, untick fails: the row ends at the tick receipt', async () => {
+    const { client, writes, tick, untick, status } = tickThenUntick();
+    await flush();
+
+    writes[0].resolve({ id: 'a', status: 'done', completed_at: '2026-10-14T12:00:00Z' });
+    await tick;
+    expect(status()).toBe('todo');
+    await flush();
+
+    writes[1].reject(new Error('500'));
+    expect(((await untick) as Error).message).toBe('500');
+    expect(client.getQueryData(TASKS)).toEqual([
+      { id: 'a', status: 'done', completed_at: '2026-10-14T12:00:00Z' },
+    ]);
+  });
+});

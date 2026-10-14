@@ -53,6 +53,11 @@ export function PaletteSwatchEditor({
 }: PaletteSwatchEditorProps) {
   const [name, setName] = useState(swatch.name ?? '');
   const [role, setRole] = useState<PaletteSwatchRole | ''>((swatch.role ?? '') as PaletteSwatchRole | '');
+  // The role the database last confirmed (the prop or a write's receipt), the
+  // role writes still awaiting a receipt, and the latest one sent.
+  const confirmedRole = useRef(role);
+  const roleWrites = useRef(0);
+  const lastRoleWrite = useRef(0);
 
   const [saveFailed, setSaveFailed] = useState(false);
 
@@ -71,6 +76,12 @@ export function PaletteSwatchEditor({
   // the server confirms; it leaves on the refetch (or, with N15, when the host
   // lets the retained row go).
   const removing = ink ? removal !== null : remove.isPending || remove.isSuccess;
+
+  useEffect(() => {
+    const serverRole = (swatch.role ?? '') as PaletteSwatchRole | '';
+    confirmedRole.current = serverRole;
+    if (roleWrites.current === 0) setRole(serverRole);
+  }, [swatch.role]);
 
   useEffect(() => {
     if (!refocusDelete) return;
@@ -102,26 +113,35 @@ export function PaletteSwatchEditor({
 
   const handleRoleChange = (next: string) => {
     const value = next === '' ? null : (next as PaletteSwatchRole);
-    const serverRole = (swatch.role ?? '') as PaletteSwatchRole | '';
     setRole((value ?? '') as PaletteSwatchRole | '');
     setSaveFailed(false);
-    upsert.mutate(
-      {
+    const write = ++lastRoleWrite.current;
+    roleWrites.current += 1;
+    // mutateAsync settles each write; mutate's own callbacks reach only the
+    // latest one, so an earlier write's receipt would be lost.
+    upsert
+      .mutateAsync({
         proposalId,
         paletteId: swatch.palette_id,
         swatchId: swatch.id,
         hex: swatch.hex,
         role: value,
-      },
-      {
-        // F15b: a refused role rolls the select back to the server value, so
-        // it never shows a state the database lacks.
-        onError: () => {
-          setRole(serverRole);
+      })
+      .then(
+        (row) => {
+          confirmedRole.current = (row.role ?? '') as PaletteSwatchRole | '';
+        },
+        () => {
+          // F15b: a refused role rolls the select back to the role the
+          // database last confirmed, unless a role was chosen again since.
+          if (write !== lastRoleWrite.current) return;
+          setRole(confirmedRole.current);
           setSaveFailed(true);
         },
-      },
-    );
+      )
+      .finally(() => {
+        roleWrites.current -= 1;
+      });
   };
 
   const handleDelete = () => {

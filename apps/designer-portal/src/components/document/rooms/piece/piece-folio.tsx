@@ -154,9 +154,10 @@ export function PieceFolio({
       })
       .finally(() => setRemovingIdx(null));
   };
-  // N15 Undo puts back only the removed image, into the list as it is now
-  // (the cache, not this render's props), at its old index or else at the
-  // end. Re-sending the whole earlier list would erase a change made since.
+  // N15 Undo puts back only the removed image, into the list the server holds
+  // at the write (00793 restore_product_image), at its old index or else at
+  // the end. Sending a whole list from this browser would erase an image a
+  // collaborator added since that it has not seen.
   const undoRemove = async () => {
     if (!undo || restoring) return;
     setRestoring(true);
@@ -167,13 +168,21 @@ export function PieceFolio({
       setRestoring(false);
       return;
     }
-    const current =
-      qc.getQueryData<{ images?: string[] | null }>(['product', productId])?.images ?? list;
-    const next = current.includes(undo.src)
-      ? current
-      : [...current.slice(0, undo.index), undo.src, ...current.slice(undo.index)];
     try {
-      await removeSave.mutateAsync({ images: next });
+      const { data: images, error } = await createBrowserClient().rpc('restore_product_image', {
+        p_product_id: productId,
+        p_src: undo.src,
+        p_index: undo.index,
+      });
+      if (error) throw new Error(error.message || 'Could not restore the image.');
+      // No row written: RLS refused it or the piece is gone (R6).
+      if (!images) throw new Error('Could not restore the image.');
+      qc.setQueryData(['product', productId], (old: unknown) =>
+        old && typeof old === 'object' ? { ...(old as object), images } : old,
+      );
+      for (const queryKey of [['product', productId], ['products'], ['layer-products'], ['layer-counts']]) {
+        void qc.invalidateQueries({ queryKey });
+      }
       setUndo(null);
       setFocusSrc(undo.src);
     } catch (e) {

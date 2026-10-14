@@ -1,9 +1,11 @@
 /**
  * US-34 N15: with `optimistic-ink` on, removing a folio image asks no confirm.
  * An in-flow Undo row takes focus and reads "Removing…", then "Removed" only
- * on the server receipt. Undo writes back only the removed image, into the
- * list as it is now, so a change made in between survives it. Runs the real
- * `usePieceField` against deferred products UPDATEs and records each payload.
+ * on the server receipt. Undo sends only the removed image and its old index
+ * (00793 restore_product_image), and the server puts it into the list it
+ * holds, so a change made in between survives it, even one this browser never
+ * saw. Runs the real `usePieceField` against deferred products UPDATEs and
+ * deferred restore RPCs, and records each payload.
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
@@ -11,7 +13,10 @@ import { PieceFolio } from '../piece-folio';
 
 type Reply = { data: unknown; error: { message: string } | null };
 type Write = { images: string[]; reply: (r: Reply) => void };
+type RestoreArgs = { p_product_id: string; p_src: string; p_index: number };
+type Restore = { args: RestoreArgs; reply: (r: Reply) => void };
 let mockWrites: Write[] = [];
+let mockRestores: Restore[] = [];
 let mockServer: { id: string; images: string[] };
 
 jest.mock('@patina/supabase', () => ({
@@ -28,6 +33,10 @@ jest.mock('@patina/supabase', () => ({
         }),
       }),
     }),
+    rpc: (_fn: string, args: RestoreArgs) =>
+      new Promise<Reply>((resolve) => {
+        mockRestores.push({ args, reply: resolve });
+      }),
   }),
 }));
 
@@ -82,6 +91,16 @@ async function accept(n: number) {
   await act(async () => mockWrites[n].reply({ data: { ...mockServer }, error: null }));
 }
 
+/** The server runs restore `n` on the list it holds now, as 00793 does. */
+async function acceptRestore(n: number) {
+  await waitFor(() => expect(mockRestores.length).toBeGreaterThan(n));
+  const { p_src, p_index } = mockRestores[n].args;
+  const held = mockServer.images;
+  const images = held.includes(p_src) ? held : [...held.slice(0, p_index), p_src, ...held.slice(p_index)];
+  mockServer = { id: 'p-1', images };
+  await act(async () => mockRestores[n].reply({ data: images, error: null }));
+}
+
 const previews = () =>
   screen
     .getAllByRole('button', { name: /^Preview image/ })
@@ -90,6 +109,7 @@ const previews = () =>
 let confirmSpy: jest.SpyInstance;
 beforeEach(() => {
   mockWrites = [];
+  mockRestores = [];
   mockServer = { id: 'p-1', images: [A, B, C] };
   confirmSpy = jest.spyOn(window, 'confirm');
 });
@@ -117,11 +137,12 @@ describe('N15 — folio image remove with Undo', () => {
     expect(previews()).toEqual([A, C]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    await waitFor(() => expect(mockWrites).toHaveLength(2));
-    expect(mockWrites[1].images).toEqual([A, B, C]);
+    await waitFor(() => expect(mockRestores).toHaveLength(1));
+    expect(mockRestores[0].args).toEqual({ p_product_id: 'p-1', p_src: B, p_index: 1 });
+    expect(mockWrites).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Restoring…' })).toBeInTheDocument();
 
-    await accept(1);
+    await acceptRestore(0);
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
     expect(previews()).toEqual([A, B, C]);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Preview image 2 of 3' })).toHaveFocus());
@@ -157,10 +178,43 @@ describe('N15 — folio image remove with Undo', () => {
     await waitFor(() => expect(previews()).toEqual([A, C, D]));
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    await waitFor(() => expect(mockWrites).toHaveLength(3));
     // Only the removed image goes back, at its old index; D stays.
-    expect(mockWrites[2].images).toEqual([A, B, C, D]);
-    await accept(2);
+    await acceptRestore(0);
+    expect(mockRestores[0].args).toEqual({ p_product_id: 'p-1', p_src: B, p_index: 1 });
+    expect(mockWrites).toHaveLength(2);
     await waitFor(() => expect(previews()).toEqual([A, B, C, D]));
+  });
+
+  it('an image a collaborator added before Undo, never seen here, survives the Undo', async () => {
+    renderFolio();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove image 2' }));
+    await accept(0);
+    await waitFor(() => expect(previews()).toEqual([A, C]));
+
+    // Someone else adds D; this browser has not refetched.
+    mockServer = { id: 'p-1', images: [A, C, D] };
+    expect(previews()).toEqual([A, C]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await acceptRestore(0);
+    // No whole-list write from the cache: the server inserted B into its list.
+    expect(mockWrites).toHaveLength(1);
+    expect(mockServer.images).toEqual([A, B, C, D]);
+    await waitFor(() => expect(previews()).toEqual([A, B, C, D]));
+  });
+
+  it('a restore that writes no row says so and keeps the Undo row', async () => {
+    renderFolio();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove image 2' }));
+    await accept(0);
+    await waitFor(() => expect(previews()).toEqual([A, C]));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(mockRestores).toHaveLength(1));
+    await act(async () => mockRestores[0].reply({ data: null, error: null }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Could not restore the image.'));
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    expect(previews()).toEqual([A, C]);
   });
 });

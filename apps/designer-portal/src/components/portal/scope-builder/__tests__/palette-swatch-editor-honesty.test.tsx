@@ -69,6 +69,56 @@ describe('F15b — a refused role rolls back to the server value', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t save'));
     expect(select).toHaveValue('wall');
   });
+
+  type Write = { resolve: (row: unknown) => void; reject: (e: Error) => void };
+  const deferWrites = () => {
+    const writes: Write[] = [];
+    mockUpsertFn = () => new Promise((resolve, reject) => writes.push({ resolve, reject }));
+    return writes;
+  };
+  const editorFor = (role: string) => (
+    <PaletteSwatchEditor proposalId="proposal-1" swatch={{ ...(swatch as object), role } as never} />
+  );
+
+  it('A then B before A lands; A succeeds and B is refused: the select shows A', async () => {
+    const writes = deferWrites();
+    renderEditor();
+    const select = screen.getByRole('combobox');
+
+    fireEvent.change(select, { target: { value: 'accent' } });
+    fireEvent.change(select, { target: { value: 'trim' } });
+    await waitFor(() => expect(writes).toHaveLength(2));
+    expect(select).toHaveValue('trim');
+
+    await act(async () => writes[0].resolve({ ...(swatch as object), role: 'accent' }));
+    expect(select).toHaveValue('trim');
+    await act(async () => writes[1].reject(new Error('permission denied')));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t save'));
+    expect(select).toHaveValue('accent');
+  });
+
+  it('takes a new server role from props only while no role write is pending', async () => {
+    const writes = deferWrites();
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const wrap = (role: string) => <QueryClientProvider client={client}>{editorFor(role)}</QueryClientProvider>;
+    const { rerender } = render(wrap('wall'));
+    const select = screen.getByRole('combobox');
+
+    rerender(wrap('floor'));
+    expect(select).toHaveValue('floor');
+
+    fireEvent.change(select, { target: { value: 'accent' } });
+    await waitFor(() => expect(writes).toHaveLength(1));
+    // A refetch lands while the choice is in flight: the choice stays.
+    rerender(wrap('trim'));
+    expect(select).toHaveValue('accent');
+
+    // Refused: back to the role the database last confirmed.
+    await act(async () => writes[0].reject(new Error('permission denied')));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t save'));
+    expect(select).toHaveValue('trim');
+  });
 });
 
 describe('F15c — swatch delete is pending-only', () => {

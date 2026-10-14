@@ -7,6 +7,10 @@
  * - A failure re-applies only this write's `invert` to the CURRENT cache. It
  *   never restores a whole snapshot: in a shared list that would erase another
  *   row's write that settled in the meantime (R5).
+ * - After every settlement the cache holds the scope's last server-confirmed
+ *   value with only its still-pending patches re-applied. `invert` reads old
+ *   fields from that confirmed value, never from this write's own snapshot,
+ *   which carries the scope's earlier writes that had not landed yet.
  * - A write must return its changed row(s) or an exact count. Zero rows is a
  *   failure and takes the rollback path (R6).
  * - The mutation stays pending until its receipt is merged into the cache, or
@@ -17,6 +21,7 @@
  * server-decided outcomes stay pending-only (plan §5.2; see NEVER_OPTIMISTIC).
  */
 import {
+  hashKey,
   useMutation,
   useMutationState,
   useQueryClient,
@@ -57,14 +62,16 @@ export interface UseOptimisticMutationOptions<
   mutationFn: (variables: TVariables) => Promise<TReceipt>;
   /**
    * Pure patch of one cached key. Keys that are not cached are skipped. It
-   * must be idempotent: after a receipt merges, the patches of the scope's
-   * later writes that are still pending are applied again.
+   * must be idempotent: after every settlement, the patches of the scope's
+   * writes that are still pending are applied again.
    */
   apply: (current: TCache, variables: TVariables, key: QueryKey) => TCache;
   /**
    * Pure inverse of `apply` for this write's own row(s), run on the CURRENT
-   * cache. `previous` is only for reading those rows' old fields: never return
-   * it whole, and leave a field that a later write has since changed.
+   * cache. `previous` is the scope's last confirmed value of the key: the
+   * cache before the scope's first pending write, with each receipt merged
+   * since. It is only for reading those rows' old fields: never return it
+   * whole, and leave a field that a later write has since changed.
    */
   invert: (
     current: TCache,
@@ -98,6 +105,21 @@ function changedRows(receipt: unknown): number {
   return receipt == null ? 0 : 1;
 }
 
+/**
+ * Per QueryClient, per scope, per key hash: the key's last server-confirmed
+ * value, with none of the scope's pending patches on it. Held only while a
+ * write of the scope is pending.
+ */
+const confirmedByClient = new WeakMap<QueryClient, Map<string, Map<string, unknown>>>();
+
+function confirmedFor(queryClient: QueryClient, scopeId: string): Map<string, unknown> {
+  let scopes = confirmedByClient.get(queryClient);
+  if (!scopes) confirmedByClient.set(queryClient, (scopes = new Map()));
+  let confirmed = scopes.get(scopeId);
+  if (!confirmed) scopes.set(scopeId, (confirmed = new Map()));
+  return confirmed;
+}
+
 /** The useMutation options behind useOptimisticMutation. */
 export function optimisticMutationOptions<
   TVariables,
@@ -115,6 +137,20 @@ export function optimisticMutationOptions<
     );
   }
 
+  /** The variables of the scope's other writes still awaiting a receipt, in click order. */
+  const othersPending = (variables: TVariables): TVariables[] => {
+    const scoped = queryClient
+      .getMutationCache()
+      .findAll({ mutationKey: optimisticMutationKey(scopeId), status: 'pending' })
+      .sort((a, b) => a.state.submittedAt - b.state.submittedAt);
+    const self = scoped.findIndex((m) => m.state.variables === variables);
+    if (self >= 0) scoped.splice(self, 1);
+    return scoped.map((m) => m.state.variables as TVariables);
+  };
+  const settle = (others: TVariables[]) => {
+    if (others.length === 0) confirmedByClient.get(queryClient)?.delete(scopeId);
+  };
+
   return {
     ...rest,
     mutationKey: optimisticMutationKey(scopeId),
@@ -128,45 +164,68 @@ export function optimisticMutationOptions<
       await Promise.all(
         keys.map((key) => queryClient.cancelQueries({ queryKey: key, exact: true })),
       );
+      const confirmed = confirmedFor(queryClient, scopeId);
+      const first = othersPending(variables).length === 0;
       const patched: OptimisticContext<TCache> = [];
       for (const key of keys) {
         const previous = queryClient.getQueryData<TCache>(key);
         if (previous === undefined) continue;
+        const hash = hashKey(key);
+        if (first || !confirmed.has(hash)) confirmed.set(hash, previous);
         queryClient.setQueryData<TCache>(key, apply(previous, variables, key));
         patched.push({ key, previous });
       }
       return patched;
     },
     onError: (error, variables, patched, context) => {
+      const confirmed = confirmedFor(queryClient, scopeId);
+      const others = othersPending(variables);
       for (const entry of patched ?? []) {
         const current = queryClient.getQueryData<TCache>(entry.key);
         if (current === undefined) continue;
-        queryClient.setQueryData<TCache>(entry.key, invert(current, variables, entry));
+        const hash = hashKey(entry.key);
+        const previous = (confirmed.has(hash) ? confirmed.get(hash) : entry.previous) as TCache;
+        let next = invert(current, variables, { key: entry.key, previous });
+        for (const pending of others) next = apply(next, pending, entry.key);
+        queryClient.setQueryData<TCache>(entry.key, next);
       }
+      settle(others);
       return onError?.(error, variables, patched, context);
     },
     onSuccess: async (receipt, variables, patched, context) => {
+      const confirmed = confirmedFor(queryClient, scopeId);
       if (merge) {
-        // A later write of this scope is still waiting for its receipt: its
-        // patch goes back on over this receipt, so a tick then an untick never
-        // shows the first value again while the second is in flight.
-        const scoped = queryClient
-          .getMutationCache()
-          .findAll({ mutationKey: optimisticMutationKey(scopeId), status: 'pending' })
-          .sort((a, b) => a.state.submittedAt - b.state.submittedAt);
-        const self = scoped.findIndex((m) => m.state.variables === variables);
-        const later = self < 0 ? [] : scoped.slice(self + 1).map((m) => m.state.variables as TVariables);
+        const others = othersPending(variables);
         for (const key of keys) {
+          const hash = hashKey(key);
+          if (others.length > 0 && confirmed.has(hash)) {
+            confirmed.set(hash, merge(confirmed.get(hash) as TCache, receipt, variables, key));
+          }
           const current = queryClient.getQueryData<TCache>(key);
           if (current === undefined) continue;
           let next = merge(current, receipt, variables, key);
-          for (const pending of later) next = apply(next, pending, key);
+          for (const pending of others) next = apply(next, pending, key);
           queryClient.setQueryData<TCache>(key, next);
         }
+        settle(others);
       } else {
         await Promise.all(
           keys.map((key) => queryClient.invalidateQueries({ queryKey: key, exact: true })),
         );
+        // The refetch can land over the scope's other pending patches.
+        const others = othersPending(variables);
+        for (const key of keys) {
+          const hash = hashKey(key);
+          if (others.length > 0 && confirmed.has(hash)) {
+            confirmed.set(hash, apply(confirmed.get(hash) as TCache, variables, key));
+          }
+          const current = queryClient.getQueryData<TCache>(key);
+          if (current === undefined || others.length === 0) continue;
+          let next: TCache = current;
+          for (const pending of others) next = apply(next, pending, key);
+          queryClient.setQueryData<TCache>(key, next);
+        }
+        settle(others);
       }
       return onSuccess?.(receipt, variables, patched, context);
     },
