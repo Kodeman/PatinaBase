@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BoardOwnerRef } from '@patina/types';
-import { registerBoardOwnerAutosave } from '@/lib/proposal-autosave-registry';
+import {
+  detachProposalAutosaves,
+  registerBoardOwnerAutosave,
+} from '@/lib/proposal-autosave-registry';
 import { useTeachingHold } from '@/lib/teaching/hold-registry';
 
 export type BufferedAutosaveState =
@@ -72,22 +75,20 @@ function firstBufferedError<Key extends string>(
   return errors.values().next().value ?? null;
 }
 
-/** Unmounted generations kept registered after a failed final drain. */
-const detachedRegistrations = new Set<{ unregister: () => void }>();
 /** Counts changes of signed-in subject. */
 let currentSubject = 0;
 
 /**
  * US-34 F1 — called at a change of signed-in subject. The previous subject's
  * buffered edits can no longer be saved as theirs, so they are dropped, never
- * saved as the next: the failed ones still registered for a later Send now,
- * and the rest when a drain reaches them (the remount's final flush, or a
- * save in flight at the change that then fails).
+ * saved as the next. Every buffer of theirs leaves the Send barrier now,
+ * settled or not (an offline save the retired client paused never settles),
+ * and its unsaved edits are dropped when a drain reaches them (the remount's
+ * final flush, or a save in flight at the change that then fails).
  */
 export function dropPreviousSubjectAutosaves(): void {
   currentSubject += 1;
-  for (const registration of detachedRegistrations) registration.unregister();
-  detachedRegistrations.clear();
+  detachProposalAutosaves();
 }
 
 /**
@@ -309,10 +310,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
         registration.notify();
         try {
           await generation.flushAll();
-          if (detached) {
-            registration.unregister();
-            detachedRegistrations.delete(registration);
-          }
+          if (detached) registration.unregister();
         } finally {
           registration.notify();
         }
@@ -333,10 +331,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
       generation.timers.clear();
       // Keep a detached, failed generation registered. The SendSheet barrier
       // can retry it; unregister only after its final patch persists.
-      void handle.flush().catch(() => {
-        registration.notify();
-        detachedRegistrations.add(registration);
-      });
+      void handle.flush().catch(() => registration.notify());
     };
   }, [generation]);
 

@@ -116,6 +116,8 @@ const createQueryCache = (isRetired: () => boolean) => new QueryCache({
       if (
         handleAuthExpiry(error, {
           restoreErrorSurface: (outcome) => {
+            // The probe can answer after the subject has left.
+            if (isRetired()) return;
             if (query.meta?.errorSurface === 'silent') return;
             if (isNetworkError(appError)) return;
             showErrorToast(
@@ -228,6 +230,8 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
       if (
         handleAuthExpiry(error, {
           restoreErrorSurface: (outcome) => {
+            // The probe can answer after the subject has left.
+            if (isRetired()) return;
             if (inlineErrorSurface || silentErrorSurface) return;
             showErrorToast(
               outcome === 'dead' ? appError : toLiveSessionError(appError)

@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { notifyManager, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient, onSessionSubjectChange } from '@patina/supabase';
+import { useToast } from '@patina/design-system';
 import { retireQueryClient } from '@/lib/react-query';
 import { dropPreviousSubjectAutosaves } from '@/hooks/use-buffered-autosave';
+import { retireAnalyticsSubject } from '@/lib/analytics/subject';
+import { dismissReturnToLeadUndo } from '@/components/document/return-to-lead-undo';
 
 /**
  * US-34 F1 — the cache boundary between signed-in subjects.
@@ -22,9 +25,12 @@ import { dropPreviousSubjectAutosaves } from '@/hooks/use-buffered-autosave';
  *   is dropped, never resumed; and it is unmounted from the focus and online
  *   managers. A mutationFn already running at the switch still completes;
  *   that window is accepted;
- * - buffered edits of the previous subject's are dropped, never saved: the
- *   failed ones still registered for a later Send, and the ones the remount
- *   flushes;
+ * - buffered edits of the previous subject's are dropped, never saved: every
+ *   buffer, action and flush of theirs leaves the Send barrier, settled or
+ *   not, and the edits the remount flushes are dropped;
+ * - their Undo offer is withdrawn, their toasts are dismissed (render
+ *   `DismissPreviousSubjectToasts` beside the Toaster), and an analytics
+ *   capture their late work makes through `forThisSubject` is dropped;
  * - the next subject gets a fresh client and the subtree remounts under it
  *   (key it on `epoch`). A hook that took the retired client from
  *   `useQueryClient()` writes its late `onSuccess`/`onError` into a cache
@@ -33,12 +39,15 @@ import { dropPreviousSubjectAutosaves } from '@/hooks/use-buffered-autosave';
  *   handed the next subject's token (or none) before the remount opens the
  *   next subject's.
  *
- * The first sign-in (no one to someone) keeps the client and the mount. A
- * signed-out portal shows only its auth pages, which open no channel and run
- * no mutation, so there is no previous subject to fence, and a remount there
- * would drop the sign-in page's own success step before it navigates. What
- * was read signed out is reset and read again; open channels stay, since
- * supabase-js hands them the new token on SIGNED_IN.
+ * A sign-in in this tab (no one to someone, from its own auth event) keeps
+ * the client and the mount. A signed-out portal shows only its auth pages,
+ * which open no channel and run no mutation, so there is no previous subject
+ * to fence, and a remount there would drop the sign-in page's own success
+ * step before it navigates. What was read signed out is reset and read
+ * again; open channels stay, since supabase-js hands them the new token on
+ * SIGNED_IN. A sign-in only the shared cookie reports (another portal) is a
+ * boundary like any other: no event reached this tab's session hooks or
+ * Realtime, so they re-read on the remount and Realtime is handed the token.
  */
 export function useSessionSubjectBoundary(
   first: QueryClient,
@@ -51,8 +60,8 @@ export function useSessionSubjectBoundary(
 
   useEffect(
     () =>
-      onSessionSubjectChange((prev, next, accessToken) => {
-        if (prev === null) {
+      onSessionSubjectChange((prev, next, accessToken, source) => {
+        if (prev === null && source === 'event') {
           readAgain(current.current);
           return;
         }
@@ -68,12 +77,31 @@ export function useSessionSubjectBoundary(
   return subject;
 }
 
+/**
+ * The Toaster stays mounted across subjects and the design-system toast store
+ * is module state, so a toast shown for the previous subject would stay up for
+ * the next. Dismisses them all at each new epoch. It re-renders with every
+ * toast, so render it as a leaf beside the Toaster.
+ */
+export function DismissPreviousSubjectToasts({ epoch }: { epoch: number }): null {
+  const { dismiss } = useToast();
+  const dismissedFor = useRef(epoch);
+  useEffect(() => {
+    if (dismissedFor.current === epoch) return;
+    dismissedFor.current = epoch;
+    dismiss();
+  }, [epoch, dismiss]);
+  return null;
+}
+
 function retire(client: QueryClient): void {
   retireQueryClient(client);
   // QueryClient.clear() clears the query cache and the mutation cache.
   client.clear();
   client.unmount();
   dropPreviousSubjectAutosaves();
+  dismissReturnToLeadUndo();
+  retireAnalyticsSubject();
 
   const supabase = createBrowserClient();
   // One by one, not removeAllChannels(): that clears the list after its
@@ -89,12 +117,20 @@ function retire(client: QueryClient): void {
  * swapped raises none of them in this tab, and the token SIGNED_IN set by
  * hand survives every resubscribe (realtime-js 2.98.0 skips its callback for
  * a manual token), so channels the remount opens would still join as A.
+ *
+ * Held by hand, though, the next subject's token would outlive the next
+ * refresh another portal writes to the cookie: realtime-js re-asks its token
+ * callback (on connect and every heartbeat) only while no manual token is set,
+ * and auth-js in this tab need not emit TOKEN_REFRESHED for a cookie that is
+ * already fresh. So once it is in place, Realtime goes back to that callback,
+ * which reads auth-js's stored session as every request does.
  */
 function authorizeRealtime(accessToken: string | null): void {
   const { realtime } = createBrowserClient();
   if (accessToken) {
-    // An explicit token is in place before setAuth's first await.
-    void realtime.setAuth(accessToken);
+    // An explicit token is in place before setAuth's first await, and stays
+    // until the callback has answered.
+    void realtime.setAuth(accessToken).then(() => realtime.setAuth());
     return;
   }
   // No one: a join carries no token until the callback answers with the

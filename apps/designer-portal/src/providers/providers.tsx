@@ -13,7 +13,10 @@ import { Toaster, toast as dsToast } from '@patina/design-system';
 import { queryClient, nextSubjectQueryClient } from '@/lib/react-query';
 import { setToastFunction, type ToastOptions } from '@/lib/error-handler';
 import { PostHogAnalyticsProvider } from '@/lib/analytics/PostHogProvider';
-import { useSessionSubjectBoundary } from '@/hooks/use-session-subject-boundary';
+import {
+  DismissPreviousSubjectToasts,
+  useSessionSubjectBoundary,
+} from '@/hooks/use-session-subject-boundary';
 
 // The global react-query handlers (src/lib/react-query.ts) call showErrorToast/
 // showSuccessToast, which forward to whatever setToastFunction registers. Bridge
@@ -53,6 +56,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <Fragment key={epoch}>{children}</Fragment>
       </PostHogAnalyticsProvider>
       <Toaster />
+      <DismissPreviousSubjectToasts epoch={epoch} />
       {/* Keep development chrome out of the protected paper/mobile regimes;
           it can otherwise sit over the single edge owner at tablet widths.
           Gated on NODE_ENV so the panel — which exposes every cached query

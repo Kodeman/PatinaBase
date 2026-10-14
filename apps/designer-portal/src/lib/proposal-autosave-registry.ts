@@ -48,6 +48,8 @@ const listenersByProposal = new Map<string, Set<() => void>>();
 const snapshotsByProposal = new Map<string, ProposalAutosaveSnapshot>();
 const activeFlushes = new Map<string, Promise<void>>();
 const proposalActionTails = new Map<string, Promise<void>>();
+/** Counts changes of signed-in subject (see `detachProposalAutosaves`). */
+let subject = 0;
 
 function emptySnapshot(revision = 0): ProposalAutosaveSnapshot {
   return {
@@ -93,14 +95,16 @@ export function registerProposalAutosave(
   handles.set(token, handle);
   handlesByProposal.set(proposalId, handles);
   let registered = true;
+  const registeredFor = subject;
+  const live = () => registered && registeredFor === subject;
   recomputeProposalAutosaves(proposalId);
 
   return {
     notify: () => {
-      if (registered) recomputeProposalAutosaves(proposalId);
+      if (live()) recomputeProposalAutosaves(proposalId);
     },
     unregister: () => {
-      if (!registered) return;
+      if (!live()) return;
       registered = false;
       const current = handlesByProposal.get(proposalId);
       current?.delete(token);
@@ -293,6 +297,27 @@ export function runBoardOwnerAutosaveAction<Result>(
   action: () => Promise<Result>,
 ): Promise<Result> {
   return runProposalAutosaveAction(owner, action);
+}
+
+/**
+ * US-34 F1 — at a change of signed-in subject every buffer, action and flush
+ * registered here is the previous subject's. They are detached whether or not
+ * they have settled: a write the retired QueryClient paused offline never
+ * settles, and the next subject's Send barrier must not wait on it. Nothing
+ * detached is resumed or flushed again; a late notify or unregister from it
+ * does nothing.
+ */
+export function detachProposalAutosaves(): void {
+  const owners = new Set([
+    ...handlesByProposal.keys(),
+    ...proposalActionTails.keys(),
+    ...activeFlushes.keys(),
+  ]);
+  subject += 1;
+  handlesByProposal.clear();
+  proposalActionTails.clear();
+  activeFlushes.clear();
+  for (const owner of owners) recomputeProposalAutosaves(owner);
 }
 
 /** Test isolation for the module-level external store. */

@@ -41,6 +41,7 @@ import {
 } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
+import { forThisSubject } from '@/lib/analytics/subject';
 import { Button, IconButton, Input, Select, Textarea } from '@/components/ui/controls';
 import { unitWord } from '@/components/document/pieces/placement-chips';
 import type { FfeRoomPlacement } from '@patina/types';
@@ -437,6 +438,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const busy = createInspection.isPending || uploading > 0;
 
   const handleSubmit = async () => {
+    const capture = forThisSubject();
     setSubmitError(null);
     const flaggedItemIds = items
       .filter((it) => conditionFor(it.id) !== 'good')
@@ -495,7 +497,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
           outcome !== 'clean' && flaggedItemIds.length > 0 ? flaggedItemIds : undefined,
       });
 
-      procurementEvents.inspectionLogged({
+      capture(procurementEvents.inspectionLogged, {
         outcome,
         has_photos: photoAssetIds.length > 0,
       });
@@ -507,7 +509,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
       // carries `damageClaimCreated`, which is `true` only after a clean
       // damage_claims INSERT (W3.5.5 HIGH-1).
       if (result.damageClaimCreated) {
-        procurementEvents.damageClaimCreated({ outcome });
+        capture(procurementEvents.damageClaimCreated, { outcome });
       }
 
       const successMsg =

@@ -33,13 +33,19 @@ import { createBrowserClient } from '../client';
  * none to someone, someone to none, and user A to user B with or without a
  * SIGNED_OUT in between — is reported to `onSessionSubjectChange` listeners
  * before readers re-render, with the next subject's access token (null for no
- * one). The portal's QueryClient wiring uses that as its cache boundary.
+ * one) and where the change was seen: this tab's own auth event, or a re-read
+ * of the stored session that no event in this tab announced. The portal's
+ * QueryClient wiring uses that as its cache boundary.
  */
+
+/** 'event': this tab's onAuthStateChange. 'storage': only the shared cookie. */
+type SubjectChangeSource = 'event' | 'storage';
 
 type SubjectListener = (
   prev: string | null,
   next: string | null,
   accessToken: string | null,
+  source: SubjectChangeSource,
 ) => void;
 
 /** How often a read may re-read the stored session. */
@@ -67,7 +73,11 @@ const subjectListeners = new Set<SubjectListener>();
 
 const isBrowser = () => typeof window !== 'undefined';
 
-function apply(next: string | null, accessToken: string | null): void {
+function apply(
+  next: string | null,
+  accessToken: string | null,
+  source: SubjectChangeSource,
+): void {
   applied += 1;
   if (!seeded) {
     // The first reading is the starting subject, not a change of subject.
@@ -79,7 +89,7 @@ function apply(next: string | null, accessToken: string | null): void {
   if (next === userId) return;
   const prev = userId;
   userId = next;
-  subjectListeners.forEach((listener) => listener(prev, next, accessToken));
+  subjectListeners.forEach((listener) => listener(prev, next, accessToken, source));
   readers.forEach((reader) => reader());
 }
 
@@ -120,7 +130,7 @@ function recheck(): Promise<void> {
       .then(
         (read) => {
           // An auth event that landed during the reads is newer than they are.
-          if (read && applied === since) apply(read.id, read.accessToken);
+          if (read && applied === since) apply(read.id, read.accessToken, 'storage');
         },
         // A failed read leaves the subject as it was.
         () => {},
@@ -138,7 +148,7 @@ function start(): Promise<void> {
   // A listener must not await another auth call (auth-js holds its lock while
   // it runs), and `apply` does not.
   auth.onAuthStateChange((_event, session) =>
-    apply(session?.user?.id ?? null, session?.access_token ?? null),
+    apply(session?.user?.id ?? null, session?.access_token ?? null, 'event'),
   );
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void recheck();
@@ -147,10 +157,10 @@ function start(): Promise<void> {
   checkedAt = Date.now();
   seedPromise = auth.getSession().then(
     ({ data }) => {
-      if (!seeded) apply(data.session?.user?.id ?? null, data.session?.access_token ?? null);
+      if (!seeded) apply(data.session?.user?.id ?? null, data.session?.access_token ?? null, 'event');
     },
     () => {
-      if (!seeded) apply(null, null);
+      if (!seeded) apply(null, null, 'event');
     },
   );
   return seedPromise;
@@ -184,7 +194,7 @@ export function useSessionUserId(): string | null {
 }
 
 /**
- * Called with (previous id, next id, next access token) whenever the
+ * Called with (previous id, next id, next access token, source) whenever the
  * signed-in subject changes. Returns the unsubscribe.
  */
 export function onSessionSubjectChange(listener: SubjectListener): () => void {

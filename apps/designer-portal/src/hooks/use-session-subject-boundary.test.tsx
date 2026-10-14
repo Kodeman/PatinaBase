@@ -15,11 +15,18 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { RealtimeClient } from '@supabase/supabase-js';
-import { useSessionSubjectBoundary } from './use-session-subject-boundary';
+import { toast, useToast } from '@patina/design-system';
+import { DismissPreviousSubjectToasts, useSessionSubjectBoundary } from './use-session-subject-boundary';
 import { useBufferedAutosave } from './use-buffered-autosave';
 import { nextSubjectQueryClient, SubjectChangedError } from '@/lib/react-query';
 import { setToastFunction } from '@/lib/error-handler';
+import { forThisSubject } from '@/lib/analytics/subject';
 import {
+  ReturnToLeadUndo,
+  offerReturnToLeadUndo,
+} from '@/components/document/return-to-lead-undo';
+import {
+  flushProposalAutosaves,
   getProposalAutosaveSnapshot,
   resetProposalAutosaveRegistryForTests,
 } from '@/lib/proposal-autosave-registry';
@@ -36,6 +43,9 @@ const mockAuthCounts = { onAuthStateChange: 0, getSession: 0, getUser: 0 };
 let mockEmit: AuthCallback | null = null;
 /** Whose session the shared auth cookie holds right now. */
 let mockStoredUser: string | null = 'user-a';
+/** How many times another portal has refreshed that session's JWT. */
+let mockRefreshes = 0;
+const mockJwt = (id: string) => (mockRefreshes ? `jwt-${id}-r${mockRefreshes}` : `jwt-${id}`);
 const mockOpenChannels: MockChannel[] = [];
 const mockChannelLog: string[] = [];
 /** "<topic> <token>": the token Realtime held when each channel subscribed. */
@@ -44,7 +54,7 @@ const mockSubscribedAs: string[] = [];
 // _getAccessToken does, from the stored session or else the anon key.
 const mockRealtime = new RealtimeClient('ws://realtime.test/realtime/v1', {
   params: { apikey: 'anon-key' },
-  accessToken: async () => (mockStoredUser ? `jwt-${mockStoredUser}` : 'anon-key'),
+  accessToken: async () => (mockStoredUser ? mockJwt(mockStoredUser) : 'anon-key'),
 });
 const mockRemoveChannel = jest.fn(async (channel: MockChannel) => {
   mockChannelLog.push(`remove ${channel.topic}`);
@@ -73,7 +83,7 @@ const mockClient = {
       getItem: async () =>
         mockStoredUser
           ? JSON.stringify({
-              access_token: `jwt-${mockStoredUser}`,
+              access_token: mockJwt(mockStoredUser),
               refresh_token: `refresh-${mockStoredUser}`,
               expires_at: 4102444800,
               user: { id: mockStoredUser },
@@ -110,6 +120,7 @@ jest.mock('@patina/supabase', () => {
     useSessionUserId: store.useSessionUserId,
     onSessionSubjectChange: store.onSessionSubjectChange,
     createBrowserClient: () => mockClient,
+    useReturnToLead: () => ({ mutate: jest.fn(), isPending: false }),
   };
 });
 
@@ -182,7 +193,34 @@ function App({
   return (
     <QueryClientProvider client={client}>
       <Fragment key={epoch}>{children}</Fragment>
+      <DismissPreviousSubjectToasts epoch={epoch} />
     </QueryClientProvider>
+  );
+}
+
+/** As useProjectNotesRealtime: a channel whose effect does not depend on the user. */
+function ProjectNotesChannel() {
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    const channel = supabase.channel('project-notes:p1').subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+  return null;
+}
+
+/** As the Toaster: outside the epoch, reading the design-system toast store. */
+function OpenToasts() {
+  const { toasts } = useToast();
+  return (
+    <ul>
+      {toasts
+        .filter((shown) => shown.open)
+        .map((shown) => (
+          <li key={shown.id}>{shown.title}</li>
+        ))}
+    </ul>
   );
 }
 
@@ -222,6 +260,7 @@ beforeEach(() => {
   mockOpenChannels.length = 0;
   mockChannelLog.length = 0;
   mockSubscribedAs.length = 0;
+  mockRefreshes = 0;
   setToastFunction(mockToast);
   // Each test starts as user A; no boundary is mounted yet, so this is silent.
   setSession('user-a');
@@ -614,6 +653,171 @@ describe('useSessionSubjectBoundary', () => {
     await waitFor(() => expect(mockSubscribedAs).toHaveLength(3));
     expect(mockSubscribedAs[2]).not.toContain('jwt-');
     await waitFor(() => expect(mockRealtime.accessTokenValue).toBe('anon-key'));
+  });
+
+  it("an autosave paused offline at the switch never holds B's Send and leaves nothing registered", async () => {
+    const writes = jest.fn(async (_body: string, _as: string | null) => 'saved');
+    function TermsEditor() {
+      const upsert = useMutation({
+        mutationFn: async (body: string) => writes(body, await getSessionUserId()),
+      });
+      const autosave = useBufferedAutosave<string, { body: string }>({
+        proposalId: 'proposal-shared',
+        delay: 800,
+        save: (_key, next) => upsert.mutateAsync(next.body),
+      });
+      return (
+        <button
+          onClick={() => {
+            autosave.queue('terms', { body: 'A terms' });
+            void autosave.flush('terms');
+          }}
+        >
+          type
+        </button>
+      );
+    }
+    function OnlyForA() {
+      return useSessionUserId() === 'user-a' ? <TermsEditor /> : null;
+    }
+    renderPortal(<OnlyForA />);
+    act(() => onlineManager.setOnline(false));
+    fireEvent.click(await screen.findByText('type'));
+    await flush();
+    // A's save is in flight, paused by query-core until a reconnect.
+    expect(onScreen!.getMutationCache().getAll()[0]?.state.isPaused).toBe(true);
+    expect(getProposalAutosaveSnapshot('proposal-shared')).toMatchObject({
+      flushing: true,
+      registeredBuffers: 1,
+    });
+
+    signInAs('user-b');
+    await waitFor(() => expect(screen.queryByText('type')).not.toBeInTheDocument());
+
+    const sent = jest.fn();
+    void flushProposalAutosaves('proposal-shared').then(sent);
+    await flush();
+    expect(sent).toHaveBeenCalled();
+    expect(getProposalAutosaveSnapshot('proposal-shared')).toMatchObject({
+      dirty: false,
+      flushing: false,
+      error: null,
+      registeredBuffers: 0,
+    });
+    await act(async () => {
+      onlineManager.setOnline(true);
+    });
+    await flush();
+    expect(writes).not.toHaveBeenCalled();
+  });
+
+  it("a sign-in only the cookie reports (no one to B) remounts and hands Realtime B's token", async () => {
+    let mounts = 0;
+    function Mounted() {
+      const [mount] = useState(() => ++mounts);
+      return <p>mount {mount}</p>;
+    }
+    renderApp(
+      newClient(),
+      <>
+        <Mounted />
+        <ProjectNotesChannel />
+      </>,
+    );
+    // Another portal signs A out, then signs B in; no auth event reaches this tab.
+    mockStoredUser = null;
+    window.dispatchEvent(new Event('focus'));
+    expect(await screen.findByText('mount 2')).toBeInTheDocument();
+    await waitFor(() => expect(mockRealtime.accessTokenValue).toBe('anon-key'));
+
+    mockStoredUser = 'user-b';
+    window.dispatchEvent(new Event('focus'));
+
+    expect(await screen.findByText('mount 3')).toBeInTheDocument();
+    expect(mockSubscribedAs.at(-1)).toBe('project-notes:p1 jwt-user-b');
+    expect(mockRealtime.accessTokenValue).toBe('jwt-user-b');
+  });
+
+  it("follows a refresh another portal writes for the same subject on Realtime's next heartbeat", async () => {
+    renderApp(newClient(), <ProjectNotesChannel />);
+    mockStoredUser = 'user-b';
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(mockSubscribedAs.at(-1)).toBe('project-notes:p1 jwt-user-b'));
+    await flush();
+
+    // Another portal refreshes B's session: same subject, a new JWT, no event here.
+    mockRefreshes = 1;
+    const connected = jest.spyOn(mockRealtime, 'isConnected').mockReturnValue(true);
+    const push = jest.spyOn(mockRealtime, 'push').mockImplementation(() => {});
+    try {
+      await act(async () => mockRealtime.sendHeartbeat());
+      await waitFor(() => expect(mockRealtime.accessTokenValue).toBe('jwt-user-b-r1'));
+    } finally {
+      connected.mockRestore();
+      push.mockRestore();
+      mockRealtime.pendingHeartbeatRef = null;
+    }
+  });
+
+  it("dismisses the toasts already showing for A when the subject changes", async () => {
+    renderApp(newClient(), <Rows />);
+    render(<OpenToasts />);
+    await screen.findByText('user-a row');
+    act(() => {
+      toast({ title: 'The order could not be saved.' });
+    });
+    expect(screen.getByText('The order could not be saved.')).toBeInTheDocument();
+
+    signInAs('user-b');
+
+    await waitFor(() =>
+      expect(screen.queryByText('The order could not be saved.')).not.toBeInTheDocument(),
+    );
+  });
+
+  it("drops the analytics a continuation of A's work captures after the switch", async () => {
+    const saved = deferred<string>();
+    const captured = jest.fn();
+    function InspectionLog() {
+      const log = useMutation({ mutationFn: () => saved.promise });
+      return (
+        <button
+          onClick={async () => {
+            const capture = forThisSubject();
+            await log.mutateAsync();
+            capture(captured, 'procurement_inspection_logged');
+          }}
+        >
+          log
+        </button>
+      );
+    }
+    renderPortal(<InspectionLog />);
+    fireEvent.click(screen.getByText('log'));
+    await flush();
+
+    // A's save is already running when B signs in, and finishes afterwards.
+    signInAs('user-b');
+    await act(async () => saved.resolve('saved'));
+    await flush();
+    expect(captured).not.toHaveBeenCalled();
+
+    // B's own work still captures.
+    fireEvent.click(screen.getByText('log'));
+    await waitFor(() => expect(captured).toHaveBeenCalledTimes(1));
+  });
+
+  it("withdraws A's Undo offer, so B's remounted band never shows it", async () => {
+    renderApp(newClient(), <ReturnToLeadUndo />);
+    act(() =>
+      offerReturnToLeadUndo({ message: 'Moved to Discovery', designerClientId: 'designer-client-a' }),
+    );
+    expect(screen.getByTestId('return-to-lead-undo')).toHaveTextContent('Moved to Discovery');
+
+    signInAs('user-b');
+    await flush();
+
+    expect(screen.queryByTestId('return-to-lead-undo')).not.toBeInTheDocument();
   });
 
   it('runs on one auth subscription and never asks getUser()', () => {

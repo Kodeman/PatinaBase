@@ -506,4 +506,44 @@ describe('US-34 F1: a retired client', () => {
     expect(mockShowErrorToast).not.toHaveBeenCalled();
     expect(mockHandleAuthExpiry).not.toHaveBeenCalled();
   });
+
+  it('shows no toast from an expiry restorer the liveness probe answers after the switch', async () => {
+    mockIsAuthError.mockReturnValue(true);
+    const restorers: Array<(outcome: string) => void> = [];
+    mockHandleAuthExpiry.mockImplementation(
+      (_error: unknown, options?: { restoreErrorSurface?: (outcome: string) => void }) => {
+        if (options?.restoreErrorSurface) restorers.push(options.restoreErrorSurface);
+        return true;
+      },
+    );
+    const retired = queryClient;
+    const failure = { code: 'PGRST301', message: 'JWT expired' };
+    await expect(
+      retired.fetchQuery({
+        queryKey: ['expiring-before-switch'],
+        queryFn: async () => {
+          throw failure;
+        },
+      }),
+    ).rejects.toBe(failure);
+    await expect(
+      retired
+        .getMutationCache()
+        .build(retired, {
+          mutationFn: async () => {
+            throw failure;
+          },
+          retry: false,
+        })
+        .execute(undefined),
+    ).rejects.toBe(failure);
+    expect(restorers).toHaveLength(2);
+
+    // Both failed under A; the probe answers once B has signed in.
+    retireQueryClient(retired);
+    nextSubjectQueryClient();
+    restorers.forEach((restore) => restore('alive'));
+
+    expect(mockShowErrorToast).not.toHaveBeenCalled();
+  });
 });
