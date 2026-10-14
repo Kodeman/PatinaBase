@@ -1144,7 +1144,7 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
       const desk: DeskQueryData = {
         ...result,
         unreadFeeds,
-        outboundDraftRows: outboundRowsError ? [] : outboundRows,
+        outboundDraftRows: outboundRowsError || !Array.isArray(outboundRows) ? [] : outboundRows,
       };
       previousResultRef.current = desk;
       return desk;
