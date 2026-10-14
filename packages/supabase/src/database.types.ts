@@ -11381,6 +11381,78 @@ export type Database = {
         }
         Relationships: []
       }
+      model_applies: {
+        Row: {
+          after: Json
+          applied_at: string
+          before: Json | null
+          effect_type: string
+          id: string
+          inserted: boolean
+          project_id: string | null
+          revert_outcome: string | null
+          reverted_at: string | null
+          reverted_by: string | null
+          source: string
+          source_id: string | null
+          studio_id: string | null
+          summary: string | null
+          target_id: string
+          target_table: string
+        }
+        Insert: {
+          after: Json
+          applied_at?: string
+          before?: Json | null
+          effect_type: string
+          id?: string
+          inserted?: boolean
+          project_id?: string | null
+          revert_outcome?: string | null
+          reverted_at?: string | null
+          reverted_by?: string | null
+          source: string
+          source_id?: string | null
+          studio_id?: string | null
+          summary?: string | null
+          target_id: string
+          target_table: string
+        }
+        Update: {
+          after?: Json
+          applied_at?: string
+          before?: Json | null
+          effect_type?: string
+          id?: string
+          inserted?: boolean
+          project_id?: string | null
+          revert_outcome?: string | null
+          reverted_at?: string | null
+          reverted_by?: string | null
+          source?: string
+          source_id?: string | null
+          studio_id?: string | null
+          summary?: string | null
+          target_id?: string
+          target_table?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_applies_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_applies_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       newsletter_subscribers: {
         Row: {
           confirmation_token: string | null
@@ -44876,6 +44948,11 @@ export type Database = {
       }
       reverse_direct_order_earnings: {
         Args: { p_order_id: string }
+        Returns: Json
+      }
+      revert_model_apply: { Args: { p_apply_id: string }; Returns: Json }
+      revert_model_apply_group: {
+        Args: { p_source_id: string }
         Returns: Json
       }
       review_agent_task: {
