@@ -48,6 +48,7 @@ export function SectionLoadingLine({
         <span
           aria-hidden
           aria-busy="true"
+          data-loading-bar
           className="ml-[0.5ch] inline-block h-[0.85em] w-[3ch] animate-pulse rounded-[2px] bg-[var(--color-pearl)] align-middle motion-reduce:animate-none"
         />
         <span className="sr-only">{label}</span>
@@ -64,6 +65,7 @@ export function SectionLoadingLine({
       <span
         aria-hidden
         aria-busy="true"
+        data-loading-bar
         className="inline-block h-[0.85em] w-24 max-w-[45%] animate-pulse rounded-[2px] bg-[var(--color-pearl)] align-middle motion-reduce:animate-none"
       />
       <span className="sr-only">{label}</span>

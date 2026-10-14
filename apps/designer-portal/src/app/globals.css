@@ -394,6 +394,67 @@
   }
 }
 
+/* ===== The loading register (US-34 N10; US-33 PQ5–PQ7, behind `loading-register`) =====
+   components/loading/register.tsx prints [data-loading-register] on <html> while the flag is on;
+   server-rendered fallbacks cannot read a flag, so the register is keyed here.
+   - PQ5: after their fade-in the placeholders breathe on R15 (doc-breath, 3 s, 1 → 0.62), and so do
+     the SectionLoadingLine bars in place of their pulse. Reduced motion stills them.
+   - PQ7: loader words marked [data-register-off] retire; lines marked [data-register-on] exist only
+     under the register. The one such line is the slow/stall line, timed from thresholds.ts. */
+html[data-loading-register] .ph,
+html[data-loading-register] .ph-disc,
+html[data-loading-register] .ph-block {
+  animation:
+    ph-in 50ms linear var(--ph-delay, 150ms) forwards,
+    doc-breath 3s ease-in-out calc(var(--ph-delay, 150ms) + 50ms) infinite;
+}
+html[data-loading-register] [data-loading-bar] {
+  animation: doc-breath 3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-loading-register] .ph,
+  html[data-loading-register] .ph-disc,
+  html[data-loading-register] .ph-block {
+    animation: ph-in 50ms step-start var(--ph-delay, 150ms) forwards;
+  }
+  html[data-loading-register] [data-loading-bar] {
+    animation: none;
+  }
+}
+html:not([data-loading-register]) [data-register-on],
+html[data-loading-register] [data-register-off] {
+  display: none !important;
+}
+/* Slow at --slow-at (4 s), stall at --stall-at (10 s): hidden, not absent, until then, so the
+   line is out of the accessibility tree and its Reload out of the tab order. A step, not motion. */
+@keyframes slow-line-in {
+  to {
+    visibility: visible;
+  }
+}
+/* It sits over the top of the paper (D1 §3, under where the nav rule runs), out of flow, so the
+   skeleton's line boxes stay the page's own (D1.19). Its parent is positioned. */
+.slow-line {
+  position: absolute;
+  top: 10px;
+  left: 16px;
+  right: 16px;
+  z-index: 11;
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  visibility: hidden;
+  animation: slow-line-in 1ms linear var(--slow-at, 4000ms) forwards;
+}
+.slow-line-stall {
+  visibility: hidden;
+  animation: slow-line-in 1ms linear var(--stall-at, 10000ms) forwards;
+}
+
 /* ===== The Life Review (R126) ===================================== */
 
 /* Three rule weights, three ranks. The strong rule is the double rule: the

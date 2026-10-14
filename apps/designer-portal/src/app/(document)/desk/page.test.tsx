@@ -26,6 +26,8 @@ let mockPendingRead:
   | 'line'
   | null = null;
 let mockMemberLineFlags = true;
+// US-34 N10 — the loading register; off unless a test turns it on.
+let mockLoadingRegister = false;
 let mockViewerStudioId: string | null = null;
 let mockLeadsRead = true;
 /** R14 — the teammates' facts read; a case swaps in a real, rejecting query. */
@@ -113,9 +115,11 @@ jest.mock('@/hooks/use-feature-flag', () => ({
   // `onboarding-teammate-persona`), the Desk's line pick waits on that read.
   useFeatureFlag: (key: string) => ({
     value:
-      key === 'studio-workspaces' || key === 'onboarding-teammate-persona'
-        ? mockMemberLineFlags
-        : true,
+      key === 'loading-register'
+        ? mockLoadingRegister
+        : key === 'studio-workspaces' || key === 'onboarding-teammate-persona'
+          ? mockMemberLineFlags
+          : true,
     isLoading: false,
   }),
 }));
@@ -708,6 +712,43 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
       expect(held(container)).toBeNull();
       expect(skeleton(container)).toBeNull();
       expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+    });
+
+    describe('under the loading register (N10)', () => {
+      beforeEach(() => {
+        mockLoadingRegister = true;
+      });
+      afterEach(() => {
+        mockLoadingRegister = false;
+        document.documentElement.removeAttribute('data-loading-register');
+      });
+
+      it('the held block is filled bars, not hollow frames, and still busy until ready', () => {
+        mockPendingRead = 'rollup';
+        armWait();
+        const { container, rerender } = render(<DeskPage />);
+        const block = skeleton(container) as HTMLElement;
+        expect(block).not.toBeNull();
+        expect(held(container)).toContainElement(block);
+        expect(block.querySelector('.desk-loading-frame')).toBeNull();
+        expect(block.querySelectorAll('[data-placeholder]').length).toBeGreaterThan(0);
+        // Words only for slow, stall and error: the block says nothing aloud but its sr-only name.
+        expect(block.querySelector('.sr-only')?.textContent).toBe('Loading today’s lines.');
+        expect(document.documentElement.hasAttribute('data-loading-register')).toBe(true);
+
+        mockPendingRead = null;
+        rerender(<DeskPage />);
+        expect(skeleton(container)).toBeNull();
+        expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+      });
+
+      it('a first read shows the same filled block', () => {
+        mockDeskRead = { ...settledDeskRead(), data: undefined, isLoading: true, isSuccess: false };
+        const { container } = render(<DeskPage />);
+        const block = skeleton(container) as HTMLElement;
+        expect(block.querySelector('.desk-loading-frame')).toBeNull();
+        expect(block.querySelectorAll('[data-placeholder]').length).toBeGreaterThan(0);
+      });
     });
 
     it('with no read in hand yet the skeleton is not marked held: a press there cannot print the roster', () => {

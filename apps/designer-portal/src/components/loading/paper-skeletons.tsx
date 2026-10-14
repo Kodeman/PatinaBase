@@ -4,9 +4,13 @@
  * design board, the Drafting Room and the match ceremony.
  *
  * Each room keeps today's loader words, and the Library keeps its
- * StrataSweep, word for word and in the place the room prints them. Retiring
- * them is N10's, behind `loading-register` (PQ6, PQ7). What these add is the
- * room's geometry around the words and `aria-busy` on the region.
+ * StrataSweep, word for word and in the place the room prints them. What these
+ * add is the room's geometry around the words and `aria-busy` on the region.
+ *
+ * Under the loading register (N10, `loading-register`) the words and the
+ * sweep retire (PQ6, PQ7): they carry `data-register-off`, a line that must
+ * keep its box holds a bar marked `data-register-on`. A server fallback cannot
+ * read the flag, so globals.css keys these marks on <html>.
  *
  * The frame is drawn with the room's own classes and measure, so nothing
  * moves when it lands (D1.19). Data lines are filled pearl bars hidden from
@@ -55,6 +59,19 @@ function PlatesSkeleton({
   );
 }
 
+/**
+ * A shelf's plates while it reads, under the loading register (N10): what
+ * library-shelf.tsx shows in place of its sweep and words, in the same row
+ * the route fallback draws.
+ */
+export function ShelfPlatesSkeleton({ label }: { label: string }) {
+  return (
+    <LoadingRegion label={label}>
+      <PlatesSkeleton count={8} phone={4} className="plates library-plates" />
+    </LoadingRegion>
+  );
+}
+
 // ── Library (F13d) ───────────────────────────────────────────────────────────
 
 /**
@@ -99,7 +116,7 @@ export function LibrarySkeleton() {
             </p>
           </div>
           {/* Today's shelf loader, word for word (library-shelf.tsx). */}
-          <div className="flex items-center gap-2 py-6">
+          <div className="flex items-center gap-2 py-6" data-register-off>
             <StrataSweep size="sm" label="Reading All shelves" />
             <span className="t-meta library-shelf-meta">reading the shelf…</span>
           </div>
@@ -138,7 +155,10 @@ export function StudioBoardsSkeleton() {
               ← Studio overview
             </Link>
             <h1 className="t-d2">Studio design boards</h1>
-            <p className="t-meta uppercase text-[var(--text-subtle)]">
+            <p
+              className="t-meta uppercase text-[var(--text-subtle)]"
+              data-register-off
+            >
               Loading design boards…
             </p>
           </div>
@@ -148,6 +168,7 @@ export function StudioBoardsSkeleton() {
           role="status"
           aria-live="polite"
           className="t-meta uppercase text-[var(--text-subtle)]"
+          data-register-off
         >
           Reading the boards…
         </p>
@@ -233,7 +254,10 @@ export function DraftingSkeleton() {
           <div className="papers-drafted">
             {/* Today's gate words, word for word (drafting-room.tsx). */}
             <p className="doc-type-body text-[var(--color-quiet-ink)]">
-              Opening the draft…
+              <span data-register-off>Opening the draft…</span>
+              <span data-register-on aria-hidden="true">
+                <Bar width={168} height={9} />
+              </span>
             </p>
           </div>
           <div className="papers-grid" aria-hidden="true">
@@ -288,7 +312,10 @@ export function CeremonySkeleton() {
       <div className="mx-auto max-w-[1120px] px-6 pb-24 pt-10 sm:px-9 sm:pt-14">
         {/* Today's words, word for word (ceremony-surface.tsx). */}
         <p className="mb-9 font-heading text-[14px] italic text-[var(--text-muted)]">
-          Arriving…
+          <span data-register-off>Arriving…</span>
+          <span data-register-on aria-hidden="true">
+            <Bar width={72} height={8} />
+          </span>
         </p>
         <header className="mb-10 title-rule st-brief">
           <p className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--text-primary)]">

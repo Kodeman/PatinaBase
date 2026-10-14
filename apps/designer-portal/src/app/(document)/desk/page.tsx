@@ -31,6 +31,7 @@ import { useViewerStudio } from '@/hooks/use-viewer-studio';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { DeskTodaySkeleton, useLoadingRegister } from '@/components/loading';
 import {
   openCommandBar,
   captureLeadPending,
@@ -140,6 +141,8 @@ export default function DeskPage() {
   const [openProjectOpen, setOpenProjectOpen] = useState(false);
 
   const oneVoice = useFeatureFlag('one-voice').value === true;
+  // US-34 N10 — the loading register: Today's frames become filled bars.
+  const loadingRegister = useLoadingRegister();
   const {
     data: studioMembers,
     isLoading: studioMembersLoading,
@@ -579,7 +582,9 @@ export default function DeskPage() {
   };
 
   const rosterBlock =
-    (isLoading && !data) || arrivalHeld ? (
+    ((isLoading && !data) || arrivalHeld) && loadingRegister ? (
+      <DeskTodaySkeleton dateLabel={dateLabel} />
+    ) : (isLoading && !data) || arrivalHeld ? (
       // Loading is not empty: Today's eyebrow and three quiet frames where
       // its cards will stand, no ledger yet.
       <section

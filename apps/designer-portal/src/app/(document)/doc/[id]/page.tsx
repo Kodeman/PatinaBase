@@ -149,6 +149,7 @@ import { gateState, useSectionGates } from '@/hooks/use-section-work';
 import { deriveFillState } from '@/lib/document/fill-state';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { DocumentSkeleton, useLoadingRegister } from '@/components/loading';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import {
   asLegacyProposalLifecycle,
@@ -988,6 +989,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const hydrated = useHydrated();
+  // US-34 N10 — the loading register (`loading-register`): the paper is picked up
+  // as its DocumentSkeleton, never as words or a hidden paper. Off: today.
+  const loadingRegister = useLoadingRegister();
   // Start to Signature W2 — the Worktable composes the paper's middle. Fails
   // closed: with the flag off this page prints exactly the composition it has
   // always printed, and every fixed part of the paper is identical either way.
@@ -3007,6 +3011,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // can arrive with a warm React Query cache. Hold the first client paint to
   // the server's loading tree so those two render contracts cannot diverge.
   if (!hydrated || resolutionState === 'loading') {
+    if (loadingRegister) return <DocumentSkeleton />;
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
         <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
@@ -3337,9 +3342,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <>
+    {/* N10 arrival C — held under the loading register, the DocumentSkeleton
+        stands over the paper (zero height, so the paper beneath still lays out
+        and reads exactly as it will once shown) and nothing is veiled: the
+        skeleton IS the arrival, and the paper lands in its place at ready. */}
+    {arrivalHeld && loadingRegister && (
+      <div className="relative z-10 h-0" data-arrival-skeleton>
+        <DocumentSkeleton />
+      </div>
+    )}
     {/* The held paper's loading line. Zero height, so the paper beneath lays
         out exactly as it will once shown. */}
-    {arrivalHeld && (
+    {arrivalHeld && !loadingRegister && (
       <div className="h-0" aria-busy>
         <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
           Picking up…
@@ -3353,6 +3367,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // waterfall) but unmarked, and arrival.css hides it under `arr-pre`.
       data-arrival={arrivalHeld ? undefined : 'document'}
       data-arrival-held={arrivalHeld ? 'document' : undefined}
+      // N10 — no arr-pre veil under the register: the held paper hides itself
+      // (laid out, out of sight and out of the accessibility tree) beneath its
+      // skeleton until ready.
+      style={arrivalHeld && loadingRegister ? { visibility: 'hidden' } : undefined}
       data-arrival-ready={arrivalReady ? '' : undefined}
       data-arr-engagement={row.engagement_id}
       data-shell-regime="single-below-1180-narrow-to-1439-full-from-1440"

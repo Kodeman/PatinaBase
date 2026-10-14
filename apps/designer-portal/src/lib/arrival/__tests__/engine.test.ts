@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRun, engine, message } from '../engine'
 import { S } from '../plan'
+import { LOADING_REGISTER_ATTR } from '../register'
 import { BUDGET, EVENT_ENDED } from '../types'
 import type { ArrivalEnded, Brief, Surface } from '../types'
 import type { Run } from '../run-contract'
@@ -207,6 +208,25 @@ describe('start', () => {
     expect(root.hasAttribute('data-arr-played')).toBe(false)
     expect(html.classList.contains('arr-pre')).toBe(false)
     expect(ours()).toHaveLength(0)
+  })
+  it('N10 arrival C: under the loading register the run settles at once, laying nothing over the paper', () => {
+    const root = deskDom()
+    html.classList.add('arr-pre')
+    html.setAttribute(LOADING_REGISTER_ATTR, '')
+    try {
+      const b = engine.brief(root, 'desk') as Brief
+      const run = createRun(b, makeHost(root), { via: null, reduced: false, entryAt: 0, now: () => Date.now() })
+      run.start()
+      // arrival_ended still reports, once, as a settled entry; no card, no played mark, no arr-on.
+      expect(events).toEqual([{ surface: 'desk', how: 'settled' }])
+      expect(run.phase).toBe('done')
+      expect(root.hasAttribute('data-arr-played')).toBe(false)
+      expect(html.classList.contains('arr-on')).toBe(false)
+      expect(html.classList.contains('arr-pre')).toBe(false)
+      expect(ours()).toHaveLength(0)
+    } finally {
+      html.removeAttribute(LOADING_REGISTER_ATTR)
+    }
   })
   it('declines no-root when the route root is gone', () => {
     const root = deskDom()
@@ -745,16 +765,16 @@ describe('B7 / B8 / B10 — the stylesheet the run relies on', () => {
     expect(CSS).toMatch(/:root\{--arr-ok:1\}/)
   })
   it('B8: hides only the route root (and the Document paper held unmarked) under arr-pre, with a 1.5s reveal failsafe', () => {
-    expect(CSS).toContain('html.arr-pre [data-arrival]{opacity:0;animation-play-state:paused}')
-    expect(CSS).toMatch(/html\.arr-pre:has\(\[data-arrival\]\)\{animation:arr-reveal 1ms linear 1500ms both\}/)
+    expect(CSS).toContain('html.arr-pre:not([data-loading-register]) [data-arrival]{opacity:0;animation-play-state:paused}')
+    expect(CSS).toMatch(/html\.arr-pre:not\(\[data-loading-register\]\):has\(\[data-arrival\]\)\{animation:arr-reveal 1ms linear 1500ms both\}/)
     expect(CSS).not.toMatch(/arr-pre body\{opacity/)
   })
   it('B8 (round 4): the held paper has its own 8.5s failsafe, which the root mark replaces rather than shortens', () => {
     expect(CSS).toContain(
-      'html.arr-pre [data-arrival-held="document"]{opacity:var(--arr-veil,0);animation-play-state:var(--arr-play,paused)}',
+      'html.arr-pre:not([data-loading-register]) [data-arrival-held="document"]{opacity:var(--arr-veil,0);animation-play-state:var(--arr-play,paused)}',
     )
     expect(CSS).toContain(
-      'html.arr-pre:has([data-arrival-held="document"]){animation:arr-reveal-held 1ms linear 8500ms both}',
+      'html.arr-pre:not([data-loading-register]):has([data-arrival-held="document"]){animation:arr-reveal-held 1ms linear 8500ms both}',
     )
     // The same keyframes under another name: a running animation keeps its start time when only its
     // delay changes, so a shared name would reveal a root held longer than 1.5s the moment it appears.
@@ -765,7 +785,14 @@ describe('B7 / B8 / B10 — the stylesheet the run relies on', () => {
     // Past the 8s hard entry cap, so it only ever shows a paper a thrown run left held.
     const heldDelay = Number(/animation:arr-reveal-held 1ms linear (\d+)ms both/.exec(CSS)?.[1])
     expect(heldDelay).toBeGreaterThan(BUDGET.HARD_ENTRY_READY_MS)
-    expect(CSS).not.toContain('html.arr-pre [data-arrival-held="document"]{opacity:0')
+    expect(CSS).not.toContain('html.arr-pre:not([data-loading-register]) [data-arrival-held="document"]{opacity:0')
+  })
+  it('N10 arrival C: no rule veils the route root or the held paper under the loading register', () => {
+    // Every hiding rule is scoped off [data-loading-register]: under the register the skeleton stands
+    // in while the wait is armed, and nothing is hidden.
+    for (const m of CSS.matchAll(/^html\.arr-pre[^,{]*\{[^}]*(opacity|animation)[^}]*\}/gm)) {
+      expect(m[0].startsWith('html.arr-pre:not([data-loading-register])')).toBe(true)
+    }
   })
   it('Skip clears the persistent bottom edge: the MobileBar below 1180, the Studio Drawer above', () => {
     expect(CSS).toMatch(

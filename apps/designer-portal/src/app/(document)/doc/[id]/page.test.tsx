@@ -707,6 +707,26 @@ describe('DocumentPage hydration render behavior', () => {
     expect(screen.getByText('No document answers to this name.')).toBeVisible();
   });
 
+  it('N10 — under the loading register the paper is picked up as its skeleton, busy and wordless', () => {
+    mockEnabledFlags = ['loading-register'];
+    try {
+      const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+      expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+      const skeleton = screen.getByText('Loading the document.').closest('[aria-busy="true"]');
+      expect(skeleton).not.toBeNull();
+      expect(skeleton!.querySelectorAll('[data-placeholder]').length).toBeGreaterThan(0);
+      // Its only words are the slow line, held hidden by CSS until 4 s.
+      expect(skeleton!.querySelector('[data-slow-line]')).not.toBeNull();
+
+      mockHydrated = true;
+      rerender(<DocumentPage params={fulfilledParams} />);
+      expect(screen.queryByText('Loading the document.')).not.toBeInTheDocument();
+      expect(screen.getByText('No document answers to this name.')).toBeVisible();
+    } finally {
+      document.documentElement.removeAttribute('data-loading-register');
+    }
+  });
+
   it('offers a retry instead of hanging when document resolution fails', () => {
     mockHydrated = true;
     mockDocumentQuery = {
@@ -3877,6 +3897,39 @@ describe('DocumentPage guide activation', () => {
         expect(shell()).toHaveAttribute('data-arrival-ready', '');
         expect(shell()).not.toHaveAttribute('data-arrival-held');
         expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+      });
+
+      it('N10 arrival C — under the loading register the held paper stands under its skeleton, never veiled, and lands at ready', () => {
+        mockEnabledFlags = ['loading-register'];
+        try {
+          asProjectDocument();
+          mockPlanRoomLoading = true;
+          armWait();
+          const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+          // The mark arrival.css keys on: no arr-pre veil applies under it.
+          expect(document.documentElement.hasAttribute('data-loading-register')).toBe(true);
+          const paper = held();
+          expect(paper).not.toBeNull();
+          // Every read of the paper still runs beside the ready waterfall; the paper is laid out but
+          // out of sight and out of the accessibility tree, under the skeleton.
+          expect(paper!.querySelector('[data-document-paper] [data-active-section]')).not.toBeNull();
+          expect(paper!.style.visibility).toBe('hidden');
+          const skeleton = document.querySelector('[data-arrival-skeleton] [aria-busy="true"]');
+          expect(skeleton).not.toBeNull();
+          expect(paper!.contains(skeleton)).toBe(false);
+          // No prose loader.
+          expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+
+          mockPlanRoomLoading = false;
+          rerender(<DocumentPage params={fulfilledParams} />);
+          expect(shell()).toBe(paper);
+          expect(shell()).toHaveAttribute('data-arrival', 'document');
+          expect(shell()).toHaveAttribute('data-arrival-ready', '');
+          expect(shell()!.style.visibility).toBe('');
+          expect(document.querySelector('[data-arrival-skeleton]')).toBeNull();
+        } finally {
+          document.documentElement.removeAttribute('data-loading-register');
+        }
       });
 
       it('ready: the root appears carrying data-arrival-ready', () => {

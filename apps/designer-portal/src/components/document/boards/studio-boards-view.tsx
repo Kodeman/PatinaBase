@@ -28,6 +28,7 @@ import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
 import { EmptyState } from '@/components/document/empty-state';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
+import { StudioBoardsSkeleton, useLoadingRegister } from '@/components/loading';
 
 const STATUS_FILTERS: ReadonlyArray<{
   key: BoardReactionStatus;
@@ -168,6 +169,10 @@ export function StudioBoardsView() {
     : boards;
   const activeFilter = STATUS_FILTERS.find((filter) => filter.key === activeStatus) ?? null;
   const jobs = groupByJob(filtered);
+  // US-34 N10 — under the loading register the overview's read keeps the route fallback's shape
+  // (one shape from fallback to data) and its loader words retire (PQ7). Off: today's words.
+  const loadingRegister = useLoadingRegister();
+  if (loadingRegister && overview.isLoading) return <StudioBoardsSkeleton />;
 
   return (
     <main className="min-h-screen bg-[var(--doc-paper)] text-[var(--text-primary)]">

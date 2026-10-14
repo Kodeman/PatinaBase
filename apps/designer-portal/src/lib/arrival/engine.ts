@@ -5,6 +5,7 @@ import { BUDGET, EVENT_ENDED } from './types'
 import type { ArrivalEnded, Brief, DeclineCause, EndHow, Part } from './types'
 import type { ArrivalEngine, CreateRun, Run, RunPhase } from './run-contract'
 import { gate } from './gate'
+import { loadingRegisterOn } from './register'
 import { brief as lift, period, verifyFrame0 } from './brief'
 import { classify, pinned, today, unclip, walk } from './collect'
 import {
@@ -341,6 +342,10 @@ export const createRun: CreateRun = (b, host, opts): Run => {
 
   function begin() {
     inputAt = -Infinity
+    // US-34 N10 arrival C: under the loading register the paper was never hidden, and it was set as its
+    // placeholders resolved. Nothing is laid over it: the arrival ends settled, the page's own entry move
+    // plays, and nothing counts as a played card (the put-down and token landings still run).
+    if (loadingRegisterOn(doc)) return end('settled', undefined, false)
     const root = host.root()
     if (!root || !root.contains(H)) return end('declined', 'no-root', false)
     if (!verifyFrame0(b)) return end('declined', 'drift', false)

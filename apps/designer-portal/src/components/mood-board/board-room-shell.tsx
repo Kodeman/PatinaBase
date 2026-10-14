@@ -1,5 +1,6 @@
 'use client';
 
+import { MoodBoardSkeleton, useLoadingRegister } from '@/components/loading';
 import {
   useCallback,
   useEffect,
@@ -552,6 +553,9 @@ function BoardRoomSurface({
 }) {
   const router = useRouter();
   const { user } = useAuth();
+  // US-34 N10 — under the loading register the board keeps the route fallback's shape while its
+  // room reads, instead of a pulsing sheet with no aria-busy.
+  const loadingRegister = useLoadingRegister();
   const rootRef = useRef<HTMLElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -1333,6 +1337,7 @@ function BoardRoomSurface({
     );
   }
   if (api.isLoading || !api.state || !api.canvasProps || !api.compositionBoard || !input) {
+    if (loadingRegister) return <MoodBoardSkeleton />;
     return <div className="fixed inset-0 h-[100dvh] animate-pulse bg-[var(--bg-muted)]" aria-label="Loading mood board" />;
   }
 

@@ -18,6 +18,7 @@ import {
   type LayerProductRow,
 } from "@patina/supabase";
 import { StrataSweep } from "@/components/ui/strata-sweep";
+import { ShelfPlatesSkeleton, useLoadingRegister } from "@/components/loading";
 import { DocumentAction } from "../../document-action";
 import { LibraryCard } from "./library-card";
 import {
@@ -83,6 +84,7 @@ export function LibraryShelf({
   const shown = SHELVES.filter((shelf) => shows(layer, shelf)).map((shelf) => reads[shelf]);
   const isLoading = shown.some((read) => read.isLoading);
   const isError = shown.some((read) => read.isError);
+  const loadingRegister = useLoadingRegister();
   const data = useMemo(
     () => mergeShelves(shown.map((read) => read.data)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,7 +130,10 @@ export function LibraryShelf({
         {meta && <p className="t-body-sm library-shelf-meta">{meta}</p>}
       </div>
 
-      {isLoading && (
+      {/* US-34 N10 — under the loading register a shelf reads as its plates, not a sweep and words
+          (PQ6, PQ7): its shape is known. Off: today's sweep. */}
+      {isLoading && loadingRegister && <ShelfPlatesSkeleton label={`Reading ${name}`} />}
+      {isLoading && !loadingRegister && (
         <div className="flex items-center gap-2 py-6">
           <StrataSweep size="sm" label={`Reading ${name}`} />
           <span className="t-meta library-shelf-meta">reading the shelf…</span>
