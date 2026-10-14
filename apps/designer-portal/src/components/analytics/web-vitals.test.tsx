@@ -70,7 +70,7 @@ describe('portal usable sampling', () => {
 
     act(() => frames.shift()?.(0));
     expect(mockCaptureAnalyticsEvent.mock.calls.filter(([name]) => name === 'portal_usable')).toEqual([
-      ['portal_usable', { route: '/desk', kind: 'hard' }],
+      ['portal_usable', { route: '/desk', kind: 'hard', ms: expect.any(Number) }],
     ]);
 
     fireEvent.click(anchor);
@@ -84,10 +84,23 @@ describe('portal usable sampling', () => {
       ['portal_nav_started', { route: '/doc/[id]', kind: 'spa' }],
     ]);
     expect(mockCaptureAnalyticsEvent.mock.calls.filter(([name]) => name === 'portal_usable')).toEqual([
-      ['portal_usable', { route: '/desk', kind: 'hard' }],
-      ['portal_usable', { route: '/doc/[id]', kind: 'spa' }],
+      ['portal_usable', { route: '/desk', kind: 'hard', ms: expect.any(Number) }],
+      ['portal_usable', { route: '/doc/[id]', kind: 'spa', ms: expect.any(Number) }],
     ]);
     anchor.remove();
+    document.querySelector('main')?.remove();
+  });
+
+  it('stops watching a route that never becomes usable after the cap', () => {
+    document.body.insertAdjacentHTML('beforeend', '<main aria-busy="true"></main>');
+    const now = jest.spyOn(performance, 'now').mockReturnValue(1_000);
+    render(<WebVitals />);
+    act(() => frames.shift()?.(0));
+    expect(frames).toHaveLength(1);
+    now.mockReturnValue(31_000);
+    act(() => frames.shift()?.(16));
+    expect(frames).toHaveLength(0);
+    expect(mockCaptureAnalyticsEvent.mock.calls.filter(([name]) => name === 'portal_usable')).toEqual([]);
     document.querySelector('main')?.remove();
   });
 });

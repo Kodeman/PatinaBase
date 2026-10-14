@@ -7,6 +7,8 @@ import { captureAnalyticsEvent } from '@/lib/analytics/posthog';
 
 const SAMPLE_RATE = 0.1;
 const sampled = Math.random() < SAMPLE_RATE;
+// A route that never settles stops being watched; the missing mark counts against the denominator.
+const MAX_WAIT_MS = 30_000;
 
 const ROUTE_TEMPLATES: Array<[RegExp, string]> = [
   [/^\/doc\/[^/]+\/pieces\/finishes\/print$/, '/doc/[id]/pieces/finishes/print'],
@@ -64,19 +66,21 @@ export function WebVitals() {
     send('portal_web_vital', webVitalProperties(metric, window.location.pathname));
   });
 
-  return <PortalUsable />;
+  // Unsampled sessions skip the per-frame DOM checks entirely.
+  return sampled ? <PortalUsable /> : null;
 }
 
 function PortalUsable() {
   const pathname = usePathname();
   const route = routeTemplate(pathname || '/');
-  const currentNavigation = useRef<{ kind: 'hard' | 'spa'; route: string; id: number } | null>(null);
+  const currentNavigation = useRef<{ kind: 'hard' | 'spa'; route: string; id: number; startedAt: number } | null>(null);
   const navigationId = useRef(0);
 
   useEffect(() => {
     // Hard-load denominator. A later pathname change is a separate SPA navigation.
     if (!currentNavigation.current) {
-      currentNavigation.current = { kind: 'hard', route, id: ++navigationId.current };
+      // performance.now() counts from navigation start, so a hard load starts at 0.
+      currentNavigation.current = { kind: 'hard', route, id: ++navigationId.current, startedAt: 0 };
       send('portal_nav_started', { route, kind: 'hard' });
     }
   }, [pathname, route]);
@@ -89,7 +93,7 @@ function PortalUsable() {
       if (target.origin !== window.location.origin || target.pathname === window.location.pathname) return;
       const nextRoute = routeTemplate(target.pathname);
       const id = ++navigationId.current;
-      currentNavigation.current = { kind: 'spa', route: nextRoute, id };
+      currentNavigation.current = { kind: 'spa', route: nextRoute, id, startedAt: performance.now() };
       send('portal_nav_started', { route: nextRoute, kind: 'spa' });
     };
     document.addEventListener('click', start, true);
@@ -113,15 +117,16 @@ function PortalUsable() {
           element.checkVisibility({ opacityProperty: true, visibilityProperty: true });
         return visible && rect.height > 0;
       });
-      const busy = Boolean(busyPlaceholder) || /Picking up/.test(document.body.innerText || '');
+      // textContent, not innerText: innerText forces a layout on every frame.
+      const busy = Boolean(busyPlaceholder) || /Picking up/.test(main?.textContent || '');
       // Mirrors baseline/harness/lab.mjs's usability gate: after route commit,
       // wait for arrival holds and visible busy placeholders to clear. Main presence is the route-agnostic
       // committed-content signal in place of the harness's scenario selector.
       if (!fired && main && !main.hasAttribute('aria-busy') && !main.querySelector('[aria-busy="true"]') && !held && !busy) {
         fired = true;
-        send('portal_usable', { route: nav.route, kind: nav.kind });
+        send('portal_usable', { route: nav.route, kind: nav.kind, ms: Math.round(performance.now() - nav.startedAt) });
       }
-      if (!fired && currentNavigation.current?.id === nav.id) frame = requestAnimationFrame(checkUsable);
+      if (!fired && currentNavigation.current?.id === nav.id && performance.now() - nav.startedAt < MAX_WAIT_MS) frame = requestAnimationFrame(checkUsable);
     };
     frame = requestAnimationFrame(checkUsable);
     return () => cancelAnimationFrame(frame);
