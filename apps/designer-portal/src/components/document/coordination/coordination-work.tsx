@@ -85,10 +85,12 @@ export function CoordinationWork({
   const inkTicks = useTickInk(toggleTask);
   const ticks = ink ? inkTicks : heldTicks;
   const creates = useCreateInk(createTask);
-  const ghosts = creates.pending.filter(
-    (c) => c.sectionKey === 'project' && !sectionTasks.some((t) => t.id === c.id),
-  );
-  const failedCreate = creates.failed?.sectionKey === 'project' ? creates.failed : null;
+  const ghosts = ink
+    ? creates.pending.filter(
+        (c) => c.sectionKey === 'project' && !sectionTasks.some((t) => t.id === c.id),
+      )
+    : [];
+  const failedCreate = ink && creates.failed?.sectionKey === 'project' ? creates.failed : null;
   // isBlocked() reads against ALL tasks (sequence predecessors may live in any
   // section) + all coordination items.
   const allTasks = tasks ?? [];

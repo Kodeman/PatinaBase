@@ -378,9 +378,11 @@ export function WorkBlock({
   const inkTicks = useTickInk(toggleTask);
   const ticks = ink ? inkTicks : heldTicks;
   const creates = useCreateInk(createTask);
-  const ghosts = creates.pending.filter(
-    (c) => c.sectionKey === sectionKey && !sectionTasks.some((t) => t.id === c.id),
-  );
+  const ghosts = ink
+    ? creates.pending.filter(
+        (c) => c.sectionKey === sectionKey && !sectionTasks.some((t) => t.id === c.id),
+      )
+    : [];
   const gate = useMemo(
     () => (gates ?? []).find((g) => g.section_key === sectionKey) ?? null,
     [gates, sectionKey],

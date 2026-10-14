@@ -139,6 +139,9 @@ describe('useOptimisticMutation (US-34 N2)', () => {
 
     writes[0].resolve({ id: 'a', status: 'done' });
     await first;
+    // N3 (story log #5): the first receipt merges, then the still-pending
+    // second patch goes back on, so the row never flips back to 'done'.
+    expect(rowIn(client.getQueryData<Task[]>(TASKS), 'a')?.status).toBe('todo');
     await flush();
     expect(sent).toEqual([
       { id: 'a', status: 'done' },
