@@ -1,0 +1,892 @@
+<title>Portal Responsiveness Findings</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="US-33: why the designer portal feels slow, measured, with paired engineering and design proposals, mockups, three tracks, budgets and founder questions.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* Layout: a studio report on paper. One 44rem reading column, a sticky contents rail on wide screens,
+   and tables, charts and specimen frames that widen to 72rem where the evidence needs the room. */
+:root{
+  --paper:#FAF7F2; --sheet:#FCFAF6; --rail:#E8E3DB; --lift:#FFFFFF; --wash:#EEE6DB;
+  --ink:#2C2926; --ink-2:#4E4339; --ink-3:#65594E;
+  --clay:#7C5E30; --clay-soft:#C4A57B; --terra:#9C5340; --sage:#5F6B57;
+  --hair:rgba(44,41,38,.10); --edge:rgba(44,41,38,.18); --rule:#2C2926;
+  --mark:#7C5E30; --budget:#4E4339; --grid:rgba(44,41,38,.08);
+  --f-display:'Playfair Display',Georgia,'Times New Roman',serif;
+  --f-body:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;
+  --f-meta:'DM Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --col:44rem; --wide:72rem;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#2A2622; --sheet:#26221E; --rail:#3A3530; --lift:#1C1A17; --wash:#3A3530;
+  --ink:#F2EDE6; --ink-2:#D6CEC4; --ink-3:#B8AEA2;
+  --clay:#D8B98A; --clay-soft:#8B7355; --terra:#E2A895; --sage:#AFC0A6;
+  --hair:rgba(242,237,230,.14); --edge:rgba(242,237,230,.22); --rule:#F2EDE6;
+  --mark:#D8B98A; --budget:#D6CEC4; --grid:rgba(242,237,230,.10);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#2A2622; --sheet:#26221E; --rail:#3A3530; --lift:#1C1A17; --wash:#3A3530;
+  --ink:#F2EDE6; --ink-2:#D6CEC4; --ink-3:#B8AEA2;
+  --clay:#D8B98A; --clay-soft:#8B7355; --terra:#E2A895; --sage:#AFC0A6;
+  --hair:rgba(242,237,230,.14); --edge:rgba(242,237,230,.22); --rule:#F2EDE6;
+  --mark:#D8B98A; --budget:#D6CEC4; --grid:rgba(242,237,230,.10);
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:16px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+.page{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px 96px;
+  display:grid;grid-template-columns:minmax(0,1fr);gap:0 48px;max-width:calc(var(--wide) + 15rem);margin:0 auto}
+.rail{display:none}
+main{min-width:0}
+@media (min-width:1180px){
+  .page{grid-template-columns:12rem minmax(0,1fr)}
+  .rail{display:block;position:sticky;top:calc(env(safe-area-inset-top,0px) + 32px);align-self:start;padding-top:8px}
+  .toc-inline{display:none}
+}
+.rail ol,.toc-inline ol{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.rail a,.toc-inline a{display:flex;gap:10px;align-items:center;min-height:44px;color:var(--ink-2);text-decoration:none;font:13px/1.3 var(--f-body)}
+.rail a:hover,.toc-inline a:hover{color:var(--ink)}
+.rail .n,.toc-inline .n{font:500 11px var(--f-meta);color:var(--clay);width:1.4rem;flex:none}
+.rail .lbl{font:500 11px/1 var(--f-meta);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:0 0 8px}
+a{color:var(--clay);text-underline-offset:3px}
+a:focus-visible,summary:focus-visible,[tabindex="0"]:focus-visible{outline:2px solid var(--clay);outline-offset:2px}
+.col{max-width:var(--col)}
+.wide{max-width:var(--wide)}
+h1,h2,h3{font-family:var(--f-display);font-weight:500;text-wrap:balance;color:var(--ink)}
+h1{font-size:clamp(2rem,5vw,3.1rem);line-height:1.1;margin:.2em 0 .35em;letter-spacing:-.01em}
+h2{font-size:clamp(1.55rem,3.4vw,2.1rem);line-height:1.2;margin:0 0 .5em}
+h3{font-size:1.28rem;line-height:1.3;margin:2.2rem 0 .5rem}
+h4{font:600 .95rem/1.4 var(--f-body);margin:1.4rem 0 .3rem}
+p{margin:0 0 1em}
+.eyebrow,.kicker{font:500 12px/1.4 var(--f-meta);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.kicker{display:flex;gap:10px;align-items:baseline;margin:0 0 .6rem}
+.kicker b{color:var(--clay);font-weight:500}
+section.sec{border-top:2px solid var(--rule);padding-top:1.6rem;margin-top:4.5rem}
+.lede{font-size:1.15rem;line-height:1.55;color:var(--ink-2)}
+.meta,code,.src{font-family:var(--f-meta);font-size:.8rem}
+code{background:var(--wash);padding:1px 4px;border-radius:2px;color:var(--ink);overflow-wrap:anywhere}
+.src{color:var(--ink-3);display:block;margin-top:.25rem;line-height:1.5;overflow-wrap:anywhere}
+.src code{background:none;padding:0;color:var(--ink-3);font-size:inherit}
+.est{font:500 .72rem var(--f-meta);letter-spacing:.06em;color:var(--ink-3);border:1px solid var(--edge);padding:0 4px;border-radius:2px;white-space:nowrap}
+.chip{display:inline-block;font:500 .7rem/1.6 var(--f-meta);letter-spacing:.06em;text-transform:uppercase;padding:0 6px;border-radius:2px;border:1px solid currentColor;white-space:nowrap}
+.chip.miss{color:var(--terra)}
+.chip.pass{color:var(--sage)}
+.chip.na{color:var(--ink-3)}
+.masthead .eyebrow{display:flex;flex-wrap:wrap;gap:6px 18px}
+.toc-inline{margin:2rem 0 0;border-top:1px solid var(--hair);padding-top:.6rem}
+.toc-inline ol{grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:0 24px}
+
+/* Section 1 */
+.answer{display:grid;gap:1.5rem;margin-top:1.2rem}
+.thesis{font:400 1.32rem/1.5 var(--f-display);color:var(--ink);border-left:2px solid var(--clay);padding-left:1rem;margin:0}
+.moves{list-style:none;counter-reset:mv;margin:0;padding:0;display:grid;gap:0}
+.moves li{counter-increment:mv;display:grid;grid-template-columns:2.2rem minmax(0,1fr) auto;gap:4px 14px;align-items:baseline;padding:.75rem 0;border-top:1px solid var(--hair)}
+.moves li::before{content:counter(mv);font:500 1.5rem/1 var(--f-display);color:var(--clay)}
+.moves .what{min-width:0}
+.moves .what b{font-weight:600}
+.moves .gain{font:500 .85rem/1.4 var(--f-meta);color:var(--ink);text-align:right;white-space:nowrap}
+.moves .src{grid-column:2 / -1;margin-top:0}
+@media (max-width:560px){.moves li{grid-template-columns:2rem minmax(0,1fr)}.moves .gain{grid-column:2;text-align:left;white-space:normal}}
+.callout{background:var(--sheet);border:1px solid var(--edge);padding:1rem 1.1rem;border-radius:2px}
+.callout h4{margin-top:0}
+.callout p:last-child{margin-bottom:0}
+
+/* Bar charts (HTML, one hue, one axis each) */
+.chart{margin:1.6rem 0 0.4rem}
+.chart h4{margin:0 0 .15rem}
+.chart .sub{font-size:.88rem;color:var(--ink-2);margin:0 0 .7rem}
+.bars{display:grid;grid-template-columns:minmax(8rem,15rem) minmax(0,1fr) 6.4rem;column-gap:12px}
+.bars .ax{grid-column:2;position:relative;height:22px;font:11px/22px var(--f-meta);color:var(--ink-3)}
+.bars .ax span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.bars .ax span:first-child{transform:none}
+.bars .ax span:last-child{transform:translateX(-100%)}
+.bars .lab{grid-column:1;font-size:.85rem;line-height:1.3;padding:7px 0;border-top:1px solid var(--hair);min-width:0}
+.bars .lab small{display:block;font:11px/1.4 var(--f-meta);color:var(--ink-3)}
+.bars .trk{grid-column:2;position:relative;border-top:1px solid var(--hair);min-height:44px;outline:none;cursor:default}
+.bars .trk .g{position:absolute;top:0;bottom:0;width:1px;background:var(--grid)}
+.bars .trk .bud{position:absolute;top:-1px;bottom:0;width:0;border-left:1.5px dashed var(--budget)}
+.bars .trk .bar{position:absolute;left:0;top:50%;height:10px;margin-top:-5px;background:var(--mark);border-radius:0 4px 4px 0}
+.bars .trk:hover .bar,.bars .trk:focus-visible .bar{outline:2px solid var(--paper);box-shadow:0 0 0 3.5px var(--mark)}
+.bars .val{grid-column:3;font:500 .78rem/1.3 var(--f-meta);padding:7px 0;border-top:1px solid var(--hair);display:flex;flex-direction:column;justify-content:center;gap:2px;font-variant-numeric:tabular-nums}
+.bars .budlab{grid-column:2;position:relative;height:18px;font:11px/18px var(--f-meta);color:var(--budget)}
+.bars .budlab span{position:absolute;white-space:nowrap;padding-left:4px}
+@media (max-width:620px){.bars{grid-template-columns:minmax(0,1fr) 5.6rem}.bars .lab{grid-column:1 / -1;border-top:1px solid var(--hair);padding-bottom:0}.bars .trk{grid-column:1;border-top:0;min-height:36px}.bars .val{grid-column:2;border-top:0}.bars .ax,.bars .budlab{grid-column:1}}
+.tip{position:fixed;z-index:40;pointer-events:none;background:var(--lift);color:var(--ink);border:1px solid var(--edge);padding:6px 9px;font:12px/1.45 var(--f-body);max-width:22rem;border-radius:2px}
+.tip strong{display:block;font:500 12px var(--f-meta)}
+.tip span{color:var(--ink-2)}
+details{margin:.8rem 0}
+details > summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;font:500 .8rem var(--f-meta);letter-spacing:.04em;color:var(--clay);list-style:none}
+details > summary::-webkit-details-marker{display:none}
+details > summary::before{content:"+";font:500 1rem var(--f-meta);width:1rem}
+details[open] > summary::before{content:"\2212"}
+
+/* Tables */
+.tw{overflow-x:auto;margin:1rem 0;border-top:2px solid var(--rule)}
+table{border-collapse:collapse;width:100%;font-size:.86rem;line-height:1.45}
+th{font:500 .7rem/1.4 var(--f-meta);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:.55rem .6rem .45rem 0;border-bottom:1px solid var(--edge);vertical-align:bottom}
+td{padding:.55rem .7rem .55rem 0;border-bottom:1px solid var(--hair);vertical-align:top}
+td.id,th.id{font:500 .78rem var(--f-meta);color:var(--clay);white-space:nowrap}
+td .src{margin-top:.15rem;font-size:.72rem}
+.score td:first-child{font:500 .74rem var(--f-meta);color:var(--ink-3);white-space:nowrap}
+.score td:nth-child(2){font-weight:500;min-width:11rem}
+.score td{min-width:9rem}
+.tracks td:nth-child(2){min-width:16rem}
+.tracks td{min-width:8rem}
+.tracks td.ef{font:500 .78rem var(--f-meta);white-space:nowrap;min-width:0}
+.tw.compact table{font-size:.84rem}
+
+/* Findings */
+.disc{margin-top:2.4rem}
+.disc h3{margin-top:0;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.disc h3 .owner{font:500 .72rem var(--f-meta);letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
+.finds{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.finds li{display:grid;grid-template-columns:3rem minmax(0,1fr);gap:0 12px;padding:.85rem 0;border-top:1px solid var(--hair)}
+.finds .fid{font:500 .78rem/1.7 var(--f-meta);color:var(--clay)}
+.finds p{margin:0}
+.versus{margin:2.6rem 0 0;border:1px solid var(--edge);background:var(--sheet);padding:1.1rem 1.2rem;border-radius:2px}
+.versus h3{margin:0 0 .3rem}
+.vrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 24px;padding:.8rem 0;border-top:1px solid var(--hair)}
+.vrow .k{font:500 .7rem var(--f-meta);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:2px}
+.vrow .rid{font:500 .78rem var(--f-meta);color:var(--clay)}
+@media (max-width:620px){.vrow{grid-template-columns:minmax(0,1fr)}}
+
+/* Screens and specimens */
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:16px;margin:1.2rem 0}
+figure{margin:0;min-width:0}
+figure img{display:block;width:100%;max-width:100%;height:auto;border:1px solid var(--edge)}
+figcaption{font-size:.82rem;line-height:1.45;color:var(--ink-2);margin-top:.4rem}
+figcaption b{font-weight:600;color:var(--ink)}
+.spec{display:block;width:100%;max-width:100%;height:560px;border:0;border-top:1px solid var(--edge);background:var(--paper)}
+.specfig{margin:1.4rem 0}
+.specfig > figcaption{margin:0 0 .5rem}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;margin:1.4rem 0}
+.pair > div{min-width:0}
+.pair h4{margin:0 0 .2rem;font-family:var(--f-display);font-weight:500;font-size:1.15rem}
+.pair .rec{font:500 .7rem var(--f-meta);letter-spacing:.06em;text-transform:uppercase;color:var(--sage);border:1px solid currentColor;padding:0 5px;border-radius:2px;margin-left:6px;vertical-align:2px}
+.pair p{font-size:.9rem;color:var(--ink-2)}
+@media (max-width:760px){.pair{grid-template-columns:minmax(0,1fr)}}
+.note{font-size:.84rem;color:var(--ink-3)}
+.label-sim{font:500 .7rem var(--f-meta);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+
+/* Pairing cards */
+.pairs{display:grid;gap:0;margin:1rem 0}
+.pc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:6px 20px;padding:.9rem 0;border-top:1px solid var(--hair)}
+.pc .k{font:500 .68rem var(--f-meta);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:2px}
+.pc p{margin:0;font-size:.88rem}
+.pc .ids{grid-column:1 / -1;font:500 .74rem var(--f-meta);color:var(--clay)}
+@media (max-width:760px){.pc{grid-template-columns:minmax(0,1fr)}}
+
+/* Budgets */
+.budgets{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:16px;margin:1.2rem 0}
+.bud-card{border-top:2px solid var(--rule);padding:.8rem 0 0}
+.bud-card .bid{font:500 1.6rem/1 var(--f-display);color:var(--clay)}
+.bud-card h4{margin:.35rem 0 .5rem;font-size:1rem}
+.bud-card dl{margin:0;display:grid;gap:.4rem}
+.bud-card dt{font:500 .68rem var(--f-meta);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.bud-card dd{margin:0;font-size:.88rem}
+
+/* PQs */
+.pqs{list-style:none;margin:1rem 0;padding:0}
+.pqs li{display:grid;grid-template-columns:3.4rem minmax(0,1fr);gap:2px 14px;padding:.9rem 0;border-top:1px solid var(--hair)}
+.pqs .pid{font:500 .82rem/1.7 var(--f-meta);color:var(--clay)}
+.pqs .q{font-weight:600;margin:0 0 .2rem}
+.pqs .touch{font-size:.82rem;color:var(--ink-3);margin:0 0 .25rem}
+.pqs .rec{margin:0;font-size:.92rem}
+.pqs .rec b{font:500 .7rem var(--f-meta);letter-spacing:.06em;text-transform:uppercase;color:var(--sage);margin-right:6px}
+.pqs li.first .pid::after{content:"decide first";display:block;font:500 .6rem/1.3 var(--f-meta);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+
+/* Evidence */
+.files{list-style:none;margin:1rem 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(19rem,1fr));gap:0 28px}
+.files li{padding:.6rem 0;border-top:1px solid var(--hair);font-size:.86rem;min-width:0}
+.files a{font:500 .8rem var(--f-meta);overflow-wrap:anywhere;display:inline-flex;align-items:center;min-height:32px}
+footer.end{margin-top:4rem;border-top:1px solid var(--hair);padding-top:1rem;font-size:.82rem;color:var(--ink-3)}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+
+<div class="page">
+<nav class="rail" aria-label="Contents">
+  <p class="lbl">Contents</p>
+  <ol>
+    <li><a href="#answer"><span class="n">1</span>The ask and the answer</a></li>
+    <li><a href="#measured"><span class="n">2</span>What sluggish is, measured</a></li>
+    <li><a href="#findings"><span class="n">3</span>Findings by discipline</a></li>
+    <li><a href="#proposals"><span class="n">4</span>Paired proposals and mockups</a></li>
+    <li><a href="#tracks"><span class="n">5</span>Three tracks</a></li>
+    <li><a href="#budgets"><span class="n">6</span>Budgets to ratify</a></li>
+    <li><a href="#questions"><span class="n">7</span>Founder questions</a></li>
+    <li><a href="#team"><span class="n">8</span>The team</a></li>
+    <li><a href="#evidence"><span class="n">9</span>Evidence trail</a></li>
+  </ol>
+</nav>
+
+<main>
+<!-- 1 ============================================================ -->
+<header class="masthead col" id="answer">
+  <p class="eyebrow"><span>US-33 · Designer portal</span><span>14 October 2026</span><span>For Kody and the founding partners</span></p>
+  <h1>Why the portal feels slow, and what to fix first</h1>
+  <p class="lede">The ask: the portal has started to feel sluggish. Page loads should show a loading indicator or skeletons, a click should make something happen at once, and engineers and designers together should find the code and infrastructure changes that remove the wait. This document is the team's answer. Nothing in the product changed to write it.</p>
+
+  <div class="answer">
+    <p class="thesis">A hard load spends about seven seconds in a fixed queue before the studio sees its work, and no screen says anything is happening while it waits. The two largest causes are a queue of sixteen user lookups, about 2.7 s, and the script weight, about 3 s. The first goes with one small change; the second only shrinks.</p>
+
+    <div>
+      <p class="kicker"><b>The top five moves</b> all in Fix now · no ruling needed · no flag</p>
+      <ol class="moves">
+        <li><span class="what"><b>Read the signed-in user once, from the session.</b> Sixteen <code>auth/v1/user</code> calls run one after another, about 172 ms each, and every data read waits behind them.</span><span class="gain">−2.7 s per hard load</span><span class="src">F1 · review/e2-page-architecture.md §0 · synthesis/pairings.md M11 · about −4.2 s on a Document</span></li>
+        <li><span class="what"><b>Stop shipping every icon and the crypto polyfill to every page.</b> Three chunks ride on every route, sign-in included.</span><span class="gain">−220 to −390 KB gzip</span><span class="src">F8, F9, F10 · review/e3-infra-bundle.md §4e · baseline/bundle.md</span></li>
+        <li><span class="what"><b>Let the browser keep the hashed scripts.</b> Every hard load asks the server again about all 63 scripts.</span><span class="gain">63 → 0 revalidations</span><span class="src">F7 · baseline/BASELINE.md:99-102 · prod walk</span></li>
+        <li><span class="what"><b>When a task is ticked, refresh only what the tick changed.</b> Today one tick reloads the whole Desk as well.</span><span class="gain">27 → 3 refetches per tick</span><span class="src">F5 · baseline/data/e1-P6-1440.json · review/e1-data-writes.md §1.1</span></li>
+        <li><span class="what"><b>Answer every press, and never show a blank room.</b> A press state on every act, 44 px task rows, and shaped placeholders in the rooms that draw nothing today.</span><span class="gain">B1 met at the press · no blank room</span><span class="src">F13, F16 · baseline/BASELINE.md:52-53 · screens/P4-200ms.jpg</span></li>
+      </ol>
+    </div>
+
+    <div class="callout">
+      <h4>Said plainly</h4>
+      <p>The proposed budget B3, usable content within 1.5 s, cannot hold on a cold hard load in the lab on any track. After every track, about 1.2 MB of JavaScript still crosses a link of about 1 MB/s and is parsed at 4× CPU slowdown. A hard load lands at 2.6–3.6 s at best <span class="est">EST</span>. Clicks inside the portal can meet 1.5 s, and most already do. PQ1 therefore asks to split B3 into B3a for navigation (≤1.5 s) and B3b for hard loads (≤3.5 s).</p>
+      <span class="src">synthesis/plan.md §2 "Estimates" and PQ1</span>
+    </div>
+
+    <p>Loading direction, recommended: <b>Q, Quiet paper</b>, with arrival option C, where the placeholder becomes the arrival instead of hiding the finished page. Action feedback, recommended: <b>one quiet grammar</b>. Something answers within 100 ms, a word appears only when a write is slow, and nothing ever claims a send, a payment or a delete before the server confirms it.</p>
+  </div>
+
+  <nav class="toc-inline" aria-label="Contents">
+    <ol>
+      <li><a href="#measured"><span class="n">2</span>What sluggish is, measured</a></li>
+      <li><a href="#findings"><span class="n">3</span>Findings by discipline</a></li>
+      <li><a href="#proposals"><span class="n">4</span>Paired proposals and mockups</a></li>
+      <li><a href="#tracks"><span class="n">5</span>Three tracks</a></li>
+      <li><a href="#budgets"><span class="n">6</span>Budgets to ratify</a></li>
+      <li><a href="#questions"><span class="n">7</span>Founder questions</a></li>
+      <li><a href="#team"><span class="n">8</span>The team</a></li>
+      <li><a href="#evidence"><span class="n">9</span>Evidence trail</a></li>
+    </ol>
+  </nav>
+</header>
+
+<!-- 2 ============================================================ -->
+<section class="sec" id="measured" aria-labelledby="h-measured">
+  <div class="col">
+    <p class="kicker"><b>2</b> Baseline</p>
+    <h2 id="h-measured">What "sluggish" is, measured</h2>
+    <p>The baseline seat timed ten scenarios, P1 to P10, in a throttled local lab: a production build, local Supabase, Chromium at 4× CPU slowdown on a Fast 4G profile, three cold runs each, at 1440 and 390 wide. A read-only signed-in walk on app.patina.cloud added prod network timings. E1 later measured the task tick (P6) on the same lab. Every figure below names its file.</p>
+    <p class="note">Local data is thin: 16 projects for Leah's local studio, not 43. Prod's heavier documents will be equal or slower. The prod tab was hidden, so prod paint timings are missing; prod numbers are network and server timings. <span class="src">baseline/BASELINE.md "Caveats"</span></p>
+  </div>
+
+  <div class="wide">
+    <div class="chart" id="chart-usable">
+      <h4>Usable content, by scenario, against B3 (1.5 s)</h4>
+      <p class="sub">Median of three local lab runs at 1440. The four hard loads take 6–7 s. The four clicks inside the portal already land near or under 1.5 s.</p>
+      <div class="bars" role="img" aria-label="Bar chart of time to usable content. Sign-in to Desk 7,153 ms; hard load of the Desk 6,974 ms; hard load of a Document 6,773 ms; hard load of the build room 6,154 ms; Desk to Document 1,464 ms; Document to Desk 1,415 ms; Document to People 1,136 ms; People to Library 862 ms. Budget 1,500 ms.">
+        <div class="ax" aria-hidden="true"><span style="left:0%">0</span><span style="left:25%">2 s</span><span style="left:50%">4 s</span><span style="left:75%">6 s</span><span style="left:100%">8 s</span></div>
+        <div class="budlab" aria-hidden="true"><span style="left:18.75%">B3 1.5 s</span></div>
+        <div class="lab">P1 sign-in → Desk<small>local-P1-1440.json</small></div>
+        <div class="trk" tabindex="0" data-tip="7,153 ms|P1 sign-in submit to a usable Desk|baseline/data/local-P1-1440.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:89.41%"></i><i class="bud" style="left:18.75%"></i></div>
+        <div class="val">7,153 ms<span class="chip miss">miss</span></div>
+        <div class="lab">P1hard /desk<small>local-P1hard-1440.json</small></div>
+        <div class="trk" tabindex="0" data-tip="6,974 ms|Hard load of /desk, LCP 6,976 ms|baseline/data/local-P1hard-1440.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:87.18%"></i><i class="bud" style="left:18.75%"></i></div>
+        <div class="val">6,974 ms<span class="chip miss">miss</span></div>
+        <div class="lab">P2hard /doc/[id]<small>local-P2hard-1440.json</small></div>
+        <div class="trk" tabindex="0" data-tip="6,773 ms|Hard load of a Document; LCP comes later, at 10,728 ms|baseline/data/local-P2hard-1440.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:84.66%"></i><i class="bud" style="left:18.75%"></i></div>
+        <div class="val">6,773 ms<span class="chip miss">miss</span></div>
+        <div class="lab">P3hard /pieces<small>local-P3hard-1440.json</small></div>
+        <div class="trk" tabindex="0" data-tip="6,154 ms|Hard load of the build room, blank until content arrives|baseline/data/local-P3hard-1440.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:76.93%"></i><i class="bud" style="left:18.75%"></i></div>
+        <div class="val">6,154 ms<span class="chip miss">miss</span></div>
+        <div class="lab">P2 Desk → Document<small>local-P2-1440.json</small></div>
+        <div class="trk" tabindex="0" data-tip="1,464 ms|Desk to a job's Document, in-app; prod settles at 2.0 s|baseline/data/local-P2-1440.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:18.30%"></i><i class="bud" style="left:18.75%"></i></div>
+        <div class="val">1,464 ms<span class="chip pass">pass</span></div>
+        <div class="lab">P10 Document → Desk<small>local-P10-1440.json</small></div>
+        <div class="trk" tabindex="0" data-tip="1,415 ms|Document back to the Desk, in-app|baseline/data/local-P10-1440.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:17.69%"></i><i class="bud" style="left:18.75%"></i></div>
+        <div class="val">1,415 ms<span class="chip pass">pass</span></div>
+        <div class="lab">P4 Document → People<small>local-P4-1440.json</small></div>
+        <div class="trk" tabindex="0" data-tip="1,136 ms|Document to People; the list area stays empty until data lands|baseline/data/local-P4-1440.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:14.20%"></i><i class="bud" style="left:18.75%"></i></div>
+        <div class="val">1,136 ms<span class="chip pass">pass</span></div>
+        <div class="lab">P5 People → Library<small>local-P5-1440.json</small></div>
+        <div class="trk" tabindex="0" data-tip="862 ms|People to the Library|baseline/data/local-P5-1440.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:10.78%"></i><i class="bud" style="left:18.75%"></i></div>
+        <div class="val">862 ms<span class="chip pass">pass</span></div>
+      </div>
+    </div>
+
+    <div class="chart" id="chart-first">
+      <h4>First visible change after a click, against B1 (100 ms)</h4>
+      <p class="sub">Median local lab time to the first change on screen. Every measured click misses. The tick (P6) is the time until the box shows its new state.</p>
+      <div class="bars" role="img" aria-label="Bar chart of time to first visible change. Tick a task 748 ms; Document to People 251 ms; People to Library 247 ms; Document to Desk 237 ms; Desk to Document 215 ms; sign-in submit 159 ms. Budget 100 ms.">
+        <div class="ax" aria-hidden="true"><span style="left:0%">0</span><span style="left:25%">200</span><span style="left:50%">400</span><span style="left:75%">600</span><span style="left:100%">800 ms</span></div>
+        <div class="budlab" aria-hidden="true"><span style="left:12.5%">B1 100 ms</span></div>
+        <div class="lab">P6 tick a task<small>e1-P6-1440.json · untick 465</small></div>
+        <div class="trk" tabindex="0" data-tip="748 ms|The tick shows its new state; the network settles at 1,368 ms after 27 refetches|baseline/data/e1-P6-1440.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:93.5%"></i><i class="bud" style="left:12.5%"></i></div>
+        <div class="val">748 ms<span class="chip miss">miss</span></div>
+        <div class="lab">P4 Document → People<small>prod 310</small></div>
+        <div class="trk" tabindex="0" data-tip="251 ms|Local lab; prod first change 310 ms|baseline/data/local-P4-1440.json; prod-walk.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:31.38%"></i><i class="bud" style="left:12.5%"></i></div>
+        <div class="val">251 ms<span class="chip miss">miss</span></div>
+        <div class="lab">P5 People → Library<small>prod 285</small></div>
+        <div class="trk" tabindex="0" data-tip="247 ms|Local lab; prod first change 285 ms|baseline/data/local-P5-1440.json; prod-walk.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:30.88%"></i><i class="bud" style="left:12.5%"></i></div>
+        <div class="val">247 ms<span class="chip miss">miss</span></div>
+        <div class="lab">P10 Document → Desk<small>prod 248</small></div>
+        <div class="trk" tabindex="0" data-tip="237 ms|Local lab; prod first change 248 ms|baseline/data/local-P10-1440.json; prod-walk.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:29.63%"></i><i class="bud" style="left:12.5%"></i></div>
+        <div class="val">237 ms<span class="chip miss">miss</span></div>
+        <div class="lab">P2 Desk → Document<small>prod 608</small></div>
+        <div class="trk" tabindex="0" data-tip="215 ms|Local lab; prod first change 608 ms|baseline/data/local-P2-1440.json; prod-walk.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:26.88%"></i><i class="bud" style="left:12.5%"></i></div>
+        <div class="val">215 ms<span class="chip miss">miss</span></div>
+        <div class="lab">P1 sign-in submit<small>local-P1-1440.json</small></div>
+        <div class="trk" tabindex="0" data-tip="159 ms|Sign-in submit to the first change|baseline/data/local-P1-1440.json"><i class="g" style="left:25%"></i><i class="g" style="left:50%"></i><i class="g" style="left:75%"></i><i class="bar" style="width:19.88%"></i><i class="bud" style="left:12.5%"></i></div>
+        <div class="val">159 ms<span class="chip miss">miss</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <h3>What the studio sees while it waits</h3>
+    <p>Three frames from the lab, captured at fixed moments after the click.</p>
+  </div>
+  <div class="wide shots">
+    <figure><img src="{{SHOT:P1-1000ms.jpg}}" alt="The Desk one second after sign-in: three hollow outlined frames and white tiles, which read as empty boards." loading="lazy"><figcaption><b>The Desk at 1 s.</b> Hollow frames and white tiles look like three empty boards. <span class="src">baseline/screens/P1-1000ms.jpg</span></figcaption></figure>
+    <figure><img src="{{SHOT:P2-1000ms.jpg}}" alt="A Document one second after opening: the words Picking up alone on otherwise blank paper." loading="lazy"><figcaption><b>A Document at 1 s.</b> "Picking up…" alone on blank paper. It says nothing about what is coming. <span class="src">baseline/screens/P2-1000ms.jpg</span></figcaption></figure>
+    <figure><img src="{{SHOT:P4-200ms.jpg}}" alt="200 ms after pressing Studio contacts: the previous Document is still on screen with no sign the click registered." loading="lazy"><figcaption><b>People at 200 ms.</b> The previous page is still there; nothing shows the click landed. <span class="src">baseline/screens/P4-200ms.jpg</span></figcaption></figure>
+  </div>
+
+  <div class="col">
+    <h3>Where the seconds go</h3>
+    <p>The mockup seat drew P1 and P2 before and after, from the request traces and the plan's estimates. Measured bars are dark; every estimate is light and marked EST. Hover or focus a row for its source.</p>
+  </div>
+  <figure class="specfig wide">
+    <iframe class="spec" title="Waterfall, P1 sign-in to Desk, before and after" data-spec="waterfalls.html" data-frames="frame-wf-p1" srcdoc="{{SPEC}}"></iframe>
+  </figure>
+  <details class="wide">
+    <summary>P2 Desk → Document, before and after</summary>
+    <iframe class="spec" title="Waterfall, P2 Desk to Document, before and after" data-spec="waterfalls.html" data-frames="frame-wf-p2" srcdoc="{{SPEC}}"></iframe>
+  </details>
+
+  <div class="col">
+    <h3>The scorecard</h3>
+    <p>Each scenario against its budget, today and after each track. "Today" is measured; every later column is a cumulative estimate. Pass and miss are judged against the budget named in the row.</p>
+  </div>
+  <div class="tw wide">
+    <table class="score">
+      <thead><tr><th>Row</th><th>Scenario · budget</th><th>Today (measured)</th><th>After Fix now <span class="est">EST</span></th><th>After Next <span class="est">EST</span></th><th>After Structural <span class="est">EST</span></th></tr></thead>
+      <tbody>
+        <tr><td>2.1</td><td>P1 sign-in → Desk · B1</td><td>159 ms <span class="chip miss">miss</span><span class="src">BASELINE.md:46</span></td><td>≤100 ms <span class="chip pass">pass</span> (F16 press)</td><td><span class="chip pass">pass</span></td><td><span class="chip pass">pass</span></td></tr>
+        <tr><td>2.2</td><td>P1 · B2</td><td>2,476 ms <span class="chip miss">miss</span></td><td>~2.3 s <span class="chip miss">miss</span> (the Desk's face waits on PQ3)</td><td>≤200 ms <span class="chip pass">pass</span> (N10, plus a /desk prefetch on sign-in)</td><td><span class="chip pass">pass</span></td></tr>
+        <tr><td>2.3</td><td>P1 · B3</td><td>7,153 ms <span class="chip miss">miss</span></td><td>3.6–4.2 s <span class="chip miss">miss</span></td><td>3.1–3.7 s <span class="chip miss">miss</span></td><td>2.7–3.4 s <span class="chip miss">miss</span> (PQ1)</td></tr>
+        <tr><td>2.4</td><td>P1hard /desk · B2 / B3</td><td>687 ms at FCP 704 <span class="chip pass">pass</span> / 6,974 ms <span class="chip miss">miss</span></td><td>pass / 3.5–4.0 s</td><td>pass / 3.0–3.5 s</td><td>pass / 2.6–3.2 s</td></tr>
+        <tr><td>2.5</td><td>P2 Desk → Document · B1</td><td>215 ms local, 608 ms prod <span class="chip miss">miss</span></td><td>≤100 ms <span class="chip pass">pass</span> (press)</td><td><span class="chip pass">pass</span></td><td><span class="chip pass">pass</span></td></tr>
+        <tr><td>2.6</td><td>P2 · B2</td><td>1,004 ms <span class="chip miss">miss</span></td><td>~1.0 s <span class="chip miss">miss</span></td><td>≤200 ms <span class="chip pass">pass</span> (N10, prefetched on intent)</td><td><span class="chip pass">pass</span></td></tr>
+        <tr><td>2.7</td><td>P2 · B3</td><td>1,464 ms <span class="chip pass">pass</span>; prod settles at 2.0 s</td><td>0.7–1.0 s <span class="chip pass">pass</span> (F1, F3)</td><td>0.6–0.9 s <span class="chip pass">pass</span></td><td>same</td></tr>
+        <tr><td>2.8</td><td>P2hard /doc/[id] · B3</td><td>usable 6,773 ms, LCP 10,728 ms <span class="chip miss">miss</span></td><td>usable 3.6–4.1 s, LCP 5–6 s</td><td>usable 3.3–3.8 s, LCP ≈ usable (PQ3 C)</td><td>3.1–3.6 s</td></tr>
+        <tr><td>2.9</td><td>P3 Document → build room</td><td>the rail scrolls in place, 31 ms; the in-app route was not measured <span class="chip na">n/a</span><span class="src">BASELINE.md:51</span></td><td>lines warm on arrival (F4)</td><td>same</td><td>same</td></tr>
+        <tr><td>2.10</td><td>P3hard /pieces · B2 / B3</td><td>none <span class="chip miss">miss</span> / 6,154 ms <span class="chip miss">miss</span></td><td>≈ FCP 0.7 s <span class="chip pass">pass</span> (F13) / 3.3–3.8 s</td><td>pass / 3.0–3.5 s</td><td>pass / 2.8–3.3 s</td></tr>
+        <tr><td>2.11</td><td>P4 Document → People · B1 / B2 / B3</td><td>251 <span class="chip miss">miss</span> / none <span class="chip miss">miss</span> / 1,136 <span class="chip pass">pass</span></td><td>pass / ≤200 pass (F13) / 0.9–1.1 s</td><td><span class="chip pass">pass</span></td><td><span class="chip pass">pass</span></td></tr>
+        <tr><td>2.12</td><td>P5 People → Library · B1 / B2 / B3</td><td>247 <span class="chip miss">miss</span> / 647 <span class="chip miss">miss</span> / 862 <span class="chip pass">pass</span></td><td>pass / ≤200 pass / pass</td><td><span class="chip pass">pass</span></td><td><span class="chip pass">pass</span></td></tr>
+        <tr><td>2.13</td><td>P5 search · B1 / B3</td><td>15 <span class="chip pass">pass</span> / results 454 <span class="chip pass">pass</span></td><td><span class="chip pass">pass</span></td><td><span class="chip pass">pass</span></td><td><span class="chip pass">pass</span></td></tr>
+        <tr><td>2.14</td><td>P6 tick a task · B1</td><td>new state at 748 ms (untick 465) <span class="chip miss">miss</span><span class="src">e1-P6-1440.json</span></td><td>held state ≤100 ms <span class="chip pass">pass</span>; the value still ~0.5–0.75 s</td><td>value ≤50 ms <span class="chip pass">pass</span> (N3)</td><td>pass, with less re-render hitching (S1)</td></tr>
+        <tr><td>2.15</td><td>P6 · settle</td><td>1,368 ms, 27 refetches</td><td>~0.6–0.8 s, 3 refetches (F5)</td><td>at the write, ~0.2–0.45 s</td><td>same</td></tr>
+        <tr><td>2.16</td><td>P7 advance a phase · B1 / the list agrees</td><td>"Completing…" at the press <span class="chip pass">pass</span> (code read, not measured) / ≥29 refetches, 1.05–1.6 s prod <span class="est">EST</span></td><td>pass / ~5 refetches, 0.5–0.8 s prod</td><td>pass / at the write, 0.24 s p50, 0.8 s p90 prod (N5)</td><td>same</td></tr>
+        <tr><td>2.17</td><td>P8 add a room · B1 / the row</td><td>the form closes at 0 ms and loses the typed name on failure / 0.73 s p50, 2.4 s p90 prod <span class="est">EST</span>, three serial round trips</td><td>"Adding…" held, the name kept <span class="chip pass">pass</span> / unchanged</td><td>ghost row ≤100 ms <span class="chip pass">pass</span> / confirmed in one round trip, 0.24 s p50 (N4)</td><td>same</td></tr>
+        <tr><td>2.18</td><td>P9 approve or send · B1</td><td>"Sending" at the press <span class="chip pass">pass</span> (code); never optimistic</td><td>pass; the Desk card clears after a send (F6)</td><td>pass; an 8 s line (N12)</td><td>same</td></tr>
+        <tr><td>2.19</td><td>P10 Document → Desk · B1 / B2 / B3</td><td>237 <span class="chip miss">miss</span> / 259 <span class="chip miss">miss</span> / 1,415 <span class="chip pass">pass</span></td><td>pass / ~250 miss / 1.0–1.3 s</td><td>pass / ≤200 pass / 0.4–0.8 s</td><td>same</td></tr>
+        <tr><td>2.20</td><td>B4 middleware (prod, warm)</td><td>+60 ms <span class="chip pass">pass</span>; local 26–32 ms<span class="src">BASELINE.md:122,135</span></td><td>same</td><td>≈0 network (N13)</td><td>the role query retired (S4, if ruled)</td></tr>
+        <tr><td>2.21</td><td>Cold Worker TTFB (prod; no budget today)</td><td>2.1–5.2 s on 4 of 16 navigations<span class="src">BASELINE.md:77-78</span></td><td>measured per deploy and in RUM (F11, F12)</td><td>same</td><td>fewer cold opens on the 28 shells (S2, S6)</td></tr>
+        <tr><td>2.22</td><td>Repeat-visit static revalidation (prod)</td><td>63 of 63 scripts return 304<span class="src">BASELINE.md:99-102</span></td><td>0 (F7)</td><td>0</td><td>0</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="col src">Transcribed from synthesis/plan.md §2. F1 removes the measured getUser span; bundle cuts are priced at the lab's ~1 MB/s; later tracks take each seat's stated saving, at the low end where seats overlap.</p>
+</section>
+
+<!-- 3 ============================================================ -->
+<section class="sec" id="findings" aria-labelledby="h-findings">
+  <div class="col">
+    <p class="kicker"><b>3</b> Findings</p>
+    <h2 id="h-findings">Findings by discipline</h2>
+    <p>Five seats read the code and the baseline on their own, then a lead reconciled them. Each finding below names where it was seen. Paths are relative to <code>apps/designer-portal/src/</code> unless they start with <code>packages/</code>; data files are under <code>baseline/</code>.</p>
+  </div>
+
+  <div class="col disc">
+    <h3>Loading <span class="owner">D1 · review/d1-loading.md</span></h3>
+    <ol class="finds">
+      <li><span class="fid">L1</span><p><b>The studio waits in three silences.</b> Dead air after a click: 215–251 ms locally and 248–608 ms in prod with nothing on screen changing. Blank paper on a hard load: first paint at about 0.7 s, usable at about 7 s. And rooms that draw nothing at all.<span class="src">BASELINE.md:49-60, 89-96 · P1hard 6,974 ms, P2hard 6,773 ms · d1 §0</span></p></li>
+      <li><span class="fid">L2</span><p><b>Five loading treatments, plus a hidden sixth.</b> About 20 different prose lines ("Picking up…", "Reading the roster…"), StrataSweep, SectionLoadingLine, two real skeletons, and nothing. The arrival veil is the sixth: the page is laid out, then hidden on purpose, for up to 1.5 s on the Desk and 8.5 s on a held Document.<span class="src">d1 §1 · lib/arrival/arrival.css:8,15,23 · doc/[id]/page.tsx:3013-3021</span></p></li>
+      <li><span class="fid">L3</span><p><b>Loading that looks empty.</b> The Desk's frames are hollow outlines and the recent-boards tiles are white cards with a border. At one second the Desk looks like three empty boards.<span class="src">desk/page.tsx:581-606 · recent-boards-strip.tsx:102 · screens/P1-1000ms.jpg</span></p></li>
+      <li><span class="fid">L4</span><p><b>Two rooms are blank, and People reads "empty" while it loads.</b> The build room renders <code>fallback={null}</code> and Room view returns <code>null</code> while loading. "Reading the roster…" has no <code>role="status"</code> or <code>aria-busy</code>, so screen readers never hear it.<span class="src">doc/[id]/pieces/page.tsx:51 · rooms/room-view/room-view.tsx:279 · people/views/directory-view.tsx:571 · BASELINE.md:52-53</span></p></li>
+      <li><span class="fid">L5</span><p><b>On the Document the arrival hides finished work; on the Desk it hides almost nothing.</b> A Document hard load is usable at 6,773 ms but its largest paint comes at 10,728 ms, because the held paper waits for the Desk enrichment. On the Desk the first data read only starts at 5,951 ms. Retiring the arrival alone would not make the Desk fast.<span class="src">BASELINE.md:50 · pairings.md M14 · e2 §0, §3.4</span></p></li>
+    </ol>
+  </div>
+
+  <div class="col disc">
+    <h3>Action feedback <span class="owner">D2 · review/d2-feedback.md</span></h3>
+    <ol class="finds">
+      <li><span class="fid">A1</span><p><b>A tick changes nothing for 465–748 ms.</b> That misses B1 by 4.6 to 7.5 times. The tick is a plain button with a hover style and no press state; the work-block row is about 29 px tall and the coordination tick 13 px, both under the 44 px rule.<span class="src">e1-P6-1440.json · work-block.tsx:312-317 · coordination-work.tsx:177-178</span></p></li>
+      <li><span class="fid">A2</span><p><b>Failures land far from the act.</b> A failed tick shows the raw database message in a red toast in the corner. Adding a room closes the form at once and loses the typed name if the write fails.<span class="src">lib/error-handler.ts:811-820 · ffe-section.tsx:934-946 · d2 §4</span></p></li>
+      <li><span class="fid">A3</span><p><b>Two deletes already pretend.</b> Removing a folio image and deleting a palette swatch update the screen before the server agrees, with no Undo. Under the honesty rule they become pending-only until Undo exists (PQ14).<span class="src">piece-folio.tsx:96 · palette-swatch-editor.tsx:61-73</span></p></li>
+      <li><span class="fid">A4</span><p><b>Every write retries once on a network error, sends and money included.</b> An ambiguous failure on a send could send twice. Fix now turns retry off for send and money hooks unless they carry an idempotency key.<span class="src">lib/react-query.ts:242-249 · plan F15 · open check O4</span></p></li>
+      <li><span class="fid">A5</span><p><b>Most of the grammar exists already.</b> "Completing…" and "Sending" hold at the press, and the Desk has a press style. The work is to make every act use them.<span class="src">phase-advance-control.tsx:324-347 · globals.css:943-955 · d2 §1</span></p></li>
+    </ol>
+  </div>
+
+  <div class="col disc">
+    <h3>Data &amp; writes <span class="owner">E1 · review/e1-data-writes.md</span></h3>
+    <ol class="finds">
+      <li><span class="fid">D1</span><p><b>The Desk's read runs on every Document.</b> The command bar loads the Desk unconditionally, and it is mounted for every Document route. That read is 24 requests plus one RPC per live purchase order, and it polls every 60 s.<span class="src">components/document/command-bar.tsx:404 · app/(document)/layout.tsx:125 · hooks/use-desk-engagements.ts:486-492, 690-739</span></p></li>
+      <li><span class="fid">D2</span><p><b>One tick causes 27 refetches, and 24 of them are the Desk.</b> The new state shows at 748 ms; the network settles at 1,368 ms. After the tick's own refetch, the remaining 650–700 ms is all Desk traffic.<span class="src">baseline/data/e1-P6-1440.json · e1 §1.1</span></p></li>
+      <li><span class="fid">D3</span><p><b>Invalidation is broad by habit.</b> 51 single-line invalidations of the whole <code>['document-state']</code> key across 38 files, 1,400 <code>invalidateQueries</code> lines, and 9 optimistic sites in 7 files.<span class="src">e1 §0.5</span></p></li>
+      <li><span class="fid">D4</span><p><b>The user lookup is a lock, not just a call.</b> The installed auth library runs <code>getUser()</code>'s network call inside its client lock, and every data request takes the same lock for its token. So 212 hook-level lookups become a queue that every read waits behind.<span class="src">@supabase/auth-js@2.98.0 GoTrueClient.js:1258-1265 · supabase-js index.mjs:329-335 · pairings.md M11</span></p></li>
+      <li><span class="fid">D5</span><p><b>The Desk can show a sent draft as ready to send for up to a minute.</b> Sending or discarding a draft does not mark the Desk stale.<span class="src">packages/supabase/src/hooks/use-outbound-drafts.ts:47,59,67 · use-desk-engagements.ts:692,707</span></p></li>
+    </ol>
+  </div>
+
+  <div class="col disc">
+    <h3>Page architecture <span class="owner">E2 · review/e2-page-architecture.md</span></h3>
+    <ol class="finds">
+      <li><span class="fid">P1</span><p><b>Where a Desk hard load's 6.9 s goes.</b> Scripts until 3,016 ms; sixteen user lookups back to back from 3,258 to 6,485 ms; the first data read at 5,951 ms, after 15 of the 16; content at 6,926 ms.<span class="src">baseline/traces/local-desk-waterfall.json · e2 §0</span></p></li>
+      <li><span class="fid">P2</span><p><b>No route has a <code>loading.tsx</code>, and only one has an error page.</b> On a hard load these client pages paint their own pre-hydration branch, so a placeholder has to render identically at three mount points.<span class="src">e2 §1.1-1.4 · board/[boardId]/error.tsx · pairings.md M2</span></p></li>
+      <li><span class="fid">P3</span><p><b>The Document is 25 requests deep.</b> 145 requests, 130 DOM mutation batches and about 1 s of long tasks on a hard load. The page is 4,112 lines with no <code>memo</code>, so every lens that settles repaints the whole body.<span class="src">BASELINE.md:50 · e2 §4.1</span></p></li>
+      <li><span class="fid">P4</span><p><b>The Desk reads itself twice on <code>/desk</code>.</b> Two query keys for the same data, one with the studio id in it: about 48 extra requests per hard load.<span class="src">desk/page.tsx:131 · hooks/use-desk-engagements.ts:1071 · e2 §3.1</span></p></li>
+      <li><span class="fid">P5</span><p><b>FF&amp;E lines load three times per Document</b> under two keys.<span class="src">packages/supabase/src/hooks/use-project-v2.ts:185 · e2 §4.4</span></p></li>
+    </ol>
+  </div>
+
+  <div class="col disc">
+    <h3>Edge &amp; bundle <span class="owner">E3 · review/e3-infra-bundle.md</span></h3>
+    <ol class="finds">
+      <li><span class="fid">B1</span><p><b>Hashed scripts are never cached.</b> Every <code>_next/static</code> asset is served with <code>max-age=0, must-revalidate</code>; on a Document load all 63 of 63 scripts came back 304. One <code>public/_headers</code> file fixes it.<span class="src">baseline/data/prod-walk.json:38 · BASELINE.md:99-102 · e3 §3a</span></p></li>
+      <li><span class="fid">B2</span><p><b>1,586 KB of gzipped script before the Desk can start;</b> 1,935 KB for a Document and 1,075 KB for the sign-in page.<span class="src">baseline/bundle.md:22-23 · BASELINE.md:141-150</span></p></li>
+      <li><span class="fid">B3</span><p><b>Every icon ships to every page.</b> The root layout imports the design-system barrel, which registers 84 client components on every route. One of them looks icons up by name, which pulls in all 1,584 lucide icons. The chunk once suspected of being a MIME table is 768 KB parsed and mostly lucide.<span class="src">packages/patina-design-system/src/components/Icon/Icon.tsx:2,44 · bundle.md:41 · e3 §4b-c</span></p></li>
+      <li><span class="fid">B4</span><p><b>A crypto polyfill rides on every route,</b> 97.6 KB gzip, through one re-export line in the shared utils package.<span class="src">packages/utils/src/index.ts:6 · bundle.md:47 · e3 §4a</span></p></li>
+      <li><span class="fid">B5</span><p><b>A cold Worker adds 1.6–3.7 s on 4 of 16 prod navigations.</b> Middleware costs about 60 ms warm and passes B4; it is the smallest item.<span class="src">BASELINE.md:77-78, 122 · e3 §2b</span></p></li>
+    </ol>
+  </div>
+
+  <div class="wide versus" aria-labelledby="h-versus">
+    <h3 id="h-versus">What we expected, and what we found</h3>
+    <p class="note">The plan's code sweep went in with hypotheses. These are the ones the evidence turned over.</p>
+    <div class="vrow"><div><span class="k">Expected</span>A realtime echo and a double subscription make each write refetch twice.</div><div><span class="k">Found · <span class="rid">RJ5</span></span>Neither exists today. The three coordination tables are not in the realtime publication locally, the lab saw 0 change frames after a write, and the band that subscribed a second time is no longer mounted. The hazard is latent; prod membership is unverified (O1).<span class="src">e1 §0.3-0.4 · e1-P6-1440.json realtimeEchoFrames</span></div></div>
+    <div class="vrow"><div><span class="k">Expected</span>Rebuilding the design system with code splitting would shrink the bundle.</div><div><span class="k">Found · <span class="rid">RJ1</span></span>It changes nothing here: the portal compiles the design system from source. The leak is the client boundary in the root layout and the icon lookup (F9, F10).<span class="src">tsconfig.json:25 · e3 §4b</span></div></div>
+    <div class="vrow"><div><span class="k">Expected</span>A 790 KB chunk was a MIME table with no source.</div><div><span class="k">Found</span>It is mostly lucide icons (449 KB of 768 KB parsed). The MIME table is 26 KB.<span class="src">BASELINE.md:175 · bundle.md:41</span></div></div>
+    <div class="vrow"><div><span class="k">Expected</span>The arrival hold is the seven seconds.</div><div><span class="k">Found</span>The seven seconds are scripts, the user-lookup queue and the reads. The hold costs 2–4 s on a Document and almost nothing on the Desk.<span class="src">pairings.md M14</span></div></div>
+    <div class="vrow"><div><span class="k">Expected</span>The Library is blank while it loads, and the Desk ships about 1.37 MB.</div><div><span class="k">Found</span>The Library shows a placeholder at 647 ms. The Desk ships more than expected: 1,586 KB.<span class="src">BASELINE.md:157, 172</span></div></div>
+    <div class="vrow"><div><span class="k">Expected</span>Excluding <code>public/three</code> from middleware would save time.</div><div><span class="k">Found · <span class="rid">RJ2</span></span>Static assets never reach the Worker in prod, so it saves nothing.<span class="src">e3 §1e</span></div></div>
+  </div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section class="sec" id="proposals" aria-labelledby="h-proposals">
+  <div class="col">
+    <p class="kicker"><b>4</b> Proposals</p>
+    <h2 id="h-proposals">Paired proposals, engineering × design</h2>
+    <p>Every design proposal was paired with the engineering change that makes it possible, and every engineering change with what a studio member would feel. Where the seats disagreed, the lead ruled and recorded why. The full map is <code>synthesis/pairings.md</code>; the ids below run through the tracks in §5.</p>
+    <p class="label-sim">"Would feel" lines are the seats' projections. No studio member was asked, and none is quoted.</p>
+  </div>
+
+  <div class="wide pairs">
+    <div class="pc"><span class="ids">F1 · N1 · E1-9</span><div><span class="k">Engineering</span><p>A session-user store seeded once from the session, replacing hook-level user lookups.</p></div><div><span class="k">Design</span><p>None needed. It removes the wait the placeholders would otherwise have to cover.</p></div><div><span class="k">Would feel</span><p>Every hard load about 2.7 s shorter. The largest single change.</p></div></div>
+    <div class="pc"><span class="ids">F13 · N10 · D1.1–D1.7 · E2-1</span><div><span class="k">Engineering</span><p>One skeleton component per room, rendered at three mount points with identical geometry.</p></div><div><span class="k">Design</span><p>One loading register: real frame, pearl placeholders in the real line boxes, an indicator, and words only when slow.</p></div><div><span class="k">Would feel</span><p>No room is ever blank. People stops looking empty while it loads.</p></div></div>
+    <div class="pc"><span class="ids">N10 · PQ3 · D1.12 · E2-6</span><div><span class="k">Engineering</span><p>Remove the held-paper path; seed the job title from the Desk cache on intent.</p></div><div><span class="k">Design</span><p>Arrival option C: the placeholder becomes the arrival, with the job's name set at first paint.</p></div><div><span class="k">Would feel</span><p>The Document's finished paper is no longer hidden for 2–4 s.</p></div></div>
+    <div class="pc"><span class="ids">F5 → N3 · D2.3 · E1-2, E1-3</span><div><span class="k">Engineering</span><p>Narrow the tick's invalidation first, then an optimistic helper with snapshot and restore.</p></div><div><span class="k">Design</span><p>The tick lands under the finger; "saving…" only past 400 ms; a failure restores the truth inline.</p></div><div><span class="k">Would feel</span><p>The tick answers at once instead of after about three quarters of a second.</p></div></div>
+    <div class="pc"><span class="ids">F16 · D2.2, D2.18, D2.19</span><div><span class="k">Engineering</span><p>Press states, <code>aria-pressed</code>, <code>aria-busy</code>, and 44 px task rows.</p></div><div><span class="k">Design</span><p>S0: every act answers the press, rows included.</p></div><div><span class="k">Would feel</span><p>No click goes unacknowledged.</p></div></div>
+    <div class="pc"><span class="ids">N11 · PQ4 · D1.9</span><div><span class="k">Engineering</span><p>A capture-phase link listener and a wrapped <code>router.push</code> start the rule; no busy region ends it.</p></div><div><span class="k">Design</span><p>A 1 px ink rule at the top of the paper, from 300 ms.</p></div><div><span class="k">Would feel</span><p>Something speaks on a slow navigation, and nothing flashes on a fast one.</p></div></div>
+    <div class="pc"><span class="ids">N7 · PQ18 · E1-4, E2-5</span><div><span class="k">Engineering</span><p>The command bar reads the Desk only when open; the Document reads a scoped "this job's needs".</p></div><div><span class="k">Design</span><p>None needed.</p></div><div><span class="k">Would feel</span><p>The Document stops "finishing" seconds after it looks ready. <span class="est">EST</span> −0.5 to −1.5 s.</p></div></div>
+    <div class="pc"><span class="ids">F6 · F15 · N12 · D2.12, D2.13</span><div><span class="k">Engineering</span><p>Mark the Desk stale after a send; no automatic retry on send and money hooks.</p></div><div><span class="k">Design</span><p>Sends stay pending-only: "Sending", then "Still sending." at 8 s; never "sent" before the receipt.</p></div><div><span class="k">Would feel</span><p>A sent draft stops reading as ready to send; nothing is sent twice by a retry.</p></div></div>
+  </div>
+
+  <div class="col">
+    <h3 id="loading-dirs">The two loading directions, side by side</h3>
+    <p>Both directions share the same structure and meet B2 equally, because the timing comes from the engineering mount points, not the material. They differ in voice. <b>Q</b> builds from what the paper already uses: pearl bars that breathe slowly and a hairline rule. <b>X</b> adds shimmer, a glowing bar and toasts. The team recommends Q (PQ2), because the studio promise is that the studio won't notice Patina.</p>
+  </div>
+  <div class="wide pair">
+    <div>
+      <h4>Q · Quiet paper <span class="rec">recommended</span></h4>
+      <p>A Document at about 200 ms, 390 wide. The job title is set at first paint (arrival C).</p>
+      <iframe class="spec" title="Direction Q, Document at 390" data-spec="skeletons-q.html" data-frames="frame-q-doc-390-light frame-q-doc-390-dark" srcdoc="{{SPEC}}"></iframe>
+    </div>
+    <div>
+      <h4>X · Expressive</h4>
+      <p>The same moment, with shimmer and the glow bar.</p>
+      <iframe class="spec" title="Direction X, Document at 390" data-spec="skeletons-x.html" data-frames="frame-x-doc-390-light frame-x-doc-390-dark" srcdoc="{{SPEC}}"></iframe>
+    </div>
+  </div>
+  <div class="col">
+    <p><b>The strongest argument against Q.</b> Kody asked for "a loading indicator or skeletons", and a 1 px rule at 40% ink may not register as an indicator at all. Branaghan and Sanchez (2009) found people prefer more feedback, and no first-party source shows calm tools deliberately leaving progress out. Q's quietness is a taste call, not evidence. If a studio walk shows the rule goes unnoticed, the fallback inside Q is a 2 px rule at 60%, still without X's bar and toasts.<span class="src">synthesis/plan.md §4 · review/r-patterns.md §1-2 · pairings.md R-5, R-6</span></p>
+  </div>
+  <figure class="specfig wide">
+    <figcaption><b>Q on the Desk at 1440.</b> Filled pearl bars stand where the cards will land; the ink rule runs along the top of the paper.</figcaption>
+    <iframe class="spec" title="Direction Q, Desk at 1440" data-spec="skeletons-q.html" data-frames="frame-q-desk-1440-light frame-q-desk-1440-dark" srcdoc="{{SPEC}}"></iframe>
+  </figure>
+  <details class="wide">
+    <summary>Both directions on the Document at 1440</summary>
+    <iframe class="spec" title="Direction Q, Document at 1440" data-spec="skeletons-q.html" data-frames="frame-q-doc-1440-light frame-q-doc-1440-dark" srcdoc="{{SPEC}}"></iframe>
+    <iframe class="spec" title="Direction X, Document at 1440" data-spec="skeletons-x.html" data-frames="frame-x-doc-1440-light frame-x-doc-1440-dark" srcdoc="{{SPEC}}"></iframe>
+  </details>
+  <details class="wide">
+    <summary>At four seconds: Q's slow line and X's toast</summary>
+    <iframe class="spec" title="Direction Q, slow Document" data-spec="skeletons-q.html" data-frames="frame-q-doc-slow-1440-light frame-q-doc-slow-1440-dark" srcdoc="{{SPEC}}"></iframe>
+    <iframe class="spec" title="Direction X, slow Document" data-spec="skeletons-x.html" data-frames="frame-x-doc-slow-1440-light frame-x-doc-slow-1440-dark" srcdoc="{{SPEC}}"></iframe>
+  </details>
+
+  <div class="col">
+    <h3>Rooms with no arrival get placeholders now</h3>
+    <p>The build room and People draw nothing while they load today. Their placeholders ship in Fix now (F13) as still pearl bars, with no ruling needed. The breath and the rule wait for PQ2 and PQ5.</p>
+  </div>
+  <figure class="specfig wide">
+    <iframe class="spec" title="Direction Q, People and build room at 1440" data-spec="skeletons-q.html" data-frames="frame-q-people-1440-light frame-q-people-1440-dark frame-q-pieces-1440-light frame-q-pieces-1440-dark" srcdoc="{{SPEC}}"></iframe>
+  </figure>
+
+  <div class="col">
+    <h3>The navigation rule</h3>
+    <p>A click on a link or a <code>router.push</code> starts it; the new page having no busy region ends it. It appears only after 300 ms, so warm navigations show nothing and a slow one does. On failure it stops and an inline line takes over. Press the live frame to play it.</p>
+  </div>
+  <figure class="specfig wide">
+    <iframe class="spec" title="Navigation rule, live run" data-spec="nav-progress.html" data-frames="frame-nav-live" srcdoc="{{SPEC}}"></iframe>
+  </figure>
+  <details class="wide">
+    <summary>The rule at start, and on failure, at 1440</summary>
+    <iframe class="spec" title="Navigation rule, start and failure" data-spec="nav-progress.html" data-frames="frame-nav-start-1440-light frame-nav-start-1440-dark frame-nav-fail-1440-light frame-nav-fail-1440-dark" srcdoc="{{SPEC}}"></iframe>
+  </details>
+
+  <div class="col">
+    <h3>Action feedback: one grammar for every click</h3>
+    <p>Within 100 ms exactly one thing answers the click. What answers depends on whether the act may show its result before the server confirms it.</p>
+  </div>
+  <div class="tw col compact">
+    <table>
+      <thead><tr><th>Stage</th><th>When</th><th>Internal acts (optimistic)</th><th>Sends, money, server-decided acts (pending-only)</th></tr></thead>
+      <tbody>
+        <tr><td class="id">S0 press</td><td>0 ms</td><td>A press state; the row warms</td><td>Same</td></tr>
+        <tr><td class="id">S1 answer</td><td>≤100 ms</td><td>The value changes (a sage tick; a faint ghost row for creates)</td><td>The verb changes ("Completing…", "Sending"), held, <code>aria-busy</code>, guarded against a second press</td></tr>
+        <tr><td class="id">S2 pending</td><td>after 400 ms, held ≥500 ms</td><td><code>saving…</code> in the row's meta column</td><td>Already showing; "Still working." at 8 s</td></tr>
+        <tr><td class="id">S3 settled</td><td>on the write's own response</td><td>The meta returns to the server's truth; nothing celebrates</td><td>A receipt in plain words</td></tr>
+        <tr><td class="id">S4 failure</td><td>on error</td><td>Restore the truth; one <code>role="alert"</code> line; a 44 px Try again; keep the typed words</td><td>The word returns, and says what is true now ("Nothing was sent.")</td></tr>
+        <tr><td class="id">S5 Undo</td><td>only where a restore path exists</td><td>An in-flow Undo row takes focus</td><td>Never</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="col callout">
+    <h4>Never optimistic</h4>
+    <p>External sends (drafts, invoices, plan issues, transmittals, trade texts). Money (payments, invoice lines, PO release, timer stop). Deletes without Undo. Outcomes the server decides (phase advance, placing a piece, promotion to the studio library, holds, archive). And any word that claims an outside fact before the receipt: "sent", "paid", "removed", "approved by client". Never, in either direction: confetti, checkmark bursts, counters that count up, streaks, "nice work", or sound.<span class="src">synthesis/plan.md §5.2 · BRIEF.md "Honesty"</span></p>
+  </div>
+  <div class="col"><p>Each strip below has a scrubber. Pick a server time and an outcome, then play it; the column for the current stage lights.</p></div>
+  <figure class="specfig wide">
+    <figcaption><b>P6 · Tick a task.</b> Optimistic, behind <code>optimistic-ink</code> (N3), after the invalidation is narrowed (F5).</figcaption>
+    <iframe class="spec" title="Action strip, P6 tick a task" data-spec="action-strips.html" data-frames="frame-strip-p6" srcdoc="{{SPEC}}"></iframe>
+  </figure>
+  <figure class="specfig wide">
+    <figcaption><b>P9 · Send a reminder.</b> Pending-only. "Sending" holds from the press; "Still sending." at 8 s.</figcaption>
+    <iframe class="spec" title="Action strip, P9 send" data-spec="action-strips.html" data-frames="frame-strip-p9" srcdoc="{{SPEC}}"></iframe>
+  </figure>
+  <details class="wide">
+    <summary>P7 advance a phase, and P8 add a room</summary>
+    <iframe class="spec" title="Action strip, P7 advance a phase" data-spec="action-strips.html" data-frames="frame-strip-p7" srcdoc="{{SPEC}}"></iframe>
+    <iframe class="spec" title="Action strip, P8 add a room" data-spec="action-strips.html" data-frames="frame-strip-p8" srcdoc="{{SPEC}}"></iframe>
+  </details>
+  <details class="wide">
+    <summary>Recording a payment, and removing a folio image with Undo</summary>
+    <iframe class="spec" title="Action strip, record a payment" data-spec="action-strips.html" data-frames="frame-strip-pay" srcdoc="{{SPEC}}"></iframe>
+    <iframe class="spec" title="Action strip, remove a folio image with Undo" data-spec="action-strips.html" data-frames="frame-strip-undo" srcdoc="{{SPEC}}"></iframe>
+  </details>
+  <p class="col note">Mockups use the illustrative Hartwell Studio fixture from US-24; no real studio, client or maker appears. They are static illustrations and prove nothing about time: every time printed on them is measured, with its file, or marked EST. Each frame lists the design-canon departures it uses, and each departure maps to a founder question. <span class="src">specimens/SPEC.md §3, §6</span></p>
+
+  <div class="col">
+    <h3>Where the seats disagreed</h3>
+  </div>
+  <div class="tw wide compact">
+    <table>
+      <thead><tr><th class="id">Id</th><th>The disagreement</th><th>Ruling</th></tr></thead>
+      <tbody>
+        <tr><td class="id">M1</td><td>Design wants an instant tick, but each write fans out to 27 refetches, and the settle rules differed between E1 and D2.</td><td>Narrowing (F5) ships before the optimistic tick (N3). Optimistic acts end their pending state at the write; the refetch reconciles in the background.</td></tr>
+        <tr><td class="id">M3</td><td>A <code>loading.tsx</code> placeholder and today's arrival would show three waiting faces in a row on the Document.</td><td>Desk and Document placeholders wait for the arrival ruling (PQ3); rooms without an arrival get theirs now (F13).</td></tr>
+        <tr><td class="id">M5</td><td>E2 would drive the rule from <code>useLinkStatus</code>; R found it skips prefetched links.</td><td>D1's capture-phase signal instead (RJ16).</td></tr>
+        <tr><td class="id">M6</td><td>D1 started the indicator at 100 ms; R's sources say no indicator under about 1 s, and Turbo waits 500 ms.</td><td>300 ms. The press state already covers B1. Ratified through PQ8.</td></tr>
+        <tr><td class="id">M8</td><td>E2 would slow polls while realtime is subscribed; E1 showed the channel can be subscribed and receive nothing.</td><td>Rejected until the publication is checked (RJ6, O1).</td></tr>
+        <tr><td class="id">M10</td><td>E1: <code>getClaims</code> falls back to a network call for HS256 tokens. E3: Strata signs ES256.</td><td>Both hold, for different callers. Middleware verifies with <code>getClaims</code> and an inlined key set (N13); browser hooks use the session store (F1). One live token header confirms the algorithm (O2).</td></tr>
+        <tr><td class="id">M11</td><td>Why do sixteen user lookups run one at a time?</td><td>The auth library holds a client lock across the network call, and every read waits on the same lock. This made F1 the largest lever.</td></tr>
+        <tr><td class="id">M14</td><td>Is the arrival hold the seven seconds?</td><td>No. On the Desk it hides almost nothing; on the Document it hides 2–4 s. PQ3 is about honesty and continuity as much as speed.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 5 ============================================================ -->
+<section class="sec" id="tracks" aria-labelledby="h-tracks">
+  <div class="col">
+    <p class="kicker"><b>5</b> Tracks</p>
+    <h2 id="h-tracks">Three tracks</h2>
+    <p><b>Fix now</b> items each take about a day or less, need no ruling and ship without a flag. <b>Next</b> items need a ruling, a flag or a few days. <b>Structural</b> items are multi-slice or wait on a measurement. Effort: S is a day or less, M several days, L several slices. Every gate reruns <code>baseline/harness/lab.mjs</code> under the same throttling unless it says otherwise.</p>
+    <p class="note">Order inside Fix now: F17 first, so every other gate has a baseline. Then F1 and F7–F10, the largest gains. F5 lands before N3. F13 and F16 can run alongside everything.</p>
+  </div>
+
+  <h3 class="col">Fix now</h3>
+  <div class="tw wide">
+    <table class="tracks">
+      <thead><tr><th class="id">Id</th><th>Change</th><th>Effort</th><th>Effect</th><th>Risk</th><th>Gate</th></tr></thead>
+      <tbody>
+        <tr><td class="id">F1</td><td>Session-user store seeded from the session; migrate the hooks on the P1/P2 hard-load waterfall; clear the cache on sign-out</td><td class="ef">S</td><td>−~2.7 s per Desk hard load, ~4.2 s per Document</td><td>Cross-user cache bleed; writes keep server attribution</td><td>User lookups 16–21 → ≤2 per hard load; an account-switch test shows no prior-user rows</td></tr>
+        <tr><td class="id">F2</td><td>One Desk key: drop the studio id from the key, filter studio drafts in <code>select</code></td><td class="ef">S</td><td>About 48 fewer requests per Desk hard load; −0.2 to −0.5 s</td><td>Low</td><td>Each Desk table requested once in the waterfall</td></tr>
+        <tr><td class="id">F3</td><td>Intent prefetch and seed: prefetch on hover and focus; the Document takes its placeholder data from the Desk cache</td><td class="ef">S</td><td>P2 usable −0.3 to −0.6 s; the title is in hand at commit</td><td>Low</td><td>Hover then click: 0 <code>document_state</code> requests after the click</td></tr>
+        <tr><td class="id">F4</td><td>One FF&amp;E key</td><td class="ef">S</td><td>3 → 1 FF&amp;E request per Document; the build room opens warm</td><td>Low; a wider embed</td><td>Document hard load shows 1 request; P3 in-app shows 0</td></tr>
+        <tr><td class="id">F5</td><td>Narrow the tick and phase hooks with a small <code>docKeys</code> factory; mark the Desk stale without refetching it</td><td class="ef">S</td><td>Tick refetches 27 → 3; settle about halves</td><td>Under-invalidation of a Desk input</td><td>The P6 harness shows ≤3 refetches; a ticked overdue task is gone on return to the Desk</td></tr>
+        <tr><td class="id">F6</td><td>Send and discard mark the Desk stale</td><td class="ef">S</td><td>The Desk stops showing a sent draft as ready to send</td><td>None</td><td>Unit test: send invalidates the Desk key</td></tr>
+        <tr><td class="id">F7</td><td><code>public/_headers</code>: <code>/_next/static/*</code> immutable for a year</td><td class="ef">S</td><td>63 revalidations → 0 on repeat hard loads</td><td>Low; hashed names only</td><td><code>curl -sI</code> shows <code>immutable</code>; prod collector 304s 63 → 0</td></tr>
+        <tr><td class="id">F8</td><td>Delete the crypto re-export in <code>packages/utils</code>; point the two orders imports at the module</td><td class="ef">S</td><td>−97.6 KB gzip on every route</td><td>Low</td><td>Orders build and portal type-check pass; no polyfill chunk</td></tr>
+        <tr><td class="id">F9</td><td>Client boundary on <code>DebugPanel</code>; audit the other barrel importers</td><td class="ef">S</td><td>Part of −220 to −390 KB per route</td><td>Low</td><td>Sign-in client manifest: design-system modules 84 → about 0</td></tr>
+        <tr><td class="id">F10</td><td>Rewrite the design-system <code>Icon</code> without the name lookup</td><td class="ef">S</td><td>About −120 KB gzip per route</td><td>Low; check Calendar and Carousel chevrons</td><td>Lucide modules in the tens, not 1,584</td></tr>
+        <tr><td class="id">F11</td><td>Real-user vitals to PostHog, sampled, route template only, no new identify</td><td class="ef">S</td><td>The only proof of B3 p75 in prod</td><td>Privacy rests on the property list</td><td>A query shows only the listed properties, no raw URL (after O6)</td></tr>
+        <tr><td class="id">F12</td><td>Cold-start numbers (handler bytes, startup time) in each deploy report</td><td class="ef">S</td><td>The cold path becomes visible</td><td>None</td><td>Numbers in the next deploy report</td></tr>
+        <tr><td class="id">F13</td><td>Shaped placeholders for rooms without an arrival: build room, People, Library, rooms, Room view, boards, drafting, ceremony</td><td class="ef">S per route</td><td>Placeholder "none" → first paint; People never reads empty while loading</td><td>Low; geometry must match</td><td>B2 on P3hard, P4, P5; <code>aria-busy</code> on every fallback</td></tr>
+        <tr><td class="id">F14</td><td>Error and not-found pages at the root and for the Document routes</td><td class="ef">S</td><td>A broken page keeps the drawer and ⌘K</td><td>Low</td><td>A page throw renders inside the chrome</td></tr>
+        <tr><td class="id">F15</td><td>Act-site honesty: keep the typed room name until success; swatch rolls back on error; two deletes become pending-only; no retry on send and money hooks; background stamps never raise the global toast</td><td class="ef">S</td><td>No lost words; no state the database lacks; no double send on retry</td><td>Low</td><td>A forced failure keeps the typed name; retry off on send and money hooks</td></tr>
+        <tr><td class="id">F16</td><td>Silent acts answer at once: press states, 44 px task rows, <code>aria-pressed</code>, <code>aria-busy</code> while pending</td><td class="ef">S</td><td>B1 met by a truthful held state on P1, P2, P4–P6, P10</td><td>Work blocks get taller</td><td>Visible change ≤100 ms on 3 of 3 runs; 44 px measured</td></tr>
+        <tr><td class="id">F17</td><td>The lab harness grows: P7 and P8 with fixture-and-delete, P9 up to "Sending" on drafts only, render counts, a layout-shift mark, per-scenario lookup and refetch counts</td><td class="ef">S</td><td>Every later gate becomes runnable</td><td>Shared local Postgres needs a reset window</td><td>Reproduces today's P6 (748 ms, 27 refetches) before any fix lands</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="col">Next</h3>
+  <div class="tw wide">
+    <table class="tracks">
+      <thead><tr><th class="id">Id</th><th>Change</th><th>Effort</th><th>Effect</th><th>Risk</th><th>Gate</th></tr></thead>
+      <tbody>
+        <tr><td class="id">N1</td><td>Finish the session-user sweep: the remaining ≥55 query and 76 mutation lookup sites</td><td class="ef">M</td><td>User lookups ≤2 everywhere (an in-app P2 makes 5)</td><td>Cross-user bleed, as F1</td><td>Per-route counts in F17</td></tr>
+        <tr><td class="id">N2</td><td>A shared optimistic helper: cancel, snapshot, patch, restore, required scope, an internal-only honesty flag, a deny-list test</td><td class="ef">S</td><td>N3–N5 safe and uniform</td><td>A wrong patch hidden in the helper</td><td>Restore over two keys; scope serializes two rapid calls</td></tr>
+        <tr><td class="id">N3</td><td>Optimistic ink, wave 1, behind <code>optimistic-ink</code>: tick, coordination tick, add-task ghost, milestone, reaction, draft text, schedule line</td><td class="ef">S per hook</td><td>P6 value ≤50 ms</td><td>Double-click race (scoped); filters hiding the row</td><td>Value ≤100 ms 3 of 3; a forced 500 restores with an inline line</td></tr>
+        <tr><td class="id">N4</td><td>Add a room in one round trip: client id, ghost row</td><td class="ef">S</td><td>Row ≤100 ms</td><td>Sort-order collision</td><td>A forced error keeps the name</td></tr>
+        <tr><td class="id">N5</td><td>Phase advance writes its receipt into the phase list; an 8 s line; stays pending-only</td><td class="ef">S</td><td>The list changes with the notice</td><td>None new</td><td>Lab P7: same frame</td></tr>
+        <tr><td class="id">N6</td><td>The remaining narrowing: 51 whole-document sites, 112 <code>Keys.all</code> sites, dead Desk keys</td><td class="ef">M</td><td>Every write's fan-out shrinks like the tick's</td><td>Under-invalidation</td><td>Per-action refetch counts in F17</td></tr>
+        <tr><td class="id">N7</td><td>The Desk leaves the Document: command bar reads only when open; the Document reads one job's scoped needs</td><td class="ef">S + M</td><td>Document no-busy −0.5 to −1.5 s; no Desk poll</td><td>Medium; the red-letter need must stay exact</td><td>0 Desk-shaped tables on a Document</td></tr>
+        <tr><td class="id">N8</td><td>A <code>desk_read</code> RPC, security invoker, per-feed exception blocks; migration reviewed at the frontier level</td><td class="ef">M</td><td>24 + 1 + N requests → 1; −0.2 to −0.5 s prod</td><td>Sequential execution can be slower</td><td>Plan ≤150 ms prod-shaped; RLS parity for three identities</td></tr>
+        <tr><td class="id">N9</td><td>A <code>document_open</code> RPC: row, ids and redirect resolution</td><td class="ef">M</td><td>One level shallower; up to 5 fewer round trips on redirects</td><td>Medium; redirect semantics</td><td>Tests over six resolution branches</td></tr>
+        <tr><td class="id">N10</td><td>The loading register on Desk and Document, behind <code>loading-register</code>: placeholders, arrival C, filled Desk bars, prose lines retired</td><td class="ef">M</td><td>P2 placeholder ≤200 ms; Document LCP ≈ usable</td><td>Medium; US-14 continuity, arrival telemetry</td><td>B2 on P2 and P10; layout shift under 0.05</td></tr>
+        <tr><td class="id">N11</td><td>The navigation rule in the Document layout, shown at 300 ms</td><td class="ef">S–M</td><td>Something speaks on a cold navigation</td><td>Low</td><td>No rule under 300 ms; rule on a forced 1 s delay; reduced motion steps</td></tr>
+        <tr><td class="id">N12</td><td>The grammar everywhere: <code>saving…</code> at 400 ms, inline failures, quiet band word, warn before leaving with a pending write, 8 s lines, offline</td><td class="ef">S per act, M in all</td><td>One consistent answer to every click</td><td>Copy volume</td><td>No global "Error" toast from a Document write</td></tr>
+        <tr><td class="id">N13</td><td>Middleware verifies with <code>getClaims()</code> and an inlined key set; the matcher skips <code>/api</code> and prefetches</td><td class="ef">S</td><td>B4 ≈0 network; −30 to −60 ms per API call</td><td>Low; HS256 and unknown keys fall back</td><td>Signed-out, expired and tampered tests; prod overhead ≤60 ms</td></tr>
+        <tr><td class="id">N14</td><td>Images: sizes, lazy loading, a high-priority folio hero</td><td class="ef">S per site</td><td>No layout shift on Library, boards, Pieces, Room view</td><td>Low</td><td>Layout shift under 0.05</td></tr>
+        <tr><td class="id">N15</td><td>Undo for folio image remove and swatch delete, if PQ14 rules it</td><td class="ef">S each</td><td>Deletes answer at once, honestly ("Removing… Undo")</td><td>Low</td><td>Undo restores the row; "Removed" only on receipt</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="col">Structural</h3>
+  <div class="tw wide">
+    <table class="tracks">
+      <thead><tr><th class="id">Id</th><th>Change</th><th>Effort</th><th>Effect</th><th>Risk</th><th>Gate</th></tr></thead>
+      <tbody>
+        <tr><td class="id">S1</td><td>Split the Document page into lenses that own their reads, with <code>memo</code> and a settled context; only after F17 render counts</td><td class="ef">L</td><td>−0.2 to −0.5 s of long tasks; less hitching</td><td>Medium; arrival readiness</td><td>Commits per settle −50%; arrival tests pass</td></tr>
+        <tr><td class="id">S2</td><td>Serve the 28 prerendered shells from static assets with cache interception</td><td class="ef">M</td><td>Fewer cold opens; −30 to −65 ms</td><td>Medium; order against middleware (O7)</td><td>Signed-out <code>/desk</code> → 307; signed-in 200</td></tr>
+        <tr><td class="id">S3</td><td>Desk-only server prefetch and hydration, flagged; after F1, N8, N13 and PQ3</td><td class="ef">L</td><td>+0.2 to 0.5 s on a hard load</td><td>High; Worker CPU, arrival flash</td><td>Keep only if RUM shows ≥500 ms p75 off LCP</td></tr>
+        <tr><td class="id">S4</td><td>A role claim through an auth hook with a database fallback, only if PQ20</td><td class="ef">M</td><td>About −30 ms per hard load</td><td>Medium; every app's sign-in</td><td>Staging; every app signs in</td></tr>
+        <tr><td class="id">S5</td><td>A CI bundle budget with tripwires and a handler-size warning</td><td class="ef">M</td><td>The weight stays off</td><td>About 1.5 min per portal PR</td><td>Fails on a reintroduced crypto re-export</td></tr>
+        <tr><td class="id">S6</td><td>Cold-start reduction, from F12's startup numbers and a CPU profile</td><td class="ef">after F12</td><td>Fewer 1.6–3.7 s cold opens</td><td>Unknown</td><td>RUM TTFB p75 trend</td></tr>
+        <tr><td class="id">S7</td><td>Realtime only if PQ17 publishes: a channel registry, apply instead of invalidate, drop the own echo</td><td class="ef">M</td><td>Live co-member changes</td><td>Echo doubling</td><td>Two acquirers → one subscribe; own echo dropped</td></tr>
+        <tr><td class="id">S8</td><td>Virtualize lists only where O9 shows over ~150 rows at p95</td><td class="ef">M per list</td><td>0 s at today's sizes</td><td>Low</td><td>After the count</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="col src">Transcribed from synthesis/plan.md §3, with effort from the seat tables (review/e1-data-writes.md §7, review/e2-page-architecture.md §8, review/e3-infra-bundle.md §7, synthesis/pairings.md §1-2). File paths for each item are in the plan.</p>
+
+  <details class="wide">
+    <summary>Ideas the team rejected, and why (RJ1–RJ18)</summary>
+    <div class="tw compact">
+      <table>
+        <thead><tr><th class="id">Id</th><th>Idea</th><th>Why not</th></tr></thead>
+        <tbody>
+          <tr><td class="id">RJ1</td><td>Rebuild the design system with code splitting</td><td>The portal compiles it from source; the leak is the client boundary</td></tr>
+          <tr><td class="id">RJ2</td><td>Exclude <code>public/three</code> from middleware</td><td>Static assets never reach the Worker in prod</td></tr>
+          <tr><td class="id">RJ3</td><td>Smart Placement or a region hint now</td><td>One studio's traffic never engages it; revisit with S3</td></tr>
+          <tr><td class="id">RJ4</td><td>A keep-warm cron</td><td>It does not warm the user's location, and it hides cold starts from RUM</td></tr>
+          <tr><td class="id">RJ5</td><td>Fix the realtime echo and double subscription now</td><td>Neither exists today; latent, so S7</td></tr>
+          <tr><td class="id">RJ6</td><td>Slow the polls while subscribed</td><td>A subscribed channel can receive nothing; data gets staler</td></tr>
+          <tr><td class="id">RJ7</td><td>React 19 <code>useOptimistic</code></td><td>A second optimistic system beside nine existing sites</td></tr>
+          <tr><td class="id">RJ8</td><td>Cache Components, PPR, partial prefetching</td><td>Not in the installed Next.js; open OpenNext stream bugs</td></tr>
+          <tr><td class="id">RJ9</td><td>An R2 or KV incremental cache</td><td>Shells change only at deploy; single-region or eventually consistent</td></tr>
+          <tr><td class="id">RJ10</td><td><code>next/image</code> on Workers by default</td><td>Needs an image loader and cost; N14 fixes the real problems</td></tr>
+          <tr><td class="id">RJ11</td><td>Virtualization now</td><td>Seeded lists are 4–41 items; waits on O9</td></tr>
+          <tr><td class="id">RJ12</td><td>Hyperdrive</td><td>The portal talks PostgREST over HTTP</td></tr>
+          <tr><td class="id">RJ13</td><td><code>getClaims</code> in browser hooks</td><td>Hooks need only the id; the session store is cheaper</td></tr>
+          <tr><td class="id">RJ14</td><td>Rename middleware to proxy now</td><td>Experimental on OpenNext, with reported bundle bloat</td></tr>
+          <tr><td class="id">RJ15</td><td><code>sideEffects: false</code> on the utils package</td><td>Bundler-dependent; deleting the re-export is exact</td></tr>
+          <tr><td class="id">RJ16</td><td><code>useLinkStatus</code> as the navigation signal</td><td>It skips prefetched links</td></tr>
+          <tr><td class="id">RJ17</td><td>Optimistic phase advance, sends, payments, deletes without Undo</td><td>Honesty; the server decides</td></tr>
+          <tr><td class="id">RJ18</td><td>Success toasts, "Saved!" badges, checkmark bursts</td><td>The studio promise: a settle is a return to truth, never a reward</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</section>
+
+<!-- 6 ============================================================ -->
+<section class="sec" id="budgets" aria-labelledby="h-budgets">
+  <div class="col">
+    <p class="kicker"><b>6</b> For ratification</p>
+    <h2 id="h-budgets">Budgets B1–B4</h2>
+    <p>The story contract proposed four budgets for Kody to ratify. Three hold as written. B3 cannot hold for a cold hard load, so PQ1 proposes splitting it. Lab conditions throughout: 4× CPU slowdown, Fast 4G.</p>
+  </div>
+  <div class="wide budgets">
+    <div class="bud-card"><span class="bid">B1</span><h4>A visible change ≤100 ms after any click</h4><dl><dt>Today</dt><dd>Every measured click misses: 159–251 ms locally on navigation, 608 ms prod Desk → Document, 748 ms for a tick.</dd><dt>After Fix now</dt><dd>Met by a truthful press or held state (F16) <span class="est">EST</span></dd><dt>Ratify</dt><dd>As written.</dd></dl></div>
+    <div class="bud-card"><span class="bid">B2</span><h4>A shaped placeholder ≤200 ms after navigation</h4><dl><dt>Today</dt><dd>P1 2,476 ms; P2 1,004 ms; the build room and People none; P5 647 ms; P10 259 ms. The Desk hard load paints its frames at first paint (687 ms at FCP 704).</dd><dt>After Fix now</dt><dd>Rooms without an arrival pass (F13). Desk and Document wait on PQ2 and PQ3 (N10) <span class="est">EST</span></dd><dt>Ratify</dt><dd>As written, reading a hard load as "at first paint".</dd></dl></div>
+    <div class="bud-card"><span class="bid">B3</span><h4>Usable content ≤1.5 s p75</h4><dl><dt>Today</dt><dd>Navigation inside the portal: 862–1,464 ms, passes. Hard loads: 6.2–7.2 s, miss.</dd><dt>After every track</dt><dd>Hard loads 2.6–3.6 s <span class="est">EST</span>. Still a miss.</dd><dt>Ratify</dt><dd>Split: <b>B3a</b> navigation usable ≤1.5 s p75; <b>B3b</b> hard load usable ≤3.5 s p75, in the lab and in RUM.</dd></dl></div>
+    <div class="bud-card"><span class="bid">B4</span><h4>Middleware adds ≤100 ms</h4><dl><dt>Today</dt><dd>+60 ms warm in prod (getUser plus roles); 26–32 ms locally. Passes.</dd><dt>After Next</dt><dd>About zero network hops (N13) <span class="est">EST</span></dd><dt>Ratify</dt><dd>As written, plus a watch on cold Worker TTFB p75 through RUM (2.1–5.2 s on 4 of 16 prod navigations today).</dd></dl></div>
+  </div>
+  <p class="col src">baseline/BASELINE.md:44-60, 77-78, 106-135 · synthesis/plan.md §2 and PQ1</p>
+</section>
+
+<!-- 7 ============================================================ -->
+<section class="sec" id="questions" aria-labelledby="h-questions">
+  <div class="col">
+    <p class="kicker"><b>7</b> Rulings</p>
+    <h2 id="h-questions">Founder questions</h2>
+    <p>Each departure from the design canon, and each product or access decision a proposal needs, is a question here with the team's recommendation. Fix now waits on none of them. Four gate the Next track and are marked to decide first: PQ1 sets the bar every gate measures against, PQ2 and PQ3 gate the loading register (N10), and PQ9 gates optimistic ink (N3). PQ10 sets how both flags roll out.</p>
+  </div>
+  <ol class="pqs col">
+    <li class="first"><span class="pid">PQ1</span><div><p class="q">Ratify B1–B4, with B3 split into B3a (navigation ≤1.5 s p75) and B3b (hard load ≤3.5 s p75, lab and RUM)? Read B2 on a hard load as "at first paint", and watch cold Worker TTFB p75 in RUM.</p><p class="touch">Touches: the contract budgets</p><p class="rec"><b>Recommend</b>Yes. B3 at 1.5 s cannot hold on a cold hard load under the lab's network on any track.</p></div></li>
+    <li class="first"><span class="pid">PQ2</span><div><p class="q">Loading direction: Q, X, or a hybrid?</p><p class="touch">Touches: the paper canon, ink-word state</p><p class="rec"><b>Recommend</b>Q, Quiet paper.</p></div></li>
+    <li class="first"><span class="pid">PQ3</span><div><p class="q">The arrival: A keep, B shorten, C the placeholder becomes the arrival, or D retire?</p><p class="touch">Touches: V12, arrival v3 and its patch-1 hold caps</p><p class="rec"><b>Recommend</b>C. A keeps 2–4 s of hidden paper on the Document; B rarely plays; D loses US-14 for nothing C does not give.</p></div></li>
+    <li><span class="pid">PQ4</span><div><p class="q">May a navigation indicator exist, as Q's ink rule at the top of the paper?</p><p class="touch">Touches: "Nothing on the Desk ever moves" (globals.css:305-306)</p><p class="rec"><b>Recommend</b>Yes, from 300 ms.</p></div></li>
+    <li><span class="pid">PQ5</span><div><p class="q">May placeholders breathe on R15, beyond the spine marker?</p><p class="touch">Touches: R15</p><p class="rec"><b>Recommend</b>Yes. A still bar on a 4 s wait reads as frozen. Reduced motion stills it.</p></div></li>
+    <li><span class="pid">PQ6</span><div><p class="q">Demote StrataSweep to work of unknown shape only?</p><p class="touch">Touches: R35</p><p class="rec"><b>Recommend</b>Yes.</p></div></li>
+    <li><span class="pid">PQ7</span><div><p class="q">Retire the ~20 prose loading lines, keeping words only for slow, stalled and failed?</p><p class="touch">Touches: the house loading voice</p><p class="rec"><b>Recommend</b>Yes.</p></div></li>
+    <li><span class="pid">PQ8</span><div><p class="q">Thresholds: placeholders 150 ms, rule 300 ms, pending word 400 ms held ≥500 ms, slow 4 s, still working 8 s, stall 10 s?</p><p class="touch">Touches: new values</p><p class="rec"><b>Recommend</b>As listed. Each is design practice, not research.</p></div></li>
+    <li class="first"><span class="pid">PQ9</span><div><p class="q">Optimistic ink for internal toggles, edits, creates and reorder, with the never-optimistic list held?</p><p class="touch">Touches: ink shows intent before the server confirms</p><p class="rec"><b>Recommend</b>Yes.</p></div></li>
+    <li><span class="pid">PQ10</span><div><p class="q">Flag strategy?</p><p class="touch">Touches: rollout</p><p class="rec"><b>Recommend</b>Fix now ships unflagged. Two PostHog flags: <code>optimistic-ink</code> (N3–N5, N15) and <code>loading-register</code> (N10, N11). Each is verified before enabling, rolled to Leah's studio by user id first, then to everyone after a week with no rise in failed writes or arrival declines. Never targeted by email.</p></div></li>
+    <li><span class="pid">PQ11</span><div><p class="q">Retire the red global "Error" toast for Document writes, giving every act an inline line?</p><p class="touch">Touches: extends R83</p><p class="rec"><b>Recommend</b>Yes.</p></div></li>
+    <li><span class="pid">PQ12</span><div><p class="q">One band-level <code>saving…</code> that disappears, rather than "Saved · 10:42"?</p><p class="touch">Touches: new chrome</p><p class="rec"><b>Recommend</b>The quiet one.</p></div></li>
+    <li><span class="pid">PQ13</span><div><p class="q">The expressive extras: shimmer, glow, toasts, hairline, settle wash, a fixed Undo row with a shadow?</p><p class="touch">Touches: D4 no shadows, R15, ink-word state</p><p class="rec"><b>Recommend</b>No, unless PQ2 picks X.</p></div></li>
+    <li><span class="pid">PQ14</span><div><p class="q">Undo for folio image remove and swatch delete, instead of a browser confirm?</p><p class="touch">Touches: new Undo surfaces</p><p class="rec"><b>Recommend</b>Yes.</p></div></li>
+    <li><span class="pid">PQ15</span><div><p class="q">Offline: ticks and edits wait and save on reconnect; sends and money refuse with "You're offline. Nothing was sent."</p><p class="touch">Touches: new band copy</p><p class="rec"><b>Recommend</b>Yes, after O3 confirms the pause behaviour.</p></div></li>
+    <li><span class="pid">PQ16</span><div><p class="q">The 8 s send line: "Still sending." always; "Nothing is sent twice." only if the send is proven idempotent?</p><p class="touch">Touches: new copy</p><p class="rec"><b>Recommend</b>Yes, conditional on O4.</p></div></li>
+    <li><span class="pid">PQ17</span><div><p class="q">Publish the coordination tables to realtime?</p><p class="touch">Touches: product behaviour; WAL and RLS cost per subscriber</p><p class="rec"><b>Recommend</b>Not now. The 30 s polls are honest. Revisit after O1, and only with S7's registry.</p></div></li>
+    <li><span class="pid">PQ18</span><div><p class="q">The Document reads a scoped "this job's needs" instead of the whole Desk?</p><p class="touch">Touches: the letterhead's source</p><p class="rec"><b>Recommend</b>Yes (N7).</p></div></li>
+    <li><span class="pid">PQ19</span><div><p class="q">Authorise three read-only prod checks: the publication list (O1), one token header and the JWT expiry (O2), and p95 list sizes (O9)?</p><p class="touch">Touches: prod access is read-only and walk-only today</p><p class="rec"><b>Recommend</b>Yes, as read-only SQL with no client data.</p></div></li>
+    <li><span class="pid">PQ20</span><div><p class="q">A Custom Access Token Hook carrying the designer role, run on every app's sign-in?</p><p class="touch">Touches: auth blast radius</p><p class="rec"><b>Recommend</b>Defer. After N13 the role query costs about 30 ms. Revisit only if RUM shows middleware matters.</p></div></li>
+  </ol>
+  <p class="col note">Not a question: 44 px task rows. The 44 px rule is not waivable, so F16 ships it; the only effect is taller work blocks. <span class="src">synthesis/plan.md §6</span></p>
+</section>
+
+<!-- 8 ============================================================ -->
+<section class="sec" id="team" aria-labelledby="h-team">
+  <div class="col">
+    <p class="kicker"><b>8</b> Team</p>
+    <h2 id="h-team">The team</h2>
+    <p>Each seat worked alone from the brief, the plan's code sweep and the outputs upstream of it, and did not edit another seat's files. The seats are models, routed by role. The adversarial review is assigned to the other provider from the builders.</p>
+  </div>
+  <div class="tw wide compact">
+    <table>
+      <thead><tr><th>Seat</th><th>Discipline</th><th>Model</th><th class="id">Ticket</th><th>Output</th></tr></thead>
+      <tbody>
+        <tr><td>0 Brief</td><td>Orchestrator</td><td>Opus (orchestrating session)</td><td class="id">—</td><td><code>BRIEF.md</code></td></tr>
+        <tr><td>1 Baseline lab</td><td>Performance engineer</td><td>Opus 5.5, with Chrome</td><td class="id">SQ-952</td><td><code>baseline/BASELINE.md</code>, <code>bundle.md</code>, data, traces, screens, harness</td></tr>
+        <tr><td>2 E1 Data &amp; writes</td><td>Frontend and data engineer</td><td>Opus 5.5</td><td class="id">SQ-953</td><td><code>review/e1-data-writes.md</code>, the measured P6 tick</td></tr>
+        <tr><td>3 E2 Page architecture</td><td>Frontend architect</td><td>Opus 5.5</td><td class="id">SQ-954</td><td><code>review/e2-page-architecture.md</code></td></tr>
+        <tr><td>4 E3 Edge &amp; bundle</td><td>Infrastructure engineer</td><td>Opus 5.5</td><td class="id">SQ-955</td><td><code>review/e3-infra-bundle.md</code></td></tr>
+        <tr><td>5 D1 Loading language</td><td>Interaction designer</td><td>Opus 5.5</td><td class="id">SQ-956</td><td><code>review/d1-loading.md</code>, <code>review/d1-sketches/</code></td></tr>
+        <tr><td>6 D2 Action feedback</td><td>Interaction designer</td><td>Opus 5.5</td><td class="id">SQ-957</td><td><code>review/d2-feedback.md</code>, <code>review/d2-sketches/</code></td></tr>
+        <tr><td>7 R Field patterns</td><td>Researcher, cited</td><td>Sonnet</td><td class="id">SQ-958</td><td><code>review/r-patterns.md</code></td></tr>
+        <tr><td>8–9 Pairing and synthesis</td><td>Lead</td><td>Opus 5.5</td><td class="id">SQ-959</td><td><code>synthesis/pairings.md</code>, <code>synthesis/plan.md</code></td></tr>
+        <tr><td>10 Mockups</td><td>Interface build</td><td>Opus 5.5</td><td class="id">SQ-960</td><td><code>specimens/</code>, 65 frames, <code>check.mjs</code></td></tr>
+        <tr><td>11 Document</td><td>Builder</td><td>Opus 5.5</td><td class="id">SQ-961</td><td><code>doc/src/index.html</code>, <code>doc/build.mjs</code> → <code>doc/index.html</code></td></tr>
+        <tr><td>12 Adversarial review</td><td>The other provider</td><td>GPT-6 Astra (planned)</td><td class="id">SQ-962</td><td><code>review/adversarial.md</code>, to come</td></tr>
+        <tr><td>13 Fix pass and render check</td><td>Builder</td><td>Opus, headless Chrome (planned)</td><td class="id">SQ-963</td><td><code>review/triage.md</code>, <code>doc/_renders/</code>, to come</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="col note">The pairing and synthesis seats were merged into one ticket to save a serial hop; E3 was routed as a spike so it could make recommendations (story decision log #1).</p>
+</section>
+
+<!-- 9 ============================================================ -->
+<section class="sec" id="evidence" aria-labelledby="h-evidence">
+  <div class="col">
+    <p class="kicker"><b>9</b> Sources</p>
+    <h2 id="h-evidence">The evidence trail</h2>
+    <p>Every file sits under <code>artifacts/portal-responsiveness-2026-10-14/</code> in the Patina repository. The links point at <code>main</code> and resolve once the story is pushed.</p>
+  </div>
+  <ul class="files wide">
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/BRIEF.md">BRIEF.md</a><br>The story contract: the ask, scenarios, budgets, what is waived and what is not.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/baseline/BASELINE.md">baseline/BASELINE.md</a><br>Method, caveats, P1–P10 timings, the prod walk, B4 probes, hypotheses confirmed or refuted.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/baseline/bundle.md">baseline/bundle.md</a><br>Per-route script weight and the chunk anatomy.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/tree/main/artifacts/portal-responsiveness-2026-10-14/baseline/data">baseline/data/</a><br>Every lab run (local-P*.json), the P6 tick (e1-P6-1440.json), the prod walk and probes.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/tree/main/artifacts/portal-responsiveness-2026-10-14/baseline/traces">baseline/traces/</a><br>The Desk and Document request waterfalls.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/tree/main/artifacts/portal-responsiveness-2026-10-14/baseline/screens">baseline/screens/</a><br>P1–P5 at 0 ms, 200 ms, 1 s and settled.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/tree/main/artifacts/portal-responsiveness-2026-10-14/baseline/harness">baseline/harness/</a><br>The lab, the prod collectors and the bundle script; rerun these for every gate.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/review/e1-data-writes.md">review/e1-data-writes.md</a><br>Mutation ranking, the optimistic helper, the narrowing map, realtime, user lookups.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/review/e2-page-architecture.md">review/e2-page-architecture.md</a><br>Where the 7 s goes, loading and error routes, the Desk and Document reads, the page split.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/review/e3-infra-bundle.md">review/e3-infra-bundle.md</a><br>Middleware, placement, caching, the bundle and RUM.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/review/d1-loading.md">review/d1-loading.md</a><br>Today's treatments, the four-layer register, directions Q and X, the arrival options.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/review/d2-feedback.md">review/d2-feedback.md</a><br>The S0–S5 grammar, action classes, the nine silent components.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/review/r-patterns.md">review/r-patterns.md</a><br>Cited evidence on calm tools, perceived-performance research and the platform versions.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/synthesis/pairings.md">synthesis/pairings.md</a><br>Every pairing, mismatches M1–M18, R's contradictions, open checks O1–O10.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/synthesis/plan.md">synthesis/plan.md</a><br>The thesis, scorecard, tracks with file paths, grammar, PQ1–PQ20, RJ1–RJ18.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/blob/main/artifacts/portal-responsiveness-2026-10-14/specimens/SPEC.md">specimens/SPEC.md</a><br>The 65 mockup frames, their canon departures, tokens, contrast pairs and the fixture.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/tree/main/artifacts/portal-responsiveness-2026-10-14/specimens">specimens/</a><br>The mockups themselves; each opens standalone, or on one frame by hash.</li>
+    <li><a href="https://github.com/Kodeman/PatinaBase/tree/main/artifacts/portal-responsiveness-2026-10-14/doc">doc/</a><br>This document's source and build script.</li>
+  </ul>
+
+  <div class="col">
+    <h3>Still unverified</h3>
+    <p>These open checks gate items in §5; none blocks Fix now.</p>
+  </div>
+  <div class="tw col compact">
+    <table>
+      <thead><tr><th class="id">Id</th><th>Check</th><th>Blocks</th></tr></thead>
+      <tbody>
+        <tr><td class="id">O1</td><td>Prod realtime publication membership</td><td>S7, PQ17</td></tr>
+        <tr><td class="id">O2</td><td>One live prod token header (algorithm, key id) and the JWT expiry</td><td>N13, S4</td></tr>
+        <tr><td class="id">O3</td><td>Whether TanStack 5.90.21 pauses mutations offline</td><td>PQ15, N12</td></tr>
+        <tr><td class="id">O4</td><td>Whether the draft and invoice sends are idempotent</td><td>PQ16, F15</td></tr>
+        <tr><td class="id">O5</td><td>Whether the doubly mounted inbox channel unsubscribes itself</td><td>S7</td></tr>
+        <tr><td class="id">O6</td><td>Whether PostHog already captures web vitals</td><td>F11</td></tr>
+        <tr><td class="id">O7</td><td>Whether OpenNext cache interception runs before or after middleware</td><td>S2</td></tr>
+        <tr><td class="id">O8</td><td>The Workers simultaneous-connection cap</td><td>S3</td></tr>
+        <tr><td class="id">O9</td><td>p95 list sizes in prod</td><td>S8</td></tr>
+        <tr><td class="id">O10</td><td><code>queryClient.query</code> against <code>prefetchQuery</code> in the installed TanStack</td><td>S3</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer class="end col">US-33 · Designer portal responsiveness · findings document, built 14 October 2026 from the files above. Read-only review: no portal code, data or deploy changed. Prod access was a read-only signed-in walk and read-only PostHog queries.</footer>
+</section>
+</main>
+</div>
+
+<script>
+(function () {
+  // Size each specimen frame to its content; the frames post their height.
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || typeof d.us33SpecH !== 'number') return;
+    var frames = document.querySelectorAll('iframe.spec');
+    for (var i = 0; i < frames.length; i++) {
+      if (frames[i].contentWindow === e.source) {
+        frames[i].style.height = Math.min(Math.max(d.us33SpecH, 120), 6000) + 'px';
+        break;
+      }
+    }
+  });
+  // A frame inside a closed <details> measures nothing until it opens; nudge it then.
+  document.querySelectorAll('details').forEach(function (det) {
+    det.addEventListener('toggle', function () {
+      if (!det.open) return;
+      det.querySelectorAll('iframe.spec').forEach(function (f) {
+        try { f.contentWindow.postMessage({ us33Ping: 1 }, '*'); } catch (err) {}
+      });
+    });
+  });
+  // Chart tooltips on hover and focus.
+  var tip = document.createElement('div');
+  tip.className = 'tip'; tip.hidden = true; tip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tip);
+  function show(el, x, y) {
+    var parts = el.getAttribute('data-tip').split('|');
+    tip.textContent = '';
+    var s = document.createElement('strong'); s.textContent = parts[0]; tip.appendChild(s);
+    var a = document.createElement('span'); a.textContent = parts[1]; tip.appendChild(a);
+    tip.appendChild(document.createElement('br'));
+    var b = document.createElement('span'); b.textContent = parts[2]; tip.appendChild(b);
+    tip.hidden = false;
+    var r = tip.getBoundingClientRect();
+    tip.style.left = Math.max(8, Math.min(window.innerWidth - r.width - 8, x + 12)) + 'px';
+    tip.style.top = Math.max(8, y - r.height - 12) + 'px';
+  }
+  document.querySelectorAll('[data-tip]').forEach(function (el) {
+    el.addEventListener('pointermove', function (e) { show(el, e.clientX, e.clientY); });
+    el.addEventListener('pointerleave', function () { tip.hidden = true; });
+    el.addEventListener('focus', function () { var r = el.getBoundingClientRect(); show(el, r.left + r.width / 3, r.top); });
+    el.addEventListener('blur', function () { tip.hidden = true; });
+  });
+})();
+</script>
