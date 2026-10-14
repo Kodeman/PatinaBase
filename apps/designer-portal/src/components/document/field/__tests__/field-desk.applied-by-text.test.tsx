@@ -12,6 +12,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const mockRpc = jest.fn();
 const mockFrom = jest.fn();
 const mockCalls: { gte: unknown[][] } = { gte: [] };
+let mockQueryError = false;
+let queryClientForTest: QueryClient;
 
 jest.mock("../../../../../../../packages/supabase/src/client", () => ({
   createBrowserClient: () => ({ rpc: mockRpc, from: mockFrom }),
@@ -57,6 +59,7 @@ function Wrapper({ children }: { children: React.ReactNode }) {
         },
       }),
   );
+  queryClientForTest = client;
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
@@ -73,7 +76,7 @@ function rowsBuilder(rows: unknown[]) {
   b.then = (
     resolve: (v: unknown) => unknown,
     reject: (e: unknown) => unknown,
-  ) => Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+  ) => Promise.resolve({ data: mockQueryError ? null : rows, error: mockQueryError ? new Error('offline') : null }).then(resolve, reject);
   return b;
 }
 
@@ -103,6 +106,7 @@ beforeEach(() => {
   mockRpc.mockReset();
   mockFrom.mockReset();
   mockCalls.gte = [];
+  mockQueryError = false;
 });
 
 it("is hidden entirely when nothing was applied by text today", async () => {
@@ -120,6 +124,24 @@ it("is hidden entirely when nothing was applied by text today", async () => {
   expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
 });
 
+it("shows a quiet retry when the applied-by-text query fails", async () => {
+  mockQueryError = true;
+  mockFrom.mockImplementation(() => rowsBuilder([]));
+  render(<FieldDesk population={{ ...emptyDesk }} />, { wrapper: Wrapper });
+
+  expect(await screen.findByText("Could not load applied texts.")).toBeInTheDocument();
+  const retry = screen.getByRole("button", { name: "Try again" });
+  expect(retry).toBeInTheDocument();
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
+
+  mockQueryError = false;
+  fireEvent.click(retry);
+  await waitFor(() => expect(mockFrom).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByText("Could not load applied texts.")).toBeNull());
+  expect(screen.queryByText("Applied by text")).toBeNull();
+});
+
 it("lists one line per text with its project, and Undo puts the text back", async () => {
   mockFrom.mockImplementation(() =>
     rowsBuilder([
@@ -133,6 +155,7 @@ it("lists one line per text with its project, and Undo puts the text back", asyn
     error: null,
   });
   render(<FieldDesk population={{ ...emptyDesk }} />, { wrapper: Wrapper });
+  const invalidateSpy = jest.spyOn(queryClientForTest, "invalidateQueries");
 
   expect(await screen.findByText("Applied by text")).toBeInTheDocument();
   expect(screen.getByText("Tile delivery marked done")).toBeInTheDocument();
@@ -149,6 +172,9 @@ it("lists one line per text with its project, and Undo puts the text back", asyn
   const line = await screen.findByText("Undone.");
   expect(line).toHaveFocus();
   expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
+  const invalidatedKeys = invalidateSpy.mock.calls.map(([filters]) => filters.queryKey);
+  expect(invalidatedKeys).toContainEqual(["project-ffe-items", "p1"]);
+  expect(invalidatedKeys).toContainEqual(["project-decisions", "p1"]);
 });
 
 it("a conflict says it changed since and offers no Undo again", async () => {

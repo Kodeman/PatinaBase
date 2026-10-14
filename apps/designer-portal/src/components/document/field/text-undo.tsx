@@ -83,7 +83,7 @@ export function TextUndoAct({
 export function TextUndoFailed({ failed }: { failed: boolean }) {
   if (!failed) return null;
   return (
-    <p role="alert" className="mt-1 text-[11px] text-[#C77B6E]">
+    <p role="alert" className="mt-1 text-[11px] text-[var(--color-error)]">
       {UNDO_FAILED}
     </p>
   );

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { smsReviewKeys } from './use-sms-review';
 import { invalidateProjectWorkflow } from './use-project-workflow';
+import type { Database } from '../database.types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODEL APPLIES — what Patina changed on its own from a text (00787, V23 R2)
@@ -17,26 +18,26 @@ import { invalidateProjectWorkflow } from './use-project-workflow';
 
 const getSupabase = () => createBrowserClient();
 
-export interface ModelApplyRow {
-  id: string;
-  studio_id: string | null;
-  project_id: string | null;
-  source: string;
-  /** sms_messages.id for source 'sms'. */
-  source_id: string | null;
-  effect_type: string;
-  target_table: string;
-  target_id: string;
-  inserted: boolean;
-  summary: string | null;
-  applied_at: string;
-  reverted_at: string | null;
-  revert_outcome: string | null;
-  project: { id: string; name: string | null } | null;
-}
+export type ModelApplyRow = Pick<
+  Database['public']['Tables']['model_applies']['Row'],
+  | 'id'
+  | 'studio_id'
+  | 'project_id'
+  | 'source'
+  | 'source_id'
+  | 'effect_type'
+  | 'target_table'
+  | 'target_id'
+  | 'inserted'
+  | 'summary'
+  | 'applied_at'
+  | 'reverted_at'
+  | 'revert_outcome'
+> & { project: { id: string; name: string | null } | null };
 
 export interface ModelAppliesFilter {
   projectId?: string | null;
+  sourceId?: string | null;
   /** ISO timestamp; only applies at or after it. */
   since?: string | null;
   enabled?: boolean;
@@ -44,8 +45,8 @@ export interface ModelAppliesFilter {
 
 export const modelAppliesKeys = {
   all: ['model-applies'] as const,
-  list: (projectId: string | null, since: string | null) =>
-    ['model-applies', projectId, since] as const,
+  list: (projectId: string | null, since: string | null, sourceId: string | null) =>
+    ['model-applies', projectId, since, sourceId] as const,
 };
 
 /** Applies for the viewer's studios (optionally one project / since a time),
@@ -53,13 +54,14 @@ export const modelAppliesKeys = {
 export function useModelApplies(filter: ModelAppliesFilter = {}) {
   const projectId = filter.projectId ?? null;
   const since = filter.since ?? null;
+  const sourceId = filter.sourceId ?? null;
   return useQuery({
-    queryKey: modelAppliesKeys.list(projectId, since),
+    queryKey: modelAppliesKeys.list(projectId, since, sourceId),
     enabled: filter.enabled ?? true,
     staleTime: 15_000,
+    refetchInterval: 30_000,
     queryFn: async (): Promise<ModelApplyRow[]> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
+      const supabase = getSupabase();
       let query = supabase
         .from('model_applies')
         .select(
@@ -68,9 +70,10 @@ export function useModelApplies(filter: ModelAppliesFilter = {}) {
         .order('applied_at', { ascending: false });
       if (projectId) query = query.eq('project_id', projectId);
       if (since) query = query.gte('applied_at', since);
+      if (sourceId) query = query.eq('source_id', sourceId);
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []) as ModelApplyRow[];
+      return data ?? [];
     },
   });
 }
@@ -103,13 +106,12 @@ export function useRevertModelApply() {
     mutationFn: async (
       input: RevertModelApplyInput,
     ): Promise<RevertModelApplyResult> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
+      const supabase = getSupabase();
       const { data, error } = await supabase.rpc('revert_model_apply_group', {
         p_source_id: input.sourceId,
       });
       if (error) throw error;
-      return data as RevertModelApplyResult;
+      return data as unknown as RevertModelApplyResult;
     },
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: modelAppliesKeys.all });
@@ -120,6 +122,8 @@ export function useRevertModelApply() {
       if (input.projectId) {
         void queryClient.invalidateQueries({ queryKey: ['coordination-items', input.projectId] });
         void queryClient.invalidateQueries({ queryKey: ['section-tasks', input.projectId] });
+        void queryClient.invalidateQueries({ queryKey: ['project-decisions', input.projectId] });
+        void queryClient.invalidateQueries({ queryKey: ['project-ffe-items', input.projectId] });
         void invalidateProjectWorkflow(queryClient, input.projectId);
       }
     },

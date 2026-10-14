@@ -34,6 +34,7 @@ import {
   type SmsReviewMessage,
 } from "@patina/supabase";
 import { SectionEyebrow } from "@/components/document/section-eyebrow";
+import { todayStartISO } from "@/lib/document/time-derivation";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
 import { SmsReviewCard } from "./sms-review-card";
 import {
@@ -184,24 +185,39 @@ export function groupAppliedTexts(
   return [...groups.values()];
 }
 
-function startOfTodayIso(): string {
-  const day = new Date();
-  day.setHours(0, 0, 0, 0);
-  return day.toISOString();
-}
-
 function AppliedByText({ withinPulse }: { withinPulse: boolean }) {
-  const [since] = useState(startOfTodayIso);
+  const since = todayStartISO(new Date());
   const appliesQuery = useModelApplies({ since });
+  const isFetching = appliesQuery.isFetching;
   const groups = useMemo(
     () => groupAppliedTexts(appliesQuery.data ?? []),
     [appliesQuery.data],
   );
+  if (appliesQuery.isError) {
+    return (
+      <section
+        aria-labelledby="applied-by-text"
+        aria-busy={isFetching}
+        className={withinPulse ? "mt-10" : "mt-14"}
+      >
+        <SectionEyebrow>
+          <span id="applied-by-text">Applied by text</span>
+        </SectionEyebrow>
+        <p className="doc-type-body text-[var(--text-muted)]">
+          Could not load applied texts.{' '}
+          <button type="button" className="underline" onClick={() => void appliesQuery.refetch()}>
+            Try again
+          </button>
+        </p>
+      </section>
+    );
+  }
   if (groups.length === 0) return null;
 
   return (
     <section
       aria-labelledby="applied-by-text"
+      aria-busy={isFetching}
       className={withinPulse ? "mt-10" : "mt-14"}
     >
       <SectionEyebrow>

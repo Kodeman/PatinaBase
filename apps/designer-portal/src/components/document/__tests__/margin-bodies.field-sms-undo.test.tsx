@@ -9,6 +9,7 @@ import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { FieldSmsBody } from '../margin-bodies';
 
 const mockRevert = jest.fn();
+const mockUseModelApplies = jest.fn();
 const mockState: {
   applies: Array<Record<string, unknown>>;
   outcome: 'restored' | 'conflict' | 'already' | 'error';
@@ -29,9 +30,15 @@ jest.mock('@patina/supabase', () => ({
   useUpdateDecision: () => ({ mutate: jest.fn(), isPending: false }),
   useExtendAndReopenDecision: () => ({ mutate: jest.fn(), isPending: false }),
   useCaptureMediaUrls: () => ({ data: undefined, isLoading: false }),
-  useModelApplies: (filter: { enabled?: boolean }) => ({
-    data: filter.enabled === false ? undefined : mockState.applies,
-  }),
+  useModelApplies: (filter: { enabled?: boolean; projectId?: string | null; sourceId?: string | null }) => {
+    mockUseModelApplies(filter);
+    return {
+      data:
+        filter.enabled === false
+          ? undefined
+          : mockState.applies.filter((apply) => !filter.sourceId || apply.source_id === filter.sourceId),
+    };
+  },
   useRevertModelApply: () => ({
     isPending: false,
     mutate: (
@@ -105,6 +112,7 @@ const undoButton = () => screen.queryByRole('button', { name: /^Undo/ });
 
 beforeEach(() => {
   mockRevert.mockReset();
+  mockUseModelApplies.mockReset();
   mockState.applies = [apply()];
   mockState.outcome = 'restored';
 });
@@ -112,6 +120,11 @@ beforeEach(() => {
 describe('FieldSmsBody — quiet Undo on an applied text', () => {
   it('offers Undo after the applied line when an unreverted apply matches', () => {
     render(<FieldSmsBody row={smsRow()} />);
+    expect(mockUseModelApplies).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      sourceId: 'sms-1',
+      enabled: true,
+    });
     expect(screen.getByText(`Applied · ${SUMMARY}`)).toBeInTheDocument();
     expect(undoButton()).toHaveAccessibleName(`Undo — ${SUMMARY}`);
   });

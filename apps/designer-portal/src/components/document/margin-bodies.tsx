@@ -946,13 +946,10 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
   // quiet Undo. A reviewed/manual apply has no log row, so no Undo.
   const appliesQuery = useModelApplies({
     projectId: row.project_id,
+    sourceId: row.item_id,
     enabled: !needsReview && !!row.project_id,
   });
-  const ownApplies = needsReview
-    ? []
-    : (appliesQuery.data ?? []).filter(
-        (a) => a.source === 'sms' && a.source_id === row.item_id,
-      );
+  const ownApplies = needsReview ? [] : (appliesQuery.data ?? []);
   const textUndo = useTextUndo(row.item_id, row.project_id);
   const revertedOnLoad =
     applied?.reverted === true ||
