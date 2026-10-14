@@ -9,6 +9,7 @@ vi.mock('@supabase/ssr', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   useMutation: (config: unknown) => config,
+  useMutationState: () => [],
   useQuery: (config: unknown) => config,
   useQueryClient: () => ({ invalidateQueries }),
 }));
@@ -113,6 +114,15 @@ describe('project FF&E GA commands', () => {
     await expect(config.mutationFn(request)).resolves.toEqual({
       outcome: 'created', selectionId: 'selection-2', threadId: 'thread-2', placementId: 'placement-2',
     });
+    expect(rpc).toHaveBeenCalledWith('create_named_project_need', { p_request: request });
+  });
+
+  it('with optimistic ink, sends the same command and treats an empty answer as a failed receipt (R6)', async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    const config = useCreateNamedProjectNeed({ optimistic: true }) as unknown as MutationConfig;
+    const request = { projectId: 'project-1', name: 'Reading chair', idempotencyKey: 'need-2' };
+
+    await expect(config.mutationFn(request)).rejects.toThrow('outcome was not returned');
     expect(rpc).toHaveBeenCalledWith('create_named_project_need', { p_request: request });
   });
 
