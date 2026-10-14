@@ -253,6 +253,8 @@ export function GateConditionsEditor({
           gate.gate_kind === 'deliverables_complete' &&
           typeof gate.payload?.legacy_text === 'string' &&
           (gate.payload.legacy_text as string).length > 0;
+        const marking = satisfyGate.isPending && satisfyGate.variables?.gateId === gate.id;
+        const removing = removeGate.isPending && removeGate.variables?.gateId === gate.id;
 
         return (
           <div
@@ -294,23 +296,30 @@ export function GateConditionsEditor({
                 )}
               </div>
 
+              {/* F16 / E1 §6 #7–8 — both acts are pending-only (a server-decided
+                  outcome, a delete without Undo): each holds while its write
+                  is in flight, and the pressed one's word says so. */}
               <div className="flex gap-1.5">
                 {!isSatisfied && gate.gate_kind !== 'designer_override' && (
                   <Button
                     variant="ghost"
                     size="sm"
+                    disabled={satisfyGate.isPending}
+                    aria-busy={marking || undefined}
                     onClick={() => satisfyGate.mutate({ gateId: gate.id, phaseId })}
                   >
-                    Mark satisfied
+                    {marking ? 'Marking satisfied…' : 'Mark satisfied'}
                   </Button>
                 )}
                 <Button
                   variant="ghost"
                   size="sm"
+                  disabled={removeGate.isPending}
+                  aria-busy={removing || undefined}
                   onClick={() => removeGate.mutate({ gateId: gate.id, phaseId })}
-                  aria-label="Remove gate"
+                  aria-label={removing ? 'Removing gate' : 'Remove gate'}
                 >
-                  x
+                  {removing ? 'Removing…' : 'x'}
                 </Button>
               </div>
             </div>

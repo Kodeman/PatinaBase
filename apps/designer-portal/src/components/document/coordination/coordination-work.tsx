@@ -32,6 +32,7 @@ import type { CoordinationItem, ProjectParty } from '@patina/supabase';
 import type { SectionTask } from '@/hooks/use-section-work';
 import { OwnerChip, TaskDepLine } from './task-dep-line';
 import { DocumentAction } from '../document-action';
+import { useTickPending } from '../work-block';
 
 const todayYmd = () => new Date().toISOString().slice(0, 10);
 
@@ -69,6 +70,8 @@ export function CoordinationWork({
     () => (tasks ?? []).filter((t) => t.section_key === 'project'),
     [tasks],
   );
+  // F16 — pending-only, busy until the receipt is in the cache (work-block.tsx).
+  const ticks = useTickPending(tasks, toggleTask.mutateAsync);
   // isBlocked() reads against ALL tasks (sequence predecessors may live in any
   // section) + all coordination items.
   const allTasks = tasks ?? [];
@@ -149,7 +152,7 @@ export function CoordinationWork({
           // NOT toggle — a blocked tick opens its blocker; a free tick toggles.
           const onTick = () => {
             if (done) {
-              toggleTask.mutate(t); // allow un-ticking a done task
+              ticks.tick(t); // allow un-ticking a done task
               return;
             }
             if (blocked.byItem && blocked.blockingItemId) {
@@ -157,7 +160,7 @@ export function CoordinationWork({
               return;
             }
             if (blocked.bySeq) return; // sequence-blocked: not actionable here
-            toggleTask.mutate(t);
+            ticks.tick(t);
           };
 
           return (
@@ -165,40 +168,45 @@ export function CoordinationWork({
               key={t.id}
               className="border-b border-dashed border-[var(--color-pearl)] last:border-b-0"
             >
-              <div className="grid w-full grid-cols-[auto_1fr_auto] items-start gap-2.5 px-1 py-1.5">
+              <div className="grid min-h-[44px] w-full grid-cols-[auto_1fr_auto] items-center gap-2.5 px-1">
                 {/* The tick is a stamp, not a SaaS checkbox (work-block.tsx):
                     sage-wash + ✓ when done; a terracotta ⊘ (not-allowed) when
-                    blocked; an empty square edge otherwise. */}
+                    blocked; an empty square edge otherwise. F16 — the button
+                    is the 44px target and the stamp stays 13px inside it; a
+                    toggle keeps one name and says its state through
+                    aria-pressed. A blocked tick opens its blocker instead, so
+                    it is no toggle and carries no pressed state. */}
                 <button
                   type="button"
                   onClick={onTick}
-                  aria-label={
-                    done
-                      ? `Mark "${t.title}" not done`
-                      : isBlockedTick
-                        ? `"${t.title}" is blocked`
-                        : `Mark "${t.title}" done`
-                  }
-                  className={`relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[8px] font-bold leading-none ${
+                  aria-label={isBlockedTick ? `"${t.title}" is blocked` : `Mark "${t.title}" done`}
+                  aria-pressed={isBlockedTick ? undefined : done}
+                  aria-busy={ticks.busy(t.id) || undefined}
+                  className={`da-press -ml-2.5 -mr-1.5 inline-flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[3px] ${
                     isBlockedTick ? 'cursor-not-allowed' : ''
                   }`}
-                  style={{
-                    borderColor: done
-                      ? 'var(--color-sage)'
-                      : isBlockedTick
-                        ? 'rgba(212,160,144,0.55)'
-                        : 'var(--doc-ink-border)',
-                    background: done
-                      ? 'rgba(168,181,160,0.15)'
-                      : isBlockedTick
-                        ? 'rgba(212,160,144,0.08)'
-                        : 'transparent',
-                    color: done
-                      ? 'var(--color-sage)'
-                      : 'var(--color-terracotta)',
-                  }}
                 >
-                  {done ? '✓' : isBlockedTick ? '⊘' : ''}
+                  <span
+                    aria-hidden
+                    className="relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[8px] font-bold leading-none"
+                    style={{
+                      borderColor: done
+                        ? 'var(--color-sage)'
+                        : isBlockedTick
+                          ? 'rgba(212,160,144,0.55)'
+                          : 'var(--doc-ink-border)',
+                      background: done
+                        ? 'rgba(168,181,160,0.15)'
+                        : isBlockedTick
+                          ? 'rgba(212,160,144,0.08)'
+                          : 'transparent',
+                      color: done
+                        ? 'var(--color-sage)'
+                        : 'var(--color-terracotta)',
+                    }}
+                  >
+                    {done ? '✓' : isBlockedTick ? '⊘' : ''}
+                  </span>
                 </button>
 
                 <span className="min-w-0">

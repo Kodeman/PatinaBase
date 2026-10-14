@@ -1173,6 +1173,52 @@
   }
 }
 
+/* ── US-34 F16 · the S0 press beyond the DocumentAction ─────────────────────
+   `.da-act:active` answers the press on every scored word. A row, a card, a
+   door and the sign-in submit are not scored words, so they take the same
+   0 ms answer as value alone: the surface warms (or, on a filled submit, the
+   ink deepens to mocha). No shadow (D4), no travel, no pool — colour only, on
+   the press-in clock. A pending-only row holds the warmth while `aria-busy`,
+   so the held state is visible as well as announced (plan §5.1 S1).
+   - `.da-press`: work-block and coordination ticks. The `button` in its
+     selectors is weight, not reach: Tailwind appends `hover:` utilities after
+     this file, so an equal-weight press would lose to the row's hover.
+   - Desk cards: the card's own name link (`.card-up .name`, whose ::after is
+     the card's head); a press on an act inside the card is that act's own.
+   - Rail links: the studio drawer's doors and wordmark (1180px and up) and
+     the Document bar beneath it; a DocumentAction there keeps its own ink.
+   - `.da-press-scope`: every enabled submit inside (the sign-in page). */
+button.da-press:active,
+button.da-press[aria-busy='true'],
+[data-tour-anchor='studio-drawer'] :is(a[href], button:not(:disabled)):not(.da-act):active,
+[data-mobile-edge-owner='document-bar'] :is(a[href], button:not(:disabled)):not(.da-act):active {
+  background-color: var(--bg-warm);
+  transition-duration: var(--press-in);
+}
+button.da-press[aria-busy='true'] {
+  cursor: progress;
+}
+.card:has(.card-up .name:active) {
+  background-image: linear-gradient(var(--bg-warm), var(--bg-warm));
+}
+.card:has(.card-up .name:active) .name {
+  text-decoration-color: var(--clay-ink);
+}
+.da-press-scope button[type='submit']:not(:disabled):active {
+  border-color: var(--color-mocha);
+  background-color: var(--color-mocha);
+  color: var(--color-off-white);
+  transition-duration: var(--press-in);
+}
+@media (prefers-reduced-motion: reduce) {
+  .da-press,
+  [data-tour-anchor='studio-drawer'] :is(a[href], button):not(.da-act),
+  [data-mobile-edge-owner='document-bar'] :is(a[href], button):not(.da-act),
+  .da-press-scope button[type='submit'] {
+    transition: none;
+  }
+}
+
 /* Scored Ink ad-hoc kit (I107 sweep) — score mechanics for non-DocumentAction controls.
    DocumentAction owns the full grammar above; everywhere else a control still needs
    to draw a hairline score under a hover or hold one steady when selected, and an

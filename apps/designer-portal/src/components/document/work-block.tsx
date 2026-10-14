@@ -8,8 +8,9 @@
  * kanban, assignees, priority flags.
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCaptureMediaUrls } from '@patina/supabase';
+import { STALL_MS } from '@/lib/loading/thresholds';
 import {
   gateState,
   useCreateSectionTask,
@@ -115,6 +116,71 @@ export function PunchPhoto({ url }: { url: string | null }) {
   );
 }
 
+type TickPending = { from: SectionTask['status']; answered: boolean };
+
+/**
+ * US-34 F16 — a tick is pending-only: it never shows the ✓ before the server
+ * has it (N3 adds that behind `optimistic-ink`). The row is busy from the
+ * press until its receipt is in the cache, read as the row's own status
+ * turning over in `tasks` (M1b); the write itself resolves before its refetch
+ * lands, so ending there would show the old mark for a round trip. A refused
+ * write ends at once (the error surface speaks). A write whose refetch never
+ * turns the row over ends at STALL_MS, so no row is held for good.
+ *
+ * While busy a second press is swallowed: the cache still holds the old
+ * status, so it would send the same write again, not a change of mind.
+ */
+export function useTickPending(
+  tasks: readonly SectionTask[] | undefined,
+  write: (task: SectionTask) => Promise<unknown>,
+) {
+  const [pending, setPending] = useState<ReadonlyMap<string, TickPending>>(() => new Map());
+  const held = useRef(new Set<string>());
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  const release = useCallback((id: string) => {
+    held.current.delete(id);
+    clearTimeout(timers.current.get(id));
+    timers.current.delete(id);
+    setPending((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    for (const [id, p] of pending) {
+      if (p.answered && tasks?.find((t) => t.id === id)?.status !== p.from) release(id);
+    }
+  }, [tasks, pending, release]);
+
+  useEffect(() => {
+    const live = timers.current;
+    return () => live.forEach(clearTimeout);
+  }, []);
+
+  const tick = (task: SectionTask) => {
+    if (held.current.has(task.id)) return;
+    held.current.add(task.id);
+    setPending((prev) => new Map(prev).set(task.id, { from: task.status, answered: false }));
+    write(task).then(
+      () => {
+        timers.current.set(task.id, setTimeout(() => release(task.id), STALL_MS));
+        setPending((prev) =>
+          prev.has(task.id)
+            ? new Map(prev).set(task.id, { from: task.status, answered: true })
+            : prev,
+        );
+      },
+      () => release(task.id),
+    );
+  };
+
+  return { busy: (id: string) => pending.has(id), tick };
+}
+
 /**
  * D-B49 — this block stands INSIDE the FF&E region's body, so it mounts only
  * when the lens promotes that region. Its three reads therefore used to fire
@@ -184,6 +250,7 @@ export function WorkBlock({
     () => (tasks ?? []).filter((t) => t.section_key === sectionKey),
     [tasks, sectionKey],
   );
+  const ticks = useTickPending(tasks, toggleTask.mutateAsync);
   const gate = useMemo(
     () => (gates ?? []).find((g) => g.section_key === sectionKey) ?? null,
     [gates, sectionKey],
@@ -309,10 +376,14 @@ export function WorkBlock({
               key={t.id}
               className="border-b border-dashed border-[var(--color-pearl)]"
             >
+              {/* F16 — the row is the 44px target; the press and the held
+                  (busy) row warm in place (`.da-press`, globals.css). */}
               <button
                 type="button"
-                onClick={() => toggleTask.mutate(t)}
-                className={`grid w-full ${
+                aria-pressed={done}
+                aria-busy={ticks.busy(t.id) || undefined}
+                onClick={() => ticks.tick(t)}
+                className={`da-press grid min-h-[44px] w-full content-center ${
                   t.field_capture_id ? 'grid-cols-[auto_auto_1fr_auto]' : 'grid-cols-[auto_1fr_auto]'
                 } items-baseline gap-2.5 px-1 py-1.5 text-left hover:bg-[rgba(196,165,123,0.04)]`}
               >

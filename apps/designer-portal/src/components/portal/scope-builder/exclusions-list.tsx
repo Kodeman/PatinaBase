@@ -110,50 +110,61 @@ export function ExclusionsList({ proposalId }: ExclusionsListProps) {
       </div>
 
       {/* Exclusion items */}
-      {exclusions.map((excl: { id: string; description: string; category: string | null }) => (
-        <div
-          key={excl.id}
-          className="group flex items-start gap-3 border-b py-2.5"
-          style={{ borderColor: 'rgba(229, 226, 221, 0.4)' }}
-        >
-          {/* Category tag */}
-          {excl.category && (
-            <span
-              className="mt-0.5 shrink-0 rounded-[2px] px-1.5 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider"
-              style={{
-                color: CATEGORY_COLORS[excl.category] || 'var(--text-muted)',
-                backgroundColor: `color-mix(in srgb, ${CATEGORY_COLORS[excl.category] || 'var(--text-muted)'} 10%, transparent)`,
-              }}
-            >
-              {excl.category}
-            </span>
-          )}
-
-          {/* Description */}
-          <span className="flex-1 font-body text-[0.88rem] text-[var(--text-primary)]">
-            {excl.description}
-          </span>
-
-          {/* Remove */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="shrink-0 !px-1.5 !py-0.5 opacity-0 transition-opacity group-hover:opacity-100"
-            onClick={() =>
-              removeExclusion.mutate(
-                { exclusionId: excl.id, proposalId },
-                {
-                  onSuccess: () => {
-                    proposalEvents.scopeUpdated({ proposalId, field: 'exclusion', action: 'remove' });
-                  },
-                }
-              )
-            }
+      {exclusions.map((excl: { id: string; description: string; category: string | null }) => {
+        // F16 / E1 §6 #6 — a delete without Undo is pending-only: every remove
+        // holds while one is in flight, and the pressed one's word says so.
+        const removing =
+          removeExclusion.isPending && removeExclusion.variables?.exclusionId === excl.id;
+        return (
+          <div
+            key={excl.id}
+            aria-busy={removing || undefined}
+            className="group flex items-start gap-3 border-b py-2.5"
+            style={{ borderColor: 'rgba(229, 226, 221, 0.4)' }}
           >
-            x
-          </Button>
-        </div>
-      ))}
+            {/* Category tag */}
+            {excl.category && (
+              <span
+                className="mt-0.5 shrink-0 rounded-[2px] px-1.5 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider"
+                style={{
+                  color: CATEGORY_COLORS[excl.category] || 'var(--text-muted)',
+                  backgroundColor: `color-mix(in srgb, ${CATEGORY_COLORS[excl.category] || 'var(--text-muted)'} 10%, transparent)`,
+                }}
+              >
+                {excl.category}
+              </span>
+            )}
+
+            {/* Description */}
+            <span className="flex-1 font-body text-[0.88rem] text-[var(--text-primary)]">
+              {excl.description}
+            </span>
+
+            {/* Remove */}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={removeExclusion.isPending}
+              aria-busy={removing || undefined}
+              className={`shrink-0 !px-1.5 !py-0.5 transition-opacity group-hover:opacity-100 ${
+                removing ? 'opacity-100' : 'opacity-0'
+              }`}
+              onClick={() =>
+                removeExclusion.mutate(
+                  { exclusionId: excl.id, proposalId },
+                  {
+                    onSuccess: () => {
+                      proposalEvents.scopeUpdated({ proposalId, field: 'exclusion', action: 'remove' });
+                    },
+                  }
+                )
+              }
+            >
+              {removing ? 'Removing…' : 'x'}
+            </Button>
+          </div>
+        );
+      })}
 
       {/* Inline add form */}
       {isAdding && (

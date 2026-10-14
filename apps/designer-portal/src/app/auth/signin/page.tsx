@@ -235,29 +235,32 @@ function SignInContent() {
           {entryNotice.description}
         </PortalAuthNotice>
       )}
-      <PortalLogin
-        state={phase}
-        email={email}
-        onEmailChange={(value) => { setEmail(value); setError(null); }}
-        onSendCode={sendCode}
-        code={code}
-        onCodeChange={setCode}
-        onVerifyCode={verifyCode}
-        resendInSeconds={resendInSeconds}
-        onResendCode={sendCode}
-        error={visibleError}
-        isSubmitting={isAuthSubmitting}
-        oauthActions={[{ id: 'apple', label: 'Continue with Apple', available: isOAuthProviderEnabled('apple'), pending: phase === 'apple-pending', onSelect: signInWithApple }]}
-        password={password}
-        onPasswordChange={(value) => { setPassword(value); setError(null); }}
-        onPasswordSignIn={signInWithPassword}
-        passwordExpanded={passwordExpanded}
-        onPasswordExpandedChange={(expanded) => { setPasswordExpanded(expanded); if (expanded) cancelQr(); setPhase(expanded ? 'password' : 'email'); setError(null); }}
-        onForgotPassword={() => { cancelQr(); window.location.assign(`/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`); }}
-        onChangeMethod={() => { setPhase('email'); setCode(''); setError(null); }}
-        onContinue={() => window.location.replace(destination)}
-        destinationHref={destination}
-      />
+      {/* US-34 F16 — the submit answers the press at 0 ms (globals.css). */}
+      <div className="da-press-scope">
+        <PortalLogin
+          state={phase}
+          email={email}
+          onEmailChange={(value) => { setEmail(value); setError(null); }}
+          onSendCode={sendCode}
+          code={code}
+          onCodeChange={setCode}
+          onVerifyCode={verifyCode}
+          resendInSeconds={resendInSeconds}
+          onResendCode={sendCode}
+          error={visibleError}
+          isSubmitting={isAuthSubmitting}
+          oauthActions={[{ id: 'apple', label: 'Continue with Apple', available: isOAuthProviderEnabled('apple'), pending: phase === 'apple-pending', onSelect: signInWithApple }]}
+          password={password}
+          onPasswordChange={(value) => { setPassword(value); setError(null); }}
+          onPasswordSignIn={signInWithPassword}
+          passwordExpanded={passwordExpanded}
+          onPasswordExpandedChange={(expanded) => { setPasswordExpanded(expanded); if (expanded) cancelQr(); setPhase(expanded ? 'password' : 'email'); setError(null); }}
+          onForgotPassword={() => { cancelQr(); window.location.assign(`/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`); }}
+          onChangeMethod={() => { setPhase('email'); setCode(''); setError(null); }}
+          onContinue={() => window.location.replace(destination)}
+          destinationHref={destination}
+        />
+      </div>
       <div className="mt-6 space-y-3 text-center text-sm text-[#65594E]">
         <p><Link className="underline underline-offset-4" href={`/auth/signup?callbackUrl=${encodeURIComponent(destination)}`}>Create designer account</Link></p>
         {process.env.NODE_ENV === 'development' && <DevAccountsPanel accounts={getAccountsForPortal('designer')} onLogin={handleDevLogin} isLoading={isAuthSubmitting} error={devAuthError} defaultCollapsed />}
