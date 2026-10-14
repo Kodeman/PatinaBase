@@ -40,6 +40,8 @@ jest.mock("@patina/supabase", () => ({
   }),
   useSmsReviewQueue: () => ({ data: [], isLoading: false, isError: false }),
   useFieldActivity: () => ({ data: [], isLoading: false, isError: false }),
+  useModelApplies: () => ({ data: [] }),
+  useRevertModelApply: () => ({ mutate: jest.fn(), isPending: false }),
   useReviewSmsMessage: () => ({ mutate: jest.fn(), isPending: false }),
   useTakeSmsThread: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useHandBackSmsThread: () => ({ mutateAsync: jest.fn(), isPending: false }),

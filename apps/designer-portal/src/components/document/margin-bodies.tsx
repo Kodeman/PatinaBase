@@ -25,6 +25,7 @@ import {
   useThreadMessages,
   useUpdateDecision,
   useExtendAndReopenDecision,
+  useModelApplies,
   type ConsentMethod,
   type FieldParsedIntent,
 } from '@patina/supabase';
@@ -39,6 +40,13 @@ import { AmendmentSheet } from '@/components/document/overlays/amendment-sheet';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { readFieldNotePayload } from '@/lib/document/field-note-payload';
 import { FieldNoteMedia } from './field-note-media';
+import {
+  CHANGED_SINCE,
+  TextUndoAct,
+  TextUndoFailed,
+  UNDONE,
+  useTextUndo,
+} from './field/text-undo';
 import { extendRevivesDecision } from '@/lib/document/decision-edges';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd, tomorrowYmd } from '@/lib/document/format';
@@ -931,16 +939,48 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
   const parsed = (p.parsed_intent ?? null) as FieldParsedIntent | null;
   const applied = (p.applied_effect ?? null) as {
     summary_text?: string;
+    reverted?: boolean;
   } | null;
+
+  // V23 R2 — what Patina applied from this text on its own (00787), and its
+  // quiet Undo. A reviewed/manual apply has no log row, so no Undo.
+  const appliesQuery = useModelApplies({
+    projectId: row.project_id,
+    enabled: !needsReview && !!row.project_id,
+  });
+  const ownApplies = needsReview
+    ? []
+    : (appliesQuery.data ?? []).filter(
+        (a) => a.source === 'sms' && a.source_id === row.item_id,
+      );
+  const textUndo = useTextUndo(row.item_id, row.project_id);
+  const revertedOnLoad =
+    applied?.reverted === true ||
+    (ownApplies.length > 0 && ownApplies.every((a) => a.reverted_at));
+  const canUndo =
+    !textUndo.outcome &&
+    !revertedOnLoad &&
+    ownApplies.some((a) => !a.reverted_at);
 
   // Needs-review shows the proposed effect (the act is on the Desk triage card);
   // an applied text shows what it did.
   const effectLine = needsReview
     ? describeFieldEffect(parsed, null)
-    : (applied?.summary_text ?? null);
+    : (applied?.summary_text ?? ownApplies[0]?.summary ?? null);
   const threadHref = partyId
     ? `/people?person=${partyId}&role=${partyKind}`
     : null;
+
+  const outcome = textUndo.outcome;
+  const lineText = needsReview
+    ? `Proposed · ${effectLine}`
+    : outcome === 'restored' || outcome === 'already'
+      ? UNDONE
+      : outcome === 'conflict'
+        ? `Applied · ${effectLine} · ${CHANGED_SINCE}`
+        : revertedOnLoad
+          ? `Applied · ${effectLine} · Undone`
+          : `Applied · ${effectLine}`;
 
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
@@ -950,10 +990,25 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
         </p>
       )}
       {effectLine && (
-        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-          {needsReview ? 'Proposed' : 'Applied'} · {effectLine}
-        </p>
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <p
+            ref={textUndo.lineRef}
+            tabIndex={-1}
+            data-field-sms-line
+            className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]"
+          >
+            {lineText}
+          </p>
+          {canUndo && (
+            <TextUndoAct
+              label={effectLine}
+              pending={textUndo.pending}
+              onUndo={textUndo.undo}
+            />
+          )}
+        </div>
       )}
+      <TextUndoFailed failed={textUndo.failed} />
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         {/* The act lives on the Desk triage card (R82: one act, one place). */}
         {needsReview && (

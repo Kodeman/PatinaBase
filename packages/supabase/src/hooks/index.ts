@@ -575,6 +575,19 @@ export type {
   FieldParsedIntent,
   ReviewSmsInput,
 } from "./use-sms-review";
+// V23 R2 — what Patina applied from a text, and its quiet Undo (00787).
+export {
+  useModelApplies,
+  useRevertModelApply,
+  modelAppliesKeys,
+} from "./use-model-applies";
+export type {
+  ModelApplyRow,
+  ModelAppliesFilter,
+  RevertModelApplyInput,
+  RevertModelApplyResult,
+  RevertModelApplyOutcome,
+} from "./use-model-applies";
 // Field Line Phase 3 — hours a trade party reported by text, as proposals the
 // designer accepts, rejects, or books to a teammate.
 export {

@@ -15,6 +15,8 @@ jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('../../../../../../../packages/supabase/src/hooks/use-party-sms'),
   ...jest.requireActual('../../../../../../../packages/supabase/src/hooks/use-sms-review'),
   useUser: () => ({ user: mockUser }),
+  useModelApplies: () => ({ data: [] }),
+  useRevertModelApply: () => ({ mutate: jest.fn(), isPending: false }),
 }));
 jest.mock('@patina/types', () => ({ getFieldTradeLabel: () => '', SMS_CONSENT_DISPLAY: {}, ALL_FIELD_TRADES: [] }));
 jest.mock('../../rooms/room-sheet', () => ({ RoomSheet: () => null }));

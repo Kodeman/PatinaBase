@@ -1,0 +1,127 @@
+'use client';
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createBrowserClient } from '../client';
+import { smsReviewKeys } from './use-sms-review';
+import { invalidateProjectWorkflow } from './use-project-workflow';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MODEL APPLIES — what Patina changed on its own from a text (00787, V23 R2)
+//
+// One model_applies row per target row an autonomous apply moved (a field text
+// can move several: mark_done also unblocks tasks/FF&E lines, all sharing the
+// text's source_id). RLS bounds the read to the viewer's active studios.
+// Undo puts back every row of one text in one transaction through
+// revert_model_apply_group: any conflict wins and nothing is written.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const getSupabase = () => createBrowserClient();
+
+export interface ModelApplyRow {
+  id: string;
+  studio_id: string | null;
+  project_id: string | null;
+  source: string;
+  /** sms_messages.id for source 'sms'. */
+  source_id: string | null;
+  effect_type: string;
+  target_table: string;
+  target_id: string;
+  inserted: boolean;
+  summary: string | null;
+  applied_at: string;
+  reverted_at: string | null;
+  revert_outcome: string | null;
+  project: { id: string; name: string | null } | null;
+}
+
+export interface ModelAppliesFilter {
+  projectId?: string | null;
+  /** ISO timestamp; only applies at or after it. */
+  since?: string | null;
+  enabled?: boolean;
+}
+
+export const modelAppliesKeys = {
+  all: ['model-applies'] as const,
+  list: (projectId: string | null, since: string | null) =>
+    ['model-applies', projectId, since] as const,
+};
+
+/** Applies for the viewer's studios (optionally one project / since a time),
+ *  latest first, reverted ones included. */
+export function useModelApplies(filter: ModelAppliesFilter = {}) {
+  const projectId = filter.projectId ?? null;
+  const since = filter.since ?? null;
+  return useQuery({
+    queryKey: modelAppliesKeys.list(projectId, since),
+    enabled: filter.enabled ?? true,
+    staleTime: 15_000,
+    queryFn: async (): Promise<ModelApplyRow[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      let query = supabase
+        .from('model_applies')
+        .select(
+          'id, studio_id, project_id, source, source_id, effect_type, target_table, target_id, inserted, summary, applied_at, reverted_at, revert_outcome, project:projects(id, name)',
+        )
+        .order('applied_at', { ascending: false });
+      if (projectId) query = query.eq('project_id', projectId);
+      if (since) query = query.gte('applied_at', since);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as ModelApplyRow[];
+    },
+  });
+}
+
+export type RevertModelApplyOutcome = 'restored' | 'conflict' | 'already';
+
+export interface RevertModelApplyInput {
+  /** The text (sms_messages.id) whose applies are put back together. */
+  sourceId: string;
+  /** Carried for cache scoping (the project's coordination/tasks). */
+  projectId?: string | null;
+}
+
+export interface RevertModelApplyResult {
+  outcome: RevertModelApplyOutcome;
+  sourceId?: string;
+  restored?: number;
+  conflicts?: string[];
+}
+
+/**
+ * Undo everything one text applied (revert_model_apply_group, 00787). A
+ * conflict writes nothing; restored/already settle the same way in the UI.
+ * Sweeps the log, the margin, the SMS review queue and the surfaces a field
+ * effect touches, as useReviewSmsMessage does.
+ */
+export function useRevertModelApply() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: RevertModelApplyInput,
+    ): Promise<RevertModelApplyResult> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('revert_model_apply_group', {
+        p_source_id: input.sourceId,
+      });
+      if (error) throw error;
+      return data as RevertModelApplyResult;
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: modelAppliesKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['margin-items'] });
+      void queryClient.invalidateQueries({ queryKey: smsReviewKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['field-activity'] });
+      void queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      if (input.projectId) {
+        void queryClient.invalidateQueries({ queryKey: ['coordination-items', input.projectId] });
+        void queryClient.invalidateQueries({ queryKey: ['section-tasks', input.projectId] });
+        void invalidateProjectWorkflow(queryClient, input.projectId);
+      }
+    },
+  });
+}

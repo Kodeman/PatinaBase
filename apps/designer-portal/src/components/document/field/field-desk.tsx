@@ -13,6 +13,8 @@
  *     trade party answered by text, each one a proposal to accept, reject, or
  *     book to a teammate. Its own population, its own eyebrow; absent entirely
  *     while the flag is off or nothing has been reported.
+ *   · applied by text (V23 R2) — what Patina changed today on its own from a
+ *     text, each with a quiet Undo. Absent entirely when there is none.
  *
  * Its own populations over the SMS/field read models — the engagement folders
  * are never touched. Renders nothing when there's no field work, so a Desk with
@@ -26,12 +28,21 @@ import {
   useUser,
   useSmsReviewQueue,
   useFieldTimeReportQueue,
+  useModelApplies,
   type FieldActivityRow,
+  type ModelApplyRow,
   type SmsReviewMessage,
 } from "@patina/supabase";
 import { SectionEyebrow } from "@/components/document/section-eyebrow";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
 import { SmsReviewCard } from "./sms-review-card";
+import {
+  CHANGED_SINCE,
+  TextUndoAct,
+  TextUndoFailed,
+  UNDONE,
+  useTextUndo,
+} from "./text-undo";
 import { TimeReportCard } from "./time-report-card";
 
 export interface FieldNeedLine {
@@ -133,6 +144,125 @@ function ReportedHoursSection({ withinPulse }: { withinPulse: boolean }) {
   );
 }
 
+/**
+ * Applied by text (V23 R2) — what Patina changed today on its own from a field
+ * text, one line per text (a text's applies share its source_id and Undo puts
+ * them all back together). Absent entirely when there are none: no heading, no
+ * empty state, no count.
+ */
+export interface AppliedTextGroup {
+  sourceId: string;
+  projectId: string | null;
+  projectName: string | null;
+  summary: string | null;
+  appliedAt: string;
+  /** Every row of the text is already put back. */
+  reverted: boolean;
+}
+
+export function groupAppliedTexts(
+  rows: readonly ModelApplyRow[],
+): AppliedTextGroup[] {
+  const groups = new Map<string, AppliedTextGroup>();
+  for (const a of rows) {
+    if (a.source !== "sms" || !a.source_id) continue;
+    const group = groups.get(a.source_id);
+    if (!group) {
+      groups.set(a.source_id, {
+        sourceId: a.source_id,
+        projectId: a.project_id,
+        projectName: a.project?.name ?? null,
+        summary: a.summary,
+        appliedAt: a.applied_at,
+        reverted: !!a.reverted_at,
+      });
+    } else {
+      group.reverted = group.reverted && !!a.reverted_at;
+      group.summary = group.summary ?? a.summary;
+    }
+  }
+  return [...groups.values()];
+}
+
+function startOfTodayIso(): string {
+  const day = new Date();
+  day.setHours(0, 0, 0, 0);
+  return day.toISOString();
+}
+
+function AppliedByText({ withinPulse }: { withinPulse: boolean }) {
+  const [since] = useState(startOfTodayIso);
+  const appliesQuery = useModelApplies({ since });
+  const groups = useMemo(
+    () => groupAppliedTexts(appliesQuery.data ?? []),
+    [appliesQuery.data],
+  );
+  if (groups.length === 0) return null;
+
+  return (
+    <section
+      aria-labelledby="applied-by-text"
+      className={withinPulse ? "mt-10" : "mt-14"}
+    >
+      <SectionEyebrow>
+        <span id="applied-by-text">Applied by text</span>
+      </SectionEyebrow>
+      <ul className="space-y-3">
+        {groups.map((group) => (
+          <AppliedTextLine key={group.sourceId} group={group} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function AppliedTextLine({ group }: { group: AppliedTextGroup }) {
+  const textUndo = useTextUndo(group.sourceId, group.projectId);
+  const summary = group.summary ?? "A change from a field text";
+  const outcome = textUndo.outcome;
+  const words =
+    outcome === "restored" || outcome === "already"
+      ? UNDONE
+      : outcome === "conflict"
+        ? `${summary} · ${CHANGED_SINCE}`
+        : group.reverted
+          ? `${summary} · Undone`
+          : summary;
+  const time = new Date(group.appliedAt).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return (
+    <li data-applied-by-text={group.sourceId}>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <p ref={textUndo.lineRef} tabIndex={-1} className="doc-type-body">
+          {words}
+        </p>
+        <span className="text-[12px] text-[var(--text-muted)]">
+          {group.projectName && (
+            <>
+              <span className="font-heading italic text-[var(--text-primary)]">
+                {group.projectName}
+              </span>
+              {" · "}
+            </>
+          )}
+          <time dateTime={group.appliedAt}>{time}</time>
+        </span>
+        {!outcome && !group.reverted && (
+          <TextUndoAct
+            label={summary}
+            pending={textUndo.pending}
+            onUndo={textUndo.undo}
+          />
+        )}
+      </div>
+      <TextUndoFailed failed={textUndo.failed} />
+    </li>
+  );
+}
+
 export function FieldDesk({
   population,
   withinPulse = false,
@@ -169,6 +299,7 @@ export function FieldDesk({
       return (
         <>
           <p role="alert">Couldn’t load the field texts. Try again.</p>
+          <AppliedByText withinPulse={withinPulse} />
           <FieldTimeReports withinPulse={withinPulse} />
         </>
       );
@@ -176,6 +307,7 @@ export function FieldDesk({
       return (
         <>
           <p role="status">Loading field texts…</p>
+          <AppliedByText withinPulse={withinPulse} />
           <FieldTimeReports withinPulse={withinPulse} />
         </>
       );
@@ -201,6 +333,7 @@ export function FieldDesk({
             </span>
           </p>
         </section>
+        <AppliedByText withinPulse={withinPulse} />
         <FieldTimeReports withinPulse={withinPulse} />
       </>
     );
@@ -273,6 +406,7 @@ export function FieldDesk({
           </ul>
         )}
       </section>
+      <AppliedByText withinPulse={withinPulse} />
       <FieldTimeReports withinPulse={withinPulse} />
     </>
   );
