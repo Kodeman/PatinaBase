@@ -72,6 +72,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -203,7 +204,8 @@ describe('session-user store (browser)', () => {
     await expect(store.getSessionUserId()).resolves.toBe('user-b');
     expect(changes).toEqual([['user-a', 'user-b']]);
     await store.getSessionUserId();
-    expect(h.auth.storage.getItem).toHaveBeenCalledTimes(1);
+    // The re-read and the read that confirmed it.
+    expect(h.auth.storage.getItem).toHaveBeenCalledTimes(2);
     expect(h.auth.getSession).toHaveBeenCalledTimes(1);
     expect(h.auth.getUser).not.toHaveBeenCalled();
   });
@@ -219,6 +221,42 @@ describe('session-user store (browser)', () => {
     finishRead(cookie('user-b'));
 
     await expect(store.getSessionUserId()).resolves.toBe('user-c');
+  });
+
+  it('follows a re-read that names another subject only once a second read 300 ms later agrees', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    const store = await loadStore();
+    const changes: Array<[string | null, string | null, string | null]> = [];
+    store.onSessionSubjectChange((prev, next, token) => changes.push([prev, next, token]));
+    await expect(store.getSessionUserId()).resolves.toBe('user-a');
+
+    // Another portal refreshing A's chunked cookie: an empty jar for a moment, then A.
+    h.auth.storage.getItem.mockResolvedValueOnce(null).mockResolvedValueOnce(cookie('user-a'));
+    window.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(300);
+    await expect(store.getSessionUserId()).resolves.toBe('user-a');
+    expect(h.auth.storage.getItem).toHaveBeenCalledTimes(2);
+    expect(changes).toEqual([]);
+
+    storeCookie('user-b');
+    window.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(299);
+    expect(changes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(store.getSessionUserId()).resolves.toBe('user-b');
+    expect(changes).toEqual([['user-a', 'user-b', 'jwt-user-b']]);
+
+    // An auth event during the confirming wait still wins.
+    storeCookie(null);
+    window.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(0);
+    emit('SIGNED_IN', 'user-c');
+    await vi.advanceTimersByTimeAsync(300);
+    await expect(store.getSessionUserId()).resolves.toBe('user-c');
+    expect(changes.map(([prev, next]) => [prev, next])).toEqual([
+      ['user-a', 'user-b'],
+      ['user-b', 'user-c'],
+    ]);
   });
 });
 

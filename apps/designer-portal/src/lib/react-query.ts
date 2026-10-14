@@ -1,4 +1,11 @@
-import { QueryClient, QueryCache, MutationCache, onlineManager } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryCache,
+  MutationCache,
+  onlineManager,
+  type MutationFunctionContext,
+  type MutationOptions,
+} from '@tanstack/react-query';
 import {
   handleApiError,
   logError,
@@ -44,9 +51,38 @@ declare module '@tanstack/react-query' {
   }
 }
 
+/**
+ * US-34 F1 — a write of a signed-in subject who has since left, refused
+ * before its mutationFn ran: nothing was sent. The subject boundary already
+ * dropped everything it belonged to, so it surfaces nowhere.
+ */
+export class SubjectChangedError extends Error {
+  constructor() {
+    super('The signed-in user changed before this was saved.');
+    this.name = 'SubjectChangedError';
+  }
+}
+
+/** Clients whose signed-in subject has left (see `retireQueryClient`). */
+const retiredClients = new WeakSet<QueryClient>();
+
+/**
+ * US-34 F1 — called by the subject boundary when this client's subject
+ * leaves. From then on the client starts no mutation attempt (a first one, a
+ * late one or a retry) and its global handlers surface nothing on screen.
+ * A mutationFn already running at that moment still completes: that window
+ * is accepted.
+ */
+export function retireQueryClient(client: QueryClient): void {
+  retiredClients.add(client);
+}
+
 // Create query cache with error handling
-const createQueryCache = () => new QueryCache({
+const createQueryCache = (isRetired: () => boolean) => new QueryCache({
   onError: (error, query) => {
+    // A retired client's late error belongs to the subject who left.
+    if (isRetired()) return;
+
     const appError = handleApiError(error);
 
     // Log error for monitoring
@@ -148,16 +184,20 @@ export function enterInlineErrorSurface(): () => void {
 export const isInlineErrorSurface = (): boolean => inlineErrorSurfaces > 0;
 
 // Create mutation cache with error handling
-const createMutationCache = () => new MutationCache({
+const createMutationCache = (isRetired: () => boolean) => new MutationCache({
   // PQ15 / O3 — under the default networkMode 'online' an offline mutation
   // pauses and runs by itself on reconnect. Ticks and edits may wait like
   // that; a send or a money write must not fire minutes later. This runs
   // before the mutation's own onMutate and its mutationFn, so a throw here
   // fails the act with no call made.
   onMutate: (_variables, mutation) => {
+    if (isRetired()) throw new SubjectChangedError();
     if (mutation.meta?.act && !onlineManager.isOnline()) throw new OfflineRefusal();
   },
   onError: (error, _variables, _context, mutation) => {
+    // A retired client's late error belongs to the subject who left.
+    if (isRetired()) return;
+
     const appError = handleApiError(error);
 
     // R83 — mutations that render their own inline error band opt out of the
@@ -221,6 +261,7 @@ const createMutationCache = () => new MutationCache({
     showErrorToast(appError);
   },
   onSuccess: (_data, _variables, _context, mutation, { client }) => {
+    if (isRetired()) return;
     // You can add global success handling here if needed
     // For example, invalidating certain queries or showing success messages
     if (mutation.meta?.successMessage) {
@@ -244,9 +285,8 @@ const createMutationCache = () => new MutationCache({
  * many modules that import `queryKeys` from this file do not pull PostHog,
  * Sanity and the teaching backend into their graph.
  * Teaching is background context: a failure here is logged, never surfaced.
- * `client` is the one whose mutation crossed the boundary, not the current
- * one: a late boundary from a previous subject reads and writes only that
- * subject's retired client (US-34 F1).
+ * `client` is the one whose mutation crossed the boundary; a late boundary
+ * from a previous subject's retired client never gets here (US-34 F1).
  */
 function onTeachingBoundary(boundaryKey: TeachingBoundaryKey, client: QueryClient): void {
   const at = Date.now();
@@ -272,42 +312,69 @@ function onTeachingBoundary(boundaryKey: TeachingBoundaryKey, client: QueryClien
     });
 }
 
-const createQueryClient = () => new QueryClient({
-  queryCache: createQueryCache(),
-  mutationCache: createMutationCache(),
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 30, // 30 minutes (replaces cacheTime)
-      retry: (failureCount, error) => {
-        // Don't retry on auth errors
-        if (isAuthError(error)) {
+/**
+ * query-core starts an attempt that was already past the cache's onMutate,
+ * or asleep before a retry, without asking the cache again (mutation.ts
+ * execute, retryer.ts run), so a retired client fences each mutationFn it
+ * defaults.
+ */
+class SubjectQueryClient extends QueryClient {
+  override defaultMutationOptions<T extends MutationOptions<any, any, any, any>>(options?: T): T {
+    const defaulted = super.defaultMutationOptions(options);
+    const { mutationFn } = defaulted;
+    // Already defaulted (and fenced) once, or nothing to fence.
+    if (defaulted === options || !mutationFn) return defaulted;
+    return {
+      ...defaulted,
+      mutationFn: (variables: unknown, context: MutationFunctionContext) =>
+        retiredClients.has(this)
+          ? Promise.reject(new SubjectChangedError())
+          : mutationFn(variables, context),
+    };
+  }
+}
+
+const createQueryClient = () => {
+  const isRetired = () => retiredClients.has(client);
+  const client: QueryClient = new SubjectQueryClient({
+    queryCache: createQueryCache(isRetired),
+    mutationCache: createMutationCache(isRetired),
+    defaultOptions: {
+      queries: {
+        staleTime: 1000 * 60 * 5, // 5 minutes
+        gcTime: 1000 * 60 * 30, // 30 minutes (replaces cacheTime)
+        retry: (failureCount, error) => {
+          // Don't retry on auth errors
+          if (isAuthError(error)) {
+            return false;
+          }
+
+          // Retry network errors up to 3 times
+          if (isNetworkError(error)) {
+            return failureCount < 3;
+          }
+
+          // Don't retry other errors
           return false;
-        }
-
-        // Retry network errors up to 3 times
-        if (isNetworkError(error)) {
-          return failureCount < 3;
-        }
-
-        // Don't retry other errors
-        return false;
+        },
+        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: true,
       },
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: true,
-    },
-    mutations: {
-      retry: (failureCount, error) => {
-        // Only retry network errors once for mutations
-        if (isNetworkError(error) && failureCount < 1) {
-          return true;
-        }
-        return false;
+      mutations: {
+        retry: (failureCount, error) => {
+          if (isRetired()) return false;
+          // Only retry network errors once for mutations
+          if (isNetworkError(error) && failureCount < 1) {
+            return true;
+          }
+          return false;
+        },
       },
     },
-  },
-});
+  });
+  return client;
+};
 
 /**
  * The QueryClient of the signed-in subject on screen. US-34 F1 gives every

@@ -1,11 +1,11 @@
-import { createBrowserClient, getSessionUserId } from '@patina/supabase';
+import { createBrowserClient, getSessionUserId, useSessionUserId } from '@patina/supabase';
 /**
  * US-34 F1 — the subject boundary, wired as providers.tsx wires it: the real
  * session-user store (only Supabase's auth client is faked) driving
  * useSessionSubjectBoundary, with the subtree keyed on its epoch.
  */
 import { Fragment, ReactNode, useEffect, useState } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import {
   QueryClient,
   QueryClientProvider,
@@ -14,9 +14,20 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { RealtimeClient } from '@supabase/supabase-js';
 import { useSessionSubjectBoundary } from './use-session-subject-boundary';
+import { useBufferedAutosave } from './use-buffered-autosave';
+import { nextSubjectQueryClient, SubjectChangedError } from '@/lib/react-query';
+import { setToastFunction } from '@/lib/error-handler';
+import {
+  getProposalAutosaveSnapshot,
+  resetProposalAutosaveRegistryForTests,
+} from '@/lib/proposal-autosave-registry';
 
-type AuthCallback = (event: string, session: { user: { id: string } } | null) => void;
+type AuthCallback = (
+  event: string,
+  session: { user: { id: string }; access_token: string } | null,
+) => void;
 type MockChannel = { topic: string; on: () => MockChannel; subscribe: () => MockChannel };
 
 // Plain counters: clearMocks wipes jest.fn() calls between tests, and the
@@ -27,6 +38,14 @@ let mockEmit: AuthCallback | null = null;
 let mockStoredUser: string | null = 'user-a';
 const mockOpenChannels: MockChannel[] = [];
 const mockChannelLog: string[] = [];
+/** "<topic> <token>": the token Realtime held when each channel subscribed. */
+const mockSubscribedAs: string[] = [];
+// The real realtime-js client; its token callback answers as supabase-js's
+// _getAccessToken does, from the stored session or else the anon key.
+const mockRealtime = new RealtimeClient('ws://realtime.test/realtime/v1', {
+  params: { apikey: 'anon-key' },
+  accessToken: async () => (mockStoredUser ? `jwt-${mockStoredUser}` : 'anon-key'),
+});
 const mockRemoveChannel = jest.fn(async (channel: MockChannel) => {
   mockChannelLog.push(`remove ${channel.topic}`);
   const index = mockOpenChannels.indexOf(channel);
@@ -69,6 +88,7 @@ const mockClient = {
       on: () => channel,
       subscribe: () => {
         mockOpenChannels.push(channel);
+        mockSubscribedAs.push(`${topic} ${mockRealtime.accessTokenValue}`);
         return channel;
       },
     };
@@ -76,6 +96,7 @@ const mockClient = {
   },
   getChannels: () => [...mockOpenChannels],
   removeChannel: mockRemoveChannel,
+  realtime: mockRealtime,
 };
 
 // The store imports the package's client module directly.
@@ -86,6 +107,7 @@ jest.mock('@patina/supabase', () => {
   const store = jest.requireActual('../../../../packages/supabase/src/auth/session-user');
   return {
     getSessionUserId: store.getSessionUserId,
+    useSessionUserId: store.useSessionUserId,
     onSessionSubjectChange: store.onSessionSubjectChange,
     createBrowserClient: () => mockClient,
   };
@@ -146,8 +168,16 @@ const nextClient = () => {
 let onScreen: QueryClient | null = null;
 
 /** As providers.tsx: the subject's client, with the subtree keyed on its epoch. */
-function App({ first, children }: { first: QueryClient; children: ReactNode }) {
-  const { client, epoch } = useSessionSubjectBoundary(first, nextClient);
+function App({
+  first,
+  next = nextClient,
+  children,
+}: {
+  first: QueryClient;
+  next?: () => QueryClient;
+  children: ReactNode;
+}) {
+  const { client, epoch } = useSessionSubjectBoundary(first, next);
   onScreen = client;
   return (
     <QueryClientProvider client={client}>
@@ -159,10 +189,21 @@ function App({ first, children }: { first: QueryClient; children: ReactNode }) {
 const renderApp = (first: QueryClient, children: ReactNode) =>
   render(<App first={first}>{children}</App>);
 
+/** With the portal's own clients (lib/react-query), as providers.tsx passes them. */
+const renderPortal = (children: ReactNode) =>
+  render(
+    <App first={nextSubjectQueryClient()} next={nextSubjectQueryClient}>
+      {children}
+    </App>,
+  );
+
 /** This tab's own auth event: the cookie and the event agree. */
 const setSession = (id: string | null) => {
   mockStoredUser = id;
-  mockEmit!(id ? 'SIGNED_IN' : 'SIGNED_OUT', id ? { user: { id } } : null);
+  mockEmit!(
+    id ? 'SIGNED_IN' : 'SIGNED_OUT',
+    id ? { user: { id }, access_token: `jwt-${id}` } : null,
+  );
 };
 const signInAs = (id: string) => act(() => setSession(id));
 const everyCachedValue = (client: QueryClient) =>
@@ -173,17 +214,24 @@ beforeAll(async () => {
   await getSessionUserId();
 });
 
+const mockToast = jest.fn();
+
 beforeEach(() => {
   held.clear();
   nextClients.length = 0;
   mockOpenChannels.length = 0;
   mockChannelLog.length = 0;
+  mockSubscribedAs.length = 0;
+  setToastFunction(mockToast);
   // Each test starts as user A; no boundary is mounted yet, so this is silent.
   setSession('user-a');
+  // As supabase-js leaves it after A's SIGNED_IN: A's token, set by hand.
+  void mockRealtime.setAuth('jwt-user-a');
 });
 
 afterEach(() => {
   onlineManager.setOnline(true);
+  resetProposalAutosaveRegistryForTests();
 });
 
 describe('useSessionSubjectBoundary', () => {
@@ -238,9 +286,9 @@ describe('useSessionSubjectBoundary', () => {
     // No auth event reaches this tab: only the shared cookie changed.
     mockStoredUser = 'user-b';
     window.dispatchEvent(new Event('focus'));
-    await flush();
+    // Followed once the read that confirms it agrees, 300 ms on.
+    await waitFor(() => expect(first.getQueryCache().getAll()).toHaveLength(0));
 
-    expect(first.getQueryCache().getAll()).toHaveLength(0);
     expect(await screen.findByText('user-b row')).toBeInTheDocument();
     await expect(getSessionUserId()).resolves.toBe('user-b');
   });
@@ -414,6 +462,158 @@ describe('useSessionSubjectBoundary', () => {
     expect(first.getQueryData(['rows'])).toEqual(['user-a row']);
     expect(screen.getByText('mount 1')).toBeInTheDocument();
     expect(mockRemoveChannel).not.toHaveBeenCalled();
+  });
+
+  it('a write that fails under A and would retry does not run again after the switch', async () => {
+    const failed = deferred<void>();
+    const writes = jest.fn(async (_edit: string, _as: string | null): Promise<string> => {
+      failed.resolve();
+      throw new Error('network request failed');
+    });
+    let outcome: unknown;
+    function Editor() {
+      // The portal's default retry: one more try for a network error.
+      const save = useMutation({
+        mutationFn: async (edit: string) => writes(edit, await getSessionUserId()),
+        retryDelay: 200,
+      });
+      return (
+        <button onClick={() => save.mutateAsync('A profile edit').catch((error) => (outcome = error))}>
+          save
+        </button>
+      );
+    }
+    renderPortal(<Editor />);
+    fireEvent.click(screen.getByText('save'));
+    await act(async () => failed.promise);
+    await flush();
+
+    // The retry is asleep when the subject changes.
+    signInAs('user-b');
+
+    await waitFor(() => expect(outcome).toBeInstanceOf(SubjectChangedError));
+    expect(writes.mock.calls).toEqual([['A profile edit', 'user-a']]);
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it('a write whose onMutate is pending at the switch never calls its mutationFn', async () => {
+    const writes = jest.fn(async (_edit: string, _as: string | null) => 'saved');
+    const prepared = deferred<void>();
+    let outcome: unknown;
+    function Editor() {
+      const save = useMutation({
+        // e.g. an optimistic write that first cancels its row's reads
+        onMutate: () => prepared.promise,
+        mutationFn: async (edit: string) => writes(edit, await getSessionUserId()),
+      });
+      return (
+        <button onClick={() => save.mutateAsync('A profile edit').catch((error) => (outcome = error))}>
+          save
+        </button>
+      );
+    }
+    renderPortal(<Editor />);
+    fireEvent.click(screen.getByText('save'));
+    await flush();
+
+    signInAs('user-b');
+    await act(async () => prepared.resolve());
+
+    await waitFor(() => expect(outcome).toBeInstanceOf(SubjectChangedError));
+    expect(writes).not.toHaveBeenCalled();
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("drops A's unsaved buffer when the switch unmounts its editor: no write, no toast, nothing registered", async () => {
+    const writes = jest.fn(async (_body: string, _as: string | null) => 'saved');
+    function TermsEditor() {
+      const upsert = useMutation({
+        mutationFn: async (body: string) => writes(body, await getSessionUserId()),
+      });
+      const autosave = useBufferedAutosave<string, { body: string }>({
+        proposalId: 'proposal-shared',
+        delay: 800,
+        save: (_key, next) => upsert.mutateAsync(next.body),
+      });
+      return <button onClick={() => autosave.queue('terms', { body: 'A terms' })}>type</button>;
+    }
+    // A page only A has open: B's remount renders without it.
+    function OnlyForA() {
+      return useSessionUserId() === 'user-a' ? <TermsEditor /> : null;
+    }
+    renderPortal(<OnlyForA />);
+    fireEvent.click(await screen.findByText('type'));
+    expect(getProposalAutosaveSnapshot('proposal-shared')).toMatchObject({
+      dirty: true,
+      registeredBuffers: 1,
+    });
+
+    signInAs('user-b');
+    await waitFor(() => expect(screen.queryByText('type')).not.toBeInTheDocument());
+    await flush();
+
+    expect(writes).not.toHaveBeenCalled();
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(getProposalAutosaveSnapshot('proposal-shared')).toMatchObject({
+      dirty: false,
+      flushing: false,
+      error: null,
+      registeredBuffers: 0,
+    });
+  });
+
+  it("drops A's failed buffers still registered for a later Send", async () => {
+    renderPortal(<Rows />);
+    // An editor A closed whose last save failed: kept for the SendSheet to retry.
+    const closed = renderHook(() =>
+      useBufferedAutosave<string, { body: string }>({
+        proposalId: 'proposal-closed',
+        delay: 800,
+        save: async () => {
+          throw new Error('refused');
+        },
+      }),
+    );
+    act(() => closed.result.current.queue('terms', { body: 'A terms' }));
+    closed.unmount();
+    await waitFor(() => expect(getProposalAutosaveSnapshot('proposal-closed').error).toBe('refused'));
+    expect(getProposalAutosaveSnapshot('proposal-closed').registeredBuffers).toBe(1);
+
+    signInAs('user-b');
+
+    expect(getProposalAutosaveSnapshot('proposal-closed')).toMatchObject({
+      dirty: false,
+      error: null,
+      registeredBuffers: 0,
+    });
+  });
+
+  it("hands Realtime B's token before the remount re-subscribes after a cookie-only switch", async () => {
+    function NotesChannel() {
+      useEffect(() => {
+        const supabase = createBrowserClient();
+        const channel = supabase.channel('project-notes:p1').subscribe();
+        return () => {
+          void supabase.removeChannel(channel);
+        };
+      }, []);
+      return null;
+    }
+    renderApp(newClient(), <NotesChannel />);
+    expect(mockSubscribedAs).toEqual(['project-notes:p1 jwt-user-a']);
+
+    // No auth event: supabase-js never hands Realtime a token for this switch.
+    mockStoredUser = 'user-b';
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(mockSubscribedAs).toHaveLength(2));
+    expect(mockSubscribedAs[1]).toBe('project-notes:p1 jwt-user-b');
+
+    // To no one: the re-subscribe carries no one's token, then the anon key.
+    mockStoredUser = null;
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(mockSubscribedAs).toHaveLength(3));
+    expect(mockSubscribedAs[2]).not.toContain('jwt-');
+    await waitFor(() => expect(mockRealtime.accessTokenValue).toBe('anon-key'));
   });
 
   it('runs on one auth subscription and never asks getUser()', () => {

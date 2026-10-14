@@ -19,7 +19,9 @@ import { createBrowserClient } from '../client';
  * portal's subdomain, so another portal can swap it to another user, or clear
  * it, and no event reaches this tab while every request already carries the
  * new JWT. So the store also re-reads the stored session itself: when the tab
- * is shown or focused, and on a read at most once per `RECHECK_MS`.
+ * is shown or focused, and on a read at most once per `RECHECK_MS`. A re-read
+ * that names another subject is followed only once a second read
+ * `CONFIRM_MS` later agrees with it.
  *
  * Browser-only. On a server a module-level store would be shared across
  * requests, so outside a browser nothing is stored: `getSessionUserId()` asks
@@ -30,14 +32,29 @@ import { createBrowserClient } from '../client';
  * The subject is the user id. After the first reading, every change of it —
  * none to someone, someone to none, and user A to user B with or without a
  * SIGNED_OUT in between — is reported to `onSessionSubjectChange` listeners
- * before readers re-render. The portal's QueryClient wiring uses that as its
- * cache boundary.
+ * before readers re-render, with the next subject's access token (null for no
+ * one). The portal's QueryClient wiring uses that as its cache boundary.
  */
 
-type SubjectListener = (prev: string | null, next: string | null) => void;
+type SubjectListener = (
+  prev: string | null,
+  next: string | null,
+  accessToken: string | null,
+) => void;
 
 /** How often a read may re-read the stored session. */
 const RECHECK_MS = 2000;
+
+/**
+ * How long a re-read that names another subject waits before reading again.
+ * @supabase/ssr 0.5.2 removes a chunked cookie's old chunks before it writes
+ * the new ones (cookies.js setItem), so a same-user refresh in another portal
+ * can leave an empty jar for the moment this tab reads it.
+ */
+const CONFIRM_MS = 300;
+
+type StoredSubject = { id: string | null; accessToken: string | null };
+const NO_SUBJECT: StoredSubject = { id: null, accessToken: null };
 
 let seedPromise: Promise<void> | null = null;
 let seeded = false;
@@ -50,7 +67,7 @@ const subjectListeners = new Set<SubjectListener>();
 
 const isBrowser = () => typeof window !== 'undefined';
 
-function apply(next: string | null): void {
+function apply(next: string | null, accessToken: string | null): void {
   applied += 1;
   if (!seeded) {
     // The first reading is the starting subject, not a change of subject.
@@ -62,30 +79,30 @@ function apply(next: string | null): void {
   if (next === userId) return;
   const prev = userId;
   userId = next;
-  subjectListeners.forEach((listener) => listener(prev, next));
+  subjectListeners.forEach((listener) => listener(prev, next, accessToken));
   readers.forEach((reader) => reader());
 }
 
 /**
- * The user id in the stored session, read as auth-js reads it but without
- * `getSession()`. In auth-js 2.98.0 that call waits for the cross-tab
- * navigator lock, so it queues behind any holder's network call (a
+ * The user id and access token in the stored session, read as auth-js reads
+ * it but without `getSession()`. In auth-js 2.98.0 that call waits for the
+ * cross-tab navigator lock, so it queues behind any holder's network call (a
  * `getUser()`, a token refresh), and it refreshes over the network itself
  * when the token is within 90 s of expiry. Reading the client's own storage
  * (the auth cookie) costs neither.
  */
-async function readStoredUserId(): Promise<string | null> {
+async function readStoredSubject(): Promise<StoredSubject> {
   // Protected in auth-js's types; at runtime, the client's own storage and key.
   const { storage, storageKey } = createBrowserClient().auth as unknown as {
     storage: SupportedStorage;
     storageKey: string;
   };
   const stored = await storage.getItem(storageKey);
-  if (!stored) return null;
+  if (!stored) return NO_SUBJECT;
   const session = JSON.parse(stored) as Partial<Session> | null;
   // What auth-js counts as a session (GoTrueClient._isValidSession).
-  if (!session?.access_token || !session.refresh_token || !session.expires_at) return null;
-  return session.user?.id ?? null;
+  if (!session?.access_token || !session.refresh_token || !session.expires_at) return NO_SUBJECT;
+  return { id: session.user?.id ?? null, accessToken: session.access_token };
 }
 
 /** Re-reads the stored session and follows it when it names another subject. */
@@ -93,11 +110,17 @@ function recheck(): Promise<void> {
   if (!checking) {
     const since = applied;
     checkedAt = Date.now();
-    checking = readStoredUserId()
+    checking = readStoredSubject()
+      .then(async (read) => {
+        if (read.id === userId) return null;
+        await new Promise((resolve) => setTimeout(resolve, CONFIRM_MS));
+        const confirm = await readStoredSubject();
+        return confirm.id === read.id ? confirm : null;
+      })
       .then(
-        (id) => {
-          // An auth event that landed during the read is newer than it.
-          if (applied === since) apply(id);
+        (read) => {
+          // An auth event that landed during the reads is newer than they are.
+          if (read && applied === since) apply(read.id, read.accessToken);
         },
         // A failed read leaves the subject as it was.
         () => {},
@@ -114,7 +137,9 @@ function start(): Promise<void> {
   const { auth } = createBrowserClient();
   // A listener must not await another auth call (auth-js holds its lock while
   // it runs), and `apply` does not.
-  auth.onAuthStateChange((_event, session) => apply(session?.user?.id ?? null));
+  auth.onAuthStateChange((_event, session) =>
+    apply(session?.user?.id ?? null, session?.access_token ?? null),
+  );
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void recheck();
   });
@@ -122,10 +147,10 @@ function start(): Promise<void> {
   checkedAt = Date.now();
   seedPromise = auth.getSession().then(
     ({ data }) => {
-      if (!seeded) apply(data.session?.user?.id ?? null);
+      if (!seeded) apply(data.session?.user?.id ?? null, data.session?.access_token ?? null);
     },
     () => {
-      if (!seeded) apply(null);
+      if (!seeded) apply(null, null);
     },
   );
   return seedPromise;
@@ -159,8 +184,8 @@ export function useSessionUserId(): string | null {
 }
 
 /**
- * Called with (previous id, next id) whenever the signed-in subject changes.
- * Returns the unsubscribe.
+ * Called with (previous id, next id, next access token) whenever the
+ * signed-in subject changes. Returns the unsubscribe.
  */
 export function onSessionSubjectChange(listener: SubjectListener): () => void {
   if (!isBrowser()) return () => {};

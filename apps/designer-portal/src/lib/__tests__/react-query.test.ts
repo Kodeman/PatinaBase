@@ -43,7 +43,7 @@ jest.mock('../../hooks/use-feature-flags', () => ({
 }));
 
 import { waitFor } from '@testing-library/react';
-import { nextSubjectQueryClient, queryClient } from '../react-query';
+import { nextSubjectQueryClient, queryClient, retireQueryClient } from '../react-query';
 import {
   firedOn,
   resetTeachingBoundaries,
@@ -435,32 +435,75 @@ describe('Return teaching tagged boundaries', () => {
   });
 
   // Keep last: it moves the module's current client on to the next subject's.
-  it('US-34 F1: a boundary that lands after a change of subject stays in its own retired client', async () => {
+  it('US-34 F1: a boundary that lands after a change of subject records and patches nothing', async () => {
     const retired = queryClient;
     let succeedLate!: (value: string) => void;
     const lateResult = new Promise<string>((resolve) => (succeedLate = resolve));
+    const send = jest.fn(() => lateResult);
     const late = retired
       .getMutationCache()
       .build(retired, {
-        mutationFn: () => lateResult,
+        mutationFn: send,
         meta: { errorSurface: 'inline', teachingBoundary: true, boundaryKey: 'invoice_sent' },
       })
       .execute(undefined);
+    // Already sent when the subject changes.
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
 
+    retireQueryClient(retired);
     retired.clear();
     const next = nextSubjectQueryClient();
     expect(queryClient).toBe(next);
     cacheVisit(5 * MIN);
     const nextSubjectRow = next.getQueryData(['teaching-note-state']);
+    const before = Date.now();
 
     succeedLate('ok');
-    await late;
-    await waitFor(() => expect(mockInvalidateTeachingSignals).toHaveBeenCalledTimes(1));
+    await expect(late).resolves.toBe('ok');
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Identity, not equality: two QueryClients compare equal field by field.
-    expect(mockInvalidateTeachingSignals.mock.calls[0][0]).toBe(retired);
+    expect(firedOn(SURFACE, 'invoice_sent', before)).toBe(false);
+    expect(mockIsTeachingNotesEnabled).not.toHaveBeenCalled();
+    expect(mockInvalidateTeachingSignals).not.toHaveBeenCalled();
     expect(mockTeachingPatch).not.toHaveBeenCalled();
     expect(next.getQueryData(['teaching-note-state'])).toBe(nextSubjectRow);
+  });
+});
+
+describe('US-34 F1: a retired client', () => {
+  beforeEach(() => {
+    mockShowErrorToast.mockClear();
+    mockLogError.mockClear();
+    mockIsAuthError.mockReset().mockReturnValue(false);
+    mockHandleAuthExpiry.mockReset().mockReturnValue(false);
+  });
+
+  it('toasts no late error, from a write or a read', async () => {
+    const retired = queryClient;
+    let failWrite!: (error: Error) => void;
+    const write = retired
+      .getMutationCache()
+      .build(retired, {
+        mutationFn: () => new Promise((_resolve, reject) => (failWrite = reject)),
+        retry: false,
+      })
+      .execute(undefined);
+    let failRead!: (error: Error) => void;
+    const read = retired.fetchQuery({
+      queryKey: ['late-read'],
+      queryFn: () => new Promise((_resolve, reject) => (failRead = reject)),
+      retry: false,
+    });
+    await waitFor(() => expect(failWrite && failRead).toBeDefined());
+
+    retireQueryClient(retired);
+    nextSubjectQueryClient();
+    failWrite(new Error('late write failed'));
+    failRead(new Error('late read failed'));
+
+    await expect(write).rejects.toThrow('late write failed');
+    await expect(read).rejects.toThrow('late read failed');
+    expect(mockShowErrorToast).not.toHaveBeenCalled();
+    expect(mockHandleAuthExpiry).not.toHaveBeenCalled();
   });
 });

@@ -11,7 +11,7 @@ import {
   isAnalyticsEnabled,
   onAnalyticsInit,
 } from './posthog';
-import { useSession } from '@patina/supabase';
+import { useSession, useSessionUserId } from '@patina/supabase';
 
 /**
  * True once `initPostHog()` has run.
@@ -50,7 +50,12 @@ function PageviewTracker() {
 }
 
 function AuthTracker() {
+  // The subject comes from the session store, which also follows a cookie
+  // another portal swapped (US-34 F1); useSession hears only this tab's auth
+  // events, so its user describes the subject only while the ids agree.
+  const userId = useSessionUserId();
   const { session } = useSession();
+  const user = session?.user && session.user.id === userId ? session.user : null;
   const ready = useAnalyticsReady();
   // Who we last told PostHog about. Guards the reset branch below.
   const identifiedUserId = useRef<string | null>(null);
@@ -58,14 +63,18 @@ function AuthTracker() {
   useEffect(() => {
     if (!ready || !isAnalyticsEnabled()) return;
 
-    if (session?.user) {
-      const emailDomain = session.user.email?.split('@')[1];
-      identifyUser(session.user.id, {
-        emailDomain,
-        displayName: session.user.user_metadata?.display_name || session.user.user_metadata?.full_name,
-        role: session.user.user_metadata?.role || 'designer',
-      });
-      identifiedUserId.current = session.user.id;
+    if (userId) {
+      identifyUser(
+        userId,
+        user
+          ? {
+              emailDomain: user.email?.split('@')[1],
+              displayName: user.user_metadata?.display_name || user.user_metadata?.full_name,
+              role: user.user_metadata?.role || 'designer',
+            }
+          : undefined,
+      );
+      identifiedUserId.current = userId;
     } else if (identifiedUserId.current !== null) {
       // Reset only on a real sign-out. Before the ready-gate existed this
       // branch could not run on a cold load (the effect bailed pre-init), and
@@ -75,7 +84,7 @@ function AuthTracker() {
       resetAnalytics();
       identifiedUserId.current = null;
     }
-  }, [session?.user?.id, ready]);
+  }, [userId, user?.id, ready]);
 
   return null;
 }

@@ -36,6 +36,8 @@ interface BufferedAutosaveGeneration<
   timers: Map<Key, ReturnType<typeof setTimeout>>;
   inFlight: Map<Key, Promise<void>>;
   errors: Map<Key, string>;
+  /** The signed-in subject whose edits this generation buffers. */
+  subject: number;
   mounted: boolean;
   notify: () => void;
   flush: (key: Key) => Promise<void>;
@@ -56,6 +58,7 @@ function createGeneration<Key extends string, Patch extends object>(
     timers: new Map(),
     inFlight: new Map(),
     errors: new Map(),
+    subject: currentSubject,
     mounted: false,
     notify: () => {},
     flush: async () => {},
@@ -67,6 +70,24 @@ function firstBufferedError<Key extends string>(
   errors: Map<Key, string>,
 ): string | null {
   return errors.values().next().value ?? null;
+}
+
+/** Unmounted generations kept registered after a failed final drain. */
+const detachedRegistrations = new Set<{ unregister: () => void }>();
+/** Counts changes of signed-in subject. */
+let currentSubject = 0;
+
+/**
+ * US-34 F1 — called at a change of signed-in subject. The previous subject's
+ * buffered edits can no longer be saved as theirs, so they are dropped, never
+ * saved as the next: the failed ones still registered for a later Send now,
+ * and the rest when a drain reaches them (the remount's final flush, or a
+ * save in flight at the change that then fails).
+ */
+export function dropPreviousSubjectAutosaves(): void {
+  currentSubject += 1;
+  for (const registration of detachedRegistrations) registration.unregister();
+  detachedRegistrations.clear();
 }
 
 /**
@@ -165,11 +186,16 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
       const saveForDrain = generation.save;
       const drain = async () => {
         while (generation.pending.has(key)) {
+          if (generation.subject !== currentSubject) {
+            generation.pending.delete(key);
+            return;
+          }
           const patch = generation.pending.get(key)!;
           generation.pending.delete(key);
           try {
             await saveForDrain(key, patch);
           } catch (saveError) {
+            if (generation.subject !== currentSubject) return;
             // Keep failed fields queued. Any newer values win on retry.
             generation.pending.set(key, {
               ...patch,
@@ -283,7 +309,10 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
         registration.notify();
         try {
           await generation.flushAll();
-          if (detached) registration.unregister();
+          if (detached) {
+            registration.unregister();
+            detachedRegistrations.delete(registration);
+          }
         } finally {
           registration.notify();
         }
@@ -304,7 +333,10 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
       generation.timers.clear();
       // Keep a detached, failed generation registered. The SendSheet barrier
       // can retry it; unregister only after its final patch persists.
-      void handle.flush().catch(() => registration.notify());
+      void handle.flush().catch(() => {
+        registration.notify();
+        detachedRegistrations.add(registration);
+      });
     };
   }, [generation]);
 
