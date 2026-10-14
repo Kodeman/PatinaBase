@@ -56,7 +56,7 @@ export function MobileAccountHeader({ onOpen }: { onOpen: () => void }) {
             src={profile.avatar_url}
             alt=""
             className="h-full w-full object-cover"
-          />
+           decoding="async"/>
         ) : (
           monogramOf(name, email)
         )}

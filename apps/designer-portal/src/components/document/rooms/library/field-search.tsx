@@ -115,7 +115,7 @@ export function FieldSearch({ query }: { query: string }) {
                           alt=""
                           className="h-full w-full object-cover"
                           loading="lazy"
-                        />
+                         decoding="async"/>
                       ) : (
                         <span className="font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
                           {row.category ?? 'Piece'}

@@ -106,7 +106,7 @@ export function StudioLogoUploadField({
             src={previewUrl}
             alt={name ? `${name} logo` : 'Studio logo'}
             className="h-full w-full object-contain"
-          />
+           decoding="async" loading="lazy"/>
         ) : (
           <span className="font-mono text-[13px] uppercase tracking-wider text-[var(--color-mocha)]">
             {monogramOf(name, '')}

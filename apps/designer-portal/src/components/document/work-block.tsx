@@ -114,7 +114,7 @@ export function PunchPhoto({ url }: { url: string | null }) {
       src={url}
       alt="The photo this task was raised from"
       className="h-8 w-8 flex-shrink-0 rounded-[3px] object-cover"
-    />
+     decoding="async" loading="lazy"/>
   );
 }
 

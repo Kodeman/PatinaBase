@@ -140,7 +140,7 @@ function CaptureRow({ capture, onDismiss, isDismissing }: CaptureRowProps) {
             className="h-full w-full object-cover"
             loading="lazy"
             draggable={false}
-          />
+           decoding="async"/>
         ) : (
           <div
             className="flex h-full w-full items-center justify-center"

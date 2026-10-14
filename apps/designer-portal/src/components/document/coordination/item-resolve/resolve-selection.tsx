@@ -95,7 +95,7 @@ export function ResolveSelection({
                       src={o.image_url}
                       alt=""
                       className="h-full w-full object-cover"
-                    />
+                     decoding="async" loading="lazy"/>
                   ) : null}
                 </span>
                 <span className="min-w-0 flex-1">

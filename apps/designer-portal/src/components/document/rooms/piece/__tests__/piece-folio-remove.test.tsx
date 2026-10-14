@@ -72,6 +72,9 @@ beforeEach(() => {
 describe('F15c — folio image remove is pending-only', () => {
   it('keeps the image reading "Removing…" until the server confirms', async () => {
     renderFolio();
+    expect(document.querySelector('img[src="https://img/a.jpg"]')).toHaveAttribute('fetchpriority', 'high');
+    expect(document.querySelector('img[src="https://img/a.jpg"]')).toHaveAttribute('decoding', 'async');
+    expect(document.querySelector('img[src="https://img/a.jpg"]')).not.toHaveAttribute('loading', 'lazy');
     fireEvent.click(screen.getByRole('button', { name: 'Remove image 2' }));
 
     await waitFor(() => expect(mockReply).not.toBeNull());

@@ -378,7 +378,7 @@ function PeekChip({
             alt=""
             decoding="async"
             className="h-[96px] w-full rounded-[1px] object-cover"
-          />
+           loading="lazy"/>
         ) : (
           <div className="flex h-[96px] w-full items-center justify-center rounded-[1px] bg-[var(--color-aged-oak)]/[0.06] font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             no preview

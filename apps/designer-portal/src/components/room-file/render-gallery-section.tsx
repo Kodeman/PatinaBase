@@ -83,7 +83,7 @@ export function RenderGallerySection({
                 alt={C.renderShotAlt(roomName, shot)}
                 className="block aspect-[4/3] w-full object-cover"
                 loading="lazy"
-              />
+               decoding="async"/>
               <span className="block px-2 py-1.5 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
                 {shotLabel(shot)}
               </span>
@@ -102,7 +102,7 @@ export function RenderGallerySection({
               src={openUrl}
               alt={C.renderShotAlt(roomName, openShot)}
               className="max-h-full max-w-full object-contain"
-            />
+             decoding="async" loading="lazy"/>
           </div>
         </FullScreenViewerShell>
       )}

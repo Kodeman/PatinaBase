@@ -27,7 +27,7 @@ export function BoardCoverArt({
     return (
       <div className={cn('h-full w-full overflow-hidden bg-[var(--bg-muted)]', className)}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={coverUrl} alt="" className={cn('h-full w-full object-cover', imageClassName)} />
+        <img src={coverUrl} alt="" className={cn('h-full w-full object-cover', imageClassName)}  decoding="async" loading="lazy"/>
       </div>
     );
   }
@@ -53,7 +53,7 @@ export function BoardCoverArt({
             )}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt="" className={cn('h-full w-full object-cover', imageClassName)} />
+            <img src={url} alt="" className={cn('h-full w-full object-cover', imageClassName)}  decoding="async" loading="lazy"/>
           </div>
         ))}
       </div>

@@ -44,7 +44,7 @@ export function ScanCard({ scan }: { scan: ScanCardScan }) {
             height: '100%',
             objectFit: 'cover',
           }}
-        />
+         decoding="async" loading="lazy"/>
       ) : (
         <div
           style={{

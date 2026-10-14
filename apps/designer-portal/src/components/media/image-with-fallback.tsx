@@ -175,7 +175,7 @@ export function ImgWithFallback({
         )}
         onError={handleError}
         onLoad={handleLoad}
-      />
+       decoding="async" loading="lazy"/>
     </div>
   );
 }

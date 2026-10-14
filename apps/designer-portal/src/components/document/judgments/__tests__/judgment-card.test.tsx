@@ -29,6 +29,8 @@ describe('JudgmentCard — plate and caption', () => {
     const plate = button.querySelector('.plate') as HTMLElement;
     expect(plate).not.toBeNull();
     expect(plate.querySelector('img')).toHaveAttribute('src', 'https://example.test/arden.jpg');
+    expect(plate.querySelector('img')).toHaveAttribute('loading', 'lazy');
+    expect(plate.querySelector('img')).toHaveAttribute('decoding', 'async');
 
     const caption = button.querySelector('.cap') as HTMLElement;
     expect(caption).toHaveTextContent('Arden lounge chair');

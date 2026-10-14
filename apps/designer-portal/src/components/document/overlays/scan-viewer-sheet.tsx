@@ -97,7 +97,7 @@ function ScanStill({ scan, onClose }: { scan: RoomScan; onClose: () => void }) {
             src={still}
             alt={title}
             className="max-h-full max-w-full object-contain"
-          />
+           decoding="async" loading="lazy"/>
         ) : (
           <p className="text-[14px] italic text-[var(--text-body)]">
             No preview image is available for this scan.

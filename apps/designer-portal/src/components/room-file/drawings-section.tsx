@@ -156,7 +156,7 @@ function PlanPreview({ sheet, roomName }: { sheet: RoomFileDrawingSheet | null; 
           alt={C.planPreviewAlt(roomName)}
           className="block h-auto w-full"
           onError={() => setFailed(true)}
-        />
+         decoding="async" loading="lazy"/>
       ) : (
         <div
           data-testid="plan-preview-skeleton"

@@ -461,7 +461,7 @@ export function DecisionOptionBuilder({
               >
                 {value.imageUrl ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={value.imageUrl} alt="" className="h-full w-full object-cover" />
+                  <img src={value.imageUrl} alt="" className="h-full w-full object-cover"  decoding="async" loading="lazy"/>
                 ) : null}
               </div>
               <div className="min-w-0 flex-1">
@@ -562,7 +562,7 @@ export function DecisionOptionBuilder({
                     src={value.imageUrl}
                     alt={`Option ${index + 1}`}
                     className="h-full w-full object-cover"
-                  />
+                   decoding="async" loading="lazy"/>
                 ) : (
                   <span style={metaStyle}>
                     {isUploading ? 'Uploading…' : `Option ${index + 1} Image`}

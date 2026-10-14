@@ -196,7 +196,7 @@ export function VisitsBlock({ projectId }: { projectId: string }) {
                             src={url}
                             alt=""
                             className="h-7 w-7 flex-shrink-0 self-center rounded-[3px] object-cover"
-                          />
+                           decoding="async" loading="lazy"/>
                         ) : null}
                         <span className="text-[12px] leading-[1.5] text-[var(--color-charcoal)]">
                           {summaryLine(c)}

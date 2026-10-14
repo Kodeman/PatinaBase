@@ -57,7 +57,7 @@ function SlideFrame({
             height: `${(element.bbox.h / (cy || 1)) * 100}%`,
             transform: element.rot ? `rotate(${element.rot}deg)` : undefined,
           }}
-        />
+         decoding="async" loading="lazy"/>
       ))}
     </div>
   );

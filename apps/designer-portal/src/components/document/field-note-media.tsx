@@ -76,7 +76,7 @@ export function FieldNoteMedia({
                 src={url}
                 alt={`Photo ${i + 1} from this note`}
                 className="h-14 w-14 rounded-[3px] object-cover"
-              />
+               decoding="async" loading="lazy"/>
             ) : null,
           )}
         </div>

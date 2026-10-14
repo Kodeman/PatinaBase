@@ -382,7 +382,7 @@ function MediaThumb({ path }: { path?: string }) {
       src={url}
       alt="Field photo"
       className="h-14 w-14 rounded-[4px] border border-[var(--color-pearl)] object-cover"
-    />
+     decoding="async" loading="lazy"/>
   );
 }
 

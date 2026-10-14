@@ -138,7 +138,7 @@ function RequestCard({
             src={request.thumbnail_url}
             alt=""
             className="h-20 w-20 shrink-0 rounded-[4px] border border-[var(--color-pearl)] object-cover"
-          />
+           decoding="async" loading="lazy"/>
         ) : (
           <div className="h-20 w-20 shrink-0 rounded-[4px] border border-dashed border-[var(--color-pearl)]" />
         )}

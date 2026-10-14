@@ -130,7 +130,7 @@ function ProductCard({ row }: { row: ProposalBoardItem }) {
             alt={snap.name ?? ''}
             draggable={false}
             className="pointer-events-none h-full w-full object-cover"
-          />
+           decoding="async" loading="lazy"/>
         ) : (
           <span className="br-plate-word">No image</span>
         )}
@@ -174,7 +174,7 @@ function ImageTile({ row }: { row: ProposalBoardItem }) {
           alt=""
           draggable={false}
           className="pointer-events-none h-full w-full object-cover"
-        />
+         decoding="async" loading="lazy"/>
       </Plate>
     </div>
   );
@@ -193,7 +193,7 @@ function RoomScanTile({ row }: { row: ProposalBoardItem }) {
             alt={snap.name ?? 'Room scan'}
             draggable={false}
             className="pointer-events-none h-full w-full object-cover"
-          />
+           decoding="async" loading="lazy"/>
         ) : (
           <span className="br-plate-word">No preview</span>
         )}

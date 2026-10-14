@@ -120,7 +120,7 @@ export function AssociatedRoomScans({ context, onViewScan }: AssociatedRoomScans
                           src={scan.thumbnailUrl}
                           alt={scan.name}
                           className="w-full h-full object-cover"
-                        />
+                         decoding="async" loading="lazy"/>
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <Camera className="h-10 w-10 text-muted-foreground/30" />
@@ -314,7 +314,7 @@ function ScanPickerDialog({
                           src={scan.thumbnailUrl}
                           alt={scan.name}
                           className="w-full h-full object-cover"
-                        />
+                         decoding="async" loading="lazy"/>
                       ) : (
                         <div className="flex items-center justify-center h-full">
                           <Camera className="h-6 w-6 text-muted-foreground/30" />

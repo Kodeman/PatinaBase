@@ -158,7 +158,7 @@ export function LightTableCard({
             alt=""
             aria-hidden
             className="max-h-full max-w-full object-contain"
-          />
+           decoding="async" loading="lazy"/>
         ) : thumbnail === null ? (
           // The page is still placeable — only its picture is missing.
           <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">

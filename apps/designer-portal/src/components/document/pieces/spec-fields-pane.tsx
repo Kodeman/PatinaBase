@@ -649,7 +649,7 @@ export function SpecFieldsPane({
                 src={image}
                 alt={`The image for ${needLabel}`}
                 className="max-h-full max-w-full object-contain"
-              />
+               decoding="async" loading="lazy"/>
             ) : (
               "Drop an image or paste a link"
             )}

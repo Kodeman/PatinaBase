@@ -259,7 +259,7 @@ function StandingConceptRender({
               src={standing.url}
               alt={standing.caption ?? `Concept render for ${roomName}`}
               className="h-[92px] w-[92px] shrink-0 rounded-[3px] border border-[var(--color-pearl)] object-cover"
-            />
+             decoding="async" loading="lazy"/>
           )}
           <p className="max-w-[56ch] pt-0.5 text-[12px] leading-[1.5] text-[var(--text-subtle)]">
             {conceptRenderCaptionLine(standing)}

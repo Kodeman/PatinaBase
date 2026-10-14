@@ -91,7 +91,7 @@ export function AccountProfilePage() {
               src={avatarUrl}
               alt=""
               className="h-full w-full object-cover"
-            />
+             decoding="async" loading="lazy"/>
           ) : (
             monogramOf(displayName, user?.email ?? '')
           )}

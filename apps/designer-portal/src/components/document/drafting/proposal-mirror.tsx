@@ -743,7 +743,7 @@ export function MirrorNarrativeSection({ section }: { section: AnyRow }) {
                   src={url}
                   alt=""
                   className="h-[58px] w-[78px] rounded object-cover"
-                />
+                 decoding="async" loading="lazy"/>
               ))}
             </div>
           )}
@@ -765,7 +765,7 @@ export function MirrorNarrativeSection({ section }: { section: AnyRow }) {
         <div className="mt-3 flex h-[140px] items-center justify-center overflow-hidden rounded bg-[var(--color-pearl)]">
           {floorPlanUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={floorPlanUrl} alt="Space plan" className="h-full w-full object-contain" />
+            <img src={floorPlanUrl} alt="Space plan" className="h-full w-full object-contain"  decoding="async" loading="lazy"/>
           ) : (
             <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               Space plan pending

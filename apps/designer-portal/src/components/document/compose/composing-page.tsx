@@ -248,7 +248,7 @@ export function ComposingPage() {
                   src={images[0]}
                   alt=""
                   className="h-full w-full object-cover"
-                />
+                 decoding="async" loading="lazy"/>
               ) : (
                 <span className="doc-type-meta uppercase tracking-[0.08em] opacity-70">
                   no image
@@ -459,7 +459,7 @@ export function ComposingPage() {
                     src={src}
                     alt=""
                     className="h-full w-full object-cover"
-                  />
+                   decoding="async" loading="lazy"/>
                   <button
                     type="button"
                     aria-label="Remove image"

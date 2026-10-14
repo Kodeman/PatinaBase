@@ -601,7 +601,7 @@ function FFELine({
             alt=""
             loading="lazy"
             className="h-12 w-12 shrink-0 rounded-[3px] border border-[var(--doc-ink-border)] object-cover"
-          />
+           decoding="async"/>
         ) : (
           <span
             aria-hidden

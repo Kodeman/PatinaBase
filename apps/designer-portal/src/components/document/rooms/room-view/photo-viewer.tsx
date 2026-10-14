@@ -304,8 +304,7 @@ export function PhotoViewer({ photos, index, onIndexChange, onClose }: PhotoView
             src={src}
             alt={photo.caption ?? `Photo ${safeIndex + 1}`}
             onError={() => setStage((s) => nextViewerStageOnError(s, photo))}
-            // Explicitly EAGER: this is the one image the designer opened the
-            // viewer to see. `loading="lazy"` here would be a bug.
+            // Explicitly eager: the user opened the viewer to see this photo.
             loading="eager"
             decoding="async"
             className="max-h-full max-w-full border border-[var(--doc-ink-border)] object-contain"

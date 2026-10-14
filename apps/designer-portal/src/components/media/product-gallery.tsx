@@ -277,7 +277,7 @@ function ProductGalleryLightbox({
               alt={`${productName} - View ${currentIndex + 1}`}
               className="max-w-full max-h-full object-contain transition-transform duration-200"
               style={{ transform: `scale(${zoomLevel})` }}
-            />
+             decoding="async" loading="lazy"/>
           </div>
 
           {/* Navigation */}
@@ -326,7 +326,7 @@ function ProductGalleryLightbox({
                       src={getOptimizedImageUrl(image, { width: 100, height: 100, fit: 'cover' })}
                       alt=""
                       className="w-full h-full object-cover"
-                    />
+                     decoding="async" loading="lazy"/>
                   </button>
                 ))}
               </div>

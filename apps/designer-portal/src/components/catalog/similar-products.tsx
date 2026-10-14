@@ -88,7 +88,7 @@ export function SimilarProducts({
                     src={imageUrl}
                     alt={product.name}
                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                  />
+                   decoding="async" loading="lazy"/>
                   <div className="absolute right-2 top-2">
                     <IconButton
                       label="Add to favorites"
@@ -199,7 +199,7 @@ export function SimilarProductsCompact({
             onClick={() => onViewProduct?.(product)}
           >
             <div className="relative h-20 w-20 flex-shrink-0 rounded-lg overflow-hidden bg-muted">
-              <img src={imageUrl} alt={product.name} className="h-full w-full object-cover" />
+              <img src={imageUrl} alt={product.name} className="h-full w-full object-cover"  decoding="async" loading="lazy"/>
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="font-semibold text-sm truncate">{product.name}</h4>

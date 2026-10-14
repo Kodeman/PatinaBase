@@ -232,7 +232,7 @@ export function EngineResults({
                     alt=""
                     className="h-full w-full object-cover"
                     loading="lazy"
-                  />
+                   decoding="async"/>
                 ) : (
                   <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] opacity-50">
                     {piece.category ?? 'piece'}

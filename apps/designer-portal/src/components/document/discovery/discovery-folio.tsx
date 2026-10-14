@@ -34,7 +34,7 @@ function Clip({ file }: { file: FolioFile }) {
     <div className="flex h-[68px] w-[96px] shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(243,238,228,0.6)] text-center font-mono text-[11px] text-[var(--text-muted)]">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt={file.title} className="h-full w-full object-cover" />
+        <img src={url} alt={file.title} className="h-full w-full object-cover"  decoding="async" loading="lazy"/>
       ) : (
         <span className="px-1.5">{file.title}</span>
       )}

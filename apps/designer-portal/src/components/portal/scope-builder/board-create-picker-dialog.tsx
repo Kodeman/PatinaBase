@@ -82,7 +82,7 @@ function TemplateCard({
       <div className="flex h-24 items-center justify-center overflow-hidden bg-[var(--bg-muted)]">
         {template.cover_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={template.cover_url} alt="" className="h-full w-full object-cover" />
+          <img src={template.cover_url} alt="" className="h-full w-full object-cover"  decoding="async" loading="lazy"/>
         ) : (
           <span aria-hidden className="font-heading text-2xl italic text-[var(--text-muted)]">
             {template.name.trim().charAt(0).toUpperCase() || 'T'}

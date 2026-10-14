@@ -106,7 +106,7 @@ export function PieceFolio({
             src={list[heroIdx]}
             alt=""
             className="h-[360px] w-full object-cover"
-          />
+           decoding="async" fetchPriority="high"/>
         </div>
         {list.length > 1 && (
           <div className="mt-2 flex flex-wrap gap-2">
@@ -122,7 +122,7 @@ export function PieceFolio({
                 }`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt="" className="h-full w-full object-cover" />
+                <img src={src} alt="" className="h-full w-full object-cover"  decoding="async" loading="lazy"/>
               </button>
             ))}
           </div>
@@ -246,7 +246,7 @@ export function PieceFolio({
             src={list[heroIdx]}
             alt=""
             className="h-[320px] w-full object-cover"
-          />
+           decoding="async" fetchPriority="high"/>
         </div>
       ) : (
         <div className="flex h-[220px] items-center justify-center rounded-[10px] border border-dashed border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]">
@@ -277,7 +277,7 @@ export function PieceFolio({
                 aria-label={`Preview image ${i + 1} of ${list.length}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt="" className="h-full w-full object-cover" />
+                <img src={src} alt="" className="h-full w-full object-cover"  decoding="async" loading="lazy"/>
               </button>
               {i === 0 && (
                 <span className="absolute left-0 top-0 bg-[var(--color-clay)] px-1 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-white">

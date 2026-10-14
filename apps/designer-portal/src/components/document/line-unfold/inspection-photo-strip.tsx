@@ -71,7 +71,7 @@ export function InspectionPhotoStrip({
                   alt={label}
                   loading="lazy"
                   className="h-14 w-14 rounded-[3px] border border-[var(--color-pearl)] object-cover"
-                />
+                 decoding="async"/>
               </a>
             ) : (
               <span

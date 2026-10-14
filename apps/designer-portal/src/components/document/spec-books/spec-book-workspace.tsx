@@ -305,7 +305,7 @@ function PieceRow({
           {image && (
             <span className="sb-thumb">
               <span className="plate">
-                <img src={image} alt="" />
+                <img src={image} alt=""  decoding="async" loading="lazy"/>
               </span>
             </span>
           )}
@@ -967,7 +967,7 @@ function AudiencePreview({
       )}
       {image && (
         <span className="plate">
-          <img src={image} alt="" />
+          <img src={image} alt=""  decoding="async" loading="lazy"/>
         </span>
       )}
       <dl className="sb-facts">
@@ -1603,7 +1603,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                                         {image ? (
                                           <div>
                                             <span className="plate">
-                                              <img src={image} alt="" />
+                                              <img src={image} alt=""  decoding="async" loading="lazy"/>
                                             </span>
                                           </div>
                                         ) : null}

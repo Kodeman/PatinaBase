@@ -103,7 +103,7 @@ export function DocFileViewer({
             src={url}
             alt={file.title}
             className="max-h-full max-w-full border border-[var(--doc-ink-border)] object-contain"
-          />
+           decoding="async" loading="lazy"/>
         ) : isPdf ? (
           <iframe
             title={file.title}

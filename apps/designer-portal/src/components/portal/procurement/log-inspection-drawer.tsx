@@ -827,7 +827,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                           alt={p.name}
                           className="h-14 w-14 rounded-[3px] border object-cover"
                           style={{ borderColor: 'var(--border-default)' }}
-                        />
+                         decoding="async" loading="lazy"/>
                         <button
                           type="button"
                           onClick={() => removePhoto(p.assetId)}

@@ -77,7 +77,7 @@ export function CaptureContextSection({ captures }: CaptureContextSectionProps) 
                     src={thumb}
                     alt=""
                     className="h-14 w-14 flex-shrink-0 rounded-[3px] object-cover"
-                  />
+                   decoding="async" loading="lazy"/>
                 ) : (
                   <span className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[3px] border border-[var(--doc-ink-border)] font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--text-faint)]">
                     {nPhotos > 0 ? `${nPhotos}◻` : cap.voice_transcript ? '♪' : '—'}

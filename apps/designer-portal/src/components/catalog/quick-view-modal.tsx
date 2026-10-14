@@ -181,7 +181,7 @@ export function QuickViewModal({
                       src={image}
                       alt={`Thumbnail ${index + 1}`}
                       className="w-full h-full object-cover"
-                    />
+                     decoding="async" loading="lazy"/>
                   </button>
                 ))}
               </div>

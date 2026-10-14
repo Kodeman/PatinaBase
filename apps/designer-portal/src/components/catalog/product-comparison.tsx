@@ -142,7 +142,7 @@ export function ProductComparison({
                           src={product.imageUrl || product.coverImage || 'https://via.placeholder.com/300'}
                           alt={product.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
+                         decoding="async" loading="lazy"/>
                       </div>
 
                       {/* Product Info */}

@@ -269,7 +269,7 @@ export function DecisionBody({
                     src={o.image_url}
                     alt=""
                     className="mt-0.5 h-7 w-7 flex-shrink-0 rounded-[3px] border border-[var(--color-pearl)] object-cover"
-                  />
+                   decoding="async" loading="lazy"/>
                 ) : (
                   <span className="mt-0.5 h-7 w-7 flex-shrink-0 rounded-[3px] border border-dashed border-[var(--color-pearl)]" />
                 )}

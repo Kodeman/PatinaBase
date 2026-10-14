@@ -51,7 +51,7 @@ export function AccountNameplate() {
       <span className="relative inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(196,165,123,0.16)] font-mono text-[11px] uppercase tracking-wider text-[var(--color-mocha)]">
         {profile?.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+          <img src={profile.avatar_url} alt="" className="h-full w-full object-cover"  decoding="async"/>
         ) : (
           monogramOf(name, email)
         )}

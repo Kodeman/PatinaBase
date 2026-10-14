@@ -238,7 +238,7 @@ export function FeedbackForm({
         {includeShot && capturing && <span style={{ color: '#888' }}>capturing…</span>}
         {includeShot && shotUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={shotUrl} alt="" style={{ height: 20, width: 32, objectFit: 'cover', border: '1px solid #555' }} />
+          <img src={shotUrl} alt="" style={{ height: 20, width: 32, objectFit: 'cover', border: '1px solid #555' }}  decoding="async" loading="lazy"/>
         )}
       </label>
 

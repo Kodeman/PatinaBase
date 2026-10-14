@@ -899,7 +899,7 @@ export function AccountStudioPage() {
               src={studio.logo_url}
               alt={`${studio.name} logo`}
               className="mt-1.5 h-16 w-16 rounded-[6px] border border-[var(--color-pearl)] object-contain"
-            />
+             decoding="async" loading="lazy"/>
           ) : (
             <p className={HELP}>No logo set.</p>
           )}

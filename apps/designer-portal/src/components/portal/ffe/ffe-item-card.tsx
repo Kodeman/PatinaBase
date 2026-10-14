@@ -126,7 +126,7 @@ export function FFEItemCard({
             loading="lazy"
             onError={() => setImgFailed(true)}
             className="h-full w-full object-cover"
-          />
+           decoding="async"/>
         ) : (
           <div
             className="flex h-full w-full items-center justify-center"

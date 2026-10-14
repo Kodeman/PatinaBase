@@ -261,7 +261,7 @@ export function VendorForm({
                   src={logoPreview}
                   alt="Logo preview"
                   className="w-full h-full object-cover"
-                />
+                 decoding="async" loading="lazy"/>
                 {isUploadingLogo && (
                   <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
                     <div className="animate-spin w-5 h-5 border-2 border-patina-mocha-brown border-t-transparent rounded-full" />

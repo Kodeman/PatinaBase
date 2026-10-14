@@ -26,7 +26,7 @@ export function JudgmentCard({
     >
       <span className="plate judgment-plate-mat">
         {image ? (
-          <img src={image} alt="" />
+          <img src={image} alt=""  decoding="async" loading="lazy"/>
         ) : (
           <span className="judgment-plate-word">{product.name}</span>
         )}

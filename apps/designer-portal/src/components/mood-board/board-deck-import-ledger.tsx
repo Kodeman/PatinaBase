@@ -243,7 +243,7 @@ export function DeckPieceActs({
               className={`h-14 w-14 overflow-hidden rounded-[3px] border ${index === pickIndex ? 'border-[var(--color-clay)]' : 'border-[var(--border-default)]'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={cropUrl(pin) ?? undefined} alt="" className="h-full w-full object-cover" />
+              <img src={cropUrl(pin) ?? undefined} alt="" className="h-full w-full object-cover"  decoding="async" loading="lazy"/>
             </button>
           ))}
         </div>
@@ -311,7 +311,7 @@ function FoundCell({ item, products }: { item: DeckImportItem; products: DeckPro
     <div className="flex min-w-0 items-start gap-2">
       {view.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={view.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-[3px] object-cover" />
+        <img src={view.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-[3px] object-cover"  decoding="async" loading="lazy"/>
       ) : (
         <span className="h-14 w-14 shrink-0 rounded-[3px] border border-dashed border-[var(--border-default)]" />
       )}
@@ -503,7 +503,7 @@ export function BoardDeckImportLedger({
                 <span className="flex gap-0.5" aria-hidden>
                   {preview.map((pin) => (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img key={pin.id} src={cropUrl(pin) ?? undefined} alt="" className="h-6 w-6 rounded-[2px] object-cover" />
+                    <img key={pin.id} src={cropUrl(pin) ?? undefined} alt="" className="h-6 w-6 rounded-[2px] object-cover"  decoding="async" loading="lazy"/>
                   ))}
                 </span>
                 <h3 className="font-heading text-[13px] text-[var(--text-primary)]">
@@ -526,7 +526,7 @@ export function BoardDeckImportLedger({
                     >
                       {crop ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={crop} alt="Her picture from the deck" className="h-14 w-14 rounded-[3px] object-cover" />
+                        <img src={crop} alt="Her picture from the deck" className="h-14 w-14 rounded-[3px] object-cover"  decoding="async" loading="lazy"/>
                       ) : (
                         <span className="h-14 w-14 rounded-[3px] border border-dashed border-[var(--border-default)]" />
                       )}

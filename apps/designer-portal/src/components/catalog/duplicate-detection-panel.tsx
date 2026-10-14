@@ -210,7 +210,7 @@ function DuplicateCard({
                 src={imageUrl}
                 alt={product?.name || 'Duplicate product'}
                 className="h-full w-full object-cover"
-              />
+               decoding="async" loading="lazy"/>
             ) : (
               <div className="flex h-full w-full items-center justify-center text-muted-foreground">
                 <Copy className="h-8 w-8" />

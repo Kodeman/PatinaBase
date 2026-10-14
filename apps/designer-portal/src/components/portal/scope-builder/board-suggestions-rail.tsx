@@ -149,7 +149,7 @@ export function BoardSuggestionsRail({ items, onAdd }: BoardSuggestionsRailProps
                     alt={p.name}
                     loading="lazy"
                     className="h-full w-full object-cover"
-                  />
+                   decoding="async"/>
                 )}
               </div>
               <div className="min-w-0 flex-1">

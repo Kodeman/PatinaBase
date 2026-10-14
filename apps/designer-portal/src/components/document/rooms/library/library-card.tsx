@@ -116,7 +116,7 @@ export function LibraryCard({
         className="plate library-plate-mat"
       >
         {img ? (
-          <img src={img} alt="" loading="lazy" />
+          <img src={img} alt="" loading="lazy"  decoding="async"/>
         ) : (
           <span className="library-plate-word">{item.category ?? "piece"}</span>
         )}

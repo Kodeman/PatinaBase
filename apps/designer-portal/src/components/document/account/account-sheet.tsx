@@ -178,7 +178,7 @@ export function AccountSheet() {
                 src={profile.avatar_url}
                 alt=""
                 className="h-full w-full object-cover"
-              />
+               decoding="async" loading="lazy"/>
             ) : (
               monogramOf(name, email)
             )}

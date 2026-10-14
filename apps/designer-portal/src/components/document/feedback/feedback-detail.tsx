@@ -180,7 +180,7 @@ export function FeedbackDetail({
             src={shotUrl}
             alt="Screen at capture"
             className="max-h-40 w-auto rounded-md border border-[var(--color-pearl)]"
-          />
+           decoding="async" loading="lazy"/>
         </a>
       )}
 

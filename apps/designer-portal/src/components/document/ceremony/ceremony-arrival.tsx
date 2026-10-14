@@ -76,7 +76,7 @@ export function CeremonyArrival({
                 src={primary.scan.thumbnail_url}
                 alt={primary.scan.name ?? 'Room scan'}
                 className="aspect-[3/2] w-full rounded-[2px] object-cover"
-              />
+               decoding="async" loading="lazy"/>
             ) : (
               <div className="flex aspect-[3/2] w-full items-center justify-center rounded-[2px] border border-dashed border-[var(--color-pearl)]">
                 <span className="font-heading text-[13px] italic text-[var(--text-muted)]">
@@ -112,7 +112,7 @@ export function CeremonyArrival({
                       src={row.scan.thumbnail_url}
                       alt={row.scan.name ?? 'Room scan'}
                       className="h-full w-full object-cover"
-                    />
+                     decoding="async" loading="lazy"/>
                   ) : (
                     <span className="flex h-full w-full items-center justify-center px-1 text-center text-[11px] italic text-[var(--text-muted)]">
                       No preview

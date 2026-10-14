@@ -96,7 +96,7 @@ function CandidateGroup({
           return (
             <li key={`${candidate.rank}-${candidate.productId ?? ''}`} className="flex items-center gap-2">
               {view?.imageUrl ? (
-                <img src={view.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-[2px] object-cover" />
+                <img src={view.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-[2px] object-cover"  decoding="async" loading="lazy"/>
               ) : null}
               <span className="min-w-0 flex-1 truncate text-[11px] leading-4 text-[var(--text-default)]">
                 {name}

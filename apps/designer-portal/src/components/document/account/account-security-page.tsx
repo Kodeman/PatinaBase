@@ -203,7 +203,7 @@ export function AccountSecurityPage() {
               src={enroll.qrCode}
               alt="Two-factor authentication QR code"
               className="mb-4 h-44 w-44 rounded-[6px] bg-white p-2"
-            />
+             decoding="async" loading="lazy"/>
           )}
 
           <div className="mb-4">

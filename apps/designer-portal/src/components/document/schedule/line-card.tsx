@@ -378,7 +378,7 @@ export function LineCard({
     <div data-line-card>
       <div className="mb-4 flex gap-4">
         <div className="h-24 w-24 shrink-0 overflow-hidden rounded-[3px] border border-[var(--color-pearl)] bg-[var(--doc-sheet-2)]">
-          {imageUrl ? <img src={imageUrl} alt="" className="h-full w-full object-cover" /> : null}
+          {imageUrl ? <img src={imageUrl} alt="" className="h-full w-full object-cover"  decoding="async" loading="lazy"/> : null}
         </div>
         <div className="min-w-0 flex-1">
           {pick ? (

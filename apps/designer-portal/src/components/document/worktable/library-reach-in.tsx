@@ -311,7 +311,7 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
                                 alt=""
                                 className="h-full w-full object-cover"
                                 loading="lazy"
-                              />
+                               decoding="async"/>
                             ) : (
                               <span
                                 aria-hidden

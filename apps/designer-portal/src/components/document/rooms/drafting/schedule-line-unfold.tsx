@@ -210,7 +210,7 @@ export function ScheduleLineUnfold({
               alt=""
               loading="lazy"
               className="h-24 w-24 shrink-0 rounded-[4px] border border-[var(--color-pearl)] object-cover"
-            />
+             decoding="async"/>
           ))}
         </div>
       )}
@@ -661,7 +661,7 @@ function AlternativesBand({
                   alt=""
                   loading="lazy"
                   className="h-full w-full object-cover"
-                />
+                 decoding="async"/>
               )}
             </div>
             <div className="min-w-0 flex-1">
