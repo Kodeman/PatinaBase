@@ -1,0 +1,39 @@
+{
+  "_meta": {
+    "target": "https://app.patina.cloud (prod Worker, browser Supabase traffic via api.patina.cloud edge proxy)",
+    "date": "2026-10-14",
+    "account": "Kody's already signed-in Chrome session (claude-in-chrome). Read-only: navigation + typing in Library search (no Enter). Spec book never opened.",
+    "doc": "/doc/[id] = one proposal-stage engagement from Kody's Desk (id withheld); /doc/[id]/pieces = same id",
+    "throttling": "none (real network, unthrottled CPU). The automation tab reported document.visibilityState='hidden' throughout, so paint/LCP entries were never recorded and background-tab timer throttling (>=1 s setTimeout clamping) inflates client-side settle times. Server/network numbers are unaffected.",
+    "collector": "harness/prod-collector.js (hard nav), harness/prod-spa.js (in-app transitions)",
+    "fields": "ttfb=responseStart-requestStart of the navigation; cfEdge/cfWorker=Cloudflare Server-Timing on the document; load=loadEventEnd; api=requests to api.patina.cloud (Supabase via edge proxy, realtime excluded); authUser=GET /auth/v1/user count; depth=inferred upper-bound dependency depth (request depth = 1 + max depth of API requests that had finished before it started); apiFirstStart/apiLastEnd ms from navigation start",
+    "cold": "rows with cold=true followed >=~1 min without a document request; Server-Timing cfWorker shows multi-second Worker time"
+  },
+  "hardNav": [
+    {"scenario": "P1", "run": 1, "path": "/desk", "cold": true, "ttfb": 3587, "cfEdge": 822, "cfWorker": 2707, "load": 8979, "note": "first nav of session; API not collected"},
+    {"scenario": "P1", "run": 2, "path": "/desk", "cold": true, "ttfb": 5032, "cfEdge": 1424, "cfWorker": 3541, "dcl": 5592, "load": 8056, "resources": 180, "jsFiles": 62, "api": 97, "rpc": 5, "authUser": 16, "apiFirstStart": 8150, "apiLastEnd": 11520, "depth": 22},
+    {"scenario": "P1", "run": 3, "path": "/desk", "cold": false, "ttfb": 349, "cfEdge": 34, "cfWorker": 260, "dcl": 773, "load": 5082, "resources": 180, "jsFiles": 62, "api": 97, "rpc": 5, "authUser": 16, "apiFirstStart": 5186, "apiLastEnd": 8133, "depth": 22},
+    {"scenario": "P1", "run": 4, "path": "/desk", "cold": false, "ttfb": 368, "cfEdge": 13, "cfWorker": 306, "dcl": 661, "load": 3341, "resources": 186, "jsFiles": 62, "api": 97, "rpc": 5, "authUser": 16, "apiFirstStart": 3404, "apiLastEnd": 6137, "depth": 22},
+    {"scenario": "P2", "run": 1, "path": "/doc/[id]", "cold": false, "ttfb": 368, "cfEdge": 13, "cfWorker": 305, "dcl": 613, "load": 2896, "resources": 164, "jsFiles": 69, "api": 79, "rpc": 1, "authUser": 20, "apiFirstStart": 2943, "apiLastEnd": 6329, "depth": 25},
+    {"scenario": "P2", "run": 2, "path": "/doc/[id]", "cold": false, "ttfb": 317, "cfEdge": 20, "cfWorker": 244, "dcl": 570, "load": 3059, "resources": 164, "jsFiles": 69, "api": 79, "rpc": 1, "authUser": 20, "apiFirstStart": 3107, "apiLastEnd": 6304, "depth": 25},
+    {"scenario": "P2", "run": 3, "path": "/doc/[id]", "cold": false, "ttfb": 323, "cfEdge": 8, "cfWorker": 208, "dcl": 601, "load": 3290, "resources": 164, "jsFiles": 69, "api": 79, "rpc": 1, "authUser": 20, "apiFirstStart": 3343, "apiLastEnd": 7087, "depth": 25},
+    {"scenario": "P3", "run": 1, "path": "/doc/[id]/pieces", "cold": true, "ttfb": 5246, "cfEdge": 1406, "cfWorker": 3673, "dcl": 5712, "load": 9352, "resources": 143, "jsFiles": 67, "api": 62, "rpc": 1, "authUser": 16, "apiFirstStart": 9477, "apiLastEnd": 12047, "depth": 19},
+    {"scenario": "P3", "run": 2, "path": "/doc/[id]/pieces", "cold": false, "ttfb": 299, "cfEdge": 13, "cfWorker": 192, "dcl": 570, "load": 2457, "resources": 143, "jsFiles": 67, "api": 62, "rpc": 1, "authUser": 16, "apiFirstStart": 2495, "apiLastEnd": 4795, "depth": 19},
+    {"scenario": "P3", "run": 3, "path": "/doc/[id]/pieces", "cold": false, "ttfb": 223, "cfEdge": 6, "cfWorker": 173, "dcl": 481, "load": 3161, "resources": 143, "jsFiles": 67, "api": 62, "rpc": 1, "authUser": 16, "apiFirstStart": 3198, "apiLastEnd": 5620, "depth": 19},
+    {"scenario": "P4", "run": 1, "path": "/people", "cold": false, "ttfb": 340, "cfEdge": 16, "cfWorker": 284, "dcl": 652, "load": 2807, "resources": 145, "jsFiles": 63, "api": 68, "rpc": 1, "authUser": 16, "apiFirstStart": 3108, "apiLastEnd": 5760, "depth": 19},
+    {"scenario": "P4", "run": 2, "path": "/people", "cold": false, "ttfb": 583, "cfEdge": 19, "cfWorker": 516, "dcl": 803, "load": 2900, "resources": 145, "jsFiles": 63, "api": 68, "rpc": 1, "authUser": 16, "apiFirstStart": 2950, "apiLastEnd": 5701, "depth": 19},
+    {"scenario": "P4", "run": 3, "path": "/people", "cold": false, "ttfb": 367, "cfEdge": 19, "cfWorker": 259, "dcl": 687, "load": 2703, "resources": 145, "jsFiles": 63, "api": 68, "rpc": 1, "authUser": 16, "apiFirstStart": 2754, "apiLastEnd": 5930, "depth": 19},
+    {"scenario": "P5", "run": 1, "path": "/library", "cold": true, "ttfb": 2102, "cfEdge": 470, "cfWorker": 1576, "dcl": 2508, "load": 4079, "resources": 182, "jsFiles": 64, "api": 71, "rpc": 0, "authUser": 16, "apiFirstStart": 4125, "apiLastEnd": 8090, "depth": 20},
+    {"scenario": "P5", "run": 2, "path": "/library", "cold": false, "ttfb": 194, "cfEdge": 3, "cfWorker": 147, "dcl": 395, "load": 1384, "resources": 155, "jsFiles": 64, "api": 70, "rpc": 0, "authUser": 16, "apiFirstStart": 1358, "apiLastEnd": 3865, "depth": 19},
+    {"scenario": "P5", "run": 3, "path": "/library", "cold": false, "ttfb": 206, "cfEdge": 4, "cfWorker": 146, "dcl": 431, "load": 2843, "resources": 148, "jsFiles": 63, "api": 70, "rpc": 0, "authUser": 16, "apiFirstStart": 2903, "apiLastEnd": 5626, "depth": 19}
+  ],
+  "spa": [
+    {"scenario": "P2", "label": "desk -> doc (click first /doc/ link)", "firstMutation": 608, "lastMutation": 2003, "api": 17, "authUser": 4, "apiLastEnd": 1793, "depth": 7},
+    {"scenario": "P10", "label": "doc -> desk (click /desk link)", "firstMutation": 248, "lastMutation": 264, "api": 2, "authUser": 0, "apiLastEnd": 381, "depth": 1},
+    {"scenario": "P4", "label": "doc -> people (Studio contacts button)", "firstMutation": 310, "lastMutation": 604, "api": 8, "authUser": 0, "apiLastEnd": 600, "depth": 1},
+    {"scenario": "P5", "label": "people -> library (Resource library button)", "firstMutation": 285, "lastMutation": 771, "api": 11, "authUser": 0, "apiLastEnd": 766, "depth": 3},
+    {"scenario": "P5", "label": "type 'chair' in Library search (no Enter)", "firstMutation": 2, "lastMutation": 978, "api": 1, "authUser": 0, "apiLastEnd": 973, "depth": 1, "note": "field-search.tsx:37 debounces 220 ms; hidden-tab timer clamping inflates this; the products request itself took 108 ms"}
+  ],
+  "requestDurations_libraryTab": {"_note": "all api.patina.cloud resource entries accumulated in one tab session (doc -> people -> library)", "authUser": {"n": 20, "p50": 104, "p90": 367, "max": 410}, "rest": {"n": 78, "p50": 243, "p90": 803, "max": 1019}, "rpc": {"n": 2, "p50": 370}},
+  "staticAssetCaching": {"_note": "fetch(cache:'no-store') of a page chunk, a css file and a woff2 from _next/static", "cache-control": "public, max-age=0, must-revalidate", "cf-cache-status": "HIT", "hardNavDocScripts": {"total": 63, "revalidated_304_transfer_lt_1KB": 63, "servedWithoutRoundTrip": 0}}
+}

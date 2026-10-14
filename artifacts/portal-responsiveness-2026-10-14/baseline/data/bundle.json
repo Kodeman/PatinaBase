@@ -1,0 +1,1195 @@
+{
+ "totalChunks": 269,
+ "totalGzipKB": 4901.2,
+ "sharedRootFiles": [
+  "static/chunks/webpack-41e9268b62bb961b.js",
+  "static/chunks/4bbed3e2-a0717ccf159538b6.js",
+  "static/chunks/8620-0ac84aa76aba723e.js",
+  "static/chunks/main-app-1280126fd4ceb45d.js",
+  "static/chunks/polyfills-42372ed130431b0a.js"
+ ],
+ "topChunks": [
+  {
+   "label": "static/chunks/04b411a3.d75db45a138e24b0.js",
+   "parsedKB": 4831.3,
+   "gzipKB": 1709.6,
+   "gzipFileKB": 1711.8,
+   "topPackages": [
+    [
+     "@sparkjsdev/spark",
+     4831.2
+    ]
+   ],
+   "modules": 1
+  },
+  {
+   "label": "static/chunks/app/(document)/doc/[id]/page-7ac25b652cce4363.js",
+   "parsedKB": 819.9,
+   "gzipKB": 222.6,
+   "gzipFileKB": 223.2,
+   "topPackages": [
+    [
+     "./src/app",
+     766.5
+    ],
+    [
+     "./src/lib",
+     35.9
+    ],
+    [
+     "packages/patina-design-system",
+     7.1
+    ],
+    [
+     "./src/components",
+     7
+    ],
+    [
+     "lucide-react",
+     1.7
+    ]
+   ],
+   "modules": 234
+  },
+  {
+   "label": "static/chunks/9078-faf0b6e7d8b59d2c.js",
+   "parsedKB": 768.3,
+   "gzipKB": 213.5,
+   "gzipFileKB": 216.6,
+   "topPackages": [
+    [
+     "lucide-react",
+     448.6
+    ],
+    [
+     "@tanstack/table-core",
+     51.6
+    ],
+    [
+     "file-selector",
+     29.9
+    ],
+    [
+     "framer-motion",
+     28.5
+    ],
+    [
+     "react-dropzone",
+     28.3
+    ],
+    [
+     "date-fns",
+     28.1
+    ],
+    [
+     "react-day-picker",
+     20.6
+    ],
+    [
+     "@radix-ui/react-select",
+     17.8
+    ]
+   ],
+   "modules": 1771
+  },
+  {
+   "label": "static/chunks/3668.3513b3ca62be0d8c.js",
+   "parsedKB": 411.9,
+   "gzipKB": 171,
+   "gzipFileKB": 171.2,
+   "topPackages": [
+    [
+     "pdf-lib",
+     297.5
+    ],
+    [
+     "@pdf-lib/standard-fonts",
+     51.2
+    ],
+    [
+     "pako",
+     42.7
+    ],
+    [
+     "@pdf-lib/upng",
+     16.2
+    ],
+    [
+     "tslib",
+     3.9
+    ]
+   ],
+   "modules": 172
+  },
+  {
+   "label": "static/chunks/db534642.f17b45ce03d14988.js",
+   "parsedKB": 401.9,
+   "gzipKB": 136.3,
+   "gzipFileKB": 136.5,
+   "topPackages": [
+    [
+     "xlsx",
+     401.5
+    ]
+   ],
+   "modules": 1
+  },
+  {
+   "label": "static/chunks/0323052c.72edc4305168a32c.js",
+   "parsedKB": 401.9,
+   "gzipKB": 118.3,
+   "gzipFileKB": 118.6,
+   "topPackages": [
+    [
+     "pdfjs-dist",
+     401.8
+    ]
+   ],
+   "modules": 1
+  },
+  {
+   "label": "static/chunks/6386-a26e3e2850f41401.js",
+   "parsedKB": 490.7,
+   "gzipKB": 112.2,
+   "gzipFileKB": 112.6,
+   "topPackages": [
+    [
+     "packages/supabase",
+     472.5
+    ],
+    [
+     "packages/utils",
+     16.6
+    ],
+    [
+     "packages/shared",
+     1.4
+    ]
+   ],
+   "modules": 132
+  },
+  {
+   "label": "static/chunks/7268-e2414bc591a3ed76.js",
+   "parsedKB": 391.1,
+   "gzipKB": 109.8,
+   "gzipFileKB": 110,
+   "topPackages": [
+    [
+     "./src/components",
+     263.1
+    ],
+    [
+     "./src/lib",
+     97.5
+    ],
+    [
+     "./src/hooks",
+     29.4
+    ],
+    [
+     "packages/shared",
+     0.2
+    ]
+   ],
+   "modules": 96
+  },
+  {
+   "label": "static/chunks/d25a86d5-554064fc574b9a88.js",
+   "parsedKB": 317.7,
+   "gzipKB": 97.6,
+   "gzipFileKB": 97.9,
+   "topPackages": [
+    [
+     "next",
+     317.7
+    ]
+   ],
+   "modules": 1
+  },
+  {
+   "label": "static/chunks/6034-2fec59a02d53b234.js",
+   "parsedKB": 300.3,
+   "gzipKB": 79.2,
+   "gzipFileKB": 79.6,
+   "topPackages": [
+    [
+     "packages/patina-design-system",
+     299.5
+    ]
+   ],
+   "modules": 114
+  },
+  {
+   "label": "static/chunks/8beefcf0.9ec3a864eebc6f90.js",
+   "parsedKB": 314.7,
+   "gzipKB": 73.8,
+   "gzipFileKB": 74,
+   "topPackages": [
+    [
+     "three",
+     314.6
+    ]
+   ],
+   "modules": 1
+  },
+  {
+   "label": "static/chunks/app/(document)/board/[boardId]/page-83e7ea8b9dd5f9c0.js",
+   "parsedKB": 236.2,
+   "gzipKB": 69.5,
+   "gzipFileKB": 69.6,
+   "topPackages": [
+    [
+     "./src/app",
+     193.4
+    ],
+    [
+     "./src/components",
+     12.5
+    ],
+    [
+     "./src/lib",
+     9.9
+    ],
+    [
+     "packages/patina-design-system",
+     9.3
+    ],
+    [
+     "lucide-react",
+     4.8
+    ],
+    [
+     "./src/hooks",
+     4.3
+    ],
+    [
+     "class-variance-authority",
+     0.8
+    ],
+    [
+     "next",
+     0.3
+    ]
+   ],
+   "modules": 77
+  },
+  {
+   "label": "static/chunks/5752-dd1207814e7543f0.js",
+   "parsedKB": 254,
+   "gzipKB": 68.4,
+   "gzipFileKB": 68.6,
+   "topPackages": [
+    [
+     "./src/components",
+     220.8
+    ],
+    [
+     "./src/lib",
+     19.2
+    ],
+    [
+     "./src/hooks",
+     9.8
+    ],
+    [
+     "packages/patina-design-system",
+     2.1
+    ],
+    [
+     "packages/catalog-ui",
+     1.6
+    ]
+   ],
+   "modules": 91
+  },
+  {
+   "label": "static/chunks/add11241.605c7672299f2c92.js",
+   "parsedKB": 227.7,
+   "gzipKB": 62.3,
+   "gzipFileKB": 62.5,
+   "topPackages": [
+    [
+     "three",
+     227.6
+    ]
+   ],
+   "modules": 1
+  },
+  {
+   "label": "static/chunks/4bbed3e2-a0717ccf159538b6.js",
+   "parsedKB": 195.2,
+   "gzipKB": 61.3,
+   "gzipFileKB": 61.4,
+   "topPackages": [
+    [
+     "next",
+     195.1
+    ]
+   ],
+   "modules": 1
+  },
+  {
+   "label": "static/chunks/8620-0ac84aa76aba723e.js",
+   "parsedKB": 217.2,
+   "gzipKB": 59.6,
+   "gzipFileKB": 59.8,
+   "topPackages": [
+    [
+     "next",
+     213.8
+    ],
+    [
+     "process",
+     1.6
+    ],
+    [
+     "@swc/helpers",
+     0.7
+    ]
+   ],
+   "modules": 146
+  },
+  {
+   "label": "static/chunks/1416-48949dc3534df060.js",
+   "parsedKB": 208.6,
+   "gzipKB": 59.1,
+   "gzipFileKB": 59.2,
+   "topPackages": [
+    [
+     "./src/components",
+     194.5
+    ],
+    [
+     "./src/lib",
+     6.7
+    ],
+    [
+     "./src/hooks",
+     3.5
+    ],
+    [
+     "@tanstack/query-core",
+     2.2
+    ],
+    [
+     "@tanstack/react-query",
+     1.1
+    ]
+   ],
+   "modules": 53
+  },
+  {
+   "label": "static/chunks/framework-5e6dc1db27727067.js",
+   "parsedKB": 185.3,
+   "gzipKB": 58.3,
+   "gzipFileKB": 58.4,
+   "topPackages": [
+    [
+     "react-dom",
+     174.1
+    ],
+    [
+     "react",
+     7.6
+    ],
+    [
+     "scheduler",
+     3.4
+    ]
+   ],
+   "modules": 10
+  },
+  {
+   "label": "static/chunks/1565-03b9b8ba8b8a5717.js",
+   "parsedKB": 230.4,
+   "gzipKB": 57.1,
+   "gzipFileKB": 57.2,
+   "topPackages": [
+    [
+     "packages/supabase",
+     229.8
+    ]
+   ],
+   "modules": 66
+  },
+  {
+   "label": "static/chunks/59a3a9e2-ca21fd5e044406d2.js",
+   "parsedKB": 174.8,
+   "gzipKB": 56.2,
+   "gzipFileKB": 56.4,
+   "topPackages": [
+    [
+     "posthog-js",
+     174.7
+    ]
+   ],
+   "modules": 1
+  }
+ ],
+ "cryptoBrowserify": [
+  {
+   "chunk": "static/chunks/d25a86d5-554064fc574b9a88.js",
+   "gzipKB": 97.6,
+   "parsedKB": 317.7,
+   "matching": 1,
+   "topPackages": [
+    [
+     "next",
+     317.7
+    ]
+   ],
+   "sampleOrigins": [
+    "next"
+   ]
+  }
+ ],
+ "mime": [],
+ "designSystem": [
+  {
+   "chunk": "static/chunks/app/(document)/doc/[id]/page-7ac25b652cce4363.js",
+   "gzipKB": 222.6,
+   "parsedKB": 819.9,
+   "matching": 3,
+   "topPackages": [
+    [
+     "./src/app",
+     766.5
+    ],
+    [
+     "./src/lib",
+     35.9
+    ],
+    [
+     "packages/patina-design-system",
+     7.1
+    ],
+    [
+     "./src/components",
+     7
+    ],
+    [
+     "lucide-react",
+     1.7
+    ]
+   ],
+   "sampleOrigins": [
+    "./src/components",
+    "./src/lib",
+    "./src/app",
+    "lucide-react",
+    "packages/patina-design-system"
+   ]
+  },
+  {
+   "chunk": "static/chunks/6034-2fec59a02d53b234.js",
+   "gzipKB": 79.2,
+   "parsedKB": 300.3,
+   "matching": 114,
+   "topPackages": [
+    [
+     "packages/patina-design-system",
+     299.5
+    ]
+   ],
+   "sampleOrigins": [
+    "packages/patina-design-system"
+   ]
+  },
+  {
+   "chunk": "static/chunks/app/(document)/board/[boardId]/page-83e7ea8b9dd5f9c0.js",
+   "gzipKB": 69.5,
+   "parsedKB": 236.2,
+   "matching": 3,
+   "topPackages": [
+    [
+     "./src/app",
+     193.4
+    ],
+    [
+     "./src/components",
+     12.5
+    ],
+    [
+     "./src/lib",
+     9.9
+    ],
+    [
+     "packages/patina-design-system",
+     9.3
+    ],
+    [
+     "lucide-react",
+     4.8
+    ],
+    [
+     "./src/hooks",
+     4.3
+    ],
+    [
+     "class-variance-authority",
+     0.8
+    ],
+    [
+     "next",
+     0.3
+    ]
+   ],
+   "sampleOrigins": [
+    "class-variance-authority",
+    "next",
+    "lucide-react",
+    "packages/patina-design-system",
+    "./src/components",
+    "./src/lib",
+    "./src/hooks",
+    "./src/app"
+   ]
+  },
+  {
+   "chunk": "static/chunks/5752-dd1207814e7543f0.js",
+   "gzipKB": 68.4,
+   "parsedKB": 254,
+   "matching": 1,
+   "topPackages": [
+    [
+     "./src/components",
+     220.8
+    ],
+    [
+     "./src/lib",
+     19.2
+    ],
+    [
+     "./src/hooks",
+     9.8
+    ],
+    [
+     "packages/patina-design-system",
+     2.1
+    ],
+    [
+     "packages/catalog-ui",
+     1.6
+    ]
+   ],
+   "sampleOrigins": [
+    "packages/catalog-ui",
+    "packages/patina-design-system",
+    "./src/hooks",
+    "./src/components",
+    "./src/lib"
+   ]
+  },
+  {
+   "chunk": "static/chunks/app/(document)/library/[id]/page-6f7f03ab3349db3a.js",
+   "gzipKB": 26.8,
+   "parsedKB": 94.8,
+   "matching": 3,
+   "topPackages": [
+    [
+     "./src/app",
+     84.9
+    ],
+    [
+     "packages/patina-design-system",
+     3.9
+    ],
+    [
+     "./src/lib",
+     2.4
+    ],
+    [
+     "./src/components",
+     1.8
+    ],
+    [
+     "lucide-react",
+     1
+    ],
+    [
+     "@radix-ui/react-compose-refs",
+     0.4
+    ]
+   ],
+   "sampleOrigins": [
+    "@radix-ui/react-compose-refs",
+    "lucide-react",
+    "packages/patina-design-system",
+    "./src/components",
+    "./src/lib",
+    "./src/app"
+   ]
+  },
+  {
+   "chunk": "static/chunks/6449-458ee0f855d2b31d.js",
+   "gzipKB": 23.5,
+   "parsedKB": 87.6,
+   "matching": 3,
+   "topPackages": [
+    [
+     "packages/help-system",
+     86.6
+    ],
+    [
+     "packages/patina-design-system",
+     0.8
+    ]
+   ],
+   "sampleOrigins": [
+    "packages/patina-design-system",
+    "packages/help-system"
+   ]
+  },
+  {
+   "chunk": "static/chunks/app/layout-16719d278fff0a9c.js",
+   "gzipKB": 22.6,
+   "parsedKB": 75,
+   "matching": 3,
+   "topPackages": [
+    [
+     "./src/components",
+     36.6
+    ],
+    [
+     "./src/lib",
+     20.5
+    ],
+    [
+     "packages/patina-design-system",
+     6.2
+    ],
+    [
+     "./src/hooks",
+     3.1
+    ],
+    [
+     "./src/providers",
+     1
+    ],
+    [
+     "./src/app",
+     0
+    ]
+   ],
+   "sampleOrigins": [
+    "./src/hooks",
+    "./src/lib",
+    "./src/components",
+    "./src/app",
+    "./src/providers",
+    "packages/patina-design-system"
+   ]
+  },
+  {
+   "chunk": "static/chunks/5782-db482bd6cd4dee81.js",
+   "gzipKB": 19.8,
+   "parsedKB": 76.6,
+   "matching": 1,
+   "topPackages": [
+    [
+     "packages/catalog-ui",
+     73.1
+    ],
+    [
+     "packages/patina-design-system",
+     3.1
+    ]
+   ],
+   "sampleOrigins": [
+    "packages/catalog-ui",
+    "packages/patina-design-system"
+   ]
+  },
+  {
+   "chunk": "static/chunks/app/(document)/room/[id]/page-c1440ac5a1896412.js",
+   "gzipKB": 17.3,
+   "parsedKB": 57.2,
+   "matching": 1,
+   "topPackages": [
+    [
+     "./src/app",
+     43.5
+    ],
+    [
+     "./src/lib",
+     7.9
+    ],
+    [
+     "next",
+     2.8
+    ],
+    [
+     "packages/patina-design-system",
+     2.5
+    ]
+   ],
+   "sampleOrigins": [
+    "./src/lib",
+    "./src/app",
+    "next",
+    "packages/patina-design-system"
+   ]
+  },
+  {
+   "chunk": "static/chunks/app/(document)/doc/[id]/boards/page-6603e400c056df69.js",
+   "gzipKB": 13.7,
+   "parsedKB": 42.5,
+   "matching": 2,
+   "topPackages": [
+    [
+     "./src/components",
+     13.3
+    ],
+    [
+     "./src/lib",
+     12.9
+    ],
+    [
+     "./src/app",
+     6.9
+    ],
+    [
+     "lucide-react",
+     4.5
+    ],
+    [
+     "packages/patina-design-system",
+     2.2
+    ],
+    [
+     "./src/hooks",
+     1.7
+    ],
+    [
+     "next",
+     0.3
+    ]
+   ],
+   "sampleOrigins": [
+    "./src/components",
+    "./src/lib",
+    "./src/hooks",
+    "./src/app",
+    "packages/patina-design-system",
+    "next",
+    "lucide-react"
+   ]
+  },
+  {
+   "chunk": "static/chunks/7631-abe760629563348e.js",
+   "gzipKB": 12.3,
+   "parsedKB": 37.7,
+   "matching": 2,
+   "topPackages": [
+    [
+     "packages/patina-design-system",
+     37.6
+    ]
+   ],
+   "sampleOrigins": [
+    "packages/patina-design-system"
+   ]
+  },
+  {
+   "chunk": "static/chunks/1031-e4b2b735aaf251ea.js",
+   "gzipKB": 8.8,
+   "parsedKB": 27.4,
+   "matching": 5,
+   "topPackages": [
+    [
+     "./src/components",
+     11.9
+    ],
+    [
+     "./src/lib",
+     8.3
+    ],
+    [
+     "packages/patina-design-system",
+     5.5
+    ],
+    [
+     "./src/hooks",
+     1.5
+    ]
+   ],
+   "sampleOrigins": [
+    "packages/patina-design-system",
+    "./src/components",
+    "./src/hooks",
+    "./src/lib"
+   ]
+  },
+  {
+   "chunk": "static/chunks/9615-e531aec3d2815c5c.js",
+   "gzipKB": 8.3,
+   "parsedKB": 24.4,
+   "matching": 3,
+   "topPackages": [
+    [
+     "packages/patina-design-system",
+     24.3
+    ]
+   ],
+   "sampleOrigins": [
+    "packages/patina-design-system"
+   ]
+  },
+  {
+   "chunk": "static/chunks/6569-91f1758e29d9b5dd.js",
+   "gzipKB": 8,
+   "parsedKB": 28.9,
+   "matching": 5,
+   "topPackages": [
+    [
+     "packages/patina-design-system",
+     28.8
+    ]
+   ],
+   "sampleOrigins": [
+    "packages/patina-design-system"
+   ]
+  },
+  {
+   "chunk": "static/chunks/4230-f976ef4fda4bbd51.js",
+   "gzipKB": 7.6,
+   "parsedKB": 25.2,
+   "matching": 9,
+   "topPackages": [
+    [
+     "packages/patina-design-system",
+     25
+    ]
+   ],
+   "sampleOrigins": [
+    "packages/patina-design-system"
+   ]
+  },
+  {
+   "chunk": "static/chunks/app/auth/signin/page-9b8f624f44163cb0.js",
+   "gzipKB": 5,
+   "parsedKB": 12,
+   "matching": 1,
+   "topPackages": [
+    [
+     "./src/app",
+     6.8
+    ],
+    [
+     "./src/lib",
+     3
+    ],
+    [
+     "lucide-react",
+     1.1
+    ],
+    [
+     "packages/patina-design-system",
+     0.3
+    ],
+    [
+     "next",
+     0.3
+    ]
+   ],
+   "sampleOrigins": [
+    "lucide-react",
+    "next",
+    "packages/patina-design-system",
+    "./src/lib",
+    "./src/app"
+   ]
+  },
+  {
+   "chunk": "static/chunks/app/invoices/[invoiceId]/print/page-09c522892234d922.js",
+   "gzipKB": 4.8,
+   "parsedKB": 14.4,
+   "matching": 1,
+   "topPackages": [
+    [
+     "packages/patina-design-system",
+     7.6
+    ],
+    [
+     "./src/components",
+     4.6
+    ],
+    [
+     "./src/app",
+     1.8
+    ],
+    [
+     "packages/shared",
+     0.2
+    ]
+   ],
+   "sampleOrigins": [
+    "./src/components",
+    "./src/app",
+    "packages/patina-design-system",
+    "packages/shared"
+   ]
+  },
+  {
+   "chunk": "static/chunks/app/(document)/library/judgments/page-15c86e54b55e3f90.js",
+   "gzipKB": 4.8,
+   "parsedKB": 11.5,
+   "matching": 1,
+   "topPackages": [
+    [
+     "./src/app",
+     3.6
+    ],
+    [
+     "./src/components",
+     2.5
+    ],
+    [
+     "packages/catalog-ui",
+     1.6
+    ],
+    [
+     "lucide-react",
+     1.4
+    ],
+    [
+     "class-variance-authority",
+     0.8
+    ],
+    [
+     "./src/lib",
+     0.7
+    ],
+    [
+     "@radix-ui/react-compose-refs",
+     0.4
+    ],
+    [
+     "./src/hooks",
+     0.1
+    ]
+   ],
+   "sampleOrigins": [
+    "class-variance-authority",
+    "lucide-react",
+    "@radix-ui/react-compose-refs",
+    "packages/catalog-ui",
+    "packages/patina-design-system",
+    "./src/hooks",
+    "./src/app",
+    "./src/components",
+    "./src/lib"
+   ]
+  }
+ ],
+ "routes": {
+  "/(document)/desk": {
+   "files": 5,
+   "gzipKB": 162.9,
+   "rawKB": 528.5,
+   "largest": [
+    [
+     "4bbed3e2-a0717ccf159538b6.js",
+     61.4
+    ],
+    [
+     "8620-0ac84aa76aba723e.js",
+     59.8
+    ],
+    [
+     "polyfills-42372ed130431b0a.js",
+     38.7
+    ],
+    [
+     "webpack-41e9268b62bb961b.js",
+     2.8
+    ],
+    [
+     "main-app-1280126fd4ceb45d.js",
+     0.2
+    ]
+   ]
+  },
+  "/(document)/doc/[id]": {
+   "files": 5,
+   "gzipKB": 162.9,
+   "rawKB": 528.5,
+   "largest": [
+    [
+     "4bbed3e2-a0717ccf159538b6.js",
+     61.4
+    ],
+    [
+     "8620-0ac84aa76aba723e.js",
+     59.8
+    ],
+    [
+     "polyfills-42372ed130431b0a.js",
+     38.7
+    ],
+    [
+     "webpack-41e9268b62bb961b.js",
+     2.8
+    ],
+    [
+     "main-app-1280126fd4ceb45d.js",
+     0.2
+    ]
+   ]
+  },
+  "/(document)/doc/[id]/pieces": {
+   "files": 5,
+   "gzipKB": 162.9,
+   "rawKB": 528.5,
+   "largest": [
+    [
+     "4bbed3e2-a0717ccf159538b6.js",
+     61.4
+    ],
+    [
+     "8620-0ac84aa76aba723e.js",
+     59.8
+    ],
+    [
+     "polyfills-42372ed130431b0a.js",
+     38.7
+    ],
+    [
+     "webpack-41e9268b62bb961b.js",
+     2.8
+    ],
+    [
+     "main-app-1280126fd4ceb45d.js",
+     0.2
+    ]
+   ]
+  },
+  "/(document)/library": {
+   "files": 5,
+   "gzipKB": 162.9,
+   "rawKB": 528.5,
+   "largest": [
+    [
+     "4bbed3e2-a0717ccf159538b6.js",
+     61.4
+    ],
+    [
+     "8620-0ac84aa76aba723e.js",
+     59.8
+    ],
+    [
+     "polyfills-42372ed130431b0a.js",
+     38.7
+    ],
+    [
+     "webpack-41e9268b62bb961b.js",
+     2.8
+    ],
+    [
+     "main-app-1280126fd4ceb45d.js",
+     0.2
+    ]
+   ]
+  },
+  "/(document)/people": {
+   "files": 5,
+   "gzipKB": 162.9,
+   "rawKB": 528.5,
+   "largest": [
+    [
+     "4bbed3e2-a0717ccf159538b6.js",
+     61.4
+    ],
+    [
+     "8620-0ac84aa76aba723e.js",
+     59.8
+    ],
+    [
+     "polyfills-42372ed130431b0a.js",
+     38.7
+    ],
+    [
+     "webpack-41e9268b62bb961b.js",
+     2.8
+    ],
+    [
+     "main-app-1280126fd4ceb45d.js",
+     0.2
+    ]
+   ]
+  },
+  "/auth/signin": {
+   "files": 5,
+   "gzipKB": 162.9,
+   "rawKB": 528.5,
+   "largest": [
+    [
+     "4bbed3e2-a0717ccf159538b6.js",
+     61.4
+    ],
+    [
+     "8620-0ac84aa76aba723e.js",
+     59.8
+    ],
+    [
+     "polyfills-42372ed130431b0a.js",
+     38.7
+    ],
+    [
+     "webpack-41e9268b62bb961b.js",
+     2.8
+    ],
+    [
+     "main-app-1280126fd4ceb45d.js",
+     0.2
+    ]
+   ]
+  }
+ },
+ "allRoutesGzipKB": {
+  "/(document)/board/[boardId]": 162.9,
+  "/(document)/boards": 162.9,
+  "/(document)/ceremony/[leadId]": 162.9,
+  "/(document)/compose": 162.9,
+  "/(document)/desk": 162.9,
+  "/(document)/doc/[id]/boards": 162.9,
+  "/(document)/doc/[id]": 162.9,
+  "/(document)/doc/[id]/pieces/finishes/print": 162.9,
+  "/(document)/doc/[id]/pieces": 162.9,
+  "/(document)/doc/[id]/plans": 162.9,
+  "/(document)/doc/[id]/spec-book": 162.9,
+  "/(document)/drafting/[proposalId]": 162.9,
+  "/(document)/library/[id]": 162.9,
+  "/(document)/library/judgments": 162.9,
+  "/(document)/library": 162.9,
+  "/(document)/people": 162.9,
+  "/(document)/room/[id]/file": 162.9,
+  "/(document)/room/[id]": 162.9,
+  "/(document)/rooms": 162.9,
+  "/(document-help)/help/[surfaceKey]": 162.9,
+  "/(document-help)/help/article/the-keys": 162.9,
+  "/(document-help)/help/changes": 162.9,
+  "/(document-help)/help": 162.9,
+  "/(document-help)/help/topic/[prefix]": 162.9,
+  "/(legal)/pilot-terms": 162.9,
+  "/(legal)/privacy": 162.9,
+  "/(legal)/terms": 162.9,
+  "/_global-error": 162.9,
+  "/_not-found": 162.9,
+  "/auth/accept-invite": 162.9,
+  "/auth/callback": 162.9,
+  "/auth/error": 162.9,
+  "/auth/forgot-password": 162.9,
+  "/auth/mfa-verify": 162.9,
+  "/auth/reset-password": 162.9,
+  "/auth/signin": 162.9,
+  "/auth/signout": 162.9,
+  "/auth/signup": 162.9,
+  "/auth/verify-otp": 162.9,
+  "/invoices/[invoiceId]/print": 162.9,
+  "/": 162.9,
+  "/preferences": 162.9,
+  "/preferences/unsubscribe": 162.9,
+  "/unauthorized": 162.9
+ }
+}

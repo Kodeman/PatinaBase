@@ -1,0 +1,32 @@
+{
+ "throttling": {
+  "cpu": 4,
+  "network": {
+   "offline": false,
+   "latency": 165,
+   "downloadThroughput": 1012500,
+   "uploadThroughput": 168750
+  }
+ },
+ "base": "http://localhost:3110",
+ "rows": [
+  {
+   "scenario": "P6",
+   "viewport": "1440",
+   "run": 1,
+   "error": "no task row on this doc"
+  },
+  {
+   "scenario": "P6",
+   "viewport": "1440",
+   "run": 2,
+   "error": "no task row on this doc"
+  },
+  {
+   "scenario": "P6",
+   "viewport": "1440",
+   "run": 3,
+   "error": "no task row on this doc"
+  }
+ ]
+}

@@ -1,0 +1,1152 @@
+{
+ "P1-1440": {
+  "ttfb": {
+   "med": 46,
+   "min": 43,
+   "max": 56,
+   "n": 3
+  },
+  "fcp": {
+   "med": 2466,
+   "min": 2395,
+   "max": 2468,
+   "n": 3
+  },
+  "lcp": {
+   "med": 7156,
+   "min": 7122,
+   "max": 7159,
+   "n": 3
+  },
+  "firstChange": {
+   "med": 159,
+   "min": 152,
+   "max": 160,
+   "n": 3
+  },
+  "placeholder": {
+   "med": 2476,
+   "min": 2472,
+   "max": 2481,
+   "n": 3
+  },
+  "content": {
+   "med": 7152,
+   "min": 7122,
+   "max": 7153,
+   "n": 3
+  },
+  "usable": {
+   "med": 7153,
+   "min": 7122,
+   "max": 7154,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 7153,
+   "min": 7122,
+   "max": 7154,
+   "n": 3
+  },
+  "settled": {
+   "med": 21177,
+   "min": 21069,
+   "max": 21463,
+   "n": 3
+  },
+  "requests": {
+   "med": 243,
+   "min": 243,
+   "max": 243,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 100,
+   "min": 100,
+   "max": 100,
+   "n": 3
+  },
+  "authUser": {
+   "med": 18,
+   "min": 18,
+   "max": 18,
+   "n": 3
+  },
+  "rpc": {
+   "med": 4,
+   "min": 4,
+   "max": 4,
+   "n": 3
+  },
+  "depth": {
+   "med": 23,
+   "min": 23,
+   "max": 23,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 35,
+   "min": 35,
+   "max": 36,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 4,
+   "min": 4,
+   "max": 4,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 400,
+   "min": 383,
+   "max": 416,
+   "n": 3
+  },
+  "signinTtfb": {
+   "med": 2,
+   "min": 2,
+   "max": 2,
+   "n": 3
+  },
+  "signinFcp": {
+   "med": 1021,
+   "min": 738,
+   "max": 1068,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/desk"
+ },
+ "P1-390": {
+  "ttfb": {
+   "med": 37,
+   "min": 33,
+   "max": 39,
+   "n": 3
+  },
+  "fcp": {
+   "med": 2419,
+   "min": 2404,
+   "max": 2495,
+   "n": 3
+  },
+  "lcp": {
+   "med": 7108,
+   "min": 7107,
+   "max": 7111,
+   "n": 3
+  },
+  "firstChange": {
+   "med": 160,
+   "min": 157,
+   "max": 166,
+   "n": 3
+  },
+  "placeholder": {
+   "med": 2510,
+   "min": 2488,
+   "max": 2512,
+   "n": 3
+  },
+  "content": {
+   "med": 7108,
+   "min": 7106,
+   "max": 7109,
+   "n": 3
+  },
+  "usable": {
+   "med": 7108,
+   "min": 7106,
+   "max": 7109,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 7109,
+   "min": 7107,
+   "max": 7110,
+   "n": 3
+  },
+  "settled": {
+   "med": 10537,
+   "min": 10320,
+   "max": 21062,
+   "n": 3
+  },
+  "requests": {
+   "med": 208,
+   "min": 208,
+   "max": 234,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 100,
+   "min": 100,
+   "max": 100,
+   "n": 3
+  },
+  "authUser": {
+   "med": 18,
+   "min": 18,
+   "max": 18,
+   "n": 3
+  },
+  "rpc": {
+   "med": 4,
+   "min": 4,
+   "max": 4,
+   "n": 3
+  },
+  "depth": {
+   "med": 23,
+   "min": 23,
+   "max": 23,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 34,
+   "min": 34,
+   "max": 34,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 4,
+   "min": 4,
+   "max": 4,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 418,
+   "min": 416,
+   "max": 422,
+   "n": 3
+  },
+  "signinTtfb": {
+   "med": 2,
+   "min": 2,
+   "max": 2,
+   "n": 3
+  },
+  "signinFcp": {
+   "med": 1009,
+   "min": 720,
+   "max": 1084,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/desk"
+ },
+ "P10-1440": {
+  "firstChange": {
+   "med": 237,
+   "min": 230,
+   "max": 249,
+   "n": 3
+  },
+  "placeholder": {
+   "med": 259,
+   "min": 236,
+   "max": 270,
+   "n": 3
+  },
+  "content": {
+   "med": 1415,
+   "min": 1395,
+   "max": 1441,
+   "n": 3
+  },
+  "usable": {
+   "med": 1415,
+   "min": 1395,
+   "max": 1441,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 1415,
+   "min": 1396,
+   "max": 1442,
+   "n": 3
+  },
+  "settled": {
+   "med": 17948,
+   "min": 2915,
+   "max": 18044,
+   "n": 3
+  },
+  "requests": {
+   "med": 118,
+   "min": 78,
+   "max": 118,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 33,
+   "min": 33,
+   "max": 33,
+   "n": 3
+  },
+  "authUser": {
+   "med": 1,
+   "min": 1,
+   "max": 1,
+   "n": 3
+  },
+  "rpc": {
+   "med": 4,
+   "min": 4,
+   "max": 4,
+   "n": 3
+  },
+  "depth": {
+   "med": 2,
+   "min": 2,
+   "max": 2,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 3,
+   "min": 3,
+   "max": 4,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 1,
+   "min": 1,
+   "max": 1,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 100,
+   "min": 99,
+   "max": 102,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/desk"
+ },
+ "P1hard-1440": {
+  "ttfb": {
+   "med": 39,
+   "min": 39,
+   "max": 40,
+   "n": 3
+  },
+  "fcp": {
+   "med": 704,
+   "min": 700,
+   "max": 704,
+   "n": 3
+  },
+  "lcp": {
+   "med": 6976,
+   "min": 6948,
+   "max": 6996,
+   "n": 3
+  },
+  "firstChange": {
+   "med": 827,
+   "min": 824,
+   "max": 828,
+   "n": 3
+  },
+  "placeholder": {
+   "med": 687,
+   "min": 683,
+   "max": 691,
+   "n": 3
+  },
+  "content": {
+   "med": 6974,
+   "min": 6948,
+   "max": 6992,
+   "n": 3
+  },
+  "usable": {
+   "med": 6974,
+   "min": 6948,
+   "max": 6993,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 6975,
+   "min": 6948,
+   "max": 6993,
+   "n": 3
+  },
+  "settled": {
+   "med": 10305,
+   "min": 10266,
+   "max": 14666,
+   "n": 3
+  },
+  "requests": {
+   "med": 212,
+   "min": 212,
+   "max": 224,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 95,
+   "min": 95,
+   "max": 95,
+   "n": 3
+  },
+  "authUser": {
+   "med": 16,
+   "min": 16,
+   "max": 16,
+   "n": 3
+  },
+  "rpc": {
+   "med": 4,
+   "min": 4,
+   "max": 4,
+   "n": 3
+  },
+  "depth": {
+   "med": 19,
+   "min": 19,
+   "max": 19,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 65,
+   "min": 65,
+   "max": 66,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 5,
+   "min": 5,
+   "max": 5,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 833,
+   "min": 831,
+   "max": 840,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/desk"
+ },
+ "P2-1440": {
+  "firstChange": {
+   "med": 215,
+   "min": 214,
+   "max": 226,
+   "n": 3
+  },
+  "placeholder": {
+   "med": 1004,
+   "min": 984,
+   "max": 1014,
+   "n": 3
+  },
+  "content": {
+   "med": 1464,
+   "min": 1454,
+   "max": 1481,
+   "n": 3
+  },
+  "usable": {
+   "med": 1464,
+   "min": 1454,
+   "max": 1481,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 3574,
+   "min": 3547,
+   "max": 3582,
+   "n": 3
+  },
+  "settled": {
+   "med": 4513,
+   "min": 4497,
+   "max": 4516,
+   "n": 3
+  },
+  "requests": {
+   "med": 112,
+   "min": 112,
+   "max": 114,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 81,
+   "min": 81,
+   "max": 81,
+   "n": 3
+  },
+  "authUser": {
+   "med": 5,
+   "min": 5,
+   "max": 5,
+   "n": 3
+  },
+  "rpc": {
+   "med": 16,
+   "min": 16,
+   "max": 16,
+   "n": 3
+  },
+  "depth": {
+   "med": 10,
+   "min": 10,
+   "max": 10,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 62,
+   "min": 59,
+   "max": 63,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 2,
+   "min": 2,
+   "max": 2,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 266,
+   "min": 259,
+   "max": 269,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/doc/[id]"
+ },
+ "P2-390": {
+  "firstChange": {
+   "med": 221,
+   "min": 212,
+   "max": 222,
+   "n": 3
+  },
+  "placeholder": {
+   "med": 1007,
+   "min": 1005,
+   "max": 1018,
+   "n": 3
+  },
+  "content": {
+   "med": 1451,
+   "min": 1429,
+   "max": 1469,
+   "n": 3
+  },
+  "usable": {
+   "med": 1452,
+   "min": 1429,
+   "max": 1469,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 3589,
+   "min": 3564,
+   "max": 3605,
+   "n": 3
+  },
+  "settled": {
+   "med": 4526,
+   "min": 4523,
+   "max": 4543,
+   "n": 3
+  },
+  "requests": {
+   "med": 107,
+   "min": 107,
+   "max": 107,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 81,
+   "min": 81,
+   "max": 81,
+   "n": 3
+  },
+  "authUser": {
+   "med": 5,
+   "min": 5,
+   "max": 5,
+   "n": 3
+  },
+  "rpc": {
+   "med": 16,
+   "min": 16,
+   "max": 16,
+   "n": 3
+  },
+  "depth": {
+   "med": 10,
+   "min": 10,
+   "max": 10,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 66,
+   "min": 63,
+   "max": 68,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 2,
+   "min": 2,
+   "max": 2,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 270,
+   "min": 258,
+   "max": 289,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/doc/[id]"
+ },
+ "P2hard-1440": {
+  "ttfb": {
+   "med": 44,
+   "min": 42,
+   "max": 71,
+   "n": 3
+  },
+  "fcp": {
+   "med": 728,
+   "min": 724,
+   "max": 748,
+   "n": 3
+  },
+  "lcp": {
+   "med": 10728,
+   "min": 10692,
+   "max": 10748,
+   "n": 3
+  },
+  "firstChange": {
+   "med": 837,
+   "min": 830,
+   "max": 839,
+   "n": 3
+  },
+  "placeholder": {
+   "med": 730,
+   "min": 724,
+   "max": 743,
+   "n": 3
+  },
+  "content": {
+   "med": 6773,
+   "min": 6761,
+   "max": 6820,
+   "n": 3
+  },
+  "usable": {
+   "med": 6773,
+   "min": 6761,
+   "max": 6820,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 9372,
+   "min": 9319,
+   "max": 9385,
+   "n": 3
+  },
+  "settled": {
+   "med": 10745,
+   "min": 10710,
+   "max": 10772,
+   "n": 3
+  },
+  "requests": {
+   "med": 233,
+   "min": 233,
+   "max": 233,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 145,
+   "min": 145,
+   "max": 145,
+   "n": 3
+  },
+  "authUser": {
+   "med": 21,
+   "min": 21,
+   "max": 21,
+   "n": 3
+  },
+  "rpc": {
+   "med": 16,
+   "min": 16,
+   "max": 16,
+   "n": 3
+  },
+  "depth": {
+   "med": 25,
+   "min": 25,
+   "max": 25,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 130,
+   "min": 126,
+   "max": 130,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 6,
+   "min": 6,
+   "max": 7,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 1044,
+   "min": 994,
+   "max": 1173,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/doc/[id]"
+ },
+ "P3-1440": {
+  "firstChange": {
+   "med": 31,
+   "min": 29,
+   "max": 40,
+   "n": 3
+  },
+  "settled": {
+   "med": 40012,
+   "min": 40010,
+   "max": 40014,
+   "n": 3
+  },
+  "requests": {
+   "med": 8,
+   "min": 8,
+   "max": 8,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 8,
+   "min": 8,
+   "max": 8,
+   "n": 3
+  },
+  "authUser": {
+   "med": 1,
+   "min": 1,
+   "max": 1,
+   "n": 3
+  },
+  "rpc": {
+   "med": 3,
+   "min": 3,
+   "max": 3,
+   "n": 3
+  },
+  "depth": {
+   "med": 5,
+   "min": 5,
+   "max": 5,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 11,
+   "min": 11,
+   "max": 11,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 3,
+  "path": "/doc/[id]"
+ },
+ "P3hard-1440": {
+  "ttfb": {
+   "med": 41,
+   "min": 41,
+   "max": 42,
+   "n": 3
+  },
+  "fcp": {
+   "med": 736,
+   "min": 728,
+   "max": 740,
+   "n": 3
+  },
+  "lcp": {
+   "med": 6152,
+   "min": 6140,
+   "max": 6156,
+   "n": 3
+  },
+  "firstChange": {
+   "med": 834,
+   "min": 829,
+   "max": 836,
+   "n": 3
+  },
+  "content": {
+   "med": 6154,
+   "min": 6139,
+   "max": 6157,
+   "n": 3
+  },
+  "usable": {
+   "med": 6154,
+   "min": 6140,
+   "max": 6157,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 6154,
+   "min": 6140,
+   "max": 6157,
+   "n": 3
+  },
+  "settled": {
+   "med": 7665,
+   "min": 7651,
+   "max": 7685,
+   "n": 3
+  },
+  "requests": {
+   "med": 152,
+   "min": 152,
+   "max": 152,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 72,
+   "min": 72,
+   "max": 72,
+   "n": 3
+  },
+  "authUser": {
+   "med": 17,
+   "min": 17,
+   "max": 17,
+   "n": 3
+  },
+  "rpc": {
+   "med": 1,
+   "min": 1,
+   "max": 1,
+   "n": 3
+  },
+  "depth": {
+   "med": 20,
+   "min": 20,
+   "max": 20,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 79,
+   "min": 79,
+   "max": 79,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 4,
+   "min": 3,
+   "max": 5,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 697,
+   "min": 645,
+   "max": 750,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/doc/[id]/pieces"
+ },
+ "P4-1440": {
+  "firstChange": {
+   "med": 251,
+   "min": 242,
+   "max": 251,
+   "n": 3
+  },
+  "content": {
+   "med": 1136,
+   "min": 1088,
+   "max": 1136,
+   "n": 3
+  },
+  "usable": {
+   "med": 1136,
+   "min": 1088,
+   "max": 1137,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 1137,
+   "min": 1089,
+   "max": 1137,
+   "n": 3
+  },
+  "settled": {
+   "med": 1501,
+   "min": 1462,
+   "max": 1502,
+   "n": 3
+  },
+  "requests": {
+   "med": 19,
+   "min": 19,
+   "max": 19,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 9,
+   "min": 9,
+   "max": 9,
+   "n": 3
+  },
+  "authUser": {
+   "med": 1,
+   "min": 1,
+   "max": 1,
+   "n": 3
+  },
+  "rpc": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "depth": {
+   "med": 3,
+   "min": 3,
+   "max": 3,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 6,
+   "min": 6,
+   "max": 6,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/people"
+ },
+ "P5-1440": {
+  "firstChange": {
+   "med": 247,
+   "min": 244,
+   "max": 250,
+   "n": 3
+  },
+  "placeholder": {
+   "med": 647,
+   "min": 641,
+   "max": 656,
+   "n": 3
+  },
+  "content": {
+   "med": 861,
+   "min": 846,
+   "max": 864,
+   "n": 3
+  },
+  "usable": {
+   "med": 862,
+   "min": 846,
+   "max": 864,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 862,
+   "min": 847,
+   "max": 864,
+   "n": 3
+  },
+  "settled": {
+   "med": 1605,
+   "min": 1569,
+   "max": 1608,
+   "n": 3
+  },
+  "requests": {
+   "med": 33,
+   "min": 33,
+   "max": 33,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 14,
+   "min": 14,
+   "max": 14,
+   "n": 3
+  },
+  "authUser": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "rpc": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "depth": {
+   "med": 7,
+   "min": 7,
+   "max": 7,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 9,
+   "min": 9,
+   "max": 9,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 1,
+   "min": 1,
+   "max": 1,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 112,
+   "min": 108,
+   "max": 113,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/library"
+ },
+ "P5-1440:search": {
+  "firstChange": {
+   "med": 15,
+   "min": 14,
+   "max": 16,
+   "n": 3
+  },
+  "placeholder": {
+   "med": 248,
+   "min": 247,
+   "max": 251,
+   "n": 3
+  },
+  "content": {
+   "med": 454,
+   "min": 449,
+   "max": 456,
+   "n": 3
+  },
+  "usable": {
+   "med": 454,
+   "min": 449,
+   "max": 456,
+   "n": 3
+  },
+  "noBusy": {
+   "med": 455,
+   "min": 449,
+   "max": 456,
+   "n": 3
+  },
+  "settled": {
+   "med": 807,
+   "min": 799,
+   "max": 912,
+   "n": 3
+  },
+  "requests": {
+   "med": 8,
+   "min": 8,
+   "max": 8,
+   "n": 3
+  },
+  "apiRequests": {
+   "med": 2,
+   "min": 2,
+   "max": 2,
+   "n": 3
+  },
+  "authUser": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "rpc": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "depth": {
+   "med": 2,
+   "min": 2,
+   "max": 2,
+   "n": 3
+  },
+  "domMutationBatches": {
+   "med": 3,
+   "min": 3,
+   "max": 3,
+   "n": 3
+  },
+  "longTasks": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "longTaskMs": {
+   "med": 0,
+   "min": 0,
+   "max": 0,
+   "n": 3
+  },
+  "errors": 0,
+  "capped": 0,
+  "path": "/library"
+ },
+ "P6-1440": {
+  "errors": 3,
+  "capped": 0
+ }
+}
