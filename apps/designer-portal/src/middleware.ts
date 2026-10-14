@@ -86,6 +86,7 @@ export async function middleware(req: NextRequest) {
     req.nextUrl.pathname === '/terms' ||
     req.nextUrl.pathname === '/pilot-terms';
   const isPublicPage = isLandingPage || isPreferencesPage || isLegalPage;
+  const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!userId;
   // /auth/accept-invite must stay reachable for ANY authenticated user,
@@ -105,6 +106,14 @@ export async function middleware(req: NextRequest) {
       req.nextUrl.searchParams.get('type') === 'recovery');
 
   const baseUrl = req.nextUrl.origin;
+
+  // API routes pass through: every handler authenticates its own request.
+  // Middleware still runs for them (after getVerifiedUserId above) because
+  // that is what refreshes an expired session cookie; proxyToBackend handlers
+  // read the cookie token as-is and would 401 on an expired one.
+  if (isApiRoute) {
+    return res;
+  }
 
   // Helper: create a redirect that preserves Supabase auth cookies from res.
   // Use the object-set form so domain/secure/sameSite/path/httpOnly/TTL
@@ -202,17 +211,16 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
-// Middleware is a shell gate, not an authority: it never runs for /api (every
-// route handler authenticates its own request) or for router prefetches. A
-// client navigation served from the prefetch cache therefore skips the gate
-// too; that is safe only while no page or layout reads data on the server
-// (RLS and the route handlers are the authorities). Hard loads and
-// non-prefetch RSC requests still pass through.
+// Middleware is a shell gate, not an authority, and it never runs for router
+// prefetches. A client navigation served from the prefetch cache therefore
+// skips the gate too; that is safe only while no page or layout reads data on
+// the server (RLS and the route handlers are the authorities). Hard loads,
+// non-prefetch RSC requests and /api (for the cookie refresh) still run it.
 export const config = {
   matcher: [
     {
       source:
-        '/((?!api(?:/|$)|_next/static|_next/image|_next/webpack-hmr|favicon.ico|auth/error|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|auth/error|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
       missing: [{ type: 'header', key: 'next-router-prefetch' }],
     },
   ],

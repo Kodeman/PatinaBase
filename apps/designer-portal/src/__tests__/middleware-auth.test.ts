@@ -274,6 +274,34 @@ describe('Designer auth middleware: getClaims session verification', () => {
     expect(calls).toEqual({ jwks: 0, user: 2, refresh: 0 });
   });
 
+  it('API routes pass through signed out: the handler decides, no Auth call or role query', async () => {
+    expectPassThrough(await run('/api/orders'));
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(roleLookup).not.toHaveBeenCalled();
+  });
+
+  it('API routes still get an expired session cookie refreshed and handed to the handler', async () => {
+    // proxyToBackend reads the cookie token as-is, so this refresh is what
+    // keeps an expired session from turning into a 401.
+    const stale = sessionCookie(await signEs256(keyA, claims({ exp: nowSec() - 60 })), nowSec() - 60);
+    refreshGrant = async () =>
+      json({
+        access_token: await signEs256(keyA, claims()),
+        refresh_token: 'refresh-token-2',
+        token_type: 'bearer',
+        expires_in: 3600,
+        expires_at: nowSec() + 3600,
+        user: { id: SUB, aud: 'authenticated', role: 'authenticated' },
+      });
+
+    const res = await run('/api/projects/abc/tasks', stale);
+
+    expectPassThrough(res);
+    expect(calls.refresh).toBe(1);
+    expect(res.headers.get('x-middleware-set-cookie')).toContain(`${storageKey}=base64-`);
+    expect(roleLookup).not.toHaveBeenCalled();
+  });
+
   it('role still enforced: a verified user without a designer/admin role goes to /unauthorized', async () => {
     grantRoles([]);
 
@@ -321,14 +349,14 @@ describe('Designer auth middleware: matcher', () => {
   const matches = (url: string, headers: Record<string, string> = {}) =>
     unstable_doesMiddlewareMatch({ config: middlewareModule.config, url, headers });
 
-  it.each(['/api', '/api/orders', '/api/projects/abc/phases?x=1'])(
-    'never runs for API route %s (handlers authenticate themselves)',
+  it.each(['/api/orders', '/api/projects/abc/phases?x=1'])(
+    'still runs for API route %s (cookie refresh)',
     (url) => {
-      expect(matches(url)).toBe(false);
+      expect(matches(url)).toBe(true);
     },
   );
 
-  it.each(['/desk', '/doc/abc', '/auth/signin', '/', '/apiary'])('runs for page %s', (url) => {
+  it.each(['/desk', '/doc/abc', '/auth/signin', '/'])('runs for page %s', (url) => {
     expect(matches(url)).toBe(true);
   });
 
