@@ -1,0 +1,692 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Expressive sketch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+/* Real tokens, copied from apps/designer-portal/src/app/globals.css
+   (lines 10-18, 34-47, 64-74, 82-121, 143-145, 204, 234-235). The portal paints
+   no dark paper set (globals.css:56), so these sketches are light only. */
+:root{
+  --color-off-white:#FAF7F2;--color-pearl:#E5E2DD;--color-clay:#C4A57B;--color-aged-oak:#8B7355;
+  --color-mocha:#5C4A3C;--color-charcoal:#2C2926;--color-quiet-ink:#65594E;
+  --color-clay-ink:#7C5E30;--color-terracotta-ink:#9C5340;--color-sage-ink:#5F6B57;--color-dusty-blue:#8B9CAD;
+  --color-card-edge:#8F8C88;--color-sage:#A8B5A0;--doc-paper:#FCFAF6;--doc-rail-stock:#E8E3DB;--doc-ink-border:rgba(44,41,38,.18);
+  --bg-primary:#FAF7F2;--bg-surface:#FFFFFF;--bg-subtle:#F5F1ED;--bg-warm:#EEE6DB;
+  --text-primary:#2C2926;--text-body:#5C4A3C;--text-muted:#4E4339;--text-faint:#65594E;
+  --border-default:#E5E2DD;--border-subtle:rgba(229,226,221,.6);--border-warm:#DDD4C8;
+  --rule-hair:1px solid rgba(44,41,38,.10);--rule-mid:1.5px solid #2C2926;--rule-strong:2px solid #2C2926;
+  --ease-editorial:cubic-bezier(.22,1,.36,1);
+  --doc-quiet-reserve-min:68px;--doc-quiet-reserve-exc:112px;
+  --font-display:'Playfair Display',Georgia,serif;--font-body:'Inter',-apple-system,'Segoe UI',sans-serif;
+  --font-meta:'DM Mono','SF Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg-primary);color:var(--text-primary);font-family:var(--font-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1560px;margin:0 auto;padding:24px 16px 80px}
+h1.page{font-family:var(--font-display);font-weight:500;font-size:34px;line-height:1.15;margin:8px 0 6px}
+.lede{max-width:72ch;color:var(--text-body)}
+h2.sec{font-family:var(--font-meta);font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;margin:44px 0 6px;padding-top:14px;border-top:var(--rule-mid)}
+.note{font-size:13px;color:var(--text-muted);max-width:80ch;margin:4px 0 12px}
+.note code{font-family:var(--font-meta);font-size:12px}
+.strip{display:flex;gap:20px;align-items:flex-start;overflow-x:auto;padding:8px 0 12px}
+.cap{font-family:var(--font-meta);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);margin:0 0 6px}
+.cell{flex:none}
+#demo{overflow-x:auto;padding-bottom:8px}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 12px}
+.ctl button,.ctl label,.ctl select{min-height:44px;min-width:44px;padding:0 14px;font:500 12px/1 var(--font-meta);letter-spacing:.06em;text-transform:uppercase;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--doc-ink-border);border-radius:2px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.ctl button:focus-visible,.ctl select:focus-visible,.ctl input:focus-visible{outline:2px solid var(--color-clay-ink);outline-offset:2px}
+.clock{font:500 13px/1 var(--font-meta);min-width:9ch;color:var(--text-muted)}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---- the viewport frame: a real 1440x900 or 390x844 screen, zoomed down */
+.vp{width:calc(var(--zw) * 1px * var(--z));overflow:hidden;border:1px solid var(--doc-ink-border);background:var(--doc-paper)}
+.screen{zoom:var(--z);position:relative;overflow:hidden;background:var(--doc-paper);display:flex;flex-direction:column}
+.s1440{width:1440px;height:900px}.s390{width:390px;height:844px}
+.pg{flex:1;min-height:0;overflow:hidden;position:relative}
+.drawer{height:64px;flex:none;border-top:1px solid var(--border-default);background:var(--bg-surface);display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-size:14px;color:var(--text-body)}
+.mbar{height:72px;flex:none;background:var(--color-charcoal);color:var(--color-off-white);display:flex;align-items:center;justify-content:space-between;padding:0 20px}
+.mono{font-family:var(--font-meta);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+.navs{letter-spacing:.01em}
+
+/* ---- line boxes: the real line-heights, so a bar and its text share a box */
+.ln{display:flex;align-items:center;gap:10px;margin:0;min-width:0}
+.ln-title{height:52px}.ln-h1{height:42px;gap:14px}.ln-job{height:28px}.ln-body{height:26px}.ln-small{height:21px}.ln-meta{height:18px}
+.real{color:var(--text-primary)}
+h1,h2{margin:0}
+.ln-h1.real,h1.inline{font:500 30px/42px var(--font-display)}
+.ln-meta.real,a.ln-meta{font:500 11px/18px var(--font-meta);letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);text-decoration:none}
+a.ln-body{font-size:14px;color:var(--text-body);text-decoration:none}
+.eb{display:flex;align-items:center;gap:10px;font:500 11px/16px var(--font-meta);letter-spacing:.1em;text-transform:uppercase;margin:0 0 14px}
+.eb.tight{margin:22px 0 8px;color:var(--text-muted)}
+.orn{width:34px;height:12px;flex:none;stroke:var(--color-clay);stroke-width:1.2;fill:none}
+hr{border:0;margin:18px 0}
+.r-strong{border-top:var(--rule-strong)}.r-mid{border-top:var(--rule-mid)}.r-hair{border-top:var(--rule-hair)}
+
+/* ---- the bar itself (direction CSS gives it material) */
+.ph{display:block;flex:none;width:var(--w);max-width:100%;font-style:normal}
+.ph.end{margin-left:auto}
+.ph.inl{display:inline-block}
+.ln-title .ph{height:24px}.ln-h1 .ph{height:16px}.ln-job .ph{height:12px}.ln-body .ph{height:9px}.ln-small .ph{height:8px}.ln-meta .ph,.eb .ph,.tabs .ph,.chip .ph{height:7px}
+.ph-box{display:block;flex:none;font-style:normal}
+.ph-dot{border-radius:50%}
+
+/* ---- loaded: each bar becomes the text it stood for, in the same box */
+.loaded .ph,.loaded .ph-box{background:none!important;animation:none!important;width:auto;height:auto;opacity:1}
+.loaded .ph::before{content:attr(data-t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.loaded .ln-title .ph::before{font:500 40px/52px var(--font-display)}
+.loaded .ln-job .ph::before{font:500 19px/28px var(--font-display);color:var(--text-primary)}
+.loaded .ln-job .ph.it::before{font-style:italic}
+.loaded .ln-body .ph::before{font-size:15px;color:var(--text-primary)}
+.loaded .ln-small .ph::before{font-size:13px;color:var(--text-body)}
+.loaded .ln-meta .ph::before,.loaded .eb .ph::before,.loaded .chip .ph::before{font:500 11px/18px var(--font-meta);letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.loaded .ph-box{background:var(--bg-warm)!important;border:1px solid var(--border-default)}
+.loaded .ph-dot{background:var(--color-sage)!important}
+.loaded .chip{border-color:var(--doc-ink-border)}
+.loaded .board-fill{opacity:1}
+.loaded .ph::before{animation:content-in 120ms ease-out both}
+@keyframes content-in{from{opacity:.0}to{opacity:1}}
+
+/* ---- room layouts */
+.desk{padding:56px 0 0}.desk>*{margin-left:auto;margin-right:auto;max-width:980px}
+.s390 .desk{padding:28px 16px 0}
+.d-head{display:flex;align-items:flex-end;justify-content:space-between}
+.d-head h1{font:500 38px/46px var(--font-display)}
+.s390 .ln-h1.real,.s390 h1.inline,.s390 .d-head h1{font-size:26px}
+.acts{font:500 12px/18px var(--font-meta);letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)}
+.cards{display:grid;gap:24px}.cards.c3{grid-template-columns:repeat(3,1fr)}.cards.c2{grid-template-columns:1fr;gap:14px}
+.card{border:1px solid var(--border-default);background:var(--doc-paper);padding:16px 18px;min-height:132px}
+.rows .row{display:grid;grid-template-columns:1fr auto auto;gap:18px;align-items:center;border-bottom:var(--rule-hair);padding:8px 0}
+.s390 .rows .row{grid-template-columns:1fr auto;}
+.s390 .rows .row{row-gap:0}.s390 .rows .row>:nth-child(1){grid-column:1}.s390 .rows .row>:nth-child(2){grid-column:1;grid-row:2}.s390 .rows .row>:nth-child(3){grid-column:2;grid-row:1}
+.docp{display:grid;grid-template-columns:220px 1fr 238px}
+.docp.m{display:block;padding:20px 16px}
+.rail{background:var(--doc-rail-stock);padding:28px 20px;overflow:hidden}
+.rail-item{padding:4px 0 4px 14px;border-left:2px solid transparent}
+.rail-item.on{border-left-color:var(--color-charcoal)}
+.rail-sub{padding-left:28px}
+.strata-still{display:flex;flex-direction:column;gap:4px;margin:26px 0 14px}
+.strata-still b{display:block;height:3px;border-radius:9px;background:var(--color-mocha);width:98px}
+.strata-still b:nth-child(2){background:var(--color-clay);width:78px}.strata-still b:nth-child(3){background:var(--color-dusty-blue);width:58px;opacity:.55}
+.paper{padding:60px 60px 0;overflow:hidden}
+.docp.m .paper{padding:0}
+.title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+.title-row>.ln-title{flex:1}
+.acts-col{display:flex;flex-direction:column;gap:10px;padding-top:8px}
+.next-band{padding:2px 0}
+.region{border-bottom:var(--rule-hair);padding:18px 0 10px}
+.margin{border-left:var(--rule-hair);padding:24px 20px;background:var(--doc-paper)}
+.mcard{border:1px solid var(--color-card-edge,#8F8C88);padding:12px 14px;margin:0 0 12px;background:var(--bg-surface)}
+.prow{display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:var(--rule-hair)}
+.grow{flex:1;min-width:0}
+.chip{display:inline-flex;align-items:center;border:1px solid var(--border-default);padding:6px 10px;flex:none}
+.group-head{display:flex;align-items:center;gap:12px;margin:16px 0 4px}
+.group-head .ln-meta{margin-left:auto}
+.people,.library{padding:40px 108px 0}.s390 .people,.s390 .library{padding:24px 16px 0}
+.field{height:54px;border:1px solid var(--doc-ink-border);background:var(--bg-surface);display:flex;align-items:center;padding:0 16px;margin:6px 0 16px}
+.tabs{display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin:4px 0 18px;min-height:22px}
+.lib-search{max-width:720px}
+.helper{font-size:13px;color:var(--text-muted);margin:-6px 0 22px}
+.rows.narrow{max-width:720px}
+.empty{padding:28px 0}.empty-line{font:italic 400 17px/1.5 var(--font-display);color:var(--text-body);margin:0}
+.err{padding:22px 0}.err-line{font:400 17px/1.5 var(--font-display);color:var(--color-terracotta-ink);margin:0 0 8px}
+.err-acts{display:flex;gap:8px}
+.btn44{min-height:44px;min-width:44px;display:inline-flex;align-items:center;padding:0 14px;font:500 11px/1 var(--font-meta);letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--doc-ink-border);background:var(--bg-surface);color:var(--color-clay-ink)}
+.btn44.quiet{border-color:transparent;background:none;color:var(--text-muted)}
+.roomv{display:flex;flex-direction:column}
+.rv-head{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:20px 36px;border-bottom:1px solid var(--border-default)}
+.rv-head .eb{margin:0}
+.s390 .rv-head{padding:16px}
+.board{position:relative;width:880px;height:500px;margin:48px auto 18px}
+.board.sq{width:358px;height:358px;margin:24px 16px 14px}
+.board-fill{position:absolute;inset:14px;opacity:0;transition:opacity 120ms}
+.reg{position:absolute;width:22px;height:22px;border-color:var(--text-faint);border-style:solid;border-width:0}
+.reg.tl{left:0;top:0;border-left-width:1px;border-top-width:1px}.reg.tr{right:0;top:0;border-right-width:1px;border-top-width:1px}
+.reg.bl{left:0;bottom:0;border-left-width:1px;border-bottom-width:1px}.reg.br{right:0;bottom:0;border-right-width:1px;border-bottom-width:1px}
+.caption{width:880px;margin:0 auto}.s390 .caption{width:auto;margin:0 16px}
+.loaded .board-fill{background:
+  linear-gradient(var(--text-primary),var(--text-primary)) 10% 12%/80% 1.5px no-repeat,
+  linear-gradient(var(--text-primary),var(--text-primary)) 10% 88%/80% 1.5px no-repeat,
+  linear-gradient(var(--text-primary),var(--text-primary)) 10% 12%/1.5px 76% no-repeat,
+  linear-gradient(var(--text-primary),var(--text-primary)) 90% 12%/1.5px 76% no-repeat,
+  linear-gradient(var(--color-pearl),var(--color-pearl)) 40% 60%/22% 18% no-repeat}
+
+/* ---- press state on the source link (D2 owns its grammar; drawn here only as t=0) */
+.failed .ph,.failed .ph-box{animation:none!important;background-image:none!important;opacity:.45}
+.pressed{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+
+.dir-x .ph,.dir-x .ph-box{background-color:var(--bg-warm);border-radius:4px;
+  background-image:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.75) 50%,transparent 70%);
+  background-size:300% 100%;background-repeat:no-repeat}
+.dir-x .ph-dot{border-radius:50%}
+.dir-x .rail .ph{background-color:color-mix(in srgb,var(--color-charcoal) 9%,transparent)}
+.dir-x .pg .ph,.dir-x .pg .ph-box{animation:ph-in 50ms linear 150ms both,shimmer 1.4s linear 200ms infinite}
+.dir-x .board .board-fill{inset:14px;opacity:1;background-color:var(--bg-warm);background-image:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.75) 50%,transparent 70%);background-size:300% 100%;animation:shimmer 1.4s linear infinite}
+.dir-x .reg{display:none}
+.dir-x .chip{border:0;padding:0}
+@keyframes ph-in{from{opacity:0}to{opacity:1}}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
+/* the progress bar: 2px clay ink, full bleed, a soft glow at its head (a shadow: canon departure) */
+.dir-x .navind{position:absolute;left:0;top:0;height:2px;width:100%;z-index:5;transform-origin:0 50%;
+  transform:scaleX(var(--p,0));background:linear-gradient(90deg,var(--color-clay),var(--color-clay-ink));
+  box-shadow:0 0 8px rgba(196,165,123,.9);transition:transform 2.4s cubic-bezier(.1,.6,.3,1),opacity 200ms}
+.dir-x .navind.off{opacity:0}
+.dir-x .navind.done{transition:transform 150ms ease-out,opacity 250ms 150ms;opacity:0}
+.dir-x .navind.fail{background:var(--color-terracotta-ink);box-shadow:none;transition:none}
+.dir-x .slow-line{display:none}
+.dir-x .toast{position:absolute;left:24px;bottom:84px;z-index:7;display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 16px;
+  background:var(--color-charcoal);color:var(--color-off-white);border-radius:6px;box-shadow:0 8px 24px rgba(44,41,38,.22);font-size:14px;
+  animation:toast-in 220ms var(--ease-editorial) both}
+.dir-x .s390 .toast{left:12px;right:12px;bottom:88px}
+.dir-x .toast .t-act{margin-left:auto;background:none;border:0;cursor:pointer;min-height:44px;min-width:44px;display:inline-flex;align-items:center;padding:0 10px;font:500 11px/1 var(--font-meta);letter-spacing:.08em;text-transform:uppercase;color:var(--color-clay)}
+.dir-x .toast.err{background:var(--color-terracotta-ink)}
+.dir-x .toast.err .t-act{color:var(--color-off-white)}
+@keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.sweep{display:inline-flex;flex-direction:column;gap:3px}
+.sweep b{display:block;height:2.5px;border-radius:9px;background:rgba(250,247,242,.18);position:relative;overflow:hidden}
+.sweep b::after{content:"";position:absolute;inset:0;transform-origin:left;transform:scaleX(0);animation:sw 2.2s cubic-bezier(.4,0,.2,1) infinite}
+.sweep b:nth-child(1){width:32px}.sweep b:nth-child(1)::after{background:var(--color-clay)}
+.sweep b:nth-child(2){width:26px}.sweep b:nth-child(2)::after{background:var(--color-clay);animation-delay:.25s}
+.sweep b:nth-child(3){width:19px;opacity:.55}.sweep b:nth-child(3)::after{background:var(--color-dusty-blue);animation-delay:.5s}
+@keyframes sw{0%,10%{transform:scaleX(0)}40%,100%{transform:scaleX(1)}}
+
+@media (prefers-reduced-motion:reduce){.pg .ph,.pg .ph-box,.pg .reg,.dir-x .board .board-fill{animation:ph-in 1ms linear 150ms both!important}
+.dir-x .ph,.dir-x .ph-box{background-image:none!important}
+.navind{transition:none!important}
+.toast{animation:none!important}
+.sweep b::after{animation:none!important;transform:scaleX(.6)}
+.loaded .ph::before{animation:none!important}}
+html.rm .pg .ph,html.rm .pg .ph-box,html.rm .pg .reg,html.rm .dir-x .board .board-fill{animation:ph-in 1ms linear 150ms both!important}
+html.rm .dir-x .ph,html.rm .dir-x .ph-box{background-image:none!important}
+html.rm .navind{transition:none!important}
+html.rm .toast{animation:none!important}
+html.rm .sweep b::after{animation:none!important;transform:scaleX(.6)}
+html.rm .loaded .ph::before{animation:none!important}</style></head>
+<body><div class="wrap dir-x">
+<p class="cap">US-33 · D1 loading language · working sketch (seat 10 builds the polished specimen)</p>
+<h1 class="page">D1 sketch X: expressive</h1>
+<p class="lede">Placeholders are warm blocks with a synchronised shimmer. A 2 px clay bar runs along the top of the viewport. A slow load raises a toast at 3 s with the StrataSweep inside it. A failure raises an error toast and the in-place error line.</p>
+<div class="ctl"><label><input type="checkbox" id="rm"> Reduced motion</label><button data-replay-stills>Replay the 150 ms fade</button><a class="btn44 quiet" href="index.html">All sketches</a></div>
+
+<h2 class="sec" id="frame-nav">Navigation, live: P2 Desk → Document at 1440</h2>
+<p class="note">Press a scenario. The first card's job name is the link that is pressed. Times follow the baseline (<code>BASELINE.md</code> P2 row; prod SPA first change 248–608 ms). Set the speed to 0.25× to see the 100 ms and 150 ms thresholds.</p>
+<div class="ctl" role="group" aria-label="Scenario">
+  <button data-run="normal">Normal</button><button data-run="fast">Fast (cached)</button><button data-run="slow">Slow</button><button data-run="fail">Fail</button>
+  <label for="speed">Speed <select id="speed"><option value="1">1×</option><option value="0.25">0.25×</option></select></label>
+  <span class="clock" id="clock" aria-live="off">0 ms</span>
+</div>
+<p class="note" id="why"></p>
+<div class="dir-x" id="demo"><div class="vp" style="--zw:1440;--z:.62"><div class="screen s1440" style="position:relative">
+  <i class="navind off"></i>
+  <p class="slow-line" hidden role="status">Still reading. The connection is slow.</p>
+  <div class="toast" hidden role="status"><span class="sweep" aria-hidden="true"><b></b><b></b><b></b></span><span class="t-msg"></span><button class="t-act" hidden>Reload</button></div>
+  <div class="prev loaded" style="display:contents"><main class="pg desk">
+  <header class="d-head"><h1 class="ln ln-h1 real">Hello.</h1><nav class="acts real">+ Record an inquiry &nbsp; + Create a project file</nav></header>
+  <hr class="r-strong">
+  <section>
+    <p class="eb real"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Today</span><i class="ph inl" style="--w:64px" data-t="14 October"></i></p>
+    <span class="sr">Loading today’s lines.</span>
+    <div class="cards c3"><div class="card" style="outline:0">
+      <div class="ln ln-meta"><i class="ph" style="--w:46%" data-t="Cedar Lane Study" data-press></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Ask the maker for an arrival date"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Side table is not here and no date is recorded."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Yours"></i></div>
+    </div><div class="card">
+      <div class="ln ln-meta"><i class="ph " style="--w:46%" data-t="Holloway Den"></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Send the reminder for INV-0721"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Overdue 11 days, $3,400."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Sam"></i></div>
+    </div><div class="card">
+      <div class="ln ln-meta"><i class="ph " style="--w:46%" data-t="Pell Court"></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Review the Friday Pulse draft"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Drafted this morning."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Yours"></i></div>
+    </div></div>
+  </section>
+  <hr class="r-mid">
+  <section>
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:92px" data-t="Also yours"></i></p>
+    <div class="rows"><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Whole Home Renovation"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Install · 26 lines"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Due Fri"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Marsh Kitchen"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Proposal · sent"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Waiting"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Linden Guest Suite"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Procurement · 4 POs"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Due 21 Oct"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Garnet Loft"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Discovery"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="New"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Thornfield Study"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Closeout"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Signed"></i></div></div></div>
+  </section>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;The desk</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div>
+  <div class="next" hidden style="display:contents"><div class="screen s1440" style="zoom:1;position:absolute;inset:0"><main class="pg docp" aria-busy="true"><span class="sr">Loading the document.</span><aside class="rail">
+    <a class="ln ln-meta real">← Back to studio overview</a>
+    <div class="strata-still" aria-hidden="true"><b></b><b></b><b></b></div>
+    <hr class="r-mid">
+    <div class="rail-item on"><div class="ln ln-body"><i class="ph " style="--w:78%" data-t="Client approvals"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Nothing yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:70%" data-t="Project schedule"></i></div><div class="ln ln-meta"><i class="ph " style="--w:52%" data-t="Not known yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Pieces"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="4 lines"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:82%" data-t="Project financials"></i></div><div class="ln ln-meta"><i class="ph " style="--w:76%" data-t="$16,330 undisbursed"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:74%" data-t="Project closeout"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Nothing yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:54%" data-t="The record"></i></div><div class="ln ln-meta"><i class="ph " style="--w:44%" data-t="1 complete"></i></div></div>
+    <p class="eb real tight">Filed with this job</p>
+    <a class="ln ln-body real">Drawing sets</a><a class="ln ln-body real">Specification book</a><a class="ln ln-body real">Boards</a><a class="ln ln-body real">Project directory</a>
+  </aside><div class="paper">
+    <div class="ln ln-small"><i class="ph " style="--w:120px" data-t="for Nora Ellison"></i></div>
+    <div class="title-row"><div class="ln ln-title"><i class="ph title" style="--w:46%" data-t="Cedar Lane Study"></i></div><div class="acts-col"><div class="ln ln-meta"><i class="ph " style="--w:120px" data-t="Message Nora"></i><i class="ph " style="--w:150px" data-t="Preview the client’s copy"></i></div><div class="ln ln-meta"><i class="ph " style="--w:84px" data-t="Sharing"></i><i class="ph " style="--w:150px" data-t="Project directory · 0"></i></div></div></div>
+    <hr class="r-mid">
+    <div class="next-band"><div class="ln ln-meta"><i class="ph " style="--w:180px" data-t="Install · Cedar Lane Study"></i></div><div class="ln ln-body"><i class="ph " style="--w:64%" data-t="Next — Side table isn’t here, and no arrival date is recorded."></i></div></div>
+    <hr class="r-mid">
+    <section class="region" style="min-height:68px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Client approvals"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Nora Ellison accepted the proposal · 13 October"></i></div>
+  </section>
+    <section class="region" style="min-height:68px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Schedule dates"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Expand to set the install window"></i></div>
+  </section>
+    <section class="region" style="min-height:112px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Install"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Side table isn’t here. 2 more aren’t here."></i></div>
+  </section>
+  </div><aside class="margin">
+    <p class="eb real tight">In the margin</p>
+    <div class="mcard"><div class="ln ln-meta"><i class="ph " style="--w:70%" data-t="Money · sent"></i></div><div class="ln ln-small"><i class="ph " style="--w:84%" data-t="INV-2026-0301"></i></div><div class="ln ln-meta"><i class="ph " style="--w:56%" data-t="About the whole job"></i></div></div><div class="mcard"><div class="ln ln-meta"><i class="ph " style="--w:70%" data-t="Money · vendor payment"></i></div><div class="ln ln-small"><i class="ph " style="--w:84%" data-t="Vendor payment, deposit"></i></div><div class="ln ln-meta"><i class="ph " style="--w:56%" data-t="About the whole job"></i></div></div>
+  </aside></main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Project file</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div><div class="err-over" hidden style="position:absolute;left:220px;top:0;right:238px;bottom:64px;background:var(--doc-paper);padding:60px;z-index:4">
+     <p class="err-line" role="alert" style="font:400 17px/1.5 var(--font-display);color:var(--color-terracotta-ink);margin:0 0 8px">This document could not be picked up.</p>
+     <p style="display:flex;gap:8px;margin:0"><button class="btn44">Try again</button><a class="btn44 quiet">Back to the desk</a></p></div></div>
+</div></div></div>
+<h2 class="sec" id="frame-states">Loading · empty · error · slow (People, the room that shows "empty" while it loads today)</h2>
+<p class="note">Loading uses bars shaped like rows and never prints a count. Empty appears only after a successful read: one sentence under an eyebrow, with no bars. Error keeps the frame and says in one line what could not be read, with a 44 px Try again. Slow raises a toast at 3 s; the error raises an error toast as well as the inline line.</p>
+<div class="strip"><div class="cell"><p class="cap">loading</p><div class="vp" style="--zw:1440;--z:0.34"><div class="screen s1440 "><i class="navind" style="--p:0.55"></i><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field"><i class="ph " style="--w:22%" data-t="A name, a firm or an email"></i></div>
+  <div class="tabs"><i class="ph inl" style="--w:64px" data-t="·"></i><i class="ph inl" style="--w:56px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:48px" data-t="·"></i><i class="ph inl" style="--w:80px" data-t="·"></i><i class="ph inl" style="--w:90px" data-t="·"></i><i class="ph inl" style="--w:120px" data-t="·"></i></div>
+  <div class="rows" aria-busy="true"><span class="sr">Loading the directory.</span><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Adaeze Okafor"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Chidi Okonkwo"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Fixture Chairworks"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Maker"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Rosa Delgado"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Trade · upholstery"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Sam Whitley"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Studio"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Nora Ellison"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div></div>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Studio contacts</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div><div class="vp" style="--zw:390;--z:0.5"><div class="screen s390 "><i class="navind" style="--p:0.55"></i><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field"><i class="ph " style="--w:46%" data-t="A name, a firm or an email"></i></div>
+  <div class="tabs"><i class="ph inl" style="--w:64px" data-t="·"></i><i class="ph inl" style="--w:56px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:48px" data-t="·"></i></div>
+  <div class="rows" aria-busy="true"><span class="sr">Loading the directory.</span><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Adaeze Okafor"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Client"></i></div></div></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Chidi Okonkwo"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Client"></i></div></div></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Fixture Chairworks"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Maker"></i></div></div></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Rosa Delgado"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Trade · upholstery"></i></div></div></div></div>
+</main><footer class="mbar"><span class="real mono">Patina</span><span class="real mono">··· More</span></footer></div></div></div><div class="cell"><p class="cap">empty</p><div class="vp" style="--zw:1440;--z:0.34"><div class="screen s1440 "><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field real" style="color:var(--text-faint)">A name, a firm or an email</div>
+  <div class="tabs real mono" style="font-size:11px;letter-spacing:.08em">Everyone<span></span>Clients<span></span>Trades<span></span>Makers<span></span>Studio<span></span>Companies<span></span>My contacts<span></span>Studio contacts</div>
+  <div class="empty"><p class="eb real"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Directory</span></p><p class="real empty-line">Nobody under this narrowing yet.</p></div>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Studio contacts</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div><div class="vp" style="--zw:390;--z:0.5"><div class="screen s390 "><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field real" style="color:var(--text-faint)">A name, a firm or an email</div>
+  <div class="tabs real mono" style="font-size:11px;letter-spacing:.08em">Everyone<span></span>Clients<span></span>Trades<span></span>Makers<span></span>Studio</div>
+  <div class="empty"><p class="eb real"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Directory</span></p><p class="real empty-line">Nobody under this narrowing yet.</p></div>
+</main><footer class="mbar"><span class="real mono">Patina</span><span class="real mono">··· More</span></footer></div></div></div><div class="cell"><p class="cap">error</p><div class="vp" style="--zw:1440;--z:0.34"><div class="screen s1440 "><i class="navind fail" style="--p:.6"></i><div class="toast err" role="alert"><span class="t-msg">Contacts could not be loaded.</span><button class="t-act">Try again</button></div><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field real" style="color:var(--text-faint)">A name, a firm or an email</div>
+  <div class="tabs real mono" style="font-size:11px;letter-spacing:.08em">Everyone<span></span>Clients<span></span>Trades<span></span>Makers<span></span>Studio<span></span>Companies<span></span>My contacts<span></span>Studio contacts</div>
+  <div class="err" role="alert"><p class="real err-line">The directory could not be read.</p><p class="real err-acts"><button class="btn44">Try again</button><a class="btn44 quiet">Back to the desk</a></p></div>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Studio contacts</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div><div class="vp" style="--zw:390;--z:0.5"><div class="screen s390 "><i class="navind fail" style="--p:.6"></i><div class="toast err" role="alert"><span class="t-msg">Contacts could not be loaded.</span><button class="t-act">Try again</button></div><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field real" style="color:var(--text-faint)">A name, a firm or an email</div>
+  <div class="tabs real mono" style="font-size:11px;letter-spacing:.08em">Everyone<span></span>Clients<span></span>Trades<span></span>Makers<span></span>Studio</div>
+  <div class="err" role="alert"><p class="real err-line">The directory could not be read.</p><p class="real err-acts"><button class="btn44">Try again</button><a class="btn44 quiet">Back to the desk</a></p></div>
+</main><footer class="mbar"><span class="real mono">Patina</span><span class="real mono">··· More</span></footer></div></div></div><div class="cell"><p class="cap">slow · after 3 s</p><div class="vp" style="--zw:1440;--z:0.34"><div class="screen s1440 "><i class="navind" style="--p:.85"></i><div class="toast" role="status"><span class="sweep" aria-hidden="true"><b></b><b></b><b></b></span><span class="t-msg">Still loading contacts…</span></div><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field"><i class="ph " style="--w:22%" data-t="A name, a firm or an email"></i></div>
+  <div class="tabs"><i class="ph inl" style="--w:64px" data-t="·"></i><i class="ph inl" style="--w:56px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:48px" data-t="·"></i><i class="ph inl" style="--w:80px" data-t="·"></i><i class="ph inl" style="--w:90px" data-t="·"></i><i class="ph inl" style="--w:120px" data-t="·"></i></div>
+  <div class="rows" aria-busy="true"><span class="sr">Loading the directory.</span><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Adaeze Okafor"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Chidi Okonkwo"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Fixture Chairworks"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Maker"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Rosa Delgado"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Trade · upholstery"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Sam Whitley"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Studio"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Nora Ellison"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div></div>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Studio contacts</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div><div class="vp" style="--zw:390;--z:0.5"><div class="screen s390 "><i class="navind" style="--p:.85"></i><div class="toast" role="status"><span class="sweep" aria-hidden="true"><b></b><b></b><b></b></span><span class="t-msg">Still loading contacts…</span></div><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field"><i class="ph " style="--w:46%" data-t="A name, a firm or an email"></i></div>
+  <div class="tabs"><i class="ph inl" style="--w:64px" data-t="·"></i><i class="ph inl" style="--w:56px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:48px" data-t="·"></i></div>
+  <div class="rows" aria-busy="true"><span class="sr">Loading the directory.</span><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Adaeze Okafor"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Client"></i></div></div></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Chidi Okonkwo"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Client"></i></div></div></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Fixture Chairworks"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Maker"></i></div></div></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Rosa Delgado"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Trade · upholstery"></i></div></div></div></div>
+</main><footer class="mbar"><span class="real mono">Patina</span><span class="real mono">··· More</span></footer></div></div></div></div>
+
+<h2 class="sec" id="frame-desk">Desk roster <span style="color:var(--text-faint)">/desk</span></h2>
+<div class="strip">
+  <div class="cell"><p class="cap">1440 × 900 · about 400 ms after the click</p><div class="vp" style="--zw:1440;--z:0.5"><div class="screen s1440 "><i class="navind" style="--p:0.55"></i><main class="pg desk" aria-busy="true">
+  <header class="d-head"><h1 class="ln ln-h1 real">Hello.</h1><nav class="acts real">+ Record an inquiry &nbsp; + Create a project file</nav></header>
+  <hr class="r-strong">
+  <section>
+    <p class="eb real"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Today</span><i class="ph inl" style="--w:64px" data-t="14 October"></i></p>
+    <span class="sr">Loading today’s lines.</span>
+    <div class="cards c3"><div class="card">
+      <div class="ln ln-meta"><i class="ph " style="--w:46%" data-t="Cedar Lane Study"></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Ask the maker for an arrival date"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Side table is not here and no date is recorded."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Yours"></i></div>
+    </div><div class="card">
+      <div class="ln ln-meta"><i class="ph " style="--w:46%" data-t="Holloway Den"></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Send the reminder for INV-0721"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Overdue 11 days, $3,400."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Sam"></i></div>
+    </div><div class="card">
+      <div class="ln ln-meta"><i class="ph " style="--w:46%" data-t="Pell Court"></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Review the Friday Pulse draft"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Drafted this morning."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Yours"></i></div>
+    </div></div>
+  </section>
+  <hr class="r-mid">
+  <section>
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:92px" data-t="Also yours"></i></p>
+    <div class="rows"><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Whole Home Renovation"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Install · 26 lines"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Due Fri"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Marsh Kitchen"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Proposal · sent"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Waiting"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Linden Guest Suite"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Procurement · 4 POs"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Due 21 Oct"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Garnet Loft"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Discovery"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="New"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Thornfield Study"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Closeout"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Signed"></i></div></div></div>
+  </section>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;The desk</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+  <div class="cell"><p class="cap">390 × 844</p><div class="vp" style="--zw:390;--z:0.62"><div class="screen s390 "><i class="navind" style="--p:0.55"></i><main class="pg desk" aria-busy="true">
+  <header class="d-head"><h1 class="ln ln-h1 real">Hello.</h1></header>
+  <hr class="r-strong">
+  <section>
+    <p class="eb real"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Today</span><i class="ph inl" style="--w:64px" data-t="14 October"></i></p>
+    <span class="sr">Loading today’s lines.</span>
+    <div class="cards c2"><div class="card">
+      <div class="ln ln-meta"><i class="ph " style="--w:46%" data-t="Cedar Lane Study"></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Ask the maker for an arrival date"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Side table is not here and no date is recorded."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Yours"></i></div>
+    </div><div class="card">
+      <div class="ln ln-meta"><i class="ph " style="--w:46%" data-t="Holloway Den"></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Send the reminder for INV-0721"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Overdue 11 days, $3,400."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Sam"></i></div>
+    </div></div>
+  </section>
+  <hr class="r-mid">
+  <section>
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:92px" data-t="Also yours"></i></p>
+    <div class="rows"><div class="row"><div class="ln ln-job"><i class="ph " style="--w:70%" data-t="Whole Home Renovation"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Install · 26 lines"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:22%" data-t="Due Fri"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:70%" data-t="Marsh Kitchen"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Proposal · sent"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:22%" data-t="Waiting"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:70%" data-t="Linden Guest Suite"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Procurement · 4 POs"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:22%" data-t="Due 21 Oct"></i></div></div></div>
+  </section>
+</main><footer class="mbar"><span class="real mono">Patina</span><span class="real mono">··· More</span></footer></div></div></div>
+  <div class="cell"><p class="cap">1440 · loaded (same line boxes)</p><div class="vp" style="--zw:1440;--z:0.3"><div class="screen s1440 loaded"><main class="pg desk" aria-busy="true">
+  <header class="d-head"><h1 class="ln ln-h1 real">Hello.</h1><nav class="acts real">+ Record an inquiry &nbsp; + Create a project file</nav></header>
+  <hr class="r-strong">
+  <section>
+    <p class="eb real"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Today</span><i class="ph inl" style="--w:64px" data-t="14 October"></i></p>
+    <span class="sr">Loading today’s lines.</span>
+    <div class="cards c3"><div class="card">
+      <div class="ln ln-meta"><i class="ph " style="--w:46%" data-t="Cedar Lane Study"></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Ask the maker for an arrival date"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Side table is not here and no date is recorded."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Yours"></i></div>
+    </div><div class="card">
+      <div class="ln ln-meta"><i class="ph " style="--w:46%" data-t="Holloway Den"></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Send the reminder for INV-0721"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Overdue 11 days, $3,400."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Sam"></i></div>
+    </div><div class="card">
+      <div class="ln ln-meta"><i class="ph " style="--w:46%" data-t="Pell Court"></i></div>
+      <div class="ln ln-job"><i class="ph " style="--w:82%" data-t="Review the Friday Pulse draft"></i></div>
+      <div class="ln ln-small"><i class="ph " style="--w:92%" data-t="Drafted this morning."></i></div>
+      <div class="ln ln-meta"><i class="ph " style="--w:22%" data-t="Yours"></i></div>
+    </div></div>
+  </section>
+  <hr class="r-mid">
+  <section>
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:92px" data-t="Also yours"></i></p>
+    <div class="rows"><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Whole Home Renovation"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Install · 26 lines"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Due Fri"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Marsh Kitchen"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Proposal · sent"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Waiting"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Linden Guest Suite"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Procurement · 4 POs"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Due 21 Oct"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Garnet Loft"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Discovery"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="New"></i></div></div><div class="row"><div class="ln ln-job"><i class="ph " style="--w:34%" data-t="Thornfield Study"></i></div><div class="ln ln-meta"><i class="ph " style="--w:20%" data-t="Closeout"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:9%" data-t="Signed"></i></div></div></div>
+  </section>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;The desk</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+</div>
+<h2 class="sec" id="frame-doc">Document paper and spine <span style="color:var(--text-faint)">/doc/[id]</span></h2>
+<div class="strip">
+  <div class="cell"><p class="cap">1440 × 900 · about 400 ms after the click</p><div class="vp" style="--zw:1440;--z:0.5"><div class="screen s1440 "><i class="navind" style="--p:0.55"></i><main class="pg docp" aria-busy="true"><span class="sr">Loading the document.</span><aside class="rail">
+    <a class="ln ln-meta real">← Back to studio overview</a>
+    <div class="strata-still" aria-hidden="true"><b></b><b></b><b></b></div>
+    <hr class="r-mid">
+    <div class="rail-item on"><div class="ln ln-body"><i class="ph " style="--w:78%" data-t="Client approvals"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Nothing yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:70%" data-t="Project schedule"></i></div><div class="ln ln-meta"><i class="ph " style="--w:52%" data-t="Not known yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Pieces"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="4 lines"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:82%" data-t="Project financials"></i></div><div class="ln ln-meta"><i class="ph " style="--w:76%" data-t="$16,330 undisbursed"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:74%" data-t="Project closeout"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Nothing yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:54%" data-t="The record"></i></div><div class="ln ln-meta"><i class="ph " style="--w:44%" data-t="1 complete"></i></div></div>
+    <p class="eb real tight">Filed with this job</p>
+    <a class="ln ln-body real">Drawing sets</a><a class="ln ln-body real">Specification book</a><a class="ln ln-body real">Boards</a><a class="ln ln-body real">Project directory</a>
+  </aside><div class="paper">
+    <div class="ln ln-small"><i class="ph " style="--w:120px" data-t="for Nora Ellison"></i></div>
+    <div class="title-row"><div class="ln ln-title"><i class="ph title" style="--w:46%" data-t="Cedar Lane Study"></i></div><div class="acts-col"><div class="ln ln-meta"><i class="ph " style="--w:120px" data-t="Message Nora"></i><i class="ph " style="--w:150px" data-t="Preview the client’s copy"></i></div><div class="ln ln-meta"><i class="ph " style="--w:84px" data-t="Sharing"></i><i class="ph " style="--w:150px" data-t="Project directory · 0"></i></div></div></div>
+    <hr class="r-mid">
+    <div class="next-band"><div class="ln ln-meta"><i class="ph " style="--w:180px" data-t="Install · Cedar Lane Study"></i></div><div class="ln ln-body"><i class="ph " style="--w:64%" data-t="Next — Side table isn’t here, and no arrival date is recorded."></i></div></div>
+    <hr class="r-mid">
+    <section class="region" style="min-height:68px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Client approvals"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Nora Ellison accepted the proposal · 13 October"></i></div>
+  </section>
+    <section class="region" style="min-height:68px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Schedule dates"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Expand to set the install window"></i></div>
+  </section>
+    <section class="region" style="min-height:112px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Install"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Side table isn’t here. 2 more aren’t here."></i></div>
+  </section>
+  </div><aside class="margin">
+    <p class="eb real tight">In the margin</p>
+    <div class="mcard"><div class="ln ln-meta"><i class="ph " style="--w:70%" data-t="Money · sent"></i></div><div class="ln ln-small"><i class="ph " style="--w:84%" data-t="INV-2026-0301"></i></div><div class="ln ln-meta"><i class="ph " style="--w:56%" data-t="About the whole job"></i></div></div><div class="mcard"><div class="ln ln-meta"><i class="ph " style="--w:70%" data-t="Money · vendor payment"></i></div><div class="ln ln-small"><i class="ph " style="--w:84%" data-t="Vendor payment, deposit"></i></div><div class="ln ln-meta"><i class="ph " style="--w:56%" data-t="About the whole job"></i></div></div>
+  </aside></main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Project file</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+  <div class="cell"><p class="cap">390 × 844</p><div class="vp" style="--zw:390;--z:0.62"><div class="screen s390 "><i class="navind" style="--p:0.55"></i><main class="pg docp m" aria-busy="true"><span class="sr">Loading the document.</span><div class="paper">
+    <div class="ln ln-small"><i class="ph " style="--w:120px" data-t="for Nora Ellison"></i></div>
+    <div class="title-row"><div class="ln ln-title"><i class="ph title" style="--w:78%" data-t="Cedar Lane Study"></i></div></div>
+    <hr class="r-mid">
+    <div class="next-band"><div class="ln ln-meta"><i class="ph " style="--w:180px" data-t="Install · Cedar Lane Study"></i></div><div class="ln ln-body"><i class="ph " style="--w:92%" data-t="Next — Side table isn’t here, and no arrival date is recorded."></i></div></div>
+    <hr class="r-mid">
+    <section class="region" style="min-height:68px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Client approvals"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Nora Ellison accepted the proposal · 13 October"></i></div>
+  </section>
+    <section class="region" style="min-height:68px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Schedule dates"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Expand to set the install window"></i></div>
+  </section>
+    <section class="region" style="min-height:112px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Install"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Side table isn’t here. 2 more aren’t here."></i></div>
+  </section>
+  </div></main><footer class="mbar"><span class="real mono">Patina</span><span class="real mono">··· More</span></footer></div></div></div>
+  <div class="cell"><p class="cap">1440 · loaded (same line boxes)</p><div class="vp" style="--zw:1440;--z:0.3"><div class="screen s1440 loaded"><main class="pg docp" aria-busy="true"><span class="sr">Loading the document.</span><aside class="rail">
+    <a class="ln ln-meta real">← Back to studio overview</a>
+    <div class="strata-still" aria-hidden="true"><b></b><b></b><b></b></div>
+    <hr class="r-mid">
+    <div class="rail-item on"><div class="ln ln-body"><i class="ph " style="--w:78%" data-t="Client approvals"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Nothing yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:70%" data-t="Project schedule"></i></div><div class="ln ln-meta"><i class="ph " style="--w:52%" data-t="Not known yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Pieces"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="4 lines"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:82%" data-t="Project financials"></i></div><div class="ln ln-meta"><i class="ph " style="--w:76%" data-t="$16,330 undisbursed"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:74%" data-t="Project closeout"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Nothing yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:54%" data-t="The record"></i></div><div class="ln ln-meta"><i class="ph " style="--w:44%" data-t="1 complete"></i></div></div>
+    <p class="eb real tight">Filed with this job</p>
+    <a class="ln ln-body real">Drawing sets</a><a class="ln ln-body real">Specification book</a><a class="ln ln-body real">Boards</a><a class="ln ln-body real">Project directory</a>
+  </aside><div class="paper">
+    <div class="ln ln-small"><i class="ph " style="--w:120px" data-t="for Nora Ellison"></i></div>
+    <div class="title-row"><div class="ln ln-title"><i class="ph title" style="--w:46%" data-t="Cedar Lane Study"></i></div><div class="acts-col"><div class="ln ln-meta"><i class="ph " style="--w:120px" data-t="Message Nora"></i><i class="ph " style="--w:150px" data-t="Preview the client’s copy"></i></div><div class="ln ln-meta"><i class="ph " style="--w:84px" data-t="Sharing"></i><i class="ph " style="--w:150px" data-t="Project directory · 0"></i></div></div></div>
+    <hr class="r-mid">
+    <div class="next-band"><div class="ln ln-meta"><i class="ph " style="--w:180px" data-t="Install · Cedar Lane Study"></i></div><div class="ln ln-body"><i class="ph " style="--w:64%" data-t="Next — Side table isn’t here, and no arrival date is recorded."></i></div></div>
+    <hr class="r-mid">
+    <section class="region" style="min-height:68px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Client approvals"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Nora Ellison accepted the proposal · 13 October"></i></div>
+  </section>
+    <section class="region" style="min-height:68px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Schedule dates"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Expand to set the install window"></i></div>
+  </section>
+    <section class="region" style="min-height:112px">
+    <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><i class="ph inl" style="--w:128px" data-t="Install"></i></p>
+    <div class="ln ln-small"><i class="ph " style="--w:38%" data-t="Side table isn’t here. 2 more aren’t here."></i></div>
+  </section>
+  </div><aside class="margin">
+    <p class="eb real tight">In the margin</p>
+    <div class="mcard"><div class="ln ln-meta"><i class="ph " style="--w:70%" data-t="Money · sent"></i></div><div class="ln ln-small"><i class="ph " style="--w:84%" data-t="INV-2026-0301"></i></div><div class="ln ln-meta"><i class="ph " style="--w:56%" data-t="About the whole job"></i></div></div><div class="mcard"><div class="ln ln-meta"><i class="ph " style="--w:70%" data-t="Money · vendor payment"></i></div><div class="ln ln-small"><i class="ph " style="--w:84%" data-t="Vendor payment, deposit"></i></div><div class="ln ln-meta"><i class="ph " style="--w:56%" data-t="About the whole job"></i></div></div>
+  </aside></main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Project file</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+</div>
+<h2 class="sec" id="frame-people">People index <span style="color:var(--text-faint)">/people</span></h2>
+<div class="strip">
+  <div class="cell"><p class="cap">1440 × 900 · about 400 ms after the click</p><div class="vp" style="--zw:1440;--z:0.5"><div class="screen s1440 "><i class="navind" style="--p:0.55"></i><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field"><i class="ph " style="--w:22%" data-t="A name, a firm or an email"></i></div>
+  <div class="tabs"><i class="ph inl" style="--w:64px" data-t="·"></i><i class="ph inl" style="--w:56px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:48px" data-t="·"></i><i class="ph inl" style="--w:80px" data-t="·"></i><i class="ph inl" style="--w:90px" data-t="·"></i><i class="ph inl" style="--w:120px" data-t="·"></i></div>
+  <div class="rows" aria-busy="true"><span class="sr">Loading the directory.</span><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Adaeze Okafor"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Chidi Okonkwo"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Fixture Chairworks"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Maker"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Rosa Delgado"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Trade · upholstery"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Sam Whitley"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Studio"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Nora Ellison"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div></div>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Studio contacts</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+  <div class="cell"><p class="cap">390 × 844</p><div class="vp" style="--zw:390;--z:0.62"><div class="screen s390 "><i class="navind" style="--p:0.55"></i><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field"><i class="ph " style="--w:46%" data-t="A name, a firm or an email"></i></div>
+  <div class="tabs"><i class="ph inl" style="--w:64px" data-t="·"></i><i class="ph inl" style="--w:56px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:48px" data-t="·"></i></div>
+  <div class="rows" aria-busy="true"><span class="sr">Loading the directory.</span><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Adaeze Okafor"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Client"></i></div></div></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Chidi Okonkwo"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Client"></i></div></div></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Fixture Chairworks"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Maker"></i></div></div></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:62%" data-t="Rosa Delgado"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="Trade · upholstery"></i></div></div></div></div>
+</main><footer class="mbar"><span class="real mono">Patina</span><span class="real mono">··· More</span></footer></div></div></div>
+  <div class="cell"><p class="cap">1440 · loaded (same line boxes)</p><div class="vp" style="--zw:1440;--z:0.3"><div class="screen s1440 loaded"><main class="pg people">
+  <header class="d-head"><h1 class="ln ln-h1 real">Studio contacts</h1></header>
+  <hr class="r-mid">
+  <p class="eb real">Search the directory</p>
+  <div class="field"><i class="ph " style="--w:22%" data-t="A name, a firm or an email"></i></div>
+  <div class="tabs"><i class="ph inl" style="--w:64px" data-t="·"></i><i class="ph inl" style="--w:56px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:52px" data-t="·"></i><i class="ph inl" style="--w:48px" data-t="·"></i><i class="ph inl" style="--w:80px" data-t="·"></i><i class="ph inl" style="--w:90px" data-t="·"></i><i class="ph inl" style="--w:120px" data-t="·"></i></div>
+  <div class="rows" aria-busy="true"><span class="sr">Loading the directory.</span><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Adaeze Okafor"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Chidi Okonkwo"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Fixture Chairworks"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Maker"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Rosa Delgado"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Trade · upholstery"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Sam Whitley"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Studio"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div><div class="prow"><i class="ph-box ph-dot" style="width:40px;height:40px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:22%" data-t="Nora Ellison"></i></div><div class="ln ln-meta"><i class="ph " style="--w:10%" data-t="Client"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="On paper"></i></i><i class="chip"><i class="ph inl" style="--w:64px" data-t="Not asked"></i></i></div></div>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Studio contacts</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+</div>
+<h2 class="sec" id="frame-library">Library shelf <span style="color:var(--text-faint)">/library</span></h2>
+<div class="strip">
+  <div class="cell"><p class="cap">1440 × 900 · about 400 ms after the click</p><div class="vp" style="--zw:1440;--z:0.5"><div class="screen s1440 "><i class="navind" style="--p:0.55"></i><main class="pg library" aria-busy="true">
+  <header class="d-head"><div class="ln ln-h1 real"><h1 class="inline">Resource library</h1><i class="ph inl" style="--w:70px" data-t="25 pieces"></i></div></header>
+  <hr class="r-mid">
+  <div class="lib-search"><div class="field"><i class="ph " style="--w:38%" data-t="Piece, maker, SKU, category…"></i></div>
+  <p class="real helper">Exact matches update as you type. Enter asks the Library.</p></div>
+  <span class="sr">Loading the shelves.</span>
+  <p class="eb"><i class="ph inl" style="--w:140px" data-t="Patina catalog · 25"></i></p>
+  <div class="rows narrow"><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Unmapped Oak Stool"></i></div><div class="ln ln-meta"><i class="ph " style="--w:28%" data-t="Chair"></i></div></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Oak Reading Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:28%" data-t="Nordic Atelier · Chair"></i></div></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Fixture Turned-Leg Side Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:28%" data-t="Fixture Chairworks · Seating"></i></div></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Velvet Club Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:28%" data-t="Article · Chair"></i></div></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Phase One Catalog Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:28%" data-t="Synthetic Atelier · Chair"></i></div></div></div></div>
+  <hr class="r-hair">
+  <div class="tabs"><i class="ph inl" style="--w:96px" data-t="·"></i><i class="ph inl" style="--w:80px" data-t="·"></i><i class="ph inl" style="--w:72px" data-t="·"></i><i class="ph inl" style="--w:128px" data-t="·"></i></div>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Resource library</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+  <div class="cell"><p class="cap">390 × 844</p><div class="vp" style="--zw:390;--z:0.62"><div class="screen s390 "><i class="navind" style="--p:0.55"></i><main class="pg library" aria-busy="true">
+  <header class="d-head"><div class="ln ln-h1 real"><h1 class="inline">Resource library</h1><i class="ph inl" style="--w:70px" data-t="25 pieces"></i></div></header>
+  <hr class="r-mid">
+  <div class="lib-search"><div class="field"><i class="ph " style="--w:38%" data-t="Piece, maker, SKU, category…"></i></div>
+  <p class="real helper">Exact matches update as you type. Enter asks the Library.</p></div>
+  <span class="sr">Loading the shelves.</span>
+  <p class="eb"><i class="ph inl" style="--w:140px" data-t="Patina catalog · 25"></i></p>
+  <div class="rows narrow"><div class="prow"><i class="ph-box " style="width:44px;height:44px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:72%" data-t="Unmapped Oak Stool"></i></div><div class="ln ln-meta"><i class="ph " style="--w:50%" data-t="Chair"></i></div></div></div><div class="prow"><i class="ph-box " style="width:44px;height:44px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:72%" data-t="Oak Reading Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:50%" data-t="Nordic Atelier · Chair"></i></div></div></div><div class="prow"><i class="ph-box " style="width:44px;height:44px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:72%" data-t="Fixture Turned-Leg Side Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:50%" data-t="Fixture Chairworks · Seating"></i></div></div></div><div class="prow"><i class="ph-box " style="width:44px;height:44px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:72%" data-t="Velvet Club Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:50%" data-t="Article · Chair"></i></div></div></div></div>
+  <hr class="r-hair">
+  <div class="tabs"><i class="ph inl" style="--w:96px" data-t="·"></i><i class="ph inl" style="--w:80px" data-t="·"></i><i class="ph inl" style="--w:72px" data-t="·"></i><i class="ph inl" style="--w:128px" data-t="·"></i></div>
+</main><footer class="mbar"><span class="real mono">Patina</span><span class="real mono">··· More</span></footer></div></div></div>
+  <div class="cell"><p class="cap">1440 · loaded (same line boxes)</p><div class="vp" style="--zw:1440;--z:0.3"><div class="screen s1440 loaded"><main class="pg library" aria-busy="true">
+  <header class="d-head"><div class="ln ln-h1 real"><h1 class="inline">Resource library</h1><i class="ph inl" style="--w:70px" data-t="25 pieces"></i></div></header>
+  <hr class="r-mid">
+  <div class="lib-search"><div class="field"><i class="ph " style="--w:38%" data-t="Piece, maker, SKU, category…"></i></div>
+  <p class="real helper">Exact matches update as you type. Enter asks the Library.</p></div>
+  <span class="sr">Loading the shelves.</span>
+  <p class="eb"><i class="ph inl" style="--w:140px" data-t="Patina catalog · 25"></i></p>
+  <div class="rows narrow"><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Unmapped Oak Stool"></i></div><div class="ln ln-meta"><i class="ph " style="--w:28%" data-t="Chair"></i></div></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Oak Reading Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:28%" data-t="Nordic Atelier · Chair"></i></div></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Fixture Turned-Leg Side Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:28%" data-t="Fixture Chairworks · Seating"></i></div></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Velvet Club Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:28%" data-t="Article · Chair"></i></div></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Phase One Catalog Chair"></i></div><div class="ln ln-meta"><i class="ph " style="--w:28%" data-t="Synthetic Atelier · Chair"></i></div></div></div></div>
+  <hr class="r-hair">
+  <div class="tabs"><i class="ph inl" style="--w:96px" data-t="·"></i><i class="ph inl" style="--w:80px" data-t="·"></i><i class="ph inl" style="--w:72px" data-t="·"></i><i class="ph inl" style="--w:128px" data-t="·"></i></div>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Resource library</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+</div>
+<h2 class="sec" id="frame-pieces">Build room <span style="color:var(--text-faint)">/doc/[id]/pieces</span></h2>
+<div class="strip">
+  <div class="cell"><p class="cap">1440 × 900 · about 400 ms after the click</p><div class="vp" style="--zw:1440;--z:0.5"><div class="screen s1440 "><i class="navind" style="--p:0.55"></i><main class="pg docp" aria-busy="true"><span class="sr">Loading the pieces.</span><aside class="rail">
+    <a class="ln ln-meta real">← Back to studio overview</a>
+    <div class="strata-still" aria-hidden="true"><b></b><b></b><b></b></div>
+    <hr class="r-mid">
+    <div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:78%" data-t="Client approvals"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Nothing yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:70%" data-t="Project schedule"></i></div><div class="ln ln-meta"><i class="ph " style="--w:52%" data-t="Not known yet"></i></div></div><div class="rail-item on"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Pieces"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="4 lines"></i></div></div><div class="rail-sub"><div class="ln ln-body"><i class="ph " style="--w:44%" data-t="Hall"></i></div><div class="ln ln-body"><i class="ph " style="--w:58%" data-t="Living Room"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:82%" data-t="Project financials"></i></div><div class="ln ln-meta"><i class="ph " style="--w:76%" data-t="$16,330 undisbursed"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:74%" data-t="Project closeout"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Nothing yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:54%" data-t="The record"></i></div><div class="ln ln-meta"><i class="ph " style="--w:44%" data-t="1 complete"></i></div></div>
+    <p class="eb real tight">Filed with this job</p>
+    <a class="ln ln-body real">Drawing sets</a><a class="ln ln-body real">Specification book</a><a class="ln ln-body real">Boards</a><a class="ln ln-body real">Project directory</a>
+  </aside><div class="paper">
+    <div class="next-band"><div class="ln ln-meta"><i class="ph " style="--w:200px" data-t="Project · Whole home renovation"></i></div><div class="ln ln-body"><i class="ph " style="--w:52%" data-t="Next — Friday Pulse drafted, review and send"></i></div></div>
+    <hr class="r-strong">
+    <div class="title-row"><div><h2 class="ln ln-h1 real">Pieces</h2><div class="ln ln-small"><i class="ph " style="--w:190px" data-t="by room · 7 groups · 26 lines"></i></div><div class="ln ln-small"><i class="ph " style="--w:170px" data-t="25 unspecified · 26 uninvoiced"></i></div></div><div class="acts-col"><div class="ln ln-meta"><i class="ph " style="--w:120px" data-t="Record a change"></i><i class="ph " style="--w:84px" data-t="Add a line"></i></div></div></div>
+    <hr class="r-hair">
+    <div class="group-head"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><div class="ln ln-job"><i class="ph it" style="--w:64px" data-t="Hall"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:84px" data-t="0 underway"></i></div></div>
+    <div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:36%" data-t="Console table"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="Specified"></i></i><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$1,840"></i></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:36%" data-t="Runner, 2′6″ × 10′"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="Specified"></i></i><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$620"></i></div></div>
+    <div class="group-head"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><div class="ln ln-job"><i class="ph it" style="--w:112px" data-t="Living Room"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:84px" data-t="1 underway"></i></div></div>
+    <div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:36%" data-t="Console table"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="Specified"></i></i><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$1,840"></i></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:36%" data-t="Runner, 2′6″ × 10′"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="Specified"></i></i><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$620"></i></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:36%" data-t="Pair of sconces"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="Unspecified"></i></i><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="—"></i></div></div>
+  </div><aside class="margin">
+    <p class="eb real tight">In the margin</p>
+    <div class="mcard"><div class="ln ln-meta"><i class="ph " style="--w:70%" data-t="Money · sent"></i></div><div class="ln ln-small"><i class="ph " style="--w:84%" data-t="INV-2026-0301"></i></div><div class="ln ln-meta"><i class="ph " style="--w:56%" data-t="About the whole job"></i></div></div><div class="mcard"><div class="ln ln-meta"><i class="ph " style="--w:70%" data-t="Money · vendor payment"></i></div><div class="ln ln-small"><i class="ph " style="--w:84%" data-t="Vendor payment, deposit"></i></div><div class="ln ln-meta"><i class="ph " style="--w:56%" data-t="About the whole job"></i></div></div>
+  </aside></main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Pieces</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+  <div class="cell"><p class="cap">390 × 844</p><div class="vp" style="--zw:390;--z:0.62"><div class="screen s390 "><i class="navind" style="--p:0.55"></i><main class="pg docp m" aria-busy="true"><span class="sr">Loading the pieces.</span><div class="paper">
+    <div class="next-band"><div class="ln ln-meta"><i class="ph " style="--w:200px" data-t="Project · Whole home renovation"></i></div><div class="ln ln-body"><i class="ph " style="--w:90%" data-t="Next — Friday Pulse drafted, review and send"></i></div></div>
+    <hr class="r-strong">
+    <div class="title-row"><div><h2 class="ln ln-h1 real">Pieces</h2><div class="ln ln-small"><i class="ph " style="--w:190px" data-t="by room · 7 groups · 26 lines"></i></div><div class="ln ln-small"><i class="ph " style="--w:170px" data-t="25 unspecified · 26 uninvoiced"></i></div></div></div>
+    <hr class="r-hair">
+    <div class="group-head"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><div class="ln ln-job"><i class="ph it" style="--w:64px" data-t="Hall"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:84px" data-t="0 underway"></i></div></div>
+    <div class="prow"><i class="ph-box " style="width:44px;height:44px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:70%" data-t="Console table"></i></div><div class="ln ln-meta"><i class="ph " style="--w:34%" data-t="Specified"></i></div></div><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$1,840"></i></div></div><div class="prow"><i class="ph-box " style="width:44px;height:44px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:70%" data-t="Runner, 2′6″ × 10′"></i></div><div class="ln ln-meta"><i class="ph " style="--w:34%" data-t="Specified"></i></div></div><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$620"></i></div></div>
+    <div class="group-head"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><div class="ln ln-job"><i class="ph it" style="--w:112px" data-t="Living Room"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:84px" data-t="1 underway"></i></div></div>
+    <div class="prow"><i class="ph-box " style="width:44px;height:44px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:70%" data-t="Console table"></i></div><div class="ln ln-meta"><i class="ph " style="--w:34%" data-t="Specified"></i></div></div><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$1,840"></i></div></div>
+  </div></main><footer class="mbar"><span class="real mono">Patina</span><span class="real mono">··· More</span></footer></div></div></div>
+  <div class="cell"><p class="cap">1440 · loaded (same line boxes)</p><div class="vp" style="--zw:1440;--z:0.3"><div class="screen s1440 loaded"><main class="pg docp" aria-busy="true"><span class="sr">Loading the pieces.</span><aside class="rail">
+    <a class="ln ln-meta real">← Back to studio overview</a>
+    <div class="strata-still" aria-hidden="true"><b></b><b></b><b></b></div>
+    <hr class="r-mid">
+    <div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:78%" data-t="Client approvals"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Nothing yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:70%" data-t="Project schedule"></i></div><div class="ln ln-meta"><i class="ph " style="--w:52%" data-t="Not known yet"></i></div></div><div class="rail-item on"><div class="ln ln-body"><i class="ph " style="--w:40%" data-t="Pieces"></i></div><div class="ln ln-meta"><i class="ph " style="--w:30%" data-t="4 lines"></i></div></div><div class="rail-sub"><div class="ln ln-body"><i class="ph " style="--w:44%" data-t="Hall"></i></div><div class="ln ln-body"><i class="ph " style="--w:58%" data-t="Living Room"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:82%" data-t="Project financials"></i></div><div class="ln ln-meta"><i class="ph " style="--w:76%" data-t="$16,330 undisbursed"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:74%" data-t="Project closeout"></i></div><div class="ln ln-meta"><i class="ph " style="--w:48%" data-t="Nothing yet"></i></div></div><div class="rail-item"><div class="ln ln-body"><i class="ph " style="--w:54%" data-t="The record"></i></div><div class="ln ln-meta"><i class="ph " style="--w:44%" data-t="1 complete"></i></div></div>
+    <p class="eb real tight">Filed with this job</p>
+    <a class="ln ln-body real">Drawing sets</a><a class="ln ln-body real">Specification book</a><a class="ln ln-body real">Boards</a><a class="ln ln-body real">Project directory</a>
+  </aside><div class="paper">
+    <div class="next-band"><div class="ln ln-meta"><i class="ph " style="--w:200px" data-t="Project · Whole home renovation"></i></div><div class="ln ln-body"><i class="ph " style="--w:52%" data-t="Next — Friday Pulse drafted, review and send"></i></div></div>
+    <hr class="r-strong">
+    <div class="title-row"><div><h2 class="ln ln-h1 real">Pieces</h2><div class="ln ln-small"><i class="ph " style="--w:190px" data-t="by room · 7 groups · 26 lines"></i></div><div class="ln ln-small"><i class="ph " style="--w:170px" data-t="25 unspecified · 26 uninvoiced"></i></div></div><div class="acts-col"><div class="ln ln-meta"><i class="ph " style="--w:120px" data-t="Record a change"></i><i class="ph " style="--w:84px" data-t="Add a line"></i></div></div></div>
+    <hr class="r-hair">
+    <div class="group-head"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><div class="ln ln-job"><i class="ph it" style="--w:64px" data-t="Hall"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:84px" data-t="0 underway"></i></div></div>
+    <div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:36%" data-t="Console table"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="Specified"></i></i><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$1,840"></i></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:36%" data-t="Runner, 2′6″ × 10′"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="Specified"></i></i><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$620"></i></div></div>
+    <div class="group-head"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><div class="ln ln-job"><i class="ph it" style="--w:112px" data-t="Living Room"></i></div><div class="ln ln-meta"><i class="ph end" style="--w:84px" data-t="1 underway"></i></div></div>
+    <div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:36%" data-t="Console table"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="Specified"></i></i><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$1,840"></i></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:36%" data-t="Runner, 2′6″ × 10′"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="Specified"></i></i><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="$620"></i></div></div><div class="prow"><i class="ph-box " style="width:54px;height:54px"></i><div class="grow"><div class="ln ln-body"><i class="ph " style="--w:36%" data-t="Pair of sconces"></i></div></div><i class="chip"><i class="ph inl" style="--w:64px" data-t="Unspecified"></i></i><div class="ln ln-meta"><i class="ph end" style="--w:44px" data-t="—"></i></div></div>
+  </div><aside class="margin">
+    <p class="eb real tight">In the margin</p>
+    <div class="mcard"><div class="ln ln-meta"><i class="ph " style="--w:70%" data-t="Money · sent"></i></div><div class="ln ln-small"><i class="ph " style="--w:84%" data-t="INV-2026-0301"></i></div><div class="ln ln-meta"><i class="ph " style="--w:56%" data-t="About the whole job"></i></div></div><div class="mcard"><div class="ln ln-meta"><i class="ph " style="--w:70%" data-t="Money · vendor payment"></i></div><div class="ln ln-small"><i class="ph " style="--w:84%" data-t="Vendor payment, deposit"></i></div><div class="ln ln-meta"><i class="ph " style="--w:56%" data-t="About the whole job"></i></div></div>
+  </aside></main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Pieces</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+</div>
+<h2 class="sec" id="frame-room">Room view <span style="color:var(--text-faint)">/room/[id]</span></h2>
+<div class="strip">
+  <div class="cell"><p class="cap">1440 × 900 · about 400 ms after the click</p><div class="vp" style="--zw:1440;--z:0.5"><div class="screen s1440 "><i class="navind" style="--p:0.55"></i><main class="pg roomv" aria-busy="true">
+  <header class="rv-head"><a class="ln ln-meta real">← The desk</a><p class="eb real"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>A room</span></p><span></span></header>
+  <span class="sr">Loading the room drawing.</span>
+  <div class="board"><i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i><div class="board-fill"></div></div>
+  <div class="caption"><div class="ln ln-job"><i class="ph " style="--w:160px" data-t="Living Room"></i></div><div class="ln ln-meta"><i class="ph " style="--w:220px" data-t="18′ 4″ × 14′ 9″ · 271 sq ft"></i></div></div>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Measured rooms</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+  <div class="cell"><p class="cap">390 × 844</p><div class="vp" style="--zw:390;--z:0.62"><div class="screen s390 "><i class="navind" style="--p:0.55"></i><main class="pg roomv" aria-busy="true">
+  <header class="rv-head"><a class="ln ln-meta real">← The desk</a><p class="eb real"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>A room</span></p><span></span></header>
+  <span class="sr">Loading the room drawing.</span>
+  <div class="board sq"><i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i><div class="board-fill"></div></div>
+  <div class="caption"><div class="ln ln-job"><i class="ph " style="--w:50%" data-t="Living Room"></i></div><div class="ln ln-meta"><i class="ph " style="--w:64%" data-t="18′ 4″ × 14′ 9″ · 271 sq ft"></i></div></div>
+</main><footer class="mbar"><span class="real mono">Patina</span><span class="real mono">··· More</span></footer></div></div></div>
+  <div class="cell"><p class="cap">1440 · loaded (same line boxes)</p><div class="vp" style="--zw:1440;--z:0.3"><div class="screen s1440 loaded"><main class="pg roomv" aria-busy="true">
+  <header class="rv-head"><a class="ln ln-meta real">← The desk</a><p class="eb real"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>A room</span></p><span></span></header>
+  <span class="sr">Loading the room drawing.</span>
+  <div class="board"><i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i><div class="board-fill"></div></div>
+  <div class="caption"><div class="ln ln-job"><i class="ph " style="--w:160px" data-t="Living Room"></i></div><div class="ln ln-meta"><i class="ph " style="--w:220px" data-t="18′ 4″ × 14′ 9″ · 271 sq ft"></i></div></div>
+</main><footer class="drawer"><span class="real mono">Patina&nbsp;/&nbsp;Measured rooms</span><span class="real navs">Resource library&nbsp;&nbsp; Studio contacts&nbsp;&nbsp; Measured rooms&nbsp;&nbsp; Ledgers</span><span class="real mono">Studio inbox</span></footer></div></div></div>
+</div>
+</div>
+<script>
+const rmBox=document.getElementById('rm');
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){rmBox.checked=true;document.documentElement.classList.add('rm')}
+rmBox.addEventListener('change',()=>document.documentElement.classList.toggle('rm',rmBox.checked));
+// restart the CSS fade-ins so the 150 ms delay can be seen again
+function restartAnims(root){root.querySelectorAll('.ph,.ph-box,.reg').forEach(n=>{n.style.animation='none';n.offsetWidth;n.style.animation=''})}
+document.querySelectorAll('[data-replay-stills]').forEach(b=>b.addEventListener('click',()=>restartAnims(document)));
+
+const SCEN={
+  normal:{commit:250,content:1400,label:'Normal: route 250 ms, data 1.4 s (P2 local usable 1,464 ms)'},
+  fast:{commit:60,content:120,label:'Fast: cached, data 120 ms. No rule, no bars: nothing flashes'},
+  slow:{commit:600,content:7000,label:'Slow: prod-like route 600 ms, data 7 s'},
+  fail:{commit:300,content:null,fail:1800,label:'Fail: data errors at 1.8 s'},
+};
+const demo=document.getElementById('demo');
+const prev=demo.querySelector('.prev'),next=demo.querySelector('.next');
+const ind=demo.querySelector('.navind'),clock=document.getElementById('clock'),why=document.getElementById('why');
+const slow=demo.querySelector('.slow-line'),toast=demo.querySelector('.toast');
+const link=prev.querySelector('[data-press]');
+let timers=[],raf=0,t0=0,speed=1;
+function at(ms,fn){timers.push(setTimeout(fn,ms/speed))}
+function reset(){timers.forEach(clearTimeout);timers=[];cancelAnimationFrame(raf);
+  prev.hidden=false;next.hidden=true;next.querySelector('.screen').classList.remove('loaded');
+  ind.className='navind off';ind.style.setProperty('--p',0);slow.hidden=true;toast.hidden=true;toast.className='toast';
+  next.querySelector('.err-over').hidden=true;next.querySelector('.screen').classList.remove('failed');link.classList.remove('pressed');clock.textContent='0 ms'}
+function tick(){clock.textContent=Math.round((performance.now()-t0)*speed)+' ms';raf=requestAnimationFrame(tick)}
+function run(name){reset();const s=SCEN[name];why.textContent=s.label;t0=performance.now();tick();
+  link.classList.add('pressed');                                        // 0 ms: press state (D2)
+  let done=false;
+  at(100,()=>{if(done)return;ind.className='navind';requestAnimationFrame(()=>ind.style.setProperty('--p',0.6))}); // 100 ms: indicator
+  at(s.commit,()=>{prev.hidden=true;next.hidden=false;restartAnims(next)}); // route commits: frame now, bars after 150 ms (CSS)
+  at(s.commit+150,()=>{if(!done)ind.style.setProperty('--p',0.85)});      // data stage
+  at(3000,()=>{if(!done){toast.hidden=false;toast.querySelector('.t-msg').textContent='Still loading Cedar Lane Study…'}});
+  at(10000,()=>{if(!done){toast.querySelector('.t-msg').textContent='This is taking longer than it should.';toast.querySelector('.t-act').hidden=false}});
+  if(s.content!=null)at(Math.max(s.content,s.commit),()=>{done=true;next.querySelector('.screen').classList.add('loaded');slow.hidden=true;toast.hidden=true;
+     if(ind.classList.contains('off')){/* never shown: stays off */}else{ind.style.setProperty('--p',1);ind.classList.add('done')}
+     at(Math.max(s.content,s.commit)+400,()=>cancelAnimationFrame(raf))});
+  if(s.fail)at(s.fail,()=>{done=true;ind.className='navind fail';next.querySelector('.screen').classList.add('failed');next.querySelector('.err-over').hidden=false;slow.hidden=true;
+     toast.hidden=false;toast.className='toast err';toast.querySelector('.t-msg').textContent='Cedar Lane Study could not be loaded.';toast.querySelector('.t-act').hidden=false;toast.querySelector('.t-act').textContent='Try again';
+     at(s.fail+300,()=>cancelAnimationFrame(raf))});
+}
+document.querySelectorAll('[data-run]').forEach(b=>b.addEventListener('click',()=>run(b.dataset.run)));
+document.getElementById('speed').addEventListener('change',e=>{speed=Number(e.target.value)});
+reset();
+</script>
+</body></html>
