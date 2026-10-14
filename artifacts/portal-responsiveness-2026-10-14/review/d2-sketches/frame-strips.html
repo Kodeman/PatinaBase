@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Action Frame Strips</title>
+<meta name="description" content="US-33 D2 sketch: frame strips (today, quiet, expressive) for P6–P9 and the 9 components the sweep flagged, with a scrubber that highlights the live frame at time t. Tokens copied from apps/designer-portal/src/app/globals.css.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Tokens copied verbatim from apps/designer-portal/src/app/globals.css (line refs in comments). */
+:root {
+  color-scheme: light; /* the portal paints no dark paper set (globals.css:56-58) */
+  --color-off-white: #FAF7F2;      /* :10 */
+  --color-pearl: #E5E2DD;          /* :11 */
+  --color-clay: #C4A57B;           /* :12 */
+  --color-aged-oak: #8B7355;       /* :13 */
+  --color-mocha: #5C4A3C;          /* :14 */
+  --color-charcoal: #2C2926;       /* :15 */
+  --color-clay-ink: #7C5E30;       /* :34 */
+  --color-terracotta-ink: #9C5340; /* :35 */
+  --color-sage-ink: #5F6B57;       /* :41 */
+  --color-sage: #A8B5A0;           /* :44 */
+  --doc-paper: #FCFAF6;            /* :64 */
+  --doc-sheet-2: #EFE9DD;          /* :72 */
+  --doc-ink-border: rgba(44, 41, 38, 0.18); /* :74 */
+  --bg-warm: #EEE6DB;              /* :119 */
+  --text-muted: #4E4339;           /* :93 */
+  --text-faint: #65594E;           /* :117 */
+  --wash-clay: rgba(196, 165, 123, 0.16);        /* :184 */
+  --wash-terracotta: rgba(212, 160, 144, 0.16);  /* :186 */
+  --wash-direction-still: rgba(54, 106, 58, 0.06); /* :189 */
+  --sheet-toast: #1A1816;          /* :1972 */
+  --sheet-toast-ink: #FFFFFF;      /* :1973 */
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1); /* :204 */
+  --press-in: 70ms;                /* :211 */
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta: 'DM Mono', 'SF Mono', monospace;
+  /* NOT a portal token: the shadcn destructive toast colour, used only to draw today's global "Error" toast. */
+  --sketch-today-toast: #B42318;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--color-off-white); color: var(--color-charcoal); font-family: var(--font-body); font-size: 14px; line-height: 1.5; }
+main { max-width: 1440px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-family: var(--font-display); font-weight: 500; font-size: 30px; line-height: 1.15; margin: 0 0 6px; }
+h2 { font-family: var(--font-display); font-weight: 500; font-size: 21px; margin: 0; }
+.kicker, .meta { font-family: var(--font-meta); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+p.lede { color: var(--text-muted); max-width: 75ch; margin: 0 0 8px; }
+code { font-family: var(--font-meta); font-size: 12px; }
+a { color: var(--color-clay-ink); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 0 4px; margin: 12px 0 0; }
+nav.toc a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; font-family: var(--font-meta); font-size: 12px; }
+
+/* scrubber */
+.scrub { position: sticky; top: 0; z-index: 2; background: var(--color-off-white); border-bottom: 1px solid var(--color-pearl); padding: 8px 0; margin: 16px 0 24px; display: flex; flex-wrap: wrap; gap: 4px 20px; align-items: center; }
+.scrub label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; }
+.scrub input[type=range] { width: min(420px, 60vw); min-height: 44px; accent-color: var(--color-charcoal); }
+.scrub select { min-height: 44px; font: inherit; border: 1px solid var(--color-pearl); background: var(--doc-paper); border-radius: 3px; padding: 0 8px; }
+.scrub input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--color-terracotta-ink); }
+.scrub output { font-family: var(--font-meta); font-size: 13px; min-width: 9ch; }
+.scrub .live { font-family: var(--font-meta); font-size: 12px; color: var(--text-muted); }
+
+/* strip */
+.strip { background: var(--doc-paper); border: 1px solid var(--doc-ink-border); border-radius: 6px; padding: 16px; margin: 0 0 24px; scroll-margin-top: 80px; }
+.strip header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-bottom: 4px; }
+.strip .cls { font-family: var(--font-meta); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; padding: 2px 6px; border: 1px solid var(--color-pearl); border-radius: 2px; }
+.strip .cls.never { color: var(--color-terracotta-ink); border-color: var(--color-terracotta-ink); }
+.strip .cite { font-family: var(--font-meta); font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
+.strip .verdict { font-size: 13px; color: var(--color-mocha); margin: 4px 0 12px; max-width: 95ch; }
+.grid { display: grid; grid-template-columns: 92px repeat(var(--cols), minmax(170px, 1fr)); gap: 0; overflow-x: auto; }
+.grid .h { font-family: var(--font-meta); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); padding: 6px 8px; border-bottom: 1.5px solid var(--color-charcoal); }
+.grid .rl { font-family: var(--font-meta); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); padding: 10px 8px; border-bottom: 1px solid var(--color-pearl); }
+.cell { position: relative; padding: 8px; border-bottom: 1px solid var(--color-pearl); border-left: 1px dashed var(--color-pearl); min-width: 0; transition: background 150ms; }
+.cell .cap { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
+.cell.on { background: linear-gradient(var(--color-charcoal), var(--color-charcoal)) top / 100% 3px no-repeat, var(--wash-clay); }
+.cell.na { color: var(--text-faint); font-size: 12px; font-style: italic; }
+@media (max-width: 720px) {
+  .grid { grid-template-columns: 70px repeat(var(--cols), minmax(150px, 1fr)); }
+  .grid .rl { font-size: 9px; padding: 10px 4px; overflow-wrap: anywhere; }
+}
+
+/* mini parts */
+.mrow { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px; border-bottom: 1px dashed var(--color-pearl); position: relative; font-size: 12.5px; }
+.mrow.short { min-height: 29px; } /* today's task row: py-1.5 + 12px text (work-block.tsx:316), derived not measured */
+.tick { display: inline-flex; width: 13px; height: 13px; align-items: center; justify-content: center; border: 1.5px solid var(--doc-ink-border); border-radius: 3px; font-size: 8px; font-weight: 700; color: var(--color-sage-ink); }
+.tick.done { border-color: var(--color-sage); background: rgba(168,181,160,.15); }
+.tick.blocked { border-color: var(--color-terracotta-ink); color: var(--color-terracotta-ink); }
+.mrow .t { color: var(--color-charcoal); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrow.done .t { color: var(--text-muted); }
+.mrow .m { font-family: var(--font-meta); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+.mrow.pressed { background: var(--bg-warm); }
+.mrow.ghost .t { color: var(--text-faint); font-style: italic; }
+.mrow.washok { background: var(--wash-direction-still); }
+.mrow.washerr { background: var(--wash-terracotta); }
+.pool { position: absolute; inset: 0; background: radial-gradient(circle at 14px 50%, rgba(196,165,123,.35) 0 30px, transparent 31px); }
+.hair { position: absolute; left: 0; bottom: -1px; height: 2px; width: 45%; background: var(--color-clay); }
+.act { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 4px 10px; font-family: var(--font-meta); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--color-charcoal); position: relative; }
+.act .lbl { position: relative; line-height: 12px; }
+.act .lbl::before { content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 1.5px; background: var(--color-charcoal); }
+.act .lbl::after { content: ''; position: absolute; left: 0; right: 0; bottom: -7.5px; height: 1px; background: var(--color-clay); }
+.act.sec { color: var(--color-mocha); }
+.act.sec .lbl::before { height: 1px; background: var(--color-aged-oak); }
+.act.sec .lbl::after { content: none; }
+.act.pressed { transform: translateY(1px); }
+.act.pressed::before { content: ''; position: absolute; inset: 8px 2px; background: var(--color-charcoal); border-radius: 2px; z-index: 0; }
+.act.pressed .lbl { color: var(--color-off-white); z-index: 1; }
+.act.held { color: var(--text-faint); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .6; }
+.ln { font-size: 11.5px; line-height: 1.4; padding: 4px 6px; }
+.ln.st { color: var(--text-muted); }
+.ln.ok { color: var(--color-sage-ink); }
+.ln.err { color: var(--color-terracotta-ink); }
+.ln .act { min-height: 32px; padding-bottom: 8px; } /* drawn smaller in a frame; the real control is 44px */
+.toast { margin-top: 6px; background: var(--sketch-today-toast); color: #fff; border-radius: 6px; padding: 6px 8px; font-size: 11px; line-height: 1.35; }
+.toast b { display: block; }
+.undo { display: flex; align-items: center; gap: 8px; background: var(--sheet-toast); color: var(--sheet-toast-ink); border-radius: 3px; padding: 2px 8px; font-size: 11.5px; margin-top: 6px; }
+.undo .act { color: #fff; min-height: 36px; }
+.undo .act .lbl::before { background: #fff; }
+.undo .act .lbl::after { content: none; }
+.undo .s { font-family: var(--font-meta); font-size: 10px; }
+.field { display: flex; align-items: center; gap: 6px; border-bottom: 1px dashed var(--color-pearl); min-height: 40px; padding: 0 4px; font-size: 12.5px; }
+.field .caret { width: 1px; height: 14px; background: var(--color-charcoal); }
+.field.focus { border-bottom-color: var(--color-clay); }
+.field .ph { color: var(--text-faint); }
+.sel { display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; min-width: 110px; border: 1px solid var(--color-pearl); border-radius: 3px; padding: 0 8px; font-size: 12px; background: #fff; }
+.swatch { display: flex; align-items: center; gap: 8px; }
+.chip-c { width: 28px; height: 28px; border-radius: 3px; border: 1px solid var(--doc-ink-border); }
+.dialog { margin-top: 6px; border: 1px solid #999; border-radius: 8px; padding: 8px; font-size: 11px; background: #fff; font-family: -apple-system, sans-serif; }
+.folio { display: flex; gap: 4px; }
+.folio i { display: block; width: 34px; height: 34px; border-radius: 3px; background: linear-gradient(135deg, var(--doc-sheet-2), var(--color-clay)); border: 1px solid var(--doc-ink-border); }
+.folio i.gone { opacity: .25; border-style: dashed; background: none; }
+.draft { border: 1px solid var(--color-pearl); border-radius: 3px; padding: 6px 8px; background: #fff; font-size: 11.5px; color: var(--color-mocha); }
+.phases { font-family: var(--font-meta); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+.phases .stale { text-decoration: underline wavy var(--color-terracotta-ink); text-underline-offset: 3px; }
+.card { border: 1px solid var(--color-pearl); border-radius: 3px; padding: 6px 8px; font-size: 12px; background: #fff; display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
+.card.gone { visibility: hidden; }
+.bandi { font-family: var(--font-meta); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); text-align: right; border-bottom: 1px solid var(--color-pearl); padding: 2px 4px; margin-bottom: 4px; }
+.none { font-family: var(--font-meta); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-faint); padding: 4px 0; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">US-33 · seat 6 · D2 action feedback · sketch, not portal code</p>
+  <h1>Frame strips: P6–P9 and the nine components</h1>
+  <p class="lede">Each strip shows <strong>Today</strong>, the proposed <strong>Quiet</strong> treatment and the <strong>Expressive</strong> one, at the six stages of the grammar (see <a href="grammar.html">grammar.html</a>). Drag the scrubber to light the frame that is live at time&nbsp;<em>t</em>. Server timings are design assumptions set against measured prod request durations (p50 243&nbsp;ms, p90 803&nbsp;ms) and the 0.5–3&nbsp;s settle estimate; no P6–P9 click was timed. Names and copy are simulated.</p>
+  <nav class="toc" aria-label="Strips" id="toc"></nav>
+
+  <div class="scrub" role="group" aria-label="Scrubber">
+    <label>t <input type="range" id="t" min="0" max="3000" step="10" value="120" aria-describedby="tval"><output id="tval">120 ms</output></label>
+    <label>Write responds at
+      <select id="T">
+        <option value="243">243 ms (p50)</option>
+        <option value="803" selected>803 ms (p90)</option>
+        <option value="2500">2.5 s</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="fail"> Server refuses</label>
+    <span class="live" id="live" aria-live="polite"></span>
+  </div>
+
+  <div id="strips"></div>
+</main>
+
+<script>
+(() => {
+  // ── mini renderers ───────────────────────────────────────────────────────
+  const row = (o = {}) => `<div class="mrow${o.c ? ' ' + o.c : ''}">${o.pool ? '<span class="pool"></span>' : ''}<span class="tick${o.done ? ' done' : ''}${o.blocked ? ' blocked' : ''}">${o.done ? '✓' : o.blocked ? '⊘' : ''}</span><span class="t">${o.t || 'Order fabric samples'}</span><span class="m">${o.m ?? 'due 16 Oct'}</span>${o.hair ? '<span class="hair"></span>' : ''}</div>`;
+  const act = (l, o = {}) => `<span class="act${o.sec ? ' sec' : ''}${o.p ? ' pressed' : ''}${o.held ? ' held' : ''}">${o.busy ? '<span class="dot"></span>' : ''}<span class="lbl">${l}</span></span>`;
+  const ln = (k, t, retry) => `<div class="ln ${k}">${t}${retry ? ' ' + act(retry, { sec: true }) : ''}</div>`;
+  const toast = (t) => `<div class="toast"><b>Error</b>${t}</div>`;
+  const undo = (t, s) => `<div class="undo"><span style="flex:1">${t}</span>${act('Undo')}<span class="s">${s}</span></div>`;
+  const field = (v, o = {}) => `<div class="field${o.f ? ' focus' : ''}">${v ? `<span>${v}</span>` : `<span class="ph">Room name</span>`}${o.f ? '<span class="caret"></span>' : ''}</div>`;
+  const band = (t) => `<div class="bandi">${t}</div>`;
+  const none = (t) => `<div class="none">${t}</div>`;
+  const phases = (a, b, stale) => `<div class="phases"><span class="${stale ? 'stale' : ''}">Concept · ${a}</span> &nbsp; Refinement · ${b}</div>`;
+  const folio = (n, gone) => `<div class="folio">${Array.from({ length: n }, (_, i) => `<i class="${gone === i ? 'gone' : ''}"></i>`).join('')}</div>`;
+  const draft = () => `<div class="draft">Hi Jordan, the swatches arrive Thursday…</div>`;
+  const sw = (role, o = {}) => `<div class="swatch"><span class="chip-c" style="background:#A8B5A0"></span><span class="sel">${role} ▾</span>${o.m ? `<span class="meta">${o.m}</span>` : ''}</div>`;
+  const card = (gone) => `<div class="card${gone ? ' gone' : ''}"><span>Arc floor lamp</span>${act('Dismiss', { sec: true })}</div>`;
+  const F = (html, cap) => ({ html, cap });
+  const NA = (cap) => ({ html: '', cap, na: true });
+
+  const S = ['S0 · press · 0 ms', 'S1 · ≤100 ms', 'S2 · 400 ms', 'S3 · settled', 'S4 · failure', 'S5 · undo'];
+
+  // ── strips ───────────────────────────────────────────────────────────────
+  const strips = [
+    { id: 'p6', title: 'P6 · Tick a task', cls: 'toggle · optimistic', cite: 'work-block.tsx:314 → use-section-work.ts:141-159',
+      verdict: 'Today nothing changes for the whole write + refetch (est. 0.5–3 s); a failure raises the red global toast. The row is about 29 px tall, under the 44 px target.',
+      today: [F(row({ c: 'short' }), 'No :active state; hover wash only.'), F(row({ c: 'short' }), 'Nothing yet.'), F(row({ c: 'short' }), 'Still nothing.'), F(row({ c: 'short done', done: true, m: 'done · 14 Oct' }), '✓ arrives with the refetch.'), F(row({ c: 'short' }) + toast('new row violates row-level security…'), 'Global destructive toast, 5 s, raw message, far from the row.'), NA('No Undo.')],
+      quiet: [F(row({ c: 'pressed' }), 'Row warms on --press-in.'), F(row({ c: 'done', done: true, m: 'done · today' }), '✓ in ink; aria-pressed="true".'), F(row({ c: 'done', done: true, m: 'saving…' }), 'Only past 400 ms; held ≥500 ms.'), F(row({ c: 'done', done: true, m: 'done · 14 Oct' }), 'Settles on the write; refetch reconciles silently.'), F(row() + ln('err', 'Didn’t save. Still open.', 'Try again'), 'Rolled back; role="alert"; focus stays on the row.'), NA('A tick is its own undo.')],
+      exp: [F(row({ pool: true }), 'Ink pool from the contact point.'), F(row({ c: 'done', done: true, m: 'done · today' }), '✓ stamps in, 120 ms, no bounce.'), F(band('Saving…') + row({ c: 'done', done: true, m: 'done · today', hair: true }), 'Clay hairline + band indicator.'), F(band('Saved · 10:42') + row({ c: 'done washok', done: true, m: 'done · 14 Oct' }), 'Direction-still wash fades, 600 ms.'), F(row({ c: 'washerr' }) + ln('err', 'Didn’t save. Still open.', 'Try again'), 'Terracotta wash. Never a shake.'), NA('—')] },
+
+    { id: 'p7', title: 'P7 · Advance a phase', cls: 'status advance · pending-only', cite: 'phase-advance-control.tsx:324-347, :404-447 → use-project-v2.ts:626-642',
+      verdict: 'Already the best act in the portal. The one gap: the receipt notice settles on the write, but the phase list changes only after five invalidations, so the page disagrees with itself.',
+      today: [F(act('Complete the phase', { p: true }), 'Ink floods (.da-act:active).'), F(act('Completing…', { busy: true }) + ln('st', 'Completing Concept…'), 'Word swaps at once; aria-busy; ref guard.'), F(act('Completing…', { busy: true }) + ln('st', 'Completing Concept…'), 'Same.'), F(phases('in progress', 'next', true) + ln('ok', 'Concept is complete. Refinement is next.'), 'Notice says complete; list still says in progress until refetch.'), F(ln('err', 'Couldn’t complete Concept.'), 'Inline alert (exists).'), NA('Never optimistic, no Undo.')],
+      quiet: [F(act('Complete the phase', { p: true }), 'Same press.'), F(act('Completing…', { busy: true }) + ln('st', 'Completing Concept…'), 'Same: the verb is the S1 answer.'), F(act('Completing…', { busy: true }) + ln('st', 'Completing Concept…'), 'At 8 s: “Still working. You can leave this open.”'), F(phases('complete', 'in progress') + ln('ok', 'Concept is complete. Refinement is next.'), 'Receipt written to [project-phases] (E1 #5): list and notice agree.'), F(ln('err', 'Couldn’t complete Concept. It is still in progress.', 'Try again'), 'Says the state now.'), NA('—')],
+      exp: [F(act('Complete the phase', { p: true }), 'Same.'), F(act('Completing…', { busy: true }), 'Same.'), F(act('Completing…', { busy: true }) + '<div class="mrow" style="min-height:6px;border:0"><span class="hair"></span></div>', 'Indeterminate hairline under the handoff.'), F(phases('complete', 'in progress') + '<div class="mrow washok" style="min-height:24px">' + ln('ok', 'Concept is complete.') + '</div>', 'Settle wash.'), F(ln('err', 'Couldn’t complete Concept. It is still in progress.', 'Try again'), 'Same.'), NA('—')] },
+
+    { id: 'p8', title: 'P8 · Add a room or piece', cls: 'create · optimistic ghost', cite: 'ffe-section.tsx:934-946 (add room) · rooms-rail.tsx:71-86',
+      verdict: 'Today the FF&E add clears her words and closes the field before the write; the room appears 0.5–3 s later, or never, with the name gone. The rail variant shows “Adding…” but fails silently.',
+      today: [F(field('Sunroom', { f: true }) + act('Add', { sec: true, p: true }), 'Enter.'), F(none('field closed · name cleared'), 'Field closes before the server answers.'), F(none('nothing on the paper'), 'Blank.'), F(row({ t: 'Sunroom', m: '$0 budget' }), 'Room arrives with the refetch.'), F(none('no room · name lost') + toast('duplicate key value…'), 'Her words are gone.'), NA('—')],
+      quiet: [F(field('Sunroom', { f: true }) + act('Add', { sec: true, p: true }), 'Press.'), F(row({ c: 'ghost', t: 'Sunroom', m: '' }) + field('', { f: true }), 'Ghost row from the mutation’s variables; input empty and focused for the next.'), F(row({ c: 'ghost', t: 'Sunroom', m: 'adding…' }), 'Word past 400 ms.'), F(row({ t: 'Sunroom', m: '$0 budget' }) + '<span class="sr">Sunroom added.</span>', 'Ink goes solid; polite “Sunroom added.”'), F(row({ c: 'ghost', t: 'Sunroom', m: 'not added' }) + ln('err', 'Didn’t add Sunroom.', 'Try again') , 'Ghost keeps her words; Try again · Discard.'), NA('—')],
+      exp: [F(field('Sunroom', { f: true }) + act('Add', { sec: true, p: true }), 'Same.'), F(row({ c: 'ghost', t: 'Sunroom', m: '' }), 'Ghost slides open, 150 ms.'), F(row({ c: 'ghost', t: 'Sunroom', m: '', hair: true }), 'Hairline.'), F(row({ c: 'washok', t: 'Sunroom', m: '$0 budget' }), 'Settle wash.'), F(row({ c: 'ghost washerr', t: 'Sunroom', m: 'not added' }) + ln('err', 'Didn’t add Sunroom.', 'Try again'), 'Terracotta wash.'), NA('—')] },
+
+    { id: 'p9', title: 'P9 · Approve or send a draft', cls: 'external send · never optimistic', never: true, cite: 'outbound-draft-review.tsx:228-229, :281-287 · ready-to-send-sheet.tsx:203-206, :314 · act-draft.tsx:40-51, :354',
+      verdict: 'Already honest. No row of this strip has an optimistic frame: the draft text stays as it is and “Sent” appears only on receipt. The only addition is the 8 s line, which promises nothing unless E1 confirms the path is idempotent.',
+      today: [F(draft() + act('Send', { p: true }), 'Press.'), F(draft() + act('Sending', { busy: true }), 'Verb at once; draft unchanged.'), F(draft() + act('Sending', { busy: true }), 'Same.'), F(ln('ok', 'Sent to Jordan Ellis.'), 'Only on the server’s receipt.'), F(ln('err', 'Not sent — email to this client is paused right now. Nothing went out.'), 'Existing honest copy (act-draft.tsx:46).'), NA('Never.')],
+      quiet: [F(draft() + act('Send', { p: true }), 'Same.'), F(draft() + act('Sending', { busy: true }), 'Same.'), F(draft() + act('Sending', { busy: true }), 'At 8 s: “Still sending.” (+ “Nothing is sent twice.” only if idempotent).'), F(ln('ok', 'Sent to Jordan Ellis.'), 'Same.'), F(ln('err', 'Not sent. Nothing went out. The draft is still here.', 'Try again'), 'Retry only with an idempotency key; offline refuses (§6.2).'), NA('Never.')],
+      exp: [F(draft() + act('Send', { p: true }), 'Same.'), F(draft() + act('Sending', { busy: true }), 'Same.'), F(draft() + act('Sending', { busy: true }), 'No hairline: nothing that reads as progress toward “sent”.'), F(ln('ok', 'Sent to Jordan Ellis.'), 'No wash, no tick. A send is a fact, not a reward.'), F(ln('err', 'Not sent. Nothing went out.', 'Try again'), 'Same.'), NA('Never.')] },
+
+    { id: 'c1', title: 'C1 · act-sheets.tsx', cls: 'send / money · has feedback (delegated)', never: true, cite: 'acts/act-sheets.tsx:97, 99, 125, 176, 182, 238, 278 → <ActDraft onSend> (act-draft.tsx:127, :354)',
+      verdict: 'Flagged by the sweep, but every mutateAsync runs inside ActDraft, which owns pending, “Sending…/Approving…” and the honest revoked/not-sent/unrecorded states. Reference for P9 and money. Keep.',
+      today: [F(act('Approve release', { p: true }), 'Press.'), F(act('Approving…', { busy: true }), 'ActDraft pending.'), F(act('Approving…', { busy: true }), 'Same.'), F(ln('ok', 'Released.'), 'On receipt.'), F(ln('err', 'Who leads this project changed, so nothing was sent.'), 'act-draft.tsx:51.'), NA('Never.')],
+      quiet: [NA('Keep as is.'), NA(''), NA('Add the 8 s line.'), NA(''), NA('Tag money mutations retry:false unless idempotent (E1 #7).'), NA('')],
+      exp: [NA('Same as quiet: money and sends get no expressive frames.'), NA(''), NA(''), NA(''), NA(''), NA('')] },
+
+    { id: 'c2', title: 'C2 · compose-decision-sheet.tsx', cls: 'background · best-effort', cite: 'coordination/compose-decision-sheet.tsx:81',
+      verdict: 'A link stamp after the decision already exists (“a lost link never blocks”). It is untagged, so a failure raises the global “Error” toast about a link she never asked for.',
+      today: [NA('No act of hers.'), NA(''), NA(''), F(none('silent'), 'Fine.'), F(toast('could not stamp escalation'), 'A toast for a background link.'), NA('')],
+      quiet: [NA(''), NA(''), NA(''), F(none('silent'), 'Silent.'), F(none('silent · logged'), 'errorSurface tag: log, never toast (E1 #11).'), NA('')],
+      exp: [NA('Same as quiet.'), NA(''), NA(''), NA(''), NA(''), NA('')] },
+
+    { id: 'c3', title: 'C3 · coordination-work.tsx', cls: 'toggle + create · optimistic', cite: 'coordination/coordination-work.tsx:93 (create), :152, :160 (tick), :174 (onTick)',
+      verdict: 'Same silent tick as P6, plus a blocked tick that opens its blocker (a navigation, which answers by moving). Create clears and closes before the write, like P8.',
+      today: [F(row({ c: 'short' }), 'No press.'), F(row({ c: 'short' }), 'Nothing.'), F(row({ c: 'short' }), 'Nothing.'), F(row({ c: 'short done', done: true, m: 'done · 14 Oct' }), 'With the refetch.'), F(row({ c: 'short' }) + toast('…'), 'Global toast.'), NA('')],
+      quiet: [F(row({ c: 'pressed' }), 'As P6.'), F(row({ c: 'done', done: true, m: 'done · today' }), 'As P6.'), F(row({ c: 'done', done: true, m: 'saving…' }), 'As P6.'), F(row({ c: 'done', done: true, m: 'done · 14 Oct' }), 'As P6.'), F(row() + ln('err', 'Didn’t save. Still open.', 'Try again'), 'As P6.'), F(row({ blocked: true, t: 'Hang drapery', m: 'waits on fabric' }), 'A blocked tick answers by opening its blocker at S1.')],
+      exp: [NA('As P6 expressive.'), NA(''), NA(''), NA(''), NA(''), NA('')] },
+
+    { id: 'c4', title: 'C4 · plan-issue-ceremony.tsx', cls: 'external send · has feedback', never: true, cite: 'plans/plan-issue-ceremony.tsx:183, :191-193 (idempotencyKey), :209, :556-559',
+      verdict: 'Flagged by the sweep (its word is “sending”), but it has a sending state, “Sending…”, a per-recipient unsent list and an idempotency key. Reference for safe retries.',
+      today: [F(act('Issue the set', { p: true }), 'Press.'), F(act('Sending…', { busy: true }), 'loading + loadingLabel.'), F(act('Sending…', { busy: true }), 'Same.'), F(ln('ok', 'Issued to 3 recipients.'), 'On receipt.'), F(ln('err', '1 of 3 not sent. It shows here before the next attempt.', 'Try again'), 'Retry is safe: same idempotency key.'), NA('Never.')],
+      quiet: [NA('Keep as is.'), NA(''), NA('Add the 8 s line.'), NA(''), NA(''), NA('')],
+      exp: [NA('Same as quiet.'), NA(''), NA(''), NA(''), NA(''), NA('')] },
+
+    { id: 'c5', title: 'C5 · piece-folio.tsx', cls: 'edit + delete · optimistic', cite: 'rooms/piece/piece-folio.tsx:36-43 (persist), :96 (remove), :283-286 (error) → use-piece-field.ts:64-80',
+      verdict: 'Already optimistic with rollback, but there is no S2 word, the error line has no role="alert", and removing an image is an optimistic delete with no Undo.',
+      today: [F(folio(3), 'Remove pressed.'), F(folio(3, 2), 'Image gone at once (onMutate).'), F(folio(3, 2), 'No word.'), F(folio(2), 'Nothing more.'), F(folio(3) + ln('err', 'Could not save the folio.'), 'Rolled back; the line is not announced.'), NA('No Undo for a delete.')],
+      quiet: [F(folio(3), 'Press.'), F(folio(3, 2) + undo('Removing image 3…', '10 S'), 'Optimistic only because Undo exists; “Removing…” until receipt.'), F(folio(3, 2) + '<div class="meta">saving…</div>', 'Folio caption past 400 ms.'), F(folio(2) + undo('Removed image 3.', '9 S'), 'Receipt: “Removed”.'), F(folio(3) + ln('err', 'Didn’t save the folio. Image 3 is back.', 'Try again'), 'role="alert".'), F(undo('Removed image 3.', '6 S'), 'Undo re-persists the previous list.')],
+      exp: [NA('As quiet, with the settle wash.'), NA(''), NA(''), NA(''), NA(''), NA('')] },
+
+    { id: 'c6', title: 'C6 · work-block.tsx', cls: 'toggle + create · optimistic', cite: 'work-block.tsx:225 (create), :314 (tick, = P6)',
+      verdict: 'The tick is P6. Create, like C3 and P8, clears the field before the write; it gets the same ghost row.',
+      today: [F(field('Order fabric samples', { f: true }), 'Enter.'), F(none('field closed'), 'Cleared before the write.'), F(none('nothing'), ''), F(row({ c: 'short' }), 'With the refetch.'), F(none('task lost') + toast('…'), 'Words gone.'), NA('')],
+      quiet: [F(field('Order fabric samples', { f: true }), 'Press.'), F(row({ c: 'ghost', m: '' }), 'Ghost task row.'), F(row({ c: 'ghost', m: 'adding…' }), 'Past 400 ms.'), F(row(), 'Solid.'), F(row({ c: 'ghost', m: 'not added' }) + ln('err', 'Didn’t add the task.', 'Try again'), 'Keeps her words.'), NA('')],
+      exp: [NA('As P8 expressive.'), NA(''), NA(''), NA(''), NA(''), NA('')] },
+
+    { id: 'c7', title: 'C7 · com-slot.tsx', cls: 'background · best-effort', cite: 'procurement/order-paper/com-slot.tsx:187',
+      verdict: 'A reconstructible supplies link, errors swallowed by design (.catch(() => undefined)). The surrounding save owns the feedback. Keep silent.',
+      today: [NA(''), NA(''), NA(''), F(none('silent'), 'Correct.'), F(none('silent'), 'Correct by design.'), NA('')],
+      quiet: [NA('Keep as is.'), NA(''), NA(''), NA(''), NA(''), NA('')],
+      exp: [NA('Keep as is.'), NA(''), NA(''), NA(''), NA(''), NA('')] },
+
+    { id: 'c8', title: 'C8 · board-suggestions-rail.tsx', cls: 'telemetry + local dismiss', cite: 'scope-builder/board-suggestions-rail.tsx:81 (impressions), :100 (accept), :115-117 (dismiss)',
+      verdict: 'The writes are telemetry. Dismiss already hides at once in local state; what is missing is the announcement and where focus goes.',
+      today: [F(card(), 'Dismiss pressed.'), F(card(true), 'Card hides; focus falls to the page.'), NA(''), NA(''), NA('Telemetry failure: global toast (untagged).'), NA('')],
+      quiet: [F(card(), 'Press.'), F(card(true) + '<span class="sr">Dismissed Arc floor lamp.</span>' + ln('st', 'Focus → next suggestion'), 'Polite “Dismissed Arc floor lamp.”; focus to the next card.'), NA(''), NA(''), F(none('silent · logged'), 'Telemetry never toasts.'), NA('Not a delete of her data; no Undo needed.')],
+      exp: [NA('Same as quiet.'), NA(''), NA(''), NA(''), NA(''), NA('')] },
+
+    { id: 'c9', title: 'C9 · palette-swatch-editor.tsx', cls: 'edit + delete', cite: 'scope-builder/palette-swatch-editor.tsx:50 (name on blur), :61-62 (role), :72-73 (delete)',
+      verdict: 'Role is set locally before the write and never rolled back, so a refused write leaves the select showing a role the database does not hold. Delete is a native confirm, then a silent remove with no Undo.',
+      today: [F(sw('Accent'), 'Select role.'), F(sw('Accent'), 'Local setRole.'), F(sw('Accent'), 'No word.'), F(sw('Accent'), 'Fine if saved.'), F(sw('Accent') + toast('…'), 'Select still says Accent: a value the DB refused.'), F(`<div class="dialog">Delete this swatch?<br>[Cancel] [OK]</div>`, 'window.confirm, then silent remove, no Undo.')],
+      quiet: [F(sw('Accent'), 'Press.'), F(sw('Accent'), 'Optimistic via cache (E1 #6), not local state.'), F(sw('Accent', { m: 'saving…' }), 'Beside the select.'), F(sw('Accent'), 'Settled.'), F(sw('Base') + ln('err', 'Didn’t save. The role is still Base.', 'Try again'), 'Rolled back; says the state now.'), F(undo('Removing Sage swatch…', '10 S'), 'D2-PQ8: Undo (needs a restore path), or pending-only “Deleting…”.')],
+      exp: [NA('As quiet, with hairline and settle wash.'), NA(''), NA(''), NA(''), NA(''), NA('')] },
+  ];
+
+  // ── render ───────────────────────────────────────────────────────────────
+  const host = document.getElementById('strips');
+  document.getElementById('toc').innerHTML = strips.map((s) => `<a href="#frame-${s.id}">${s.title.split(' · ')[0]}</a>`).join('');
+  host.innerHTML = strips.map((s) => {
+    const rows = [['Today', s.today], ['Quiet', s.quiet], ['Expressive', s.exp]];
+    return `<section class="strip" id="frame-${s.id}" aria-labelledby="h-${s.id}">
+      <header><h2 id="h-${s.id}">${s.title}</h2><span class="cls${s.never ? ' never' : ''}">${s.cls}</span><span class="cite">${s.cite}</span></header>
+      <p class="verdict">${s.verdict}</p>
+      <div class="grid" style="--cols:${S.length}">
+        <div class="h"></div>${S.map((h) => `<div class="h">${h}</div>`).join('')}
+        ${rows.map(([name, frames]) => `<div class="rl">${name}</div>${frames.map((f, i) => `<div class="cell${f.na ? ' na' : ''}" data-col="${i}">${f.html || ''}${f.cap ? `<div class="cap">${f.cap}</div>` : ''}</div>`).join('')}`).join('')}
+      </div></section>`;
+  }).join('');
+  host.querySelectorAll('.cell .act, .cell .sel').forEach((el) => el.setAttribute('aria-hidden', 'true'));
+
+  // ── scrubber ─────────────────────────────────────────────────────────────
+  const t = document.getElementById('t'), T = document.getElementById('T'), fail = document.getElementById('fail');
+  const out = document.getElementById('tval'), live = document.getElementById('live');
+  const names = ['S0 press', 'S1 answer', 'S2 pending word', 'S3 settled', 'S4 failure'];
+  function col(tt, TT, f) {
+    if (tt < 100) return 0;
+    if (tt >= TT) return f ? 4 : 3;
+    return tt < 400 ? 1 : 2;
+  }
+  let last = -1;
+  function update() {
+    const tt = Number(t.value), TT = Number(T.value), c = col(tt, TT, fail.checked);
+    out.textContent = tt + ' ms';
+    document.querySelectorAll('.cell').forEach((el) => el.classList.toggle('on', Number(el.dataset.col) === c));
+    if (c !== last) { live.textContent = 'Live frame: ' + names[c]; last = c; }
+  }
+  [t, T, fail].forEach((el) => el.addEventListener('input', update));
+  update();
+})();
+</script>
+</body>
+</html>

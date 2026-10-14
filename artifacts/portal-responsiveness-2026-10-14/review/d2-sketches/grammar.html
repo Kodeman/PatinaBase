@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Action Feedback Grammar</title>
+<meta name="description" content="US-33 D2 sketch: the six-stage feedback grammar (press, answer, pending, settled, failure, undo) as a timeline, with a live bench in quiet and expressive treatments. Tokens copied from apps/designer-portal/src/app/globals.css.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Tokens copied verbatim from apps/designer-portal/src/app/globals.css (line refs in comments). */
+:root {
+  color-scheme: light; /* the portal paints no dark paper set (globals.css:56-58) */
+  --color-off-white: #FAF7F2;      /* :10 */
+  --color-pearl: #E5E2DD;          /* :11 */
+  --color-clay: #C4A57B;           /* :12 */
+  --color-aged-oak: #8B7355;       /* :13 */
+  --color-mocha: #5C4A3C;          /* :14 */
+  --color-charcoal: #2C2926;       /* :15 */
+  --color-quiet-ink: #65594E;      /* :18 */
+  --color-clay-ink: #7C5E30;       /* :34 */
+  --color-terracotta-ink: #9C5340; /* :35 */
+  --color-sage-ink: #5F6B57;       /* :41 */
+  --color-sage: #A8B5A0;           /* :44 */
+  --doc-paper: #FCFAF6;            /* :64 */
+  --doc-sheet-2: #EFE9DD;          /* :72 */
+  --doc-ink-border: rgba(44, 41, 38, 0.18); /* :74 */
+  --bg-warm: #EEE6DB;              /* :119 */
+  --text-muted: #4E4339;           /* :93 */
+  --text-faint: #65594E;           /* :117 */
+  --wash-clay: rgba(196, 165, 123, 0.16);        /* :184 */
+  --wash-terracotta: rgba(212, 160, 144, 0.16);  /* :186 */
+  --wash-direction-still: rgba(54, 106, 58, 0.06); /* :189 */
+  --sheet-toast: #1A1816;          /* :1972 */
+  --sheet-toast-ink: #FFFFFF;      /* :1973 */
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1); /* :204 */
+  --press-in: 70ms;                /* :211 */
+  --press-out: 240ms;              /* :212 */
+  --doc-band-height: 56px;         /* :232 */
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta: 'DM Mono', 'SF Mono', monospace;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--color-off-white); color: var(--color-charcoal); font-family: var(--font-body); font-size: 14px; line-height: 1.5; }
+main { max-width: 1200px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-family: var(--font-display); font-weight: 500; font-size: 30px; line-height: 1.15; margin: 0 0 6px; }
+h2 { font-family: var(--font-display); font-weight: 500; font-size: 22px; margin: 40px 0 8px; }
+h3 { font-family: var(--font-meta); font-weight: 500; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 8px; }
+p.lede { color: var(--text-muted); max-width: 70ch; margin: 0 0 8px; }
+.meta { font-family: var(--font-meta); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+code { font-family: var(--font-meta); font-size: 12px; }
+
+/* ── timeline ─────────────────────────────────────────────────────────── */
+.tl { background: var(--doc-paper); border: 1px solid var(--doc-ink-border); border-radius: 6px; padding: 20px 16px 16px; overflow: hidden; }
+.tl-axis { position: relative; height: 34px; border-bottom: 1.5px solid var(--color-charcoal); margin: 0 8px; }
+.tl-tick { position: absolute; bottom: -6px; width: 1px; height: 10px; background: var(--color-charcoal); }
+.tl-tick span { position: absolute; top: -22px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-family: var(--font-meta); font-size: 11px; color: var(--text-muted); }
+.tl-measure { position: absolute; bottom: 0; height: 100%; border-left: 1px dashed var(--color-aged-oak); }
+.tl-measure span { position: absolute; bottom: 2px; left: 4px; font-family: var(--font-meta); font-size: 10px; color: var(--color-clay-ink); white-space: nowrap; }
+.tl-band { position: absolute; bottom: 0; height: 8px; background: var(--wash-clay); }
+.lane { position: relative; height: 64px; margin: 10px 8px 0; border-bottom: 1px dashed var(--color-pearl); }
+.lane-name { position: absolute; left: 0; top: 0; font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.chip { position: absolute; top: 22px; transform: translateX(-2px); padding: 4px 8px; border-left: 2px solid var(--color-charcoal); background: var(--doc-sheet-2); font-size: 12px; line-height: 1.3; white-space: nowrap; }
+.chip b { font-family: var(--font-meta); font-weight: 500; font-size: 11px; margin-right: 4px; }
+.chip.fail { border-left-color: var(--color-terracotta-ink); }
+.chip.never { border-left-color: var(--color-terracotta-ink); background: var(--wash-terracotta); }
+.tl-note { margin: 12px 8px 0; font-size: 12px; color: var(--text-muted); }
+@media (max-width: 720px) {
+  .tl { overflow-x: auto; }
+  .tl-inner { min-width: 720px; }
+}
+
+/* ── stage table ──────────────────────────────────────────────────────── */
+.stages { width: 100%; border-collapse: collapse; background: var(--doc-paper); border: 1px solid var(--doc-ink-border); }
+.stages th, .stages td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--color-pearl); }
+.stages th { font-family: var(--font-meta); font-weight: 500; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.stages td.when { font-family: var(--font-meta); font-size: 12px; white-space: nowrap; }
+.stages .cap { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+@media (max-width: 720px) {
+  .stages, .stages tbody, .stages tr, .stages td { display: block; width: 100%; }
+  .stages thead { display: none; }
+  .stages td { border-bottom: 0; padding: 6px 12px; }
+  .stages tr { border-bottom: 1px solid var(--color-pearl); padding: 8px 0; }
+  .stages td[data-l]::before { content: attr(data-l); display: block; font-family: var(--font-meta); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+}
+
+/* ── the task row (work-block.tsx:303-372, proposed at 44px) ──────────── */
+.mrow { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; min-height: 44px; padding: 0 8px; border-bottom: 1px dashed var(--color-pearl); position: relative; background: transparent; font-size: 13px; }
+.tick { display: inline-flex; width: 15px; height: 15px; align-items: center; justify-content: center; border: 1.5px solid var(--doc-ink-border); border-radius: 3px; font-size: 9px; font-weight: 700; color: var(--color-sage-ink); }
+.tick.done { border-color: var(--color-sage); background: rgba(168,181,160,.15); }
+.mrow .ttl { color: var(--color-charcoal); }
+.mrow.done .ttl { color: var(--text-muted); }
+.mrow .m { font-family: var(--font-meta); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+.mrow.pressed { background: var(--bg-warm); }
+.mrow.ghost .ttl { color: var(--text-faint); font-style: italic; }
+.mrow.ghost { border-bottom-style: dashed; }
+.mrow.washok { background: var(--wash-direction-still); }
+.mrow.washerr { background: var(--wash-terracotta); }
+.hair { position: absolute; left: 0; bottom: -1px; height: 2px; width: 40%; background: var(--color-clay); }
+.alert { font-size: 12px; color: var(--color-terracotta-ink); padding: 4px 8px 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.status { font-size: 12px; color: var(--text-muted); padding: 4px 8px; }
+.status.ok { color: var(--color-sage-ink); }
+.pool { position: absolute; inset: 0; background: radial-gradient(circle at 18px 50%, rgba(196,165,123,.35) 0 34px, transparent 35px); pointer-events: none; }
+
+/* ── DocumentAction (globals.css:689-1000), reduced to what the sketch needs ── */
+.act { position: relative; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 6px 10px; border: 0; background: none; cursor: pointer; font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--color-charcoal); touch-action: manipulation; transition: transform var(--press-out) var(--ease-editorial), color 150ms var(--ease-editorial); }
+.act .lbl { position: relative; line-height: 12px; }
+.act .lbl::before { content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 1.5px; background: var(--color-charcoal); }
+.act .lbl::after { content: ''; position: absolute; left: 0; right: 0; bottom: -7.5px; height: 1px; background: var(--color-clay); }
+.act.secondary { color: var(--color-mocha); }
+.act.secondary .lbl::before { height: 1px; background: var(--color-aged-oak); }
+.act.secondary .lbl::after { content: none; }
+.act:active, .act.pressed { transform: translateY(1px); transition-duration: var(--press-in); }
+.act[aria-busy="true"] { cursor: progress; }
+.act[aria-disabled="true"] { color: var(--text-faint); cursor: not-allowed; }
+.act:focus-visible, .mrow:focus-visible, input:focus-visible { outline: 2px solid var(--color-clay-ink); outline-offset: 2px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: .7; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+.undo { display: flex; align-items: center; gap: 16px; background: var(--sheet-toast); color: var(--sheet-toast-ink); border-radius: 3px; padding: 4px 12px; font-size: 13px; }
+.undo .act { color: var(--sheet-toast-ink); }
+.undo .act .lbl::before { background: var(--sheet-toast-ink); }
+.undo .act .lbl::after { content: none; }
+
+/* ── live bench ───────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; margin: 12px 0 16px; }
+fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+legend { float: left; margin-right: 8px; font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.seg { position: relative; }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border: 1px solid var(--color-pearl); border-radius: 3px; font-size: 13px; background: var(--doc-paper); }
+.seg input:checked + span { border-color: var(--color-charcoal); background: var(--doc-sheet-2); }
+.seg input:focus-visible + span { outline: 2px solid var(--color-clay-ink); outline-offset: 2px; }
+.bench { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 860px) { .bench { grid-template-columns: 1fr; } }
+.paper { background: var(--doc-paper); border: 1px solid var(--doc-ink-border); border-radius: 6px; overflow: hidden; }
+.band { display: flex; justify-content: space-between; align-items: center; height: var(--doc-band-height); padding: 0 16px; border-bottom: 1px solid var(--color-pearl); }
+.band .title { font-family: var(--font-display); font-size: 18px; }
+.saving { font-family: var(--font-meta); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); min-height: 16px; }
+.inst { padding: 12px 16px 16px; border-bottom: 1px solid var(--color-pearl); }
+.inst:last-child { border-bottom: 0; }
+.mrow-btn { width: 100%; border: 0; text-align: left; cursor: pointer; font: inherit; }
+.mrow-btn:active { background: var(--bg-warm); }
+.addline { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.addline input { flex: 1; min-width: 0; min-height: 44px; border: 0; border-bottom: 1px dashed var(--color-pearl); background: transparent; font: inherit; font-size: 14px; padding: 0 4px; color: var(--color-charcoal); }
+.draft { border: 1px solid var(--color-pearl); border-radius: 4px; padding: 10px 12px; background: #fff; font-size: 13px; color: var(--color-mocha); }
+.phase-list { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--font-meta); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+.phase-list .cur { color: var(--color-charcoal); }
+.exp .mrow.washok, .exp .mrow.washerr { transition: background 600ms var(--ease-editorial); }
+.exp .hair { animation: draw 1.4s var(--ease-editorial) infinite; }
+@keyframes draw { from { left: 0; width: 0; } 50% { left: 0; width: 60%; } to { left: 100%; width: 0; } }
+.exp .tick.stamp { animation: stamp 120ms var(--ease-editorial); }
+@keyframes stamp { from { transform: scale(.92); opacity: .4; } to { transform: none; opacity: 1; } }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.legend-note { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .exp .hair { display: none; }
+}
+</style>
+</head>
+<body>
+<main>
+  <p class="meta">US-33 · seat 6 · D2 action feedback · sketch, not portal code</p>
+  <h1>One grammar for every click</h1>
+  <p class="lede">Within 100&nbsp;ms exactly one thing answers: the new value (optimistic classes) or the verb in progress (pending-only classes). A second signal appears only when the first is not enough. Thresholds are set against measured prod request durations (p50 243&nbsp;ms, p90 803&nbsp;ms; <code>baseline/BASELINE.md</code>). P6–P9 click timings were not measured yet.</p>
+
+  <h2 id="frame-timeline">The timeline</h2>
+  <div class="tl" role="img" aria-label="Timeline from 0 to 3 seconds. Press at 0 ms, answer by 100 ms, pending word only after 400 ms, settled when the write responds, failure restores the value. Request p50 243 ms and p90 803 ms are marked. Today's click-to-settled range of 0.5 to 3 seconds is shaded. Sends and money have no optimistic stage.">
+    <div class="tl-inner">
+      <div class="tl-axis" id="axis"></div>
+      <div class="lane" id="lane-opt"><span class="lane-name">Optimistic · tick, edit, create, reorder</span></div>
+      <div class="lane" id="lane-pend"><span class="lane-name">Pending-only · advance, send, money, delete w/o Undo</span></div>
+      <p class="tl-note">Scale is split: 0–500&nbsp;ms takes the left half, 0.5–3&nbsp;s the right half. Shaded band: today's click&nbsp;→&nbsp;settled estimate (write + 2–4 refetches, SQ-957 comment&nbsp;1). At 8&nbsp;s (off scale) a pending-only act adds “Still working. You can leave this open.”</p>
+    </div>
+  </div>
+
+  <h2 id="frame-stages">Each stage, quiet and expressive</h2>
+  <p class="lede">Quiet is built only from parts the portal already ships. Expressive is what the waived canon allows; every departure is a candidate ruling (D2-PQ3, PQ4, PQ6).</p>
+  <table class="stages">
+    <thead><tr><th>Stage</th><th>When</th><th>Quiet</th><th>Expressive</th></tr></thead>
+    <tbody id="stage-rows"></tbody>
+  </table>
+
+  <h2 id="frame-bench">Live bench</h2>
+  <p class="lede">Click anything. The server is simulated. Pick how long it takes and whether it refuses. Both papers run the same grammar; only the treatment differs.</p>
+  <div class="controls">
+    <fieldset>
+      <legend>Server answers in</legend>
+      <label class="seg"><input type="radio" name="lat" value="243" checked><span>243&nbsp;ms (p50)</span></label>
+      <label class="seg"><input type="radio" name="lat" value="803"><span>803&nbsp;ms (p90)</span></label>
+      <label class="seg"><input type="radio" name="lat" value="2500"><span>2.5&nbsp;s (today's settle)</span></label>
+      <label class="seg"><input type="radio" name="lat" value="9000"><span>9&nbsp;s</span></label>
+    </fieldset>
+    <fieldset>
+      <legend>Outcome</legend>
+      <label class="seg"><input type="radio" name="out" value="ok" checked><span>Saves</span></label>
+      <label class="seg"><input type="radio" name="out" value="fail"><span>Refuses</span></label>
+    </fieldset>
+  </div>
+  <div class="bench">
+    <section class="paper quiet" data-mode="quiet" aria-label="Quiet treatment"></section>
+    <section class="paper exp" data-mode="exp" aria-label="Expressive treatment"></section>
+  </div>
+  <p class="legend-note">Names and copy are simulated. Never in either treatment: confetti, checkmark bursts, animated counters, streaks, “nice work”, or a “Sent” before the server says so.</p>
+</main>
+
+<template id="paper-tpl">
+  <div class="band"><span class="title"></span><span class="saving" role="status" aria-live="off"></span></div>
+  <div class="inst">
+    <h3>Tick · optimistic (P6)</h3>
+    <ul class="tasks" style="list-style:none;margin:0;padding:0"></ul>
+  </div>
+  <div class="inst">
+    <h3>Advance a phase · pending-only (P7)</h3>
+    <div class="phase-list"><span class="ph-a">Concept · in progress</span><span class="ph-b">Refinement · next</span></div>
+    <button type="button" class="act primary phase-act"><span class="lbl">Complete the phase</span></button>
+    <div class="phase-line"></div>
+  </div>
+  <div class="inst">
+    <h3>Add a room · optimistic ghost (P8)</h3>
+    <ul class="rooms" style="list-style:none;margin:0;padding:0"></ul>
+    <form class="addline"><input type="text" aria-label="Room name" placeholder="Room name"><button type="submit" class="act secondary"><span class="lbl">Add</span></button></form>
+  </div>
+  <div class="inst">
+    <h3>Send a draft · never optimistic (P9)</h3>
+    <div class="draft">Hi Jordan, the swatches for the sunroom arrive Thursday. I'll bring both linens to the walk-through.</div>
+    <button type="button" class="act primary send-act"><span class="lbl">Send</span></button>
+    <div class="send-line"></div>
+  </div>
+  <p class="sr announce" aria-live="polite"></p>
+</template>
+
+<script>
+(() => {
+  // ── timeline ───────────────────────────────────────────────────────────
+  const X = (ms) => ms <= 500 ? (ms / 500) * 50 : 50 + ((Math.min(ms, 3000) - 500) / 2500) * 50;
+  const axis = document.getElementById('axis');
+  const band = document.createElement('div');
+  band.className = 'tl-band'; band.style.left = X(500) + '%'; band.style.width = (X(3000) - X(500)) + '%';
+  axis.appendChild(band);
+  [0, 100, 200, 400, 500, 1000, 2000, 3000].forEach((ms) => {
+    const t = document.createElement('div'); t.className = 'tl-tick'; t.style.left = X(ms) + '%';
+    t.innerHTML = '<span>' + (ms < 1000 ? ms + ' ms' : ms / 1000 + ' s') + '</span>'; axis.appendChild(t);
+  });
+  [[243, 'p50 243'], [803, 'p90 803']].forEach(([ms, l]) => {
+    const m = document.createElement('div'); m.className = 'tl-measure'; m.style.left = X(ms) + '%';
+    m.innerHTML = '<span>' + l + '</span>'; axis.appendChild(m);
+  });
+  const chips = {
+    'lane-opt': [[0, 'S0', 'press'], [100, 'S1', 'value changes'], [400, 'S2', 'saving…'], [1150, 'S3', 'settled on the write'], [2200, 'S4', 'roll back + one line', 'fail']],
+    'lane-pend': [[0, 'S0', 'press'], [100, 'S1', 'verb: “Sending…”'], [400, '', 'no optimistic value, ever', 'never'], [1500, 'S3', 'receipt in words'], [2350, 'S4', 'nothing sent', 'fail']],
+  };
+  for (const [lane, list] of Object.entries(chips)) {
+    const el = document.getElementById(lane);
+    list.forEach(([ms, s, l, k], i) => {
+      const c = document.createElement('div'); c.className = 'chip' + (k ? ' ' + k : '');
+      c.style.left = X(ms) + '%'; if (i % 2) c.style.top = '40px';
+      c.innerHTML = (s ? '<b>' + s + '</b>' : '') + l; el.appendChild(c);
+    });
+  }
+
+  // ── stage table ────────────────────────────────────────────────────────
+  const row = (o) => `<div class="mrow${o.cls ? ' ' + o.cls : ''}">${o.pool ? '<span class="pool"></span>' : ''}<span class="tick${o.done ? ' done' : ''}">${o.done ? '✓' : ''}</span><span class="ttl">${o.title || 'Order fabric samples'}</span><span class="m">${o.m || 'due 16 Oct'}</span>${o.hair ? '<span class="hair"></span>' : ''}</div>${o.alert ? `<div class="alert" role="presentation">${o.alert} <button class="act secondary" type="button" tabindex="-1"><span class="lbl">Try again</span></button></div>` : ''}${o.band ? `<div class="status">Band: <span class="meta">${o.band}</span></div>` : ''}`;
+  const stages = [
+    ['S0 · Press', '0 ms', row({ cls: 'pressed' }), 'Row warms to --bg-warm on --press-in (70 ms); the word drops 1 px.', row({ cls: 'pressed', pool: true }), 'Ink pool opens from the contact point (.da-pool clip-path, now on rows).'],
+    ['S1 · Answer', '≤100 ms', row({ cls: 'done', done: true, m: 'done · today' }), 'Optimistic: the value. Pending-only: the verb (“Completing…”), aria-busy, guarded.', row({ cls: 'done', done: true, m: 'done · today' }), '✓ stamps in over 120 ms (opacity + 0.92→1 scale, no bounce).'],
+    ['S2 · Pending', 'only after 400 ms', row({ cls: 'done', done: true, m: 'saving…' }), 'The row’s own meta reads “saving…”; held ≥500 ms once shown.', row({ cls: 'done', done: true, m: 'done · today', hair: true, band: 'Saving…' }), '2 px clay hairline under the row; band indicator.'],
+    ['S3 · Settled', 'when the write responds', row({ cls: 'done', done: true, m: 'done · 14 Oct' }), 'Meta reads the server’s truth. Nothing else moves.', row({ cls: 'done washok', done: true, m: 'done · 14 Oct', band: 'Saved · 10:42' }), 'Direction-still wash fades over 600 ms; band reads “Saved · 10:42” for 2 s.'],
+    ['S4 · Failure', 'on error', row({ alert: 'Didn’t save. The task is still open.' }), 'Rolled back. One plain line, role="alert", 44 px Try again. Focus stays.', row({ cls: 'washerr', alert: 'Didn’t save. The task is still open.' }), 'Same line plus a terracotta wash. Never a shake; never the red global toast.'],
+    ['S5 · Undo', 'only where it exists', '<div class="undo"><span style="flex:1">Removing Rattan lounge chair ×2…</span><button class="act" type="button" tabindex="-1"><span class="lbl">Undo</span></button><span class="meta" style="color:#fff">10 S</span></div>', 'In flow, takes focus (undo-toast.tsx). Reads “Removing…” until receipt, then “Removed…”.', '<div class="undo"><span style="flex:1">Removed Rattan lounge chair ×2.</span><button class="act" type="button" tabindex="-1"><span class="lbl">Undo</span></button><span class="meta" style="color:#fff">8 S</span></div>', 'Pinned to the viewport foot with a shadow (D2-PQ6: two canon departures).'],
+  ];
+  document.getElementById('stage-rows').innerHTML = stages.map(([s, w, q, qc, e, ec]) =>
+    `<tr><td data-l="Stage"><strong>${s}</strong></td><td class="when" data-l="When">${w}</td><td data-l="Quiet" aria-hidden="false">${q}<div class="cap">${qc}</div></td><td data-l="Expressive">${e}<div class="cap">${ec}</div></td></tr>`).join('');
+  document.querySelectorAll('#stage-rows .act').forEach((b) => b.setAttribute('aria-hidden', 'true'));
+
+  // ── live bench ─────────────────────────────────────────────────────────
+  const latency = () => Number(document.querySelector('input[name=lat]:checked').value);
+  const willFail = () => document.querySelector('input[name=out]:checked').value === 'fail';
+  const server = () => new Promise((res, rej) => { const fail = willFail(); setTimeout(() => (fail ? rej(new Error('refused')) : res()), latency()); });
+  const today = () => new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const clock = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+  function mountPaper(root) {
+    const exp = root.dataset.mode === 'exp';
+    root.appendChild(document.getElementById('paper-tpl').content.cloneNode(true));
+    root.querySelector('.title').textContent = exp ? 'Expressive' : 'Quiet';
+    const savingEl = root.querySelector('.saving');
+    const announce = (t) => { const a = root.querySelector('.announce'); a.textContent = ''; setTimeout(() => { a.textContent = t; }, 30); };
+    let inflight = 0, bandTimer = 0, savedTimer = 0;
+    const begin = () => { inflight++; clearTimeout(savedTimer); if (inflight === 1) bandTimer = setTimeout(() => { if (inflight) savingEl.textContent = 'Saving…'; }, 400); };
+    const end = (ok) => { inflight = Math.max(0, inflight - 1); if (inflight) return; clearTimeout(bandTimer);
+      if (exp && ok) { savingEl.textContent = 'Saved · ' + clock(); savedTimer = setTimeout(() => { savingEl.textContent = ''; }, 2000); } else savingEl.textContent = ''; };
+
+    // S2 helper: show `word` after 400 ms; once shown, hold ≥500 ms before settling.
+    function pendingWord(show) { let shownAt = 0; const t = setTimeout(() => { shownAt = performance.now(); show(); }, 400);
+      return (fn) => { clearTimeout(t); const wait = shownAt ? Math.max(0, 500 - (performance.now() - shownAt)) : 0; setTimeout(fn, wait); }; }
+
+    // Tick (optimistic, last intent wins, serialized per task)
+    const tasks = [['Order fabric samples', 'due 16 Oct'], ['Confirm sofa COM yardage', 'due 18 Oct'], ['Book the rug install', 'due 21 Oct']];
+    const ul = root.querySelector('.tasks');
+    tasks.forEach(([title, due]) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<button type="button" class="mrow mrow-btn" aria-pressed="false"><span class="tick" aria-hidden="true"></span><span class="ttl">${title}</span><span class="m">${due}</span></button><div class="alert-slot"></div>`;
+      const btn = li.querySelector('button'), tick = li.querySelector('.tick'), m = li.querySelector('.m'), slot = li.querySelector('.alert-slot');
+      let server_done = false, shown = false, chain = Promise.resolve();
+      const paint = (done, meta) => { shown = done; btn.setAttribute('aria-pressed', String(done)); btn.classList.toggle('done', done); tick.classList.toggle('done', done); tick.textContent = done ? '✓' : ''; m.textContent = meta; if (exp && done) { tick.classList.remove('stamp'); void tick.offsetWidth; tick.classList.add('stamp'); } };
+      btn.addEventListener('click', () => {
+        const want = !shown; slot.innerHTML = ''; btn.classList.remove('washerr', 'washok');
+        paint(want, want ? 'done · today' : due); // S1 ≤100 ms
+        let hair;
+        const settle = pendingWord(() => { if (exp) { hair = document.createElement('span'); hair.className = 'hair'; btn.appendChild(hair); } else m.textContent = 'saving…'; });
+        begin();
+        chain = chain.then(() => server()).then(() => {
+          server_done = want;
+          settle(() => { hair && hair.remove(); if (shown === want) { m.textContent = want ? 'done · ' + today() : due; if (exp) { btn.classList.add('washok'); setTimeout(() => btn.classList.remove('washok'), 600); } } end(true); });
+        }, () => {
+          settle(() => { hair && hair.remove(); paint(server_done, server_done ? 'done · ' + today() : due); if (exp) btn.classList.add('washerr');
+            slot.innerHTML = `<div class="alert" role="alert">Didn’t save. “${title}” is still ${server_done ? 'done' : 'open'}. <button type="button" class="act secondary"><span class="lbl">Try again</span></button></div>`;
+            slot.querySelector('button').addEventListener('click', () => { slot.innerHTML = ''; btn.click(); btn.focus(); }); end(false); });
+        });
+      });
+      ul.appendChild(li);
+    });
+
+    // Phase (pending-only, ref-guarded)
+    const phaseAct = root.querySelector('.phase-act'), phaseLine = root.querySelector('.phase-line'), phA = root.querySelector('.ph-a'), phB = root.querySelector('.ph-b');
+    let phaseBusy = false, completed = false;
+    phaseAct.addEventListener('click', () => {
+      if (phaseBusy) return; phaseBusy = true; // the ref guard (phase-advance-control.tsx:408)
+      const verb = completed ? 'Resuming' : 'Completing';
+      phaseAct.setAttribute('aria-busy', 'true'); phaseAct.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="lbl">${verb}…</span>`;
+      phaseLine.innerHTML = `<p class="status" role="status">${verb} Concept…</p>`; begin();
+      const slow = setTimeout(() => phaseLine.insertAdjacentHTML('beforeend', '<p class="status">Still working. You can leave this open.</p>'), 8000);
+      let hair; if (exp) { hair = document.createElement('span'); hair.className = 'hair'; hair.style.position = 'relative'; hair.style.display = 'block'; phaseLine.appendChild(hair); }
+      server().then(() => {
+        completed = !completed; phA.textContent = completed ? 'Concept · complete' : 'Concept · in progress'; phB.textContent = completed ? 'Refinement · in progress' : 'Refinement · next'; phB.classList.toggle('cur', completed);
+        phaseLine.innerHTML = `<p class="status ok" role="status">${completed ? 'Concept is complete. Refinement is next.' : 'Concept is back in progress.'}</p>`; end(true);
+      }, () => { phaseLine.innerHTML = `<p class="alert" role="alert">Couldn’t ${completed ? 'resume' : 'complete'} Concept. It is still ${completed ? 'complete' : 'in progress'}.</p>`; end(false); })
+        .finally(() => { clearTimeout(slow); phaseBusy = false; phaseAct.removeAttribute('aria-busy'); phaseAct.innerHTML = `<span class="lbl">${completed ? 'Resume the phase' : 'Complete the phase'}</span>`; });
+    });
+
+    // Add a room (ghost row from the mutation's variables; never clears her words on failure)
+    const rooms = root.querySelector('.rooms'), form = root.querySelector('.addline'), input = form.querySelector('input');
+    const addRoom = (name, li) => {
+      li = li || document.createElement('li');
+      li.innerHTML = `<div class="mrow ghost"><span class="tick" aria-hidden="true" style="visibility:hidden"></span><span class="ttl">${name}</span><span class="m"></span></div>`;
+      if (!li.isConnected) rooms.appendChild(li);
+      const r = li.querySelector('.mrow'), m = li.querySelector('.m'); begin();
+      const settle = pendingWord(() => { m.textContent = 'adding…'; if (exp) r.insertAdjacentHTML('beforeend', '<span class="hair"></span>'); });
+      server().then(() => settle(() => { li.innerHTML = `<div class="mrow${exp ? ' washok' : ''}"><span class="tick" aria-hidden="true" style="visibility:hidden"></span><span class="ttl">${name}</span><span class="m">0 pieces</span></div>`; announce(name + ' added.'); end(true); }),
+        () => settle(() => { r.querySelector('.hair')?.remove(); m.textContent = 'not added'; if (exp) r.classList.add('washerr');
+          li.insertAdjacentHTML('beforeend', `<div class="alert" role="alert">Didn’t add ${name}. <button type="button" class="act secondary retry"><span class="lbl">Try again</span></button><button type="button" class="act secondary discard"><span class="lbl">Discard</span></button></div>`);
+          li.querySelector('.retry').addEventListener('click', () => addRoom(name, li));
+          li.querySelector('.discard').addEventListener('click', () => { li.remove(); input.focus(); }); end(false); }));
+    };
+    form.addEventListener('submit', (e) => { e.preventDefault(); const name = input.value.trim(); if (!name) return; input.value = ''; input.focus(); addRoom(name); });
+
+    // Send (never optimistic)
+    const sendAct = root.querySelector('.send-act'), sendLine = root.querySelector('.send-line');
+    let sending = false, sent = false;
+    sendAct.addEventListener('click', () => {
+      if (sending || sent) return; sending = true;
+      sendAct.setAttribute('aria-busy', 'true'); sendAct.innerHTML = '<span class="dot" aria-hidden="true"></span><span class="lbl">Sending</span>';
+      sendLine.innerHTML = ''; begin();
+      const slow = setTimeout(() => { sendLine.innerHTML = '<p class="status" role="status">Still sending.</p>'; }, 8000);
+      server().then(() => { sent = true; sendAct.setAttribute('aria-disabled', 'true'); sendAct.innerHTML = '<span class="lbl">Sent</span>'; sendLine.innerHTML = '<p class="status ok" role="status">Sent to Jordan Ellis.</p>'; end(true); },
+        () => { sendAct.innerHTML = '<span class="lbl">Send</span>'; sendLine.innerHTML = '<p class="alert" role="alert">Not sent. Nothing went out. The draft is still here.</p>'; end(false); })
+        .finally(() => { clearTimeout(slow); sending = false; sendAct.removeAttribute('aria-busy'); });
+    });
+  }
+  document.querySelectorAll('.bench .paper').forEach(mountPaper);
+})();
+</script>
+</body>
+</html>
