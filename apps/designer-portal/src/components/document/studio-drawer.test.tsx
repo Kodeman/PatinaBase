@@ -8,6 +8,8 @@ import {
 import { StudioDrawer } from './studio-drawer';
 
 const mockPush = jest.fn();
+const mockPrefetch = jest.fn();
+const mockRouter = { push: mockPush, prefetch: mockPrefetch };
 const mockOpenTimer = jest.fn();
 let mockUnseenFeedback: Array<{ id: string }> = [];
 let mockPathname = '/desk';
@@ -25,7 +27,7 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => mockRouter,
 }));
 
 // The drawer's clock is the timer's doorway from W1 (`spine-timer.tsx` is
@@ -102,12 +104,23 @@ jest.mock('./account/account-nameplate', () => ({
 describe('StudioDrawer', () => {
   beforeEach(() => {
     mockPush.mockClear();
+    mockPrefetch.mockClear();
     mockOpenTimer.mockClear();
     mockPathname = '/desk';
     mockInHandToday = 0;
     mockPresenceOthers = [];
     mockUnseenFeedback = [];
     window.localStorage.clear();
+  });
+
+  it('SQ-1013 — prefetches every room door on mount, so a door opens without a server round trip', () => {
+    render(<StudioDrawer />);
+
+    expect(mockPrefetch.mock.calls.map(([href]) => href).sort()).toEqual([
+      '/library',
+      '/people',
+      '/rooms',
+    ]);
   });
 
   it('keeps Rooms direct and gathers sheet ledgers behind one doorway', () => {

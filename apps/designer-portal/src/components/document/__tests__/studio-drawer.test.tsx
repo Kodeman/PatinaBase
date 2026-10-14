@@ -23,7 +23,7 @@ jest.mock('next/navigation', () => ({
   // US-25 fix-now 12 — a Document view: on the Desk the drawer prints no
   // Find of its own (the header has one).
   usePathname: () => mockPathname,
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: jest.fn(), prefetch: jest.fn() }),
 }));
 
 jest.mock('../mobile/mobile-shell', () => ({

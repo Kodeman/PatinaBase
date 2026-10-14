@@ -182,6 +182,13 @@ export function StudioDrawer() {
   // the surface underneath.
   useSheetSurfaceKey(openLedger);
 
+  // The room doors are buttons that router.push, so nothing prefetches their
+  // routes the way an in-view <Link> would. Without it a door waits one
+  // server round trip before any of its room can paint (SQ-1013).
+  useEffect(() => {
+    for (const door of ROOM_DOORS) router.prefetch(door.href!);
+  }, [router]);
+
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(
