@@ -48,6 +48,25 @@ jobs:
           bash -n scripts/agent-preflight.sh scripts/bootstrap-worktree.sh scripts/init-local-env-profile.sh scripts/worktree-recovery-manifest.sh scripts/verify-affected.sh scripts/repo-gc.sh
           pnpm lint:skills
 
+      - name: Detect portal bundle changes
+        id: bundle-paths
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -Eq '^(apps/designer-portal/|packages/)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check designer portal bundle budgets
+        if: steps.bundle-paths.outputs.changed == 'true'
+        run: |
+          ANALYZE=true pnpm --filter @patina/designer-portal analyze
+          node scripts/bundle-budget.mjs apps/designer-portal/.next
+
       - name: Verify affected code
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}

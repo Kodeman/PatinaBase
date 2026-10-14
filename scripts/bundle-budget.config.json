@@ -1,0 +1,26 @@
+{
+  "measurement": {
+    "source": "main 21a1c69fc after F8-F10",
+    "command": "ANALYZE=true pnpm --filter @patina/designer-portal analyze",
+    "capturedAt": "2026-10-14",
+    "firstLoadGzipBytes": {
+      "/desk": 1281929,
+      "/doc/[id]": 1607318
+    },
+    "note": "Raw gzip byte sums from each route's clientModules chunks in the completed Next webpack analysis build; budgets are ceil(measurement * 1.05)."
+  },
+  "routes": {
+    "(document)/desk": {
+      "budgetBytes": 1346026
+    },
+    "(document)/doc/[id]": {
+      "budgetBytes": 1687684
+    }
+  },
+  "lucideIconModuleLimit": 200,
+  "lucideIconMeasurement": {
+    "count": 140,
+    "source": "main 21a1c69fc after F8-F10",
+    "comment": "140 real icon modules are expected; the tripwire catches the full icon set returning (~1,584 modules). Threshold and rationale follow orchestrator ruling SQ-999."
+  }
+}
