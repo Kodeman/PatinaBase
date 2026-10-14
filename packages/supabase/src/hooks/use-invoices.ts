@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Note: This file uses type assertions (as any) because the database types
 // haven't been regenerated yet to include the invoicing tables (invoices,
@@ -745,9 +746,8 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
     mutationFn: async (input: CreateDraftInvoiceInput): Promise<Invoice> => {
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data: project, error: projectErr } = await supabase
@@ -827,9 +827,8 @@ export function useCreateDraftStudioInvoice(options?: { errorSurface?: 'inline' 
     mutationFn: async (input: CreateDraftStudioInvoiceInput): Promise<string> => {
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const lines = input.lines.map((line, index) => {

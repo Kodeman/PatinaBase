@@ -1,6 +1,6 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import { getSessionUserId } from '../auth/session-user';
 
 // Lazy client getter to avoid module-level initialization during SSR.
 const getSupabase = () => createBrowserClient();
@@ -216,9 +216,8 @@ export function useCreateFeedback() {
 
       let screenshot_path: string | null = null;
       if (input.screenshot) {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
         if (user) {
           const path = `${user.id}/${id}.png`;
           const { error: upErr } = await supabase.storage

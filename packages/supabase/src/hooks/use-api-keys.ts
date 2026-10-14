@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 
@@ -197,9 +198,8 @@ export function useCreateApiKey() {
   return useMutation({
     mutationFn: async (input: CreateApiKeyInput): Promise<CreateApiKeyResult> => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Generate a secure random key
@@ -312,9 +312,8 @@ export function useRevokeApiKey() {
   return useMutation({
     mutationFn: async ({ keyId }: { keyId: string }) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -353,9 +352,8 @@ export function useRegenerateApiKey() {
   return useMutation({
     mutationFn: async ({ keyId }: { keyId: string }): Promise<CreateApiKeyResult> => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Get the existing key details

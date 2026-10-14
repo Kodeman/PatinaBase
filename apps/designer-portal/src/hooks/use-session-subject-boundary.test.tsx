@@ -1,3 +1,4 @@
+import { getSessionUserId } from '@patina/supabase';
 /**
  * US-34 F1 — the subject boundary, wired as the portal wires it: the real
  * session-user store (only Supabase's auth client is faked) driving a real
@@ -6,7 +7,6 @@
 import { ReactNode } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { getSessionUserId } from '@patina/supabase';
 import { useSessionSubjectBoundary } from './use-session-subject-boundary';
 
 type AuthCallback = (event: string, session: { user: { id: string } } | null) => void;

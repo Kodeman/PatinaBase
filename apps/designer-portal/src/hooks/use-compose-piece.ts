@@ -1,4 +1,5 @@
 'use client';
+import { getSessionUserId } from '@patina/supabase';
 
 /**
  * Save a composed piece (R40) as a REAL catalog draft — a `products` row on the
@@ -45,9 +46,8 @@ export function useComposePiece() {
   return useMutation({
     mutationFn: async (input: ComposeDraftInput): Promise<{ id: string }> => {
       const supabase = createBrowserClient() as any;
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const row: Record<string, unknown> = {

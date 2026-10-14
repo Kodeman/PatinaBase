@@ -1,3 +1,4 @@
+import { getSessionUserId } from '@patina/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
 
@@ -124,7 +125,8 @@ export function useAddProductRelation() {
       relationType: 'pairs_with' | 'alternative' | 'never_with';
       notes?: string;
     }) => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase.from('product_relations').insert({

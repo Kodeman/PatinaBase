@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 
@@ -176,7 +177,8 @@ export function useSatisfyGate() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: userRes } = await supabase.auth.getUser();
+      const userResId = await getSessionUserId();
+      const userRes = { user: userResId ? { id: userResId } : null };
       const userId = userRes?.user?.id ?? null;
 
       const { data, error } = await supabase
@@ -215,7 +217,8 @@ export function useDesignerOverrideGate() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: userRes } = await supabase.auth.getUser();
+      const userResId = await getSessionUserId();
+      const userRes = { user: userResId ? { id: userResId } : null };
       const userId = userRes?.user?.id ?? null;
 
       const { data: existing } = await supabase

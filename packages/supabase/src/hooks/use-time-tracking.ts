@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 /**
  * Hooks for Project Time Tracking (public.project_time_entries, 00177).
  *
@@ -15,7 +16,6 @@
 
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import { getSessionUserId } from '../auth/session-user';
 import { normalizePhaseSlug, ALL_PHASE_SLUGS, type PhaseSlug } from '@patina/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1244,7 +1244,8 @@ export function useMyRateRoles(projectId: string | null) {
     enabled: Boolean(projectId),
     queryFn: async (): Promise<TimeRateRole[]> => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
+      const userDataId = await getSessionUserId();
+      const userData = { user: userDataId ? { id: userDataId } : null };
       const userId = userData?.user?.id;
       if (!userId) return [];
 

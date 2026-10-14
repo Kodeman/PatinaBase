@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient, createBrowserClient } from '../client';
 
@@ -54,7 +55,8 @@ export function useCreateProject() {
       const supabase = getAuthSupabase();
 
       // Get the current user
-      const { data: userData } = await supabase.auth.getUser();
+      const userDataId = await getSessionUserId();
+      const userData = { user: userDataId ? { id: userDataId } : null };
       if (!userData.user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase

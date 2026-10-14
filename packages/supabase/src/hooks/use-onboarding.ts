@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 
@@ -75,9 +76,8 @@ export function useMyDesignerApplication() {
     queryKey: ['my-designer-application'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getDesignerApplicationsTable()
@@ -102,9 +102,8 @@ export function useSubmitDesignerApplication() {
   return useMutation({
     mutationFn: async (input: DesignerApplicationInput) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Check for existing pending application
@@ -154,9 +153,8 @@ export function useUpdateDesignerApplication() {
       ...input
     }: DesignerApplicationInput & { applicationId: string }) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getDesignerApplicationsTable()
@@ -268,9 +266,8 @@ export function useApproveDesignerApplication() {
       notes?: string;
     }) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Get the application
@@ -342,9 +339,8 @@ export function useRejectDesignerApplication() {
       notes?: string;
     }) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await getDesignerApplicationsTable()
@@ -376,9 +372,8 @@ export function useMarkApplicationUnderReview() {
   return useMutation({
     mutationFn: async ({ applicationId }: { applicationId: string }) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await getDesignerApplicationsTable()

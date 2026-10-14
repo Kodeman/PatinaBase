@@ -1,3 +1,4 @@
+import { getSessionUserId } from '@patina/supabase';
 /**
  * Hooks for Project Tracking — Opus System
  *
@@ -816,7 +817,8 @@ export function useUploadProjectDocument() {
         .upload(path, file, { contentType: file.type || undefined, upsert: false });
       if (upErr) throw upErr;
 
-      const { data: userData } = await supabase.auth.getUser();
+      const userDataId = await getSessionUserId();
+      const userData = { user: userDataId ? { id: userDataId } : null };
       const { data: row, error } = await supabase
         .from('project_documents')
         .insert({

@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 "use client";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -157,9 +158,8 @@ export function useRoomConceptRender() {
         .upload(path, file, { contentType: file.type, upsert: true });
       if (uploadError) throw uploadError;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
 
       const trimmed = typeof caption === "string" ? caption.trim() : "";
 

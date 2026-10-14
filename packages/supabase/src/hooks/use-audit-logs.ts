@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import type { Json } from '../database.types';
@@ -184,9 +185,8 @@ export function useMyAuditLogs(limit = 50) {
     queryKey: ['my-audit-logs', limit],
     queryFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -359,9 +359,8 @@ export function useCreateAuditLog() {
   return useMutation({
     mutationFn: async (input: CreateAuditLogInput) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
 
       const { data, error } = await supabase
         .from('audit_logs')

@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient, createBrowserClient } from '../client';
 import type { AccountStatus } from '@patina/shared';
@@ -174,7 +175,8 @@ export function useProductsWithVendorPricing(filters?: ProductFilter, pagination
       const supabase = getAuthSupabase() as any;
 
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
 
       // Fetch user's trade accounts to determine tier discounts
       let tradeAccountsMap: Map<string, { status: AccountStatus; tier: string | null; discount: number | null; discountDisplay: string | null }> = new Map();
@@ -453,7 +455,8 @@ export function useProductWithVendorPricing(id: string) {
       const supabase = getAuthSupabase() as any;
 
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
 
       // Fetch product with vendor (manufacturer) and retailer data
       const { data: product, error } = await supabase
@@ -710,9 +713,8 @@ export function useCreateDraftProduct() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getAuthSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const trimmedName = input.name.trim();

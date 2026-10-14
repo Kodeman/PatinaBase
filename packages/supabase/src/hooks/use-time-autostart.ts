@@ -1,6 +1,6 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import { getSessionUserId } from '../auth/session-user';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HT-35 — the automatic timer is disclosed once, and a member may decline it.
@@ -93,7 +93,8 @@ export function useSetTimeAutostartOptOut() {
   return useMutation({
     mutationFn: async (optedOut: boolean) => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
+      const userDataId = await getSessionUserId();
+      const userData = { user: userDataId ? { id: userDataId } : null };
       const userId = userData?.user?.id;
       if (!userId) throw new Error('Sign in to change this.');
       const { error } = await supabase
@@ -128,7 +129,8 @@ export function useMarkTimeAutostartDisclosed() {
     retry: 2,
     mutationFn: async () => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
+      const userDataId = await getSessionUserId();
+      const userData = { user: userDataId ? { id: userDataId } : null };
       const userId = userData?.user?.id;
       if (!userId) return;
       const { error } = await supabase

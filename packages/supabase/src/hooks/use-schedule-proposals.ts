@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import type { Tables } from '../database.types';
@@ -114,7 +115,7 @@ export function useCommitScheduleProposal() {
         .update({
           state: 'committed',
           resolved_at: new Date().toISOString(),
-          resolved_by: (await supabase.auth.getUser()).data?.user?.id ?? null,
+          resolved_by: await getSessionUserId() ?? null,
         })
         .eq('id', proposalId)
         .eq('state', 'proposed');
@@ -139,7 +140,7 @@ export function useDismissScheduleProposal() {
         .update({
           state: 'dismissed',
           resolved_at: new Date().toISOString(),
-          resolved_by: (await supabase.auth.getUser()).data?.user?.id ?? null,
+          resolved_by: await getSessionUserId() ?? null,
         })
         .eq('id', proposalId)
         .eq('state', 'proposed');

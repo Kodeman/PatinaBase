@@ -1,3 +1,4 @@
+import { getSessionUserId } from '@patina/supabase';
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -2283,7 +2284,8 @@ export async function uploadPaperScanDocument(
   file: File,
 ): Promise<string> {
   const supabase = getSupabase();
-  const { data: auth } = await supabase.auth.getUser();
+  const authId = await getSessionUserId();
+      const auth = { user: authId ? { id: authId } : null };
 
   const safeName = file.name.replace(/[^\w.-]+/g, "_");
   const storagePath = `${proposalId}/${Date.now()}-${safeName}`;

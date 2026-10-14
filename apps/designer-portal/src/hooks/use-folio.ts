@@ -1,3 +1,4 @@
+import { getSessionUserId } from '@patina/supabase';
 /**
  * The Folio (R24) — files clipped to the paper, riding the shipped
  * project_documents table (00169) + project-documents bucket (00170);
@@ -97,7 +98,8 @@ export function useUploadFolioFile(projectId: string | null) {
     mutationFn: async ({ file, anchor }: { file: File; anchor: FolioAnchor }) => {
       if (!projectId) throw new Error('folio upload: no project');
       const supabase = getSupabase();
-      const { data: auth } = await supabase.auth.getUser();
+      const authId = await getSessionUserId();
+      const auth = { user: authId ? { id: authId } : null };
 
       const safeName = file.name.replace(/[^\w.\-]+/g, '_');
       const storagePath = `${projectId}/${Date.now()}-${safeName}`;
@@ -190,7 +192,8 @@ export function useUploadDiscoveryFolioFile(designerClientId: string | null) {
     mutationFn: async ({ file }: { file: File }) => {
       if (!designerClientId) throw new Error('discovery folio: no engagement');
       const supabase = getSupabase();
-      const { data: auth } = await supabase.auth.getUser();
+      const authId = await getSessionUserId();
+      const auth = { user: authId ? { id: authId } : null };
 
       const safeName = file.name.replace(/[^\w.\-]+/g, '_');
       const storagePath = `${designerClientId}/${Date.now()}-${safeName}`;
@@ -255,7 +258,8 @@ export function useUploadProposalFolioFile(proposalId: string | null) {
     mutationFn: async ({ file }: { file: File }) => {
       if (!proposalId) throw new Error('proposal folio: no proposal');
       const supabase = getSupabase();
-      const { data: auth } = await supabase.auth.getUser();
+      const authId = await getSessionUserId();
+      const auth = { user: authId ? { id: authId } : null };
 
       const safeName = file.name.replace(/[^\w.\-]+/g, '_');
       const storagePath = `${proposalId}/${Date.now()}-${safeName}`;

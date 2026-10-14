@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 
@@ -84,9 +85,8 @@ export function useMyDataExportRequests() {
     queryKey: ['my-data-export-requests'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getDataExportRequestsTable()
@@ -119,9 +119,8 @@ export function useLatestDataExportRequest() {
     queryKey: ['latest-data-export-request'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getDataExportRequestsTable()
@@ -158,9 +157,8 @@ export function useRequestDataExport() {
   return useMutation({
     mutationFn: async (includedData?: string[]) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Check for existing pending/processing request
@@ -221,9 +219,8 @@ export function useExportMyData() {
   return useMutation({
     mutationFn: async (): Promise<DataExportContent> => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Fetch all user data in parallel
@@ -277,9 +274,8 @@ export function useMyAccountDeletionRequest() {
     queryKey: ['my-account-deletion-request'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getAccountDeletionRequestsTable()
@@ -315,9 +311,8 @@ export function useRequestAccountDeletion() {
   return useMutation({
     mutationFn: async (reason?: string) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Check for existing pending request
@@ -373,9 +368,8 @@ export function useCancelAccountDeletion() {
   return useMutation({
     mutationFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getAccountDeletionRequestsTable()
@@ -419,9 +413,8 @@ export function useMyConsents() {
     queryKey: ['my-consents'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getConsentRecordsTable()
@@ -453,9 +446,8 @@ export function useHasConsent(consentType: string) {
     queryKey: ['has-consent', consentType],
     queryFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) return false;
 
       const { data, error } = await getConsentRecordsTable()
@@ -482,9 +474,8 @@ export function useGrantConsent() {
   return useMutation({
     mutationFn: async (consentType: string) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getConsentRecordsTable()
@@ -530,9 +521,8 @@ export function useRevokeConsent() {
   return useMutation({
     mutationFn: async (consentType: string) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getConsentRecordsTable()

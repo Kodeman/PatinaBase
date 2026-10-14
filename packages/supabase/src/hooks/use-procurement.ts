@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Note: This file uses type assertions (as any) because the database types
 // haven't been regenerated yet to include the procurement workspace tables
@@ -8,7 +9,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import { getSessionUserId } from '../auth/session-user';
 import { invalidateProjectWorkflow } from './use-project-workflow';
 
 // Lazy client getter to avoid module-level initialization during SSR
@@ -2646,9 +2646,8 @@ export function useMarkProcurementNotificationRead() {
       notificationId: string;
     }): Promise<ProcurementNotification> => {
       const supabase = getSupabase() as any;
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase

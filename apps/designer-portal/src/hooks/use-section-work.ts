@@ -1,3 +1,4 @@
+import { getSessionUserId } from '@patina/supabase';
 /**
  * The Work (R23) — section tasks + approval gates, both riding shipped
  * tables (audit-first: project_tasks 00169 + client_decisions; additive
@@ -114,7 +115,8 @@ export function useCreateSectionTask(projectId: string | null) {
       estimateMinutes?: number | null;
     }) => {
       const supabase = getSupabase();
-      const { data: auth } = await supabase.auth.getUser();
+      const authId = await getSessionUserId();
+      const auth = { user: authId ? { id: authId } : null };
       const { data, error } = await supabase
         .from('project_tasks')
         .insert({

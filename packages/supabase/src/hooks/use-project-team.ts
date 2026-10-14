@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 /**
  * Project team membership hooks (project_team_members table, migration 00084).
  */
@@ -62,7 +63,7 @@ export function useAddProjectTeamMember() {
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: user } = await supabase.auth.getUser();
+      const sessionUserId = await getSessionUserId();
       const { data, error } = await supabase
         .from('project_team_members')
         .insert({
@@ -70,7 +71,7 @@ export function useAddProjectTeamMember() {
           user_id: userId,
           role,
           permissions,
-          assigned_by: user.user?.id ?? null,
+          assigned_by: sessionUserId ?? null,
         })
         .select()
         .single();
@@ -180,7 +181,8 @@ export function useProjectPermissions(projectId: string): ProjectPermissions & {
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: user } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = { user: userId ? { id: userId } : null };
       if (!user.user) return [];
 
       // Lead designer is also stored on projects.designer_id (00066).

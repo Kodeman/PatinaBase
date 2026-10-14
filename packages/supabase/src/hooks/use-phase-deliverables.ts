@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 
@@ -128,7 +129,8 @@ export function useToggleDeliverableCompleted() {
 
       let userId: string | null = null;
       if (completed) {
-        const { data: userRes } = await supabase.auth.getUser();
+        const userResId = await getSessionUserId();
+      const userRes = { user: userResId ? { id: userResId } : null };
         userId = userRes?.user?.id ?? null;
       }
 

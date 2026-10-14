@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 
@@ -90,9 +91,8 @@ export function useMyEngagementScore() {
     queryKey: ['my-engagement-score'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getEngagementScoresView()
@@ -126,9 +126,8 @@ export function useRecentEngagementEvents(filters?: EngagementEventFilters) {
     queryKey: ['engagement-events', filters],
     queryFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       let query = getEngagementEventsTable()
@@ -185,9 +184,8 @@ export function useTrackEngagementEvent() {
       posthogEventId?: string;
     }) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await getEngagementEventsTable()

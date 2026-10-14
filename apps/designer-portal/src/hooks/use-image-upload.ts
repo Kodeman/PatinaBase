@@ -1,4 +1,5 @@
 'use client';
+import { getSessionUserId } from '@patina/supabase';
 
 import { useCallback, useState } from 'react';
 import { createBrowserClient } from '@patina/supabase';
@@ -85,9 +86,8 @@ export function useImageUpload(): UseImageUploadReturn {
       setIsUploading(true);
       try {
         const supabase = createBrowserClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
         if (!user) {
           setError('Authentication required');
           return null;

@@ -1,6 +1,6 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import { getSessionUserId } from '../auth/session-user';
 import { peopleKeys } from './use-people';
 import { emailDeliveryKeys } from './use-email-delivery';
 import { asWrittenConsentError, consentKeys } from './use-consent';
@@ -463,7 +463,8 @@ export function useSendClientMessage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: user } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = { user: userId ? { id: userId } : null };
       if (!user.user) throw new Error('Not authenticated');
 
       // recipient_id: look up the other party in the designer_clients row

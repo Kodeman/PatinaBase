@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 
@@ -277,7 +278,8 @@ export function useCreateRoom() {
       const supabase = getSupabase() as any;
 
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -488,7 +490,8 @@ export function useRecalculateStyleSignals() {
       const supabase = getSupabase() as any;
 
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Call the database function

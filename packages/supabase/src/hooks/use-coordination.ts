@@ -1,4 +1,5 @@
 'use client';
+import { getSessionUserId } from '../auth/session-user';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
@@ -2259,9 +2260,7 @@ export function useUpdateSiteAccessCard() {
     ): Promise<ProjectSiteAccessCard> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-
+      const userDataId = await getSessionUserId();
       const wayInChanged =
         input.lockboxVersion !== undefined ||
         input.alarmRef !== undefined ||
@@ -2270,7 +2269,7 @@ export function useUpdateSiteAccessCard() {
       const row: Record<string, unknown> = { project_id: input.projectId };
       if (wayInChanged) {
         row.changed_at = new Date().toISOString();
-        row.changed_by = userData?.user?.id ?? null;
+        row.changed_by = userDataId ?? null;
         row.told_refs = [];
       }
       if (input.lockboxVersion !== undefined)

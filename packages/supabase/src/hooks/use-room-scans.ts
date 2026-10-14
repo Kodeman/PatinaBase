@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { publicUrlToPath } from '../lib/storage-url';
@@ -227,7 +228,8 @@ export function useClientRoomScans(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: auth } = await supabase.auth.getUser();
+      const authId = await getSessionUserId();
+      const auth = { user: authId ? { id: authId } : null };
       const designerId: string | null = auth?.user?.id ?? null;
 
       const readScansFor = async (

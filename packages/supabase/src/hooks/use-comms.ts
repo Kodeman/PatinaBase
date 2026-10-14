@@ -1,4 +1,5 @@
 'use client';
+import { getSessionUserId } from '../auth/session-user';
 
 import {
   useQuery,
@@ -145,7 +146,8 @@ export function useThreads(params: UseThreadsParams = {}) {
     queryKey: commsKeys.threads(params as Record<string, unknown>),
     queryFn: async (): Promise<ThreadSummary[]> => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
+      const userRespId = await getSessionUserId();
+      const userResp = { user: userRespId ? { id: userRespId } : null };
       const userId = userResp.user?.id;
       if (!userId) return [];
 
@@ -223,7 +225,8 @@ export function useThread(threadId: string | undefined) {
     queryFn: async (): Promise<ThreadSummary | null> => {
       if (!threadId) return null;
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
+      const userRespId = await getSessionUserId();
+      const userResp = { user: userRespId ? { id: userRespId } : null };
       const userId = userResp.user?.id;
 
       const { data, error } = await supabase
@@ -307,7 +310,8 @@ export function useSendMessage() {
   return useMutation({
     mutationFn: async (input: SendMessageInput): Promise<CommsMessage> => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
+      const userRespId = await getSessionUserId();
+      const userResp = { user: userRespId ? { id: userRespId } : null };
       const userId = userResp.user?.id;
       if (!userId) throw new Error('Not authenticated');
 
@@ -402,7 +406,8 @@ export function useArchiveThread() {
   return useMutation({
     mutationFn: async (input: { threadId: string; archived: boolean }) => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
+      const userRespId = await getSessionUserId();
+      const userResp = { user: userRespId ? { id: userRespId } : null };
       const userId = userResp.user?.id;
       if (!userId) throw new Error('Not authenticated');
       const { error } = await supabase
@@ -424,7 +429,8 @@ export function useMuteThread() {
   return useMutation({
     mutationFn: async (input: { threadId: string; muted: boolean }) => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
+      const userRespId = await getSessionUserId();
+      const userResp = { user: userRespId ? { id: userRespId } : null };
       const userId = userResp.user?.id;
       if (!userId) throw new Error('Not authenticated');
       const { error } = await supabase
@@ -603,8 +609,7 @@ export function useInboxRealtime() {
     let channel: RealtimeChannel | undefined;
 
     (async () => {
-      const { data } = await supabase.auth.getUser();
-      userId = data.user?.id;
+      userId = (await getSessionUserId()) ?? undefined;
       if (!userId) return;
       channel = supabase
         .channel(`inbox:${userId}`)
@@ -645,7 +650,8 @@ export function useTypingIndicator(threadId: string | undefined) {
     let cancelled = false;
 
     (async () => {
-      const { data: userResp } = await supabase.auth.getUser();
+      const userRespId = await getSessionUserId();
+      const userResp = { user: userRespId ? { id: userRespId } : null };
       const userId = userResp.user?.id;
       if (!userId) return;
       const { data: profile } = await supabase
@@ -745,7 +751,8 @@ export function useUpsertQuickReply() {
       position?: number;
     }) => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
+      const userRespId = await getSessionUserId();
+      const userResp = { user: userRespId ? { id: userRespId } : null };
       const userId = userResp.user?.id;
       if (!userId) throw new Error('Not authenticated');
 
@@ -930,7 +937,8 @@ export function useEnsureCoordinationItemThread() {
   return useMutation({
     mutationFn: async (input: EnsureItemThreadInput): Promise<string> => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
+      const userRespId = await getSessionUserId();
+      const userResp = { user: userRespId ? { id: userRespId } : null };
       const userId = userResp.user?.id;
       if (!userId) throw new Error('Not authenticated');
 
@@ -1001,7 +1009,8 @@ export function useMyThreadOverrides() {
     queryKey: ['comms', 'my-overrides'] as const,
     queryFn: async (): Promise<ThreadOverride[]> => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
+      const userRespId = await getSessionUserId();
+      const userResp = { user: userRespId ? { id: userRespId } : null };
       const userId = userResp.user?.id;
       if (!userId) return [];
 
@@ -1061,7 +1070,8 @@ export function useUpdateThreadNotificationPref() {
       pref: NotificationPref;
     }) => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
+      const userRespId = await getSessionUserId();
+      const userResp = { user: userRespId ? { id: userRespId } : null };
       const userId = userResp.user?.id;
       if (!userId) throw new Error('Not authenticated');
       const { error } = await supabase

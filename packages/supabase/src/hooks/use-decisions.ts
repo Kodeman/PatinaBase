@@ -1,4 +1,5 @@
 'use client';
+import { getSessionUserId } from '../auth/session-user';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -389,7 +390,8 @@ export function useDecisionMetrics() {
       // Hydrate the auth session before the SELECT — without this, the browser
       // client doesn't attach the JWT and RLS sees auth.uid() as null, which
       // makes the policy's EXISTS subquery evaluate false for every row.
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -984,7 +986,8 @@ export function useCreateDecisionComment() {
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -1091,7 +1094,8 @@ export function useDecisionAnalyticsByType() {
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase.rpc('get_decision_analytics_by_type', {
@@ -1109,7 +1113,8 @@ export function useDecisionAnalyticsByClient() {
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase.rpc('get_decision_analytics_by_client', {
@@ -1127,7 +1132,8 @@ export function useDecisionBottleneckPhases() {
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase.rpc('get_decision_bottleneck_phases', {

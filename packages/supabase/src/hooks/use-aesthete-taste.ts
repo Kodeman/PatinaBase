@@ -1,4 +1,5 @@
 'use client';
+import { getSessionUserId } from '../auth/session-user';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Note: aesthete taste tables/RPCs are not in database.types.ts yet (00242
@@ -363,9 +364,8 @@ export function useMyTasteProfile() {
     queryFn: async (): Promise<TasteProfileRow | null> => {
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) return null;
 
       const { data, error } = await supabase

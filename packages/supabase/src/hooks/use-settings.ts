@@ -1,6 +1,6 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import { getSessionUserId } from '../auth/session-user';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -93,7 +93,8 @@ export function useUpdateProfile() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: user } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = { user: userId ? { id: userId } : null };
       if (!user.user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -122,7 +123,8 @@ export function useSettings() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: user } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = { user: userId ? { id: userId } : null };
       if (!user.user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -167,7 +169,8 @@ export function useUpdateSettings() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: user } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = { user: userId ? { id: userId } : null };
       if (!user.user) throw new Error('Not authenticated');
 
       // Try to update first
@@ -220,7 +223,8 @@ export function useUploadAvatar() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: user } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = { user: userId ? { id: userId } : null };
       if (!user.user) throw new Error('Not authenticated');
 
       const fileExt = file.name.split('.').pop();

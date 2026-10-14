@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // AI Companion hooks for edge function communication and conversation management
 
@@ -79,7 +80,8 @@ export function useCompanionConversation() {
     queryKey: ['companion-conversation'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await (supabase as any)
@@ -161,7 +163,8 @@ export function useSendCompanionMessage() {
       conversation_id?: string;
     }) => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase.functions.invoke('companion-message', {

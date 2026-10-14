@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createBrowserClient } from "../client";
 import type { NotificationPreferences } from "@patina/shared/types";
@@ -56,9 +57,8 @@ export function useNotificationPreferences(options?: { enabled?: boolean }) {
     enabled: options?.enabled ?? true,
     queryFn: async () => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error("Not authenticated");
 
       const { data, error } = await supabase
@@ -94,9 +94,8 @@ export function useUpdateNotificationPreferences() {
   return useMutation({
     mutationFn: async (updates: Partial<NotificationPreferences>) => {
       const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error("Not authenticated");
 
       // Check if row exists

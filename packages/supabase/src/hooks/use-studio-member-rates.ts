@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 /**
  * Hooks for a studio's per-member hourly rates (public.studio_member_rates,
  * migration 00598 — HT-3).
@@ -102,7 +103,8 @@ export function useSetStudioMemberRate() {
   return useMutation({
     mutationFn: async (input: SetStudioMemberRateInput): Promise<StudioMemberRate> => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
+      const userDataId = await getSessionUserId();
+      const userData = { user: userDataId ? { id: userDataId } : null };
       const userId = userData?.user?.id;
       if (!userId) throw new Error('Not signed in');
 

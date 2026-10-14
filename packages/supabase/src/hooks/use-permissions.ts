@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { useOrganizations, type OrganizationWithMembership } from './use-organizations';
@@ -120,7 +121,8 @@ export function useUserRoles() {
     queryKey: ['user-roles'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -152,7 +154,8 @@ export function useUserPermissions() {
     queryKey: ['user-permissions'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Get user's direct roles
@@ -228,7 +231,8 @@ export function useHasPermission(
     queryKey: ['current-user-id'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       return user?.id;
     },
   });
@@ -257,7 +261,8 @@ export function useHasAnyPermission(
     queryKey: ['current-user-id'],
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       return user?.id;
     },
   });

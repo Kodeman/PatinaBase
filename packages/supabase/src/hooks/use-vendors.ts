@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Note: This file uses type assertions (as any) because the database types
 // haven't been regenerated yet to include the vendor management tables.
@@ -97,9 +98,8 @@ export function useVendor(vendorId: string) {
       const supabase = getSupabase() as any;
 
       // Get current user to check relationship
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
 
       // Fetch vendor with all related data
       const { data: vendor, error: vendorError } = await supabase
@@ -256,9 +256,8 @@ export function useTradeAccounts() {
     queryFn: async () => {
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) return { accounts: [], pendingApplications: [] };
 
       // Fetch active trade accounts
@@ -363,9 +362,8 @@ export function useToggleVendorSave(options?: { errorSurface?: 'inline' }) {
     mutationFn: async ({ vendorId, notes }: { vendorId: string; notes?: string }) => {
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Check if already saved
@@ -425,9 +423,8 @@ export function useSaveVendor(options?: { errorSurface?: 'inline' }) {
     mutationFn: async ({ vendorId, notes }: { vendorId: string; notes?: string }) => {
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase.from('saved_vendors').upsert(
@@ -462,9 +459,8 @@ export function useSavedVendorIds() {
     queryFn: async (): Promise<string[]> => {
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) return [];
 
       const { data, error } = await supabase
@@ -494,9 +490,8 @@ export function useSubmitVendorReview() {
     }) => {
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Calculate overall rating from dimension ratings
@@ -564,9 +559,8 @@ export function useVoteOnSpecialization() {
     }) => {
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase

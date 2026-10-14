@@ -63,8 +63,7 @@ export function useSetAvailability() {
   return useMutation({
     mutationFn: async (status: AvailabilityStatus) => {
       const supabase = getSupabase();
-      const { data } = await supabase.auth.getUser();
-      const userId = data.user?.id;
+      const userId = await getSessionUserId();
       if (!userId) throw new Error('Not signed in');
 
       const { error } = await supabase

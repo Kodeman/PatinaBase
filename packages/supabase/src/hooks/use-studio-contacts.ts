@@ -1,4 +1,5 @@
 'use client';
+import { getSessionUserId } from '../auth/session-user';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPartyKindLabel } from '@patina/types';
@@ -1155,8 +1156,9 @@ export function useSetContactRule() {
     mutationFn: async (input: SetStudioContactRuleInput): Promise<StudioContactRule> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
+      const userDataId = await getSessionUserId();
+      const userData = { user: userDataId ? { id: userDataId } : null };
+      if (!userData.user) throw new Error('Not authenticated');
       // CR3-2: in merge mode the standing row is the baseline, so a caller that
       // knows only the reason cannot blank the forbidden list, the route or the
       // hours somebody else wrote.
@@ -1818,8 +1820,9 @@ export function useConfirmComplianceDocument() {
     }): Promise<StudioComplianceDocument> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
+      const userDataId = await getSessionUserId();
+      const userData = { user: userDataId ? { id: userDataId } : null };
+      if (!userData.user) throw new Error('Not authenticated');
       const { data, error } = await supabase
         .from('studio_compliance_documents')
         .update({

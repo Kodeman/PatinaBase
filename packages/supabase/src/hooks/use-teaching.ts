@@ -1,3 +1,4 @@
+import { getSessionUserId } from '../auth/session-user';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Note: This file uses type assertions (as any) because the database types
 // haven't been regenerated yet to include the teaching tables.
@@ -153,7 +154,8 @@ export function useClaimNextProduct(mode: TeachingMode) {
       const supabase = getSupabase() as any;
 
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Find next available product based on mode
@@ -232,7 +234,8 @@ export function useSaveSpectrum() {
     }) => {
       const supabase = getSupabase() as any;
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -297,7 +300,8 @@ export function useAssignStyle() {
     }) => {
       const supabase = getSupabase();
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // If setting as primary, unset any existing primary
@@ -412,7 +416,8 @@ export function useSubmitValidation(options?: { errorSurface?: 'inline' }) {
     }) => {
       const supabase = getSupabase() as any;
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -447,7 +452,8 @@ export function useDesignerTeachingStats() {
     queryFn: async () => {
       const supabase = getSupabase() as any;
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) return null;
 
       const { data, error } = await supabase
@@ -501,7 +507,8 @@ export function useDesignerTaughtToday() {
     queryFn: async () => {
       const supabase = getSupabase() as any;
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) return 0;
 
       // Designer-local start of day → UTC for the timestamptz comparison.
@@ -542,7 +549,8 @@ export function useSubmitTeaching() {
     }) => {
       const supabase = getSupabase() as any;
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const userId = await getSessionUserId();
+      const user = userId ? { id: userId } : null;
       if (!user) throw new Error('Not authenticated');
 
       // Start a batch of operations
