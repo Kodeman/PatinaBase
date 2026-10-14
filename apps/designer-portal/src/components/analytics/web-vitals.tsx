@@ -83,7 +83,7 @@ function PortalUsable() {
 
   useEffect(() => {
     const start = (event: MouseEvent) => {
-      const anchor = (event.target as Element | null)?.closest('a[href]');
+      const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>('a[href]');
       if (!anchor || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || anchor.target === '_blank') return;
       const target = new URL(anchor.href, window.location.href);
       if (target.origin !== window.location.origin || target.pathname === window.location.pathname) return;
