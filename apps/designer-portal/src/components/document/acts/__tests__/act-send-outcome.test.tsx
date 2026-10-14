@@ -95,7 +95,9 @@ jest.mock('@patina/supabase', () => ({
   }),
 }));
 
-import { queryClient } from '@/lib/react-query';
+import { onlineManager } from '@tanstack/react-query';
+import { queryClient, OFFLINE_NOT_SENT } from '@/lib/react-query';
+import { NOTHING_SENT_TWICE, STILL_SENDING } from '@/components/feedback/act-still-line';
 import { NeedActSheetProvider, useNeedActSheet } from '../need-act-sheet';
 import { SEND_FAILED, SEND_UNCONFIRMED, SENT_UNRECORDED } from '../act-draft';
 
@@ -227,5 +229,47 @@ describe('Follow up this proposal — failures stay on the sheet (SQ-777 F1 · F
     await waitFor(() => expect(screen.queryByText(SENT_UNRECORDED)).toBeNull());
     expect(mockCalls.filter((call) => call === 'set_need_state')).toHaveLength(2);
     expect(inserts()).toBe(1);
+  });
+});
+
+describe('Follow up this proposal — the grammar (US-34 N12a · PQ15 · PQ16)', () => {
+  const sendCalls = () =>
+    mockCalls.filter((call) => call === 'recheck' || call === 'rpc_start_direct_thread' || call.startsWith('insert:'));
+
+  afterEach(() => {
+    onlineManager.setOnline(true);
+    jest.useRealTimers();
+  });
+
+  it('offline, the send refuses before any call, keeps Send, and nothing goes on reconnect', async () => {
+    onlineManager.setOnline(false);
+    sendFollowUp();
+    expect(await screen.findByText(OFFLINE_NOT_SENT)).toHaveAttribute('role', 'alert');
+    expect(sendCalls()).toEqual([]);
+    expect(screen.getByRole('button', SEND)).toBeInTheDocument();
+    expect(mockShowErrorToast).not.toHaveBeenCalled();
+
+    act(() => onlineManager.setOnline(true));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(sendCalls()).toEqual([]);
+    expect(mockCalls).not.toContain('set_need_state');
+  });
+
+  it('a slow send says "Still sending." at 8 s, never "Nothing is sent twice."', async () => {
+    jest.useFakeTimers();
+    mockThreadRpc = () => new Promise<Result>(() => {});
+    sendFollowUp();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(7999);
+    });
+    expect(screen.queryByText(STILL_SENDING)).toBeNull();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1);
+    });
+    expect(screen.getByText(STILL_SENDING)).toHaveAttribute('role', 'status');
+    expect(screen.queryByText(new RegExp(NOTHING_SENT_TWICE))).toBeNull();
+    expect(inserts()).toBe(0);
   });
 });

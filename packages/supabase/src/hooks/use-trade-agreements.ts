@@ -254,6 +254,7 @@ async function tradeAgreementSendFailureMessage(
 export function useSendTradeAgreement(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationKey: ['send-trade-agreement', projectId],
     mutationFn: async (agreementId: string): Promise<SendTradeAgreementResult> => {

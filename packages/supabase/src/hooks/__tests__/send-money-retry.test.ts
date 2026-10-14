@@ -26,7 +26,15 @@ const inventory: Record<string, string[]> = {
   'apps/designer-portal/src/hooks/use-account-page.ts': ['useGenerateMilestoneInvoice'],
 };
 
-function mutationRetryOptions(source: string, functionName: string) {
+const propertyNamed = (object: ts.ObjectLiteralExpression | undefined, name: string) =>
+  object?.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) &&
+      (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+      property.name.text === name,
+  );
+
+function mutationOptions(source: string, functionName: string) {
   const sf = ts.createSourceFile('hook.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const fn = sf.statements.find(
     (statement): statement is ts.FunctionDeclaration =>
@@ -43,13 +51,7 @@ function mutationRetryOptions(source: string, functionName: string) {
     ts.forEachChild(node, visit);
   };
   if (fn?.body) visit(fn.body);
-  const retry = options?.properties.find(
-    (property): property is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(property) &&
-      (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
-      property.name.text === 'retry',
-  );
-  return retry?.initializer;
+  return options;
 }
 
 describe('send and money mutation retry policy', () => {
@@ -57,8 +59,18 @@ describe('send and money mutation retry policy', () => {
     const source = fs.readFileSync(path.join(repoRoot, sourcePath), 'utf8');
     for (const hookName of hookNames) {
       it(`${hookName} never retries automatically`, () => {
-        const retry = mutationRetryOptions(source, hookName);
+        const retry = propertyNamed(mutationOptions(source, hookName), 'retry')?.initializer;
         expect(retry?.kind === ts.SyntaxKind.FalseKeyword).toBe(true);
+      });
+
+      // US-34 N12a (PQ15) — the portal's MutationCache refuses a tagged act
+      // before any call while offline; an untagged one would pause and fire
+      // on reconnect (O3).
+      it(`${hookName} is tagged as a send or money act`, () => {
+        const meta = propertyNamed(mutationOptions(source, hookName), 'meta')?.initializer;
+        const act =
+          meta && ts.isObjectLiteralExpression(meta) ? propertyNamed(meta, 'act')?.initializer : undefined;
+        expect(act && ts.isStringLiteral(act) ? act.text : null).toMatch(/^(send|money)$/);
       });
     }
   }

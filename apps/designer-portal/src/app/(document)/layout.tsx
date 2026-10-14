@@ -29,6 +29,7 @@ import { SkipToPaper } from '@/components/document/skip-to-paper';
 import { ArrivalMount } from '@/components/document/arrival/arrival-mount';
 import { ArrivalRoute } from '@/components/document/arrival/arrival-route';
 import { NeedActSheetProvider } from '@/components/document/acts/need-act-sheet';
+import { SavingBand } from '@/components/feedback/saving-band';
 import '@/lib/arrival/arrival.css';
 
 export const metadata: Metadata = {
@@ -77,6 +78,10 @@ export default function DocumentLayout({
       {/* F55 — the skip link, first focusable node in the tree, ahead of the
           route boundary so it survives even the bare /board/* render. */}
       <SkipToPaper />
+      {/* US-34 N12a (PQ12) — the one quiet band-level `saving…`, and the
+          beforeunload guard while a write is pending. Outside the route
+          boundary so the bare /board/* render keeps the guard too. */}
+      <SavingBand />
       <DocumentRouteBoundary bare={children}>
         <div className="document-route-shell min-h-screen bg-[var(--bg-primary)]">
         {/* One time system above the Desk and every document (R4): the

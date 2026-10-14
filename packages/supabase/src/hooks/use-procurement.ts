@@ -746,7 +746,7 @@ export function useRecordVendorPayment(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    meta: { act: 'money', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
     mutationFn: recordVendorPayment,
     onSuccess: (_, { purchaseOrderId }) => {
       invalidateVendorPaymentCaches(queryClient, purchaseOrderId);
@@ -763,6 +763,7 @@ export function useRecordVendorPayment(options?: { errorSurface?: 'inline' }) {
 export function useLogPaymentPaid() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'money' },
     retry: false,
     mutationFn: ({
       paymentId,
@@ -801,7 +802,7 @@ export function useVoidVendorPayment(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    meta: { act: 'money', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
     mutationFn: async ({
       paymentId,
       reason,
@@ -2419,7 +2420,7 @@ export function useSendPurchaseOrder(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    meta: { act: 'send', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
     mutationFn: async (
       input: SendPurchaseOrderInput
     ): Promise<SendPurchaseOrderResult> => {

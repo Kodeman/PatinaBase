@@ -327,6 +327,7 @@ export function useUpdateMilestoneTrigger(projectId: string | null) {
 export function useGenerateMilestoneInvoice(projectId: string | null) {
   const qc = useQueryClient();
   return useMutation({
+    meta: { act: 'money' },
     retry: false,
     mutationFn: async (milestoneId: string) => {
       const { data, error } = await getSupabase().rpc('generate_milestone_invoice', {

@@ -1025,7 +1025,7 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
 
   return useMutation({
     retry: false,
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    meta: { act: 'send', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
     mutationFn: async ({
       proposalId,
       personalMessage,
@@ -1251,9 +1251,9 @@ export function useRetryProposalSend(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: options?.errorSurface
+    meta: { act: 'send', ...(options?.errorSurface
       ? { errorSurface: options.errorSurface }
-      : undefined,
+      : undefined) },
     mutationFn: async (input: {
       proposalId: string;
       sentAt: string;

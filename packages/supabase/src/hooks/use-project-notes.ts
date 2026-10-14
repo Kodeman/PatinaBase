@@ -94,6 +94,7 @@ export interface SendProjectNoteInput {
 export function useSendProjectNote() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationFn: async ({
       projectId,

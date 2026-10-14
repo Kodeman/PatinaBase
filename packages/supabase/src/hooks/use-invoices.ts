@@ -1021,7 +1021,7 @@ export function useIssueInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    meta: { act: 'money', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
     mutationFn: async ({
       invoiceId,
       dueDate,
@@ -1059,7 +1059,7 @@ export function useRecordPayment(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    meta: { act: 'money', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
     mutationFn: async ({
       invoiceId,
       amountCents,
@@ -1114,6 +1114,7 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
   return useMutation({
     // Return teaching: a completed send is a tagged boundary.
     meta: {
+      act: 'send',
       ...(options?.errorSurface ? { errorSurface: options.errorSurface } : {}),
       teachingBoundary: true,
       boundaryKey: 'invoice_sent',
@@ -1186,7 +1187,7 @@ export function useChaseInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    meta: { act: 'send', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
     mutationFn: async ({
       invoiceId,
     }: {
@@ -1565,7 +1566,7 @@ export function useVoidInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    meta: { act: 'money', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
     mutationFn: async ({
       invoiceId,
       reason,

@@ -116,6 +116,7 @@ export function smsResultWords(result: PartySmsResult): string {
 export function useSendPartySms() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationFn: async ({ partyId, body }: { partyId: string; body: string }) => {
       const supabase = getSupabase();

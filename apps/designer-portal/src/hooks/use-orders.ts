@@ -328,6 +328,7 @@ export function useCheckout() {
 // Payments
 export function useCreatePaymentIntent() {
   return useMutation({
+    meta: { act: 'money' },
     retry: false,
     mutationFn: ({
       orderId,
@@ -347,6 +348,7 @@ export function useConfirmPayment() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: { act: 'money' },
     retry: false,
     mutationFn: (paymentIntentId: string) => ordersApi.confirmPayment(paymentIntentId),
     onSuccess: () => {

@@ -4,6 +4,9 @@
  * not research (r-patterns.md §2).
  */
 
+/** B1: within this, exactly one thing answers a click (D2 §2, S1). */
+export const ANSWER_BUDGET_MS = 100;
+
 /** Shaped placeholders fade in after this, so a fast load never flashes. */
 export const PLACEHOLDER_DELAY_MS = 150;
 

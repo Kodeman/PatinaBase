@@ -1156,6 +1156,7 @@ export function useSendDecisionReminder() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationFn: async ({ decisionId }: { decisionId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

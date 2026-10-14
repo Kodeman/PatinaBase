@@ -278,7 +278,9 @@ export function useSendDocumentNote(
 ) {
   const qc = useQueryClient();
   return useMutation({
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    // US-34 N12a (PQ15) — a message reaches the counterpart: offline it
+    // refuses before any call rather than firing on reconnect.
+    meta: { act: 'send', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
     // SQ-781 R1 — the message insert is not idempotent: a failure may follow a
     // written message whose answer was lost, so it never runs again on its own.
     retry: 0,

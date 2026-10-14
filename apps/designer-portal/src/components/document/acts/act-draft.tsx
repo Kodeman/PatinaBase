@@ -15,8 +15,12 @@
  */
 
 import { useRef, useState, type ReactNode } from 'react';
+import { onlineManager } from '@tanstack/react-query';
 import { useSetNeedState } from '@patina/supabase';
 import { Input, Textarea } from '@/components/ui/controls';
+import { ActStillLine } from '@/components/feedback/act-still-line';
+import { useActFeedback } from '@/components/feedback/use-act-feedback';
+import { OFFLINE_NOT_SENT, OfflineRefusal } from '@/lib/react-query';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import type { ActViewer } from './act-viewer';
@@ -139,6 +143,8 @@ export function ActDraft({
   // The recording steps still to run, in order; a done step leaves the list.
   const recordings = useRef<RecordAct[]>([]);
   const setNeedState = useSetNeedState({ errorSurface: 'inline' });
+  // US-34 N12a — the verb shows from the press; at 8 s the act adds its line.
+  const { phase } = useActFeedback({ status: pending ? 'pending' : 'idle' });
 
   const mode: 'reading' | 'send' | 'save' | 'read-only' = !viewer.ready
     ? 'reading'
@@ -187,6 +193,13 @@ export function ActDraft({
     acted: boolean,
   ) => {
     setError(null);
+    // PQ15 — offline, a send refuses before any call, so "nothing was sent"
+    // is true; queued, it would fire by itself on reconnect (O3). A save for
+    // the lead is an edit: it may wait and save on reconnect.
+    if (acted && !onlineManager.isOnline()) {
+      setError(OFFLINE_NOT_SENT);
+      return;
+    }
     setPending(true);
     // Set once the lead is confirmed: from then on the outward call is under way.
     const progress = { outward: false };
@@ -202,7 +215,9 @@ export function ActDraft({
         setRevoked(e.draftHeld ? 'held' : 'unsent');
         return;
       }
-      if (e instanceof NotSent) {
+      // OfflineRefusal: the MutationCache refused a send or money write
+      // before its call (connection lost after the press) — nothing went.
+      if (e instanceof NotSent || e instanceof OfflineRefusal) {
         setError(e.message);
         return;
       }
@@ -370,6 +385,15 @@ export function ActDraft({
             </DocumentAction>
           )}
         </DocumentActionGroup>
+      )}
+      {(mode === 'send' || mode === 'save') && (
+        // PQ16 — a send says "Still sending." (never "Nothing is sent twice.":
+        // these sends are not proven idempotent, SQ-965 O4); a release or a
+        // save is a write.
+        <ActStillLine
+          phase={phase}
+          act={mode === 'send' && regionKey !== 'act-release-order' ? 'send' : 'write'}
+        />
       )}
     </div>
   );

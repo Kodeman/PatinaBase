@@ -144,7 +144,7 @@ export function useSendScopeChangeRequest(options?: { errorSurface?: 'inline' })
   return useMutation({
     retry: false,
     // R83 — see useCreateScopeChangeRequest.
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    meta: { act: 'send', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
     mutationFn: async ({ requestId, projectId }: { requestId: string; projectId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;

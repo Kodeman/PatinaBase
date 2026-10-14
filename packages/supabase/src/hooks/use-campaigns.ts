@@ -122,6 +122,7 @@ export function useSendCampaign() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationFn: async (id: string) => {
       const headers = await getAuthHeaders();

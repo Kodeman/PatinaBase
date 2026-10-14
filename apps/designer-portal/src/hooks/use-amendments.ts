@@ -100,7 +100,7 @@ export function useSendAmendment() {
   const send = useSendScopeChangeRequest({ errorSurface: 'inline' });
   return useMutation({
     retry: false,
-    meta: { errorSurface: 'inline' as const },
+    meta: { act: 'send', errorSurface: 'inline' as const },
     mutationFn: async ({ requestId, projectId }: { requestId: string; projectId: string }) =>
       send.mutateAsync({ requestId, projectId }),
     onSuccess: (_d, { projectId }) => invalidateAmendmentSurfaces(qc, projectId),

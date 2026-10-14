@@ -846,7 +846,7 @@ export function useSendProcurementDraft(options?: ErrorSurfaceOptions) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: errorMeta(options),
+    meta: { act: 'send', ...(errorMeta(options)) },
     mutationFn: sendProcurementDraft,
     onSettled: () => invalidateDrafts(queryClient),
   });
@@ -1552,7 +1552,7 @@ export function useReleasePurchaseOrder(options?: ErrorSurfaceOptions) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: errorMeta(options),
+    meta: { act: 'money', ...(errorMeta(options)) },
     mutationFn: async (purchaseOrderId: string): Promise<PurchaseOrder> => {
       const { data, error } = await getSupabase().rpc('release_purchase_order', { p_po_id: purchaseOrderId });
       if (error) throw error;
@@ -1567,7 +1567,7 @@ export function useSendBackPurchaseOrder(options?: ErrorSurfaceOptions) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
-    meta: errorMeta(options),
+    meta: { act: 'send', ...(errorMeta(options)) },
     mutationFn: async ({ purchaseOrderId, note }: { purchaseOrderId: string; note: string }): Promise<PurchaseOrder> => {
       const { data, error } = await getSupabase().rpc('send_back_purchase_order', {
         p_po_id: purchaseOrderId,

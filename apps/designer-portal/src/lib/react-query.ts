@@ -1,4 +1,4 @@
-import { QueryClient, QueryCache, MutationCache } from '@tanstack/react-query';
+import { QueryClient, QueryCache, MutationCache, onlineManager } from '@tanstack/react-query';
 import {
   handleApiError,
   logError,
@@ -30,6 +30,9 @@ declare module '@tanstack/react-query' {
       /** 'silent' = supporting/background mutation; log, but do not toast. */
       /** 'inline' = the caller renders the failure inline (R83); no global toast. */
       errorSurface?: 'silent' | 'inline';
+      /** An external send or a money write (SQ-965 inventory): refused before
+       *  any call while offline, never queued for reconnect (PQ15). */
+      act?: 'send' | 'money';
       successMessage?: string;
       /** Return teaching: a named completion act (see `onTeachingBoundary`). */
       teachingBoundary?: true;
@@ -104,8 +107,28 @@ const queryCache = new QueryCache({
   },
 });
 
+/** US-34 N12a (PQ15) — true only because the call never started. */
+export const OFFLINE_NOT_SENT = 'You’re offline. Nothing was sent.';
+
+/** A send or money act refused before its mutationFn ran, because the
+ *  browser was offline. A definite refusal: nothing went. */
+export class OfflineRefusal extends Error {
+  constructor() {
+    super(OFFLINE_NOT_SENT);
+    this.name = 'OfflineRefusal';
+  }
+}
+
 // Create mutation cache with error handling
 const mutationCache = new MutationCache({
+  // PQ15 / O3 — under the default networkMode 'online' an offline mutation
+  // pauses and runs by itself on reconnect. Ticks and edits may wait like
+  // that; a send or a money write must not fire minutes later. This runs
+  // before the mutation's own onMutate and its mutationFn, so a throw here
+  // fails the act with no call made.
+  onMutate: (_variables, mutation) => {
+    if (mutation.meta?.act && !onlineManager.isOnline()) throw new OfflineRefusal();
+  },
   onError: (error, _variables, _context, mutation) => {
     const appError = handleApiError(error);
 

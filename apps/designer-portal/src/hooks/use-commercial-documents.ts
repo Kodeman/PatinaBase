@@ -676,6 +676,7 @@ export async function fetchCommercialDocumentSendFingerprint(
 export function useSendServiceAgreement(proposalId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationKey: ["send-service-agreement", proposalId],
     mutationFn: async ({
@@ -1160,6 +1161,7 @@ function mapReleaseForAuthorizationResult(
 export function useReleaseForAuthorization(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationKey: ["release-for-authorization", projectId],
     mutationFn: async ({
@@ -1291,6 +1293,7 @@ export function useAuthorizationLineDrift(
 export function useSendFurnishingsAuthorization(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationKey: ["send-furnishings-authorization", projectId],
     mutationFn: async (proposalId: string) => {
@@ -1729,6 +1732,7 @@ export function useSelectTradeBid(projectId: string) {
 export function useSendTradeScope(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationKey: ["send-trade-scope", projectId],
     mutationFn: async (proposalId: string) => {
@@ -1914,6 +1918,7 @@ export interface IssueTradeDrawInput {
 export function useIssueTradeDrawInvoice(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'money' },
     retry: false,
     mutationKey: ["issue-trade-draw-invoice", projectId],
     mutationFn: async ({ drawId, proposalId }: IssueTradeDrawInput) => {
@@ -2143,6 +2148,7 @@ async function tradeRfqSendFailureMessage(
 export function useSendTradeRfq(scopeId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationKey: ["send-trade-rfq", scopeId],
     mutationFn: async (input: SendTradeRfqInput): Promise<SendTradeRfqResult> => {

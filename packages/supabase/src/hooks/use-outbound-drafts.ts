@@ -63,6 +63,7 @@ export function useDiscardOutboundDraft() {
 export function useSendOutboundDrafts() {
   const client = useQueryClient();
   return useMutation({
+    meta: { act: 'send' },
     retry: false,
     mutationFn: async (draftIds: string[]): Promise<{ results: Array<{ id: string; ok: boolean; error?: string }> }> => {
       const { data, error } = await createBrowserClient().functions.invoke('outbound-draft-send', { body: { draftIds } });
