@@ -20,7 +20,7 @@ import { useProjectFFEItems } from '../use-project-v2';
 
 const projectId = 'project-1';
 const queryKey = ['project-ffe-items', projectId] as const;
-let observers: QueryObserver<unknown[]>[] = [];
+let observers: Array<{ destroy: () => void }> = [];
 
 afterEach(() => {
   observers.forEach((observer) => observer.destroy());
