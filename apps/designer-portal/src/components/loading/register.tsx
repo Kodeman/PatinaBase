@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The loading register's switch (US-34 N10; US-33 PQ2, PQ5–PQ7, V24), behind
@@ -17,32 +17,42 @@
  *   stall at 10 s, from thresholds.ts. CSS times it, so it needs no clock.
  */
 
-import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { LOADING_REGISTER_ATTR } from '@/lib/arrival/register';
-import { SLOW_MS, STALL_MS } from '@/lib/loading/thresholds';
+import {
+  useLayoutEffect,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { LOADING_REGISTER_ATTR } from "@/lib/arrival/register";
+import { SLOW_MS, STALL_MS } from "@/lib/loading/thresholds";
 
-export const LOADING_REGISTER_FLAG = 'loading-register';
+export const LOADING_REGISTER_FLAG = "loading-register";
 
 export function useLoadingRegister(): boolean {
   const { value, isLoading } = useFeatureFlag(LOADING_REGISTER_FLAG);
   const [carried] = useState(
     () =>
-      typeof document !== 'undefined' &&
+      typeof document !== "undefined" &&
       document.documentElement.hasAttribute(LOADING_REGISTER_ATTR),
   );
   useLayoutEffect(() => {
     if (isLoading) return;
     const html = document.documentElement;
-    if (value) html.setAttribute(LOADING_REGISTER_ATTR, '');
+    if (value) html.setAttribute(LOADING_REGISTER_ATTR, "");
     else html.removeAttribute(LOADING_REGISTER_ATTR);
   }, [value, isLoading]);
   return isLoading ? carried : value;
 }
 
-/** A route fallback that exists only under the register; flag off, nothing. */
-export function RegisterOnly({ children }: { children: ReactNode }) {
-  return useLoadingRegister() ? <>{children}</> : null;
+/**
+ * A route fallback that renders either way and keeps the register's mark on
+ * <html> current. A loading boundary swaps the old page out at once, so flag
+ * off must still draw the sheet (still, no slow line) rather than nothing.
+ */
+export function RegisterFallback({ children }: { children: ReactNode }) {
+  useLoadingRegister();
+  return <>{children}</>;
 }
 
 /**
@@ -57,18 +67,21 @@ export function SlowLine({ className }: { className?: string }) {
       role="status"
       data-slow-line
       data-register-on
-      className={className ? `slow-line ${className}` : 'slow-line'}
+      className={className ? `slow-line ${className}` : "slow-line"}
       style={
         {
-          '--slow-at': `${SLOW_MS}ms`,
-          '--stall-at': `${STALL_MS}ms`,
+          "--slow-at": `${SLOW_MS}ms`,
+          "--stall-at": `${STALL_MS}ms`,
         } as CSSProperties
       }
     >
       Still reading. The connection is slow.
       <span className="slow-line-stall">
-        {' '}
-        <a href="" className="inline-flex min-h-11 items-center underline underline-offset-2">
+        {" "}
+        <a
+          href=""
+          className="inline-flex min-h-11 items-center underline underline-offset-2"
+        >
           Reload the page
         </a>
       </span>

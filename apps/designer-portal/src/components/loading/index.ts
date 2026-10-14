@@ -1,7 +1,7 @@
 export { Bar, LoadingRegion } from "./placeholder";
 export {
   LOADING_REGISTER_FLAG,
-  RegisterOnly,
+  RegisterFallback,
   SlowLine,
   useLoadingRegister,
 } from "./register";
