@@ -27,7 +27,6 @@ const getSupabase = () => createBrowserClient() as any;
  *  document, the Desk, and the legacy project surfaces re-derive together. */
 function invalidateProjectDocument(qc: QueryClient, projectId: string | null) {
   void qc.invalidateQueries({ queryKey: ['document-state'] });
-  void qc.invalidateQueries({ queryKey: ['desk-engagements'] });
   void qc.invalidateQueries({ queryKey: ['projects'] });
   if (projectId) {
     void qc.invalidateQueries({ queryKey: ['project-v2', projectId] });

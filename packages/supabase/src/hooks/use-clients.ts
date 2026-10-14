@@ -406,7 +406,6 @@ export function useUpdateClientContact() {
       queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
       queryClient.invalidateQueries({ queryKey: ['designer-client', clientId] });
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
-      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
       // F3-R1-03: the People Room reads this same edit through people_directory
       // (the client branch) — without this, the profile head and Directory row
       // keep showing the pre-edit name/email/phone after a successful save.

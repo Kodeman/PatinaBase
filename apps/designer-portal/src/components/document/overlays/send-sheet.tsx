@@ -569,7 +569,6 @@ export function SendSheet({
       // stamp, margin, and Desk move together. (useSendProposal already
       // invalidates the proposal keys.)
       void qc.invalidateQueries({ queryKey: ['document-state'] });
-      void qc.invalidateQueries({ queryKey: ['desk-engagements'] });
       if (result._emailDispatched) {
         onSent?.();
         onClose();

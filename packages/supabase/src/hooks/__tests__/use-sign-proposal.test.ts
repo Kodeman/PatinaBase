@@ -63,7 +63,6 @@ describe('useSignProposal authority contract', () => {
       ['proposal', 'proposal-1'],
       ['proposal-stats'],
       ['document-state'],
-      ['desk-engagements'],
       ['projects'],
       ['proposal-project', 'proposal-1'],
     ]) {

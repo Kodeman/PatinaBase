@@ -34,7 +34,6 @@ type AnyRecord = any;
 function invalidateAmendmentSurfaces(qc: QueryClient, projectId: string) {
   void qc.invalidateQueries({ queryKey: ['scope-changes', projectId] });
   void qc.invalidateQueries({ queryKey: ['document-state'] });
-  void qc.invalidateQueries({ queryKey: ['desk-engagements'] });
   invalidateMarginSurfaces(qc, projectId);
 }
 

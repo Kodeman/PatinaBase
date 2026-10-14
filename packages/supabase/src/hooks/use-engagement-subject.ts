@@ -77,8 +77,6 @@ export function useUpdateEngagementSubject(): UseMutationResult<
       // The letterhead reads `document_state`; the Desk reads its own
       // composition; the kind's own list carries the row too.
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
-      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
-      queryClient.invalidateQueries({ queryKey: ['desk'] });
       queryClient.invalidateQueries({ queryKey: [LIST_KEY_FOR_KIND[kind]] });
     },
   });

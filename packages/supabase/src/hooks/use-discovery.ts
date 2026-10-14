@@ -190,7 +190,6 @@ export function useBeginDirection() {
       void qc.invalidateQueries({ queryKey: ['discovery', input.designerClientId] });
       // One act, many surfaces (§5): the open doc + Desk re-derive Shape D→B.
       void qc.invalidateQueries({ queryKey: ['document-state'] });
-      void qc.invalidateQueries({ queryKey: ['desk'] });
       void qc.invalidateQueries({ queryKey: ['leads'] });
       // The seeded artifact is a design agreement — its own list/stats keys.
       void qc.invalidateQueries({ queryKey: ['proposals'] });

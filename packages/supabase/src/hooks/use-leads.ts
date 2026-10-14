@@ -731,10 +731,6 @@ export function useReturnToLead() {
             query.queryKey[2] === designerClientId
           ),
       });
-      // Vestigial, and kept only because use-clients.ts and use-proposals.ts
-      // both carry it: no query in the tree keys on it. The Desk is the
-      // ['document-state', 'desk'] query the invalidation above covers.
-      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
     },
   });
 }

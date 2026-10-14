@@ -641,7 +641,6 @@ export function useCountersignDesignServicesAgreement(proposalId: string) {
         queryKey: commercialDocumentKeys.bundle(proposalId),
       });
       void queryClient.invalidateQueries({ queryKey: ["document-state"] });
-      void queryClient.invalidateQueries({ queryKey: ["desk-engagements"] });
       void queryClient.invalidateQueries({
         queryKey: commercialDocumentKeys.authority(result.projectId),
       });
@@ -726,7 +725,6 @@ export function useSendServiceAgreement(proposalId: string) {
         queryKey: commercialDocumentKeys.bundle(proposalId),
       });
       void queryClient.invalidateQueries({ queryKey: ["document-state"] });
-      void queryClient.invalidateQueries({ queryKey: ["desk-engagements"] });
       void queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
@@ -2388,7 +2386,6 @@ export function useRecordPaperClientSignature(proposalId: string) {
         }),
         queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] }),
         queryClient.invalidateQueries({ queryKey: ["document-state"] }),
-        queryClient.invalidateQueries({ queryKey: ["desk-engagements"] }),
         // A scan attached at record time lands in the same Folio bucket the
         // proposal-folio strip reads (project-documents/{proposalId}/…,
         // 00252) — invalidate so it actually shows up there without a

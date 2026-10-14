@@ -120,8 +120,6 @@ describe('useUpdateEngagementSubject — one line, four tables', () => {
     );
     expect(keys).toEqual([
       ['document-state'],
-      ['desk-engagements'],
-      ['desk'],
       ['designer-clients'],
     ]);
   });

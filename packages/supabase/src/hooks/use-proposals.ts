@@ -1334,7 +1334,6 @@ export function useNudgeProposal() {
       queryClient.invalidateQueries({ queryKey: ['proposal'] });
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
-      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
     },
   });
 }
@@ -1872,7 +1871,6 @@ export function useSignProposal() {
       // The sign settles a client_decisions row and opens the project, so the
       // desk/document surfaces that read those derived views must refetch too.
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
-      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({
         queryKey: ['proposal-project', proposalId],
@@ -1930,7 +1928,6 @@ export function useRecordOfflineSignature() {
       // to accepted, and the project activates — the desk/document read models
       // and the project lists must all refetch.
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
-      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['proposal-project', proposalId] });
     },

@@ -38,7 +38,6 @@ export function useAttachDocumentClient() {
       // The open document's vitals + client chip, the Desk folder lines, and the
       // client mirror all carry the client identity — refresh them in one act.
       qc.invalidateQueries({ queryKey: ['document-state'] });
-      qc.invalidateQueries({ queryKey: ['desk-engagements'] });
       qc.invalidateQueries({ queryKey: ['designer-clients'] });
       qc.invalidateQueries({ queryKey: ['designer-client-for-user'] });
       qc.invalidateQueries({ queryKey: ['designer-client'] });
