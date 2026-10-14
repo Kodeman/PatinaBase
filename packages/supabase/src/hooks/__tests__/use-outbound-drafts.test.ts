@@ -13,6 +13,10 @@ import { outboundDraftKeys, useOutboundDrafts, useDiscardOutboundDraft, useSendO
 beforeEach(() => { from.mockReset(); rpc.mockReset(); invoke.mockReset(); invalidateQueries.mockReset(); });
 
 describe('outbound draft hooks', () => {
+  it('keeps the pinned Desk cache key', () => {
+    expect(docKeys.desk()).toEqual(['document-state', 'desk']);
+  });
+
   it('scopes the list query by project and uses its stable query key', async () => {
     const chain: any = { select: vi.fn(() => chain), eq: vi.fn(() => chain), order: vi.fn(async () => ({ data: [{ id: 'd1' }], error: null })) };
     from.mockReturnValue(chain);
@@ -29,7 +33,7 @@ describe('outbound draft hooks', () => {
     expect(invoke).toHaveBeenCalledWith('outbound-draft-send', { body: { draftIds: ['d1'] } });
     mutation.onSettled();
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: outboundDraftKeys.all });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: docKeys.desk() });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['document-state', 'desk'] });
   });
 
   it('discards via the guarded RPC and invalidates cached drafts and the Desk', async () => {
@@ -39,6 +43,6 @@ describe('outbound draft hooks', () => {
     expect(rpc).toHaveBeenCalledWith('discard_outbound_draft', { p_id: 'd1' });
     mutation.onSuccess();
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: outboundDraftKeys.all });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: docKeys.desk() });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['document-state', 'desk'] });
   });
 });

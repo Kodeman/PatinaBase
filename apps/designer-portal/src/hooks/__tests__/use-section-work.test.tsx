@@ -21,7 +21,8 @@ function wrapper(client: QueryClient) {
 }
 
 describe('section-work invalidation', () => {
-  it('invalidates no more than three active keys and refetches a stale Desk on mount', async () => {
+  it('uses the pinned Desk key and invalidates no more than three active keys, refetching stale Desk on mount', async () => {
+    expect(docKeys.desk()).toEqual(['document-state', 'desk']);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
     const calls: Record<string, number> = { tasks: 0, engagement: 0, workflow: 0, desk: 0 };
     const observe = (key: readonly unknown[], slot: keyof typeof calls) =>
@@ -47,7 +48,7 @@ describe('section-work invalidation', () => {
     expect(invalidateSpy).toHaveBeenCalledTimes(4);
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: docKeys.sectionTasks('p1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: docKeys.engagement('p1') });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: docKeys.desk(), refetchType: 'none' });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['document-state', 'desk'], refetchType: 'none' });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: projectWorkflowQueryKey('p1') });
 
     await waitFor(() => {
