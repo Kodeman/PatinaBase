@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 import { DayPicker } from 'react-day-picker'
 import type { DayPickerSingleProps, DayPickerRangeProps, DayPickerMultipleProps } from 'react-day-picker'
 import { cn } from '../../utils/cn'
@@ -69,8 +70,8 @@ export const Calendar = React.forwardRef<HTMLDivElement, any>(
             day_hidden: 'invisible',
           }}
           components={{
-            IconLeft: () => <Icon name="ChevronLeft" size={16} />,
-            IconRight: () => <Icon name="ChevronRight" size={16} />,
+            IconLeft: () => <Icon icon={ChevronLeft} size={16} />,
+            IconRight: () => <Icon icon={ChevronRight} size={16} />,
           }}
           {...props}
         />
@@ -146,7 +147,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         )}
       >
         <span>{value ? formatDate(value) : placeholder}</span>
-        <Icon name="Calendar" size={16} className="ml-2" />
+        <Icon icon={CalendarIcon} size={16} className="ml-2" />
       </button>
 
       {isOpen && (
@@ -240,7 +241,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         )}
       >
         <span>{value ? formatRange(value) : placeholder}</span>
-        <Icon name="Calendar" size={16} className="ml-2" />
+        <Icon icon={CalendarIcon} size={16} className="ml-2" />
       </button>
 
       {isOpen && (

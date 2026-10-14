@@ -1,33 +1,46 @@
 import * as React from 'react'
-import { icons, LucideProps } from 'lucide-react'
+import {
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ExternalLink,
+  GripVertical,
+  Heart,
+  Plus,
+  Star,
+  type LucideIcon,
+  type LucideProps,
+} from 'lucide-react'
 import { cn } from '../../utils/cn'
 
-export type IconName = keyof typeof icons
+const iconNameMap = {
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ExternalLink,
+  GripVertical,
+  Heart,
+  Plus,
+  Star,
+} satisfies Record<string, LucideIcon>
 
-export interface IconProps extends Omit<LucideProps, 'ref'> {
-  /**
-   * Name of the icon from lucide-react
-   */
-  name: IconName
-  /**
-   * Size of the icon
-   * @default 24
-   */
+export type IconName = keyof typeof iconNameMap
+
+type IconBaseProps = Omit<LucideProps, 'ref'> & {
   size?: number | string
-  /**
-   * Color of the icon
-   */
   color?: string
-  /**
-   * Stroke width of the icon
-   * @default 2
-   */
   strokeWidth?: number | string
-  /**
-   * Additional CSS classes
-   */
   className?: string
 }
+
+export type IconProps = IconBaseProps &
+  ({ icon: LucideIcon; name?: never } | { icon?: never; name: IconName })
 
 /**
  * Icon component wrapper for lucide-react icons
@@ -35,18 +48,15 @@ export interface IconProps extends Omit<LucideProps, 'ref'> {
  *
  * @example
  * ```tsx
- * <Icon name="Heart" size={24} color="red" />
+ * <Icon icon={Heart} size={24} color="red" />
  * <Icon name="ChevronDown" size="1.5rem" strokeWidth={3} />
  * ```
  */
 export const Icon = React.forwardRef<SVGSVGElement, IconProps>(
-  ({ name, size = 24, color, strokeWidth = 2, className, ...props }, ref) => {
-    const LucideIcon = icons[name]
+  ({ icon, name, size = 24, color, strokeWidth = 2, className, ...props }, ref) => {
+    const LucideIcon = icon ?? (name ? iconNameMap[name] : undefined)
 
-    if (!LucideIcon) {
-      console.warn(`Icon "${name}" not found in lucide-react`)
-      return null
-    }
+    if (!LucideIcon) return null
 
     return (
       <LucideIcon

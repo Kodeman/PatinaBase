@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 import useEmblaCarousel from 'embla-carousel-react'
 import type { EmblaOptionsType, EmblaCarouselType } from 'embla-carousel'
 import { cn } from '../../utils/cn'
@@ -186,7 +187,7 @@ export const Carousel = React.forwardRef<HTMLDivElement, CarouselProps>(
               disabled={!canScrollPrev}
               aria-label="Previous slide"
             >
-              <Icon name={isHorizontal ? 'ChevronLeft' : 'ChevronUp'} size={20} />
+              <Icon icon={isHorizontal ? ChevronLeft : ChevronUp} size={20} />
             </Button>
             <Button
               variant="outline"
@@ -201,7 +202,7 @@ export const Carousel = React.forwardRef<HTMLDivElement, CarouselProps>(
               disabled={!canScrollNext}
               aria-label="Next slide"
             >
-              <Icon name={isHorizontal ? 'ChevronRight' : 'ChevronDown'} size={20} />
+              <Icon icon={isHorizontal ? ChevronRight : ChevronDown} size={20} />
             </Button>
           </>
         )}

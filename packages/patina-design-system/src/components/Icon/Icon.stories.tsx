@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react'
+import * as LucideIcons from 'lucide-react'
 import { Icon, CustomIcon } from './Icon'
 
 const meta: Meta<typeof Icon> = {
@@ -33,7 +34,7 @@ type Story = StoryObj<typeof Icon>
 
 export const Default: Story = {
   args: {
-    name: 'Heart',
+    icon: LucideIcons.Heart,
     size: 24,
     strokeWidth: 2,
   },
@@ -41,7 +42,7 @@ export const Default: Story = {
 
 export const Large: Story = {
   args: {
-    name: 'Star',
+    icon: LucideIcons.Star,
     size: 48,
     strokeWidth: 2,
   },
@@ -49,7 +50,7 @@ export const Large: Story = {
 
 export const Colored: Story = {
   args: {
-    name: 'Heart',
+    icon: LucideIcons.Heart,
     size: 32,
     color: '#ef4444',
     strokeWidth: 2,
@@ -58,7 +59,7 @@ export const Colored: Story = {
 
 export const ThickStroke: Story = {
   args: {
-    name: 'Circle',
+    icon: LucideIcons.Circle,
     size: 32,
     strokeWidth: 4,
   },
@@ -67,26 +68,26 @@ export const ThickStroke: Story = {
 export const CommonIcons: Story = {
   render: () => (
     <div className="flex gap-4 flex-wrap">
-      <Icon name="Home" size={24} />
-      <Icon name="User" size={24} />
-      <Icon name="Settings" size={24} />
-      <Icon name="Search" size={24} />
-      <Icon name="ShoppingCart" size={24} />
-      <Icon name="Heart" size={24} />
-      <Icon name="Star" size={24} />
-      <Icon name="Bell" size={24} />
-      <Icon name="Mail" size={24} />
-      <Icon name="Calendar" size={24} />
-      <Icon name="Image" size={24} />
-      <Icon name="Upload" size={24} />
-      <Icon name="Download" size={24} />
-      <Icon name="Edit" size={24} />
-      <Icon name="Trash2" size={24} />
-      <Icon name="Check" size={24} />
-      <Icon name="X" size={24} />
-      <Icon name="ChevronRight" size={24} />
-      <Icon name="ChevronDown" size={24} />
-      <Icon name="Menu" size={24} />
+      <Icon icon={LucideIcons.Home} size={24} />
+      <Icon icon={LucideIcons.User} size={24} />
+      <Icon icon={LucideIcons.Settings} size={24} />
+      <Icon icon={LucideIcons.Search} size={24} />
+      <Icon icon={LucideIcons.ShoppingCart} size={24} />
+      <Icon icon={LucideIcons.Heart} size={24} />
+      <Icon icon={LucideIcons.Star} size={24} />
+      <Icon icon={LucideIcons.Bell} size={24} />
+      <Icon icon={LucideIcons.Mail} size={24} />
+      <Icon icon={LucideIcons.Calendar} size={24} />
+      <Icon icon={LucideIcons.Image} size={24} />
+      <Icon icon={LucideIcons.Upload} size={24} />
+      <Icon icon={LucideIcons.Download} size={24} />
+      <Icon icon={LucideIcons.Edit} size={24} />
+      <Icon icon={LucideIcons.Trash2} size={24} />
+      <Icon icon={LucideIcons.Check} size={24} />
+      <Icon icon={LucideIcons.X} size={24} />
+      <Icon icon={LucideIcons.ChevronRight} size={24} />
+      <Icon icon={LucideIcons.ChevronDown} size={24} />
+      <Icon icon={LucideIcons.Menu} size={24} />
     </div>
   ),
 }
@@ -94,18 +95,18 @@ export const CommonIcons: Story = {
 export const DesignerIcons: Story = {
   render: () => (
     <div className="flex gap-4 flex-wrap">
-      <Icon name="Palette" size={24} />
-      <Icon name="Paintbrush" size={24} />
-      <Icon name="Layers" size={24} />
-      <Icon name="Layout" size={24} />
-      <Icon name="Grid3x3" size={24} />
-      <Icon name="Maximize2" size={24} />
-      <Icon name="Move" size={24} />
-      <Icon name="Copy" size={24} />
-      <Icon name="Eye" size={24} />
-      <Icon name="EyeOff" size={24} />
-      <Icon name="Ruler" size={24} />
-      <Icon name="Droplet" size={24} />
+      <Icon icon={LucideIcons.Palette} size={24} />
+      <Icon icon={LucideIcons.Paintbrush} size={24} />
+      <Icon icon={LucideIcons.Layers} size={24} />
+      <Icon icon={LucideIcons.Layout} size={24} />
+      <Icon icon={LucideIcons.Grid3x3} size={24} />
+      <Icon icon={LucideIcons.Maximize2} size={24} />
+      <Icon icon={LucideIcons.Move} size={24} />
+      <Icon icon={LucideIcons.Copy} size={24} />
+      <Icon icon={LucideIcons.Eye} size={24} />
+      <Icon icon={LucideIcons.EyeOff} size={24} />
+      <Icon icon={LucideIcons.Ruler} size={24} />
+      <Icon icon={LucideIcons.Droplet} size={24} />
     </div>
   ),
 }
@@ -129,11 +130,11 @@ export const CustomSVGIcon: StoryObj<typeof CustomIcon> = {
 export const Sizes: Story = {
   render: () => (
     <div className="flex gap-4 items-center">
-      <Icon name="Heart" size={16} />
-      <Icon name="Heart" size={24} />
-      <Icon name="Heart" size={32} />
-      <Icon name="Heart" size={48} />
-      <Icon name="Heart" size={64} />
+      <Icon icon={LucideIcons.Heart} size={16} />
+      <Icon icon={LucideIcons.Heart} size={24} />
+      <Icon icon={LucideIcons.Heart} size={32} />
+      <Icon icon={LucideIcons.Heart} size={48} />
+      <Icon icon={LucideIcons.Heart} size={64} />
     </div>
   ),
 }
