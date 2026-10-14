@@ -109,8 +109,7 @@ serve(async (req: Request) => {
       .from("products")
       .select(`
         id, name, description, price_retail, materials, images,
-        vendors!inner ( name ),
-        product_styles ( confidence, styles ( name ) )
+        vendors!inner ( name )
       `)
       .limit(resultLimit * 3); // Fetch extra for scoring
 
@@ -136,12 +135,30 @@ serve(async (req: Request) => {
       );
     }
 
-    // Score and rank products
+    // Score and rank products using only currently shareable teaching labels.
+    const { data: shareableStyles, error: stylesError } = await supabase.rpc(
+      "emergence_shareable_product_styles",
+      { p_product_ids: products.map((product: any) => product.id) },
+    );
+
+    if (stylesError) {
+      console.error("Shareable styles query error:", stylesError);
+      return new Response(
+        JSON.stringify({ error: "Failed to fetch products" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const stylesByProduct = new Map<string, string[]>();
+    for (const style of shareableStyles ?? []) {
+      const names = stylesByProduct.get(style.product_id) ?? [];
+      names.push(style.style_name.toLowerCase());
+      stylesByProduct.set(style.product_id, names);
+    }
+
     const scored = products.map((p: any) => {
       let score = 0;
-      const productStyles = (p.product_styles || []).map(
-        (ps: any) => ps.styles?.name?.toLowerCase()
-      ).filter(Boolean);
+      const productStyles = stylesByProduct.get(p.id) ?? [];
 
       // Style match scoring
       for (const pref of stylePreferences) {

@@ -11,6 +11,11 @@ ALTER TABLE public.llm_controls
 ALTER TABLE public.llm_controls
   ALTER COLUMN studio_monthly_cap_usd SET DEFAULT 50;
 
+-- SET DEFAULT affects future inserts only; initialize the existing singleton.
+UPDATE public.llm_controls
+   SET studio_monthly_cap_usd = 50
+ WHERE studio_monthly_cap_usd IS NULL;
+
 CREATE OR REPLACE FUNCTION public.llm_reserve(
   p_feature text, p_studio_id uuid, p_user_id uuid, p_est_usd numeric,
   p_role text, p_prompt_version text

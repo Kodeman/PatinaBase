@@ -57,6 +57,27 @@ COMMENT ON COLUMN public.organizations.share_teaching IS
   'False = they stay with the studio: its members'' teaching is skipped by every cross-studio reader. '
   'Set through set_studio_teaching_sharing.';
 
+CREATE OR REPLACE FUNCTION public.guard_share_teaching_setter()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  IF NEW.share_teaching IS DISTINCT FROM OLD.share_teaching
+     AND current_user NOT IN ('postgres', 'service_role')
+     AND current_setting('app.teaching_sharing_setter', true) IS DISTINCT FROM 'on' THEN
+    RAISE EXCEPTION 'share_teaching must be changed through set_studio_teaching_sharing'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END;
+$fn$;
+
+DROP TRIGGER IF EXISTS organizations_guard_share_teaching_setter ON public.organizations;
+CREATE TRIGGER organizations_guard_share_teaching_setter
+  BEFORE UPDATE OF share_teaching ON public.organizations
+  FOR EACH ROW EXECUTE FUNCTION public.guard_share_teaching_setter();
+
 -- ─── 2. Who may read whose teaching ─────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public._teaching_shareable(p_user uuid)
@@ -117,6 +138,25 @@ REVOKE ALL ON FUNCTION public._teaching_visible_to(uuid, uuid) FROM PUBLIC, anon
 REVOKE ALL ON FUNCTION public.teaching_row_visible(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.teaching_row_visible(uuid) TO authenticated;
 
+-- The legacy emergence scorer uses service role; return only labels from
+-- currently shareable teachers, without exposing the internal predicate.
+CREATE OR REPLACE FUNCTION public.emergence_shareable_product_styles(p_product_ids uuid[])
+RETURNS TABLE (product_id uuid, style_name text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $fn$
+  SELECT ps.product_id, s.name
+    FROM public.product_styles ps
+    JOIN public.styles s ON s.id = ps.style_id
+   WHERE ps.product_id = ANY(p_product_ids)
+     AND public._teaching_shareable(ps.assigned_by);
+$fn$;
+
+REVOKE ALL ON FUNCTION public.emergence_shareable_product_styles(uuid[]) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.emergence_shareable_product_styles(uuid[]) TO service_role;
+
 -- ─── 3. The setter (owner/admin, the 00710 pattern) ─────────────────────────
 
 CREATE OR REPLACE FUNCTION public.set_studio_teaching_sharing(
@@ -144,10 +184,12 @@ BEGIN
   END IF;
 
   IF v_old IS DISTINCT FROM p_share THEN
+    PERFORM set_config('app.teaching_sharing_setter', 'on', true);
     UPDATE public.organizations
        SET share_teaching = p_share,
            updated_at = now()
      WHERE id = p_studio_id;
+    PERFORM set_config('app.teaching_sharing_setter', 'off', true);
 
     INSERT INTO public.audit_logs
       (user_id, organization_id, action, resource_type, resource_id, old_values, new_values)
@@ -177,6 +219,13 @@ CREATE POLICY "Users can read visible product style spectrum"
   ON public.product_style_spectrum FOR SELECT
   TO authenticated
   USING (public.teaching_row_visible(assigned_by));
+
+DROP POLICY IF EXISTS "Users can read teaching validations" ON public.teaching_validations;
+DROP POLICY IF EXISTS "Users can read visible teaching validations" ON public.teaching_validations;
+CREATE POLICY "Users can read visible teaching validations"
+  ON public.teaching_validations FOR SELECT
+  TO authenticated
+  USING (public.teaching_row_visible(validator_id));
 
 -- ─── 5. Internal model helpers gain the reader ──────────────────────────────
 

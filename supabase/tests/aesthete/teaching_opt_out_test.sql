@@ -10,7 +10,7 @@
 -- Run: supabase test db supabase/tests/aesthete/teaching_opt_out_test.sql
 -- The transaction is rolled back.
 BEGIN;
-SELECT plan(56);
+SELECT plan(61);
 
 -- ─── fixtures ───────────────────────────────────────────────────────────────
 
@@ -131,6 +131,8 @@ SELECT set_config('request.jwt.claims', '{"sub": "79000000-0000-4000-8000-000000
 SET LOCAL ROLE authenticated;
 SELECT is(public.set_studio_teaching_sharing('79000000-0000-4000-8000-000000000011', false), false,
           'the owner turns studio A''s sharing off');
+SELECT throws_ok($$UPDATE public.organizations SET share_teaching = true WHERE id = '79000000-0000-4000-8000-000000000011'$$,
+                 '42501', NULL, 'direct owner UPDATE cannot change share_teaching');
 RESET ROLE;
 
 SELECT set_config('request.jwt.claims', '{"sub": "79000000-0000-4000-8000-000000000002", "role": "authenticated"}', true);
@@ -171,6 +173,15 @@ SELECT is((SELECT user_id::text || ':' || (old_values->>'share_teaching') || '>'
           '79000000-0000-4000-8000-000000000001:true>false', 'the audit row names the actor and the change');
 
 -- ─── 2. Helpers: privileges and the membership rule ─────────────────────────
+
+SELECT ok(NOT EXISTS (
+  SELECT 1 FROM public.emergence_shareable_product_styles(ARRAY['79000000-0000-4000-8000-000000000031'::uuid])
+  WHERE style_name = 'Opt-out Archetype S 790'),
+  'emergence scorer labels exclude opted-out teacher');
+SELECT ok(EXISTS (
+  SELECT 1 FROM public.emergence_shareable_product_styles(ARRAY['79000000-0000-4000-8000-000000000032'::uuid])
+  WHERE style_name = 'Opt-out Archetype S2 790'),
+  'emergence scorer labels retain shareable teacher');
 
 SELECT ok(NOT has_function_privilege('authenticated', 'public._teaching_shareable(uuid)', 'EXECUTE'),
           'authenticated cannot execute _teaching_shareable');
@@ -278,6 +289,16 @@ SELECT set_config('request.jwt.claims', '{"sub": "79000000-0000-4000-8000-000000
 SET LOCAL ROLE authenticated;
 SELECT is((SELECT count(*) FROM product_style_spectrum WHERE product_id = '79000000-0000-4000-8000-000000000031'),
           1::bigint, 'a2 reads its studio''s spectrum row');
+RESET ROLE;
+SELECT set_config('request.jwt.claims', '{"sub": "79000000-0000-4000-8000-000000000002", "role": "authenticated"}', true);
+SET LOCAL ROLE authenticated;
+SELECT is((SELECT count(*) FROM teaching_validations WHERE product_id = '79000000-0000-4000-8000-000000000031'),
+          2::bigint, 'a co-studio member can read opted-out validator rows');
+RESET ROLE;
+SELECT set_config('request.jwt.claims', '{"sub": "79000000-0000-4000-8000-000000000003", "role": "authenticated"}', true);
+SET LOCAL ROLE authenticated;
+SELECT is((SELECT count(*) FROM teaching_validations WHERE product_id = '79000000-0000-4000-8000-000000000031'),
+          1::bigint, 'an unrelated studio cannot read opted-out validator rows');
 RESET ROLE;
 
 -- ─── 9. Flip back (by the admin): every reader restores ─────────────────────

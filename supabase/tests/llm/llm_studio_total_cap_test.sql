@@ -4,12 +4,16 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(10);
+SELECT plan(12);
 
-SELECT public.llm_set_controls(false, 10000, NULL, 50, true);
+SELECT is((SELECT studio_monthly_cap_usd FROM public.llm_controls WHERE id), 50::numeric,
+          'migration backfills the existing controls singleton to the default cap');
+SELECT public.llm_set_controls(false, 10000, NULL);
 SELECT public.llm_set_feature_control('total-cap-a', true, NULL, NULL, NULL);
 SELECT public.llm_set_feature_control('total-cap-b', true, NULL, NULL, NULL);
 SELECT public.llm_set_feature_control('total-cap-feature-limited', true, NULL, 1, NULL);
+SELECT is(public.llm_reserve('total-cap-a', '93000000-0000-4000-8000-000000000000', NULL, 51, NULL, NULL)->>'reason',
+          'studio_cap', 'the backfilled default cap binds without a setter call');
 CREATE TEMP TABLE total_cap_ids (name text PRIMARY KEY, id bigint);
 
 -- Two features contribute to one studio's total; a different studio is isolated.
