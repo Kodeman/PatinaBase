@@ -157,7 +157,7 @@ See `bundle.md`. Hard-load client JS (gzip as transferred):
 | Blank screens on `/pieces`, `/people`, `/library` | **Confirmed for /pieces and /people**, **refuted for /library** | P3hard and P4 show no placeholder. P5 shows a placeholder at 647 |
 | Design-system `Skeleton` is unused | Not measured (code fact). No skeleton mark fired outside the Desk roster | — |
 | Arrival hold (up to 1.5 s / 8.5 s) delays content | **Confirmed, magnitude measured** | Desk usable about 7.0 s. Document hard load: usable 6.8 s, no-busy 9.4 s, LCP 10.7 s (the memory's "≈6.6 s doc first paint" reproduces) |
-| No navigation progress indicator | **Confirmed** | SPA first change 215–251 ms local and 248–608 ms prod, with nothing shown before that (`screens/P2-0ms.jpg`, `P4-0ms.png`) |
+| No navigation progress indicator | **Confirmed** | SPA first change 215–251 ms local and 248–608 ms prod, with nothing shown before that (`screens/P2-0ms.jpg`, `screens/P4-0ms.jpg`) |
 | Only 5 optimistic mutations; clicks wait for write + refetch | **Not measured** | P6–P9 were not run (see above) |
 | Broad `['document-state']` invalidation re-runs the Desk's 18 queries | **Not measured** | No write scenario ran |
 | Realtime double subscription and echo invalidation | **Not measured** | — |
