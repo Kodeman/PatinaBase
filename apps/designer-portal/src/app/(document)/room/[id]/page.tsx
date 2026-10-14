@@ -107,7 +107,9 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
     }
   }, [id]);
 
-  const { data, isLoading } = useRoomGeometry(id);
+  // US-34 F13b (H1): pending, not `isLoading`. A read paused offline is still
+  // loading, and must not print "could not be found".
+  const { data, isPending, isError } = useRoomGeometry(id);
 
   // A2: resolve the referring document by the id the door carried, THROUGH
   // the same resolver the doc surface itself uses (J6's redirect leg applies
@@ -204,7 +206,8 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
         thicknessConvention={adapted?.thicknessConvention ?? false}
         provenance={adapted?.provenance ?? null}
         photos={photos ?? []}
-        isLoading={isLoading}
+        isLoading={isPending}
+        isError={isError}
       />
     </RoomShell>
   );

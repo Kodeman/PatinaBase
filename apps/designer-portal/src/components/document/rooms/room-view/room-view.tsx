@@ -39,6 +39,7 @@ import {
   useSignedScanModelUrl,
   useSplatUrl,
 } from '@patina/supabase';
+import { RoomViewSkeleton } from '@/components/loading';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import type { PhotoProvenance } from '@/lib/room-view/photo-poses';
@@ -102,7 +103,10 @@ export interface RoomViewProps {
   /** null until parsed (from-rows.ts only ever runs against a parsed header). */
   geometry: RoomGeometry | null;
   thicknessConvention: boolean;
+  /** The scan has not answered yet (the read is pending). */
   isLoading: boolean;
+  /** The scan's read failed and nothing was read before it (H1). */
+  isError?: boolean;
   /** Plan-frame provenance (00337, from-rows.ts) — projects photo camera
    *  transforms into the Plan frame for the marker layer (photo-poses.ts).
    *  null until parsed with provenance; the marker layer degrades silently. */
@@ -118,6 +122,7 @@ export function RoomView({
   geometry,
   thicknessConvention,
   isLoading,
+  isError = false,
   provenance = null,
   photos = [],
 }: RoomViewProps) {
@@ -276,10 +281,29 @@ export function RoomView({
     }
   }, [measure.state.phase, roomId]);
 
-  if (isLoading) return null;
+  // US-34 F13b (D1 §5): three states, none of them blank. Loading is the
+  // board's corners with no words; a read that failed says so; a scan that has
+  // not parsed yet is the processing sentence, a fact about the scan. A read
+  // that answered with no room is neither of those.
+  if (isLoading) return <RoomViewSkeleton />;
 
-  const ready = doc != null && doc.parseStatus === 'parsed' && geometry != null;
-  if (!ready || doc == null || geometry == null) {
+  if (doc == null) {
+    return (
+      <div className="mx-auto max-w-[520px] px-6 pt-24 text-center">
+        {isError ? (
+          <p role="alert" className="font-heading text-[1.3rem] text-[var(--color-terracotta-ink)]">
+            The room could not be read. Reload the page to try again.
+          </p>
+        ) : (
+          <p className="font-heading text-[1.3rem] italic text-[var(--color-charcoal)]">
+            This room could not be found.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (doc.parseStatus !== 'parsed' || geometry == null) {
     return (
       <div className="mx-auto max-w-[520px] px-6 pt-24 text-center">
         <p className="font-heading text-[1.3rem] italic text-[var(--color-charcoal)]">

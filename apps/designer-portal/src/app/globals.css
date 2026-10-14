@@ -349,6 +349,51 @@
   }
 }
 
+/* ===== Shaped placeholders (US-34 F13; US-33 D1 §2–§3, Q "Quiet paper") =====
+   Filled pearl bars shaped like the text they stand for, never hollow frames
+   (H2). They wait --ph-delay (PQ8: 150 ms, set by LoadingRegion from
+   lib/loading/thresholds.ts) and then fade in over 50 ms, so a fast load never
+   flashes. Under reduced motion they appear after the same delay with no fade:
+   a step is a state change, not motion. No breath here: that is N10's. */
+@keyframes ph-in {
+  to {
+    opacity: 1;
+  }
+}
+.ph,
+.ph-disc,
+.ph-block {
+  background: var(--color-pearl);
+  opacity: 0;
+  animation: ph-in 50ms linear var(--ph-delay, 150ms) forwards;
+}
+.ph {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+.ph-disc {
+  display: inline-block;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+/* The Room view's drawing board: four registration corners, nothing else. */
+.ph-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: var(--text-faint);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph,
+  .ph-disc,
+  .ph-block {
+    animation-timing-function: step-start;
+  }
+}
+
 /* ===== The Life Review (R126) ===================================== */
 
 /* Three rule weights, three ranks. The strong rule is the double rule: the

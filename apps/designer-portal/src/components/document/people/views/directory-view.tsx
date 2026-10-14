@@ -159,10 +159,19 @@ export function DirectoryView({
   /** The Room's one announcer — what it says after a merge lands. */
   onAnnounce?: (message: string) => void;
 }) {
-  const { data, isLoading } = usePeopleDirectory({
+  // US-34 F13c (H1): the empty sentence needs a read that answered. Pending
+  // (which also covers a read paused offline) is loading; a failed first read
+  // is an error, never "Nobody under this narrowing yet."
+  const {
+    data,
+    isPending: isLoading,
+    isError,
+    refetch,
+  } = usePeopleDirectory({
     role: "all",
     scope: scope === "mine" ? "mine" : undefined,
   });
+  const readFailed = isError && data === undefined;
   // QA-R2-9: a company-only engagement with nobody named is not a head. It
   // reaches the studio through the firm's own row and the Call Sheet's Bidding
   // band, never as a second, person-shaped copy of the same entity.
@@ -569,9 +578,30 @@ export function DirectoryView({
       {marketplace ? (
         <MakersMarketplace onOpenMaker={(id) => openPerson(id, "maker")} />
       ) : isLoading ? (
-        <p className="t-body-sm px-1 py-6 text-[var(--ink-subtle)]">
+        <p
+          role="status"
+          aria-busy="true"
+          data-directory-loading
+          className="t-body-sm px-1 py-6 text-[var(--ink-subtle)]"
+        >
           Reading the roster…
         </p>
+      ) : readFailed ? (
+        <div className="people-sections">
+          <p
+            role="alert"
+            className="font-heading text-[19px] leading-[1.5] text-[var(--color-terracotta-ink)]"
+          >
+            The directory could not be read.
+          </p>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="mt-2 inline-flex min-h-11 items-center font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--ink)] underline decoration-[var(--color-clay)] underline-offset-[3px]"
+          >
+            Try again
+          </button>
+        </div>
       ) : narrowed.length === 0 ? (
         <div className="people-sections">
           <EmptyState eyebrow="Directory">

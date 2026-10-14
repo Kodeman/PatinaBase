@@ -16,6 +16,7 @@ import {
   useRemovedProjectLines,
 } from "@patina/supabase";
 import { BuildRoomShell } from "@/components/document/pieces/build-room-shell";
+import { PiecesSkeleton } from "@/components/loading";
 import {
   FinishesLens,
   roomFinishesByRoom,
@@ -48,7 +49,7 @@ export default function BuildRoomPage({
 }) {
   const { id } = use(params);
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PiecesSkeleton />}>
       <BuildRoom docId={id} />
     </Suspense>
   );
@@ -60,7 +61,11 @@ function BuildRoom({ docId }: { docId: string }) {
   const canSeeMoney = useCanSeeMargin();
   const { lens, room } = parseBuildRoomSearch(searchParams, { canSeeMoney });
 
-  const { data: resolution } = useDocumentEngagement(docId);
+  const {
+    data: resolution,
+    isError: resolutionFailed,
+    fetchStatus,
+  } = useDocumentEngagement(docId);
   const row = resolution?.kind === "engagement" ? resolution.row : null;
   const projectId = row?.project_id ?? null;
 
@@ -113,7 +118,26 @@ function BuildRoom({ docId }: { docId: string }) {
     [addRoom, navigate, lens],
   );
 
-  if (!row) return <main aria-busy={resolution == null} />;
+  if (!row) {
+    // US-34 F13a (H1): only a read that answered can say there is nothing
+    // here. A failed read says so; one still in flight, or a redirect on its
+    // way, is the shaped sheet, never a blank one. The read is disabled only
+    // for an id that is not a UUID, which no document has.
+    const missing =
+      resolution?.kind === "missing" ||
+      (resolution == null && fetchStatus === "idle" && !resolutionFailed);
+    if (resolutionFailed && resolution == null) {
+      return (
+        <BuildRoomNote role="alert">
+          The pieces could not be read. Reload the page to try again.
+        </BuildRoomNote>
+      );
+    }
+    if (missing) {
+      return <BuildRoomNote>This document could not be found.</BuildRoomNote>;
+    }
+    return <PiecesSkeleton />;
+  }
 
   if (!projectId) {
     return (
@@ -185,5 +209,26 @@ function BuildRoom({ docId }: { docId: string }) {
         />
       )}
     </BuildRoomShell>
+  );
+}
+
+/** A Build room that cannot open says why, in the sheet's own note. */
+function BuildRoomNote({
+  role,
+  children,
+}: {
+  role?: "alert";
+  children: string;
+}) {
+  return (
+    <main className="mx-auto max-w-[56ch] px-6 py-12 text-[14px] leading-[1.5]">
+      <p role={role}>{children}</p>
+      <a
+        href="/desk"
+        className="mt-3 inline-flex min-h-11 items-center font-mono text-[12px] font-medium uppercase tracking-[0.06em] underline underline-offset-4"
+      >
+        ← Back to the desk
+      </a>
+    </main>
   );
 }

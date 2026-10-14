@@ -11,11 +11,12 @@
  */
 
 import { Suspense } from 'react';
+import { PeopleSkeleton } from '@/components/loading';
 import { PeopleRoom } from '@/components/document/people/people-room';
 
 export default function PeopleRoomPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PeopleSkeleton />}>
       <PeopleRoom />
     </Suspense>
   );
