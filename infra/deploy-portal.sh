@@ -624,7 +624,11 @@ echo "==> [3/3] Deploying the ${PORTAL} portal to Cloudflare Workers"
 # "unbound variable". WRANGLER_ENV_ARGS is empty for production, so the
 # unguarded form broke every production deploy while staging (non-empty)
 # kept working.
-CLOUDFLARE_ACCOUNT_ID=be3aaeed18a81b5d90ee2263b62219ea npx wrangler deploy ${WRANGLER_ENV_ARGS[@]+"${WRANGLER_ENV_ARGS[@]}"}
+DEPLOY_OUTPUT=$(mktemp)
+trap 'rm -f "$DEPLOY_OUTPUT"' EXIT
+CLOUDFLARE_ACCOUNT_ID=be3aaeed18a81b5d90ee2263b62219ea npx wrangler deploy ${WRANGLER_ENV_ARGS[@]+"${WRANGLER_ENV_ARGS[@]}"} 2>&1 | tee "$DEPLOY_OUTPUT"
+STARTUP_TIME_MS=$(grep -oE 'Worker Startup Time: [0-9]+ ms' "$DEPLOY_OUTPUT" | tail -1 | sed -E 's/.*: ([0-9]+) ms/\1/')
+echo "deploy-report: handler_bytes=${HANDLER_BYTES} startup_time_ms=${STARTUP_TIME_MS}"
 
 echo
 echo "==> Done: ${PORTAL} portal deployed to ${TARGET_ENV}."
