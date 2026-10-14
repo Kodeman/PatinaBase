@@ -129,17 +129,22 @@ let mockDeskData: MockDeskData = { folders: [], chips: [], composed: {} };
 let mockDeskLoading = false;
 let mockDeskError = false;
 const mockRetryDesk = jest.fn();
-// `enabled` does NOT withhold data: a disabled TanStack observer still reads the
-// cache, and <CommandBar/> in (document)/layout.tsx keeps this exact key hot on
-// every document route. The page must be safe against a populated cache it did
-// not ask for, so these tests hand it one.
-const mockUseDeskEngagements = jest.fn((_options?: { enabled?: boolean }) => ({
-  data: mockDeskData,
-  isLoading: mockDeskLoading,
-  isPending: mockDeskLoading,
-  isError: mockDeskError,
-  refetch: mockRetryDesk,
-}));
+// US-34 N7 — the page reads this job's need through its own scoped hook and
+// never observes the Desk read. `enabled` does NOT withhold data: a disabled
+// TanStack observer still reads whatever its key already holds, so the page
+// must be safe against a populated answer it did not ask for, and these tests
+// hand it one.
+const mockUseEngagementNeed = jest.fn(
+  (_engagementId: string | null | undefined, _options?: { enabled?: boolean }) => ({
+    data: mockDeskData,
+    isLoading: mockDeskLoading,
+    isPending: mockDeskLoading,
+    isError: mockDeskError,
+    refetch: mockRetryDesk,
+  }),
+);
+// The Desk read belongs to the ⌘K palette alone; the page must never call it.
+const mockUseDeskEngagements = jest.fn();
 const mockSelectOperationalNeed = jest.fn(
   (data: MockDeskData | undefined, engagementId: string | null | undefined) => {
     if (!data || !engagementId) return undefined;
@@ -573,8 +578,13 @@ jest.mock('@/hooks/use-drafting-state', () => ({
   useDraftingState: () => mockDraftingState,
 }));
 
+jest.mock('@/hooks/use-engagement-need', () => ({
+  useEngagementNeed: (engagementId: string | null | undefined, options?: { enabled?: boolean }) =>
+    mockUseEngagementNeed(engagementId, options),
+}));
+
 jest.mock('@/hooks/use-desk-engagements', () => ({
-  useDeskEngagements: (options?: { enabled?: boolean }) => mockUseDeskEngagements(options),
+  useDeskEngagements: (...args: unknown[]) => mockUseDeskEngagements(...args),
   selectOperationalNeedForDocument: (
     data: typeof mockDeskData | undefined,
     engagementId: string | null | undefined,
@@ -772,6 +782,7 @@ describe('DocumentPage guide activation', () => {
     mockDeskError = false;
     mockRetryDesk.mockReset();
     mockUseDeskEngagements.mockClear();
+    mockUseEngagementNeed.mockClear();
     mockSelectOperationalNeed.mockClear();
     mockSelectOperationalNeeds.mockClear();
     mockRecentDocumentsInHand = [];
@@ -854,7 +865,10 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: true });
+    // US-34 N7 — the need is read for this engagement alone, and the Desk read
+    // (the ⌘K palette's, closed here) is never triggered by the page.
+    expect(mockUseEngagementNeed).toHaveBeenCalledWith('lead-1', { enabled: true });
+    expect(mockUseDeskEngagements).not.toHaveBeenCalled();
     expect(mockSelectOperationalNeed).toHaveBeenCalledWith(
       mockDeskData, 'lead-1',
     );
@@ -882,7 +896,7 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByRole('button', { name: 'Chase the approval' })).toBeInTheDocument();
   });
 
-  it('ignores a hot Desk cache for a document its side feeds cannot key on', () => {
+  it('ignores a held need answer for a document its side feeds cannot key on', () => {
     const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
     mockDocumentQuery = {
       ...mockDocumentQuery,
@@ -891,9 +905,9 @@ describe('DocumentPage guide activation', () => {
         engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
       } },
     };
-    // The CommandBar keeps this key warm, so the cache holds a composed answer
-    // for this very engagement. This page declared the enrichment out of scope,
-    // so it must not consult it at all — not even to read the answer.
+    // The observer hands back a composed answer for this very engagement. This
+    // page declared the enrichment out of scope, so it must not consult it at
+    // all — not even to read the answer.
     mockDeskData = {
       folders: [{
         row: { engagement_id: 'relationship-1' },
@@ -908,13 +922,14 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: false });
+    expect(mockUseEngagementNeed).toHaveBeenCalledWith(expect.anything(), { enabled: false });
+    expect(mockUseEngagementNeed).not.toHaveBeenCalledWith(expect.anything(), { enabled: true });
     expect(mockSelectOperationalNeed).not.toHaveBeenCalled();
     expect(screen.queryByText('Reconnect with Avery')).not.toBeInTheDocument();
     expect(screen.getByText('Finish what you need to know')).toBeInTheDocument();
   });
 
-  it('skips the Desk read on a paused document', () => {
+  it('skips the need read on a paused document', () => {
     const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
     mockDocumentQuery = {
       ...mockDocumentQuery,
@@ -923,7 +938,8 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: false });
+    expect(mockUseEngagementNeed).toHaveBeenCalledWith(expect.anything(), { enabled: false });
+    expect(mockUseEngagementNeed).not.toHaveBeenCalledWith(expect.anything(), { enabled: true });
     expect(screen.getByText('This project is paused')).toBeInTheDocument();
   });
 
@@ -964,14 +980,14 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByText('Nothing to decide yet.')).toBeInTheDocument();
   });
 
-  it('derives locally when a hot Desk cache never composed this document', () => {
+  it('derives locally when the need answer never composed this document', () => {
     const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
     mockDocumentQuery = {
       ...mockDocumentQuery,
       data: { kind: 'engagement', row: { ...current, overdue_decision_count: 1 } },
     };
-    // The CommandBar's read is warm and holds OTHER engagements. Absence from
-    // it is not an answer about this one, so the row's own need must still show.
+    // The answer holds OTHER engagements only. Absence from it is not an answer
+    // about this one, so the row's own need must still show.
     mockDeskData = {
       folders: [{ row: { engagement_id: 'someone-else' }, need: null }],
       chips: [],
@@ -1031,7 +1047,8 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: true });
+    expect(mockUseEngagementNeed).toHaveBeenCalledWith('proposal-1', { enabled: true });
+    expect(mockUseDeskEngagements).not.toHaveBeenCalled();
     expect(mockSelectOperationalNeed).toHaveBeenCalledWith(
       mockDeskData, 'proposal-1',
     );
@@ -4286,6 +4303,7 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
     mockDeskError = false;
     mockRetryDesk.mockReset();
     mockUseDeskEngagements.mockClear();
+    mockUseEngagementNeed.mockClear();
     mockSelectOperationalNeed.mockClear();
     mockSelectOperationalNeeds.mockClear();
     mockRecentDocumentsInHand = [];

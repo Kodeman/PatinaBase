@@ -47,8 +47,10 @@ jest.mock('@patina/supabase', () => ({
 }));
 
 const mockDeskData = jest.fn(() => ({ folders: [] as unknown[], chips: [] as unknown[] }));
+const mockDeskOptions = jest.fn();
 jest.mock('@/hooks/use-desk-engagements', () => ({
-  useDeskEngagements: () => {
+  useDeskEngagements: (options?: { enabled?: boolean }) => {
+    mockDeskOptions(options);
     const data = mockDeskData() as unknown as Record<string, unknown[]>;
     if (!data) return { data };
     // Production's `live` is every non-archived row the composition saw, need
@@ -165,6 +167,25 @@ describe('the Find anything → command bar circuit', () => {
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
 
     expect(screen.getByRole('dialog', { name: 'Studio search' })).toBeInTheDocument();
+  });
+
+  it('reads the Desk only while the bar is open (US-34 N7)', async () => {
+    mockDeskOptions.mockClear();
+    render(<><FindAnythingButton /><CommandBar /></>);
+
+    // Closed on every Document route: the Desk read is held, never fired.
+    expect(mockDeskOptions).toHaveBeenCalled();
+    expect(mockDeskOptions).not.toHaveBeenCalledWith({ enabled: true });
+
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+    expect(screen.getByRole('dialog', { name: 'Studio search' })).toBeInTheDocument();
+    expect(mockDeskOptions).toHaveBeenLastCalledWith({ enabled: true });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Studio search' })).not.toBeInTheDocument(),
+    );
+    expect(mockDeskOptions).toHaveBeenLastCalledWith({ enabled: false });
   });
 
   it('prefetches a Desk document when its row receives keyboard focus', () => {

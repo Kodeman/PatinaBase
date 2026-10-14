@@ -56,6 +56,7 @@ import {
   type DocumentStateRow,
   type MotionChip,
   type NeedLine,
+  type PulseCountRow,
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
 import { lineMaker, linePoNumber } from '@/lib/document/install-reading';
@@ -102,6 +103,10 @@ export interface DeskData {
   studioDrafts?: DeskDraftSignal[];
 }
 
+/** What the Document's need selectors read: the Desk's, or one engagement's
+ *  (use-engagement-need.ts). */
+export type NeedComposition = Pick<DeskData, 'folders' | 'composed'>;
+
 interface DeskQueryData extends DeskData {
   /** Unprojected source rows; each observer filters these in its own `select`. */
   outboundDraftRows: unknown[];
@@ -114,13 +119,13 @@ interface DeskQueryData extends DeskData {
  * reads the pair the same way, so a genuine "no need" is honored instead of
  * being re-derived from the row.
  *
- * Absence from `folders` alone is NOT an answer — the Desk's cache is shared
- * with the CommandBar and is hot on every document route, so a document the
- * composition never covered (archived, outside this read, a different studio's)
- * would otherwise read as need-free. Only `composed` membership licenses `null`.
+ * Absence from `folders` alone is NOT an answer — a disabled observer still
+ * reads whatever its key holds, so a document the composition never covered
+ * (archived, outside this read, a different studio's) would otherwise read as
+ * need-free. Only `composed` membership licenses `null`.
  */
 export function selectOperationalNeedForDocument(
-  data: DeskData | undefined,
+  data: NeedComposition | undefined,
   engagementId: string | null | undefined,
 ): NeedLine | null | undefined {
   if (!data || !engagementId) return undefined;
@@ -135,7 +140,7 @@ export function selectOperationalNeedForDocument(
  * so the caller has no answer; `[]` = it did, and there are no needs.
  */
 export function selectOperationalNeedsForDocument(
-  data: DeskData | undefined,
+  data: NeedComposition | undefined,
   engagementId: string | null | undefined,
 ): NeedLine[] | undefined {
   if (!data || !engagementId) return undefined;
@@ -657,7 +662,7 @@ function flattenBoardFlaggedRows(rows: any): FlaggedLineRow[] {
  * the `{error, code}` a feed answers when it failed inside the RPC, or a key
  * the RPC did not carry.
  */
-function deskFeed(
+export function deskFeed(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   read: any,
   key: string,
@@ -667,6 +672,196 @@ function deskFeed(
   if (Array.isArray(value)) return { data: value, error: null };
   const message = typeof value?.error === 'string' ? value.error : `desk_read did not answer ${key}`;
   return { data: null, error: Object.assign(new Error(message), { code: value?.code ?? null }) };
+}
+
+/**
+ * US-34 N7: the Desk's composition over one desk_read answer (00791) — the
+ * whole studio's for the Desk, one engagement's (p_engagement_id) for the
+ * Document's own need (use-engagement-need.ts). `rows` is the answer's
+ * engagements feed. `pulseRows` is what partitionDesk sums the week's Pulses
+ * over; it defaults to `rows`, which on a scoped read is one job's.
+ */
+export function composeDeskRead(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  read: any,
+  rows: DocumentStateRow[],
+  today: string,
+  now: Date,
+  pulseRows?: readonly PulseCountRow[],
+): DeskQueryData {
+  const feed = (key: string) => deskFeed(read, key);
+  const { data: events, error: eventsError } = feed('delivery_events');
+  const { data: invoices, error: invoicesError } = feed('receivables');
+  const { data: flaggedFeedback, error: flaggedError } = feed('flagged_lines');
+  const { data: boardFlagged, error: boardFlaggedError } = feed('flagged_board_pins');
+  const { data: ceremonies, error: ceremoniesError } = feed('ceremonies');
+  const { data: deskPhases, error: deskPhasesError } = feed('phases');
+  const { data: deskMilestones, error: deskMilestonesError } = feed('milestones');
+  const { data: deskProjectStarts, error: deskProjectStartsError } = feed('project_starts');
+  const { data: deskProposals, error: deskProposalsError } = feed('schedule_proposals');
+  const { data: claimNotices, error: claimNoticesError } = feed('claim_notices');
+  const { data: claimDeadlines, error: claimDeadlinesError } = feed('claim_deadlines');
+  const { data: paymentNotices, error: paymentNoticesError } = feed('payment_notices');
+  const { data: returnRows, error: returnRowsError } = feed('returns');
+  const { data: draftRows, error: draftRowsError } = feed('drafts');
+  const { data: outboundRows, error: outboundRowsError } = feed('outbound_drafts');
+  const { data: quoteRows, error: quoteRowsError } = feed('quotes');
+  const { data: exceptionRows, error: exceptionRowsError } = feed('exceptions');
+  const { data: heldRows, error: heldRowsError } = feed('held');
+  const { data: sampleRows, error: sampleRowsError } = feed('samples');
+  const { data: liveProposalRows, error: liveProposalsError } = feed('live_proposals');
+  const { data: paidInvoices, error: paidInvoicesError } = feed('paid_invoices');
+  const { data: paidPoPayments, error: paidPoPaymentsError } = feed('paid_po_payments');
+  const { data: sentPoRows, error: sentPoRowsError } = feed('sent_purchase_orders');
+  const { data: leadRows, error: leadRowsError } = feed('leads');
+
+  // The Desk never dies on a side feed — conflicts/receivables/flags stay quiet.
+  const conflicts = eventsError ? undefined : buildDeskConflicts(events ?? []);
+  const receivables = invoicesError
+    ? undefined
+    : buildDeskReceivables((invoices ?? []) as Invoice[], now);
+  // Line flags + board-pin flags fold together by proposal_id (one folder,
+  // summed count). Each source degrades to [] on its own error.
+  const flaggedLines =
+    flaggedError && boardFlaggedError
+      ? undefined
+      : buildDeskFlaggedLines([
+          ...(flaggedError ? [] : flattenFlaggedRows(flaggedFeedback)),
+          ...(boardFlaggedError ? [] : flattenBoardFlaggedRows(boardFlagged)),
+        ]);
+  // R106: the ceremonies feed degrades the same way — a query error never
+  // takes the whole Desk down, it just means no ceremony-derived need/chip
+  // fires this read (identical in effect to the flag-off path).
+  const ceremonyRows = ceremoniesError ? [] : ((ceremonies ?? []) as CeremonyRow[]);
+  const ceremoniesByLeadId = ceremoniesError ? undefined : buildDeskCeremoniesByLead(ceremonyRows);
+  const ceremoniesByDesignerClientId = ceremoniesError
+    ? undefined
+    : buildDeskCeremoniesByDesignerClient(ceremonyRows);
+  // R108: the schedule reads degrade independently and together — a phases
+  // error leaves the map undefined, which partitionDesk reads as
+  // "unanswered", never as "this project has no schedule". Milestones or
+  // start dates alone failing still resolves every chain, only less
+  // precisely.
+  //
+  // Truncation is the dangerous case, not the error case: a capped phase
+  // read silently drops whole projects, and a project missing from a
+  // PRESENT map reads as "no phases" — i.e. the desk would invent a
+  // "Name the phases for this project" need for a fully-composed schedule.
+  // A full page is therefore treated as no answer at all.
+  const phaseRows = (deskPhases ?? []) as DeskPhaseRow[];
+  const phasesTruncated = phaseRows.length >= DESK_PHASE_LIMIT;
+  // Same sentinel as the phases read, same reason: a capped page silently
+  // drops whole projects, and a project missing from a PRESENT feed reads
+  // as "nothing proposed" rather than "unanswered".
+  const proposalRows = (deskProposals ?? []) as DeskProposalRow[];
+  const proposalsTruncated = proposalRows.length >= DESK_PROPOSAL_LIMIT;
+  const answeredProposals =
+    deskProposalsError || proposalsTruncated ? [] : proposalRows;
+  // Degradation runs both ways: a failed phases read must not silence the
+  // proposals, which need no chain to be true.
+  const schedules =
+    deskPhasesError || phasesTruncated
+      ? answeredProposals.length > 0
+        ? buildDeskProposalSignals(answeredProposals)
+        : undefined
+      : buildDeskSchedule(
+          phaseRows,
+          deskMilestonesError ? [] : ((deskMilestones ?? []) as DeskMilestoneRow[]),
+          today,
+          deskProjectStartsError
+            ? undefined
+            : new Map(
+                ((deskProjectStarts ?? []) as Array<{ id: string; start_date: string | null }>).map(
+                  (p) => [p.id, p.start_date ?? null],
+                ),
+              ),
+          answeredProposals,
+        );
+  const claimWindows = claimNoticesError
+    ? undefined
+    : buildDeskClaimWindows(claimNotices, claimDeadlinesError ? null : claimDeadlines);
+  const payments = paymentNoticesError ? undefined : buildDeskPayments(paymentNotices);
+  const returns = returnRowsError ? undefined : buildDeskReturns(returnRows);
+  const drafts =
+    draftRowsError && outboundRowsError
+      ? undefined
+      : buildDeskDrafts(draftRowsError ? [] : draftRows, outboundRowsError ? [] : outboundRows);
+  const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
+  const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
+  const heldReleases = heldRowsError
+    ? undefined
+    : buildDeskHeldReleases(heldRows as HeldPurchaseOrder[]);
+  const samples = sampleRowsError ? undefined : buildDeskSamples(sampleRows);
+  const liveProposalsTruncated =
+    Array.isArray(liveProposalRows) && liveProposalRows.length >= DESK_LIVE_PROPOSAL_LIMIT;
+  const proposalOutcomes =
+    liveProposalsError || liveProposalsTruncated
+      ? undefined
+      : buildDeskProposalOutcomes(liveProposalRows);
+  const landedPayments = buildDeskLandedPayments(
+    paidInvoicesError ? null : paidInvoices,
+    paidPoPaymentsError ? null : paidPoPayments,
+  );
+  // The per-PO and leads reads fall back to the row's own aggregate and
+  // wording, so their failure leaves nothing unchecked.
+  const purchaseOrders = sentPoRowsError ? undefined : buildDeskPurchaseOrders(sentPoRows);
+  const leads = leadRowsError ? undefined : buildDeskLeads(leadRows);
+
+  // Fix-now 6: name every modelled feed this read could not answer. Any one
+  // failed contributing read leaves its feed unread, even where the other
+  // half answered and still prints what it found (SQ-751 F4).
+  const unreadFeeds = [
+    ...(invoicesError || paidInvoicesError ? ['invoices'] : []),
+    ...(eventsError ? ['deliveries'] : []),
+    ...(flaggedError || boardFlaggedError ? ['flagged lines'] : []),
+    ...(ceremoniesError ? ['introductions'] : []),
+    ...(deskPhasesError ||
+    phasesTruncated ||
+    deskMilestonesError ||
+    deskProjectStartsError ||
+    deskProposalsError ||
+    proposalsTruncated
+      ? ['schedules']
+      : []),
+    ...(liveProposalsError || liveProposalsTruncated ? ['proposals'] : []),
+    ...(claimNoticesError || !claimWindows ? ['claim windows'] : []),
+    ...(paymentNoticesError || paidPoPaymentsError ? ['maker payments'] : []),
+    ...(returnRowsError ? ['returns'] : []),
+    ...(draftRowsError || outboundRowsError ? ['letters'] : []),
+    ...(quoteRowsError ? ['quotes'] : []),
+    ...(exceptionRowsError ? ['exceptions'] : []),
+    ...(heldRowsError ? ['held orders'] : []),
+    ...(sampleRowsError ? ['samples'] : []),
+  ];
+
+  const result = partitionDesk(
+    rows,
+    now,
+    conflicts,
+    receivables,
+    flaggedLines,
+    ceremoniesByLeadId,
+    ceremoniesByDesignerClientId,
+    schedules,
+    claimWindows,
+    payments,
+    returns,
+    drafts,
+    quotes,
+    exceptions,
+    heldReleases,
+    samples,
+    proposalOutcomes,
+    landedPayments,
+    purchaseOrders,
+    leads,
+    pulseRows,
+  );
+  return {
+    ...result,
+    unreadFeeds,
+    outboundDraftRows: outboundRowsError || !Array.isArray(outboundRows) ? [] : outboundRows,
+  };
 }
 
 export function useDeskEngagements(options: { enabled?: boolean; organizationId?: string | null } = {}) {
@@ -695,32 +890,7 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
       // refused here as an error; the 0-row guard below still covers the rest.
       const { data: read, error: readError } = await supabase.rpc('desk_read');
       if (readError) throw readError;
-      const feed = (key: string) => deskFeed(read, key);
-      const { data, error } = feed('engagements');
-      const { data: events, error: eventsError } = feed('delivery_events');
-      const { data: invoices, error: invoicesError } = feed('receivables');
-      const { data: flaggedFeedback, error: flaggedError } = feed('flagged_lines');
-      const { data: boardFlagged, error: boardFlaggedError } = feed('flagged_board_pins');
-      const { data: ceremonies, error: ceremoniesError } = feed('ceremonies');
-      const { data: deskPhases, error: deskPhasesError } = feed('phases');
-      const { data: deskMilestones, error: deskMilestonesError } = feed('milestones');
-      const { data: deskProjectStarts, error: deskProjectStartsError } = feed('project_starts');
-      const { data: deskProposals, error: deskProposalsError } = feed('schedule_proposals');
-      const { data: claimNotices, error: claimNoticesError } = feed('claim_notices');
-      const { data: claimDeadlines, error: claimDeadlinesError } = feed('claim_deadlines');
-      const { data: paymentNotices, error: paymentNoticesError } = feed('payment_notices');
-      const { data: returnRows, error: returnRowsError } = feed('returns');
-      const { data: draftRows, error: draftRowsError } = feed('drafts');
-      const { data: outboundRows, error: outboundRowsError } = feed('outbound_drafts');
-      const { data: quoteRows, error: quoteRowsError } = feed('quotes');
-      const { data: exceptionRows, error: exceptionRowsError } = feed('exceptions');
-      const { data: heldRows, error: heldRowsError } = feed('held');
-      const { data: sampleRows, error: sampleRowsError } = feed('samples');
-      const { data: liveProposalRows, error: liveProposalsError } = feed('live_proposals');
-      const { data: paidInvoices, error: paidInvoicesError } = feed('paid_invoices');
-      const { data: paidPoPayments, error: paidPoPaymentsError } = feed('paid_po_payments');
-      const { data: sentPoRows, error: sentPoRowsError } = feed('sent_purchase_orders');
-      const { data: leadRows, error: leadRowsError } = feed('leads');
+      const { data, error } = deskFeed(read, 'engagements');
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
 
@@ -758,153 +928,7 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
         }
       }
 
-      const now = new Date();
-      // The Desk never dies on a side feed — conflicts/receivables/flags stay quiet.
-      const conflicts = eventsError ? undefined : buildDeskConflicts(events ?? []);
-      const receivables = invoicesError
-        ? undefined
-        : buildDeskReceivables((invoices ?? []) as Invoice[], now);
-      // Line flags + board-pin flags fold together by proposal_id (one folder,
-      // summed count). Each source degrades to [] on its own error.
-      const flaggedLines =
-        flaggedError && boardFlaggedError
-          ? undefined
-          : buildDeskFlaggedLines([
-              ...(flaggedError ? [] : flattenFlaggedRows(flaggedFeedback)),
-              ...(boardFlaggedError ? [] : flattenBoardFlaggedRows(boardFlagged)),
-            ]);
-      // R106: the ceremonies feed degrades the same way — a query error never
-      // takes the whole Desk down, it just means no ceremony-derived need/chip
-      // fires this read (identical in effect to the flag-off path).
-      const ceremonyRows = ceremoniesError ? [] : ((ceremonies ?? []) as CeremonyRow[]);
-      const ceremoniesByLeadId = ceremoniesError ? undefined : buildDeskCeremoniesByLead(ceremonyRows);
-      const ceremoniesByDesignerClientId = ceremoniesError
-        ? undefined
-        : buildDeskCeremoniesByDesignerClient(ceremonyRows);
-      // R108: the schedule reads degrade independently and together — a phases
-      // error leaves the map undefined, which partitionDesk reads as
-      // "unanswered", never as "this project has no schedule". Milestones or
-      // start dates alone failing still resolves every chain, only less
-      // precisely.
-      //
-      // Truncation is the dangerous case, not the error case: a capped phase
-      // read silently drops whole projects, and a project missing from a
-      // PRESENT map reads as "no phases" — i.e. the desk would invent a
-      // "Name the phases for this project" need for a fully-composed schedule.
-      // A full page is therefore treated as no answer at all.
-      const phaseRows = (deskPhases ?? []) as DeskPhaseRow[];
-      const phasesTruncated = phaseRows.length >= DESK_PHASE_LIMIT;
-      // Same sentinel as the phases read, same reason: a capped page silently
-      // drops whole projects, and a project missing from a PRESENT feed reads
-      // as "nothing proposed" rather than "unanswered".
-      const proposalRows = (deskProposals ?? []) as DeskProposalRow[];
-      const proposalsTruncated = proposalRows.length >= DESK_PROPOSAL_LIMIT;
-      const answeredProposals =
-        deskProposalsError || proposalsTruncated ? [] : proposalRows;
-      // Degradation runs both ways: a failed phases read must not silence the
-      // proposals, which need no chain to be true.
-      const schedules =
-        deskPhasesError || phasesTruncated
-          ? answeredProposals.length > 0
-            ? buildDeskProposalSignals(answeredProposals)
-            : undefined
-          : buildDeskSchedule(
-              phaseRows,
-              deskMilestonesError ? [] : ((deskMilestones ?? []) as DeskMilestoneRow[]),
-              today,
-              deskProjectStartsError
-                ? undefined
-                : new Map(
-                    ((deskProjectStarts ?? []) as Array<{ id: string; start_date: string | null }>).map(
-                      (p) => [p.id, p.start_date ?? null],
-                    ),
-                  ),
-              answeredProposals,
-            );
-      const claimWindows = claimNoticesError
-        ? undefined
-        : buildDeskClaimWindows(claimNotices, claimDeadlinesError ? null : claimDeadlines);
-      const payments = paymentNoticesError ? undefined : buildDeskPayments(paymentNotices);
-      const returns = returnRowsError ? undefined : buildDeskReturns(returnRows);
-      const drafts =
-        draftRowsError && outboundRowsError
-          ? undefined
-          : buildDeskDrafts(draftRowsError ? [] : draftRows, outboundRowsError ? [] : outboundRows);
-      const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
-      const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
-      const heldReleases = heldRowsError
-        ? undefined
-        : buildDeskHeldReleases(heldRows as HeldPurchaseOrder[]);
-      const samples = sampleRowsError ? undefined : buildDeskSamples(sampleRows);
-      const liveProposalsTruncated =
-        Array.isArray(liveProposalRows) && liveProposalRows.length >= DESK_LIVE_PROPOSAL_LIMIT;
-      const proposalOutcomes =
-        liveProposalsError || liveProposalsTruncated
-          ? undefined
-          : buildDeskProposalOutcomes(liveProposalRows);
-      const landedPayments = buildDeskLandedPayments(
-        paidInvoicesError ? null : paidInvoices,
-        paidPoPaymentsError ? null : paidPoPayments,
-      );
-      // The per-PO and leads reads fall back to the row's own aggregate and
-      // wording, so their failure leaves nothing unchecked.
-      const purchaseOrders = sentPoRowsError ? undefined : buildDeskPurchaseOrders(sentPoRows);
-      const leads = leadRowsError ? undefined : buildDeskLeads(leadRows);
-
-      // Fix-now 6: name every modelled feed this read could not answer. Any one
-      // failed contributing read leaves its feed unread, even where the other
-      // half answered and still prints what it found (SQ-751 F4).
-      const unreadFeeds = [
-        ...(invoicesError || paidInvoicesError ? ['invoices'] : []),
-        ...(eventsError ? ['deliveries'] : []),
-        ...(flaggedError || boardFlaggedError ? ['flagged lines'] : []),
-        ...(ceremoniesError ? ['introductions'] : []),
-        ...(deskPhasesError ||
-        phasesTruncated ||
-        deskMilestonesError ||
-        deskProjectStartsError ||
-        deskProposalsError ||
-        proposalsTruncated
-          ? ['schedules']
-          : []),
-        ...(liveProposalsError || liveProposalsTruncated ? ['proposals'] : []),
-        ...(claimNoticesError || !claimWindows ? ['claim windows'] : []),
-        ...(paymentNoticesError || paidPoPaymentsError ? ['maker payments'] : []),
-        ...(returnRowsError ? ['returns'] : []),
-        ...(draftRowsError || outboundRowsError ? ['letters'] : []),
-        ...(quoteRowsError ? ['quotes'] : []),
-        ...(exceptionRowsError ? ['exceptions'] : []),
-        ...(heldRowsError ? ['held orders'] : []),
-        ...(sampleRowsError ? ['samples'] : []),
-      ];
-
-      const result = partitionDesk(
-        rows,
-        now,
-        conflicts,
-        receivables,
-        flaggedLines,
-        ceremoniesByLeadId,
-        ceremoniesByDesignerClientId,
-        schedules,
-        claimWindows,
-        payments,
-        returns,
-        drafts,
-        quotes,
-        exceptions,
-        heldReleases,
-        samples,
-        proposalOutcomes,
-        landedPayments,
-        purchaseOrders,
-        leads,
-      );
-      const desk: DeskQueryData = {
-        ...result,
-        unreadFeeds,
-        outboundDraftRows: outboundRowsError || !Array.isArray(outboundRows) ? [] : outboundRows,
-      };
+      const desk = composeDeskRead(read, rows, today, new Date());
       previousResultRef.current = desk;
       return desk;
     },

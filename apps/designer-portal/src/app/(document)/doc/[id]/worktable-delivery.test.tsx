@@ -244,14 +244,16 @@ jest.mock('@/hooks/use-drafting-state', () => ({
   useDraftingState: () => ({ gaps: [], isLoading: false, error: null }),
 }));
 jest.mock('@/hooks/use-desk-engagements', () => ({
-  useDeskEngagements: () => ({
-    data: { folders: [], chips: [], composed: {} },
-    isLoading: false,
+  selectOperationalNeedForDocument: () => undefined,
+  selectOperationalNeedsForDocument: () => undefined,
+}));
+jest.mock('@/hooks/use-engagement-need', () => ({
+  useEngagementNeed: () => ({
+    data: { folders: [], composed: {} },
+    isPending: false,
     isError: false,
     refetch: jest.fn(),
   }),
-  selectOperationalNeedForDocument: () => undefined,
-  selectOperationalNeedsForDocument: () => undefined,
 }));
 jest.mock('@/hooks/use-document-rooms', () => ({ useDocumentRooms: () => ({ data: [] }) }));
 jest.mock('@/hooks/use-section-work', () => ({

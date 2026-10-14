@@ -2394,6 +2394,12 @@ function needSortKey(folder: DeskFolder): [number, number, number, number] {
   return [need.urgent ? 0 : 1, NEED_RANK[need.kind], date, arrival];
 }
 
+/** The columns partitionDesk sums the studio's weekly Pulse count from. */
+export type PulseCountRow = Pick<
+  DocumentStateRow,
+  'is_archived' | 'is_paused' | 'pulse_week_of' | 'unsent_pulse_count'
+>;
+
 /** Split rows into the needs-your-hand stack and the in-motion chips.
  *  `conflicts` (R28) maps project_id → Desk conflict inputs. `ceremoniesByLeadId`
  *  / `ceremoniesByDesignerClientId` (R106, the Arrival Arc) map a `match_ceremonies`
@@ -2435,6 +2441,9 @@ export function partitionDesk(
   purchaseOrders?: ReadonlyMap<string, readonly DeskPurchaseOrderSignal[]>,
   /** N6 — lead_id → the lead's arrival and contact name. */
   leads?: ReadonlyMap<string, DeskLeadSignal>,
+  /** US-34 N7 — the rows the studio's weekly Pulse count is summed over, when
+   *  `rows` is narrower than the studio (one engagement's scoped need). */
+  pulseRows: readonly PulseCountRow[] = rows,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -2460,7 +2469,7 @@ export function partitionDesk(
   const composed: Record<string, true> = {};
   // N8: the studio's unsent Pulses, summed per week across every live job.
   const pulsesByWeek = new Map<string, number>();
-  for (const row of rows) {
+  for (const row of pulseRows) {
     if (row.is_archived || row.is_paused || !row.pulse_week_of) continue;
     pulsesByWeek.set(
       row.pulse_week_of,

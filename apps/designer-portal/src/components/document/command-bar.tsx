@@ -412,7 +412,6 @@ export function CommandBar() {
     void queryClient.prefetchQuery(documentEngagementQueryOptions(id));
   };
   const pathname = usePathname();
-  const { data } = useDeskEngagements();
   // The missing noun beside documents + ledgers (G3): every party in the
   // unified directory is ⌘K-reachable. Small per-designer roster — fetched once
   // and filtered in memory like the rest of the rows.
@@ -452,6 +451,9 @@ export function CommandBar() {
       ? primaryAction
       : null;
   const [open, setOpen] = useState(false);
+  // US-34 N7 — the Desk loads only while ⌘K is open. Closed, the bar renders
+  // nothing, so a closed bar on every document route neither reads nor polls it.
+  const { data } = useDeskEngagements({ enabled: open });
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [asking, setAsking] = useState<string | null>(null);

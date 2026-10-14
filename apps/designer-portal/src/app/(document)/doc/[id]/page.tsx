@@ -199,8 +199,8 @@ import { useDraftingState } from '@/hooks/use-drafting-state';
 import {
   selectOperationalNeedForDocument,
   selectOperationalNeedsForDocument,
-  useDeskEngagements,
 } from '@/hooks/use-desk-engagements';
+import { useEngagementNeed } from '@/hooks/use-engagement-need';
 import { callSheetPending, openLedger } from '@/components/document/command-bar';
 import { type RedLetterRow } from '@/components/document/red-letter-zone';
 import {
@@ -1104,23 +1104,24 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     row?.active_section === 'direction' && Boolean(proposalId),
   );
   const deskEnrichment = deskEnrichmentApplies(row);
-  const enrichedOperationalQuery = useDeskEngagements({
+  // US-34 N7 — this job's need, read for this engagement alone (never the
+  // whole Desk): the Desk's feeds narrowed to this job, composed as the Desk
+  // composes them.
+  const enrichedOperationalQuery = useEngagementNeed(row?.engagement_id, {
     enabled: deskEnrichment && !isError,
   });
-  // Gated on the same predicate as the query, not on the query's own state: the
-  // CommandBar in (document)/layout.tsx holds this key hot on every document
-  // route, so `data` is present even where this page asked for nothing. Reading
-  // it there would let a composition that never covered this document answer
-  // "no need" for it.
+  // Gated on the same predicate as the query, not on the query's own state: a
+  // disabled observer still reads whatever its key already holds, and that
+  // answer is only this document's to print where this page asked for it.
   const enrichedOperationalNeed = deskEnrichment
     ? selectOperationalNeedForDocument(enrichedOperationalQuery.data, row?.engagement_id)
     : undefined;
   // The letterhead's red-letter zone (project documents only): every need this
   // document is carrying, printed once, instead of the guide's single sentence.
-  // Sourced from the Desk composition ONLY — `undefined` means the composition
+  // Sourced from the need composition ONLY — `undefined` means the composition
   // has not answered for this document, and the zone stands down in favour of
   // DocumentGuide rather than printing a local derivation: this page cannot
-  // pass deriveNeeds the invoice/schedule facts the Desk holds, so that
+  // pass deriveNeeds the invoice/schedule facts the Desk's feeds hold, so that
   // fallback silently printed a SHORT list as if it were the whole list.
   const enrichedOperationalNeeds = deskEnrichment
     ? selectOperationalNeedsForDocument(enrichedOperationalQuery.data, row?.engagement_id)
@@ -1834,7 +1835,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }, []);
   // The Desk composition enriches guidance; it never gates it. A cold deep-link
   // renders the document's own derivation on first paint and upgrades in place
-  // if the Desk read later contributes a need the row alone cannot carry.
+  // if the need read later contributes a need the row alone cannot carry.
   const guideModel = row
     ? deriveDocumentGuide({
         row,
