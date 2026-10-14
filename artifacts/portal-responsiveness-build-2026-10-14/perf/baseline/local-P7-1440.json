@@ -1,0 +1,729 @@
+{
+ "throttling": {
+  "cpu": 4,
+  "network": {
+   "offline": false,
+   "latency": 165,
+   "downloadThroughput": 1012500,
+   "uploadThroughput": 168750
+  }
+ },
+ "base": "http://localhost:3000",
+ "commit": "19edde5f26452edfe5bddb60196150bd785b40d0",
+ "arrivalOptIn": true,
+ "doc": "b0000000-0000-0000-0000-00000000c0d1",
+ "writeDoc": "b0000000-0000-0000-0000-0000000000d1",
+ "rows": [
+  {
+   "scenario": "P7",
+   "viewport": "1440",
+   "run": 1,
+   "hostLoad": 3.8,
+   "act": {
+    "action": "complete-phase",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 26,
+    "placeholder": 90,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 1254,
+    "requests": 31,
+    "apiRequests": 31,
+    "authUser": 0,
+    "rpc": 2,
+    "depth": 2,
+    "domMutationBatches": 8,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 13,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "phaseShowsState": 541,
+    "pendingShown": 42,
+    "write": "POST rpc:advance_project_phase",
+    "writeStart": 92,
+    "writeEnd": 269,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 30,
+    "refetchesByKind": {
+     "GET projects": 4,
+     "GET project_phases": 2,
+     "GET document_state": 2,
+     "GET purchase_orders": 2,
+     "GET invoices": 2,
+     "GET item_feedback": 2,
+     "GET procurement_notifications": 2,
+     "GET outbound_drafts": 1,
+     "GET delivery_events": 1,
+     "GET match_ceremonies": 1,
+     "GET schedule_milestones": 1,
+     "GET schedule_proposals": 1,
+     "GET studio_purchases": 1,
+     "GET procurement_drafts": 1,
+     "GET vendor_quotes": 1,
+     "GET procurement_exceptions": 1,
+     "GET sample_requests": 1,
+     "GET proposals": 1,
+     "GET po_payments": 1,
+     "GET leads": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_phases",
+      "s": 311,
+      "e": 511
+     },
+     {
+      "k": "GET projects",
+      "s": 314,
+      "e": 489
+     },
+     {
+      "k": "GET projects",
+      "s": 315,
+      "e": 571
+     },
+     {
+      "k": "GET projects",
+      "s": 315,
+      "e": 571
+     },
+     {
+      "k": "GET document_state",
+      "s": 318,
+      "e": 516
+     },
+     {
+      "k": "GET outbound_drafts",
+      "s": 319,
+      "e": 515
+     },
+     {
+      "k": "GET purchase_orders",
+      "s": 319,
+      "e": 661
+     },
+     {
+      "k": "GET document_state",
+      "s": 320,
+      "e": 722
+     },
+     {
+      "k": "GET delivery_events",
+      "s": 321,
+      "e": 679
+     },
+     {
+      "k": "GET invoices",
+      "s": 322,
+      "e": 714
+     },
+     {
+      "k": "GET item_feedback",
+      "s": 322,
+      "e": 716
+     },
+     {
+      "k": "GET item_feedback",
+      "s": 323,
+      "e": 828
+     },
+     {
+      "k": "GET match_ceremonies",
+      "s": 323,
+      "e": 848
+     },
+     {
+      "k": "GET project_phases",
+      "s": 324,
+      "e": 893
+     },
+     {
+      "k": "GET schedule_milestones",
+      "s": 324,
+      "e": 856
+     },
+     {
+      "k": "GET projects",
+      "s": 325,
+      "e": 888
+     },
+     {
+      "k": "GET schedule_proposals",
+      "s": 327,
+      "e": 891
+     },
+     {
+      "k": "GET procurement_notifications",
+      "s": 329,
+      "e": 1000
+     },
+     {
+      "k": "GET procurement_notifications",
+      "s": 329,
+      "e": 1018
+     },
+     {
+      "k": "GET studio_purchases",
+      "s": 330,
+      "e": 1022
+     },
+     {
+      "k": "GET procurement_drafts",
+      "s": 331,
+      "e": 1059
+     },
+     {
+      "k": "GET vendor_quotes",
+      "s": 331,
+      "e": 1058
+     },
+     {
+      "k": "GET procurement_exceptions",
+      "s": 332,
+      "e": 1062
+     },
+     {
+      "k": "GET sample_requests",
+      "s": 332,
+      "e": 1170
+     },
+     {
+      "k": "GET proposals",
+      "s": 333,
+      "e": 1195
+     },
+     {
+      "k": "GET invoices",
+      "s": 336,
+      "e": 1190
+     },
+     {
+      "k": "GET po_payments",
+      "s": 337,
+      "e": 1227
+     },
+     {
+      "k": "GET purchase_orders",
+      "s": 337,
+      "e": 1231
+     },
+     {
+      "k": "GET leads",
+      "s": 338,
+      "e": 1229
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 338,
+      "e": 688
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P7",
+    "teardown": {
+     "restored": [
+      {
+       "id": "b0000000-0000-0000-0000-00000005c704",
+       "status": "in_progress"
+      },
+      {
+       "id": "b0000000-0000-0000-0000-00000005c705",
+       "status": "pending"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "scenario": "P7",
+   "viewport": "1440",
+   "run": 2,
+   "hostLoad": 5.2,
+   "act": {
+    "action": "complete-phase",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 34,
+    "placeholder": 103,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 1270,
+    "requests": 31,
+    "apiRequests": 31,
+    "authUser": 0,
+    "rpc": 2,
+    "depth": 2,
+    "domMutationBatches": 8,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 13,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "phaseShowsState": 548,
+    "pendingShown": 53,
+    "write": "POST rpc:advance_project_phase",
+    "writeStart": 104,
+    "writeEnd": 276,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 30,
+    "refetchesByKind": {
+     "GET projects": 4,
+     "GET project_phases": 2,
+     "GET document_state": 2,
+     "GET purchase_orders": 2,
+     "GET invoices": 2,
+     "GET item_feedback": 2,
+     "GET procurement_notifications": 2,
+     "GET outbound_drafts": 1,
+     "GET delivery_events": 1,
+     "GET match_ceremonies": 1,
+     "GET schedule_milestones": 1,
+     "GET schedule_proposals": 1,
+     "GET studio_purchases": 1,
+     "GET procurement_drafts": 1,
+     "GET vendor_quotes": 1,
+     "GET procurement_exceptions": 1,
+     "GET sample_requests": 1,
+     "GET proposals": 1,
+     "GET po_payments": 1,
+     "GET leads": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_phases",
+      "s": 321,
+      "e": 520
+     },
+     {
+      "k": "GET projects",
+      "s": 324,
+      "e": 497
+     },
+     {
+      "k": "GET projects",
+      "s": 326,
+      "e": 564
+     },
+     {
+      "k": "GET projects",
+      "s": 327,
+      "e": 564
+     },
+     {
+      "k": "GET document_state",
+      "s": 327,
+      "e": 525
+     },
+     {
+      "k": "GET outbound_drafts",
+      "s": 328,
+      "e": 525
+     },
+     {
+      "k": "GET purchase_orders",
+      "s": 329,
+      "e": 670
+     },
+     {
+      "k": "GET document_state",
+      "s": 330,
+      "e": 741
+     },
+     {
+      "k": "GET delivery_events",
+      "s": 330,
+      "e": 695
+     },
+     {
+      "k": "GET invoices",
+      "s": 331,
+      "e": 723
+     },
+     {
+      "k": "GET item_feedback",
+      "s": 335,
+      "e": 726
+     },
+     {
+      "k": "GET item_feedback",
+      "s": 335,
+      "e": 840
+     },
+     {
+      "k": "GET match_ceremonies",
+      "s": 336,
+      "e": 849
+     },
+     {
+      "k": "GET project_phases",
+      "s": 337,
+      "e": 867
+     },
+     {
+      "k": "GET schedule_milestones",
+      "s": 337,
+      "e": 897
+     },
+     {
+      "k": "GET projects",
+      "s": 338,
+      "e": 894
+     },
+     {
+      "k": "GET schedule_proposals",
+      "s": 338,
+      "e": 1009
+     },
+     {
+      "k": "GET procurement_notifications",
+      "s": 339,
+      "e": 907
+     },
+     {
+      "k": "GET procurement_notifications",
+      "s": 341,
+      "e": 1017
+     },
+     {
+      "k": "GET studio_purchases",
+      "s": 341,
+      "e": 1035
+     },
+     {
+      "k": "GET procurement_drafts",
+      "s": 343,
+      "e": 1067
+     },
+     {
+      "k": "GET vendor_quotes",
+      "s": 343,
+      "e": 1066
+     },
+     {
+      "k": "GET procurement_exceptions",
+      "s": 344,
+      "e": 1074
+     },
+     {
+      "k": "GET sample_requests",
+      "s": 344,
+      "e": 1181
+     },
+     {
+      "k": "GET proposals",
+      "s": 345,
+      "e": 1191
+     },
+     {
+      "k": "GET invoices",
+      "s": 345,
+      "e": 1202
+     },
+     {
+      "k": "GET po_payments",
+      "s": 346,
+      "e": 1235
+     },
+     {
+      "k": "GET purchase_orders",
+      "s": 347,
+      "e": 1237
+     },
+     {
+      "k": "GET leads",
+      "s": 347,
+      "e": 1241
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 351,
+      "e": 700
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P7",
+    "teardown": {
+     "restored": [
+      {
+       "id": "b0000000-0000-0000-0000-00000005c704",
+       "status": "in_progress"
+      },
+      {
+       "id": "b0000000-0000-0000-0000-00000005c705",
+       "status": "pending"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "scenario": "P7",
+   "viewport": "1440",
+   "run": 3,
+   "hostLoad": 4.3,
+   "act": {
+    "action": "complete-phase",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 35,
+    "placeholder": 203,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 1385,
+    "requests": 31,
+    "apiRequests": 31,
+    "authUser": 0,
+    "rpc": 2,
+    "depth": 2,
+    "domMutationBatches": 7,
+    "longTasks": 1,
+    "longTaskMs": 146,
+    "reactCommits": 11,
+    "cls": 0.0002,
+    "layoutShifts": 1,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "phaseShowsState": 637,
+    "pendingShown": 53,
+    "write": "POST rpc:advance_project_phase",
+    "writeStart": 205,
+    "writeEnd": 383,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 30,
+    "refetchesByKind": {
+     "GET projects": 4,
+     "GET project_phases": 2,
+     "GET document_state": 2,
+     "GET purchase_orders": 2,
+     "GET invoices": 2,
+     "GET item_feedback": 2,
+     "GET procurement_notifications": 2,
+     "GET outbound_drafts": 1,
+     "GET delivery_events": 1,
+     "GET match_ceremonies": 1,
+     "GET schedule_milestones": 1,
+     "GET schedule_proposals": 1,
+     "GET studio_purchases": 1,
+     "GET procurement_drafts": 1,
+     "GET vendor_quotes": 1,
+     "GET procurement_exceptions": 1,
+     "GET sample_requests": 1,
+     "GET proposals": 1,
+     "GET po_payments": 1,
+     "GET leads": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_phases",
+      "s": 425,
+      "e": 598
+     },
+     {
+      "k": "GET projects",
+      "s": 434,
+      "e": 672
+     },
+     {
+      "k": "GET projects",
+      "s": 434,
+      "e": 673
+     },
+     {
+      "k": "GET projects",
+      "s": 435,
+      "e": 673
+     },
+     {
+      "k": "GET document_state",
+      "s": 436,
+      "e": 674
+     },
+     {
+      "k": "GET outbound_drafts",
+      "s": 437,
+      "e": 674
+     },
+     {
+      "k": "GET purchase_orders",
+      "s": 437,
+      "e": 770
+     },
+     {
+      "k": "GET document_state",
+      "s": 438,
+      "e": 854
+     },
+     {
+      "k": "GET delivery_events",
+      "s": 439,
+      "e": 796
+     },
+     {
+      "k": "GET invoices",
+      "s": 439,
+      "e": 828
+     },
+     {
+      "k": "GET item_feedback",
+      "s": 443,
+      "e": 830
+     },
+     {
+      "k": "GET item_feedback",
+      "s": 444,
+      "e": 942
+     },
+     {
+      "k": "GET match_ceremonies",
+      "s": 444,
+      "e": 994
+     },
+     {
+      "k": "GET project_phases",
+      "s": 445,
+      "e": 972
+     },
+     {
+      "k": "GET schedule_milestones",
+      "s": 446,
+      "e": 976
+     },
+     {
+      "k": "GET projects",
+      "s": 447,
+      "e": 997
+     },
+     {
+      "k": "GET schedule_proposals",
+      "s": 448,
+      "e": 1110
+     },
+     {
+      "k": "GET procurement_notifications",
+      "s": 452,
+      "e": 1025
+     },
+     {
+      "k": "GET procurement_notifications",
+      "s": 453,
+      "e": 1142
+     },
+     {
+      "k": "GET studio_purchases",
+      "s": 453,
+      "e": 1163
+     },
+     {
+      "k": "GET procurement_drafts",
+      "s": 454,
+      "e": 1145
+     },
+     {
+      "k": "GET vendor_quotes",
+      "s": 455,
+      "e": 1165
+     },
+     {
+      "k": "GET procurement_exceptions",
+      "s": 456,
+      "e": 1195
+     },
+     {
+      "k": "GET sample_requests",
+      "s": 456,
+      "e": 1278
+     },
+     {
+      "k": "GET proposals",
+      "s": 459,
+      "e": 1319
+     },
+     {
+      "k": "GET invoices",
+      "s": 460,
+      "e": 1310
+     },
+     {
+      "k": "GET po_payments",
+      "s": 461,
+      "e": 1332
+     },
+     {
+      "k": "GET purchase_orders",
+      "s": 461,
+      "e": 1334
+     },
+     {
+      "k": "GET leads",
+      "s": 462,
+      "e": 1360
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 463,
+      "e": 806
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P7",
+    "teardown": {
+     "restored": [
+      {
+       "id": "b0000000-0000-0000-0000-00000005c704",
+       "status": "in_progress"
+      },
+      {
+       "id": "b0000000-0000-0000-0000-00000005c705",
+       "status": "pending"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

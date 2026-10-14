@@ -3,26 +3,35 @@
 // Chromium under CDP throttling and writes one JSON row per run.
 //
 //   node lab.mjs explore             # unthrottled DOM survey of each route
-//   node lab.mjs run <scenario> <n> [viewport]   # P1..P6, P10; viewport 1440|390
+//   node lab.mjs run <scenario> <n> [viewport]   # P1..P10 (+P1hard, P2hard, P3hard); viewport 1440|390
+//                                                # P6-P9 write LOCAL fixtures (fixtures.mjs) and remove them
 //   node lab.mjs shots <scenario>    # 0/200/1000 ms + settled screenshots
 //
-// Env: BASE (default http://localhost:3110), OUT (data dir), SHOTS (shots dir),
-//      STATE (storageState path), DOC (doc id).
+// Env: BASE (default http://localhost:3000; SQ-952 ran on :3110), OUT (data dir), SHOTS (shots dir),
+//      STATE (storageState path), DOC (doc id for the read scenarios), BASE_COMMIT (recorded),
+//      PGURL (local fixtures database, default 127.0.0.1:54322).
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
+import * as fx from './fixtures.mjs';
+const { withFixture } = fx;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../../..');
 const require = createRequire(path.join(root, 'apps/designer-portal/package.json'));
 const { chromium } = require('@playwright/test');
 
-const BASE = process.env.BASE || 'http://localhost:3110';
+const BASE = process.env.BASE || 'http://localhost:3000';
 const OUT = process.env.OUT || path.resolve(here, '../data');
 const SHOTS = process.env.SHOTS || path.resolve(here, '../shots');
 const STATE = process.env.STATE;
 const DOC = process.env.DOC || 'b0000000-0000-0000-0000-00000000c0d1';
+// The US-14 arrival declines under navigator.webdriver (lib/arrival/gate.ts:22) unless the tab
+// carries its e2e opt-in, so SQ-952 and E1 never saw it play. ARRIVAL=1 (default) arms the opt-in
+// (e2e/arrival/helpers.ts) so the lab sees the arrival a designer sees; ARRIVAL=0 reproduces SQ-952.
+const ARRIVAL = process.env.ARRIVAL !== '0';
 const EMAIL = 'designer@patina.dev';
 const PASSWORD = 'password123';
 
@@ -43,18 +52,51 @@ const SEL = {
 
 // In-page instrumentation. Marks are absolute epoch ms (timeOrigin + now) so a
 // click on one document and the content on the next compare directly.
+// SQ-966 (F17) adds, per measured window:
+//   - React commits: a minimal DevTools global hook installed before React loads. React (prod
+//     builds included) calls hook.onCommitFiberRoot once per commit, the same commits the React
+//     Profiler reports. Counts only, no durations.
+//   - CLS: the sum of layout-shift values without recent input, plus the shift count.
+//   - Arrival marks: arrivalStart is the first moment <html> carries arr-pre/arr-on or a
+//     [data-arrival-held] root exists; arrivalEnd is the first moment after that when none
+//     remain; arrivalPlayed records whether arr-on (the run itself) was ever seen, and
+//     arrivalPlayStart when it first appeared (start..playStart is the wait, playStart..end the play).
+//   - Watches: named DOM conditions checked on every mutation batch and every 50 ms, so a
+//     write's visible state (a tick label flip, "Sending") is timed at mutation precision.
 const INIT = `(() => {
   try { performance.setResourceTimingBufferSize(5000); } catch {}
-  const M = window.__sq = { marks: {}, mut: 0, lastMut: 0, firstMut: null, sel: window.__sqSel || null, lt: [], lcp: null };
+  const M = window.__sq = { marks: {}, mut: 0, lastMut: 0, firstMut: null, sel: window.__sqSel || null, lt: [], lcp: null,
+    commits: 0, shifts: [], arrival: { start: null, end: null, played: false, playStart: null }, watches: [] };
   const ep = () => performance.timeOrigin + performance.now();
+  if (!window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+    let id = 0;
+    window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = { renderers: new Map(), supportsFiber: true, isDisabled: false,
+      inject(r) { id += 1; this.renderers.set(id, r); return id; },
+      onCommitFiberRoot() { M.commits += 1; }, onCommitFiberUnmount() {}, onPostCommitFiberRoot() {}, onScheduleFiberRoot() {},
+      setStrictMode() {}, checkDCE() {} };
+  }
   const vis = (el) => el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) && el.getBoundingClientRect().height > 0;
   const anyVis = (sel) => { const i = sel.indexOf('||'); if (i >= 0) { if (!new RegExp(sel.slice(0, i)).test(location.pathname)) return false; sel = sel.slice(i + 2); } for (const el of document.querySelectorAll(sel)) if (vis(el)) return true; return false; };
   const PH = '[aria-busy="true"], .animate-pulse, .strata-sweep, [data-skeleton]';
   const busy = () => anyVis(PH) || /Picking up/.test(document.body.innerText || '');
   const mark = (k) => { if (M.marks[k] == null) { M.marks[k] = ep(); try { window.__sqReport(k, M.marks[k]); } catch {} } };
-  M.reset = (sel) => { M.marks = {}; M.mut = 0; M.firstMut = null; M.sel = sel; M.t0 = ep(); };
+  M.reset = (sel) => { M.marks = {}; M.mut = 0; M.firstMut = null; M.sel = sel; M.t0 = ep(); M.commits = 0; M.shifts = []; M.watches = [];
+    M.arrival = { start: null, end: null, played: false, playStart: null }; };
+  // A watch is { key, sel, text?, present } : present=true marks when an element matching sel
+  // (and text, a regex source, if given) is visible; present=false marks when none exists.
+  M.watch = (ws) => { M.watches = ws.map((w) => ({ ...w, re: w.text ? new RegExp(w.text) : null })); checkWatches(); };
+  const hit = (w) => { for (const el of document.querySelectorAll(w.sel)) if (vis(el) && (!w.re || w.re.test(el.textContent || ''))) return true; return false; };
+  const checkWatches = () => { for (const w of M.watches) if (M.marks[w.key] == null && (w.present ? hit(w) : !document.querySelector(w.sel))) mark(w.key); };
+  const checkArrival = () => {
+    const cls = document.documentElement.classList;
+    const holding = cls.contains('arr-pre') || cls.contains('arr-on') || !!document.querySelector('[data-arrival-held]');
+    if (cls.contains('arr-on')) { M.arrival.played = true; if (M.arrival.playStart == null) M.arrival.playStart = ep(); }
+    if (holding && M.arrival.start == null) M.arrival.start = ep();
+    if (!holding && M.arrival.start != null && M.arrival.end == null) M.arrival.end = ep();
+  };
   try { new PerformanceObserver((l) => l.getEntries().forEach((e) => M.lt.push([performance.timeOrigin + e.startTime, e.duration]))).observe({ type: 'longtask', buffered: true }); } catch {}
   try { new PerformanceObserver((l) => { const e = l.getEntries().pop(); if (e) M.lcp = performance.timeOrigin + e.startTime; }).observe({ type: 'largest-contentful-paint', buffered: true }); } catch {}
+  try { new PerformanceObserver((l) => l.getEntries().forEach((e) => { if (!e.hadRecentInput) M.shifts.push([performance.timeOrigin + e.startTime, e.value]); })).observe({ type: 'layout-shift', buffered: true }); } catch {}
   setInterval(() => {
     if (!document.body) return;
     const cls = document.documentElement.classList;
@@ -63,8 +105,11 @@ const INIT = `(() => {
     if (busy()) mark('placeholder');
     if (M.sel && anyVis(M.sel)) { mark('content'); if (!held) mark('usable'); }
     if (M.marks.usable != null && !busy()) mark('noBusy');
+    checkWatches(); checkArrival();
   }, 50);
-  const mo = new MutationObserver(() => { M.mut++; M.lastMut = ep(); if (M.firstMut == null) { M.firstMut = M.lastMut; try { window.__sqReport('firstMut', M.firstMut); } catch {} } });
+  // Watches run on every batch; the arrival check only when <html> itself changed (its class).
+  const mo = new MutationObserver((recs) => { M.mut++; M.lastMut = ep(); if (M.firstMut == null) { M.firstMut = M.lastMut; try { window.__sqReport('firstMut', M.firstMut); } catch {} }
+    if (M.watches.length) checkWatches(); if (recs.some((r) => r.target === document.documentElement)) checkArrival(); });
   const start = () => mo.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
   if (document.documentElement) start(); else document.addEventListener('DOMContentLoaded', start);
 })();`;
@@ -72,9 +117,16 @@ const INIT = `(() => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isApi = (u) => u.includes('127.0.0.1:54321') && !u.includes('/realtime/');
 
-async function newPage(ctx, { throttle = true } = {}) {
+const isLocal = (u) => /^(data:|blob:|about:)/.test(u) || /^[a-z]+:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(u);
+
+// blockFunctions (P9 only): every Supabase edge-function request is aborted in the browser
+// before it leaves, and recorded. This is how P9 reaches "Sending" without a send.
+async function newPage(ctx, { throttle = true, blockFunctions = false } = {}) {
   const page = await ctx.newPage();
-  const rec = { marks: {}, reqs: [] };
+  const rec = { marks: {}, reqs: [], frames: [], blocked: [] };
+  if (ARRIVAL) await page.addInitScript('try { window.sessionStorage.setItem("pl-arrive-e2e", "1"); } catch (e) {}');
+  if (blockFunctions) await page.route(/\/functions\/v1\//, (route) => { rec.blocked.push({ url: route.request().url(), at: Date.now() }); return route.abort(); });
+  page.on('websocket', (ws) => ws.on('framereceived', (f) => { const p = typeof f.payload === 'string' ? f.payload : ''; if (p.includes('postgres_changes')) rec.frames.push({ at: Date.now(), table: (p.match(/"table":"([^"]+)"/) || [])[1] || null }); }));
   await page.exposeBinding('__sqReport', (_s, k, t) => { if (rec.marks[k] == null || k === 'firstMut') rec.marks[k] = rec.marks[k] ?? t; });
   page.on('request', (r) => { const q = { url: r.url(), start: Date.now(), end: null, method: r.method() }; rec.reqs.push(q); r.__q = q; });
   page.on('requestfinished', (r) => { if (r.__q) r.__q.end = Date.now(); });
@@ -120,12 +172,15 @@ async function collect(page, rec, t0, settledAt, extra = {}) {
   const ins = await page.evaluate(() => {
     const n = performance.getEntriesByType('navigation')[0];
     const p = Object.fromEntries(performance.getEntriesByType('paint').map((e) => [e.name, performance.timeOrigin + e.startTime]));
-    return { origin: performance.timeOrigin, ttfb: n ? n.responseStart - n.requestStart : null, fp: p['first-paint'] ?? null, fcp: p['first-contentful-paint'] ?? null, lcp: window.__sq.lcp, mut: window.__sq.mut, lt: window.__sq.lt, path: location.pathname };
+    const M = window.__sq;
+    return { origin: performance.timeOrigin, ttfb: n ? n.responseStart - n.requestStart : null, fp: p['first-paint'] ?? null, fcp: p['first-contentful-paint'] ?? null, lcp: M.lcp, mut: M.mut, lt: M.lt,
+      path: location.pathname, commits: M.commits, shifts: M.shifts, arrival: M.arrival };
   });
   const rel = (t) => (t == null ? null : Math.round(t - t0));
   const win = rec.reqs.filter((q) => q.start >= t0 - 5 && q.start <= settledAt);
   const api = win.filter((q) => isApi(q.url));
   const lt = ins.lt.filter(([s]) => s >= t0 - 5 && s <= settledAt);
+  const shifts = ins.shifts.filter(([s]) => s >= t0 - 5 && s <= settledAt);
   return {
     ...extra,
     path: ins.path.replace(/[0-9a-f-]{36}/g, '[id]'),
@@ -138,6 +193,10 @@ async function collect(page, rec, t0, settledAt, extra = {}) {
     rpc: api.filter((q) => q.url.includes('/rest/v1/rpc/')).length,
     depth: depthOf(api), domMutationBatches: ins.mut,
     longTasks: lt.length, longTaskMs: Math.round(lt.reduce((s, [, d]) => s + d, 0)),
+    reactCommits: ins.commits,
+    cls: Math.round(shifts.reduce((s, [, v]) => s + v, 0) * 10000) / 10000, layoutShifts: shifts.length,
+    arrivalStart: rel(ins.arrival.start), arrivalEnd: rel(ins.arrival.end), arrivalPlayStart: rel(ins.arrival.playStart), arrivalPlayed: ins.arrival.played,
+    externalRequests: [...new Set(win.filter((q) => !isLocal(q.url)).map((q) => q.url.split('/').slice(0, 3).join('/')))],
   };
 }
 
@@ -171,6 +230,42 @@ async function clickAndMeasure(page, rec, sel, act) {
 }
 
 const byText = (page, re) => page.locator('button, a').filter({ hasText: re }).first();
+
+// "GET project_tasks", "POST rpc:get_project_workflow": the request kinds E1 reported.
+const kindOf = (q) => { const u = new URL(q.url); const m = u.pathname.match(/\/rest\/v1\/(rpc\/)?([^/]+)/); return m ? `${q.method} ${m[1] ? 'rpc:' : ''}${m[2]}` : `${q.method} ${u.pathname}`; };
+
+// The write is the first API request in the window that matches; refetches are the API reads
+// (not auth, not the write) that start at or after the write ends. Same split as E1's P6.
+function writeStats(rec, t0, settledAt, isWrite) {
+  const api = rec.reqs.filter((q) => q.start >= t0 - 5 && q.start <= settledAt && isApi(q.url)).sort((a, b) => a.start - b.start);
+  const w = api.find(isWrite);
+  const rel = (t) => (t == null ? null : Math.round(t - t0));
+  if (!w) return { writeStart: null, writeEnd: null, refetchesAfterWrite: null, error: 'no write request seen' };
+  const after = api.filter((q) => q !== w && w.end != null && q.start >= w.end && !q.url.includes('/auth/v1/') && !q.url.includes('/functions/v1/'));
+  const byKind = {};
+  for (const q of after) byKind[kindOf(q)] = (byKind[kindOf(q)] || 0) + 1;
+  return {
+    write: kindOf(w), writeStart: rel(w.start), writeEnd: rel(w.end),
+    beforeWrite: api.filter((q) => q.start < w.start && !q.url.includes('/auth/v1/')).map((q) => ({ k: kindOf(q), s: rel(q.start), e: rel(q.end) })),
+    refetchesAfterWrite: after.length,
+    refetchesByKind: Object.fromEntries(Object.entries(byKind).sort((a, b) => b[1] - a[1])),
+    realtimeEchoFrames: rec.frames.filter((f) => w.end != null && f.at >= w.end && f.at <= settledAt).map((f) => ({ table: f.table, at: rel(f.at) })),
+    requestTimeline: after.map((q) => ({ k: kindOf(q), s: rel(q.start), e: rel(q.end) })),
+  };
+}
+
+// One measured write: reset, arm the visible-state watches, act, settle on the primary watch.
+async function writeAct(page, rec, { action, isWrite, watches, act }) {
+  await reset(page, rec, null);
+  await page.evaluate((ws) => window.__sq.watch(ws), watches);
+  await act();
+  const s = await settle(page, rec, { need: watches[0].key });
+  const r = await collect(page, rec, rec.t0, s.settled, { capped: s.capped, spa: true });
+  const marks = Object.fromEntries(watches.map((w) => [w.key, rec.marks[w.key] == null ? null : Math.round(rec.marks[w.key] - rec.t0)]));
+  return { action, ...r, ttfb: null, firstPaint: null, fcp: null, lcp: null, anyText: null, ...marks, ...writeStats(rec, rec.t0, s.settled, isWrite) };
+}
+
+const isReq = (method, re) => (q) => q.method === method && re.test(new URL(q.url).pathname);
 
 async function scenario(browser, name, vp) {
   const viewport = VIEW[vp];
@@ -223,14 +318,71 @@ async function scenario(browser, name, vp) {
       return await clickAndMeasure(page, rec, SEL.desk, () => page.locator('a[href="/desk"]').first().click());
     }
     if (name === 'P6') {
-      // Tick then untick the same task (reversible; local Supabase only).
-      const { page, rec } = await hardNav(ctx, `${BASE}/doc/${DOC}`, SEL.doc);
-      const task = page.locator('ul.px-1\\.5 > li.border-dashed > button.grid').first();
-      if (!(await task.count())) return { error: 'no task row on this doc' };
-      await task.scrollIntoViewIfNeeded();
-      const tick = await clickAndMeasure(page, rec, null, () => task.click());
-      const untick = await clickAndMeasure(page, rec, null, () => task.click());
-      return { tick, untick };
+      // Tick then untick the fixture task in "The work" (coordination-work.tsx). E1's P6, promoted.
+      return await withFixture('P6', async ({ title }) => {
+        const { page, rec } = await hardNav(ctx, `${BASE}/doc/${fx.PROJECT}`, SEL.doc);
+        const undone = `button[aria-label='Mark "${title}" done']`, done = `button[aria-label='Mark "${title}" not done']`;
+        const task = page.locator(undone);
+        if (!(await task.count())) throw new Error('P6: fixture task row not rendered');
+        await task.scrollIntoViewIfNeeded();
+        const isWrite = isReq('PATCH', /\/rest\/v1\/project_tasks$/);
+        const tick = await writeAct(page, rec, { action: 'tick', isWrite, act: () => task.click(),
+          watches: [{ key: 'tickShowsState', sel: done, present: true }] });
+        const untick = await writeAct(page, rec, { action: 'untick', isWrite, act: () => page.locator(done).click(),
+          watches: [{ key: 'tickShowsState', sel: undone, present: true }] });
+        return { tick, untick };
+      });
+    }
+    if (name === 'P7') {
+      // Complete an in-progress phase (phase-advance-control.tsx) on fixtures.PHASE_PROJECT; restored after.
+      return await withFixture('P7', async ({ phaseName, project }) => {
+        const { page, rec } = await hardNav(ctx, `${BASE}/doc/${project}`, SEL.doc);
+        const sel = `button[aria-label^="Complete ${phaseName} ("]`;
+        const btn = page.locator(sel).first();
+        if (!(await btn.count())) throw new Error('P7: complete-phase action not rendered');
+        await btn.scrollIntoViewIfNeeded();
+        return { act: await writeAct(page, rec, { action: 'complete-phase', isWrite: isReq('POST', /\/rpc\/advance_project_phase$/), act: () => btn.click(),
+          watches: [{ key: 'phaseShowsState', sel, present: false }, { key: 'pendingShown', sel: '[aria-busy="true"]', text: 'Completing', present: true }] }) };
+      });
+    }
+    if (name === 'P8') {
+      // Add a room through the Pieces folio's inline form (ffe-section.tsx AddRoomInline); deleted after.
+      return await withFixture('P8', async ({ room }) => {
+        const { page, rec } = await hardNav(ctx, `${BASE}/doc/${fx.PROJECT}`, SEL.doc);
+        await page.locator('button').filter({ hasText: /^Pieces/ }).first().click();
+        const open = page.getByRole('button', { name: 'Add a room' }).first();
+        await open.waitFor({ state: 'visible', timeout: 20000 });
+        await open.scrollIntoViewIfNeeded();
+        await open.click();
+        await page.getByPlaceholder('Room name').fill(room);
+        await sleep(1500);
+        const add = page.getByRole('button', { name: 'Add', exact: true }).first();
+        return { act: await writeAct(page, rec, { action: 'add-room', isWrite: isReq('POST', /\/rest\/v1\/project_rooms$/), act: () => add.click(),
+          watches: [{ key: 'roomShown', sel: 'h3 button', text: room, present: true }] }) };
+      });
+    }
+    if (name === 'P9') {
+      // Edit the fixture outbound draft in the ready-to-send sheet and press Send, up to "Sending".
+      // Every /functions/v1/ request is aborted in the browser (newPage blockFunctions), so the
+      // send never leaves; teardown also asserts the row was never claimed or sent.
+      return await withFixture('P9', async ({ draft }) => {
+        const { page, rec } = await hardNav(ctx, `${BASE}/doc/${fx.PROJECT}`, SEL.doc, { blockFunctions: true });
+        await page.locator('button').filter({ hasText: /^All open/ }).first().click();
+        // The "One ready to send" line rides the drafted-unsent kind, whose act reads "Open the purchase order" here.
+        const need = page.getByRole('dialog').getByRole('button', { name: /Open the purchase order|Review and send/i }).first();
+        await need.waitFor({ state: 'visible', timeout: 20000 });
+        await need.click();
+        await page.locator(`[aria-controls="outbound-review-${draft}"]`).click();
+        const body = page.locator(`#outbound-${draft}-body`);
+        await body.fill('A perf fixture draft, edited by the harness. It is never sent.');
+        await sleep(1500);
+        const send = page.locator(`#outbound-review-${draft} button`).filter({ hasText: /^Send$/ }).first();
+        const act = await writeAct(page, rec, { action: 'edit-then-send-until-sending', isWrite: isReq('POST', /\/rpc\/update_outbound_draft$/), act: () => send.click(),
+          watches: [{ key: 'sendingShown', sel: `#outbound-review-${draft} [aria-busy="true"]`, text: 'Sending', present: true }] });
+        const sends = rec.blocked.filter((b) => b.url.includes('outbound-draft-send'));
+        if (rec.reqs.some((q) => q.url.includes('/functions/v1/') && q.end != null && !rec.blocked.some((b) => b.url === q.url))) throw new Error('P9: a function request was not blocked');
+        return { act: { ...act, sendBlocked: sends.length, sendBlockedAt: sends[0] ? Math.round(sends[0].at - rec.t0) : null, functionsBlocked: rec.blocked.length } };
+      });
     }
     throw new Error(`unknown scenario ${name}`);
   } finally { await ctx.close(); }
@@ -300,11 +452,14 @@ try {
     const file = path.join(OUT, `local-${a}-${vp}.json`);
     const rows = [];
     for (let i = 1; i <= n; i++) {
-      try { rows.push({ scenario: a, viewport: vp, run: i, ...(await scenario(browser, a, vp)) }); }
-      catch (e) { rows.push({ scenario: a, viewport: vp, run: i, error: String(e.message || e).slice(0, 1500) }); }
+      // Host 1-minute load average when the run starts (CDP throttling multiplies whatever the host
+      // leaves free, so a contended host inflates every CPU-bound mark). Recorded, never gated.
+      const hostLoad = Math.round(os.loadavg()[0] * 10) / 10;
+      try { rows.push({ scenario: a, viewport: vp, run: i, hostLoad, ...(await scenario(browser, a, vp)) }); }
+      catch (e) { rows.push({ scenario: a, viewport: vp, run: i, hostLoad, error: String(e.message || e).slice(0, 1500) }); }
       console.log(JSON.stringify(rows[rows.length - 1]));
     }
-    fs.writeFileSync(file, JSON.stringify({ throttling: { cpu: CPU, network: FAST_4G }, base: BASE, rows }, null, 1));
+    fs.writeFileSync(file, JSON.stringify({ throttling: { cpu: CPU, network: FAST_4G }, base: BASE, commit: process.env.BASE_COMMIT || null, arrivalOptIn: ARRIVAL, doc: DOC, writeDoc: fx.PROJECT, rows }, null, 1));
   } else if (mode === 'shots') console.log(JSON.stringify(await shots(browser, a)));
   else if (mode === 'waterfall') {
     // Throttled hard load; one line per request (path only, query stripped), offsets from navigation start.

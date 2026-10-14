@@ -1,0 +1,222 @@
+{
+ "throttling": {
+  "cpu": 4,
+  "network": {
+   "offline": false,
+   "latency": 165,
+   "downloadThroughput": 1012500,
+   "uploadThroughput": 168750
+  }
+ },
+ "base": "http://localhost:3000",
+ "commit": "19edde5f26452edfe5bddb60196150bd785b40d0",
+ "arrivalOptIn": true,
+ "doc": "b0000000-0000-0000-0000-00000000c0d1",
+ "writeDoc": "b0000000-0000-0000-0000-0000000000d1",
+ "rows": [
+  {
+   "scenario": "P8",
+   "viewport": "1440",
+   "run": 1,
+   "hostLoad": 4.3,
+   "act": {
+    "action": "add-room",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 42,
+    "placeholder": null,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 1054,
+    "requests": 5,
+    "apiRequests": 3,
+    "authUser": 0,
+    "rpc": 0,
+    "depth": 3,
+    "domMutationBatches": 5,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 6,
+    "cls": 0.0121,
+    "layoutShifts": 1,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "roomShown": 638,
+    "write": "POST project_rooms",
+    "writeStart": 243,
+    "writeEnd": 426,
+    "beforeWrite": [
+     {
+      "k": "GET project_rooms",
+      "s": 66,
+      "e": 240
+     }
+    ],
+    "refetchesAfterWrite": 1,
+    "refetchesByKind": {
+     "GET project_rooms": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_rooms",
+      "s": 434,
+      "e": 609
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P8",
+    "teardown": {
+     "deleted": 1
+    }
+   }
+  },
+  {
+   "scenario": "P8",
+   "viewport": "1440",
+   "run": 2,
+   "hostLoad": 4.7,
+   "act": {
+    "action": "add-room",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 38,
+    "placeholder": null,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 1052,
+    "requests": 5,
+    "apiRequests": 3,
+    "authUser": 0,
+    "rpc": 0,
+    "depth": 3,
+    "domMutationBatches": 5,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 6,
+    "cls": 0.0121,
+    "layoutShifts": 1,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "roomShown": 644,
+    "write": "POST project_rooms",
+    "writeStart": 246,
+    "writeEnd": 426,
+    "beforeWrite": [
+     {
+      "k": "GET project_rooms",
+      "s": 69,
+      "e": 242
+     }
+    ],
+    "refetchesAfterWrite": 1,
+    "refetchesByKind": {
+     "GET project_rooms": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_rooms",
+      "s": 433,
+      "e": 606
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P8",
+    "teardown": {
+     "deleted": 1
+    }
+   }
+  },
+  {
+   "scenario": "P8",
+   "viewport": "1440",
+   "run": 3,
+   "hostLoad": 5,
+   "act": {
+    "action": "add-room",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 38,
+    "placeholder": null,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 1038,
+    "requests": 5,
+    "apiRequests": 3,
+    "authUser": 0,
+    "rpc": 0,
+    "depth": 3,
+    "domMutationBatches": 5,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 6,
+    "cls": 0.0121,
+    "layoutShifts": 1,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "roomShown": 626,
+    "write": "POST project_rooms",
+    "writeStart": 238,
+    "writeEnd": 413,
+    "beforeWrite": [
+     {
+      "k": "GET project_rooms",
+      "s": 60,
+      "e": 234
+     }
+    ],
+    "refetchesAfterWrite": 1,
+    "refetchesByKind": {
+     "GET project_rooms": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_rooms",
+      "s": 420,
+      "e": 594
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P8",
+    "teardown": {
+     "deleted": 1
+    }
+   }
+  }
+ ]
+}

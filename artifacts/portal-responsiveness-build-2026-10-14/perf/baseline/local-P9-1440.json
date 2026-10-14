@@ -1,0 +1,285 @@
+{
+ "throttling": {
+  "cpu": 4,
+  "network": {
+   "offline": false,
+   "latency": 165,
+   "downloadThroughput": 1012500,
+   "uploadThroughput": 168750
+  }
+ },
+ "base": "http://localhost:3000",
+ "commit": "19edde5f26452edfe5bddb60196150bd785b40d0",
+ "arrivalOptIn": true,
+ "doc": "b0000000-0000-0000-0000-00000000c0d1",
+ "writeDoc": "b0000000-0000-0000-0000-0000000000d1",
+ "rows": [
+  {
+   "scenario": "P9",
+   "viewport": "1440",
+   "run": 1,
+   "hostLoad": 4.6,
+   "act": {
+    "action": "edit-then-send-until-sending",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 30,
+    "placeholder": 53,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 1630,
+    "requests": 7,
+    "apiRequests": 7,
+    "authUser": 0,
+    "rpc": 1,
+    "depth": 5,
+    "domMutationBatches": 8,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 10,
+    "cls": 0.0112,
+    "layoutShifts": 2,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "sendingShown": 46,
+    "write": "POST rpc:update_outbound_draft",
+    "writeStart": 56,
+    "writeEnd": 235,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 5,
+    "refetchesByKind": {
+     "GET outbound_drafts": 2,
+     "GET projects": 1,
+     "GET project_team_members": 1,
+     "GET profiles": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET outbound_drafts",
+      "s": 245,
+      "e": 422
+     },
+     {
+      "k": "GET projects",
+      "s": 245,
+      "e": 418
+     },
+     {
+      "k": "GET project_team_members",
+      "s": 246,
+      "e": 420
+     },
+     {
+      "k": "GET profiles",
+      "s": 422,
+      "e": 594
+     },
+     {
+      "k": "GET outbound_drafts",
+      "s": 641,
+      "e": 813
+     }
+    ],
+    "sendBlocked": 1,
+    "sendBlockedAt": 602,
+    "functionsBlocked": 1
+   },
+   "fixture": {
+    "name": "P9",
+    "teardown": {
+     "neverSent": true,
+     "edited": true
+    }
+   }
+  },
+  {
+   "scenario": "P9",
+   "viewport": "1440",
+   "run": 2,
+   "hostLoad": 4.8,
+   "act": {
+    "action": "edit-then-send-until-sending",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 30,
+    "placeholder": 77,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 1615,
+    "requests": 7,
+    "apiRequests": 7,
+    "authUser": 0,
+    "rpc": 1,
+    "depth": 5,
+    "domMutationBatches": 8,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 10,
+    "cls": 0.0112,
+    "layoutShifts": 2,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "sendingShown": 45,
+    "write": "POST rpc:update_outbound_draft",
+    "writeStart": 54,
+    "writeEnd": 230,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 5,
+    "refetchesByKind": {
+     "GET outbound_drafts": 2,
+     "GET projects": 1,
+     "GET project_team_members": 1,
+     "GET profiles": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET outbound_drafts",
+      "s": 240,
+      "e": 415
+     },
+     {
+      "k": "GET projects",
+      "s": 242,
+      "e": 413
+     },
+     {
+      "k": "GET project_team_members",
+      "s": 243,
+      "e": 414
+     },
+     {
+      "k": "GET profiles",
+      "s": 418,
+      "e": 588
+     },
+     {
+      "k": "GET outbound_drafts",
+      "s": 625,
+      "e": 796
+     }
+    ],
+    "sendBlocked": 1,
+    "sendBlockedAt": 594,
+    "functionsBlocked": 1
+   },
+   "fixture": {
+    "name": "P9",
+    "teardown": {
+     "neverSent": true,
+     "edited": true
+    }
+   }
+  },
+  {
+   "scenario": "P9",
+   "viewport": "1440",
+   "run": 3,
+   "hostLoad": 5.1,
+   "act": {
+    "action": "edit-then-send-until-sending",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 32,
+    "placeholder": 65,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 1626,
+    "requests": 7,
+    "apiRequests": 7,
+    "authUser": 0,
+    "rpc": 1,
+    "depth": 5,
+    "domMutationBatches": 8,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 10,
+    "cls": 0.0112,
+    "layoutShifts": 2,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "sendingShown": 47,
+    "write": "POST rpc:update_outbound_draft",
+    "writeStart": 55,
+    "writeEnd": 230,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 5,
+    "refetchesByKind": {
+     "GET outbound_drafts": 2,
+     "GET projects": 1,
+     "GET project_team_members": 1,
+     "GET profiles": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET outbound_drafts",
+      "s": 239,
+      "e": 414
+     },
+     {
+      "k": "GET projects",
+      "s": 240,
+      "e": 412
+     },
+     {
+      "k": "GET project_team_members",
+      "s": 241,
+      "e": 414
+     },
+     {
+      "k": "GET profiles",
+      "s": 419,
+      "e": 592
+     },
+     {
+      "k": "GET outbound_drafts",
+      "s": 637,
+      "e": 808
+     }
+    ],
+    "sendBlocked": 1,
+    "sendBlockedAt": 599,
+    "functionsBlocked": 1
+   },
+   "fixture": {
+    "name": "P9",
+    "teardown": {
+     "neverSent": true,
+     "edited": true
+    }
+   }
+  }
+ ]
+}
