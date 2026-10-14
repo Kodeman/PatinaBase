@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>US-33 specimens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root,[data-theme="light"]{color-scheme:light;--paper:#FAF7F2;--paper-doc:#FCFAF6;--rail:#E8E3DB;--lift:#FFFFFF;--ink:#2C2926;--ink-muted:#4E4339;--ink-subtle:#5A4E43;--ink-faint:#65594E;--clay-ink:#7C5E30;--terracotta-ink:#9C5340;--sage-ink:#5F6B57;--bar:#2C2926;--bar-ink:#FAF7F2;--clay:#C4A57B;--pearl:#E5E2DD;--rail-ph:rgba(44, 41, 38, .11);--warm:#EEE6DB;--shine:rgba(255, 255, 255, .75);--hair:rgba(44, 41, 38, .10);--edge:rgba(44, 41, 38, .18);--card-edge:#8F8C88;--rule-strong:#2C2926;--press-in:rgba(196, 165, 123, .14);--viz-measured:#7C5E30;--viz-est:#C4A57B;}
+[data-theme="dark"]{color-scheme:dark;--paper:#2A2622;--paper-doc:#26221E;--rail:#3A3530;--lift:#1C1A17;--ink:#F2EDE6;--ink-muted:#D6CEC4;--ink-subtle:#C7BEB3;--ink-faint:#B8AEA2;--clay-ink:#D8B98A;--terracotta-ink:#E2A895;--sage-ink:#AFC0A6;--bar:#1C1A17;--bar-ink:#F2EDE6;--clay:#B39572;--pearl:rgba(242, 237, 230, .12);--rail-ph:rgba(242, 237, 230, .12);--warm:#3A3530;--shine:rgba(242, 237, 230, .10);--hair:rgba(242, 237, 230, .14);--edge:rgba(242, 237, 230, .22);--card-edge:#77736E;--rule-strong:#F2EDE6;--press-in:rgba(216, 185, 138, .14);--viz-measured:#D8B98A;--viz-est:#8B7355;}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--paper:#2A2622;--paper-doc:#26221E;--rail:#3A3530;--lift:#1C1A17;--ink:#F2EDE6;--ink-muted:#D6CEC4;--ink-subtle:#C7BEB3;--ink-faint:#B8AEA2;--clay-ink:#D8B98A;--terracotta-ink:#E2A895;--sage-ink:#AFC0A6;--bar:#1C1A17;--bar-ink:#F2EDE6;--clay:#B39572;--pearl:rgba(242, 237, 230, .12);--rail-ph:rgba(242, 237, 230, .12);--warm:#3A3530;--shine:rgba(242, 237, 230, .10);--hair:rgba(242, 237, 230, .14);--edge:rgba(242, 237, 230, .22);--card-edge:#77736E;--rule-strong:#F2EDE6;--press-in:rgba(216, 185, 138, .14);--viz-measured:#D8B98A;--viz-est:#8B7355;}}
+:root{--ease:cubic-bezier(.22,1,.36,1);--f-display:'Playfair Display',Georgia,serif;--f-body:'Inter',-apple-system,'Segoe UI',sans-serif;--f-meta:'DM Mono','SF Mono',ui-monospace,monospace}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--f-body)}
+.wrap{max-width:1560px;margin:0 auto;padding:24px 16px 80px}
+h1.page{font:500 32px/1.2 var(--f-display);margin:8px 0 6px}
+.lede{max-width:76ch;color:var(--ink-muted);margin:0 0 12px}
+.lede code,.fcap code,.fnote code{font:12px var(--f-meta)}
+.t44{min-height:44px;min-width:44px}
+.gobar{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--edge);display:flex;flex-wrap:wrap;gap:6px;padding:8px 0;margin:0 0 16px}
+.gobar button,.ctl button{font:500 12px/1 var(--f-meta);letter-spacing:.04em;padding:0 12px;background:var(--lift);color:var(--ink);border:1px solid var(--edge);border-radius:2px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.gobar button:focus-visible,.ctl button:focus-visible,.ctl input:focus-visible,[tabindex="0"]:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--clay-ink);outline-offset:2px}
+.ctl button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+a.t44{display:inline-flex;align-items:center;color:var(--clay-ink)}
+.frame{background:var(--paper);color:var(--ink);margin:0 0 40px;border-top:2px solid var(--rule-strong);padding-top:10px}
+.fcap{font:500 12px/1.5 var(--f-meta);letter-spacing:.03em;color:var(--ink-muted);margin:0 0 8px;display:flex;flex-wrap:wrap;gap:4px 14px}
+.fcap b{color:var(--ink);font-weight:500}
+.fnote{font-size:13px;color:var(--ink-faint);margin:8px 0 0;max-width:110ch}
+body.nobar .fcap,body.nobar .fnote{display:none}
+body.single .wrap{padding:0;max-width:none}
+body.single .gobar,body.single .intro{display:none}
+body.single .frame{margin:0;border-top:0;padding:0}
+body.single .fcap,body.single .fnote{padding:8px 16px;margin:0}
+.vpwrap{overflow-x:auto;max-width:100%}
+.vp{border:1px solid var(--edge);width:max-content}
+.vp.v1440{zoom:.5}.vp.v390{zoom:.8}
+body.single .vp{zoom:1;border:0}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+ul{padding:0;list-style:none}li{border-bottom:1px solid var(--hair);display:flex;gap:12px;align-items:center}.n{font:12px var(--f-meta);color:var(--ink-faint)}</style>
+</head>
+<body>
+<div class="wrap"><h1 class="page">US-33 specimens</h1>
+<p class="lede">Mockups for the designer portal responsiveness review (SQ-960). Frame list, fixture and gate: SPEC.md. Illustrative fixture · not a real studio.</p>
+<ul><li><a class="t44" href="skeletons-q.html">Skeletons, Quiet paper</a> <span class="n">26 frames</span></li><li><a class="t44" href="skeletons-x.html">Skeletons, Expressive</a> <span class="n">10 frames</span></li><li><a class="t44" href="nav-progress.html">Navigation rule</a> <span class="n">21 frames</span></li><li><a class="t44" href="action-strips.html">Action feedback strips</a> <span class="n">6 frames</span></li><li><a class="t44" href="waterfalls.html">Before and after waterfalls</a> <span class="n">2 frames</span></li></ul></div>
+</body>
+</html>
+<!-- SPECIMEN COMPLETE -->
