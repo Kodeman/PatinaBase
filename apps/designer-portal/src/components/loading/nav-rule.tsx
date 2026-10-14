@@ -34,6 +34,8 @@ type Stage = "hidden" | "route" | "data" | "done";
 interface Run {
   /** The destination, as `pathname?search`. */
   target: string;
+  /** Where the first click stood, and every target a newer click superseded. */
+  left: Set<string>;
   committed: boolean;
 }
 
@@ -193,7 +195,9 @@ function NavRuleRun() {
         return;
       }
       quiet();
-      run.current = { target, committed: false };
+      const left = run.current?.left ?? new Set([keyOf(path, query)]);
+      if (run.current) left.add(run.current.target);
+      run.current = { target, left, committed: false };
       if (stageRef.current === "done") setStage("route");
       // Measured from the first click: a superseding click never resets the wait.
       if (stageRef.current === "hidden" && showTimer.current === null) {
@@ -222,13 +226,18 @@ function NavRuleRun() {
     };
   }, [begin, router, stop]);
 
-  // The commit: pathname and search now read the target. A superseded
-  // navigation's commit is not the target, so it never ends the rule.
+  // The commit: pathname and search now read the target, or an address the
+  // target redirected to (middleware to sign-in, the Document's own redirect).
+  // A superseded navigation's commit, or the page we left, never ends the rule.
   useEffect(() => {
     here.current = { pathname, search };
     const current = run.current;
     if (!current || current.committed) return;
-    if (keyOf(pathname, search) !== current.target) return;
+    const key = keyOf(pathname, search);
+    // Only a different path reads as a redirect: the router commits path and
+    // search together, so the target's path with other search is not a landing.
+    const samePath = key.split("?")[0] === current.target.split("?")[0];
+    if (key !== current.target && (current.left.has(key) || samePath)) return;
     current.committed = true;
     watch();
   }, [pathname, search, watch]);

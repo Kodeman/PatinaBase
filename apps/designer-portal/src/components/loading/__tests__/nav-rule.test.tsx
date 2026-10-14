@@ -168,6 +168,30 @@ describe("NavRule", () => {
     expect(rule()).toHaveAttribute("data-stage", "done");
   });
 
+  it("a destination that redirects (middleware to sign-in) still ends the rule", async () => {
+    const { rerender } = render(<Page />);
+    fireEvent.click(screen.getByText("Holloway Den"));
+    await tick(NAV_RULE_DELAY_MS);
+    expect(rule()).toHaveAttribute("data-stage", "route");
+    await commit(rerender, "/auth/signin", { search: "next=%2Fdoc%2Fa" });
+    await tick(16);
+    expect(rule()).toHaveAttribute("data-stage", "done");
+  });
+
+  it("after a supersede, neither the page left nor the abandoned target reads as a redirect", async () => {
+    const { rerender } = render(<Page />);
+    fireEvent.click(screen.getByText("Holloway Den"));
+    act(() => mockRouter.push("/doc/b"));
+    await tick(NAV_RULE_DELAY_MS);
+    await commit(rerender, "/desk");
+    await commit(rerender, "/doc/a");
+    await tick(500);
+    expect(rule()).toHaveAttribute("data-stage", "route");
+    await commit(rerender, "/doc/b-renamed");
+    await tick(16);
+    expect(rule()).toHaveAttribute("data-stage", "done");
+  });
+
   it("a click on the current address ends it at once", async () => {
     render(<Page />);
     fireEvent.click(screen.getByText("Holloway Den"));
