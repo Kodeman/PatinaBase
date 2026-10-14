@@ -98,6 +98,11 @@ export interface DeskData {
   studioDrafts?: DeskDraftSignal[];
 }
 
+interface DeskQueryData extends DeskData {
+  /** Unprojected source rows; each observer filters these in its own `select`. */
+  outboundDraftRows: unknown[];
+}
+
 /**
  * One sentinel each, and they mean different things: `undefined` = the Desk has
  * not answered for this document, so the caller derives locally; `null` = this
@@ -686,8 +691,8 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
   // because the queryFn needs it read-and-write on every call, synchronously.
   const previousResultRef = useRef<DeskData | null>(null);
 
-  return useQuery<DeskData>({
-    queryKey: ['document-state', 'desk', ...(options.organizationId ? [options.organizationId] : [])],
+  return useQuery<DeskQueryData, Error, DeskData>({
+    queryKey: ['document-state', 'desk'],
     enabled: options.enabled ?? true,
     refetchInterval: 60_000,
     // A background refetch (the 60s tick) never flashes an empty desk over
@@ -1068,7 +1073,6 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
         draftRowsError && outboundRowsError
           ? undefined
           : buildDeskDrafts(draftRowsError ? [] : draftRows, outboundRowsError ? [] : outboundRows);
-      const studioDrafts = outboundRowsError ? [] : buildDeskStudioDrafts(outboundRows, options.organizationId);
       const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
       const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
       const heldReleases = heldRowsError ? undefined : buildDeskHeldReleases(heldRows);
@@ -1137,9 +1141,17 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
         purchaseOrders,
         leads,
       );
-      const desk: DeskData = { ...result, unreadFeeds, studioDrafts };
+      const desk: DeskQueryData = {
+        ...result,
+        unreadFeeds,
+        outboundDraftRows: outboundRowsError ? [] : outboundRows,
+      };
       previousResultRef.current = desk;
       return desk;
     },
+    select: ({ outboundDraftRows, ...desk }) => ({
+      ...desk,
+      studioDrafts: buildDeskStudioDrafts(outboundDraftRows, options.organizationId),
+    }),
   });
 }

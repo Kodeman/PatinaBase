@@ -330,6 +330,37 @@ describe('useDeskEngagements', () => {
     for (const n of limits) expect(n).toBeGreaterThan(0);
   });
 
+  it('shares one Desk fetch across observers while selecting studio drafts per observer', async () => {
+    const studioDraft = {
+      id: 'studio-1-draft', organization_id: 'studio-1', project_id: null,
+      kind: 'invoice_reminder', channel: 'email', recipient_kind: 'client',
+      status: 'awaiting_review', to_address: 'one@example.test', subject: 'One',
+      body: 'Draft', created_at: '2026-10-13T08:00:00Z', claimed_at: null,
+    };
+    const otherStudioDraft = {
+      ...studioDraft, id: 'studio-2-draft', organization_id: 'studio-2',
+    };
+    mockFrom.mockImplementation((table: string) =>
+      chainResult({
+        data: table === 'document_state' ? [NEW_LEAD_ROW]
+          : table === 'outbound_drafts' ? [studioDraft, otherStudioDraft]
+            : [],
+        error: null,
+      }),
+    );
+    const wrapper = createWrapper();
+    const desk = renderHook(() => useDeskEngagements({ organizationId: 'studio-1' }), { wrapper });
+    const commandBar = renderHook(() => useDeskEngagements({ organizationId: 'studio-2' }), { wrapper });
+
+    await waitFor(() => {
+      expect(desk.result.current.isSuccess).toBe(true);
+      expect(commandBar.result.current.isSuccess).toBe(true);
+    });
+    expect(mockFrom.mock.calls.filter(([table]) => table === 'document_state')).toHaveLength(1);
+    expect(desk.result.current.data?.studioDrafts?.map((draft) => draft.id)).toEqual(['studio-1-draft']);
+    expect(commandBar.result.current.data?.studioDrafts?.map((draft) => draft.id)).toEqual(['studio-2-draft']);
+  });
+
   it('keeps existing outbound drafts visible when the UI feature flag is off', async () => {
     const studioDraft = {
       id: 'studio-draft',
