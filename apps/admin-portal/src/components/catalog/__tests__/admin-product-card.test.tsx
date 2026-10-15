@@ -40,8 +40,11 @@ describe('AdminProductCard', () => {
   const mockPresenter: AdminCatalogPresenter = {
     selectedProducts: [],
     handleProductToggle: jest.fn(),
-    handleSelectAll: jest.fn(),
     handleClearSelection: jest.fn(),
+    handleSelectAll: jest.fn(),
+    openPublishModal: jest.fn(),
+    openUnpublishModal: jest.fn(),
+    openDeleteModal: jest.fn(),
     isAllSelected: false,
   } as any;
 
@@ -322,7 +325,7 @@ describe('AdminProductCard', () => {
       await user.click(moreButton);
 
       expect(screen.getByRole('menuitem', { name: /edit/i })).toBeInTheDocument();
-      expect(screen.getByRole('menuitem', { name: /duplicate/i })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /duplicate/i })).not.toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: /delete/i })).toBeInTheDocument();
     });
 
@@ -366,6 +369,80 @@ describe('AdminProductCard', () => {
 
       expect(screen.getByRole('menuitem', { name: 'Unpublish' })).toBeInTheDocument();
       expect(screen.queryByRole('menuitem', { name: 'Publish' })).not.toBeInTheDocument();
+    });
+    it('selects only the draft product and opens publish confirmation', async () => {
+      const user = userEvent.setup();
+      const presenter = {
+        ...mockPresenter,
+        handleClearSelection: jest.fn(),
+        handleProductToggle: jest.fn(),
+        openPublishModal: jest.fn(),
+      };
+      const product = {
+        id: 'product-1',
+        name: 'Modern Sofa',
+        brand: 'Test Brand',
+        price: 999,
+        status: 'draft',
+      } as ProductListItem;
+
+      renderWithProviders(<AdminProductCard product={product} presenter={presenter} />);
+      await user.click(screen.getByRole('button', { name: /more actions/i }));
+      await user.click(screen.getByRole('menuitem', { name: 'Publish' }));
+
+      expect(presenter.handleClearSelection).toHaveBeenCalledTimes(1);
+      expect(presenter.handleProductToggle).toHaveBeenCalledWith('product-1');
+      expect(presenter.openPublishModal).toHaveBeenCalledTimes(1);
+    });
+
+    it('selects only the published product and opens unpublish confirmation', async () => {
+      const user = userEvent.setup();
+      const presenter = {
+        ...mockPresenter,
+        handleClearSelection: jest.fn(),
+        handleProductToggle: jest.fn(),
+        openUnpublishModal: jest.fn(),
+      };
+      const product = {
+        id: 'product-1',
+        name: 'Modern Sofa',
+        brand: 'Test Brand',
+        price: 999,
+        status: 'published',
+      } as ProductListItem;
+
+      renderWithProviders(<AdminProductCard product={product} presenter={presenter} />);
+      await user.click(screen.getByRole('button', { name: /more actions/i }));
+      await user.click(screen.getByRole('menuitem', { name: 'Unpublish' }));
+
+      expect(presenter.handleClearSelection).toHaveBeenCalledTimes(1);
+      expect(presenter.handleProductToggle).toHaveBeenCalledWith('product-1');
+      expect(presenter.openUnpublishModal).toHaveBeenCalledTimes(1);
+    });
+
+    it('selects only the product and opens delete confirmation', async () => {
+      const user = userEvent.setup();
+      const presenter = {
+        ...mockPresenter,
+        handleClearSelection: jest.fn(),
+        handleProductToggle: jest.fn(),
+        openDeleteModal: jest.fn(),
+      };
+      const product = {
+        id: 'product-1',
+        name: 'Modern Sofa',
+        brand: 'Test Brand',
+        price: 999,
+        status: 'draft',
+      } as ProductListItem;
+
+      renderWithProviders(<AdminProductCard product={product} presenter={presenter} />);
+      await user.click(screen.getByRole('button', { name: /more actions/i }));
+      await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
+
+      expect(presenter.handleClearSelection).toHaveBeenCalledTimes(1);
+      expect(presenter.handleProductToggle).toHaveBeenCalledWith('product-1');
+      expect(presenter.openDeleteModal).toHaveBeenCalledTimes(1);
     });
   });
 

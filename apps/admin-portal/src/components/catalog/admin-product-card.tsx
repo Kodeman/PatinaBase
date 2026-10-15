@@ -8,7 +8,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Edit,
-  Copy,
   Trash2,
   ExternalLink,
 } from 'lucide-react';
@@ -76,6 +75,12 @@ export const AdminProductCard = memo(
       </div>
     );
 
+    const selectProductAndOpen = (openModal: () => void) => {
+      presenter.handleClearSelection();
+      presenter.handleProductToggle(product.id);
+      openModal();
+    };
+
     const footerSlot = (
       <div className="flex items-center gap-2" role="group" aria-label={`Actions for ${product.name}`}>
         <Button
@@ -119,18 +124,23 @@ export const AdminProductCard = memo(
                 </a>
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem>
-              <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
-              Duplicate
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             {product.status === 'published' ? (
-              <DropdownMenuItem>Unpublish</DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => selectProductAndOpen(presenter.openUnpublishModal)}
+              >
+                Unpublish
+              </DropdownMenuItem>
             ) : (
-              <DropdownMenuItem>Publish</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => selectProductAndOpen(presenter.openPublishModal)}>
+                Publish
+              </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-600">
+            <DropdownMenuItem
+              className="text-red-600"
+              onSelect={() => selectProductAndOpen(presenter.openDeleteModal)}
+            >
               <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
               Delete
             </DropdownMenuItem>
