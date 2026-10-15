@@ -30,9 +30,6 @@ let fetching = 0;
 /** Queries in flight by key, for the cases that ask which ones the gate counts. */
 let fetchingKeys: unknown[][] = [];
 let notifyCache: () => void = () => {};
-jest.mock('@patina/help-system', () => ({
-  helpContentQueryKey: () => ['help-content'],
-}));
 jest.mock('@patina/supabase', () => ({
   inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
   procurementUnreadCountKey: () => ['procurement-unread-count'],

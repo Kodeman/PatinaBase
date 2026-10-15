@@ -69,7 +69,6 @@ import type { RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { QueryClient, QueryClientContext } from '@tanstack/react-query';
 import type { Query } from '@tanstack/react-query';
-import { helpContentQueryKey } from '@patina/help-system';
 import { inboxKeys, procurementUnreadCountKey } from '@patina/supabase';
 import { documentTimeTodayQueryKey } from '@/hooks/document-time-query-keys';
 import {
@@ -110,7 +109,8 @@ const STANDBY_CLIENT = new QueryClient();
  * prefixes, so the margin rail's `['inbox', 'notifications', …]` still counts.
  */
 const OFF_PAPER_QUERY_KEYS: ReadonlyArray<readonly string[]> = [
-  helpContentQueryKey(),
+  // Owner is helpContentQueryKey() in @patina/help-system; avoid bundling its Sanity barrel here.
+  ['help-content'],
   inboxKeys.unreadCount(),
   procurementUnreadCountKey(),
   documentTimeTodayQueryKey(),
