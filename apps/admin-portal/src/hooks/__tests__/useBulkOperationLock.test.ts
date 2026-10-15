@@ -148,12 +148,13 @@ describe('useBulkOperationLock', () => {
         result.current.releaseLock();
       });
 
-      // Operation 2
+      // Operation 2 — result.current only reflects the new state after act() re-renders
+      let acquired = false;
       act(() => {
-        const acquired = result.current.acquireLock('Operation 2');
-        expect(acquired).toBe(true);
-        expect(result.current.currentOperation).toBe('Operation 2');
+        acquired = result.current.acquireLock('Operation 2');
       });
+      expect(acquired).toBe(true);
+      expect(result.current.currentOperation).toBe('Operation 2');
     });
 
     it('should handle rapid sequential operations', () => {
@@ -162,10 +163,13 @@ describe('useBulkOperationLock', () => {
       const operations = ['Op1', 'Op2', 'Op3', 'Op4', 'Op5'];
 
       operations.forEach((op) => {
+        let acquired = false;
         act(() => {
-          const acquired = result.current.acquireLock(op);
-          expect(acquired).toBe(true);
-          expect(result.current.currentOperation).toBe(op);
+          acquired = result.current.acquireLock(op);
+        });
+        expect(acquired).toBe(true);
+        expect(result.current.currentOperation).toBe(op);
+        act(() => {
           result.current.releaseLock();
         });
       });

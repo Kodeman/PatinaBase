@@ -110,7 +110,12 @@ describe('Bulk Operations Validation', () => {
       const invalid = {
         productIds: [validUUID],
       };
-      expect(() => BulkUnpublishSchema.parse(invalid)).toThrow('Reason is required');
+      // A missing key fails zod's type check before .min(1, 'Reason is required…') runs.
+      const result = BulkUnpublishSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+      expect(result.error?.issues).toEqual([
+        expect.objectContaining({ path: ['reason'], code: 'invalid_type', message: 'Required' }),
+      ]);
     });
 
     it('should reject empty reason', () => {

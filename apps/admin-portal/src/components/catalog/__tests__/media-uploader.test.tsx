@@ -1,11 +1,9 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MediaUploader } from '../media-uploader';
-import { validateFile } from '@/lib/media-utils';
 
 // Mock media-utils
 jest.mock('@/lib/media-utils', () => ({
-  validateFile: jest.fn(),
   formatFileSize: jest.fn((bytes) => `${bytes} bytes`),
   getImageDimensions: jest.fn(() => Promise.resolve({ width: 1920, height: 1080 })),
   isImageFile: jest.fn(() => true),
@@ -15,13 +13,29 @@ jest.mock('@/lib/media-utils', () => ({
 global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
 global.URL.revokeObjectURL = jest.fn();
 
+// validateFileSecure decodes each image through new Image(); jsdom never
+// fires load events, so resolve the load as soon as a src is assigned.
+class LoadingImage {
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  set src(_url: string) {
+    setTimeout(() => this.onload?.());
+  }
+}
+global.Image = LoadingImage as unknown as typeof Image;
+
+// validateFileSecure checks magic numbers, so fixtures need a real JPEG header.
+const JPEG_HEADER = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+function jpegFile(name: string, body = 'dummy'): File {
+  return new File([JPEG_HEADER, body], name, { type: 'image/jpeg' });
+}
+
 describe('MediaUploader', () => {
   const mockOnUpload = jest.fn();
   const mockOnRemove = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (validateFile as jest.Mock).mockReturnValue({ valid: true });
   });
 
   it('renders the dropzone with correct text', () => {
@@ -30,7 +44,7 @@ describe('MediaUploader', () => {
     expect(
       screen.getByText(/drag & drop images here, or click to browse/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/jpg, png, webp up to 10mb each/i)).toBeInTheDocument();
+    expect(screen.getByText(/jpeg, png, webp up to 10mb each/i)).toBeInTheDocument();
   });
 
   it('displays correct file size limit', () => {
@@ -43,7 +57,7 @@ describe('MediaUploader', () => {
     const user = userEvent.setup();
     render(<MediaUploader onUpload={mockOnUpload} />);
 
-    const file = new File(['dummy content'], 'test.jpg', { type: 'image/jpeg' });
+    const file = jpegFile('test.jpg', 'dummy content');
 
     const input = screen.getByRole('presentation').querySelector('input[type="file"]');
     expect(input).toBeInTheDocument();
@@ -59,16 +73,9 @@ describe('MediaUploader', () => {
 
   it('rejects files that fail validation', async () => {
     const user = userEvent.setup();
-    (validateFile as jest.Mock).mockReturnValue({
-      valid: false,
-      error: 'File too large',
-    });
-
     render(<MediaUploader onUpload={mockOnUpload} />);
 
-    const file = new File(['x'.repeat(11 * 1024 * 1024)], 'huge.jpg', {
-      type: 'image/jpeg',
-    });
+    const file = jpegFile('huge.jpg', 'x'.repeat(11 * 1024 * 1024));
 
     const input = screen.getByRole('presentation').querySelector('input[type="file"]');
 
@@ -76,8 +83,26 @@ describe('MediaUploader', () => {
       await user.upload(input as HTMLInputElement, file);
 
       await waitFor(() => {
-        expect(screen.getByText(/file too large/i)).toBeInTheDocument();
+        expect(screen.getByText(/huge\.jpg: file size exceeds 10mb/i)).toBeInTheDocument();
       });
+    }
+  });
+
+  it('rejects files whose content does not match the declared type', async () => {
+    const user = userEvent.setup();
+    render(<MediaUploader onUpload={mockOnUpload} />);
+
+    const file = new File(['not a jpeg'], 'forged.jpg', { type: 'image/jpeg' });
+
+    const input = screen.getByRole('presentation').querySelector('input[type="file"]');
+
+    if (input) {
+      await user.upload(input as HTMLInputElement, file);
+
+      await waitFor(() => {
+        expect(screen.getByText(/forged\.jpg: .*possible file forgery/i)).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Files (1)')).not.toBeInTheDocument();
     }
   });
 
@@ -85,7 +110,7 @@ describe('MediaUploader', () => {
     const user = userEvent.setup();
     render(<MediaUploader onUpload={mockOnUpload} />);
 
-    const file = new File(['dummy'], 'preview.jpg', { type: 'image/jpeg' });
+    const file = jpegFile('preview.jpg');
 
     const input = screen.getByRole('presentation').querySelector('input[type="file"]');
 
@@ -93,7 +118,7 @@ describe('MediaUploader', () => {
       await user.upload(input as HTMLInputElement, file);
 
       await waitFor(() => {
-        const img = screen.getByAlt('preview.jpg');
+        const img = screen.getByAltText('preview.jpg');
         expect(img).toBeInTheDocument();
         expect(img).toHaveAttribute('src', 'blob:mock-url');
       });
@@ -104,7 +129,7 @@ describe('MediaUploader', () => {
     const user = userEvent.setup();
     render(<MediaUploader onUpload={mockOnUpload} onRemove={mockOnRemove} />);
 
-    const file = new File(['dummy'], 'remove-me.jpg', { type: 'image/jpeg' });
+    const file = jpegFile('remove-me.jpg');
 
     const input = screen.getByRole('presentation').querySelector('input[type="file"]');
 
@@ -130,7 +155,7 @@ describe('MediaUploader', () => {
 
     render(<MediaUploader onUpload={mockOnUpload} />);
 
-    const file = new File(['dummy'], 'upload-test.jpg', { type: 'image/jpeg' });
+    const file = jpegFile('upload-test.jpg');
 
     const input = screen.getByRole('presentation').querySelector('input[type="file"]');
 
@@ -141,7 +166,7 @@ describe('MediaUploader', () => {
         expect(screen.getByText('upload-test.jpg')).toBeInTheDocument();
       });
 
-      const uploadButton = screen.getByRole('button', { name: /upload/i });
+      const uploadButton = screen.getByRole('button', { name: /upload all/i });
       await user.click(uploadButton);
 
       await waitFor(() => {
@@ -161,27 +186,25 @@ describe('MediaUploader', () => {
     render(<MediaUploader onUpload={mockOnUpload} disabled />);
 
     const dropzone = screen.getByRole('presentation');
-    expect(dropzone.parentElement).toHaveClass('cursor-not-allowed', 'opacity-50');
+    expect(dropzone).toHaveClass('cursor-not-allowed', 'opacity-50');
   });
 
   it('respects maxFiles limit', async () => {
     const user = userEvent.setup();
     render(<MediaUploader onUpload={mockOnUpload} maxFiles={2} />);
 
-    const files = [
-      new File(['1'], 'file1.jpg', { type: 'image/jpeg' }),
-      new File(['2'], 'file2.jpg', { type: 'image/jpeg' }),
-      new File(['3'], 'file3.jpg', { type: 'image/jpeg' }),
-    ];
+    const files = [jpegFile('file1.jpg', '1'), jpegFile('file2.jpg', '2'), jpegFile('file3.jpg', '3')];
 
     const input = screen.getByRole('presentation').querySelector('input[type="file"]');
 
     if (input) {
       await user.upload(input as HTMLInputElement, files);
 
+      // react-dropzone rejects every file of an over-limit drop, one error each
       await waitFor(() => {
-        expect(screen.getByText(/maximum 2 files allowed/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/maximum 2 files allowed/i).length).toBeGreaterThan(0);
       });
+      expect(screen.queryByText('file1.jpg')).not.toBeInTheDocument();
     }
   });
 
@@ -189,7 +212,7 @@ describe('MediaUploader', () => {
     const user = userEvent.setup();
     render(<MediaUploader onUpload={mockOnUpload} />);
 
-    const file = new File(['dummy'], 'dimensions.jpg', { type: 'image/jpeg' });
+    const file = jpegFile('dimensions.jpg');
 
     const input = screen.getByRole('presentation').querySelector('input[type="file"]');
 
@@ -206,10 +229,7 @@ describe('MediaUploader', () => {
     const user = userEvent.setup();
     render(<MediaUploader onUpload={mockOnUpload} multiple />);
 
-    const files = [
-      new File(['1'], 'file1.jpg', { type: 'image/jpeg' }),
-      new File(['2'], 'file2.jpg', { type: 'image/jpeg' }),
-    ];
+    const files = [jpegFile('file1.jpg', '1'), jpegFile('file2.jpg', '2')];
 
     const input = screen.getByRole('presentation').querySelector('input[type="file"]');
 
