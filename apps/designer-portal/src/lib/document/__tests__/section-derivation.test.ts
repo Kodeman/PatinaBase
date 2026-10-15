@@ -43,6 +43,7 @@ const lineage = {
   sentAt: '2026-03-21T12:00:00Z',
   signedAt: '2026-04-01T12:00:00Z',
   status: 'accepted',
+  commercialState: null,
   version: 2,
 };
 
@@ -135,7 +136,7 @@ describe('deriveSections (§4)', () => {
           proposal_status: 'sent',
           proposal_sent_at: '2026-06-03T12:00:00Z',
         },
-        lineage: { ...lineage, signedAt: null, status: 'sent' },
+        lineage: { ...lineage, signedAt: null, status: 'sent', commercialState: 'sent' },
         lineageResolved: true,
         schedule: null,
       },
@@ -143,6 +144,23 @@ describe('deriveSections (§4)', () => {
     expect(s[3]).toMatchObject({ state: 'active', sub: 'Awaiting signature' });
     expect(s[2].sub).toBe('Settled · 21 March');
     expect(s[4].state).toBe('future');
+  });
+
+  it('client-signed proposal reads Client signed from commercial state', () => {
+    const s = deriveSections({
+      row: {
+        ...baseRow,
+        engagement_kind: 'proposal',
+        project_id: null,
+        proposal_id: 'pr1',
+        active_section: 'proposal',
+        proposal_status: 'sent',
+      },
+      lineage: { ...lineage, signedAt: null, status: 'sent', commercialState: 'client_signed' },
+      lineageResolved: true,
+      schedule: null,
+    });
+    expect(s[3]).toMatchObject({ state: 'active', sub: 'Client signed' });
   });
 
   it('declined proposal holds at Proposal-active with the state in the sub (R1)', () => {

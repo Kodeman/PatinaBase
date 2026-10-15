@@ -1636,6 +1636,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       sentAt: src.sent_at ?? null,
       signedAt: src.signed_at ?? null,
       status: src.status ?? null,
+      commercialState: src.commercial_state ?? null,
       version: src.version ?? null,
     };
   }, [row?.engagement_kind, project?.proposal, liveProposal]);
