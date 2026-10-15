@@ -74,7 +74,7 @@ const PRODUCERS: Array<
   {
     file: "invoice-reminders",
     entityType: "invoice",
-    path: new URL("../invoice-reminders/index.ts", import.meta.url).pathname,
+    path: new URL("../_shared/outbound-kinds/invoice_reminder.ts", import.meta.url).pathname,
   },
 ];
 

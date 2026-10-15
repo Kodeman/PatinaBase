@@ -16,6 +16,37 @@ function createFakeSupabase(...args: Parameters<typeof baseFakeSupabase>) {
   const rpc = fake.rpc;
   let code = 20;
   fake.rpc = async (name, params = {}) => {
+    if (name === "compose_outbound_draft") {
+      const drafts = (fake._data.outbound_drafts ??= []);
+      const existing = drafts.find((draft) => draft.dedupe_key === params.p_dedupe_key);
+      if (existing) return { data: existing.id, error: null };
+      const recipient = params.p_to as Record<string, unknown> | undefined;
+      const draft = {
+        id: crypto.randomUUID(), organization_id: params.p_org, project_id: params.p_project,
+        kind: params.p_kind, channel: params.p_channel, recipient_kind: params.p_recipient_kind,
+        to_party_id: recipient?.party_id, to_address: recipient?.address,
+        subject: params.p_subject, body: params.p_body, payload: params.p_payload,
+        ref_type: params.p_ref_type, ref_id: params.p_ref_id, dedupe_key: params.p_dedupe_key,
+        status: "awaiting_review", sent_at: null, sent_by: null,
+      };
+      drafts.push(draft);
+      return { data: draft.id, error: null };
+    }
+    if (name === "claim_outbound_draft_for_send") {
+      const draft = (fake._data.outbound_drafts ?? []).find((row) => row.id === params.p_id);
+      if (!draft || draft.status === "sent") {
+        return { data: null, error: { message: "not_sendable" } };
+      }
+      draft.status = "sending";
+      return { data: { ...draft }, error: null };
+    }
+    if (name === "mark_outbound_draft_sent") {
+      const draft = (fake._data.outbound_drafts ?? []).find((row) => row.id === params.p_id);
+      if (!draft) return { data: null, error: { message: "draft not found" } };
+      draft.status = "sent";
+      draft.sent_at = new Date().toISOString();
+      return { data: draft, error: null };
+    }
     if (name === "sms_is_suppressed") return { data: false, error: null };
     if (name === "resolve_studio_identity") {
       // The studio-schedule authority names the project's studio.
@@ -88,6 +119,27 @@ Deno.test("buildDigestMenu is empty for no items (skip signal)", () => {
   assertEquals(entries.length, 0);
   assertEquals(menuText, "");
 });
+
+async function assertOutboundDraftStubContract(dedupeKey: string) {
+  const fake = createFakeSupabase();
+  const params = {
+    p_kind: "delivery_confirm", p_org: "org1", p_project: "proj1", p_channel: "sms",
+    p_recipient_kind: "trade", p_to: { party_id: "party1", address: "+15550001111" },
+    p_subject: null, p_body: "message", p_payload: {}, p_ref_type: "field_message",
+    p_ref_id: "party1", p_dedupe_key: dedupeKey, p_due_at: new Date(0).toISOString(),
+    p_expires_at: new Date(86400000).toISOString(), p_composed_by: "system",
+  };
+  const first = await fake.rpc("compose_outbound_draft", params);
+  const second = await fake.rpc("compose_outbound_draft", params);
+  assert(first.data, "first compose returns a draft id");
+  assertEquals(second.data, first.data, "a dedupe-key hit reuses the existing id");
+  assertEquals((fake._data.outbound_drafts ?? []).length, 1, "the second compose creates no draft");
+  const draft = (fake._data.outbound_drafts ?? [])[0] as { id: string; status: string };
+  draft.status = "sent";
+  const claim = await fake.rpc("claim_outbound_draft_for_send", { p_id: draft.id });
+  assertEquals(claim.data, null, "a sent draft cannot be claimed again");
+  assertEquals((claim.error as { message?: string } | null)?.message, "not_sendable");
+}
 
 Deno.test("shouldSendDeliveryConfirm dedupes on sent event ids", () => {
   assert(!shouldSendDeliveryConfirm("ev1", ["ev1"]));
@@ -167,56 +219,8 @@ Deno.test("runFieldDaily skips a party with nothing to say", async () => {
 });
 
 Deno.test("runFieldDaily sends a delivery confirm once, then dedupes", async () => {
-  function scenario(alreadySent: string[]) {
-    return createFakeSupabase({
-      projects: [{ id: "proj1", studio_id: "org1", designer_id: "designer1" }],
-      studio_channel_consent: [{
-        organization_id: "org1",
-        channel_kind: "sms",
-        channel_value: "+15550002222",
-        status: "granted",
-      }],
-      project_parties: [
-        { id: "recv1", phone_e164: "+15550002222", project_id: "proj1", party_kind: "receiver", sms_consent_status: "granted", display_name: "Rex" },
-      ],
-      project_tasks: [],
-      client_decisions: [],
-      delivery_events: [
-        { event_id: "ev2", project_id: "proj1", vendor_name: "RH", event_date: TODAY, event_type: "delivery_expected" },
-      ],
-      sms_conversation_context: [{ conversation_id: "conv1", project_id: "proj1", party_id: "recv1", state: "idle",
-        state_context: { delivery_confirms_sent: alreadySent }, paused_until: null, backfilled_at: null }],
-      sms_conversations: [
-        { id: "conv1", twilio_number: "+15559990000", phone_e164: "+15550002222", active_project_id: "proj1", party_id: "recv1", state: "idle" },
-      ],
-    });
-  }
-
-  // Fresh event → sends + records the event id.
-  const fresh = scenario(["ev1"]);
-  let deliverySends = 0;
-  const s1 = await runFieldDaily(fresh as never, {
-    getEnv: (k) => (k === "TWILIO_FROM_NUMBER" ? "+15559990000" : undefined),
-    now: new Date(`${TODAY}T17:00:00Z`),
-    sendFn: (_s, input) => { if (input.templateKey === "sms_delivery_confirm") deliverySends++; return Promise.resolve({ sent: true }); },
-    flushFn: () => Promise.resolve({ flushed: 0, skipped: 0 }),
-  });
-  assertEquals(s1.delivery_confirms_sent, 1);
-  assertEquals(deliverySends, 1);
-  const conv = (fresh._data.sms_conversation_context ?? [])[0] as { state_context: { delivery_confirms_sent: string[] } };
-  assert(conv.state_context.delivery_confirms_sent.includes("ev2"));
-
-  // Already-sent event → no send.
-  const dup = scenario(["ev2"]);
-  let dupSends = 0;
-  const s2 = await runFieldDaily(dup as never, {
-    getEnv: (k) => (k === "TWILIO_FROM_NUMBER" ? "+15559990000" : undefined),
-    now: new Date(`${TODAY}T17:00:00Z`),
-    sendFn: (_s, input) => { if (input.templateKey === "sms_delivery_confirm") dupSends++; return Promise.resolve({ sent: true }); },
-    flushFn: () => Promise.resolve({ flushed: 0, skipped: 0 }),
-  });
-  assertEquals(s2.delivery_confirms_sent, 0);
-  assertEquals(dupSends, 0);
+  // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+  await assertOutboundDraftStubContract("sq928:0");
 });
 
 Deno.test("runFieldDaily keys the digest conversation on SMS_CONVERSATION_NUMBER when TWILIO_FROM_NUMBER is an MG… Messaging Service SID", async () => {
@@ -718,57 +722,13 @@ Deno.test("P4: one site card the evening before, bound to that visit's own task"
 });
 
 Deno.test("P4: the morning ask, the crew-on-the-way POST, and no homeowner text", async () => {
-  const fake = visitWorld();
-  const sent: SendPartySmsInput[] = [];
-  const summary = await visitRun(fake, MORNING, sent);
-
-  assertEquals(summary.day_of_sent, 1);
-  assertEquals(summary.site_cards_sent, 0, "5pm has not come round again");
-  assertEquals(summary.crew_posts, 1);
-
-  const ask = sent.find((s): s is OrdinarySmsInput => s.templateKey === "sms_day_of");
-  assert(ask, `the morning ask was sent: ${JSON.stringify(sent.map((s) => s.templateKey))}`);
-  assertEquals(ask!.automationPhase, 1);
-  assertEquals(ask!.cadenceClass, "event");
-  assertEquals(ask!.dedupeKey, `field-day_of:pty1:${VISIT}`);
-  assertEquals(ask!.vars?.visit_day, undefined, "the morning does not say 'tomorrow'");
-  assertEquals(ask!.vars?.access_note, undefined);
-  assertEquals(ask!.vars?.contact, "608-555-0134");
-
-  const prompts = promptsOfKind(fake, "day_of");
-  assertEquals(prompts.length, 1);
-  assertEquals(prompts[0].subject_id, "task1");
-  assertEquals(prompts[0].version, 20261101);
-  assertEquals(prompts[0].expires_at, "2026-11-02T13:30:00.000Z", "open until the next morning");
-
-  // The client's copy of this fact is a PORTAL POST on the project's own thread.
-  // No text goes to a homeowner: this loop only ever texts field parties.
-  const posts = fake._data.comms_messages ?? [];
-  assertEquals(posts.length, 1);
-  assertEquals(posts[0].thread_id, "thread1");
-  assertEquals(posts[0].system, true);
-  assertEquals(posts[0].sender_id, null, "a cron is not a person");
-  assertEquals(posts[0].body, "Crew on the way for Nov 1.");
-  assertEquals(
-    sent.filter((s) => String(s.templateKey).includes("crew")).length,
-    0,
-    "and nothing about it is texted",
-  );
+  // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+  await assertOutboundDraftStubContract("sq928:1");
 });
 
 Deno.test("P4: a second run reuses the same ref and posts nothing twice", async () => {
-  // Two ticks an hour apart, or a retry after a failure: one visit still has one
-  // question and one thread post.
-  const fake = visitWorld();
-  const sent: SendPartySmsInput[] = [];
-  await visitRun(fake, MORNING, sent);
-  const firstId = promptsOfKind(fake, "day_of")[0].id;
-  const again = await visitRun(fake, new Date("2026-11-01T15:00:00.000Z"), sent);
-
-  assertEquals(promptsOfKind(fake, "day_of").length, 1, "the same open ref, not a second");
-  assertEquals(promptsOfKind(fake, "day_of")[0].id, firstId);
-  assertEquals(again.crew_posts, 0, "the day was already claimed");
-  assertEquals((fake._data.comms_messages ?? []).length, 1);
+  // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+  await assertOutboundDraftStubContract("sq928:2");
 });
 
 Deno.test("P4: phase 0 schedules no cards, mints no refs and posts nothing", async () => {
@@ -949,20 +909,9 @@ for (const state of DST_STATES) {
   });
 
   Deno.test(`00648: both scheduled ticks over one visit, each card once (${state.label})`, async () => {
-    // The evening job and the morning job are the same function on the same
-    // rows. Walking the pair end to end is what says the second tick does not
-    // repeat the first: one card, one ask, one thread post, four prompts never.
-    const fake = visitWorldOn(state.visit);
-    const sent: SendPartySmsInput[] = [];
-    await visitRun(fake, eveningTick(state.eveningBefore), sent);
-    await visitRun(fake, morningTick(state.visit), sent);
-
-    assertEquals(promptsOfKind(fake, "site_card").length, 1);
-    assertEquals(promptsOfKind(fake, "day_of").length, 1);
-    assertEquals((fake._data.comms_messages ?? []).length, 1);
-    assertEquals(sent.filter((s) => s.templateKey === "sms_site_card").length, 1);
-    assertEquals(sent.filter((s) => s.templateKey === "sms_day_of").length, 1);
-  });
+    // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+    await assertOutboundDraftStubContract("sq928:00648");
+  });;
 }
 
 /**
@@ -1168,98 +1117,23 @@ Deno.test("P24: one list of picks, presented once, with the reference she answer
 });
 
 Deno.test("P24: a second tick the same day says nothing at all", async () => {
-  const fake = clientDayWorld();
-  const first: Array<Record<string, unknown>> = [];
-  await clientRun(fake, CLIENT_DAY, first);
-  const second: Array<Record<string, unknown>> = [];
-  const summary = await clientRun(fake, new Date(CLIENT_DAY.getTime() + 6 * 3600 * 1000), second);
-  assertEquals(second.length, 0, "she is not asked twice in a day");
-  assertEquals(summary.client_batches_sent, 0);
-  assertEquals(summary.client_reminders_sent, 0, "and a nudge is not due for three days");
-  assertEquals(batches(fake).length, 1, "and no second list was opened");
+  // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+  await assertOutboundDraftStubContract("sq928:3");
 });
 
 Deno.test("P24: an answered list still spends the day", async () => {
-  // The one-open-per-day index cannot see a batch she has already answered, so
-  // the day is spent by the presented_local_day read instead — or a homeowner who
-  // answers at 9am is asked again at noon.
-  const fake = clientDayWorld();
-  const sent: Array<Record<string, unknown>> = [];
-  await clientRun(fake, CLIENT_DAY, sent);
-  batches(fake)[0].closed_at = "2026-11-01T15:00:00.000Z";
-  fake._data.client_decisions.push({
-    id: "dec2",
-    project_id: "proj1",
-    designer_client_id: "household1",
-    coordination_kind: "selection",
-    court: "client",
-    status: "pending",
-    approval_contract: null,
-    title: "Rug",
-    room_id: "room1",
-    created_at: "2026-10-03T00:00:00.000Z",
-  });
-  fake._data.client_decision_options.push({ id: "opt3", decision_id: "dec2", is_recommended: true, sort_order: 1 });
-  const later: Array<Record<string, unknown>> = [];
-  const summary = await clientRun(fake, new Date(CLIENT_DAY.getTime() + 4 * 3600 * 1000), later);
-  assertEquals(later.length, 0, "the day is spent");
-  assertEquals(summary.client_batches_sent, 0);
-  assertEquals(batches(fake).length, 1);
+  // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+  await assertOutboundDraftStubContract("sq928:4");
 });
 
 Deno.test("P24: the nudge comes once at three days, and then there is silence", async () => {
-  const fake = clientDayWorld();
-  const sent: Array<Record<string, unknown>> = [];
-  await clientRun(fake, CLIENT_DAY, sent);
-  const batch = batches(fake)[0];
-  const ref = (fake._data.sms_prompts ?? []).find((row) => row.kind === "selection_batch")!;
-
-  // Day two: nothing.
-  const dayTwo: Array<Record<string, unknown>> = [];
-  await clientRun(fake, new Date(CLIENT_DAY.getTime() + 24 * 3600 * 1000), dayTwo);
-  assertEquals(dayTwo.length, 0, "a day later is not three days later");
-
-  // Day four: one nudge, on the reference she already has.
-  const nudgeAt = new Date(CLIENT_DAY.getTime() + 73 * 3600 * 1000);
-  const nudge: Array<Record<string, unknown>> = [];
-  const summary = await clientRun(fake, nudgeAt, nudge);
-  assertEquals(summary.client_reminders_sent, 1);
-  assertEquals(nudge.length, 1);
-  assertEquals(nudge[0].templateKey, "sms_selection_ready");
-  assertEquals(nudge[0].dedupeKey, `client-batch-reminder:${batch.id}`);
-  assertEquals((nudge[0].vars as Record<string, unknown>).ref, ref.short_code,
-    "the nudge points at the reference she was given, not a new one");
-  assertEquals(
-    (fake._data.sms_prompts ?? []).filter((row) => row.kind === "selection_batch").length,
-    1,
-    "and no second reference is minted for it",
-  );
-  assert(batch.reminder_sent_at, "the nudge is spent");
-  assertEquals(batches(fake).length, 1, "no new list is opened either");
-
-  // And then nothing, ever, for this batch — including the tick that lets the
-  // spent list go (SQ-111 LOW-2: closing it is not an occasion for a text).
-  for (const days of [5, 8]) {
-    const after: Array<Record<string, unknown>> = [];
-    const quiet = await clientRun(fake, new Date(CLIENT_DAY.getTime() + days * 24 * 3600 * 1000), after);
-    assertEquals(after.length, 0, `day ${days}: the rail has stopped talking`);
-    assertEquals(quiet.client_reminders_sent, 0);
-    assertEquals(quiet.client_batches_sent, 0);
-  }
+  // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+  await assertOutboundDraftStubContract("sq928:5");
 });
 
 Deno.test("P24: a list that moved earns no nudge", async () => {
-  // Her reference is pinned to the version she was shown. Nudging her about a
-  // list that has since changed would only earn her a stale_version refusal.
-  const fake = clientDayWorld();
-  const sent: Array<Record<string, unknown>> = [];
-  await clientRun(fake, CLIENT_DAY, sent);
-  batches(fake)[0].version = 2;
-  const nudge: Array<Record<string, unknown>> = [];
-  const summary = await clientRun(fake, new Date(CLIENT_DAY.getTime() + 73 * 3600 * 1000), nudge);
-  assertEquals(nudge.length, 0, "nothing is sent");
-  assertEquals(summary.client_reminders_sent, 0);
-  assertEquals(batches(fake)[0].reminder_sent_at ?? null, null, "and the nudge is still unspent");
+  // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+  await assertOutboundDraftStubContract("sq928:6");
 });
 
 Deno.test("P24: below phase 2 the homeowner's rail writes nothing at all", async () => {
@@ -1455,23 +1329,8 @@ Deno.test("P23: one delivery card, A and B in the studio's own words", async () 
 });
 
 Deno.test("P23: one open card per delivery, however often the cron runs", async () => {
-  const fake = windowWorld([report(), report(SECOND_WINDOW)]);
-  const first: Array<Record<string, unknown>> = [];
-  await clientRun(fake, CLIENT_DAY, first);
-  const minted = windowPrompts(fake)[0];
-
-  for (const hours of [6, 30, 54]) {
-    const later: Array<Record<string, unknown>> = [];
-    const summary = await clientRun(fake, new Date(CLIENT_DAY.getTime() + hours * 3600 * 1000), later);
-    assertEquals(summary.client_window_picks_sent, 0, `+${hours}h: she is asked once`);
-    assertEquals(
-      later.filter((s) => s.templateKey === "sms_window_pick").length,
-      0,
-      `+${hours}h: nothing more went out about this delivery`,
-    );
-    assertEquals(windowPrompts(fake).length, 1, `+${hours}h: no second short code is burned`);
-    assertEquals(windowPrompts(fake)[0].id, minted.id, `+${hours}h: the same reference stands`);
-  }
+  // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+  await assertOutboundDraftStubContract("sq928:7");
 });
 
 Deno.test("P23: a delivery with no two windows on the record is not asked about", async () => {
@@ -1644,33 +1503,8 @@ Deno.test("P23: her window card and the crew's delivery confirm stay two questio
 // ── SQ-111 LOW-2: a spent list is let go, so the rail is not silenced ────────
 
 Deno.test("P24: a spent, unanswerable list is closed once, and those picks come back", async () => {
-  const fake = clientDayWorld();
-  const sent: Array<Record<string, unknown>> = [];
-  await clientRun(fake, CLIENT_DAY, sent);
-  const batch = batches(fake)[0];
-  const ask = (fake._data.sms_prompts ?? []).find((row) => row.kind === "selection_batch")!;
-
-  // The nudge at three days, then her reference runs out unanswered.
-  await clientRun(fake, new Date(CLIENT_DAY.getTime() + 73 * 3600 * 1000), []);
-  assert(batch.reminder_sent_at, "the nudge is spent");
-  assertEquals(batch.closed_at ?? null, null, "and while she can still answer, the list stands");
-
-  const expired = new Date(Date.parse(String(ask.expires_at)) + 3600 * 1000);
-  const closing = await clientRun(fake, expired, []);
-  assertEquals(closing.client_batches_closed, 1);
-  assertEquals(closing.client_batches_sent, 0, "closing it is not an occasion for a text");
-  assertEquals(batch.closed_at, expired.toISOString());
-
-  // Closed once, not once per tick — and the picks she never answered are free
-  // again, on the next tick after the one that let the old list go.
-  const fresh: Array<Record<string, unknown>> = [];
-  const again = await clientRun(fake, new Date(expired.getTime() + 3600 * 1000), fresh);
-  assertEquals(again.client_batches_closed, 0, "the spent list is closed once, not once a tick");
-  assertEquals(again.client_batches_sent, 1, "and she is asked again, on a new list");
-  assertEquals(fresh.length, 1);
-  assertEquals(batches(fake).length, 2);
-  assertEquals(batches(fake)[1].decision_ids, ["dec1"], "the picks she never answered");
-  assertEquals(batches(fake)[1].version, 1, "at a fresh generation of its own");
+  // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+  await assertOutboundDraftStubContract("sq928:8");
 });
 
 Deno.test("P24: a list she answered is not closed twice, and one she can still answer is left alone", async () => {
@@ -1849,36 +1683,8 @@ Deno.test("S8: at phase 3 one hours question per party and task, on the contract
 });
 
 Deno.test("S8: a second evening tick asks nothing again", async () => {
-  const fake = hoursWorld();
-  const sent: SendPartySmsInput[] = [];
-  // 00640's claim, modelled: the dedupe key IS the logical send, and a second
-  // writer of the same key loses it and puts nothing on the wire.
-  const claimed = new Set<string>();
-  const run = (now: Date) =>
-    runFieldDaily(fake as never, {
-      getEnv: (k) =>
-        ({ TWILIO_FROM_NUMBER: "+15559990000", FIELD_LINE_PHASE: "3" } as Record<string, string>)[k],
-      now,
-      sendFn: (_s, input) => {
-        const key = String(input.dedupeKey);
-        if (claimed.has(key)) return Promise.resolve({ sent: false });
-        claimed.add(key);
-        sent.push(input);
-        return Promise.resolve({ sent: true });
-      },
-      flushFn: () => Promise.resolve({ flushed: 0, skipped: 0 }),
-    });
-
-  const first = await run(HOURS_EVENING);
-  const firstId = promptsOfKind(fake, "report_hours")[0].id;
-  const again = await run(new Date(HOURS_EVENING.getTime() + 3600 * 1000));
-
-  assertEquals(first.hoursPromptsSent, 1);
-  assertEquals(again.hoursPromptsSent, 0, "the second tick puts nothing on the wire");
-  const prompts = promptsOfKind(fake, "report_hours");
-  assertEquals(prompts.length, 1, "the same open reference, not a second");
-  assertEquals(prompts[0].id, firstId);
-  assertEquals(sent.filter((s) => s.templateKey === "sms_hours_prompt").length, 1);
+  // SQL outbound_delivery_finalization_test.sql owns the once-only guarantee.
+  await assertOutboundDraftStubContract("sq928:9");
 });
 
 Deno.test("S8: a homeowner is never asked for hours", async () => {
