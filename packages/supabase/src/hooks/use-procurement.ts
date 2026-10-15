@@ -2596,6 +2596,8 @@ function isValidExportInput(input: QboExportInput): boolean {
   return input.includePaid || input.includeOutstanding;
 }
 
+export const procurementUnreadCountKey = () => ['procurement-unread-count'] as const;
+
 /**
  * Returns the count of unread procurement notifications for the current user.
  * Used by the procurement nav badge.
@@ -2608,7 +2610,7 @@ function isValidExportInput(input: QboExportInput): boolean {
  */
 export function useProcurementUnreadCount() {
   return useQuery({
-    queryKey: ['procurement-unread-count'],
+    queryKey: procurementUnreadCountKey(),
     queryFn: async (): Promise<number> => {
       try {
         const supabase = getSupabase() as any;

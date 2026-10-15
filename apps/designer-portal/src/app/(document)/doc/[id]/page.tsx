@@ -3357,11 +3357,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     {/* The held paper's loading line. Zero height, so the paper beneath lays
         out exactly as it will once shown. */}
     {arrivalHeld && !loadingRegister && (
-      <div className="h-0" aria-busy>
-        <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
-          Picking up…
-        </p>
-      </div>
+      <>
+        <div className="fixed inset-0 -z-10 bg-[var(--doc-paper)]" aria-hidden="true" />
+        <div className="h-0" aria-busy>
+          <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
+            Picking up…
+          </p>
+        </div>
+      </>
     )}
     <div
       ref={lensShellRef}
