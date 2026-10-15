@@ -644,7 +644,6 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     ['the viewer studio', 'studio'],
     ['the studio members', 'members'],
     ['the unbilled time', 'unbilled'],
-    ['the profile greeting', 'profile'],
     ['the running timer', 'timer'],
     ['the day’s line pick', 'line'],
   ] as const)('holds ready while %s read is pending', (_read, pending) => {
@@ -654,11 +653,24 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
   });
 
-  it.each([
-    ['profile', 'the greeting profile'],
-    ['timer', 'the running timer'],
-  ] as const)('waits for %s to settle before marking ready', (pending, _read) => {
-    mockPendingRead = pending;
+  it('holds ready for the pending profile after the line-pick timeout', () => {
+    mockPendingRead = 'profile';
+    jest.useFakeTimers();
+    try {
+      const { container, rerender } = render(<DeskPage />);
+      act(() => jest.advanceTimersByTime(800));
+      expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+
+      mockPendingRead = null;
+      rerender(<DeskPage />);
+      expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('waits for the running timer to settle before marking ready', () => {
+    mockPendingRead = 'timer';
     const { container, rerender } = render(<DeskPage />);
     expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
 
