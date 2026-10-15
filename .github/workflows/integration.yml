@@ -50,7 +50,8 @@ jobs:
         run: supabase test db
 
       - name: Run edge-function tests
-        run: deno test --allow-all --config supabase/functions/deno.json supabase/functions
+        # This attended harness requires Supabase keys and is run separately by _tests/run.sh.
+        run: deno test --allow-all --config supabase/functions/deno.json --ignore=supabase/functions/_tests/stripe-rail.test.ts supabase/functions
 
   portal-e2e:
     name: ${{ matrix.portal }} portal browser integration
