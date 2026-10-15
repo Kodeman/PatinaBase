@@ -166,8 +166,8 @@ resolve_next_public_var() {
       \"*\") val="${val#\"}"; val="${val%\"}" ;;
       \'*\') val="${val#\'}"; val="${val%\'}" ;;
     esac
-    # Skip an empty VAR= (Next would use it); harmless, because Phase 0 exports the resolved value, which beats Next's env files.
-    [ -n "$val" ] || continue
+    # An empty VAR= ends the .env walk and falls through to the wrangler value, which is exported and so wins over Next's empty value.
+    [ -n "$val" ] || break
     RESOLVED_SOURCE="${env_file##*/}"
     RESOLVED_VALUE="$val"
     printf '%s' "$RESOLVED_VALUE"
@@ -349,14 +349,18 @@ fi
 echo "==> [0/3] Preflight OK: NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL}"
 echo "==> [0/3] Preflight OK: runtime-origin path resolves (SUPABASE_ORIGIN_RUNTIME=${PREFLIGHT_ORIGIN_RUNTIME:-<unset, inherits build-time URL>})"
 
-# Every refusal above has passed. Export the validated trio whatever its source:
-# an exported value beats Next's env files, so next build inlines exactly this.
-export NEXT_PUBLIC_SUPABASE_URL="$PREFLIGHT_URL"
-export NEXT_PUBLIC_SUPABASE_ANON_KEY="$PREFLIGHT_ANON"
-export NEXT_PUBLIC_SUPABASE_STORAGE_KEY="$PREFLIGHT_STORAGE_KEY"
-echo "==> [0/3] Preflight export: NEXT_PUBLIC_SUPABASE_URL (source=${PREFLIGHT_URL_SOURCE})"
-echo "==> [0/3] Preflight export: NEXT_PUBLIC_SUPABASE_ANON_KEY (source=${PREFLIGHT_ANON_SOURCE})"
-echo "==> [0/3] Preflight export: NEXT_PUBLIC_SUPABASE_STORAGE_KEY (source=${PREFLIGHT_STORAGE_KEY_SOURCE})"
+# Every refusal above has passed. next build never reads wrangler.jsonc, so export a
+# trio value that came from it; exported values are already in process.env and .env
+# values stay with Next's loader.
+export_wrangler_trio_var() {
+  # $1 = variable name, $2 = validated value, $3 = its Phase 0 source.
+  [ "$3" = "wrangler.jsonc" ] || return 0
+  export "$1=$2"
+  echo "==> [0/3] Preflight export: $1 (source=wrangler.jsonc)"
+}
+export_wrangler_trio_var NEXT_PUBLIC_SUPABASE_URL "$PREFLIGHT_URL" "$PREFLIGHT_URL_SOURCE"
+export_wrangler_trio_var NEXT_PUBLIC_SUPABASE_ANON_KEY "$PREFLIGHT_ANON" "$PREFLIGHT_ANON_SOURCE"
+export_wrangler_trio_var NEXT_PUBLIC_SUPABASE_STORAGE_KEY "$PREFLIGHT_STORAGE_KEY" "$PREFLIGHT_STORAGE_KEY_SOURCE"
 echo
 
 # ---------------------------------------------------------------------------
