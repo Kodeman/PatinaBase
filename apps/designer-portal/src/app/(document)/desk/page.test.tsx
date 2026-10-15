@@ -23,8 +23,11 @@ let mockPendingRead:
   | 'studio'
   | 'members'
   | 'unbilled'
+  | 'profile'
+  | 'timer'
   | 'line'
   | null = null;
+let mockProfileAbsent = false;
 let mockMemberLineFlags = true;
 // US-34 N10 — the loading register; off unless a test turns it on.
 let mockLoadingRegister = false;
@@ -35,7 +38,14 @@ const answeredFacts = () => ({ data: new Map(), isSuccess: true });
 let mockTeammateActed: (organizationId: string) => unknown = answeredFacts;
 
 jest.mock('@patina/supabase', () => ({
-  useProfile: () => ({ data: { display_name: 'Leah Warner' } }),
+  useProfile: () =>
+    mockPendingRead === 'profile'
+      ? { data: undefined, isLoading: true }
+      : { data: mockProfileAbsent ? undefined : { display_name: 'Leah Warner' }, isLoading: false },
+  useRunningTimer: () =>
+    mockPendingRead === 'timer'
+      ? { data: undefined, isPending: true }
+      : { data: undefined, isPending: false },
   useOrganizations: () => ({ data: mockOrgs() }),
   // TanStack v5's shapes: a disabled query (no studio id) with no data is
   // `isPending` but not `isLoading`.
@@ -205,6 +215,7 @@ beforeEach(() => {
   resetDeskVisit();
   mockDeskRead = settledDeskRead();
   mockPendingRead = null;
+  mockProfileAbsent = false;
   mockViewerStudioId = null;
   mockLeadsRead = true;
   mockTeammateActed = answeredFacts;
@@ -633,12 +644,40 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     ['the viewer studio', 'studio'],
     ['the studio members', 'members'],
     ['the unbilled time', 'unbilled'],
+    ['the profile greeting', 'profile'],
+    ['the running timer', 'timer'],
     ['the day’s line pick', 'line'],
   ] as const)('holds ready while %s read is pending', (_read, pending) => {
     mockPendingRead = pending;
     const { container } = render(<DeskPage />);
     expect(main(container).getAttribute('data-arrival')).toBe('desk');
     expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+  });
+
+  it.each([
+    ['profile', 'the greeting profile'],
+    ['timer', 'the running timer'],
+  ] as const)('waits for %s to settle before marking ready', (pending, _read) => {
+    mockPendingRead = pending;
+    const { container, rerender } = render(<DeskPage />);
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+
+    mockPendingRead = null;
+    rerender(<DeskPage />);
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
+  });
+
+  it('does not hold ready when the settled profile read has no data', () => {
+    mockProfileAbsent = true;
+    const { container } = render(<DeskPage />);
+    expect(main(container).getAttribute('data-arrival')).toBe('desk');
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
+  });
+
+  it('does not hold ready when the settled timer read has no data', () => {
+    const { container } = render(<DeskPage />);
+    expect(main(container).getAttribute('data-arrival')).toBe('desk');
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
   });
 
   // Round 5 — the members print the roster's "By person" facet inside the
