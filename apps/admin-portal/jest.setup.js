@@ -6,6 +6,19 @@ import { TextEncoder, TextDecoder } from 'util'
 global.TextEncoder = TextEncoder
 global.TextDecoder = TextDecoder
 
+// jsdom 20 (jest-environment-jsdom 29) has no Blob#arrayBuffer, which the
+// media uploader's file-signature check calls on file.slice(...).
+if (typeof Blob !== 'undefined' && !Blob.prototype.arrayBuffer) {
+  Blob.prototype.arrayBuffer = function arrayBuffer() {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = () => reject(reader.error)
+      reader.readAsArrayBuffer(this)
+    })
+  }
+}
+
 // Mock canvas to avoid native dependency issues in tests
 jest.mock('canvas', () => {}, { virtual: true })
 

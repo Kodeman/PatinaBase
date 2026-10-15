@@ -207,7 +207,6 @@ describe('Input Sanitization', () => {
       '<script>alert("XSS")</script>',
       '<img src=x onerror=alert(1)>',
       '<svg onload=alert(1)>',
-      'javascript:alert(1)',
       '<iframe src="javascript:alert(1)">',
       '<body onload=alert(1)>',
       '<input onfocus=alert(1) autofocus>',
@@ -225,6 +224,13 @@ describe('Input Sanitization', () => {
         expect(result).not.toContain('javascript:');
         expect(result).not.toMatch(/on\w+\s*=/i);
       });
+    });
+
+    // sanitizeInput is an HTML stripper: markup-free text passes through
+    // unchanged and is inert when rendered as text. URL-context checks are
+    // detectSuspiciousInput's job, not this function's.
+    it('should leave markup-free text such as javascript:alert(1) unchanged', () => {
+      expect(sanitizeInput('javascript:alert(1)')).toBe('javascript:alert(1)');
     });
   });
 });

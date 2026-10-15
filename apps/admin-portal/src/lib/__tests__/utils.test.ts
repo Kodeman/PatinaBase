@@ -34,8 +34,10 @@ describe('utils', () => {
     })
 
     it('should format date string correctly', () => {
-      const formatted = formatDate('2024-03-20')
-      expect(formatted).toMatch(/Mar 2[01], 2024/)
+      // A date-only string parses as UTC midnight, which is the previous day
+      // west of UTC; a local date-time string formats the same in every zone.
+      const formatted = formatDate('2024-03-20T12:00:00')
+      expect(formatted).toBe('Mar 20, 2024')
     })
   })
 

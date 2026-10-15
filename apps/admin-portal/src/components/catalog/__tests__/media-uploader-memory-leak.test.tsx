@@ -18,10 +18,32 @@ const mockRevokeObjectURL = jest.fn();
 global.URL.createObjectURL = mockCreateObjectURL;
 global.URL.revokeObjectURL = mockRevokeObjectURL;
 
-// Helper to create a mock file
+// validateFileSecure and getImageDimensions decode each image through
+// new Image(); jsdom never fires load events, so resolve the load as soon as
+// a src is assigned.
+class LoadingImage {
+  width = 800;
+  height = 600;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  set src(_url: string) {
+    setTimeout(() => this.onload?.());
+  }
+}
+global.Image = LoadingImage as unknown as typeof Image;
+
+// Helper to create a mock file. validateFileSecure checks magic numbers, so
+// JPEG fixtures start with a real JPEG header.
+const JPEG_HEADER = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
 function createMockFile(name: string, size: number, type: string): File {
-  const blob = new Blob(['x'.repeat(size)], { type });
+  const blob = new Blob([JPEG_HEADER, 'x'.repeat(size)], { type });
   return new File([blob], name, { type });
+}
+
+function fileInput(): HTMLInputElement {
+  const input = screen.getByRole('presentation').querySelector('input[type="file"]');
+  if (!input) throw new Error('File input not found');
+  return input as HTMLInputElement;
 }
 
 describe('MediaUploader - Memory Leak Prevention', () => {
@@ -45,35 +67,15 @@ describe('MediaUploader - Memory Leak Prevention', () => {
       <MediaUploader onUpload={mockOnUpload} acceptedTypes={['image/jpeg']} />
     );
 
-    // Simulate file drop
-    const dropzone = screen.getByText(/drag & drop/i).closest('div');
-    if (!dropzone) throw new Error('Dropzone not found');
+    await userEvent.upload(fileInput(), file);
 
-    // Create a DataTransfer object with the file
-    const dataTransfer = {
-      files: [file],
-      items: [
-        {
-          kind: 'file',
-          type: file.type,
-          getAsFile: () => file,
-        },
-      ],
-      types: ['Files'],
-    };
-
-    // Trigger drop event
-    const dropEvent = new Event('drop', { bubbles: true });
-    Object.defineProperty(dropEvent, 'dataTransfer', {
-      value: dataTransfer,
-    });
-
-    // Wait for preview generation
+    // Wait for validation and preview generation to finish
     await waitFor(() => {
-      expect(mockCreateObjectURL).toHaveBeenCalled();
+      expect(screen.getByText('test.jpg')).toBeInTheDocument();
     });
 
     const createCallCount = mockCreateObjectURL.mock.calls.length;
+    expect(createCallCount).toBeGreaterThan(0);
 
     // Unmount component
     unmount();
@@ -90,15 +92,7 @@ describe('MediaUploader - Memory Leak Prevention', () => {
     render(<MediaUploader onUpload={mockOnUpload} acceptedTypes={['image/jpeg']} />);
 
     // Add file (this will trigger createObjectURL)
-    const input = screen.getByRole('presentation').querySelector('input[type="file"]');
-    if (!input) throw new Error('File input not found');
-
-    Object.defineProperty(input, 'files', {
-      value: [file],
-    });
-
-    const changeEvent = new Event('change', { bubbles: true });
-    input.dispatchEvent(changeEvent);
+    await userEvent.upload(fileInput(), file);
 
     // Wait for file to be added
     await waitFor(() => {
@@ -108,8 +102,8 @@ describe('MediaUploader - Memory Leak Prevention', () => {
     // Clear mock before removal
     mockRevokeObjectURL.mockClear();
 
-    // Remove file
-    const removeButton = screen.getByLabelText(/remove/i);
+    // Remove file (the icon-only X button)
+    const removeButton = screen.getByRole('button', { name: '' });
     await userEvent.click(removeButton);
 
     // Verify URL was revoked
@@ -122,31 +116,19 @@ describe('MediaUploader - Memory Leak Prevention', () => {
     const file1 = createMockFile('test1.jpg', 1024 * 100, 'image/jpeg');
     const file2 = createMockFile('test2.jpg', 1024 * 100, 'image/jpeg');
 
-    const { rerender } = render(
-      <MediaUploader onUpload={mockOnUpload} acceptedTypes={['image/jpeg']} />
-    );
+    render(<MediaUploader onUpload={mockOnUpload} acceptedTypes={['image/jpeg']} />);
 
     // Add first file
-    const input = screen.getByRole('presentation').querySelector('input[type="file"]');
-    if (!input) throw new Error('File input not found');
-
-    Object.defineProperty(input, 'files', {
-      value: [file1],
-    });
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await userEvent.upload(fileInput(), file1);
 
     await waitFor(() => {
-      expect(mockCreateObjectURL).toHaveBeenCalled();
+      expect(screen.getByText('test1.jpg')).toBeInTheDocument();
     });
 
-    const initialCallCount = mockCreateObjectURL.mock.calls.length;
     mockRevokeObjectURL.mockClear();
 
     // Add second file (triggers re-render with new files array)
-    Object.defineProperty(input, 'files', {
-      value: [file2],
-    });
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await userEvent.upload(fileInput(), file2);
 
     await waitFor(() => {
       // Should have revoked URLs from previous files array
@@ -165,15 +147,9 @@ describe('MediaUploader - Memory Leak Prevention', () => {
       <MediaUploader onUpload={mockOnUpload} acceptedTypes={['image/jpeg']} />
     );
 
-    const input = screen.getByRole('presentation').querySelector('input[type="file"]');
-    if (!input) throw new Error('File input not found');
-
     // Add files one by one
     for (const file of files) {
-      Object.defineProperty(input, 'files', {
-        value: [file],
-      });
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await userEvent.upload(fileInput(), file);
 
       await waitFor(() => {
         expect(screen.getByText(file.name)).toBeInTheDocument();
@@ -181,9 +157,9 @@ describe('MediaUploader - Memory Leak Prevention', () => {
     }
 
     const totalCreatedURLs = mockCreateObjectURL.mock.calls.length;
-    mockRevokeObjectURL.mockClear();
 
-    // Unmount should revoke all URLs
+    // Unmount should revoke all URLs: every URL created over the component's
+    // lifetime (validation, dimensions and previews) must have been revoked.
     unmount();
 
     await waitFor(() => {
@@ -196,25 +172,17 @@ describe('MediaUploader - Memory Leak Prevention', () => {
 
     render(<MediaUploader onUpload={mockOnUpload} acceptedTypes={['image/jpeg']} />);
 
-    const input = screen.getByRole('presentation').querySelector('input[type="file"]');
-    if (!input) throw new Error('File input not found');
-
     // Add file
-    Object.defineProperty(input, 'files', {
-      value: [file],
-    });
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await userEvent.upload(fileInput(), file);
 
     await waitFor(() => {
       expect(screen.getByText('test.jpg')).toBeInTheDocument();
     });
 
-    // Track created URLs
-    const createdURLCount = mockCreateObjectURL.mock.calls.length;
     mockRevokeObjectURL.mockClear();
 
     // Click upload
-    const uploadButton = screen.getByRole('button', { name: /upload/i });
+    const uploadButton = screen.getByRole('button', { name: /upload all/i });
     await userEvent.click(uploadButton);
 
     // Wait for upload to complete
@@ -231,9 +199,7 @@ describe('MediaUploader - Memory Leak Prevention', () => {
     // The actual implementation should have:
     // useEffect(() => { return () => { /* cleanup */ } }, [files])
 
-    const file1 = createMockFile('test1.jpg', 1024 * 100, 'image/jpeg');
-
-    const { rerender, unmount } = render(
+    const { unmount } = render(
       <MediaUploader onUpload={mockOnUpload} acceptedTypes={['image/jpeg']} />
     );
 
