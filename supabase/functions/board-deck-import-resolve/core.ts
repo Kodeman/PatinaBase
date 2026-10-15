@@ -791,10 +791,35 @@ async function adjudicateSlides(
   for (const [, slide] of slides) {
     if (pastDeadline()) break;
     let assignments: AdjudicationAssignment[] | null = null;
-    const claim = await deps.claimAdjudication(
-      slide.import_id,
-      slide.slide_index,
-    );
+    let claim: AdjudicationClaim;
+    try {
+      claim = await deps.claimAdjudication(
+        slide.import_id,
+        slide.slide_index,
+      );
+    } catch (error) {
+      // The deterministic tiers can still resolve the pieces. Do not let a
+      // broken adjudication RPC release/refund the whole claimed batch.
+      deps.log("adjudication_claim_failed", {
+        import_id: slide.import_id,
+        slide_index: slide.slide_index,
+        error: String(error).slice(0, 200),
+      });
+      try {
+        await deps.storeAdjudication(
+          slide.import_id,
+          slide.slide_index,
+          null,
+        );
+      } catch (storeError) {
+        deps.log("adjudication_claim_failure_store_failed", {
+          import_id: slide.import_id,
+          slide_index: slide.slide_index,
+          error: String(storeError).slice(0, 200),
+        });
+      }
+      continue;
+    }
     if (claim.status === "cached") {
       assignments = claim.assignments;
     } else if (claim.status === "granted") {
@@ -817,15 +842,51 @@ async function adjudicateSlides(
           transient,
           error: String(error).slice(0, 200),
         });
-        // A transient failure stores nothing: the pending slot is reclaimed
-        // once its lease ages out. Anything else is recorded as failed.
-        if (transient) continue;
+        // Persist failure when possible so the SQL ledger can apply backoff.
+        // In particular, do not abandon a granted claim as an indefinitely
+        // pending slot after an upstream transient response.
       }
-      await deps.storeAdjudication(
-        slide.import_id,
-        slide.slide_index,
-        assignments,
-      );
+      let stored = false;
+      for (let attempt = 0; attempt < 3 && !stored; attempt++) {
+        try {
+          await deps.storeAdjudication(
+            slide.import_id,
+            slide.slide_index,
+            assignments,
+          );
+          stored = true;
+        } catch (error) {
+          deps.log("adjudication_store_failed", {
+            import_id: slide.import_id,
+            slide_index: slide.slide_index,
+            attempt: attempt + 1,
+            error: String(error).slice(0, 200),
+          });
+          if (attempt < 2) await deps.sleep(250 * 2 ** attempt);
+        }
+      }
+      if (!stored) {
+        // The provider result stays in memory: retries above never repeat the
+        // provider call. Best-effort terminal failure writes consume the two
+        // existing SQL failure attempts; the stale-pending TTL is the crash
+        // recovery if the store remains unavailable.
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            await deps.storeAdjudication(
+              slide.import_id,
+              slide.slide_index,
+              null,
+            );
+          } catch (error) {
+            deps.log("adjudication_terminal_store_failed", {
+              import_id: slide.import_id,
+              slide_index: slide.slide_index,
+              attempt: attempt + 1,
+              error: String(error).slice(0, 200),
+            });
+          }
+        }
+      }
     }
     if (!assignments) continue;
     const texts = new Map(slide.texts.map((t) => [t.key, t.text]));

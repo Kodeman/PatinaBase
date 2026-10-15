@@ -708,7 +708,7 @@ Deno.test("shared-client 529 failures remain transient at the deck adapter", () 
   assert(isTransientAdjudicationError(error));
 });
 
-Deno.test("F5: a transient 409 failure stores nothing; the slot stays reclaimable", async () => {
+Deno.test("F5: a transient 409 failure is stored so SQL can apply backoff", async () => {
   const failure = adjudicationErrorFromClaudeFailure({
     error: "conflict",
     status: 409,
@@ -724,13 +724,13 @@ Deno.test("F5: a transient 409 failure stores nothing; the slot stays reclaimabl
   });
   const summary = await runResolve(f.deps);
   assertEquals(f.calls.claimAdjudication, 1);
-  assertEquals(f.calls.storeAdjudication ?? 0, 0);
+  assertEquals(f.calls.storeAdjudication, 1);
   assertEquals(summary.adjudications, 0);
   assertEquals(recordFor(f, "pic-a").state, "not_found");
   assert(isTransientAdjudicationError(failure));
 });
 
-Deno.test("F5: a transient failure (429, 529, timeout, network) stores nothing; the slot stays reclaimable", async () => {
+Deno.test("F5: transient failures are stored so SQL can back off without another quota debit", async () => {
   for (
     const failure of [
       new AdjudicationHttpError(429),
@@ -748,7 +748,7 @@ Deno.test("F5: a transient failure (429, 529, timeout, network) stores nothing; 
     });
     const summary = await runResolve(f.deps);
     assertEquals(f.calls.claimAdjudication, 1, String(failure));
-    assertEquals(f.calls.storeAdjudication ?? 0, 0, String(failure));
+    assertEquals(f.calls.storeAdjudication, 1, String(failure));
     assertEquals(summary.adjudications, 0);
     // The piece still resolves deterministically.
     assertEquals(recordFor(f, "pic-a").state, "not_found");
@@ -773,6 +773,83 @@ Deno.test("F5: a permanent failure (400) is stored as a failed adjudication", as
     false,
   );
 });
+
+Deno.test("F8: store retries reuse the provider result and persistent failures do not refund pieces", async () => {
+  let successfulStoreAttempts = 0;
+  let providerCalls = 0;
+  const succeedsAfterRetry = fake([item("store-retry", FLAGGED)], {
+    adjudicate: async () => {
+      providerCalls++;
+      return {
+        input: [],
+        usage: { input_tokens: 10, output_tokens: 4 },
+        usd: 0.01,
+      };
+    },
+    storeAdjudication: async () => {
+      successfulStoreAttempts++;
+      if (successfulStoreAttempts < 3) throw new Error("temporary store failure");
+    },
+  });
+  await runResolve(succeedsAfterRetry.deps);
+  assertEquals(providerCalls, 1);
+  assertEquals(successfulStoreAttempts, 3);
+  assertEquals(succeedsAfterRetry.released, []);
+
+  let persistentProviderCalls = 0;
+  let persistentStoreAttempts = 0;
+  const persistentFailure = fake([item("store-terminal", FLAGGED)], {
+    adjudicate: async () => {
+      persistentProviderCalls++;
+      return {
+        input: [],
+        usage: { input_tokens: 10, output_tokens: 4 },
+        usd: 0.01,
+      };
+    },
+    storeAdjudication: async () => {
+      persistentStoreAttempts++;
+      throw new Error("store RPC unavailable");
+    },
+  });
+  await runResolve(persistentFailure.deps);
+  assertEquals(persistentProviderCalls, 1);
+  assertEquals(persistentStoreAttempts, 5);
+  assertEquals(persistentFailure.released, []);
+  assertEquals(recordFor(persistentFailure, "store-terminal").state, "not_found");
+});
+
+Deno.test("F8: failed adjudication claim is recorded for backoff without refunds", async () => {
+  const claimFailure = fake([item("claim-error", FLAGGED)], {
+    adjudicate: async () => {
+      throw new Error("claim failure must not reach provider");
+    },
+    claimAdjudication: async () => {
+      throw new Error("claim RPC unavailable");
+    },
+  });
+  await runResolve(claimFailure.deps);
+  assertEquals(claimFailure.calls.storeAdjudication, 1);
+  assertEquals(claimFailure.calls.adjudicate ?? 0, 0);
+  assertEquals(claimFailure.released, []);
+  assertEquals(recordFor(claimFailure, "claim-error").state, "not_found");
+});
+
+Deno.test("F8: stale adjudication claim does not invoke the provider or release pieces", async () => {
+  const staleClaim = fake([item("stale-claim", FLAGGED)], {
+    adjudicate: async () => {
+      throw new Error("stale pending claim must not reach provider");
+    },
+    claimAdjudication: async () => ({ status: "denied" }),
+  });
+  await runResolve(staleClaim.deps);
+  assertEquals(staleClaim.calls.adjudicate ?? 0, 0);
+  assertEquals(staleClaim.released, []);
+  assertEquals(recordFor(staleClaim, "stale-claim").state, "not_found");
+});
+
+// ─── SQ-366 F7: the run stops starting work after its start budget ──────────
+
 
 // ─── SQ-366 F7: the run stops starting work after its start budget ──────────
 

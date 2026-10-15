@@ -305,7 +305,7 @@ END $$;
 
 -- ── 6. Adjudication ledger ──────────────────────────────────────────────────
 DO $$
-DECLARE r jsonb;
+DECLARE r jsonb; v_studio uuid; v_day date := (now() AT TIME ZONE 'UTC')::date; v_used integer;
 BEGIN
   r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 4, 'rd');
   ASSERT r->>'status' = 'granted', format('first claim: %s', r);
@@ -316,13 +316,35 @@ BEGIN
   r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 4, 'rd');
   ASSERT r->>'status' = 'cached' AND jsonb_array_length(r->'assignments') = 1,
     format('a re-run reuses the answer: %s', r);
-  -- 00678 F5: a failed call is tried once more, then no more.
-  PERFORM public.store_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, NULL, 'rd');
+  -- 00678 F5: a failed call is retried once after backoff, reusing its original
+  -- studio-day quota reservation; a second failure is terminal.
   r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, 'rd');
-  ASSERT r->>'status' = 'granted', format('a failed call is retried once: %s', r);
+  ASSERT r->>'status' = 'granted', format('initial adjudication slot: %s', r);
   PERFORM public.store_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, NULL, 'rd');
+  SELECT studio_key INTO v_studio FROM public.board_deck_import_link_usage
+  WHERE import_id = 'd6777000-0000-4000-8000-000000000001';
+  SELECT adjudications_used INTO v_used FROM public.board_deck_import_studio_link_days
+  WHERE studio_key = v_studio AND day = v_day;
+  UPDATE public.board_deck_import_link_usage
+  SET adjudications = jsonb_set(adjudications, '{5,at}', to_jsonb(now() - interval '2 minutes'))
+  WHERE import_id = 'd6777000-0000-4000-8000-000000000001';
+  r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, 'rd');
+  ASSERT r->>'status' = 'granted', format('failed call retries after backoff: %s', r);
+  ASSERT (SELECT adjudications_used = v_used
+          FROM public.board_deck_import_studio_link_days
+          WHERE studio_key = v_studio AND day = v_day),
+    'retry of the same slide does not debit another studio-day slot';
+  PERFORM public.store_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, NULL, 'rd');
+  UPDATE public.board_deck_import_link_usage
+  SET adjudications = jsonb_set(adjudications, '{5,at}', to_jsonb(now() - interval '10 minutes'))
+  WHERE import_id = 'd6777000-0000-4000-8000-000000000001';
   r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, 'rd');
   ASSERT r->>'status' = 'denied', format('a second failure is final: %s', r);
+  ASSERT (SELECT adjudications->'5'->>'state' = 'failed'
+                 AND (adjudications->'5'->>'failures')::integer = 2
+          FROM public.board_deck_import_link_usage
+          WHERE import_id = 'd6777000-0000-4000-8000-000000000001'),
+    'terminal slide failure remains recorded in the existing adjudication ledger';
   FOR i IN 6..30 LOOP
     r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', i, 'rd');
   END LOOP;
