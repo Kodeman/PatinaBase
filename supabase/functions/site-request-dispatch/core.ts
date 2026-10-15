@@ -90,6 +90,15 @@ export function dispatchCompletionStatus(
   return result.sent ? "sent" : result.terminal ? "cancelled" : "retry";
 }
 
+export function notificationLogStatus(
+  result: DispatchSmsResult,
+): "sending" | "suppressed" | "queued" {
+  if (result.sent) return "sending";
+  return !result.deferred && result.reason && REFUSAL_REASONS.has(result.reason)
+    ? "suppressed"
+    : "queued";
+}
+
 export interface DeliveryNotificationContext {
   outbox_id: string;
   request_id: string;
@@ -350,8 +359,14 @@ async function dispatchClaimed(
       await completeWithRetry(deps, context.outbox_id!, {
         sent: false,
         error: "dispatch_token_missing",
+        terminal: true,
       });
-      return { sent: false, queued: true, context };
+      return {
+        sent: false,
+        queued: false,
+        refused: "dispatch_token_missing",
+        context,
+      };
     }
     body = siteRequestBody(deps, context);
     templateKey = action === "resend"

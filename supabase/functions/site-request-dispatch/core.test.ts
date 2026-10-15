@@ -7,6 +7,7 @@ import {
   type DispatchCompletion,
   dispatchCompletionStatus,
   handleSiteRequestDispatch,
+  notificationLogStatus,
   siteRequestSendAuthority,
   type SiteRequestDispatchContext,
   type SiteRequestDispatchDeps,
@@ -263,6 +264,59 @@ Deno.test(
     });
   },
 );
+
+Deno.test("notification log marks refusal suppressed and retryable failure queued", () => {
+  assertEquals(
+    notificationLogStatus({ sent: false, reason: "field_line_phase_off" }),
+    "suppressed",
+  );
+  assertEquals(
+    notificationLogStatus({ sent: false, reason: "sms_provider_error" }),
+    "queued",
+  );
+  assertEquals(notificationLogStatus({ sent: true }), "sending");
+});
+
+Deno.test("missing dispatch capability is terminal and returns send_refused", async () => {
+  for (const action of ["send", "resend"]) {
+    for (const missing of [
+      { token: null, access_id: claimed.access_id },
+      { token: claimed.token, access_id: null },
+    ]) {
+      let completion: DispatchCompletion | undefined;
+      let sent = false;
+      const context = { ...claimed, ...missing, action };
+      const res = await handleSiteRequestDispatch(
+        request(action),
+        deps({
+          claimDispatch: () => Promise.resolve(context),
+          sendSms: () => {
+            sent = true;
+            return Promise.resolve({ sent: true });
+          },
+          completeDispatch: (_id, result) => {
+            completion = result;
+            return Promise.resolve({ status: "cancelled" });
+          },
+        }),
+      );
+      assertEquals(sent, false);
+      assertEquals(completion, {
+        sent: false,
+        error: "dispatch_token_missing",
+        terminal: true,
+      });
+      assertEquals(dispatchCompletionStatus(completion!), "cancelled");
+      assertEquals(res.status, 409);
+      assertEquals(await res.json(), {
+        ok: false,
+        error: "send_refused",
+        reason: "dispatch_token_missing",
+        status: "draft",
+      });
+    }
+  }
+});
 
 // ── Gate refusals are policy decisions, not carrier weather (SQ-118) ────────
 // sendPartySms refuses with a REASON when a gate says no. Retrying re-asks the

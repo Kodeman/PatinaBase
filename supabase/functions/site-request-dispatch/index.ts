@@ -12,6 +12,7 @@ import {
   DISPATCH_RPC_BY_ACTION,
   dispatchCompletionStatus,
   handleSiteRequestDispatch,
+  notificationLogStatus,
   siteRequestSendAuthority,
   type SiteRequestDispatchContext,
   type SiteRequestDispatchDeps,
@@ -243,7 +244,7 @@ const deps: SiteRequestDispatchDeps = {
       user_id: party.user_id,
       type: `site_request_${action.replaceAll("-", "_")}`,
       channel: "sms",
-      status: result.sent ? "sending" : "queued",
+      status: notificationLogStatus(result),
       provider_id: result.twilioSid ?? null,
       metadata: {
         request_id: context.request_id,
