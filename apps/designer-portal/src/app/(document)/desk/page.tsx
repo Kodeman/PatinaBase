@@ -507,7 +507,7 @@ export default function DeskPage() {
   const arrivalWaiting = useArrivalWaiting('/desk');
   const arrivalRootShown = useRef(false);
   const arrivalHeld = arrivalWaiting && !arrivalReady && !arrivalRootShown.current;
-  const arrivalRoot = deskRead && !arrivalHeld;
+  const arrivalRoot = deskRead && hydrated && !arrivalHeld;
   // Latched at commit, not in render: a render React throws away must not
   // count as a shown root.
   useLayoutEffect(() => {
