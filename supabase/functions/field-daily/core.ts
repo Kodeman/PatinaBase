@@ -1611,7 +1611,8 @@ async function proposedDeliveryWindows(
     // an offer of a window.
     if (!row.subject_kind || !row.subject_id) continue;
     if (!row.proposed_date && !row.proposed_window) continue;
-    const key = `${row.subject_kind} ${row.subject_id}`;
+    // NUL cannot collide with a subject kind or id.
+    const key = `${row.subject_kind}\u0000${row.subject_id}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
 
