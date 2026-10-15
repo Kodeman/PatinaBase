@@ -142,5 +142,6 @@ function casePhase(caseId) {
     ["client-version-race", 2], ["client-one-ask-a-day", 2],
     ["client-consent-boundary", 2], ["client-campaign-approval", 2],
     ["client-window-pick-issued", 2],
+    ["hours-prompt-gate", 3], ["hours-reply-proposal", 3],
   ]).get(caseId) ?? Number.POSITIVE_INFINITY;
 }
