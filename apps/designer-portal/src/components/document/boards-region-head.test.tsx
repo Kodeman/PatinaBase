@@ -15,6 +15,8 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   useProjectOwnedBoards: (...args: unknown[]) => useProjectOwnedBoards(...args),
   useProjectBoards: (...args: unknown[]) => useProjectBoards(...args),
   useProjectFFEItems: (...args: unknown[]) => useProjectFFEItems(...args),

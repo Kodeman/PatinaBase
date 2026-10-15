@@ -184,6 +184,8 @@ let mockPlanRoomLoading = false;
 const mockUsePlanRoom = jest.fn(() => ({ data: { sheets: [] }, isLoading: mockPlanRoomLoading }));
 
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   /* B1 — the job ticket's own reads. The ticket is mounted by every
      project-kind document now, so every suite that renders one pays for
      these; none of them is this suite's subject. */

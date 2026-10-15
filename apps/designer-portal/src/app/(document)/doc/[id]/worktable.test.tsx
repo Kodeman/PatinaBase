@@ -28,6 +28,8 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   useInstallWindow: () => ({ data: null, isSuccess: true }),
   useProjectLead: () => ({ data: null }),
   useNeedStates: () => ({ data: new Map() }),

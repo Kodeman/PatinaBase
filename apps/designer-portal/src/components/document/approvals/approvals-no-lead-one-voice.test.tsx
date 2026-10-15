@@ -22,6 +22,8 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 
 const idle = { mutateAsync: jest.fn(), isPending: false };
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   useProjectApprovals: () => ({ data: [], isLoading: false, isFetching: false, isError: false }),
   useProjectApprovalArtifactCandidates: () => ({ data: [], isLoading: false, isError: false }),
   useProjectDecisionAuthority: () => ({ data: authority, isLoading: false, isError: false }),

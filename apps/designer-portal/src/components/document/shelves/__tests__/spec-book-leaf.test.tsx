@@ -25,6 +25,8 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   useProjectRoomPlacements: () => ({ data: [] }),
   useProjectPalettes: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),

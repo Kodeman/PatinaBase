@@ -69,6 +69,8 @@ import type { RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { QueryClient, QueryClientContext } from '@tanstack/react-query';
 import type { Query } from '@tanstack/react-query';
+import { inboxKeys, procurementUnreadCountKey } from '@patina/supabase';
+import { documentTimeTodayQueryKey } from '@/hooks/document-time-query-keys';
 import {
   LENS_LOOKAHEAD_PX,
   LENS_RESOLVE_MAX_MS,
@@ -107,13 +109,11 @@ const STANDBY_CLIENT = new QueryClient();
  * prefixes, so the margin rail's `['inbox', 'notifications', …]` still counts.
  */
 const OFF_PAPER_QUERY_KEYS: ReadonlyArray<readonly string[]> = [
-  // DeskWalkthrough (WelcomeModal, TourController) and the ContextualHelpPanel.
+  // Owner is helpContentQueryKey() in @patina/help-system; avoid bundling its Sanity barrel here.
   ['help-content'],
-  // The StudioDrawer's and the MobileBar's badges (the inbox's polls every 30s).
-  ['inbox', 'unread-count'],
-  ['procurement-unread-count'],
-  // DocumentTimeProvider's in-hand readout for the drawer (polls every 60s).
-  ['document-time-today'],
+  inboxKeys.unreadCount(),
+  procurementUnreadCountKey(),
+  documentTimeTodayQueryKey(),
 ];
 
 function readsPaper(query: Query): boolean {

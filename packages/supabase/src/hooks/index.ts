@@ -1808,6 +1808,7 @@ export {
   // Sprint 3 / Wave 3.2 — Procurement notifications (migration 00151)
   useProcurementNotifications,
   useProcurementUnreadCount,
+  procurementUnreadCountKey,
   useMarkProcurementNotificationRead,
   // Sprint 3 / Wave 3.3 — Capture-to-slot integration
   useAssignProductToFfeSlot,

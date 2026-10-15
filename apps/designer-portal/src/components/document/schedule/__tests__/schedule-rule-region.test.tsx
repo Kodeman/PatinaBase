@@ -16,6 +16,8 @@ const mockSchedule: {
 };
 
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   useResolvedSchedule: () => mockSchedule,
 }));
 

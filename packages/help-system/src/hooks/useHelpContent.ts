@@ -27,6 +27,8 @@ const groq = (strings: TemplateStringsArray, ...values: unknown[]): string =>
 
 const HELP_CONTENT_STALE_MS = 5 * 60 * 1000 // 5 minutes per spec §7.3
 
+export const helpContentQueryKey = () => ['help-content'] as const
+
 /**
  * Fetches help content from Sanity by surface key + content type, applying
  * the canonical 4-step persona fallback chain (spec §7.3, full contract in
@@ -51,7 +53,7 @@ export function useHelpContent<T extends HelpContentType>(
   persona: Persona = 'all',
 ): UseQueryResult<ContentTypeMap[T] | null> {
   return useQuery({
-    queryKey: ['help-content', surfaceKey, contentType, persona],
+    queryKey: [...helpContentQueryKey(), surfaceKey, contentType, persona],
     queryFn: async () => {
       const client = getSanityClient()
       const result = await fetchWithFallback(client, surfaceKey, contentType, persona)

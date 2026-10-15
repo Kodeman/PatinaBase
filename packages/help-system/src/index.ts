@@ -68,7 +68,7 @@ export type {
 export { getSanityClient } from './sanityClient';
 
 // ─── Data hooks ───────────────────────────────────────────────────────────────
-export { useHelpContent } from './hooks/useHelpContent';
+export { useHelpContent, helpContentQueryKey } from './hooks/useHelpContent';
 
 // ─── Placeholder-content guard (filters seed/stub CMS copy) ──────────────────
 export { isPlaceholderContent } from './isPlaceholderContent';

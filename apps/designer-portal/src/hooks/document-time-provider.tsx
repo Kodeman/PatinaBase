@@ -63,6 +63,7 @@ import {
 import { automaticTimeBillingIntent } from '@/lib/document/authority-hours';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { queryKeys } from '@/lib/react-query';
+import { documentTimeTodayQueryKey } from './document-time-query-keys';
 
 /**
  * The automatic timer (D11 pick-up = start), off for every member whatever her
@@ -711,7 +712,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
 
   // ── "In hand today" (D9 readout in the drawer) ──
   const { data: todayMinutes } = useQuery({
-    queryKey: ['document-time-today'],
+    queryKey: documentTimeTodayQueryKey(),
     refetchInterval: 60_000,
     queryFn: async () => {
       const supabase = getSupabase();
