@@ -107,6 +107,17 @@ INSERT INTO public.product_image_vectors (
   ('d6846000-0000-4000-8000-00000000000b', repeat('b1', 32), pg_temp.unit(0.020), 4294967295,
    'm1', 'product_image', NULL, NULL);
 
+-- More than the default HNSW ef_search of other-studio rows, all nearer than
+-- studio B's eligible bench. The RPC's wider search must reach the post-filter.
+INSERT INTO public.product_image_vectors (
+  product_id, image_hash, vector, model_version, source, studio_id, created_by
+)
+SELECT 'd6846000-0000-4000-8000-00000000000a',
+       repeat('d1', 30) || lpad(to_hex(n), 4, '0'),
+       pg_temp.unit(n::double precision * 0.000000001),
+       'm1', 'product_image', NULL, NULL
+FROM generate_series(1, 120) AS n;
+
 INSERT INTO public.board_deck_imports (id, board_id, created_by, source_format, file_sha256, file_name, options, status)
 VALUES
   ('d6847000-0000-4000-8000-00000000000a', 'd6843000-0000-4000-8000-000000000001',
@@ -143,6 +154,21 @@ FROM (VALUES
   ('a', 'd6847000-0000-4000-8000-00000000000a'::uuid),
   ('b', 'd6847000-0000-4000-8000-00000000000b'::uuid)
 ) AS imp(n, id);
+DO $$
+DECLARE
+  v_product uuid;
+BEGIN
+  -- Force the HNSW path and start below its configured ef_search. The function
+  -- setting must still find an eligible row after 120 closer foreign rows.
+  PERFORM set_config('enable_seqscan', 'off', true);
+  PERFORM set_config('hnsw.ef_search', '10', true);
+  SELECT hit.product_id INTO v_product
+  FROM public.board_deck_import_match_image_knn(
+    'd6847000-0000-4000-8000-00000000000b', pg_temp.unit(0), 1, NULL
+  ) AS hit;
+  ASSERT v_product = 'd6846000-0000-4000-8000-00000000000b',
+    format('F7: many closer other-studio vectors do not hide the eligible result: %s', v_product);
+END $$;
 RESET ROLE;
 
 -- ── 1. Onto studio B's board: nothing of studio A's ─────────────────────────
@@ -177,7 +203,7 @@ BEGIN
       jsonb_build_array('d6846000-0000-4000-8000-000000000001',
                         (1 - (pg_temp.unit(0.001) <=> pg_temp.unit(0)))::real, 'designer_confirmed'),
       jsonb_build_array('d6846000-0000-4000-8000-00000000000a',
-                        (1 - (pg_temp.unit(0.010) <=> pg_temp.unit(0)))::real, 'product_image')),
+                        (1 - (pg_temp.unit(0.000000001) <=> pg_temp.unit(0)))::real, 'product_image')),
     format('image kNN onto A: studio A''s taught sofa crop, then its bench; never B''s: %s', v_knn);
 
   ASSERT v_phash = '[["d6846000-0000-4000-8000-00000000000a", 1, "product_image"],

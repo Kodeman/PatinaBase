@@ -22518,6 +22518,24 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00795_deck_import_lease_recall_adjudication.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_guard_lease_scope() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00795_deck_import_lease_recall_adjudication.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_board_deck_import_adjudication(uuid, integer, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00795_deck_import_lease_recall_adjudication.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_board_deck_import_adjudication(uuid, integer, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

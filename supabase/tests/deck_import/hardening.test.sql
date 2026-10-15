@@ -312,6 +312,30 @@ BEGIN
   ), 'Fold: a merged row is never claimed';
 END $$;
 
+-- ── F4: a pin re-ask cannot change resolver scope during a live lease ───────
+DO $$
+DECLARE
+  v_import uuid := 'd6787000-0000-4000-8000-000000000001';
+  v_item uuid := 'd6788000-0000-4000-8000-000000000005';
+  v_user uuid;
+  v_options jsonb;
+BEGIN
+  UPDATE public.board_deck_import_items
+  SET lease_owner = 'f4-live', lease_until = now() + interval '1 minute'
+  WHERE id = v_item;
+  SELECT created_by, options INTO v_user, v_options
+  FROM public.board_deck_imports WHERE id = v_import;
+  PERFORM pg_temp.expect_error(
+    format('UPDATE public.board_deck_imports SET created_by = %L, options = %L WHERE id = %L',
+      'd6780000-0000-4000-8000-000000000002', '{"photo_match":true}'::jsonb, v_import),
+    '55P03', NULL, 'F4: re-ask scope/options are refused while a piece is leased');
+  ASSERT (SELECT created_by = v_user AND options = v_options
+          FROM public.board_deck_imports WHERE id = v_import),
+    'F4: a refused re-ask cannot mutate the import scope';
+  UPDATE public.board_deck_import_items
+  SET lease_owner = NULL, lease_until = NULL WHERE id = v_item;
+END $$;
+
 -- ── F2: placement of a deck-import Keep product keeps trade empty ───────────
 DO $$
 DECLARE
@@ -429,10 +453,15 @@ BEGIN
   r := public.claim_board_deck_import_adjudication('d6787000-0000-4000-8000-000000000001', 7, 'hd');
   ASSERT r->>'status' = 'denied', format('F5: a fresh pending slide is not claimed twice: %s', r);
   UPDATE public.board_deck_import_link_usage
-  SET adjudications = jsonb_set(adjudications, '{7,at}', to_jsonb(now() - interval '4 minutes'))
+  SET adjudications = jsonb_set(adjudications, '{7,at}', to_jsonb(now() - interval '16 minutes'))
   WHERE import_id = 'd6787000-0000-4000-8000-000000000001';
   r := public.claim_board_deck_import_adjudication('d6787000-0000-4000-8000-000000000001', 7, 'hd');
-  ASSERT r->>'status' = 'granted', format('F5: a pending slide older than the lease is reclaimed: %s', r);
+  ASSERT r->>'status' = 'denied' AND r->>'reason' = 'terminal_failure',
+    format('F8: stale pending adjudication becomes terminal without a new call: %s', r);
+  ASSERT (SELECT adjudications->'7'->>'terminal' = 'true'
+          FROM public.board_deck_import_link_usage
+          WHERE import_id = 'd6787000-0000-4000-8000-000000000001'),
+    'F8: stale pending failure is persisted as terminal';
 END $$;
 
 -- ── F7 (record): the lease holder records; the lease is released ────────────
