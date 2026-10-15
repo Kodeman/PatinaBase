@@ -13,18 +13,36 @@ import { renderWithProviders } from '@/test-utils/render';
 import { ProductCreateDialog } from '../product-create-dialog';
 import { catalogService } from '@/services/catalog';
 import { createMockCategory, createMockProduct } from '@/test-utils';
-import { toast } from 'sonner';
+import { toast } from 'sonner'
+import { useCreateProduct } from '@/hooks/use-admin-products'
 
 // Mock dependencies
 jest.mock('@/services/catalog');
+jest.mock('@/hooks/use-admin-products', () => ({ useCreateProduct: jest.fn() }));
 jest.mock('sonner');
+
+const mockMutateAsync = jest.fn();
+const mockUseCreateProduct = useCreateProduct as jest.MockedFunction<typeof useCreateProduct>;
 
 describe('ProductCreateDialog', () => {
   const mockOnOpenChange = jest.fn();
   const mockOnSuccess = jest.fn();
 
+  async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText(/product name/i), 'Modern Sofa');
+    await user.type(screen.getByLabelText(/brand/i), 'Test Brand');
+    await user.type(screen.getByLabelText(/short description/i), 'A comfortable modern sofa');
+    await user.type(screen.getByLabelText(/price \(usd\)/i), '1299.99');
+    await user.type(screen.getByLabelText(/msrp/i), '1499.99');
+    const category = screen.getByLabelText(/category/i);
+    await waitFor(() => expect(within(category as HTMLElement).getByRole('option', { name: 'Seating' })).toBeInTheDocument());
+    await user.selectOptions(category, '550e8400-e29b-41d4-a716-446655440000');
+  }
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMutateAsync.mockReset();
+    mockUseCreateProduct.mockReturnValue({ mutateAsync: mockMutateAsync } as any);
     (toast.success as jest.Mock).mockImplementation(() => {});
     (toast.error as jest.Mock).mockImplementation(() => {});
   });
@@ -43,7 +61,7 @@ describe('ProductCreateDialog', () => {
 
     it('should render form fields when open', async () => {
       const mockCategories = [
-        createMockCategory({ id: 'cat-1', name: 'Seating' }),
+        createMockCategory({ id: '550e8400-e29b-41d4-a716-446655440000', name: 'Seating' }),
         createMockCategory({ id: 'cat-2', name: 'Tables' }),
       ];
 
@@ -73,7 +91,7 @@ describe('ProductCreateDialog', () => {
 
       // Check optional fields
       expect(screen.getByLabelText(/msrp/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/tags/i)).toBeInTheDocument();
+      expect(screen.getByLabelText('Tags')).toBeInTheDocument();
       expect(screen.getByLabelText(/materials/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/colors/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/style tags/i)).toBeInTheDocument();
@@ -85,7 +103,7 @@ describe('ProductCreateDialog', () => {
 
     it('should load categories when dialog opens', async () => {
       const mockCategories = [
-        createMockCategory({ id: 'cat-1', name: 'Seating' }),
+        createMockCategory({ id: '550e8400-e29b-41d4-a716-446655440000', name: 'Seating' }),
         createMockCategory({ id: 'cat-2', name: 'Tables' }),
       ];
 
@@ -154,7 +172,7 @@ describe('ProductCreateDialog', () => {
 
   describe('Form Validation', () => {
     beforeEach(async () => {
-      const mockCategories = [createMockCategory({ id: 'cat-1', name: 'Seating' })];
+      const mockCategories = [createMockCategory({ id: '550e8400-e29b-41d4-a716-446655440000', name: 'Seating' })];
       (catalogService.getCategories as jest.Mock).mockResolvedValue({
         data: mockCategories,
       });
@@ -185,6 +203,7 @@ describe('ProductCreateDialog', () => {
         expect(screen.getByText(/short description is required/i)).toBeInTheDocument();
         expect(screen.getByText(/category is required/i)).toBeInTheDocument();
       });
+      expect(mockMutateAsync).not.toHaveBeenCalled();
     });
 
     it('should validate product name length', async () => {
@@ -202,24 +221,12 @@ describe('ProductCreateDialog', () => {
       });
 
       const nameInput = screen.getByLabelText(/product name/i);
-
-      // Test minimum length
+      await fillRequiredFields(user);
       await user.clear(nameInput);
       await user.type(nameInput, 'AB');
-      await user.tab();
-
-      await waitFor(() => {
-        expect(screen.getByText(/product name must be at least 3 characters/i)).toBeInTheDocument();
-      });
-
-      // Test valid length
-      await user.clear(nameInput);
-      await user.type(nameInput, 'Modern Sofa');
-      await user.tab();
-
-      await waitFor(() => {
-        expect(screen.queryByText(/product name must be at least 3 characters/i)).not.toBeInTheDocument();
-      });
+      await user.click(screen.getByRole('button', { name: /create product/i }));
+      await waitFor(() => expect(screen.getByText(/product name must be at least 3 characters/i)).toBeInTheDocument());
+      expect(mockMutateAsync).not.toHaveBeenCalled();
     });
 
     it('should validate price is a positive number', async () => {
@@ -237,22 +244,12 @@ describe('ProductCreateDialog', () => {
       });
 
       const priceInput = screen.getByLabelText(/price \(usd\)/i);
-
-      // Fill required fields first
-      await user.type(screen.getByLabelText(/product name/i), 'Modern Sofa');
-      await user.type(screen.getByLabelText(/brand/i), 'Test Brand');
-      await user.type(screen.getByLabelText(/short description/i), 'A comfortable modern sofa');
-
-      // Test negative price
+      await fillRequiredFields(user);
       await user.clear(priceInput);
-      await user.type(priceInput, '-100');
-
-      const submitButton = screen.getByRole('button', { name: /create product/i });
-      await user.click(submitButton);
-
-      await waitFor(() => {
-        expect(screen.getByText(/price must be greater than 0/i)).toBeInTheDocument();
-      });
+      await user.type(priceInput, '0');
+      await user.click(screen.getByRole('button', { name: /create product/i }));
+      await waitFor(() => expect(screen.getByText(/price must be greater than 0/i)).toBeInTheDocument());
+      expect(mockMutateAsync).not.toHaveBeenCalled();
     });
 
     it('should validate short description length', async () => {
@@ -270,20 +267,18 @@ describe('ProductCreateDialog', () => {
       });
 
       const descriptionInput = screen.getByLabelText(/short description/i);
-
-      // Test too short
+      await fillRequiredFields(user);
+      await user.clear(descriptionInput);
       await user.type(descriptionInput, 'Short');
-      await user.tab();
-
-      await waitFor(() => {
-        expect(screen.getByText(/short description must be at least 10 characters/i)).toBeInTheDocument();
-      });
+      await user.click(screen.getByRole('button', { name: /create product/i }));
+      await waitFor(() => expect(screen.getByText(/short description must be at least 10 characters/i)).toBeInTheDocument());
+      expect(mockMutateAsync).not.toHaveBeenCalled();
     });
   });
 
   describe('Multi-Input Functionality', () => {
     beforeEach(async () => {
-      const mockCategories = [createMockCategory({ id: 'cat-1', name: 'Seating' })];
+      const mockCategories = [createMockCategory({ id: '550e8400-e29b-41d4-a716-446655440000', name: 'Seating' })];
       (catalogService.getCategories as jest.Mock).mockResolvedValue({
         data: mockCategories,
       });
@@ -303,7 +298,7 @@ describe('ProductCreateDialog', () => {
         expect(screen.getByRole('dialog')).toBeInTheDocument();
       });
 
-      const tagsInput = screen.getByLabelText(/tags/i);
+      const tagsInput = screen.getByLabelText('Tags');
 
       await user.type(tagsInput, 'modern{Enter}');
       await user.type(tagsInput, 'minimalist{Enter}');
@@ -327,7 +322,7 @@ describe('ProductCreateDialog', () => {
         expect(screen.getByRole('dialog')).toBeInTheDocument();
       });
 
-      const tagsInput = screen.getByLabelText(/tags/i);
+      const tagsInput = screen.getByLabelText('Tags');
 
       await user.type(tagsInput, 'modern,minimalist,');
 
@@ -350,7 +345,7 @@ describe('ProductCreateDialog', () => {
         expect(screen.getByRole('dialog')).toBeInTheDocument();
       });
 
-      const tagsInput = screen.getByLabelText(/tags/i);
+      const tagsInput = screen.getByLabelText('Tags');
       await user.type(tagsInput, 'modern{Enter}');
 
       expect(screen.getByText('modern')).toBeInTheDocument();
@@ -378,7 +373,7 @@ describe('ProductCreateDialog', () => {
         expect(screen.getByRole('dialog')).toBeInTheDocument();
       });
 
-      const tagsInput = screen.getByLabelText(/tags/i);
+      const tagsInput = screen.getByLabelText('Tags');
 
       await user.type(tagsInput, 'modern{Enter}');
       await user.type(tagsInput, 'modern{Enter}');
@@ -426,7 +421,7 @@ describe('ProductCreateDialog', () => {
 
   describe('Form Submission', () => {
     beforeEach(async () => {
-      const mockCategories = [createMockCategory({ id: 'cat-1', name: 'Seating' })];
+      const mockCategories = [createMockCategory({ id: '550e8400-e29b-41d4-a716-446655440000', name: 'Seating' })];
       (catalogService.getCategories as jest.Mock).mockResolvedValue({
         data: mockCategories,
       });
@@ -436,15 +431,7 @@ describe('ProductCreateDialog', () => {
       const user = userEvent.setup();
       const mockProduct = createMockProduct({ id: 'new-product-id' });
 
-      // Mock the useCreateProduct mutation
-      const mockMutateAsync = jest.fn().mockResolvedValue({
-        data: mockProduct,
-      });
-
-      // We need to mock the hook, but since it's internal, we'll mock the service
-      (catalogService as any).createProduct = jest.fn().mockResolvedValue({
-        data: mockProduct,
-      });
+      mockMutateAsync.mockResolvedValue({ data: mockProduct });
 
       renderWithProviders(
         <ProductCreateDialog
@@ -458,76 +445,77 @@ describe('ProductCreateDialog', () => {
         expect(screen.getByRole('dialog')).toBeInTheDocument();
       });
 
-      // Fill in required fields
-      await user.type(screen.getByLabelText(/product name/i), 'Modern Sofa');
-      await user.type(screen.getByLabelText(/brand/i), 'Test Brand');
-      await user.type(screen.getByLabelText(/short description/i), 'A comfortable modern sofa for your living room');
-      await user.type(screen.getByLabelText(/price \(usd\)/i), '1299.99');
+      await fillRequiredFields(user);
 
-      // Select category
-      const categorySelect = screen.getByLabelText(/category/i);
-      await user.selectOptions(categorySelect, 'cat-1');
 
-      // Note: Actual submission testing requires mocking TanStack Query mutations
-      // which is complex. We'll verify form validity instead.
       const submitButton = screen.getByRole('button', { name: /create product/i });
-      expect(submitButton).not.toBeDisabled();
+      await user.click(submitButton);
+      await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Modern Sofa',
+        brand: 'Test Brand',
+        categoryId: '550e8400-e29b-41d4-a716-446655440000',
+        shortDescription: 'A comfortable modern sofa',
+        price: 1299.99,
+        currency: 'USD',
+        status: 'draft',
+      })));
+      expect(mockMutateAsync).toHaveBeenCalledTimes(1);
     });
 
     it('should show loading state during submission', async () => {
       const user = userEvent.setup();
-
-      (catalogService as any).createProduct = jest.fn().mockImplementation(
-        () => new Promise(() => {}) // Never resolves
-      );
+      mockMutateAsync.mockImplementation(() => new Promise(() => {}));
 
       renderWithProviders(
-        <ProductCreateDialog
-          open={true}
-          onOpenChange={mockOnOpenChange}
-        />
+        <ProductCreateDialog open={true} onOpenChange={mockOnOpenChange} />
       );
+      await screen.findByRole('dialog');
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /create product/i }));
 
-      await waitFor(() => {
-        expect(screen.getByRole('dialog')).toBeInTheDocument();
-      });
-
-      // Fill in valid data
-      await user.type(screen.getByLabelText(/product name/i), 'Modern Sofa');
-      await user.type(screen.getByLabelText(/brand/i), 'Test Brand');
-      await user.type(screen.getByLabelText(/short description/i), 'A comfortable modern sofa');
-      await user.type(screen.getByLabelText(/price \(usd\)/i), '1299.99');
-
-      const categorySelect = screen.getByLabelText(/category/i);
-      await user.selectOptions(categorySelect, 'cat-1');
-
-      // The button should be enabled before submission
-      const submitButton = screen.getByRole('button', { name: /create product/i });
-      expect(submitButton).not.toBeDisabled();
+      expect(await screen.findByRole('button', { name: /creating/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
     });
 
-    it('should call onSuccess callback on successful creation', async () => {
-      // This test would require full TanStack Query integration
-      // Skipping for now as it requires complex mocking
-      expect(true).toBe(true);
+    it('should call onSuccess and close after a successful create', async () => {
+      const user = userEvent.setup();
+      mockMutateAsync.mockResolvedValue({ data: { id: 'new-product-id' } });
+      renderWithProviders(<ProductCreateDialog open={true} onOpenChange={mockOnOpenChange} onSuccess={mockOnSuccess} />);
+      await screen.findByRole('dialog');
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /create product/i }));
+      await waitFor(() => expect(mockOnSuccess).toHaveBeenCalledWith('new-product-id'));
+      expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+      expect(toast.success).toHaveBeenCalledWith('Product created successfully', expect.any(Object));
     });
 
-    it('should show error toast on API failure', async () => {
-      // This test would require full TanStack Query integration
-      // Skipping for now as it requires complex mocking
-      expect(true).toBe(true);
+    it('should show an error toast when create mutation fails', async () => {
+      const user = userEvent.setup();
+      mockMutateAsync.mockRejectedValue(new Error('Request failed'));
+      renderWithProviders(<ProductCreateDialog open={true} onOpenChange={mockOnOpenChange} />);
+      await screen.findByRole('dialog');
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /create product/i }));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to create product', expect.objectContaining({ description: 'Request failed' })));
+      expect(mockOnOpenChange).not.toHaveBeenCalledWith(false);
     });
 
-    it('should reset form after successful submission', async () => {
-      // This test would require full TanStack Query integration
-      // Skipping for now as it requires complex mocking
-      expect(true).toBe(true);
+    it('resets the form after a successful submission', async () => {
+      const user = userEvent.setup();
+      mockMutateAsync.mockResolvedValue({ data: { id: 'new-product-id' } });
+      const { rerender } = renderWithProviders(<ProductCreateDialog open={true} onOpenChange={mockOnOpenChange} />);
+      await screen.findByRole('dialog');
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /create product/i }));
+      await waitFor(() => expect(mockOnOpenChange).toHaveBeenCalledWith(false));
+      rerender(<ProductCreateDialog open={true} onOpenChange={mockOnOpenChange} />);
+      expect(screen.getByLabelText(/product name/i)).toHaveValue('');
     });
   });
 
   describe('Dialog Behavior', () => {
     beforeEach(async () => {
-      const mockCategories = [createMockCategory({ id: 'cat-1', name: 'Seating' })];
+      const mockCategories = [createMockCategory({ id: '550e8400-e29b-41d4-a716-446655440000', name: 'Seating' })];
       (catalogService.getCategories as jest.Mock).mockResolvedValue({
         data: mockCategories,
       });
@@ -597,7 +585,7 @@ describe('ProductCreateDialog', () => {
 
   describe('Accessibility', () => {
     beforeEach(async () => {
-      const mockCategories = [createMockCategory({ id: 'cat-1', name: 'Seating' })];
+      const mockCategories = [createMockCategory({ id: '550e8400-e29b-41d4-a716-446655440000', name: 'Seating' })];
       (catalogService.getCategories as jest.Mock).mockResolvedValue({
         data: mockCategories,
       });

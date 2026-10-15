@@ -22,7 +22,7 @@ afterAll(() => {
 describe('ErrorBoundary', () => {
   it('should render children when there is no error', () => {
     render(
-      <ErrorBoundary>
+      <ErrorBoundary showDetails>
         <div data-testid="child">Child component</div>
       </ErrorBoundary>
     );
@@ -33,18 +33,18 @@ describe('ErrorBoundary', () => {
 
   it('should catch errors and show fallback UI', () => {
     render(
-      <ErrorBoundary>
+      <ErrorBoundary showDetails>
         <ThrowError />
       </ErrorBoundary>
     );
 
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    expect(screen.getByText(/We're sorry, but something unexpected happened/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Something went wrong' })).toBeInTheDocument();
+    expect(screen.getByText('Test error message')).toBeInTheDocument();
   });
 
   it('should display the error message in details', () => {
     render(
-      <ErrorBoundary>
+      <ErrorBoundary showDetails>
         <ThrowError />
       </ErrorBoundary>
     );
@@ -56,7 +56,7 @@ describe('ErrorBoundary', () => {
     fireEvent.click(details);
 
     // Error message should be visible
-    expect(screen.getByText(/Test error message/)).toBeInTheDocument();
+    expect(screen.getByText(/^Error: Test error message/)).toBeInTheDocument();
   });
 
   it('should call onError callback when error is caught', () => {
@@ -77,30 +77,28 @@ describe('ErrorBoundary', () => {
     );
   });
 
-  it('should reset error state when Try Again is clicked', () => {
-    const { rerender } = render(
-      <ErrorBoundary>
-        <ThrowError />
+  it('should reset to children when the failed condition is recoverable', () => {
+    let recovered = false;
+    function RecoverableChild() {
+      if (!recovered) throw new Error('Temporary failure');
+      return <div>Recovered content</div>;
+    }
+
+    render(
+      <ErrorBoundary fallback={(error, reset) => (
+        <div>
+          <p>{error.message}</p>
+          <button onClick={() => { recovered = true; reset(); }}>Retry</button>
+        </div>
+      )}>
+        <RecoverableChild />
       </ErrorBoundary>
     );
 
-    // Should show error UI
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-
-    const resetButton = screen.getByText('Try Again');
-    fireEvent.click(resetButton);
-
-    // After reset, error state should be cleared
-    // Re-render with non-throwing component
-    rerender(
-      <ErrorBoundary>
-        <ThrowError shouldThrow={false} />
-      </ErrorBoundary>
-    );
-
-    // Should show success
-    expect(screen.getByText('Success')).toBeInTheDocument();
-    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
+    expect(screen.getByText('Temporary failure')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(screen.getByText('Recovered content')).toBeInTheDocument();
+    expect(screen.queryByText('Temporary failure')).not.toBeInTheDocument();
   });
 
   it('should render custom fallback when provided', () => {
@@ -116,16 +114,15 @@ describe('ErrorBoundary', () => {
     expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
   });
 
-  it('should show all action buttons', () => {
+  it('should show the retry and reload recovery actions', () => {
     render(
-      <ErrorBoundary>
+      <ErrorBoundary showDetails>
         <ThrowError />
       </ErrorBoundary>
     );
 
-    expect(screen.getByText('Try Again')).toBeInTheDocument();
-    expect(screen.getByText('Reload Page')).toBeInTheDocument();
-    expect(screen.getByText('Go to Dashboard')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reload page/i })).toBeInTheDocument();
   });
 
   it('should handle errors in nested components', () => {
@@ -139,7 +136,7 @@ describe('ErrorBoundary', () => {
     }
 
     render(
-      <ErrorBoundary>
+      <ErrorBoundary showDetails>
         <NestedComponent />
       </ErrorBoundary>
     );
@@ -152,7 +149,7 @@ describe('ErrorBoundary', () => {
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     render(
-      <ErrorBoundary>
+      <ErrorBoundary showDetails>
         <ThrowError />
       </ErrorBoundary>
     );
