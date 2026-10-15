@@ -19,6 +19,7 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 jest.mock('@patina/supabase', () => ({
   useRecentBoards: (...args: unknown[]) => mockRecentBoards(...args),
   useStudioUnbilledTime: () => ({ data: [], isLoading: false, isError: false, isPending: false }),
+  useRunningTimer: () => ({ data: undefined, isPending: false }),
   // The remaining exports are only exercised by the DeskPage-level describe
   // block below (the grid/rail wiring) — inert defaults, nothing under test
   // there reads them.

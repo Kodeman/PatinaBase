@@ -33,6 +33,7 @@ jest.mock('@patina/supabase', () => ({
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
   useRecentBoards: (...args: unknown[]) => mockRecentBoards(...args),
   useStudioUnbilledTime: () => ({ data: [], isLoading: false, isError: false, isPending: false }),
+  useRunningTimer: () => ({ data: undefined, isPending: false }),
   useBoardsReactionRollup: () => ({
     data: { awaitingReaction: [], reactionsIn: [], approvedPipeline: [], capped: false },
     isLoading: false,
