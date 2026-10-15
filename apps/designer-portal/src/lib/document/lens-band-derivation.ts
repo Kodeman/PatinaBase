@@ -1652,7 +1652,20 @@ function deriveVoice(
   const voiced = voiceStanding(standing, clientFirstName);
   const actOf = (item: { key: string; sentence: string; needKind?: NeedKind | null }) =>
     rowAct(item.key, item.sentence, item.needKind, voiced, ownAct, clientFirstName, input.landOn);
-  const acted = voiced.map((item) => (item.act ? item : { ...item, act: actOf(item) }));
+  const heldNote = voiced.find((item) => item.heldMakerNote && item.act);
+  const foldedHeldNoteKey =
+    heldNote &&
+    voiced.some(
+      (item) =>
+        !item.heldMakerNote &&
+        item.needKind === 'po_unacknowledged' &&
+        item.act?.label === OPEN_THE_HELD_DRAFT,
+    )
+      ? heldNote.key
+      : undefined;
+  const acted = voiced
+    .filter((item) => item.key !== foldedHeldNoteKey)
+    .map((item) => (item.act ? item : { ...item, act: actOf(item) }));
   // FR3 F3-9 / 512-7 — one need, one row. A row whose act is the stage's own
   // act Next is Next's row; a row whose act and subject equal Next's row's is
   // that row again and never prints a second time, nor counts behind the door.

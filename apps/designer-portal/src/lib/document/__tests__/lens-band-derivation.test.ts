@@ -2323,7 +2323,7 @@ describe('deriveLensBand · FR7 F7-1: the relabel follows the PO number', () => 
     const s078 = rowOf(voice.standing, 'need:po-078');
     expect(s077?.act?.label).toBe('Open the held draft');
     expect(s078?.act?.label).toBe('Follow up with the maker');
-    expect(rowOf(voice.standing, 'need:draft-0')?.act?.label).toBe('Open the held draft');
+    expect(rowOf(voice.standing, 'need:draft-0')).toBeUndefined();
     s077?.act?.onAct();
     expect(NOTE.onAct).toHaveBeenCalledTimes(1);
     expect(SILENCE_077.onAct).not.toHaveBeenCalled();
@@ -2395,7 +2395,7 @@ describe('deriveLensBand · F8-6: the relabel matches either PO number', () => {
     const rowOf = (standing: readonly LensStandingItem[], key: string) =>
       standing.find((item) => item.key === key);
     expect(rowOf(voice.standing, 'need:po-077')?.act?.label).toBe('Open the held draft');
-    expect(rowOf(voice.standing, 'need:draft-0')?.act?.label).toBe('Open the held draft');
+    expect(rowOf(voice.standing, 'need:draft-0')).toBeUndefined();
   });
 });
 
