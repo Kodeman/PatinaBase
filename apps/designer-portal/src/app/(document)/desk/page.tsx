@@ -22,6 +22,7 @@ import {
   useBoardsReactionRollup,
   useRecentBoards,
   useStudioUnbilledTime,
+  useRunningTimer,
   useProjectLeads,
   useNeedStates,
   useTeammateActed,
@@ -132,6 +133,7 @@ export default function DeskPage() {
     useDeskEngagements({ organizationId: studioId || null });
   const { user } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
+  const runningTimerRead = useRunningTimer();
   const hydrated = useHydrated();
   const suppressFirstTouch = useSuppressDeskFirstTouch(); // R97 — hold the note during modal/tour
   const showWalkthroughOffer = useDeskWalkthroughOffer(); // R97 — existing-designer tour offer
@@ -500,6 +502,8 @@ export default function DeskPage() {
     viewerStudio.isSettled &&
     studioMembersSettled &&
     !unbilledTimeRead.isPending &&
+    !profileLoading &&
+    !runningTimerRead.isPending &&
     deskLineDecided;
   // US-14 post-ship patch 1 — while the Desk's arrival wait is armed the
   // skeleton stands until ready, so the route root first appears ready. A root
