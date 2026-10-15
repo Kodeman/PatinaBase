@@ -166,7 +166,7 @@ resolve_next_public_var() {
       \"*\") val="${val#\"}"; val="${val%\"}" ;;
       \'*\') val="${val#\'}"; val="${val%\'}" ;;
     esac
-    # Empty dotenv assignments do not prevent the production literal fallback.
+    # Skip an empty VAR= (Next would use it); harmless, because Phase 0 exports the resolved value, which beats Next's env files.
     [ -n "$val" ] || continue
     RESOLVED_SOURCE="${env_file##*/}"
     RESOLVED_VALUE="$val"
@@ -348,6 +348,15 @@ fi
 
 echo "==> [0/3] Preflight OK: NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL}"
 echo "==> [0/3] Preflight OK: runtime-origin path resolves (SUPABASE_ORIGIN_RUNTIME=${PREFLIGHT_ORIGIN_RUNTIME:-<unset, inherits build-time URL>})"
+
+# Every refusal above has passed. Export the validated trio whatever its source:
+# an exported value beats Next's env files, so next build inlines exactly this.
+export NEXT_PUBLIC_SUPABASE_URL="$PREFLIGHT_URL"
+export NEXT_PUBLIC_SUPABASE_ANON_KEY="$PREFLIGHT_ANON"
+export NEXT_PUBLIC_SUPABASE_STORAGE_KEY="$PREFLIGHT_STORAGE_KEY"
+echo "==> [0/3] Preflight export: NEXT_PUBLIC_SUPABASE_URL (source=${PREFLIGHT_URL_SOURCE})"
+echo "==> [0/3] Preflight export: NEXT_PUBLIC_SUPABASE_ANON_KEY (source=${PREFLIGHT_ANON_SOURCE})"
+echo "==> [0/3] Preflight export: NEXT_PUBLIC_SUPABASE_STORAGE_KEY (source=${PREFLIGHT_STORAGE_KEY_SOURCE})"
 echo
 
 # ---------------------------------------------------------------------------
