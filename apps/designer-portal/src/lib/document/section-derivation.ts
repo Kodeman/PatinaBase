@@ -31,6 +31,7 @@ export interface SectionLineage {
   sentAt: string | null;
   signedAt: string | null;
   status: string | null;
+  commercialState: string | null;
   version: number | null;
 }
 
@@ -110,6 +111,7 @@ function activeSub(key: SectionKey, f: SectionFacts): string {
     case 'direction':
       return 'Drafting';
     case 'proposal': {
+      if (lineage?.commercialState === 'client_signed') return 'Client signed';
       const status = row.proposal_status ?? lineage?.status;
       if (status === 'accepted')
         return lineage?.signedAt ? `Signed · ${fmtDay(lineage.signedAt)}` : 'Signed';
