@@ -18,6 +18,7 @@
 # (`turbo build --filter=<pkg>^...`), so the package dists bundled into the
 # worker are always fresh. Deploy portals THROUGH this script — never via a raw
 # `opennextjs-cloudflare build`.
+# Set PATINA_DEPLOY_PREFLIGHT_ONLY=1 to exit after Phase 0b without building or deploying.
 
 set -euo pipefail
 
@@ -58,6 +59,70 @@ fi
 echo "==> Deploying portal '${PORTAL}' to '${TARGET_ENV}'  (workspace package: ${PKG_NAME})"
 echo
 
+read_wrangler_next_public_vars() {
+  # $1 = wrangler.jsonc path, $2 = production|staging.
+  # Emits KEY<NUL>VALUE<NUL> for every NEXT_PUBLIC_* var in the ACTIVE vars
+  # block. Wrangler does not inherit `vars` into a named environment — an env
+  # block that declares vars replaces the top-level block wholesale — so
+  # staging reads env.staging.vars and nothing else.
+  node - "$1" "$2" <<'NODE'
+const fs = require('fs');
+const [file, targetEnv] = process.argv.slice(2);
+const src = fs.readFileSync(file, 'utf8');
+
+// String-aware JSONC comment stripper. A naive /\/\/.*/ replace eats the `//`
+// inside every "https://..." value and silently yields empty vars.
+let out = '';
+let i = 0;
+while (i < src.length) {
+  const c = src[i];
+  if (c === '"') {
+    out += c;
+    i++;
+    while (i < src.length) {
+      if (src[i] === '\\') { out += src.slice(i, i + 2); i += 2; continue; }
+      out += src[i];
+      i++;
+      if (src[i - 1] === '"') break;
+    }
+    continue;
+  }
+  if (c === '/' && src[i + 1] === '/') { while (i < src.length && src[i] !== '\n') i++; continue; }
+  if (c === '/' && src[i + 1] === '*') {
+    i += 2;
+    while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
+    i += 2;
+    continue;
+  }
+  // Trailing-comma strip, inside the string-aware pass so it can never touch
+  // string contents: a value of "a,}b" is emitted whole above, and `out` always
+  // ends with the closing quote after a string, so /,\s*$/ cannot reach into
+  // one. Doing this as a post-pass regex over the whole document would corrupt
+  // exactly that value.
+  if (c === '}' || c === ']') {
+    out = out.replace(/,\s*$/, '');
+    out += c;
+    i++;
+    continue;
+  }
+  out += c;
+  i++;
+}
+
+const cfg = JSON.parse(out);
+const vars = targetEnv === 'staging'
+  ? ((cfg.env && cfg.env.staging && cfg.env.staging.vars) || {})
+  : (cfg.vars || {});
+
+let buf = '';
+for (const key of Object.keys(vars)) {
+  if (key.indexOf('NEXT_PUBLIC_') !== 0) continue;
+  buf += key + '\0' + String(vars[key]) + '\0';
+}
+process.stdout.write(buf);
+NODE
+}
+
 # ---------------------------------------------------------------------------
 # Phase 0 — preflight: fail closed on a broken client Supabase env.
 #
@@ -70,63 +135,80 @@ echo
 # couldn't load". This guard refuses to build unless BOTH values resolve non-empty
 # AND the URL is not local-pointed — so a worktree/local build can never ship again.
 #
-# Resolution mirrors what `next build` actually sees: an already-exported
-# process.env value wins (that is precisely the environment the child build
-# inherits, and Next never overrides a value already in process.env); otherwise
-# the highest-precedence app env file that defines the var, in Next order
-# .env.production.local > .env.local > .env.production > .env.
+# Resolution mirrors `next build`: exported process.env wins, then the highest-precedence app .env file, then the target production wrangler.jsonc vars literal.
 # ---------------------------------------------------------------------------
 echo "==> [0/3] Preflight: resolving client Supabase env the way next build will"
 
 resolve_next_public_var() {
-  # $1 = variable name. Prints the resolved value (possibly empty) to stdout.
+  # $1 = variable name. Prints the resolved value and sets RESOLVED_SOURCE.
   var_name="$1"
+  RESOLVED_SOURCE=""
 
-  # 1) An exported process.env value wins. printenv reports ONLY exported vars,
-  #    which is exactly the environment a spawned `next build` inherits; if the
-  #    var is exported (even to an empty string), Next uses it and never lets an
-  #    env file override it.
+  # An exported process.env value wins, including an explicit empty override.
   if exported_val="$(printenv "$var_name")"; then
-    printf '%s' "$exported_val"
+    RESOLVED_SOURCE="exported"
+    RESOLVED_VALUE="$exported_val"
+    printf '%s' "$RESOLVED_VALUE"
     return 0
   fi
 
-  # 2) Otherwise walk the app's env files in Next precedence order; the first
-  #    file that defines the var wins.
+  # Otherwise walk the app's env files in Next precedence order.
   for env_file in \
     "$APP_DIR/.env.production.local" \
     "$APP_DIR/.env.local" \
     "$APP_DIR/.env.production" \
     "$APP_DIR/.env"; do
     [ -f "$env_file" ] || continue
-    # Take the last assignment in the file (dotenv last-wins). Match an optional
-    # leading `export ` and require `=` immediately after the name so we never
-    # match a longer key. Split on the FIRST `=` only, so values that themselves
-    # contain `=` (e.g. JWT-style anon keys) survive intact.
     line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${var_name}=" "$env_file" | tail -n 1 || true)"
     [ -n "$line" ] || continue
     val="${line#*${var_name}=}"
-    # Strip one layer of matching surrounding quotes, mirroring dotenv.
     case "$val" in
       \"*\") val="${val#\"}"; val="${val%\"}" ;;
       \'*\') val="${val#\'}"; val="${val%\'}" ;;
     esac
-    printf '%s' "$val"
+    # An empty VAR= ends the .env walk and falls through to the wrangler value, which is exported and so wins over Next's empty value.
+    [ -n "$val" ] || break
+    RESOLVED_SOURCE="${env_file##*/}"
+    RESOLVED_VALUE="$val"
+    printf '%s' "$RESOLVED_VALUE"
     return 0
   done
 
-  # Defined nowhere → empty.
+  # Only production may use the top-level (production) Wrangler vars block.
+  if [ "$TARGET_ENV" = "production" ]; then
+    WRANGLER_CONFIG="$APP_DIR/wrangler.jsonc"
+    while IFS= read -r -d '' wrangler_name && IFS= read -r -d '' wrangler_value; do
+      if [ "$wrangler_name" = "$var_name" ]; then
+        RESOLVED_SOURCE="wrangler.jsonc"
+        RESOLVED_VALUE="$wrangler_value"
+        printf '%s' "$RESOLVED_VALUE"
+        return 0
+      fi
+    done < <(read_wrangler_next_public_vars "$WRANGLER_CONFIG" production)
+  fi
+
+  RESOLVED_SOURCE="empty"
+  RESOLVED_VALUE=""
   printf '%s' ''
   return 0
 }
 
-PREFLIGHT_URL="$(resolve_next_public_var NEXT_PUBLIC_SUPABASE_URL)"
-PREFLIGHT_ANON="$(resolve_next_public_var NEXT_PUBLIC_SUPABASE_ANON_KEY)"
+resolve_next_public_var NEXT_PUBLIC_SUPABASE_URL >/dev/null
+PREFLIGHT_URL="$RESOLVED_VALUE"
+PREFLIGHT_URL_SOURCE="$RESOLVED_SOURCE"
+resolve_next_public_var NEXT_PUBLIC_SUPABASE_ANON_KEY >/dev/null
+PREFLIGHT_ANON="$RESOLVED_VALUE"
+PREFLIGHT_ANON_SOURCE="$RESOLVED_SOURCE"
 # D-B1 (docs/engineering/repoint-b0-audit.md §5): the pinned auth-cookie
 # storage key. Same var as the client.ts/extension pin — resolved here too
 # because NEXT_PUBLIC_* is build-time-inlined, so a wrangler.jsonc-only value
 # is invisible to `next build`; see the fail-closed check below.
-PREFLIGHT_STORAGE_KEY="$(resolve_next_public_var NEXT_PUBLIC_SUPABASE_STORAGE_KEY)"
+resolve_next_public_var NEXT_PUBLIC_SUPABASE_STORAGE_KEY >/dev/null
+PREFLIGHT_STORAGE_KEY="$RESOLVED_VALUE"
+PREFLIGHT_STORAGE_KEY_SOURCE="$RESOLVED_SOURCE"
+echo "==> [0/3] Preflight source: NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL_SOURCE}"
+echo "==> [0/3] Preflight source: NEXT_PUBLIC_SUPABASE_ANON_KEY=${PREFLIGHT_ANON_SOURCE}"
+echo "==> [0/3] Preflight source: NEXT_PUBLIC_SUPABASE_STORAGE_KEY=${PREFLIGHT_STORAGE_KEY_SOURCE}"
 
 if [ -z "$PREFLIGHT_URL" ] || [ -z "$PREFLIGHT_ANON" ]; then
   echo "ERROR: refusing to build ${PORTAL} portal — NEXT_PUBLIC_SUPABASE_URL and/or" >&2
@@ -266,6 +348,19 @@ fi
 
 echo "==> [0/3] Preflight OK: NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL}"
 echo "==> [0/3] Preflight OK: runtime-origin path resolves (SUPABASE_ORIGIN_RUNTIME=${PREFLIGHT_ORIGIN_RUNTIME:-<unset, inherits build-time URL>})"
+
+# Every refusal above has passed. next build never reads wrangler.jsonc, so export a
+# trio value that came from it; exported values are already in process.env and .env
+# values stay with Next's loader.
+export_wrangler_trio_var() {
+  # $1 = variable name, $2 = validated value, $3 = its Phase 0 source.
+  [ "$3" = "wrangler.jsonc" ] || return 0
+  export "$1=$2"
+  echo "==> [0/3] Preflight export: $1 (source=wrangler.jsonc)"
+}
+export_wrangler_trio_var NEXT_PUBLIC_SUPABASE_URL "$PREFLIGHT_URL" "$PREFLIGHT_URL_SOURCE"
+export_wrangler_trio_var NEXT_PUBLIC_SUPABASE_ANON_KEY "$PREFLIGHT_ANON" "$PREFLIGHT_ANON_SOURCE"
+export_wrangler_trio_var NEXT_PUBLIC_SUPABASE_STORAGE_KEY "$PREFLIGHT_STORAGE_KEY" "$PREFLIGHT_STORAGE_KEY_SOURCE"
 echo
 
 # ---------------------------------------------------------------------------
@@ -323,69 +418,6 @@ TRIO_NEXT_PUBLIC_KEYS=" NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY N
 # staging — an empty host or edge API URL is a mistake in either env.
 STAGING_MAY_BE_EMPTY=" NEXT_PUBLIC_POSTHOG_KEY "
 
-read_wrangler_next_public_vars() {
-  # $1 = wrangler.jsonc path, $2 = production|staging.
-  # Emits KEY<NUL>VALUE<NUL> for every NEXT_PUBLIC_* var in the ACTIVE vars
-  # block. Wrangler does not inherit `vars` into a named environment — an env
-  # block that declares vars replaces the top-level block wholesale — so
-  # staging reads env.staging.vars and nothing else.
-  node - "$1" "$2" <<'NODE'
-const fs = require('fs');
-const [file, targetEnv] = process.argv.slice(2);
-const src = fs.readFileSync(file, 'utf8');
-
-// String-aware JSONC comment stripper. A naive /\/\/.*/ replace eats the `//`
-// inside every "https://..." value and silently yields empty vars.
-let out = '';
-let i = 0;
-while (i < src.length) {
-  const c = src[i];
-  if (c === '"') {
-    out += c;
-    i++;
-    while (i < src.length) {
-      if (src[i] === '\\') { out += src.slice(i, i + 2); i += 2; continue; }
-      out += src[i];
-      i++;
-      if (src[i - 1] === '"') break;
-    }
-    continue;
-  }
-  if (c === '/' && src[i + 1] === '/') { while (i < src.length && src[i] !== '\n') i++; continue; }
-  if (c === '/' && src[i + 1] === '*') {
-    i += 2;
-    while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
-    i += 2;
-    continue;
-  }
-  // Trailing-comma strip, inside the string-aware pass so it can never touch
-  // string contents: a value of "a,}b" is emitted whole above, and `out` always
-  // ends with the closing quote after a string, so /,\s*$/ cannot reach into
-  // one. Doing this as a post-pass regex over the whole document would corrupt
-  // exactly that value.
-  if (c === '}' || c === ']') {
-    out = out.replace(/,\s*$/, '');
-    out += c;
-    i++;
-    continue;
-  }
-  out += c;
-  i++;
-}
-
-const cfg = JSON.parse(out);
-const vars = targetEnv === 'staging'
-  ? ((cfg.env && cfg.env.staging && cfg.env.staging.vars) || {})
-  : (cfg.vars || {});
-
-let buf = '';
-for (const key of Object.keys(vars)) {
-  if (key.indexOf('NEXT_PUBLIC_') !== 0) continue;
-  buf += key + '\0' + String(vars[key]) + '\0';
-}
-process.stdout.write(buf);
-NODE
-}
 
 mask_value() {
   # $1 = value. Prints a non-recoverable preview: the prefix up to and
@@ -513,6 +545,11 @@ fi
 
 echo "==> [0b/3] Preflight OK: ${EXPORTED_COUNT} NEXT_PUBLIC_* vars exported (Supabase trio left to Phase 0 + Next's loader)"
 echo
+if [ "${PATINA_DEPLOY_PREFLIGHT_ONLY:-0}" = "1" ]; then
+  echo "==> Preflight-only mode: stopping before Phase 1 build"
+  exit 0
+fi
+
 
 # ---------------------------------------------------------------------------
 # Phase 1 — rebuild this app's workspace dependencies (the stale-dist guard).
