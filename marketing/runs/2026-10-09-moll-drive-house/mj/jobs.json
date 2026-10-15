@@ -1,0 +1,79 @@
+[
+  {
+    "id": "J01",
+    "kind": "still",
+    "channel": "instagram-4x5",
+    "pieceIds": [
+      "P01"
+    ],
+    "variants": 1,
+    "paste": "REAL PHOTOGRAPH, not Midjourney: do not paste this into Midjourney. Drop one credited photo of the Moll Drive house into this inbox: the room Leah would send a designer to first (her pick, the same room she names in the P01 FILL; if she has no pick yet, any room the listing names that is not already the J05, J06 or J07 frame), shot from the doorway so the whole room reads, daylight through the real windows, no people, no staging props added. Crop: the photo fills the top two thirds of a 1080x1350 post (about 1080x900 px) with the headline on paper below, so supply at least 1080 px wide, keep the room's centre of interest mid-frame and nothing important in the outer 64 px. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this photo).",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/mj/inbox/J01"
+  },
+  {
+    "id": "J02",
+    "kind": "still",
+    "channel": "instagram-4x5",
+    "pieceIds": [
+      "P02"
+    ],
+    "variants": 1,
+    "paste": "REAL PHOTOGRAPH, not Midjourney: do not paste this into Midjourney. Drop one credited photo of the Moll Drive house into this inbox: a close view of the piece Kippley's shop built for this house (a mantel, a built-in or the cabinetry, whichever Leah names in the P02 FILL), grain and finish filling the frame, window light raking across it, tight 85mm-style crop, no people, no hands. Crop: fills the top two thirds of a 1080x1350 post (about 1080x900 px); supply at least 1080 px wide with the grain running through the centre. Do not choose the piece or name its wood; Leah does. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this photo).",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/mj/inbox/J02"
+  },
+  {
+    "id": "J03",
+    "kind": "still",
+    "channel": "instagram-4x5",
+    "pieceIds": [
+      "P03"
+    ],
+    "variants": 1,
+    "paste": "REAL PHOTOGRAPH, not Midjourney: do not paste this into Midjourney. Drop one credited photo of the Moll Drive house into this inbox: the front of the house from the street or the drive in late afternoon light, straight-on or a quarter view, no people, no cars in the drive, no Parade or builder signage in focus. Crop: fills the top two thirds of a 1080x1350 post (about 1080x900 px); leave enough sky and ground around the house to crop, at least 1080 px wide. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this photo).",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/mj/inbox/J03"
+  },
+  {
+    "id": "J04",
+    "kind": "still",
+    "channel": "poster-18x24",
+    "pieceIds": [
+      "P04"
+    ],
+    "variants": 3,
+    "paste": "warm oak grain and a soft brass pull on a plain cabinet door, hand-rubbed oil finish catching the figure, low side light from a tall window, 85mm close crop, quiet and settled, an old farmhouse kitchen in the Driftless Area of Wisconsin --ar 3:4 --style raw --v 8.1 --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/mj/inbox/J04"
+  },
+  {
+    "id": "J05",
+    "kind": "still",
+    "channel": "email",
+    "pieceIds": [
+      "P05"
+    ],
+    "variants": 1,
+    "paste": "REAL PHOTOGRAPH, not Midjourney: do not paste this into Midjourney. Optional: one image at most. Drop one credited photo of the Moll Drive house into this inbox: the finished kitchen with its generous island, the room Leah would rather talk in, from the doorway, daylight, no people, a different frame from J01 and J07 if they also show the kitchen. Crop: landscape 3:2, full width under the opening paragraph of a 600 px email, so supply at least 1200x800 px. The letter reads with images off; the photo carries no words. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this photo).",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/mj/inbox/J05"
+  },
+  {
+    "id": "J06",
+    "kind": "still",
+    "channel": "one-pager-letter",
+    "pieceIds": [
+      "P06"
+    ],
+    "variants": 1,
+    "paste": "REAL PHOTOGRAPH, not Midjourney: do not paste this into Midjourney. Drop one credited photo of the Moll Drive house into this inbox for the leave-behind's image band: a room with the warm wood accents and the rear windows onto the landscape in frame, daylight, no people. Crop: a wide band about 7 x 3 in on a letter page, so supply at least 2100x900 px with the windows and the wood both inside that band. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this photo).",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/mj/inbox/J06"
+  },
+  {
+    "id": "J07",
+    "kind": "still",
+    "channel": "one-pager-letter",
+    "pieceIds": [
+      "P07"
+    ],
+    "variants": 1,
+    "paste": "REAL PHOTOGRAPH, not Midjourney: do not paste this into Midjourney. Drop one credited photo of the Moll Drive house into this inbox for the counter flyer's image band: the kitchen with the generous island and the walk-in pantry door in frame, or the front of the house if a kitchen photo already runs on the sign (P04), daylight, no people, a different frame from J01 and J05. Crop: a wide band about 7 x 3 in on a letter page, so supply at least 2100x900 px. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this photo).",
+    "inbox": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/mj/inbox/J07"
+  }
+]

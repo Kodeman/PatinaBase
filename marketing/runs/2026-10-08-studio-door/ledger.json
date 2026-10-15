@@ -1,0 +1,947 @@
+[
+  {
+    "ts": "2026-10-08T20:59:27.498Z",
+    "seat": "sol-draft",
+    "piece": "P01",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 12097,
+      "output_tokens": 636
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/copy/P01.sol.md"
+  },
+  {
+    "ts": "2026-10-08T20:59:28.781Z",
+    "seat": "sol-draft",
+    "piece": "P03",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 12098,
+      "output_tokens": 706
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/copy/P03.sol.md"
+  },
+  {
+    "ts": "2026-10-08T20:59:30.567Z",
+    "seat": "sol-draft",
+    "piece": "P02",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 12095,
+      "output_tokens": 704
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/copy/P02.sol.md"
+  },
+  {
+    "ts": "2026-10-08T20:59:30.600Z",
+    "seat": "sol-draft",
+    "piece": "P06",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 12100,
+      "output_tokens": 954
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/copy/P06.sol.md"
+  },
+  {
+    "ts": "2026-10-08T20:59:35.195Z",
+    "seat": "sol-draft",
+    "piece": "P04",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 12093,
+      "output_tokens": 654
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/copy/P04.sol.md"
+  },
+  {
+    "ts": "2026-10-08T20:59:37.585Z",
+    "seat": "sol-draft",
+    "piece": "P05",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 12095,
+      "output_tokens": 1191
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/copy/P05.sol.md"
+  },
+  {
+    "ts": "2026-10-08T20:59:52.849Z",
+    "seat": "sol-draft",
+    "piece": "P08",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 12094,
+      "output_tokens": 542
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/copy/P08.sol.md"
+  },
+  {
+    "ts": "2026-10-08T20:59:59.642Z",
+    "seat": "sol-draft",
+    "piece": "P07",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 12077,
+      "output_tokens": 710
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/copy/P07.sol.md"
+  },
+  {
+    "ts": "2026-10-08T21:00:14.738Z",
+    "seat": "sol-draft",
+    "piece": "P09",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 12101,
+      "output_tokens": 1744
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/copy/P09.sol.md"
+  },
+  {
+    "ts": "2026-10-08T21:02:59.936Z",
+    "seat": "sol-cold-read",
+    "step": "sol-cold-read",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 9543,
+      "output_tokens": 2317
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/critique/cold-read.sol.md"
+  },
+  {
+    "ts": "2026-10-08T21:07:53.188Z",
+    "piece": "P01",
+    "step": "compose",
+    "kind": "social",
+    "status": "image-missing",
+    "reason": "no image for J01; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:07:53.190Z",
+    "piece": "P02",
+    "step": "compose",
+    "kind": "social",
+    "status": "image-missing",
+    "reason": "no image for J02; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:07:53.192Z",
+    "piece": "P03",
+    "step": "compose",
+    "kind": "pin",
+    "status": "image-missing",
+    "reason": "no image for J03; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:07:53.193Z",
+    "piece": "P04",
+    "step": "compose",
+    "kind": "email",
+    "status": "image-missing",
+    "reason": "no image for J04; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:07:53.195Z",
+    "piece": "P05",
+    "step": "compose",
+    "kind": "one-pager",
+    "status": "image-missing",
+    "reason": "no image for J01; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:07:53.196Z",
+    "piece": "P08",
+    "step": "compose",
+    "kind": "poster",
+    "status": "image-missing",
+    "reason": "no image for J06; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:10:35.599Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-08T21:10:36.063Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-08T21:10:36.524Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P03/P03.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-08T21:10:36.526Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P04/P04.html",
+    "format": "html"
+  },
+  {
+    "ts": "2026-10-08T21:10:37.061Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P04/P04.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-08T21:10:37.555Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P05/P05.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-08T21:10:37.582Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P05/P05-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-08T21:10:37.584Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.html",
+    "format": "html"
+  },
+  {
+    "ts": "2026-10-08T21:10:38.138Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-08T21:10:38.156Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-08T21:10:38.158Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "pr-pitch",
+    "status": "ok",
+    "output": "out/P07/pitch.md",
+    "format": "md"
+  },
+  {
+    "ts": "2026-10-08T21:10:38.630Z",
+    "piece": "P08",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P08/P08.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-08T21:10:38.694Z",
+    "piece": "P08",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P08/P08-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-08T21:10:58.369Z",
+    "piece": "P09",
+    "step": "render",
+    "kind": "video",
+    "status": "failed",
+    "reason": "hyperframes render exited 1: ✗  FFmpeg not found\n\n   FFmpeg is required to encode video.\n   brew install ffmpeg\n\n\n✗  FFprobe not found\n\n   FFprobe is required to probe media assets. It ships with FFmpeg but was not found on PATH.\n   brew install ffmpeg"
+  },
+  {
+    "ts": "2026-10-08T21:11:34.727Z",
+    "seat": "sol-render-review",
+    "step": "sol-render-review",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 18971,
+      "output_tokens": 1021
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/critique/review.sol.md"
+  },
+  {
+    "ts": "2026-10-08T21:32:05.723Z",
+    "piece": "P01",
+    "step": "compose",
+    "kind": "social",
+    "status": "image-missing",
+    "reason": "no image for J01; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:32:05.776Z",
+    "piece": "P02",
+    "step": "compose",
+    "kind": "social",
+    "status": "image-missing",
+    "reason": "no image for J02; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:32:05.831Z",
+    "piece": "P03",
+    "step": "compose",
+    "kind": "pin",
+    "status": "image-missing",
+    "reason": "no image for J03; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:32:05.888Z",
+    "piece": "P04",
+    "step": "compose",
+    "kind": "email",
+    "status": "image-missing",
+    "reason": "no image for J04; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:32:05.942Z",
+    "piece": "P05",
+    "step": "compose",
+    "kind": "one-pager",
+    "status": "image-missing",
+    "reason": "no image for J01; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:32:05.994Z",
+    "piece": "P08",
+    "step": "compose",
+    "kind": "poster",
+    "status": "image-missing",
+    "reason": "no image for J06; composed with IMAGE PENDING"
+  },
+  {
+    "ts": "2026-10-08T21:32:17.157Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-08T21:32:18.169Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-08T21:32:19.203Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P03/P03.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-08T21:32:19.840Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P04/P04.html",
+    "format": "html"
+  },
+  {
+    "ts": "2026-10-08T21:32:20.392Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P04/P04.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-08T21:32:21.495Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P05/P05.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-08T21:32:21.523Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P05/P05-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-08T21:32:22.166Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "pr-pitch",
+    "status": "ok",
+    "output": "out/P07/pitch.md",
+    "format": "md"
+  },
+  {
+    "ts": "2026-10-08T21:32:23.202Z",
+    "piece": "P08",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P08/P08.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-08T21:32:23.270Z",
+    "piece": "P08",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P08/P08-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-08T21:32:28.770Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.html",
+    "format": "html"
+  },
+  {
+    "ts": "2026-10-08T21:32:29.218Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-08T21:32:29.236Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-08T21:32:49.105Z",
+    "piece": "P09",
+    "step": "render",
+    "kind": "video",
+    "status": "failed",
+    "reason": "hyperframes render exited 1: ✗  FFmpeg not found\n\n   FFmpeg is required to encode video.\n   brew install ffmpeg\n\n\n✗  FFprobe not found\n\n   FFprobe is required to probe media assets. It ships with FFmpeg but was not found on PATH.\n   brew install ffmpeg"
+  },
+  {
+    "ts": "2026-10-08T21:35:12.699Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "pr-pitch",
+    "status": "ok",
+    "output": "out/P07/pitch.md",
+    "format": "md"
+  },
+  {
+    "ts": "2026-10-09T14:13:55.236Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T14:13:55.245Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:13:55.245Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:13:55.700Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T14:13:55.703Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:13:55.704Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:13:56.304Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P03/P03.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T14:13:56.307Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P03/P03.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:13:56.307Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P03/P03.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:13:56.309Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P04/P04.html",
+    "format": "html"
+  },
+  {
+    "ts": "2026-10-09T14:13:56.768Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P04/P04.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T14:13:57.474Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1180 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-09T14:13:57.495Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.html",
+    "format": "html"
+  },
+  {
+    "ts": "2026-10-09T14:13:58.038Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T14:13:58.481Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T14:13:58.486Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "pr-pitch",
+    "status": "ok",
+    "output": "out/P07/pitch.md",
+    "format": "md"
+  },
+  {
+    "ts": "2026-10-09T14:13:59.138Z",
+    "piece": "P08",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P08/P08.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T14:13:59.703Z",
+    "piece": "P08",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P08/P08-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T14:14:34.945Z",
+    "piece": "P09",
+    "step": "render",
+    "kind": "video",
+    "status": "ok",
+    "output": "out/P09/P09.mp4",
+    "format": "mp4"
+  },
+  {
+    "ts": "2026-10-09T14:15:46.054Z",
+    "seat": "sol-render-review",
+    "step": "sol-render-review",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 19710,
+      "output_tokens": 1319
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-08-studio-door/critique/review.sol.md"
+  },
+  {
+    "ts": "2026-10-09T14:36:34.815Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T14:36:34.823Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:36:34.824Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:36:35.973Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T14:36:35.981Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:36:35.981Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:36:37.158Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P03/P03.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T14:36:37.166Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P03/P03.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:36:37.166Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P03/P03.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T14:36:37.738Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P04/P04.html",
+    "format": "html"
+  },
+  {
+    "ts": "2026-10-09T14:36:38.291Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P04/P04.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T14:36:39.279Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1106 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-09T14:36:39.902Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "pr-pitch",
+    "status": "ok",
+    "output": "out/P07/pitch.md",
+    "format": "md"
+  },
+  {
+    "ts": "2026-10-09T14:36:41.299Z",
+    "piece": "P08",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P08/P08.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T14:36:41.867Z",
+    "piece": "P08",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P08/P08-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T14:36:42.451Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.html",
+    "format": "html"
+  },
+  {
+    "ts": "2026-10-09T14:36:42.952Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T14:36:43.383Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "deck",
+    "status": "ok",
+    "output": "out/P06/P06.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T14:37:17.631Z",
+    "piece": "P09",
+    "step": "render",
+    "kind": "video",
+    "status": "ok",
+    "output": "out/P09/P09.mp4",
+    "format": "mp4"
+  },
+  {
+    "ts": "2026-10-09T14:37:53.544Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P05/P05.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T14:37:53.611Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P05/P05-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T16:04:09.622Z",
+    "piece": "P09",
+    "step": "render",
+    "kind": "video",
+    "status": "ok",
+    "output": "out/P09/P09.mp4",
+    "format": "mp4"
+  },
+  {
+    "ts": "2026-10-09T16:08:38.948Z",
+    "piece": "P09",
+    "step": "render",
+    "kind": "video",
+    "status": "ok",
+    "output": "out/P09/P09.mp4",
+    "format": "mp4"
+  },
+  {
+    "ts": "2026-10-09T16:14:30.628Z",
+    "piece": "P09",
+    "step": "render",
+    "kind": "video",
+    "status": "ok",
+    "output": "out/P09/P09.mp4",
+    "format": "mp4"
+  },
+  {
+    "ts": "2026-10-09T16:15:12.185Z",
+    "piece": "P09",
+    "step": "render",
+    "kind": "video",
+    "status": "ok",
+    "output": "out/P09/P09.mp4",
+    "format": "mp4"
+  }
+]

@@ -1,7 +1,7 @@
 ---
 Status: Active
 Owner: Kody
-Last Updated: 2026-09-01
+Last Updated: 2026-10-09
 ---
 
 **Purpose.** Append-only log of every change to `VISION.md` and every open vision ruling. Never edit past entries; corrections get a new dated entry referencing the old one. Ruling ids are V-numbers; learnings from the market are L-numbers; re-cuts of the page are C-numbers. Same discipline as `docs/design/the-document/DECISIONS.md`.
@@ -38,24 +38,28 @@ Last Updated: 2026-09-01
 **Question:** Keep Designer Pro $49 / Studio $149 (my-company.md), or a single studio tier? Is a solo tier coherent with the "first hires" trigger?
 **Why it matters:** Sets the floor stream and the number on the recruiting sheet.
 **Blocks:** Recruiting sheet money line; pricing page.
+**Interim 2026-10-09 (Kody):** still open. Until it is ruled, no price, fee or "no fee" language on patina.cloud or in campaign copy. See V16.
 
 ### V3 · Consumer cohort — 2026-09-01
 
 **Question:** Pause the consumer Founding Circle (0/200, ten weeks at zero) until at least one studio beyond Leah's is live on The Document?
 **Why it matters:** The marketing engine's lead cohort is one the vision says isn't the customer. Its three re-queued recommendations are all consumer-facing.
 **Blocks:** Next marketing-engine run's cohort targets.
+**RULED 2026-10-09 (Kody): a second, quieter door, not paused.** The studio door (/designers, "Bring one live project") leads the homepage; /founding and /signup stay live. See V16.
 
 ### V4 · Entity — 2026-09-01
 
 **Question:** Stay a venture of Middle West Studio, or form a separate LLC before Design Chicago?
 **Why it matters:** Co-founder equity, IP chain-of-title, trademark filings (Patina, Aesthete Engine, Strata Mark), Pledge contract counterparty, separate Cloudflare account.
 **Blocks:** Trademarks; Pledge counsel review; any public "co-founder" byline.
+**Interim 2026-10-09 (Kody):** the entity question stays open. Until it is ruled, public bylines use names only ("Kody and Leah"), no titles. See V16.
 
 ### V5 · Thesis line — 2026-09-01
 
 **Question:** "Where Time Adds Value" — canon or retire?
 **Why it matters:** Lives in memory and pitch decks, not in any repo file. If canon, it belongs in VISION.md §1 and the brand doc; if not, it should stop appearing.
 **Blocks:** Nothing. Cosmetic until Design Chicago copy.
+**RULED 2026-10-09 (Kody): canon, used sparingly.** Footer, metadata, at most one brand moment per page or piece; never a headline. voice-lint now warns rather than fails. See V16.
 
 ### V6 · Pledge × subscription — 2026-09-01
 
@@ -488,6 +492,41 @@ These are side journeys from the studio buying review (`artifacts/procurement-bu
 
 ---
 
+## Ruled — 2026-10-09 (website review)
+
+### V16 · Website copy rulings — V3, V5 ruled; V2, V4 interim; canon; Parade ask — 2026-10-09
+
+**Decision (Kody, 2026-10-09, answering the founders' website-review deck):**
+
+- **V3 · consumer cohort:** the Founding Circle becomes a second, quieter door; it is not paused. The homepage's first ask is the studio door, matching every October campaign.
+- **V5 · thesis line:** "Where Time Adds Value" is canon, used sparingly (footer, metadata, at most one brand moment per page or piece, never a headline). `marketing/canon/lexicon.json` moves it from errors to warnings.
+- **V4 · entity (interim):** names, no titles, in every public byline until the entity is ruled.
+- **V2 · studio price (interim):** no price or fee language in public copy until the price is ruled.
+- **Voice canon:** `marketing/canon` is the one voice rulebook for patina.cloud too. The website repo's `docs/messaging/patina-messaging-system.md` shrinks to a pointer plus site-only rules (system strings, the frozen SMS consent text).
+- **Parade homeowners:** /designers carries one quiet newsletter line ("The Designer's Eye") below the studio application, tagged `designers_homeowner`. The studio ask stays first.
+
+**Shipped:** patina.cloud Worker version 69e063c1 (2026-10-10), PatinaWebsite branch `codex/living-study-production` (tickets SQ-10 to SQ-14).
+
+**Source:** founders' website-review deck (https://claude.ai/artifact/UX9NXrBbjQK27QvRg8ztPA); PatinaWebsite `docs/launch/2026-10-website-review.html`.
+
+## Ruled — 2026-10-11 (homeowner homepage)
+
+### V17 · The patina.cloud homepage speaks to homeowners — amends V16/V3 for the homepage only — 2026-10-11
+
+**Decision (Kody, 2026-10-11):** "the home is reading more towards designers. I want the home page to read for the homeowners." Asked how far it goes, Kody chose the homepage only.
+
+- **Homepage (`/`) only:** copy may address homeowners directly about their own home. The Founding Circle is the homepage's main door, and the studio door ("For designers" → /designers) becomes the quieter second door there.
+- **Everywhere else is unchanged:** /designers, /makers, campaigns, The Press and email stay studio-first under voice.md §1 and V16. §2's drift line ("consumer-first thinking") is acknowledged; this is a scoped exception for the site's front door, not a change of customer.
+- **Still binding on the homepage:** lexicon bans, claims, no price (V2 interim), names not titles (V4 interim), the tagline at most once (V5), pre-launch honesty, art direction.
+
+**Recorded in:** `marketing/canon/voice.md` §1 (homepage exception); PatinaWebsite `docs/messaging/patina-messaging-system.md`.
+
+---
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 · V15 · V16 (V3, V5 ruled) · V17 (V3 amended, homepage) · last id = V17*
+
+---
+
 ## Ruled — 2026-10-10 (US-24/US-25 Day Sheet and Direction C)
 
 ### V18 · US-24/US-25 Day Sheet rulings + Direction C labeling, Kody 2026-10-10
@@ -556,6 +595,16 @@ Both start with a design spike: specimens, then the build.
 **Release:** no feature flag. One release at the end: the migration goes to Strata, then the designer portal through `deploy-portal.sh`. Verification is behaviour probes plus a signed-in prod walk at 1440 and 390, read-only.
 
 **Source:** Kody's multiple-choice interview of 2026-10-12.
+
+### V21 · Founding Circle campaigns may speak to Madison-area homeowners — amends V17 beyond the homepage — 2026-10-12
+
+**Decision (Kody, 2026-10-12):** asked for a Press campaign "targeting home owners for the Founding Circle in the Madison area". Shown that V17 kept campaigns studio-first, Kody chose a new ruling over the Moll Drive framing (homeowners as Middle West's prospective clients) or a homepage-only link.
+
+- **Scope:** a campaign whose brief names the Founding Circle as its ask may address Madison-area homeowners directly about their own home. Its ask is joining at patina.cloud/founding.
+- **Unchanged:** every other campaign, /designers, /makers and studio email stay studio-first under voice.md §1 and V16. The studio remains the customer (S2); the Founding Circle is an invitation into the building of Patina, not a sale.
+- **Still binding:** no shop or product push, no prices (V2 interim), no Pledge language, names not titles (V4 interim), the tagline at most once (V5), pre-launch honesty [C24], claims, art direction, Midwest only.
+
+**Recorded in:** `marketing/canon/voice.md` §1; the content test in `.claude/workflows/marketing-draft.js`; claims C34–C39.
 
 ### V22 · Every studio message waits for a designer's Send — Kody 2026-10-13
 

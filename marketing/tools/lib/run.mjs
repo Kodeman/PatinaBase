@@ -27,6 +27,10 @@ const PIECE_KINDS = [
 const STREAMS = ['subscription', 'margin', 'both'];
 const JOB_KINDS = ['still', 'video'];
 
+// A run's binaries, relative to the run dir. They live in R2 (archive.mjs), never in git; keep this
+// list and the Press block in .gitignore identical.
+export const RUN_BINARY_PATHS = ['mj/inbox', 'flux', 'compose', 'out', 'approved', 'board.html'];
+
 export function runPaths(runDir) {
   return {
     root: runDir,

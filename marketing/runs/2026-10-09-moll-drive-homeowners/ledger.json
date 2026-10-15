@@ -1,0 +1,290 @@
+[
+  {
+    "ts": "2026-10-09T17:08:03.396Z",
+    "seat": "sol-draft",
+    "piece": "P03",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 16207,
+      "output_tokens": 724
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/copy/P03.sol.md"
+  },
+  {
+    "ts": "2026-10-09T17:08:06.332Z",
+    "seat": "sol-draft",
+    "piece": "P02",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 16207,
+      "output_tokens": 710
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/copy/P02.sol.md"
+  },
+  {
+    "ts": "2026-10-09T17:08:07.246Z",
+    "seat": "sol-draft",
+    "piece": "P05",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 16203,
+      "output_tokens": 627
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/copy/P05.sol.md"
+  },
+  {
+    "ts": "2026-10-09T17:08:12.206Z",
+    "seat": "sol-draft",
+    "piece": "P04",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 16204,
+      "output_tokens": 914
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/copy/P04.sol.md"
+  },
+  {
+    "ts": "2026-10-09T17:08:16.334Z",
+    "seat": "sol-draft",
+    "piece": "P06",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 16205,
+      "output_tokens": 1333
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/copy/P06.sol.md"
+  },
+  {
+    "ts": "2026-10-09T17:08:39.757Z",
+    "seat": "sol-draft",
+    "piece": "P07",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 16205,
+      "output_tokens": 994
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/copy/P07.sol.md"
+  },
+  {
+    "ts": "2026-10-09T17:10:17.577Z",
+    "seat": "sol-draft",
+    "piece": "P01",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 16207,
+      "output_tokens": 827
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/copy/P01.sol.md"
+  },
+  {
+    "ts": "2026-10-09T17:13:44.876Z",
+    "seat": "sol-cold-read",
+    "step": "sol-cold-read",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 10284,
+      "output_tokens": 1957
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/critique/cold-read.sol.md"
+  },
+  {
+    "ts": "2026-10-09T17:19:36.168Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T17:19:36.180Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T17:19:36.181Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T17:19:37.813Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P04/P04.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T17:19:38.337Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P04/P04-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T17:19:39.503Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1097 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-09T17:19:40.913Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P07/P07.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T17:19:40.972Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P07/P07-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T17:20:24.397Z",
+    "seat": "sol-render-review",
+    "step": "sol-render-review",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 13217,
+      "output_tokens": 983
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/critique/review.sol.md"
+  },
+  {
+    "ts": "2026-10-09T17:26:10.240Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T17:26:10.249Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T17:26:10.249Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T17:26:11.462Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1076 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-09T17:26:12.803Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P07/P07.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T17:26:12.866Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P07/P07-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T17:26:19.871Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P06/P06.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T17:26:19.933Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P06/P06-preview.png",
+    "format": "png",
+    "preview": true
+  }
+]

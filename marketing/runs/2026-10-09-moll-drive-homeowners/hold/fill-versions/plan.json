@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "runId": "2026-10-09-moll-drive-homeowners",
+  "contentTest": {
+    "pass": true,
+    "audience": "A Madison-area homeowner touring the 2026 Fall Parade (or seeing the Moll Drive house online) who is planning to build, remodel or furnish and is deciding whether to hire a designer. She is Middle West Studio's prospective client, seen and addressed through the studio (VISION §2: homeowners are the studio's clients; voice.md §1 and §2: 'to the homeowner, through the studio'). She is never Patina's customer: no Patina sign-up, no patina.cloud link, no Founding 50, no shop line. The one ask in the batch is to talk to Leah at Middle West Studio, middlewest.studio. AUDIENCE RULING by Kody, Parade opening day: 'See how Patina can help bring your vision to life, working with Middle West Studio.'",
+    "moment": "Fall Parade weekends, October 9–11 and 16–18, 2026 [C27]: she is standing in finished rooms Middle West Studio designed [C28] and Kippley Custom Carpentry built [C25], picturing her own house and wondering what working with a designer would actually be like. For the studio this is Leah's own client-winning moment: Middle West's next homeowner client arrives by word of mouth and by walking her work, 1:1, never through SEO strangers. Surface: The Document (VISION §1 #1), met on its homeowner-facing side, the client page she and her designer share (VISION-DECISIONS V8).",
+    "stream": "margin",
+    "promise": "One agreed direction (VISION §4, to the homeowner): you and your designer look at the same page, from brief to install. Middle West Studio brings your vision to life; Patina is the page you share [C04, C05]. No engagement ask, no dashboards, no funnel; the only ask is a conversation with Leah.",
+    "reason": "Passes the feature test on all four counts. Surface: The Document, on its homeowner-facing client page (V8), introduced only as the page Middle West and its client share. Studio moment: Leah's studio winning its own next client at the Parade, which is the studio's moment (the customer is still the studio; the homeowner is its client, VISION §2). Stream: margin, the upside, since a Middle West project with this homeowner is the designer-led project through which furniture is sold (VISION §3); no Pledge language rides on it. Promise: one agreed direction, to the homeowner through the studio (VISION §4, voice.md §2). Acquisition is 1:1 through Leah's own work, her presence at the house, her email and her leave-behind, never SEO strangers. The batch does not address the homeowner as Patina's customer: no Patina sign-up, no patina.cloud, no Founding 50, no shop line, no funnel copy; the ask is Leah at middlewest.studio. No held tagline, no prices, no time-saved figures, no claim that any studio besides Middle West uses Patina. Honesty held open as hard rules on every piece: the house was NOT run in Patina and no line may imply the crew, Leah or a client used a Patina page; it is a spec home with no homeowner client, so C05 speaks only to how Middle West will work with the reader going forward; C30 (Leah's day and hours) stays ⟨FILL: day and hours⟩ and is never cited; Kippley is the builder only, their craft honored [C25, C26], never beside Patina; J04 is the only generated image, labelled 'Illustration' and never described as the house."
+  },
+  "concept": {
+    "name": "Every room began as a brief",
+    "idea": "A homeowner walks the Parade and sees finished rooms; she never sees how they came together: the brief, the choices, the questions from the site. The Moll Drive house is Leah's work at Middle West Studio, built by a Sauk City crew that frames, finishes and builds its own millwork. The batch tells her, honestly and from the finished side, what working with Middle West Studio looks like: bring your own house to Leah, and the two of you work from one page, from brief to install, so you always see the same direction your designer does. This house was designed and built before that page was ready (it was NOT run in Patina); it is the kind of house Middle West will work on with her, from one shared page, going forward. Three angles from the brief, one per surface: the decisions you can't see from the doorway (P01, P04, P07); the warm wood, one piece, the drawing and the crew behind it (P02); ask for Leah, a designer talking with a homeowner standing in a finished kitchen (P03, P05, P06). The seed copy's facts, schedule and every ⟨FILL⟩ stay; its studio angle and designer asks are rewritten for the homeowner, with Leah at middlewest.studio as the only ask.",
+    "artDirection": "Real, credited photographs of the Moll Drive house or the builder's rendering (credited 'Rendering: Kippley Custom Carpentry'), no people, daylight through real windows: a room from the doorway, the woodwork's grain up close, the front of the house in late afternoon. Paper ground (#EDE9E4), Playfair Display headlines in sentence case, Inter body, DM Mono eyebrow carrying the place and date line (Waunakee · Fall Parade · Oct 9–11 and 16–18). Instagram: image owns the top two thirds, headline on paper below, text out of the outer 64 px. Poster: one image, one Playfair line readable from six feet; J04 is the only image that may be generated, a warm oak and brass texture that carries the label 'Illustration' on the print and is never captioned or described as the house; a real credited detail photo may replace it. One-pagers: eyebrow, Playfair title, one image band, three or four single-column sections, CTA at the foot (Leah at Middle West Studio, middlewest.studio), print-safe. Email: letter first, from Leah, at most one photo under the opening paragraph, readable with images off. Flat paper, ink and clay-beige hairlines; no gradients, no badges, no red/green, no product screenshots, no Patina mark as hero."
+  },
+  "pieces": [
+    {
+      "id": "P01",
+      "kind": "social",
+      "channel": "instagram-4x5",
+      "angle": "Open this weekend in Waunakee: the decisions you can't see from the doorway, and how yours would start.",
+      "brief": "Schedule: opening weekend, post Fri Oct 9. Rewrite the seed copy's P01 for a homeowner walking the Parade: Kippley Custom Carpentry built it with their own framing and finishing carpenters [C25]; Middle West Studio designed the rooms [C28]; open October 9–11 and 16–18 [C27]. Replace 'If you run a studio, walk it slowly' with an invitation to the homeowner picturing her own house: every room here started as a brief, a sample board and a long run of decisions, and that is where hers would start too, with Leah at Middle West Studio. Keep ⟨FILL: the one room Leah would send a designer to first, and why, in one sentence.⟩ in its place with that wording (the copy may introduce it as the room Leah would send you to first, but the marker text stays). Honesty rules: the house was NOT run in Patina, so no line may say or imply the crew, Leah or a client worked from a Patina page (P01 need not name Patina at all); spec home, so no homeowner-client lines about this house; never invent a room or material beyond C29; Kippley is the builder only, never beside Patina. No Patina sign-up, no patina.cloud, no shop line; if there is an ask it is Leah at Middle West Studio, middlewest.studio. Headline ≤ 8 words, caption 40–90 words, ≤ 4 hashtags. Alt text describes the real photo plainly (a room in daylight, no people).",
+      "claims": [
+        "C25",
+        "C27",
+        "C28"
+      ],
+      "visuals": [
+        "J01"
+      ]
+    },
+    {
+      "id": "P02",
+      "kind": "social",
+      "channel": "instagram-4x5",
+      "angle": "The warm wood is the point: one piece, the drawing and the crew behind it, and the page you and your designer would share.",
+      "brief": "Schedule: the woodwork, post midweek (Tue–Wed Oct 13–14). Keep the seed copy's facts: warm wood and classic detail only as C29 states it; Kippley builds its own mantels, built-ins and cabinetry [C26]; keep ⟨FILL: the piece in this house from their shop, and its species⟩ in place and never fill the piece or the species yourself. Rewrite the studio line for the homeowner: behind a piece like that sits a run of decisions between a designer and a crew (a drawing, a finish sample, a question from the site); when Middle West works with you on your own house, those decisions live on one page you and your designer share, from brief to install [C04]. Honesty rules: NOT run in Patina (the decisions behind this piece did not live on a Patina page; say Patina is the page Middle West will share with you on your house, never that it held this one); Kippley is the builder only, never a Patina user, endorser or partner, and 'with Kippley' never sits beside Patina; spec home, no client lines about this house; no Patina sign-up, no patina.cloud, no shop line. Headline ≤ 8 words, caption 40–90 words, ≤ 4 hashtags. Alt text: close view of the woodwork's grain and finish in window light, no people.",
+      "claims": [
+        "C04",
+        "C26",
+        "C29"
+      ],
+      "visuals": [
+        "J02"
+      ]
+    },
+    {
+      "id": "P03",
+      "kind": "social",
+      "channel": "instagram-4x5",
+      "angle": "One more weekend to walk it: ask for Leah, and bring your own house.",
+      "brief": "Schedule: second weekend, post Fri Oct 16. Keep the seed copy's facts: open October 16–18, the Fall Parade's second weekend [C27]; rooms by Middle West Studio, built by Kippley Custom Carpentry [C28]. Keep ⟨FILL: day and hours⟩ for Leah's presence exactly; C30 is todo, so never state, guess or cite a day or time. Rewrite the designer ask for the homeowner: drop 'Designers:' and the studio's-next-job line; instead, Leah will be there ⟨FILL: day and hours⟩, ask her about the house and about your own, and how the two of you would work from one page from brief to install [C04]. The only ask is to talk to Leah at Middle West Studio, middlewest.studio. Honesty rules: NOT run in Patina; spec home, no homeowner-client lines about this house; no Patina sign-up, no patina.cloud, no shop line; never claim any studio besides Middle West uses Patina. Headline ≤ 8 words, caption 40–90 words, ≤ 4 hashtags. Alt text: the front of the Moll Drive house in late afternoon light, no people.",
+      "claims": [
+        "C04",
+        "C27",
+        "C28"
+      ],
+      "visuals": [
+        "J03"
+      ]
+    },
+    {
+      "id": "P04",
+      "kind": "poster",
+      "channel": "poster-18x24",
+      "angle": "Every room began as a brief: the easel sign at the house, speaking to the homeowner standing in front of it.",
+      "brief": "Schedule: easel sign at the house, second weekend, print by Thu Oct 15 (print-ready PDF, 18×24 in, 0.125 in bleed, 300 dpi). Keep the seed copy's headline 'Every room began as a brief' and subhead 'Interiors by Middle West Studio, for Kippley Custom Carpentry's Fall Parade home.' Rewrite the body for the homeowner reading it: bring your own house to Leah at Middle West Studio and the two of you work from one page, from brief to install [C04]; Middle West Studio · middlewest.studio. Drop 'Designers, start at patina.cloud/designers' entirely; no patina.cloud, no Founding 50, no sign-up, no shop line, no QR-first design; the words carry it. Honesty rules: NOT run in Patina, so nothing may imply this house ran from the page; spec home, no client lines; Kippley is the builder only, never beside Patina; C30 is todo, so no day or hours on the sign. Visual J04 is the ONLY generated image in the batch: a warm oak grain and brass pull texture that carries the label 'Illustration' on the print and must never be captioned, credited or described as the house, as Kippley's work or as any real project; a real credited detail photo of the house may replace it. Headline ≤ 6 words, subhead ≤ 14 words, body ≤ 35 words, readable from six feet.",
+      "claims": [
+        "C04"
+      ],
+      "visuals": [
+        "J04"
+      ]
+    },
+    {
+      "id": "P05",
+      "kind": "email",
+      "channel": "email",
+      "angle": "A letter from Leah to the homeowners who toured or asked about the house: how I'd work with you on yours.",
+      "brief": "Schedule: Leah to homeowners who toured or asked about the house, send Mon Oct 12 (draft only; nothing is sent). A letter, not a newsletter, signed Leah, Middle West Studio; subject ≤ 60 characters; body 120–220 words; exactly one ask (reply to talk about your own house, or come find her at the house); ends 'Reply here; it comes straight to me.' Keep every ⟨FILL⟩ in place with its wording: ⟨FILL: first name⟩, ⟨FILL: day and hours⟩ (C30 is todo; never state or guess a day or time), and ⟨FILL, Leah: one true sentence on how the job was run, e.g. drawings, email threads and photos from the site.⟩. Facts: Middle West designed the interiors [C28]; open one more weekend, October 16–18 [C27]; Kippley's own framing and finishing carpenters made it look easy [C25]. Rewrite the studio-owner invitation for the homeowner: Leah is honest that this house ran the way most houses do (her FILL sentence); what she would do differently with you is work from one living page, from brief to install [C04], so you see the same direction she does [C05, about working with the reader going forward only]; Patina is Middle West Studio's own venture [C01] and still pre-launch [C24], which is why she would rather talk about it standing in a finished kitchen than over a demo. Honesty rules: the email must be honest that this house did NOT run on Patina; spec home, so no client lines about this house; Kippley never pitched on, using or beside Patina; no Patina sign-up, no patina.cloud, no Founding 50, no Pledge, no prices, no time-saved figures. At most one real photo under the opening paragraph (J05), readable with images off.",
+      "claims": [
+        "C01",
+        "C04",
+        "C05",
+        "C24",
+        "C25",
+        "C27",
+        "C28"
+      ],
+      "visuals": [
+        "J05"
+      ]
+    },
+    {
+      "id": "P06",
+      "kind": "one-pager",
+      "channel": "one-pager-letter",
+      "angle": "What working with Middle West Studio looks like, on one shared page: the take-home leave-behind.",
+      "brief": "Schedule: take-home leave-behind at the house, print by Thu Oct 15 (print-ready PDF, letter, margins ≥ 0.75 in, print-safe). Rewrite the seed copy's studio leave-behind as the homeowner's take-home: what working with Middle West Studio looks like, on one shared page. Four sections, each ≤ 70 words: (1) the moment, you walk finished rooms and picture your own, and the part you never see is how the rooms came together, the brief, the choices, the questions from the site; (2) one page from brief to install, Middle West writes the direction once on one living page per client [C04], you see the same page your designer does, one agreed direction [C05, about working with the reader going forward only], with no dashboards, no task manager and no tab bars to learn [C06]; (3) where it stands, Patina is Middle West Studio's own venture [C01] and pre-launch [C24], and the honest line that the Moll Drive house was designed before the page was ready, so it is the kind of house Middle West will work on with you from one page, going forward; (4) what it asks of you, a conversation with Leah about your own house. One CTA: talk to Leah at Middle West Studio, middlewest.studio. Drop every studio line from the seed copy: no first-hire year [C03], no Madison-and-Milwaukee studios [C08], no Founding 50 [C23], no 'apply', no patina.cloud. Honesty rules: NOT run in Patina and no line may imply this house, its crew or anyone on it used a Patina page; spec home, no client lines about this house; never claim any studio besides Middle West uses Patina; Kippley never beside Patina; no Pledge, no prices, no time-saved figures, no feature grid or comparison table. One real photo band (J06), credited, no people.",
+      "claims": [
+        "C01",
+        "C04",
+        "C05",
+        "C06",
+        "C24"
+      ],
+      "visuals": [
+        "J06"
+      ]
+    },
+    {
+      "id": "P07",
+      "kind": "one-pager",
+      "channel": "one-pager-letter",
+      "angle": "The Moll Drive house: the counter flyer a visitor picks up at the house.",
+      "brief": "Schedule: counter flyer at the house, print by Thu Oct 15 (print-ready PDF, letter, margins ≥ 0.75 in, print-safe). Keep the seed copy's three house sections and their facts: designed by Middle West Studio, a residential design studio in Madison, which designed the interiors [C28], with ⟨FILL: two plain sentences from Leah on the direction for this house: the light, the palette, the room she would show first.⟩; the hands, Kippley Custom Carpentry, family-owned, Sauk City, building homes since 1987 with its own framing and finishing carpenters [C25], whose shop builds mantels, built-ins and cabinetry [C26], with ⟨FILL: piece⟩; the house as the listing states it, a traditional home with warm wood accents, a kitchen built around a generous island and walk-in pantry, rear windows onto the landscape, and a finished walkout lower level [C29], with ⟨FILL: the materials Leah chose, named plainly.⟩. Never invent rooms, materials or species. Rewrite the fourth section for the homeowner walking through: every room here began as a brief and a long run of decisions; if you are picturing your own house, talk to Leah; Middle West works with you from one living page, from brief to install [C04]; Patina is a venture of Middle West Studio in Madison [C01]. One CTA: Leah at Middle West Studio, middlewest.studio. Drop 'If you run a studio' and 'Studios: patina.cloud/designers'; no patina.cloud, no sign-up, no shop line. Honesty rules: NOT run in Patina, so nothing may say or imply this house, its crew or anyone on it used a Patina page; spec home, no client lines; Kippley is the builder only, credited and honored, never a Patina user, endorser or partner, and never beside Patina. Four sections, each ≤ 70 words. One real credited photo band (J07), no people.",
+      "claims": [
+        "C01",
+        "C04",
+        "C25",
+        "C26",
+        "C28",
+        "C29"
+      ],
+      "visuals": [
+        "J07"
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "id": "J01",
+      "pieceIds": [
+        "P01"
+      ],
+      "kind": "still",
+      "channel": "instagram-4x5",
+      "source": "photo",
+      "prompt": "REAL PHOTOGRAPH OR BUILDER'S RENDERING, not Midjourney: do not paste this into Midjourney. Drop one credited image of the Moll Drive house into this inbox: the room Leah would send a visitor to first (her pick, the same room she names in the P01 FILL; if she has no pick yet, the finished walkout lower level, which the listing names and no other job uses), shot from the doorway so the whole room reads, daylight through the real windows, no people, no staging props added. If it is the builder's rendering, the credit line is 'Rendering: Kippley Custom Carpentry'. Crop: the image fills the top two thirds of a 1080x1350 post (about 1080x900 px) with the headline on paper below, so supply at least 1080 px wide, keep the room's centre of interest mid-frame and nothing important in the outer 64 px. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this image).",
+      "params": "",
+      "variants": 1,
+      "fluxPrompt": "a traditional room seen from the doorway, warm wood accents, soft daylight through rear windows, 35mm wide at eye level, calm and settled, a house outside Madison, Wisconsin"
+    },
+    {
+      "id": "J02",
+      "pieceIds": [
+        "P02"
+      ],
+      "kind": "still",
+      "channel": "instagram-4x5",
+      "source": "photo",
+      "prompt": "REAL PHOTOGRAPH, not Midjourney: do not paste this into Midjourney. Drop one credited photo of the Moll Drive house into this inbox: a close view of the piece Kippley's shop built for this house (a mantel, a built-in or the cabinetry, whichever Leah names in the P02 FILL), grain and finish filling the frame, window light raking across it, tight 85mm-style crop, no people, no hands. Crop: fills the top two thirds of a 1080x1350 post (about 1080x900 px); supply at least 1080 px wide with the grain running through the centre. Do not choose the piece or name its wood; Leah does. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this photo).",
+      "params": "",
+      "variants": 1,
+      "fluxPrompt": "close view of warm wood grain and a hand-applied finish on built-in woodwork, soft raking side light from a window, 85mm close crop, quiet and settled, a house in southern Wisconsin"
+    },
+    {
+      "id": "J03",
+      "pieceIds": [
+        "P03"
+      ],
+      "kind": "still",
+      "channel": "instagram-4x5",
+      "source": "photo",
+      "prompt": "REAL PHOTOGRAPH OR BUILDER'S RENDERING, not Midjourney: do not paste this into Midjourney. Drop one credited image of the Moll Drive house into this inbox: the front of the house seen from the drive (the P03 alt text says 'seen from the drive') in late afternoon light, straight-on or a quarter view, no people, no cars in the drive, no Parade or builder signage in focus. If it is the builder's rendering, the credit line is 'Rendering: Kippley Custom Carpentry'. Crop: fills the top two thirds of a 1080x1350 post (about 1080x900 px); leave enough sky and ground around the house to crop, at least 1080 px wide. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this image).",
+      "params": "",
+      "variants": 1,
+      "fluxPrompt": "the front of a traditional new-build house in late afternoon light, long low sun across the lawn, 35mm from the drive, settled and quiet, outside Madison, Wisconsin"
+    },
+    {
+      "id": "J04",
+      "pieceIds": [
+        "P04"
+      ],
+      "kind": "still",
+      "channel": "poster-18x24",
+      "source": "midjourney",
+      "prompt": "a soft brass pull on a plain cabinet door, warm oak grain under a hand-rubbed oil finish, low side light from a tall window, 85mm close crop, quiet and settled, a century-old farmhouse in Door County, Wisconsin",
+      "params": "--ar 3:4 --style raw --v 8.1 --sref {{SREF}} --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere",
+      "variants": 3,
+      "fluxPrompt": "a soft brass pull on a plain cabinet door, warm oak grain, oil finish, low side light from a window, 85mm close crop, quiet and settled, an old Wisconsin farmhouse",
+      "note": "The only generated image in the batch, and an illustration: a texture, not a place. The print carries the label 'Illustration'. The poster must never caption, credit or describe it as the Moll Drive house, as Kippley's work or as any real project. The poster sets it in the top half, so pick variants whose grain and pull hold a centre crop; upscale the pick to 5400x7200 px for print. A real credited detail photo of the house (grain and a pull or a shop piece, no people, at least 5400x7200 px or upscaled to it) may replace it; if so, drop that photo in this inbox instead and it carries a photographer credit."
+    },
+    {
+      "id": "J05",
+      "pieceIds": [
+        "P05"
+      ],
+      "kind": "still",
+      "channel": "email",
+      "source": "photo",
+      "prompt": "REAL PHOTOGRAPH OR BUILDER'S RENDERING, not Midjourney: do not paste this into Midjourney. Optional: one image at most. Drop one credited image of the Moll Drive house into this inbox: the finished kitchen with its generous island, the room Leah would rather talk in, from the doorway, daylight, no people, a different frame from J01 and J07 if they also show the kitchen. If it is the builder's rendering, the credit line is 'Rendering: Kippley Custom Carpentry'. Crop: landscape 3:2, full width under the opening paragraph of a 600 px email, so supply at least 1200x800 px. The letter reads with images off; the image carries no words. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this image).",
+      "params": "",
+      "variants": 1,
+      "fluxPrompt": "a finished traditional kitchen with warm wood accents and a generous island, daylight from rear windows, 35mm landscape from the doorway, calm and settled, a house outside Madison, Wisconsin"
+    },
+    {
+      "id": "J06",
+      "pieceIds": [
+        "P06"
+      ],
+      "kind": "still",
+      "channel": "one-pager-letter",
+      "source": "photo",
+      "prompt": "REAL PHOTOGRAPH OR BUILDER'S RENDERING, not Midjourney: do not paste this into Midjourney. Drop one credited image of the Moll Drive house into this inbox for the take-home's image band: a room with the warm wood accents and the rear windows onto the landscape in frame, daylight, no people. If it is the builder's rendering, the credit line is 'Rendering: Kippley Custom Carpentry'. Crop: a wide band about 7 x 3 in on a letter page, so supply at least 2100x900 px with the windows and the wood both inside that band. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this image).",
+      "params": "",
+      "variants": 1,
+      "fluxPrompt": "a traditional room with warm wood accents and rear windows onto an open landscape, soft overcast daylight, 28mm wide landscape, settled and quiet, a new house in southern Wisconsin"
+    },
+    {
+      "id": "J07",
+      "pieceIds": [
+        "P07"
+      ],
+      "kind": "still",
+      "channel": "one-pager-letter",
+      "source": "photo",
+      "prompt": "REAL PHOTOGRAPH OR BUILDER'S RENDERING, not Midjourney: do not paste this into Midjourney. Drop one credited image of the Moll Drive house into this inbox for the counter flyer's image band: the kitchen with its generous island (and the walk-in pantry, if it shows from that view), from the doorway, daylight through the rear windows, no people, a different frame from J05; if the P05 email already runs a kitchen image on J05, use the front of the house in daylight instead, a different frame from J03. If it is the builder's rendering, the credit line is 'Rendering: Kippley Custom Carpentry'. Crop: a wide band about 7 x 3 in on a letter page, so supply at least 2100x900 px. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this image).",
+      "params": "",
+      "variants": 1,
+      "fluxPrompt": "a traditional kitchen with warm wood accents and a generous island, daylight from rear windows, 35mm wide landscape, calm and settled, a new house outside Madison, Wisconsin"
+    }
+  ]
+}

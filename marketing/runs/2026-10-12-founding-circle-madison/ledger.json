@@ -1,0 +1,507 @@
+[
+  {
+    "ts": "2026-10-13T01:30:10.161Z",
+    "seat": "sol-draft",
+    "piece": "P01",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 15202,
+      "output_tokens": 444
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/copy/P01.sol.md"
+  },
+  {
+    "ts": "2026-10-13T01:30:13.938Z",
+    "seat": "sol-draft",
+    "piece": "P04",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 15203,
+      "output_tokens": 570
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/copy/P04.sol.md"
+  },
+  {
+    "ts": "2026-10-13T01:30:15.597Z",
+    "seat": "sol-draft",
+    "piece": "P02",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 15202,
+      "output_tokens": 675
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/copy/P02.sol.md"
+  },
+  {
+    "ts": "2026-10-13T01:30:18.800Z",
+    "seat": "sol-draft",
+    "piece": "P05",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 15198,
+      "output_tokens": 588
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/copy/P05.sol.md"
+  },
+  {
+    "ts": "2026-10-13T01:30:21.544Z",
+    "seat": "sol-draft",
+    "piece": "P03",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 15202,
+      "output_tokens": 683
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/copy/P03.sol.md"
+  },
+  {
+    "ts": "2026-10-13T01:30:24.076Z",
+    "seat": "sol-draft",
+    "piece": "P06",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 15200,
+      "output_tokens": 1053
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/copy/P06.sol.md"
+  },
+  {
+    "ts": "2026-10-13T01:30:46.410Z",
+    "seat": "sol-draft",
+    "piece": "P08",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 15182,
+      "output_tokens": 545
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/copy/P08.sol.md"
+  },
+  {
+    "ts": "2026-10-13T01:30:47.293Z",
+    "seat": "sol-draft",
+    "piece": "P07",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 15199,
+      "output_tokens": 1143
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/copy/P07.sol.md"
+  },
+  {
+    "ts": "2026-10-13T01:35:09.287Z",
+    "seat": "sol-cold-read",
+    "step": "sol-cold-read",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 10108,
+      "output_tokens": 1833
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/critique/cold-read.sol.md"
+  },
+  {
+    "ts": "2026-10-13T19:11:34.738Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-13T19:11:34.746Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:11:34.747Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:11:35.345Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-13T19:11:35.348Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:11:35.348Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:11:35.938Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P03/P03.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-13T19:11:35.941Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P03/P03.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:11:35.942Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P03/P03.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:11:36.669Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P04/P04.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-13T19:11:36.671Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P04/P04.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:11:36.672Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "pin",
+    "status": "ok",
+    "output": "out/P04/P04.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:11:36.674Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P05/P05.html",
+    "format": "html"
+  },
+  {
+    "ts": "2026-10-13T19:11:37.271Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P05/P05.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-13T19:11:37.745Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1171 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-13T19:11:38.391Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P07/P07.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-13T19:11:39.096Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P07/P07-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-13T19:11:39.099Z",
+    "piece": "P08",
+    "step": "render",
+    "kind": "pr-pitch",
+    "status": "ok",
+    "output": "out/P08/pitch.md",
+    "format": "md"
+  },
+  {
+    "ts": "2026-10-13T19:12:39.118Z",
+    "seat": "sol-render-review",
+    "step": "sol-render-review",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 20847,
+      "output_tokens": 1186
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-12-founding-circle-madison/critique/review.sol.md"
+  },
+  {
+    "ts": "2026-10-13T19:19:23.243Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-13T19:19:23.252Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:19:23.252Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:19:24.625Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-13T19:19:24.632Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:19:24.633Z",
+    "piece": "P02",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P02/P02.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:19:26.044Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P03/P03.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-13T19:19:26.051Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P03/P03.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:19:26.052Z",
+    "piece": "P03",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P03/P03.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-13T19:19:26.670Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P05/P05.html",
+    "format": "html"
+  },
+  {
+    "ts": "2026-10-13T19:19:27.400Z",
+    "piece": "P05",
+    "step": "render",
+    "kind": "email",
+    "status": "ok",
+    "output": "out/P05/P05.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-13T19:19:28.509Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1084 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-13T19:19:29.831Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P07/P07.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-13T19:19:30.540Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P07/P07-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-13T19:19:37.001Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1084 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-13T19:19:49.982Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1063 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-13T19:19:55.498Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1063 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-13T19:20:04.809Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1063 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-13T19:20:11.101Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1063 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-13T19:20:25.267Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P06/P06.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-13T19:20:25.322Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P06/P06-preview.png",
+    "format": "png",
+    "preview": true
+  }
+]

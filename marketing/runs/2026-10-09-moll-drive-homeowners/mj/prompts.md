@@ -1,0 +1,81 @@
+# Midjourney pack: 2026-10-09-moll-drive-homeowners
+
+How to run this pack (by hand; nothing here is automated):
+
+1. Open https://www.midjourney.com/imagine and sign in.
+2. For each still job below, paste its block into the prompt bar as-is (the parameters are part of it).
+3. Upscale the variants you would pick (the job says how many it wants).
+4. Download each upscaled pick and save it into that job's inbox folder (path under the block).
+5. For a video job, open your upscaled pick from its `startFrom` still job, choose Animate, paste the
+   video block as the motion prompt, and save the mp4 into the video job's inbox folder.
+6. When the folders are filled, run `node marketing/tools/ingest.mjs marketing/runs/2026-10-09-moll-drive-homeowners` from the repo root.
+
+## 1. J01: still, instagram-4x5, for P01
+
+Paste, then upscale 1 pick:
+
+```text
+REAL PHOTOGRAPH OR BUILDER'S RENDERING, not Midjourney: do not paste this into Midjourney. Drop one credited image of the Moll Drive house into this inbox: the room Leah would send a visitor to first (her pick, the same room she names in the P01 FILL; if she has no pick yet, the finished walkout lower level, which the listing names and no other job uses), shot from the doorway so the whole room reads, daylight through the real windows, no people, no staging props added. If it is the builder's rendering, the credit line is 'Rendering: Kippley Custom Carpentry'. Crop: the image fills the top two thirds of a 1080x1350 post (about 1080x900 px) with the headline on paper below, so supply at least 1080 px wide, keep the room's centre of interest mid-frame and nothing important in the outer 64 px. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this image).
+```
+
+Save the upscaled picks into: `/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/mj/inbox/J01`
+
+## 2. J02: still, instagram-4x5, for P02
+
+Paste, then upscale 1 pick:
+
+```text
+REAL PHOTOGRAPH, not Midjourney: do not paste this into Midjourney. Drop one credited photo of the Moll Drive house into this inbox: a close view of the piece Kippley's shop built for this house (a mantel, a built-in or the cabinetry, whichever Leah names in the P02 FILL), grain and finish filling the frame, window light raking across it, tight 85mm-style crop, no people, no hands. Crop: fills the top two thirds of a 1080x1350 post (about 1080x900 px); supply at least 1080 px wide with the grain running through the centre. Do not choose the piece or name its wood; Leah does. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this photo).
+```
+
+Save the upscaled picks into: `/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/mj/inbox/J02`
+
+## 3. J03: still, instagram-4x5, for P03
+
+Paste, then upscale 1 pick:
+
+```text
+REAL PHOTOGRAPH OR BUILDER'S RENDERING, not Midjourney: do not paste this into Midjourney. Drop one credited image of the Moll Drive house into this inbox: the front of the house seen from the drive (the P03 alt text says 'seen from the drive') in late afternoon light, straight-on or a quarter view, no people, no cars in the drive, no Parade or builder signage in focus. If it is the builder's rendering, the credit line is 'Rendering: Kippley Custom Carpentry'. Crop: fills the top two thirds of a 1080x1350 post (about 1080x900 px); leave enough sky and ground around the house to crop, at least 1080 px wide. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this image).
+```
+
+Save the upscaled picks into: `/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/mj/inbox/J03`
+
+## 4. J04: still, poster-18x24, for P04
+
+Paste, then upscale 3 picks:
+
+```text
+a soft brass pull on a plain cabinet door, warm oak grain under a hand-rubbed oil finish, low side light from a tall window, 85mm close crop, quiet and settled, a century-old farmhouse in Door County, Wisconsin --ar 3:4 --style raw --v 8.1 --no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render, plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus, skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere
+```
+
+Save the upscaled picks into: `/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/mj/inbox/J04`
+
+## 5. J05: still, email, for P05
+
+Paste, then upscale 1 pick:
+
+```text
+REAL PHOTOGRAPH OR BUILDER'S RENDERING, not Midjourney: do not paste this into Midjourney. Optional: one image at most. Drop one credited image of the Moll Drive house into this inbox: the finished kitchen with its generous island, the room Leah would rather talk in, from the doorway, daylight, no people, a different frame from J01 and J07 if they also show the kitchen. If it is the builder's rendering, the credit line is 'Rendering: Kippley Custom Carpentry'. Crop: landscape 3:2, full width under the opening paragraph of a 600 px email, so supply at least 1200x800 px. The letter reads with images off; the image carries no words. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this image).
+```
+
+Save the upscaled picks into: `/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/mj/inbox/J05`
+
+## 6. J06: still, one-pager-letter, for P06
+
+Paste, then upscale 1 pick:
+
+```text
+REAL PHOTOGRAPH OR BUILDER'S RENDERING, not Midjourney: do not paste this into Midjourney. Drop one credited image of the Moll Drive house into this inbox for the take-home's image band: a room with the warm wood accents and the rear windows onto the landscape in frame, daylight, no people. If it is the builder's rendering, the credit line is 'Rendering: Kippley Custom Carpentry'. Crop: a wide band about 7 x 3 in on a letter page, so supply at least 2100x900 px with the windows and the wood both inside that band. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this image).
+```
+
+Save the upscaled picks into: `/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/mj/inbox/J06`
+
+## 7. J07: still, one-pager-letter, for P07
+
+Paste, then upscale 1 pick:
+
+```text
+REAL PHOTOGRAPH OR BUILDER'S RENDERING, not Midjourney: do not paste this into Midjourney. Drop one credited image of the Moll Drive house into this inbox for the counter flyer's image band: the kitchen with its generous island (and the walk-in pantry, if it shows from that view), from the doorway, daylight through the rear windows, no people, a different frame from J05; if the P05 email already runs a kitchen image on J05, use the front of the house in daylight instead, a different frame from J03. If it is the builder's rendering, the credit line is 'Rendering: Kippley Custom Carpentry'. Crop: a wide band about 7 x 3 in on a letter page, so supply at least 2100x900 px. Credit: photographer and rights owner (Leah's own, or Kippley's with written OK for this image).
+```
+
+Save the upscaled picks into: `/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-homeowners/mj/inbox/J07`

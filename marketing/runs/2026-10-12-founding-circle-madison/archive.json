@@ -1,0 +1,292 @@
+{
+  "version": 1,
+  "bucket": "patina-marketing",
+  "prefix": "runs/2026-10-12-founding-circle-madison/",
+  "files": {
+    "board.html": {
+      "sha256": "93af809ea071c169ba905fb80ee7567c5c0ed1962fa0d60fd5b7ba7a6e9f79cd",
+      "bytes": 1622034,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P01/image.png": {
+      "sha256": "bad5be4efa7e055765ae7eb1009d62f632bd5f4b6a6e712b18bbc8b3e62ab99f",
+      "bytes": 1718514,
+      "contentType": "image/png"
+    },
+    "compose/P01/index.html": {
+      "sha256": "0fca7dc1083db65dbfa95e23d7e6da21a0ec93ab9f6cf661fd428bc4c732ea00",
+      "bytes": 4789,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P02/image.png": {
+      "sha256": "12ddf12cba7563a0c42df83f32a743438b84a226fcd04e92166c6157f2ea6a9e",
+      "bytes": 1370986,
+      "contentType": "image/png"
+    },
+    "compose/P02/index.html": {
+      "sha256": "eac08e692b099b1a0b57810f0eccfe4452cee90ec54dc6136227ad12a418b889",
+      "bytes": 4654,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P03/image.png": {
+      "sha256": "78467fd1d6bc6300e4e20a6c640ab1a7cde40d1c9cd5507aaa070e0a17978732",
+      "bytes": 1533990,
+      "contentType": "image/png"
+    },
+    "compose/P03/index.html": {
+      "sha256": "d36eef1a03deb6c64e9f8ec54e083f5f1ed19924530cb55c8f467d1f9e667dc1",
+      "bytes": 4765,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P04/image.png": {
+      "sha256": "baae57a004058c83fd213649983426c53c24cbc457c751d3aeaa2f4ae31eea62",
+      "bytes": 1317436,
+      "contentType": "image/png"
+    },
+    "compose/P04/index.html": {
+      "sha256": "fe95edd439257c6a08b3d53d37e3c6abec6d2db9f7fdac4976729e471f24480c",
+      "bytes": 3065,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P05/image.png": {
+      "sha256": "b99835ac799f8235289f2c19693de0ed202f1e08a3ac24c5dee29d56feec665e",
+      "bytes": 1565035,
+      "contentType": "image/png"
+    },
+    "compose/P05/index.html": {
+      "sha256": "b8cd9f7938d70c33660c9614d2f50540ec4cc36ae170c4cf3127c29bb842d05a",
+      "bytes": 8958,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P06/image.png": {
+      "sha256": "41490a0c49b1b1be00da160f8af4f1a070daf93bcfe30812056363ba3ae5b02a",
+      "bytes": 1580811,
+      "contentType": "image/png"
+    },
+    "compose/P06/index.html": {
+      "sha256": "9c061cecada74fbceeb56a02215b2e1d563ae278ad3539f1813255ae2bc8c25c",
+      "bytes": 5263,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P07/image.png": {
+      "sha256": "98b668684dd3667c349a0e952ad07c0fa2adbf6577dc5965d9a2ac08427014c2",
+      "bytes": 1675636,
+      "contentType": "image/png"
+    },
+    "compose/P07/index.html": {
+      "sha256": "3d67a29ad847d0c24486e7cf0c3d017d3b7545ceea3977b7c263d81a7197edbe",
+      "bytes": 4840,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "compose/P08/pitch.md": {
+      "sha256": "e0b0a47928129a08189629c8f7527467dc44ec5481fd783b67c3a06e91d5059c",
+      "bytes": 915,
+      "contentType": "text/markdown; charset=utf-8"
+    },
+    "mj/inbox/J01/J01-1.png": {
+      "sha256": "d5e8ac1d326e95aa10d3f27969f026e8906ed88346bcde31c4a6836d1c4d276f",
+      "bytes": 1476666,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J01/J01-2.png": {
+      "sha256": "bad5be4efa7e055765ae7eb1009d62f632bd5f4b6a6e712b18bbc8b3e62ab99f",
+      "bytes": 1718514,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J01/J01-3.png": {
+      "sha256": "4455c7a216b85b35498e6424a416966a07cf82308ea35853433ebc514d505393",
+      "bytes": 1575652,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J02/J02-1.png": {
+      "sha256": "12ddf12cba7563a0c42df83f32a743438b84a226fcd04e92166c6157f2ea6a9e",
+      "bytes": 1370986,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J02/J02-2.png": {
+      "sha256": "50d6b241fd4a09bcb3cee57b6a5cf16f9ea6602ce730e6f2c6ab9c96a02d0eed",
+      "bytes": 1341754,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J02/J02-4.png": {
+      "sha256": "23ff09d353ab43a07259467984f26dc26be4901001b9eb7fe005dfda81e509e0",
+      "bytes": 1389993,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J03/J03-1.png": {
+      "sha256": "78467fd1d6bc6300e4e20a6c640ab1a7cde40d1c9cd5507aaa070e0a17978732",
+      "bytes": 1533990,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J03/J03-2.png": {
+      "sha256": "32f58e548066a717b136b4b418ee93404c914aa77d10d59aa9087a12d6d535ad",
+      "bytes": 1586109,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J03/J03-4.png": {
+      "sha256": "5af475c1ee480b403d62f099588abe0863cb9c50ca1b3988f6ba475ef2e5af89",
+      "bytes": 1412842,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J04/J04-1.png": {
+      "sha256": "1dcb0310aa45844e45fccf2a8f3698be1e4310c90a02c47d923838d75384dc81",
+      "bytes": 1357233,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J04/J04-2.png": {
+      "sha256": "baae57a004058c83fd213649983426c53c24cbc457c751d3aeaa2f4ae31eea62",
+      "bytes": 1317436,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J04/J04-3.png": {
+      "sha256": "70ce73e65220602edc108f659c651dd555ab34ceaf0e46554cef65d3d11f2fb2",
+      "bytes": 1539793,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J05/J05-1.png": {
+      "sha256": "b99835ac799f8235289f2c19693de0ed202f1e08a3ac24c5dee29d56feec665e",
+      "bytes": 1565035,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J05/J05-2.png": {
+      "sha256": "f41e9834928232a09e3046ae90f4a288606f07b8d6e379fd3e68b7827211a520",
+      "bytes": 1607122,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J05/J05-3.png": {
+      "sha256": "460114e6090b49eaf16775b9a48dae792274f7e9e5aa7552aefbc158662897ef",
+      "bytes": 1496274,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J06/J06-1.png": {
+      "sha256": "ac9b6b093ef8598a0b7a374a16cb8e031afffc6700153cb1b2a226c302fef97d",
+      "bytes": 1204691,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J06/J06-2.png": {
+      "sha256": "41490a0c49b1b1be00da160f8af4f1a070daf93bcfe30812056363ba3ae5b02a",
+      "bytes": 1580811,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J06/J06-3.png": {
+      "sha256": "1fd3bceb0998aee4c1200b9c34486be1ee98fc64ff1ab658286156684abd6cf1",
+      "bytes": 1420731,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J07/J07-1.png": {
+      "sha256": "73604f947048d6317ad8a3a727bdf20adcbd06ffef1d15c392ff3aaf9d7c5afa",
+      "bytes": 1516840,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J07/J07-3.png": {
+      "sha256": "0fd9847939eb942ccb1d6cda776f7a112028b00b34e2fb4166d4437db7f31650",
+      "bytes": 1626807,
+      "contentType": "image/png"
+    },
+    "mj/inbox/J07/J07-4.png": {
+      "sha256": "98b668684dd3667c349a0e952ad07c0fa2adbf6577dc5965d9a2ac08427014c2",
+      "bytes": 1675636,
+      "contentType": "image/png"
+    },
+    "out/P01/P01.alt.txt": {
+      "sha256": "9547adb17261aa40da3e9f27fd7ddca7b16ba5aef1729989f5efda7d20e3672c",
+      "bytes": 296,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "out/P01/P01.caption.txt": {
+      "sha256": "71101ed1ad5f9cebac6fab404c3e6c71c6d7abef8cfa58e951d307bd352087bd",
+      "bytes": 498,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "out/P01/P01.png": {
+      "sha256": "5530a9d9af1e98f11f0ae518fdd0e22495887fbe5ec27e280f0b55d17917eb01",
+      "bytes": 1351491,
+      "contentType": "image/png"
+    },
+    "out/P02/P02.alt.txt": {
+      "sha256": "f177307765ebc65934f21a590b8f2be4cc37fcca3f19af28a655152c84d8c6c0",
+      "bytes": 183,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "out/P02/P02.caption.txt": {
+      "sha256": "0487c60381090a0373c5ad5cd005572020f88d9dafe592525795b20adb124d98",
+      "bytes": 542,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "out/P02/P02.png": {
+      "sha256": "12450918490a3970b6f86f9b7fdc687338d9124dcefc110e39b021a76b690cfc",
+      "bytes": 1098577,
+      "contentType": "image/png"
+    },
+    "out/P03/P03.alt.txt": {
+      "sha256": "d94565b706cede70311e744af9a2fe5b1931b2e09ac42980afb2688c3c4fb141",
+      "bytes": 266,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "out/P03/P03.caption.txt": {
+      "sha256": "65cf80fa5e27f4b095f71465f33d237dc57211ecf4f07ead291c50f2d3d6c43c",
+      "bytes": 470,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "out/P03/P03.png": {
+      "sha256": "421fa5bcad7893a0db8815f642edd110e524b6399a79173e79408550a02fbf8f",
+      "bytes": 1175903,
+      "contentType": "image/png"
+    },
+    "out/P04/P04.alt.txt": {
+      "sha256": "fc805867fc1968c3779b6bd9f7b497776525d8e16a839537d448f6c7477ac85e",
+      "bytes": 196,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "out/P04/P04.caption.txt": {
+      "sha256": "3713eb55557fd41d41c0e9401753d6f0f36c78a17d51e84dd0799f3db33d79c5",
+      "bytes": 361,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "out/P04/P04.png": {
+      "sha256": "beff0edee6adae15396b7b24a4326b4078c04a4cded323b8d25547d4d3309348",
+      "bytes": 1106351,
+      "contentType": "image/png"
+    },
+    "out/P05/image.png": {
+      "sha256": "b99835ac799f8235289f2c19693de0ed202f1e08a3ac24c5dee29d56feec665e",
+      "bytes": 1565035,
+      "contentType": "image/png"
+    },
+    "out/P05/P05.html": {
+      "sha256": "b8cd9f7938d70c33660c9614d2f50540ec4cc36ae170c4cf3127c29bb842d05a",
+      "bytes": 8958,
+      "contentType": "text/html; charset=utf-8"
+    },
+    "out/P05/P05.png": {
+      "sha256": "383fe40465294a6c75fc6feb6af255c9b80703b6463780a8ae87629666a88de1",
+      "bytes": 365629,
+      "contentType": "image/png"
+    },
+    "out/P06/P06-preview.png": {
+      "sha256": "eed08ed42e7f36372f3b059c81c6fc2a0f9237a375b2b48703d1a6a5711889bf",
+      "bytes": 362986,
+      "contentType": "image/png"
+    },
+    "out/P06/P06.pdf": {
+      "sha256": "5422a3295d2754609b430905f35a970ea706f35cce663eeb302b98d6060253ef",
+      "bytes": 858934,
+      "contentType": "application/pdf"
+    },
+    "out/P07/P07-preview.png": {
+      "sha256": "87b2dcac2c17547ce77dae50958bf28014187d4e10ebfa576ce669bb0b86bee0",
+      "bytes": 2965841,
+      "contentType": "image/png"
+    },
+    "out/P07/P07.pdf": {
+      "sha256": "8db9d94b5824656588f4292eb374b0e3d2663bf0babae1a4aa572a1f6212837e",
+      "bytes": 2728651,
+      "contentType": "application/pdf"
+    },
+    "out/P08/pitch.md": {
+      "sha256": "e0b0a47928129a08189629c8f7527467dc44ec5481fd783b67c3a06e91d5059c",
+      "bytes": 915,
+      "contentType": "text/markdown; charset=utf-8"
+    }
+  }
+}

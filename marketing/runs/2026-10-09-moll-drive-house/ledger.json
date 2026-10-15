@@ -1,0 +1,328 @@
+[
+  {
+    "ts": "2026-10-09T15:18:38.926Z",
+    "seat": "sol-draft",
+    "piece": "P02",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 13689,
+      "output_tokens": 642
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/copy/P02.sol.md"
+  },
+  {
+    "ts": "2026-10-09T15:18:39.332Z",
+    "seat": "sol-draft",
+    "piece": "P04",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 13686,
+      "output_tokens": 498
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/copy/P04.sol.md"
+  },
+  {
+    "ts": "2026-10-09T15:18:40.663Z",
+    "seat": "sol-draft",
+    "piece": "P05",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 13685,
+      "output_tokens": 654
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/copy/P05.sol.md"
+  },
+  {
+    "ts": "2026-10-09T15:18:46.375Z",
+    "seat": "sol-draft",
+    "piece": "P03",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 13689,
+      "output_tokens": 877
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/copy/P03.sol.md"
+  },
+  {
+    "ts": "2026-10-09T15:18:49.641Z",
+    "seat": "sol-draft",
+    "piece": "P01",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 13689,
+      "output_tokens": 701
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/copy/P01.sol.md"
+  },
+  {
+    "ts": "2026-10-09T15:18:53.613Z",
+    "seat": "sol-draft",
+    "piece": "P06",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 13687,
+      "output_tokens": 1140
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/copy/P06.sol.md"
+  },
+  {
+    "ts": "2026-10-09T15:19:14.362Z",
+    "seat": "sol-draft",
+    "piece": "P07",
+    "step": "sol-draft",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 13687,
+      "output_tokens": 1186
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/copy/P07.sol.md"
+  },
+  {
+    "ts": "2026-10-09T15:25:54.637Z",
+    "seat": "sol-cold-read",
+    "step": "sol-cold-read",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 9541,
+      "output_tokens": 1991
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/critique/cold-read.sol.md"
+  },
+  {
+    "ts": "2026-10-09T15:55:35.091Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T15:55:35.100Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T15:55:35.100Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T15:55:37.417Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P04/P04.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T15:55:37.952Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P04/P04-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T15:55:39.629Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1063 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-09T15:55:41.590Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P07/P07.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T15:55:41.647Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P07/P07-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T15:56:22.029Z",
+    "seat": "sol-render-review",
+    "step": "sol-render-review",
+    "status": "ok",
+    "model": "claude-gpt-6-sol[1m]",
+    "usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 13216,
+      "output_tokens": 900
+    },
+    "stop_reason": "end_turn",
+    "out": "/Users/kody/Code/patina-merged/marketing/runs/2026-10-09-moll-drive-house/critique/review.sol.md"
+  },
+  {
+    "ts": "2026-10-09T16:07:48.491Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.png",
+    "format": "png"
+  },
+  {
+    "ts": "2026-10-09T16:07:48.500Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.caption.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T16:07:48.501Z",
+    "piece": "P01",
+    "step": "render",
+    "kind": "social",
+    "status": "ok",
+    "output": "out/P01/P01.alt.txt",
+    "format": "txt"
+  },
+  {
+    "ts": "2026-10-09T16:07:50.337Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P04/P04.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T16:07:50.871Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P04/P04-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T16:07:51.927Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "failed",
+    "reason": "one-pager overflows: content is 1063 px on a 1056 px page; cut copy"
+  },
+  {
+    "ts": "2026-10-09T16:07:53.163Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P07/P07.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T16:07:53.219Z",
+    "piece": "P07",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P07/P07-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T16:08:21.633Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P06/P06.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T16:08:21.744Z",
+    "piece": "P06",
+    "step": "render",
+    "kind": "one-pager",
+    "status": "ok",
+    "output": "out/P06/P06-preview.png",
+    "format": "png",
+    "preview": true
+  },
+  {
+    "ts": "2026-10-09T16:12:00.253Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P04/P04.pdf",
+    "format": "pdf"
+  },
+  {
+    "ts": "2026-10-09T16:12:00.795Z",
+    "piece": "P04",
+    "step": "render",
+    "kind": "poster",
+    "status": "ok",
+    "output": "out/P04/P04-preview.png",
+    "format": "png",
+    "preview": true
+  }
+]

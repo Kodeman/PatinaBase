@@ -93,7 +93,7 @@ const direction = await agent(`${RULES}
 YOUR TASK (Press A1: direction). You set the batch's direction and hold the content test.
 Read ${RUN}/brief.md, every Markdown file in ${CANON} (voice.md, claims.md, art-direction.md), ${CANON}/channels.json and ${VISION}.
 
-1. Content test (VISION's feature test): which surface, which studio moment, which money stream, which promise does this batch serve? The audience must be a design studio (VISION §2). If the brief fails (no studio moment, the reader is a homeowner or maker as Patina's customer, it needs Pledge language or the held tagline, it exists to SEO strangers, it optimizes the studio surface for engagement), set pass=false with a one-paragraph reason.
+1. Content test (VISION's feature test): which surface, which studio moment, which money stream, which promise does this batch serve? The audience must be a design studio (VISION §2), with one exception: per VISION-DECISIONS V21 and voice.md §1, a brief whose ask is the Founding Circle may address Madison-area homeowners directly (for that batch, the "studio moment" check reads as the homeowner's moment and the promise as the Founding Circle's own; everything else below still fails it). If the brief fails (no studio moment, the reader is a homeowner or maker as Patina's customer, it needs Pledge language or the held tagline, it exists to SEO strangers, it optimizes the studio surface for engagement), set pass=false with a one-paragraph reason.
 2. Write ${RUN}/plan.json (plan v1):
 {"version":1,"runId":"${setup.date}-${SLUG}",
  "contentTest":{"pass":true,"audience":"","moment":"","stream":"subscription|margin|both","promise":"","reason":""},

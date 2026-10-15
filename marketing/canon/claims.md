@@ -53,6 +53,21 @@ source. Keep `|` out of cells.
 | C22 | Mydoma charges a one-time onboarding fee on its annual plan. | https://mydomastudio.com/pricing/ via 05-competitor-activation.md line 52 (competitor price; pricing has changed over time) | todo |
 | C23 | The Founding 50 is a circle of 50 working designers shaping Patina; Kody and Leah read every application at patina.cloud/designers. | https://patina.cloud/designers (hero and application sections, read 2026-10-08) | verified |
 | C24 | Patina's app and marketplace are pre-launch. | https://patina.cloud (status line, read 2026-10-08) | verified |
+| C25 | Kippley Custom Carpentry is a family-owned builder in Sauk City, Wisconsin, building homes since 1987, that employs its own framing and finishing carpenters. | https://www.kippleycustomcarpentry.com (home page: "Since 1987", "family-owned", "we employ our own framing and finishing carpenters", footer address; read 2026-10-09) | verified |
+| C26 | Kippley Custom Carpentry builds its own custom woodwork: fireplace mantels, entertainment centers, built-ins and cabinetry. | https://www.kippleycustomcarpentry.com (home page, "Intricate Custom Woodworking" and "Remodeling and Additions"; read 2026-10-09) | verified |
+| C27 | The 2026 Madison Fall Parade of Homes, hosted by the Madison Area Builders Association, runs October 9–11 and 16–18, 2026: Fridays 3–7 PM, Saturdays and Sundays 11 AM–6 PM. | https://www.madisonfallparadeofhomes.com (home page, dates and hours; read 2026-10-09) | verified |
+| C28 | Middle West Studio designed the interiors of Kippley Custom Carpentry's 2026 Fall Parade home on Moll Drive in Waunakee (the Moll Drive house). | docs/marketing/partners/kippley.md §Moll Drive house | verified |
+| C29 | The Moll Drive house is a traditional home with warm wood accents, a kitchen with a generous island and walk-in pantry, rear windows onto the landscape, and a finished walkout lower level. | https://www.madisonfallparadeofhomes.com/kippleycustomcarpentry (listing; read 2026-10-09) | verified |
+| C30 | Leah will be at the Moll Drive house during the Fall Parade on ⟨day and hours⟩. | Kody, chat 2026-10-09: Leah or Kody will be present the second weekend. Promote once the day and hours are set and recorded in docs/marketing/partners/kippley.md | todo |
+| C31 | On Patina, everyone who acts on a job (the client's household, the contractor, the trades and the studio's own team) holds a seat on that job, and a seat's access ends when the job does. | docs/design/the-document/DECISIONS.md R151 (PR-c household + seat; PR-d grant ends with the engagement window; built and deployed in the People room program) | verified |
+| C32 | A trade sends its insurance certificate, W-9 and licence to the studio through a link, and the studio confirms them. | docs/design/the-document/DECISIONS.md R151 PR-a (tokened field-link page a trade writes to, unverified until a studio member confirms) | verified |
+| C33 | The Founding Circle is limited to 200 founding members. | Kody, chat 2026-10-11 (homepage review: keep the line, add this row). A founders' policy: nothing in the site code caps signups yet, so close the circle by hand at 200. | verified |
+| C34 | Founding Circle members are first through the door when the Patina app launches, and first to test it as it is built. | https://patina.cloud/founding (membership list, "First access"; read 2026-10-12) | verified |
+| C35 | Founding Circle members get monthly questions on which makers to bring in and which styles to explore. | https://patina.cloud/founding (membership list, "Real influence"; read 2026-10-12) | verified |
+| C36 | Founding Circle members get updates from Kody and Leah as Patina takes shape. | https://patina.cloud/founding (membership list, "Behind the curtain"; read 2026-10-12) | verified |
+| C37 | Founding members are credited by name at launch, and founding-member status never expires. | https://patina.cloud/founding (membership list, "Your name at launch" and "Always a founder"; read 2026-10-12) | verified |
+| C38 | A Founding Circle membership begins with a first letter from Kody. Joining is at patina.cloud/founding. | https://patina.cloud/founding (page copy "A first letter from Kody to welcome you"; read 2026-10-12) | verified |
+| C39 | The Founding Circle is open wherever you call home; Patina is rooted in Madison, Wisconsin, and its first outreach is Chicago, Madison and Minneapolis. | https://patina.cloud/founding (cap line and questions; read 2026-10-12) | verified |
 | C40 | Model work included up to $50 per studio per month; no usage billing. | docs/vision/VISION-DECISIONS.md V23 R7 and migration 00788 (cap enforcement); publish only with the pricing page (V2) | todo |
 
 ## Never claim (not ledger rows; lint cannot catch all of these)
@@ -64,4 +79,4 @@ source. Keep `|` out of cells.
   reconciling" (completeness-critic.md §4.7).
 - "8–16 hours of transcription" (an inferred figure; completeness-critic.md §4.8).
 - "Leah Hartwell". Her surname is Kochaver.
-- "Where Time Adds Value" (held, VISION V5).
+- "Where Time Adds Value" (canon since VISION V5, 2026-10-09; used sparingly, lint warns).

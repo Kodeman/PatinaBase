@@ -20,6 +20,16 @@ already spoken for twice. The one thing she cannot afford is a new system to lea
 - **Makers are the studio's vendors.** Patina qualifies them and carries the order. Copy may honor
   a maker's craft; it never sells Patina to a maker or sells a maker to a homeowner directly.
 - **No consumer push.** No "shop now", no homeowner sign-up, no funnel copy.
+- **Homepage exception (Kody, 2026-10-11, VISION-DECISIONS V17).** On patina.cloud's homepage only,
+  copy may speak to the homeowner directly about her own home, and the Founding Circle is the main
+  door; the studio door is the quieter second one. Every other rule on this page still holds there,
+  and everywhere else the studio comes first.
+- **Founding Circle campaigns (Kody, 2026-10-12, VISION-DECISIONS V21).** A campaign whose brief
+  names the Founding Circle as its ask may speak to Madison-area homeowners directly about their
+  own home, and its ask is joining at patina.cloud/founding [C38]. Membership is an invitation into
+  the building of Patina, not a purchase: no "shop now", no products, no prices, no urgency beyond
+  the published cap [C33]. Be honest that the app and marketplace are pre-launch [C24]. Every other
+  rule on this page holds, and every other campaign stays studio-first.
 
 ## 2. The promise
 
@@ -45,7 +55,6 @@ already spoken for twice. The one thing she cannot afford is a new system to lea
 
 - **The Pledge.** Pledge language is legal-gated (VISION §3). No teaching royalties, no "a share of
   our commission goes back to designers", no "when Patina earns, you earn". Not hinted, not softened.
-- **"Where Time Adds Value"** is HELD pending VISION V5. Lint fails it. No other tagline either.
 - **Prices, take rates, fees and percentages** wait on V1/V2. Every money number in
   `claims.md` is `todo`. Write "pricing is on one page" only once that page exists.
 - **"Your data exports" and "no lock-in"** are promises, not yet facts. Don't claim them as true.
@@ -79,7 +88,7 @@ hand-built, honest materials, trade, Designer-Taught Intelligence.
 **Avoid — lint ERROR (the piece fails):**
 - `AI` as a word, "AI-powered", "artificial intelligence", "machine learning", "powered by",
   "algorithm"
-- "pledge", "Where Time Adds Value"
+- "pledge"
 - disrupt*, revolutioni*, curated, luxury, gig, game-chang*, seamless, unlock
 - non-Midwest places: NYC, New York, Manhattan, Brooklyn, Hamptons, LA, Los Angeles,
   San Francisco, Miami, penthouse
@@ -90,7 +99,9 @@ hand-built, honest materials, trade, Designer-Taught Intelligence.
   characters
 
 **Avoid — lint WARN (fix unless you can defend it):** "elevated", "bespoke" (only when literally
-custom), emoji, more than one exclamation mark in a piece.
+custom), emoji, more than one exclamation mark in a piece. "Where Time Adds Value" also warns: it is canon
+(VISION V5, ruled 2026-10-09) but used sparingly: a footer, metadata, at most one brand moment per
+page or piece, never a headline. No other tagline.
 
 **Avoid by judgment (lint can't see these):** "platform", "solution", "empower", "leverage",
 "all-in-one", "next-level", "our designers" (as labor), "unlimited revisions", "dashboard",

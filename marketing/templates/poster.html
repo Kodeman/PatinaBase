@@ -46,7 +46,15 @@
   .eyebrow:empty{ display:none; }
   h1{ font-family:var(--font-display); font-weight:400; font-size:1.15in; line-height:1.05; margin:0; text-wrap:balance; max-width:15in; color:var(--ink); }
   .subhead{ font-family:var(--font-display); font-style:italic; font-size:0.42in; line-height:1.25; color:var(--mocha); margin:0; }
-  .body{ font-size:0.24in; line-height:1.5; color:var(--body); margin:0; max-width:11in; }
+  .body{ font-size:0.4in; line-height:1.4; color:var(--body); margin:0; max-width:14in; }
+  /* Frontmatter `imageLabel` (e.g. "Illustration") marks a generated image so it never reads as
+     the real place or a real maker's piece. */
+  .image-label{
+    position:absolute; left:calc(var(--safe) + var(--bleed)); bottom:0.35in; margin:0;
+    font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.2em; font-size:0.2in;
+    color:var(--paper); background:rgba(63,59,55,0.72); padding:0.08in 0.16in;
+  }
+  .image-label:empty{ display:none; }
   .wordmark{ position:absolute; right:calc(var(--safe) + var(--bleed)); bottom:calc(0.9in + var(--bleed)); }
   .wordmark-type{ font-family:var(--font-display); font-size:0.42in; color:var(--mocha); }
   .wordmark-logo{ height:0.42in; display:block; }
@@ -54,7 +62,7 @@
 </head>
 <body>
 <main class="sheet" data-piece="{{piece}}">
-  <div class="media">{{{image}}}</div>
+  <div class="media">{{{image}}}<p class="image-label">{{imageLabel}}</p></div>
   <div class="band">
     <p class="eyebrow">{{eyebrow}}</p>
     <h1>{{headline}}</h1>

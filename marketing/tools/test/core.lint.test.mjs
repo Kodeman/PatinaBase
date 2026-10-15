@@ -60,13 +60,6 @@ const failing = [
     "pledge",
   ],
   [
-    "Where Time Adds Value",
-    social("Where Time Adds Value."),
-    "social",
-    "held-tagline",
-    "Where Time Adds Value",
-  ],
-  [
     "curated",
     social("A curated set of pieces."),
     "social",
@@ -150,27 +143,6 @@ const failing = [
     "social",
     "pay-it-forward",
     "pay it forward",
-  ],
-  [
-    "F1.5 tagline nbsp, lower case",
-    social(`Where time${U(0xa0)}adds value.`),
-    "social",
-    "held-tagline",
-    "Where time adds value",
-  ],
-  [
-    "F1.5 tagline across a headline break",
-    social("Where Time\nAdds Value"),
-    "social",
-    "held-tagline",
-    "Where Time\nAdds Value",
-  ],
-  [
-    "F1.5 tagline without where",
-    social("Time adds value here."),
-    "social",
-    "held-tagline",
-    "Time adds value",
   ],
   [
     "F1.7 marker across list lines",
@@ -519,3 +491,12 @@ test("voice-lint passes the run-sample fixture finals in directory mode, kind fr
   );
   for (const x of reports) assert.deepEqual(x.errors, [], x.file);
 });
+
+// V5 ruled 2026-10-09: the tagline is canon, used sparingly, so every form of it warns instead of failing.
+for (const text of ["Where Time Adds Value.", `Where time${U(0xa0)}adds value.`, "Where Time\nAdds Value", "Time adds value here."]) {
+  test(`tagline warns, never fails: ${JSON.stringify(text)}`, () => {
+    const { code, report } = lint(social(text), "social");
+    assert.equal(code, 0, JSON.stringify(report.errors));
+    assert.ok(report.warnings.some((w) => w.rule === "tagline"), JSON.stringify(report.warnings));
+  });
+}
