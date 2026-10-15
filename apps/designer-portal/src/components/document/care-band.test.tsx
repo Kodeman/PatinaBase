@@ -18,6 +18,8 @@ jest.mock('@/hooks/use-project-lifecycle', () => ({
   useCloseProject: () => useCloseProject(),
 }));
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   useProjectV2: (id: string) => useProjectV2(id),
   useProjectPhases: (id: string) => useProjectPhases(id),
   useCoordinationItems: (id: string) => useCoordinationItems(id),

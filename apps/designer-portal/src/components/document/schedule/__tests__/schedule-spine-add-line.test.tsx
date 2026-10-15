@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   // D-B49 — the revision ledger's read moved to the schedule region ROOT.
   useScheduleRevisions: () => ({ data: [] }),
   excludeProjectArtifactApprovals: (items: unknown[]) => items,

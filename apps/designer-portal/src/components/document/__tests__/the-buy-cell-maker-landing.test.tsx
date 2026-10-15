@@ -30,6 +30,8 @@ jest.mock('@/components/document/buying/install-manifest', () => ({
 jest.mock('@patina/supabase', () => {
   const idle = { mutateAsync: jest.fn(), isPending: false };
   return {
+    inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+    procurementUnreadCountKey: () => ['procurement-unread-count'],
     buyingPhase2Keys: { all: ['buying-phase2'] },
     useInstallWindow: () => ({ isSuccess: true, data: null }),
     useProcurementDrafts: () => ({ data: [], isPending: false, isError: false }),

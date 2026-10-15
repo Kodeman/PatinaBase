@@ -45,6 +45,8 @@ afterEach(() => {
 });
 
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   useProposals: () => ({ data: [], isLoading: false, isError: false }),
   useProjectApprovals: () => ({
     data: approvals,

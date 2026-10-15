@@ -96,6 +96,8 @@ function line(id: string, name: string, scopeRoomId: string | null, position: nu
 }
 
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   useInstallWindow: () => ({ data: null, isSuccess: true }),
   useProjectLead: () => ({ data: null }),
   useNeedStates: () => ({ data: new Map() }),

@@ -66,6 +66,8 @@ jest.mock('@/components/document/overlays/ask-maker-sheet', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
+  procurementUnreadCountKey: () => ['procurement-unread-count'],
   useProjectRoomPlacements: () => ({ data: [] }),
   useProjectPalettes: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
