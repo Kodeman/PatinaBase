@@ -36,6 +36,8 @@ jest.mock("@patina/supabase", () => ({
     }
   },
   useStampProjectPricingStudio: () => ({ mutate: mockStampStudio, isPending: false }),
+  // K5 (00796) — can_link_document_client; the lead never asks.
+  useCanLinkDocumentClient: () => ({ data: undefined }),
   useSessionUserId: () => mockViewerId,
   useOrganizationMembers: (orgId: string) => ({
     data: orgId ? mockStudioMembers : undefined,

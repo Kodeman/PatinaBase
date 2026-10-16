@@ -48,9 +48,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import {
   useAddInvoiceBillingLines,
+  useCanLinkDocumentClient,
   InvoiceBillingGapError,
   useCreateDraftInvoice,
   useCreateDraftStudioInvoice,
@@ -174,7 +184,8 @@ export function InvoiceComposer({
     studioInvoiceOn && !flagLoading && !context.projectId;
   const studioMode = studioChoiceAvailable && target === STUDIO_TARGET;
 
-  const { data: projects, dataUpdatedAt: projectsUpdatedAt = 0 } = useProjects();
+  const { data: projects, dataUpdatedAt: projectsUpdatedAt = 0 } =
+    useProjects();
   const { data: organizations, isLoading: organizationsLoading } =
     useOrganizations();
   const { data: milestones } = useProjectPaymentMilestones(projectId);
@@ -191,8 +202,9 @@ export function InvoiceComposer({
   const { data: purchases, isLoading: purchasesLoading } = useStudioPurchases(
     projectId ? { projectId } : null,
   );
-  const { data: riders, isLoading: ridersLoading } =
-    useProjectPoCostLines(projectId || null);
+  const { data: riders, isLoading: ridersLoading } = useProjectPoCostLines(
+    projectId || null,
+  );
   const offerablePurchases = useMemo(
     () => unbilledPurchases(purchases as ComposerPurchase[] | undefined),
     [purchases],
@@ -283,6 +295,8 @@ export function InvoiceComposer({
     seenAt: number;
   } | null>(null);
   const [nameStudioError, setNameStudioError] = useState<string | null>(null);
+  // K12 — Name studio asks once, inline, before it stamps.
+  const [confirmingName, setConfirmingName] = useState(false);
   const statusId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const forSelectRef = useRef<HTMLSelectElement>(null);
@@ -293,6 +307,9 @@ export function InvoiceComposer({
   const addLineRef = useRef<HTMLButtonElement>(null);
   const linkClientRef = useRef<HTMLAnchorElement>(null);
   const nameStudioRef = useRef<HTMLButtonElement>(null);
+  const confirmNameRef = useRef<HTMLButtonElement>(null);
+  const askNoteRef = useRef<HTMLSpanElement>(null);
+  const supportAddressRef = useRef<HTMLSpanElement>(null);
   const draftActRef = useRef<HTMLButtonElement>(null);
   // The project whose Link a client opened the household sheet, which hands
   // focus back to it.
@@ -404,7 +421,13 @@ export function InvoiceComposer({
   );
 
   const ratePendingHours = useMemo(
-    () => (ratePendingEntries.reduce((total, entry) => total + entry.duration_minutes, 0) / 60).toFixed(1),
+    () =>
+      (
+        ratePendingEntries.reduce(
+          (total, entry) => total + entry.duration_minutes,
+          0,
+        ) / 60
+      ).toFixed(1),
     [ratePendingEntries],
   );
 
@@ -587,21 +610,33 @@ export function InvoiceComposer({
       overrides,
     ],
   );
-  const billingFiguresMissing = billingLines.some((l) => l.amountCents === null);
+  const billingFiguresMissing = billingLines.some(
+    (l) => l.amountCents === null,
+  );
   const depositBlocked =
     ffeStage === "deposit" && tickedFfeIds.size > 0 && !depositPctValid;
   // R8/R9 — warned, never blocked: a purchase bought for a line whose client
   // price this invoice also bills, or a non-void invoice already bills
   // (SQ-448: any live slot), bills that piece twice.
   const doubleBilledPurchases = useMemo(() => {
-    const billedLines = new Set([...tickedFfeIds, ...tickedBalanceIds, ...billing.keys()]);
+    const billedLines = new Set([
+      ...tickedFfeIds,
+      ...tickedBalanceIds,
+      ...billing.keys(),
+    ]);
     return offerablePurchases.filter(
       (p) =>
         tickedPurchaseIds.has(p.id) &&
         !!p.ffe_item_id &&
         billedLines.has(p.ffe_item_id),
     ).length;
-  }, [offerablePurchases, tickedPurchaseIds, tickedFfeIds, tickedBalanceIds, billing]);
+  }, [
+    offerablePurchases,
+    tickedPurchaseIds,
+    tickedFfeIds,
+    tickedBalanceIds,
+    billing,
+  ]);
   const totals = useMemo(
     () =>
       computeInvoiceTotals(
@@ -638,7 +673,7 @@ export function InvoiceComposer({
   const overrideGap =
     billingGapOverride?.projectId === projectId ? billingGapOverride.gap : null;
   const billingGap = !studioMode
-    ? overrideGap ?? deriveInvoiceBillingGap(selectedProject)
+    ? (overrideGap ?? deriveInvoiceBillingGap(selectedProject))
     : null;
   useEffect(() => {
     if (!billingGapOverride) return;
@@ -689,9 +724,15 @@ export function InvoiceComposer({
     };
   }, [billingGap, projectId]);
 
-  // F9 — set_document_client (00387) answers only to the project's lead.
   const isLead =
     !!viewerId && !!selectedProject && selectedProject.designer_id === viewerId;
+  // K5 (00796) — set_document_client answers to the lead or an owner/admin of
+  // the project's studio; can_link_document_client is that same predicate.
+  // The lead is always admitted, so only anyone else waits on the read.
+  const { data: canLinkAsStudio } = useCanLinkDocumentClient(
+    billingGap === "no-client" && !isLead ? projectId : null,
+  );
+  const canLinkClient = isLead || canLinkAsStudio === true;
   const leadName: string =
     selectedProject?.designer?.display_name ||
     selectedProject?.designer?.full_name ||
@@ -714,6 +755,23 @@ export function InvoiceComposer({
         member.role !== "guest" &&
         member.role !== "owner",
     );
+  // R173 — a solo owner (the only active non-guest seat in the one studio she
+  // holds) on a project opened before it had a studio. The server keeps that
+  // project closed to her (HT-3-g(3)), so the only fix is support's.
+  const seatedMembers = (viewerStudioMembers ?? []).filter(
+    (member: AnyRecord) =>
+      member.status === "active" && member.role !== "guest",
+  );
+  const soloOwnerUnstamped =
+    billingGap === "no-studio" &&
+    isLead &&
+    !!viewerStudio &&
+    studios.length === 1 &&
+    studios[0].id === viewerStudio.id &&
+    studios[0].membership?.role === "owner" &&
+    seatedMembers.length === 1 &&
+    seatedMembers[0].user_id === viewerId;
+  useEffect(() => setConfirmingName(false), [projectId]);
 
   // §A5 — the first unmet requirement; the held act names it and lands on it.
   const blocker: ComposerBlocker | null = studioMode
@@ -744,9 +802,10 @@ export function InvoiceComposer({
   const heldReason = heldBlocker
     ? blockerReason(heldBlocker, {
         projectName: selectedProject?.name ?? "This project",
-        isLead,
+        canLinkClient,
         leadName,
         canNameStudio,
+        soloOwnerUnstamped,
         hasStudioOwner,
         studioLoading: organizationsLoading,
       })
@@ -755,10 +814,16 @@ export function InvoiceComposer({
   const focusBlocker = (held: ComposerBlocker) => {
     const root = containerRef.current;
     const firstUnfilledLine = () => {
-      const rows = adhocRef.current?.querySelectorAll<HTMLElement>("[data-adhoc-row]") ?? [];
+      const rows =
+        adhocRef.current?.querySelectorAll<HTMLElement>("[data-adhoc-row]") ??
+        [];
       for (const row of Array.from(rows)) {
-        const description = row.querySelector<HTMLInputElement>('input[aria-label="Line description"]');
-        const price = row.querySelector<HTMLInputElement>('input[aria-label="Unit price (dollars)"]');
+        const description = row.querySelector<HTMLInputElement>(
+          'input[aria-label="Line description"]',
+        );
+        const price = row.querySelector<HTMLInputElement>(
+          'input[aria-label="Unit price (dollars)"]',
+        );
         if (description && !description.value.trim()) return description;
         if (price && !(dollarsToCents(price.value) > 0)) return price;
       }
@@ -776,9 +841,13 @@ export function InvoiceComposer({
               : held === "deposit"
                 ? depositPctRef.current
                 : held === "billing-figures"
-                  ? root?.querySelector<HTMLElement>('[data-at-cost-row] input[aria-invalid="true"]')
+                  ? root?.querySelector<HTMLElement>(
+                      '[data-at-cost-row] input[aria-invalid="true"]',
+                    )
                   : held === "household"
-                    ? householdRef.current?.querySelector<HTMLElement>("button, input")
+                    ? householdRef.current?.querySelector<HTMLElement>(
+                        "button, input",
+                      )
                     : held === "regarding"
                       ? regardingRef.current
                       : null;
@@ -788,11 +857,16 @@ export function InvoiceComposer({
 
   // F5 — a refusal names its purchase, rider or line by the label printed here.
   const billingSubjectName = (id: string): string | null => {
-    const purchase = ((purchases ?? []) as ComposerPurchase[]).find((p) => p.id === id);
+    const purchase = ((purchases ?? []) as ComposerPurchase[]).find(
+      (p) => p.id === id,
+    );
     if (purchase) return purchase.description?.trim() || purchase.payee_name;
     const rider = ((riders ?? []) as ComposerRider[]).find((r) => r.id === id);
     if (rider) return riderLabel(rider);
-    return ((ffeItems ?? []) as ComposerFfeItem[]).find((i) => i.id === id)?.name ?? null;
+    return (
+      ((ffeItems ?? []) as ComposerFfeItem[]).find((i) => i.id === id)?.name ??
+      null
+    );
   };
 
   const draft = async () => {
@@ -814,7 +888,9 @@ export function InvoiceComposer({
         });
         onDrafted(studioInvoiceId, null);
       } catch (e) {
-        setError(draftInvoiceRefusal((e as { message?: unknown } | null)?.message));
+        setError(
+          draftInvoiceRefusal((e as { message?: unknown } | null)?.message),
+        );
       }
       return;
     }
@@ -838,7 +914,11 @@ export function InvoiceComposer({
           ? preWriteFailure(e)
           : draftInvoiceRefusal((e as { message?: unknown } | null)?.message);
       if (failure.gap) {
-        setBillingGapOverride({ projectId, gap: failure.gap, seenAt: projectsUpdatedAt });
+        setBillingGapOverride({
+          projectId,
+          gap: failure.gap,
+          seenAt: projectsUpdatedAt,
+        });
       }
       setError(failure);
       return;
@@ -984,7 +1064,8 @@ export function InvoiceComposer({
             )}
             {activeProjects.map((p) => (
               <option key={p.id} value={p.id}>
-              {p.name}{p.client_id == null ? " — no client yet" : ""}
+                {p.name}
+                {p.client_id == null ? " — no client yet" : ""}
               </option>
             ))}
           </select>
@@ -1205,7 +1286,8 @@ export function InvoiceComposer({
                       </div>
                     ))}
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {ratePendingHours} hours waiting for a rate · they cannot be invoiced until the studio prices them ·{" "}
+                      {ratePendingHours} hours waiting for a rate · they cannot
+                      be invoiced until the studio prices them ·{" "}
                       <Link
                         href="/desk?account=studio"
                         className="underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
@@ -1307,7 +1389,8 @@ export function InvoiceComposer({
                               deposit{" "}
                               {formatCurrency(
                                 depositCents(
-                                  (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
+                                  (it.quantity ?? 1) *
+                                    (it.unit_price_cents ?? 0),
                                   depositPct,
                                 ),
                               )}{" "}
@@ -1378,7 +1461,9 @@ export function InvoiceComposer({
                             <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
                               {it.name}
                               <span className="ml-1.5 text-[var(--text-muted)]">
-                                {(b?.slots ?? []).map(stageSlotWords).join(" · ")}
+                                {(b?.slots ?? [])
+                                  .map(stageSlotWords)
+                                  .join(" · ")}
                               </span>
                             </span>
                             <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
@@ -1405,7 +1490,9 @@ export function InvoiceComposer({
                         key={it.id}
                         className="flex gap-2 py-0.5 text-[11px] text-[var(--text-muted)]"
                       >
-                        <span className="min-w-0 flex-1 truncate">{it.name}</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {it.name}
+                        </span>
                         <span className="font-mono">
                           {(billing.get(it.id)?.slots ?? [])
                             .map(stageSlotWords)
@@ -1436,16 +1523,22 @@ export function InvoiceComposer({
               {/* ── Purchases (C-25, 00703) — each its own line at cost ────── */}
               {offerablePurchases.length > 0 && (
                 <div className="mt-4" data-testid="composer-purchases">
-                  <p className={`${LABEL} mb-0.5`}>purchases · unbilled · at cost</p>
+                  <p className={`${LABEL} mb-0.5`}>
+                    purchases · unbilled · at cost
+                  </p>
                   {offerablePurchases.map((p) => (
                     <AtCostRow
                       key={p.id}
                       id={p.id}
                       ticked={tickedPurchaseIds.has(p.id)}
-                      onTick={(on) => setTickedPurchaseIds((prev) => toggled(prev, p.id, on))}
+                      onTick={(on) =>
+                        setTickedPurchaseIds((prev) => toggled(prev, p.id, on))
+                      }
                       costCents={purchaseAtCostCents(p)}
                       override={overrides.get(p.id)}
-                      onOverride={(text) => setOverrides((prev) => new Map(prev).set(p.id, text))}
+                      onOverride={(text) =>
+                        setOverrides((prev) => new Map(prev).set(p.id, text))
+                      }
                       label={p.description?.trim() || p.payee_name}
                       detail={`${p.description?.trim() ? `${p.payee_name} · ` : ""}${fmtDay(p.purchased_on)}`}
                       refusal={refusedLines.get(p.id)}
@@ -1465,25 +1558,33 @@ export function InvoiceComposer({
               {/* ── Riders (C-26, 00704) — each its own line at cost ────────── */}
               {offerableRiders.length > 0 && (
                 <div className="mt-4" data-testid="composer-riders">
-                  <p className={`${LABEL} mb-0.5`}>riders · unbilled · at cost</p>
+                  <p className={`${LABEL} mb-0.5`}>
+                    riders · unbilled · at cost
+                  </p>
                   {offerableRiders.map((r) => (
                     <AtCostRow
                       key={r.id}
                       id={r.id}
                       ticked={tickedRiderIds.has(r.id)}
-                      onTick={(on) => setTickedRiderIds((prev) => toggled(prev, r.id, on))}
+                      onTick={(on) =>
+                        setTickedRiderIds((prev) => toggled(prev, r.id, on))
+                      }
                       costCents={riderAtCostCents(r)}
                       override={overrides.get(r.id)}
-                      onOverride={(text) => setOverrides((prev) => new Map(prev).set(r.id, text))}
-                      label={riderLabel(r)}
-                      detail={
-                        [
-                          r.purchase_order?.po_number ? `PO ${r.purchase_order.po_number}` : null,
-                          r.actual_cents === null && r.estimate_cents !== null ? "estimate" : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")
+                      onOverride={(text) =>
+                        setOverrides((prev) => new Map(prev).set(r.id, text))
                       }
+                      label={riderLabel(r)}
+                      detail={[
+                        r.purchase_order?.po_number
+                          ? `PO ${r.purchase_order.po_number}`
+                          : null,
+                        r.actual_cents === null && r.estimate_cents !== null
+                          ? "estimate"
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                       refusal={refusedLines.get(r.id)}
                     />
                   ))}
@@ -1626,18 +1727,60 @@ export function InvoiceComposer({
             </div>
             {billingGap && selectedProject && (
               <div className="w-full basis-full text-sm text-[var(--color-charcoal)]">
-                <p>
-                  {billingGap === "no-client"
-                    ? isLead
-                      ? `${selectedProject.name} has no client yet. Link one to bill it.`
-                      : `${selectedProject.name} has no client yet. Ask ${leadName} to link one.`
-                    : canNameStudio
-                      ? `${selectedProject.name} isn't tied to your studio yet.`
-                      : hasStudioOwner
-                        ? `${selectedProject.name} isn't tied to a studio yet. Ask your studio owner to name it.`
-                        : `${selectedProject.name} isn't tied to a studio yet. Only a studio that employs its designer can name one.`}
-                </p>
-                {billingGap === "no-client" && isLead && (
+                {soloOwnerUnstamped ? (
+                  <p>
+                    This job was opened before your studio had one home. Write
+                    to{" "}
+                    <span
+                      ref={supportAddressRef}
+                      className="font-mono text-[12px]"
+                    >
+                      {SUPPORT_ADDRESS}
+                    </span>{" "}
+                    and we&apos;ll set it.
+                  </p>
+                ) : (
+                  <p>
+                    {billingGap === "no-client"
+                      ? canLinkClient
+                        ? `${selectedProject.name} has no client yet. Link one to bill it.`
+                        : `${selectedProject.name} has no client yet. Ask ${leadName} to link one.`
+                      : canNameStudio
+                        ? `${selectedProject.name} isn't tied to your studio yet.`
+                        : hasStudioOwner
+                          ? `${selectedProject.name} isn't tied to a studio yet. Ask your studio owner to name it.`
+                          : `${selectedProject.name} isn't tied to a studio yet. Only a studio that employs its designer can name one.`}
+                  </p>
+                )}
+                {soloOwnerUnstamped && (
+                  <CopyAct
+                    text={SUPPORT_ADDRESS}
+                    selectRef={supportAddressRef}
+                    actionKey="copy-support-address"
+                  >
+                    Copy the address
+                  </CopyAct>
+                )}
+                {billingGap === "no-client" && !canLinkClient && (
+                  // M4 — the note goes nowhere on its own; she sends it herself.
+                  <p className="mt-1 text-[var(--color-aged-oak)]">
+                    “
+                    <span ref={askNoteRef}>
+                      {askLinkNote(selectedProject.name)}
+                    </span>
+                    ”
+                  </p>
+                )}
+                {billingGap === "no-client" && !canLinkClient && (
+                  <CopyAct
+                    text={askLinkNote(selectedProject.name)}
+                    selectRef={askNoteRef}
+                    actionKey="copy-link-client-note"
+                  >
+                    Copy a note
+                  </CopyAct>
+                )}
+                {billingGap === "no-client" && canLinkClient && (
                   // One anchor on every page, so the sheet hands focus back to
                   // it on Esc. On this project's document it opens the sheet in
                   // place, above the folio and its draft; anywhere else it walks
@@ -1655,12 +1798,20 @@ export function InvoiceComposer({
                       linkingClientRef.current = projectId;
                       if (pathname === `/doc/${projectId}`) {
                         e.preventDefault();
-                        window.dispatchEvent(new CustomEvent(OPEN_HOUSEHOLD_SHEET_EVENT));
+                        window.dispatchEvent(
+                          new CustomEvent(OPEN_HOUSEHOLD_SHEET_EVENT),
+                        );
                       }
                     }}
                   >
                     {MESSAGE_WITHHELD.repair}
                   </DocumentAction>
+                )}
+                {canNameStudio && viewerStudio && (
+                  <p className="mt-1">
+                    Naming a studio stamps it on every invoice this project
+                    sends.
+                  </p>
                 )}
                 {canNameStudio && viewerStudio && (
                   <DocumentAction
@@ -1669,31 +1820,75 @@ export function InvoiceComposer({
                     surfaceKey="accounts"
                     regionKey="invoice-composer"
                     variant="tertiary"
-                    loading={stampProjectStudio.isPending}
-                    loadingLabel="Naming…"
+                    aria-expanded={confirmingName}
                     onClick={() => {
                       setNameStudioError(null);
-                      stampProjectStudio.mutate(
-                        { projectId, studioId: viewerStudio.id },
-                        {
-                          onError: (e) =>
-                            setNameStudioError(
-                              stampStudioRefusal(
-                                (e as { message?: unknown } | null)?.message,
-                                viewerStudio.name,
-                              ),
-                            ),
-                        },
+                      setConfirmingName(true);
+                      requestAnimationFrame(() =>
+                        confirmNameRef.current?.focus(),
                       );
                     }}
                   >
                     Name studio
                   </DocumentAction>
                 )}
+                {canNameStudio && viewerStudio && confirmingName && (
+                  // K12 — one inline confirm, no modal: the stamp is final.
+                  <div
+                    role="group"
+                    aria-label="Confirm naming the studio"
+                    className="mt-1 flex flex-wrap items-center gap-x-3"
+                  >
+                    <p>Name {viewerStudio.name}? This can&apos;t be undone.</p>
+                    <DocumentAction
+                      ref={confirmNameRef}
+                      actionKey="confirm-name-invoice-studio"
+                      surfaceKey="accounts"
+                      regionKey="invoice-composer"
+                      variant="tertiary"
+                      loading={stampProjectStudio.isPending}
+                      loadingLabel="Naming…"
+                      onClick={() => {
+                        stampProjectStudio.mutate(
+                          { projectId, studioId: viewerStudio.id },
+                          {
+                            onError: (e) => {
+                              setConfirmingName(false);
+                              nameStudioRef.current?.focus();
+                              setNameStudioError(
+                                stampStudioRefusal(
+                                  (e as { message?: unknown } | null)?.message,
+                                  viewerStudio.name,
+                                ),
+                              );
+                            },
+                          },
+                        );
+                      }}
+                    >
+                      Name
+                    </DocumentAction>
+                    <DocumentAction
+                      actionKey="cancel-name-invoice-studio"
+                      surfaceKey="accounts"
+                      regionKey="invoice-composer"
+                      variant="tertiary"
+                      onClick={() => {
+                        setConfirmingName(false);
+                        nameStudioRef.current?.focus();
+                      }}
+                    >
+                      Not yet
+                    </DocumentAction>
+                  </div>
+                )}
                 <ActFailLine
                   error={
                     nameStudioError
-                      ? new AppError({ code: "NAME_STUDIO", message: nameStudioError })
+                      ? new AppError({
+                          code: "NAME_STUDIO",
+                          message: nameStudioError,
+                        })
                       : null
                   }
                   className="mt-1"
@@ -1730,7 +1925,14 @@ export function InvoiceComposer({
 
           {/* R83 — the inline failure band, at the act site. */}
           <ActFailLine
-            error={error ? new AppError({ code: "INVOICE_DRAFT", message: error.message }) : null}
+            error={
+              error
+                ? new AppError({
+                    code: "INVOICE_DRAFT",
+                    message: error.message,
+                  })
+                : null
+            }
             className="mt-2"
             onRetry={error?.retryable ? () => void draft() : undefined}
             retryKey="retry-draft-invoice"
@@ -1742,7 +1944,9 @@ export function InvoiceComposer({
       <p
         id={statusId}
         role="status"
-        className={heldReason ? "mt-2 text-sm text-[var(--color-charcoal)]" : "sr-only"}
+        className={
+          heldReason ? "mt-2 text-sm text-[var(--color-charcoal)]" : "sr-only"
+        }
       >
         {heldReason ?? ""}
       </p>
@@ -1764,24 +1968,27 @@ function blockerReason(
   blocker: ComposerBlocker,
   facts: {
     projectName: string;
-    isLead: boolean;
+    canLinkClient: boolean;
     leadName: string;
     canNameStudio: boolean;
+    soloOwnerUnstamped: boolean;
     hasStudioOwner: boolean;
     studioLoading: boolean;
   },
 ): string {
   switch (blocker) {
     case "no-client":
-      return facts.isLead
+      return facts.canLinkClient
         ? "Link a client before drafting this invoice."
-        : `Ask ${facts.leadName} to link a client before drafting this invoice.`;
+        : `Ask ${facts.leadName} to link a client.`;
     case "no-studio":
       return facts.canNameStudio
         ? "Name the studio before drafting this invoice."
-        : facts.hasStudioOwner
-          ? "Ask your studio owner to name this project’s studio."
-          : `${facts.projectName} can’t be billed until a studio that employs its designer names it.`;
+        : facts.soloOwnerUnstamped
+          ? `This job was opened before your studio had one home. Write to ${SUPPORT_ADDRESS} and we'll set it.`
+          : facts.hasStudioOwner
+            ? "Ask your studio owner to name this project’s studio."
+            : `${facts.projectName} can’t be billed until a studio that employs its designer names it.`;
     case "no-project":
       return "Choose a project first.";
     case "lines":
@@ -1803,19 +2010,95 @@ function blockerReason(
   }
 }
 
+const SUPPORT_ADDRESS = "hello@patina.cloud";
+
+/** K5 — the one line a designer who can't link a client copies to its lead. */
+function askLinkNote(projectName: string): string {
+  return `Could you link a client to ${projectName}? I'm drafting its invoice.`;
+}
+
+/**
+ * A quiet copy act. Nothing is sent (M4): the text goes to the clipboard, or,
+ * where the clipboard refuses, the visible text is selected for a manual copy.
+ * writeText is called inside the click, which Safari requires.
+ */
+function CopyAct({
+  text,
+  selectRef,
+  actionKey,
+  children,
+}: {
+  text: string;
+  selectRef: RefObject<HTMLElement | null>;
+  actionKey: string;
+  children: ReactNode;
+}) {
+  const [copied, setCopied] = useState(false);
+  const selectText = () => {
+    const node = selectRef.current;
+    const selection = window.getSelection();
+    if (!node || !selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-x-3">
+      <DocumentAction
+        actionKey={actionKey}
+        surfaceKey="accounts"
+        regionKey="invoice-composer"
+        variant="tertiary"
+        onClick={() => {
+          setCopied(false);
+          try {
+            navigator.clipboard
+              .writeText(text)
+              .then(() => setCopied(true), selectText);
+          } catch {
+            selectText();
+          }
+        }}
+      >
+        {children}
+      </DocumentAction>
+      <span
+        role="status"
+        className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
+      >
+        {copied ? "Copied." : ""}
+      </span>
+    </div>
+  );
+}
+
 /** A refusal before anything was written: a billing gap or a bad request is
  *  the same refusal next time; anything else (a dropped connection, a timeout)
  *  may go through on a second try. */
-function preWriteFailure(e: unknown): { message: string; retryable: boolean; gap?: InvoiceBillingGap } {
+function preWriteFailure(e: unknown): {
+  message: string;
+  retryable: boolean;
+  gap?: InvoiceBillingGap;
+} {
   if (e instanceof InvoiceBillingGapError) {
     const gap: InvoiceBillingGap | undefined =
-      e.gap === "client" ? "no-client" : e.gap === "studio" ? "no-studio" : undefined;
+      e.gap === "client"
+        ? "no-client"
+        : e.gap === "studio"
+          ? "no-studio"
+          : undefined;
     return { message: e.message, retryable: false, gap };
   }
-  const message = e instanceof Error && e.message ? e.message : "Could not draft the invoice.";
+  const message =
+    e instanceof Error && e.message
+      ? e.message
+      : "Could not draft the invoice.";
   return {
     message,
-    retryable: !/validation|invalid|must be|does not match|not allowed/i.test(message),
+    retryable: !/validation|invalid|must be|does not match|not allowed/i.test(
+      message,
+    ),
   };
 }
 
@@ -1894,7 +2177,11 @@ function AtCostRow({
 function RefusedLineNote({ note }: { note: string | undefined }) {
   return (
     <ActFailLine
-      error={note ? new AppError({ code: "INVOICE_LINE_REFUSED", message: note }) : null}
+      error={
+        note
+          ? new AppError({ code: "INVOICE_LINE_REFUSED", message: note })
+          : null
+      }
       className="pl-6"
     />
   );

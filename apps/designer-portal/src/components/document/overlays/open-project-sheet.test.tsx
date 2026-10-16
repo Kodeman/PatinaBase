@@ -7,6 +7,13 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
+// One studio: the sheet asks no studio question (K9).
+jest.mock('@patina/supabase', () => ({
+  useOrganizations: () => ({
+    data: [{ id: 'studio-1', name: 'Middle West Studio', type: 'design_studio', status: 'active' }],
+  }),
+}));
+
 jest.mock('@/hooks/use-project-lifecycle', () => ({
   useOpenProjectDirect: () => ({ mutate, isPending: false }),
 }));
