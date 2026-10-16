@@ -26,6 +26,7 @@ import {
 } from '@patina/supabase';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
+import { billingRefusal } from '@/lib/document/invoice-composer';
 import { DeliveryWord } from '../delivery-word';
 import { DocumentAction } from '../document-action';
 import { openInvoiceFolio } from './invoice-overlays';
@@ -155,7 +156,8 @@ function ReceivableRow({
           : `reminded ${result.recipient}`,
       );
     } catch (e) {
-      setNote(e instanceof Error ? e.message : 'Could not send the reminder');
+      // The note's colour keys on 'Could not'; the reason is said, never raw.
+      setNote(`Could not send the reminder — ${billingRefusal('send', e).sentence}`);
     }
   };
 

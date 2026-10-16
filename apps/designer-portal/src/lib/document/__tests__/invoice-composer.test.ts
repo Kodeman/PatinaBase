@@ -9,6 +9,7 @@ import {
   activeDesignStudios,
   asSentence,
   billingLinesRefusal,
+  billingRefusal,
   buildComposerLines,
   canDraftStudioInvoice,
   claimTimeRefusal,
@@ -16,6 +17,7 @@ import {
   dollarsToCents,
   draftInvoiceRefusal,
   partitionFfeBillable,
+  refusedBillingLines,
   stampStudioRefusal,
   studioInvoiceBlocker,
   unbilledMilestones,
@@ -24,6 +26,8 @@ import {
   type ComposerMilestone,
   type ComposerStudio,
 } from "../invoice-composer";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 const MILESTONE: ComposerMilestone = {
   id: "m1",
@@ -680,3 +684,173 @@ describe("stampStudioRefusal", () => {
     expect(stampStudioRefusal(message, "Middle West Studio")).toBe(sentence);
   });
 });
+
+describe("billingRefusal", () => {
+  const GENERIC = "The invoice couldn't be completed. Check the invoice and try again.";
+  const MILESTONE_ID = "5b1f0c7e-0000-4000-8000-000000000001";
+  const SENT = {
+    noRecipient: "This invoice has no client email yet. Add their email, then send it.",
+    notIssued: "Issue the invoice before sending it.",
+    void: "This invoice was voided and can't be sent.",
+    notOpen: "Only an open invoice can receive a reminder.",
+    checkFailed: "The invoice's payment status couldn't be checked. Try sending it again.",
+    inFlight: "The client is paying this invoice now. Send the note after the payment finishes.",
+    sendFailed: "The email couldn't be sent. Check the recipient and try again.",
+    notFound: "This invoice couldn't be found. Reload the accounts page and try again.",
+    lookup: "The invoice couldn't be loaded. Reload the folio and try again.",
+    signIn: "Your sign-in couldn't be confirmed. Sign in again, then send the invoice.",
+    body: "The invoice details couldn't be read. Reload the folio and try again.",
+    method: "The invoice couldn't be sent this way. Open it in the folio and try again.",
+  };
+
+  it.each([
+    [
+      "milestone",
+      `generate_milestone_invoice: milestone ${MILESTONE_ID} not found`,
+      "This milestone couldn't be found. Reload the project and try again.",
+    ],
+    [
+      "milestone",
+      `generate_milestone_invoice: milestone ${MILESTONE_ID} not found or access denied`,
+      "This milestone couldn't be found. Reload the project and try again.",
+    ],
+    [
+      "milestone",
+      `draft_invoice_from_milestone: milestone ${MILESTONE_ID} not found`,
+      "This milestone couldn't be found. Reload the project and try again.",
+    ],
+    [
+      "milestone",
+      "generate_milestone_invoice: not your project",
+      "This milestone belongs to a project you can't bill from. Open the project and try again.",
+    ],
+    // invoice-send's codes, as useSendInvoice throws them when no detail rides along.
+    ["send", "no_recipient", SENT.noRecipient],
+    ["send", "invoice_not_issued", SENT.notIssued],
+    ["send", "invoice_void", SENT.void],
+    ["send", "invoice_not_open", SENT.notOpen],
+    ["send", "checkout_attempt_check_failed", SENT.checkFailed],
+    ["send", "checkout_in_flight", SENT.inFlight],
+    ["send", "send_failed", SENT.sendFailed],
+    ["send", "invoice_not_found", SENT.notFound],
+    ["send", "lookup_failed", SENT.lookup],
+    ["send", "unauthorized", SENT.signIn],
+    ["send", "authorization_failed", SENT.signIn],
+    ["send", "invalid_body", SENT.body],
+    ["send", "invoiceId_required", SENT.body],
+    ["send", "method_not_allowed", SENT.method],
+    // ... and the details it throws in their place.
+    ["send", "Issue the invoice before sending.", SENT.notIssued],
+    ["send", "A voided invoice cannot be sent.", SENT.void],
+    ["send", "Reminders can only be sent on open (sent or partially paid) invoices.", SENT.notOpen],
+    ["send", "Patina could not check whether this invoice is being paid right now. Try again.", SENT.checkFailed],
+    [
+      "send",
+      "the client is paying this invoice right now, so Patina held the letter rather than replace the address they are standing on. Send it once the payment lands or falls through.",
+      SENT.inFlight,
+    ],
+  ] as const)("maps the %s refusal %s", (source, err, sentence) => {
+    expect(billingRefusal(source, err).sentence).toBe(sentence);
+    // Thrown as an Error, as the hooks do, it reads the same.
+    expect(billingRefusal(source, new Error(err)).sentence).toBe(sentence);
+  });
+
+  it("says each of the draft, claim and lines refusals through its own table", () => {
+    const draft = "Failed to create draft invoice: Not authenticated";
+    const claim = "Time entry 5b1f0c7e is attached to invoice 9a2e4d10; only notes may change.";
+    const lines = { message: "add_invoice_billing_lines: purchase p1 is already billed" };
+    expect(billingRefusal("draft", new Error(draft)).sentence).toBe(draftInvoiceRefusal(draft).message);
+    expect(billingRefusal("claim", new Error(claim)).sentence).toBe(claimTimeRefusal(claim));
+    expect(billingRefusal("lines", lines, () => "Pair of lamps").sentence).toBe(
+      "Pair of lamps is already on another invoice.",
+    );
+  });
+
+  it("maps every code and every literal detail invoice-send returns", () => {
+    const source = readFileSync(
+      join(__dirname, "../../../../../../supabase/functions/invoice-send/index.ts"),
+      "utf8",
+    );
+    const codes = Array.from(source.matchAll(/error:\s*'([a-zA-Z_]+)'/g), (m) => m[1]);
+    const details = Array.from(source.matchAll(/detail:\s*'([^']+)'/g), (m) => m[1]);
+    expect(new Set(codes)).toEqual(
+      new Set([
+        "method_not_allowed",
+        "invalid_body",
+        "invoiceId_required",
+        "unauthorized",
+        "authorization_failed",
+        "invoice_not_found",
+        "lookup_failed",
+        "invoice_not_issued",
+        "invoice_void",
+        "invoice_not_open",
+        "checkout_attempt_check_failed",
+        "checkout_in_flight",
+        "no_recipient",
+        "send_failed",
+      ]),
+    );
+    expect(details).toHaveLength(5);
+    for (const said of [...codes, ...details]) {
+      expect(billingRefusal("send", said).sentence).not.toBe(GENERIC);
+    }
+  });
+
+  it.each([
+    ["send", "private database detail"],
+    ["send", "Edge Function returned a non-2xx status code"],
+    ["send", "invoice_not_issued, then something else"],
+    ["milestone", `draft_invoice_from_milestone: milestone ${MILESTONE_ID} has an unsafe line owner ${MILESTONE_ID}`],
+    // issue_invoice has no table: every refusal of it is the one generic sentence.
+    ["issue", "issue_invoice: signed retainer invoice must be paid first"],
+  ] as const)("never prints the unknown %s refusal %s", (source, raw) => {
+    const result = billingRefusal(source, new Error(raw)).sentence;
+    expect(result).toBe(GENERIC);
+    expect(result).not.toContain(raw);
+  });
+
+  it("says the generic sentence when there are no words at all", () => {
+    expect(billingRefusal("send", null).sentence).toBe(GENERIC);
+    expect(billingRefusal("milestone", { code: "P0001" }).sentence).toBe(GENERIC);
+  });
+});
+
+describe("refusedBillingLines", () => {
+  const LINES = [
+    { request: { ffeItemId: "f1", stage: "deposit" as const, depositPct: 50 } },
+    { request: { ffeItemId: "f2", stage: "balance" as const } },
+    { request: { purchaseId: "p1" } },
+    { request: { costLineId: "r1" } },
+  ];
+  const refusal = (reason: string) => ({ message: `add_invoice_billing_lines: ${reason}` });
+
+  it.each([
+    ["purchase p1 is already billed", LINES[2]],
+    ["rider r1 has no estimate or actual; enter amountCents", LINES[3]],
+    ["line f1 has no client price; enter amountCents", LINES[0]],
+    ["line f2 has nothing left to bill after its deposit", LINES[1]],
+    ["a deposit of 60000 cents is more than the 50000 cents left to bill on line f1", LINES[0]],
+    ["a balance of 60000 cents is more than the 50000 cents left on line f2 after its deposit", LINES[1]],
+  ])("names exactly the line refused by %s", (reason, line) => {
+    expect(refusedBillingLines(refusal(reason), LINES)).toEqual([line]);
+  });
+
+  it.each([
+    "not authenticated",
+    "lines must be an array of 1 to 200 objects",
+    "a deposit needs depositPct above 0 and at most 100",
+    // A subject of the wrong kind, or one this draft never sent, names nothing here.
+    "rider p1 is already billed",
+    "purchase p9 is already billed",
+  ])("names no line for %s", (reason) => {
+    expect(refusedBillingLines(refusal(reason), LINES)).toEqual([]);
+  });
+
+  it("names no line for a refusal that is not the billing writer's", () => {
+    expect(refusedBillingLines({ message: "purchase p1 is already billed" }, LINES)).toEqual([]);
+    expect(refusedBillingLines(new Error("network error"), LINES)).toEqual([]);
+    expect(refusedBillingLines(null, LINES)).toEqual([]);
+  });
+});
+

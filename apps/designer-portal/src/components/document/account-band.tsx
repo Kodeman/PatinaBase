@@ -24,6 +24,7 @@ import {
 import { InkAlert, SavingWord } from './work-block';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { billingRefusal } from '@/lib/document/invoice-composer';
 import {
   formatCurrencyTotal,
   formatMoney,
@@ -177,9 +178,7 @@ function MilestoneRow({
             generate.mutate(m.id, {
               onSuccess: (invoiceId) => openInvoiceFolio(invoiceId),
               onError: (error) =>
-                setInvoiceNote(
-                  error instanceof Error ? error.message : 'Could not draft this invoice.',
-                ),
+                setInvoiceNote(billingRefusal('milestone', error).sentence),
             });
           }}
           className="text-left"

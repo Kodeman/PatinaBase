@@ -53,7 +53,7 @@ import { fmtDay, todayYmd } from '@/lib/document/format';
 import { voiceFirstName } from '@/lib/document/document-guide';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { needActLabel } from '@/lib/document/act-names';
-import { dollarsToCents } from '@/lib/document/invoice-composer';
+import { billingRefusal, dollarsToCents } from '@/lib/document/invoice-composer';
 import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
 import { useReconcileInvoiceCheckout } from '@/hooks/use-invoice-checkout-reconciliation';
 import { AccountsQueryFailure } from './accounts-query-failure';
@@ -269,7 +269,7 @@ export function InvoiceFolio({
         projectId: invoice.project_id ?? undefined,
       });
     } catch (e) {
-      setNote(`Could not issue — ${e instanceof Error ? e.message : 'try again'}`);
+      setNote(`Could not issue — ${billingRefusal('issue', e).sentence}`);
       return;
     }
     try {
@@ -288,9 +288,9 @@ export function InvoiceFolio({
       setMessage('');
     } catch (e) {
       setNote(
-        `Could not send — issued as ${issued.invoice_number ?? 'this invoice'}; ${
-          e instanceof Error ? e.message : 'the email failed'
-        }. Resend to retry.`,
+        `Could not send — issued as ${issued.invoice_number ?? 'this invoice'}. ${
+          billingRefusal('send', e).sentence
+        } Resend to retry.`,
       );
       setShowClientFallback(true);
       setAct(null);
@@ -314,7 +314,7 @@ export function InvoiceFolio({
       setAct(null);
       setMessage('');
     } catch (e) {
-      setNote(`Could not send — ${e instanceof Error ? e.message : 'try again'}`);
+      setNote(`Could not send — ${billingRefusal('send', e).sentence}`);
       setShowClientFallback(true);
     }
   };

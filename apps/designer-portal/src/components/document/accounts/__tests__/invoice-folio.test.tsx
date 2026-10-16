@@ -875,3 +875,53 @@ describe('InvoiceFolio · what became of the mail', () => {
     expect(screen.queryByTestId('delivery-word')).toBeNull();
   });
 });
+
+describe('InvoiceFolio · a refused send, in the folio’s words (US-36 R1)', () => {
+  beforeEach(() => {
+    mockInvoice = invoice;
+    mockEmailDeliveryByRef = {};
+    mockInvoiceLink = null;
+    jest.clearAllMocks();
+    mockRefetch.mockResolvedValue({ data: invoice });
+  });
+
+  it('says what to do when the issued invoice has no client email to send to', async () => {
+    mockIssue.mockImplementation(async () => ({
+      ...invoice,
+      status: 'sent',
+      invoice_number: 'INV-1071',
+    }));
+    // invoice-send's 422 body carries the code alone; useSendInvoice throws it.
+    mockSend.mockRejectedValue(new Error('no_recipient'));
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'Could not send — issued as INV-1071. This invoice has no client email yet. Add their email, then send it. Resend to retry.',
+    );
+    expect(alert).not.toHaveTextContent(/no_recipient/);
+  });
+
+  it('says a held letter plainly when the client is mid-payment', async () => {
+    mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1072' };
+    // invoice-send's 409 carries a detail, which useSendInvoice throws in the code's place.
+    mockSend.mockRejectedValue(
+      new Error(
+        'the client is paying this invoice right now, so Patina held the letter rather than replace the address they are standing on. Send it once the payment lands or falls through.',
+      ),
+    );
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    await resendAndBounce();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'Could not send — The client is paying this invoice now. Send the note after the payment finishes.',
+    );
+    expect(alert).not.toHaveTextContent(/held the letter|checkout_in_flight/);
+  });
+});

@@ -326,27 +326,58 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
     ]);
   });
 
-  it("deletes the draft when the writer refuses, and says why", async () => {
-    mockAddBilling.mockRejectedValue({
+  it("deletes the draft when the writer refuses a line, unticks just that line, and says why beside it", async () => {
+    // The PostgrestError's own words: the RPC's name and the purchase's id.
+    mockAddBilling.mockRejectedValueOnce({
       message: "add_invoice_billing_lines: purchase p1 is already billed",
     });
     const onDrafted = jest.fn();
     render(
       <InvoiceComposer
-        context={{ projectId: "project-1", initialPurchaseIds: ["p1"] }}
+        context={{ projectId: "project-1", initialPurchaseIds: ["p1", "p2"] }}
         onDrafted={onDrafted}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
     // F5 — the refusal in the composer's words, naming the purchase by the
-    // label it was printed under: no RPC name, no id, and one sentence each.
+    // label it was printed under: no RPC name, no id — and beside its row.
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(
       "Pair of table lamps is already on another invoice. Nothing was billed.",
     );
     expect(alert).not.toHaveTextContent(/add_invoice_billing_lines|\bp1\b/);
+    const refusedRow = screen.getByLabelText("Bill Pair of table lamps").closest("[data-at-cost-row]");
+    expect(refusedRow?.nextElementSibling).toBe(alert);
+    // The draft is gone and never handed on as if it had gone through.
     expect(mockDeleteDraft).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1" });
     expect(onDrafted).not.toHaveBeenCalled();
+    // Only the refused line is unticked; the rest stays for the next draft.
+    expect(screen.getByLabelText("Bill Pair of table lamps")).not.toBeChecked();
+    expect(screen.getByLabelText("Bill Estate sale")).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    await waitFor(() => expect(onDrafted).toHaveBeenCalledWith("inv-1", "project-1"));
+    expect(mockAddBilling.mock.calls[1][0].lines).toEqual([{ purchaseId: "p2" }]);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("unticks nothing when the draft it refused could not be deleted, and says so at the act", async () => {
+    mockAddBilling.mockRejectedValue({
+      message: "add_invoice_billing_lines: purchase p1 is already billed",
+    });
+    mockDeleteDraft.mockRejectedValue(new Error("network error"));
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialPurchaseIds: ["p1", "p2"] }}
+        onDrafted={jest.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Pair of table lamps is already on another invoice. Nothing was billed; the draft was kept. Delete or void it.",
+    );
+    expect(screen.getByLabelText("Bill Pair of table lamps")).toBeChecked();
+    expect(screen.getByLabelText("Bill Estate sale")).toBeChecked();
   });
 });
 
@@ -1029,6 +1060,8 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
       "The billing lines couldn't be added to the draft. Nothing was billed.",
     );
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    // A refusal that names no line unticks none.
+    expect(screen.getByLabelText("Bill Pair of table lamps")).toBeChecked();
   });
 
   it.each([
