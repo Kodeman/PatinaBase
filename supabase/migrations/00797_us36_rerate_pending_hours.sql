@@ -24,32 +24,44 @@
 -- the same statement. So the exception is carved inside the classifier, at the
 -- one point where it resolves, and nowhere else:
 --
---   public.rerate_pending_time_entries(p_studio_id, p_designer_id) → integer
---     SECURITY DEFINER. Refuses everyone but an owner/admin of p_studio_id
---     (is_org_admin_or_owner, 00484). K11's solo owner holds the owner role, so
---     she is covered; 00796 added no K11 predicate (R173). It walks the rows
---     where projects.studio_id = p_studio_id (the pricing studio, 00615's
---     project_pricing_studio_id), user_id = p_designer_id, rate_source =
---     'none' and invoice_id IS NULL (00617's un-invoiced predicate). For each
---     row it names that row's id in the transaction-local GUC
---     app.rerate_time_entry_id (00412/00414's app.budget_publish_id
---     precedent: row-bound, restored on exit and on error) and issues a touch
---     UPDATE of hourly_rate_cents, a watched column, so the classifier
---     re-derives the row. It returns how many rows came back priced.
+--   public.rerate_pending_time_entries(p_rate_id) → integer
+--     SECURITY DEFINER. p_rate_id is the studio_member_rates row just saved
+--     (the row useSetStudioMemberRate's upsert returns). The studio and the
+--     member come from that row, never from the caller. The function refuses
+--     everyone but an owner/admin of the row's studio (is_org_admin_or_owner,
+--     00484), and an unknown id gets the same refusal, so the id grants nothing
+--     by itself. K11's solo owner holds the owner role, so she is covered;
+--     00796 added no K11 predicate (R173). It also refuses a row that is
+--     neither the member's open row nor the row in force today (superseded),
+--     and a self-written row that tier 2 would ignore (00615 HT-3-e(2)). It
+--     share-locks the row, so a same-day correction waits for the walk to
+--     finish. It walks the rows where projects.studio_id is the row's studio
+--     (the pricing studio, 00615's project_pricing_studio_id), user_id is the
+--     row's member, rate_source = 'none' and invoice_id IS NULL (00617's
+--     un-invoiced predicate). For each one it names the entry in the
+--     transaction-local GUC app.rerate_time_entry_id, and the rate row in
+--     app.rerate_rate_id (00412/00414's app.budget_publish_id precedent:
+--     restored on exit and on error). Then it issues a touch UPDATE of
+--     hourly_rate_cents, a watched column, so the classifier re-derives the
+--     row. It returns how many rows came back priced.
 --
 --   classify_project_time_entry_authority — the 00618 body VERBATIM plus one
---     block after delta 2's resolution. When the GUC names THIS row, OLD is
---     still pending and un-invoiced, the started_at answer is still 'none', and
---     the actor is an owner/admin of the project's studio, the row is resolved
---     again at now(), so it takes the member rate in force today (the rate just
---     set). Only a 'studio_member' answer is taken. An authority card in force
---     now postdates the hour: the classifier binds by started_at, so the row
---     would read 'authority' unbound, which is the lie W1-R5-03 measured. Any
---     other answer RETURNs NULL, which skips the row. Nothing is written, so no
---     audit row and no updated_by stamp land on an hour that stays pending.
---     A row that already resolves at started_at (a rate backdated over it, or
---     a studio stamped since it was logged) is priced by the classifier's
---     ordinary path, which is the same answer any later edit would give it.
+--     block after delta 2's resolution. That block applies when the entry GUC
+--     names THIS row, OLD is still pending and un-invoiced, and the started_at
+--     answer is still 'none'. The row then takes the hourly_rate_cents of the
+--     rate row named in app.rerate_rate_id, stamped 'studio_member'. The rate
+--     row must be this member's, in the studio that prices the project, and
+--     must pass tier 2's self-authored test. The actor must be an owner/admin
+--     of that studio. Nothing is re-resolved at now() (SQ-1075). There, a
+--     signed card that postdates the hour wins tier 1 and masks the member rate
+--     (F1), and the UTC day can still be the previous rate's while the browser
+--     dated the new row by the studio's local day (F2). The RPC checks the
+--     same things first, so inside it every walked row qualifies and comes
+--     back priced. A row that fails them, reachable only by setting the GUCs
+--     outside the RPC, takes the ordinary path and stays pending. A row that
+--     already resolves at started_at (a rate backdated over it, or a studio
+--     stamped since it was logged) is priced by the classifier's ordinary
+--     path, which is the same answer any later edit would give it.
 --
 -- WHAT IS NOT TOUCHED: aab_ (00605) still refuses every caller-supplied rate,
 -- amount, billing state and provenance, for an owner as for anyone. Delta 5's
@@ -62,7 +74,7 @@
 -- public.audit_logs row per UPDATE, with user_id = auth.uid(), the old and new
 -- rate, and the pricing studio. zzz_stamp_time_entry_updated_by_trg stamps
 -- updated_by. A re-priced entry therefore leaves exactly one trace row, and a
--- skipped entry leaves none. No second writer is added.
+-- refused re-rate writes nothing. No second writer is added.
 --
 -- Lineage:
 --   classify_project_time_entry_authority ... 00412 → 00575 → 00578 → 00601
@@ -106,7 +118,6 @@ DECLARE
   v_rate_role text;
   -- 00797 delta (K8)
   v_rerate_cents integer;
-  v_rerate_source text;
 BEGIN
   IF TG_OP = 'UPDATE' AND OLD.billing_authority_id IS NOT NULL AND (
     NEW.billing_authority_id IS DISTINCT FROM OLD.billing_authority_id
@@ -201,34 +212,46 @@ BEGIN
 
   -- ── 00797 delta (K8, amends P-4): re-rate on set ─────────────────────────
   -- The one statement that may price an hour its started_at left pending is
-  -- rerate_pending_time_entries, which names this row in
-  -- app.rerate_time_entry_id for its own UPDATE. The actor must still be an
-  -- owner/admin of the studio that prices the project, so the GUC grants nothing
-  -- that the RPC does not. The pending hour takes the member rate in force NOW
-  -- (the rate just set), and only a 'studio_member' answer is taken: a card in
-  -- force now postdates the hour, and an unbound 'authority' row is W1-R5-03's
-  -- lie. Anything else RETURNs NULL, which skips the row so a still-pending hour
-  -- gains no trace. A priced or invoiced row never reaches this block, and aab_
+  -- rerate_pending_time_entries. For its own UPDATE it names this row in
+  -- app.rerate_time_entry_id and the rate row just saved in app.rerate_rate_id.
+  -- The hour takes THAT row's rate, stamped 'studio_member'. Nothing is resolved
+  -- at now(): a signed card that postdates the hour would mask the member rate,
+  -- and the UTC day can still belong to the previous rate (SQ-1075 F1, F2). The
+  -- rate row must be this member's, in the studio that prices the project, and
+  -- must pass tier 2's self-authored test (00615). The actor must be an
+  -- owner/admin of that studio, so the GUCs grant nothing the RPC does not. The
+  -- RPC alone refuses a superseded row. A row that fails any of these (reachable
+  -- only by setting the GUCs outside the RPC) takes the ordinary path below and
+  -- stays pending. A priced or invoiced row never reaches this block, and aab_
   -- still refuses caller-supplied rates.
   IF TG_OP = 'UPDATE'
      AND v_rate_source = 'none'
      AND OLD.rate_source = 'none'
      AND OLD.invoice_id IS NULL
      AND current_setting('app.rerate_time_entry_id', true) IS NOT DISTINCT FROM NEW.id::text
-     AND COALESCE(public.is_org_admin_or_owner(
-           (SELECT project.studio_id FROM public.projects AS project
-             WHERE project.id = NEW.project_id)), false)
   THEN
-    SELECT resolved.cents, resolved.source
-      INTO v_rerate_cents, v_rerate_source
-    FROM public.resolve_time_rate_cents(
-      NEW.project_id, NEW.user_id, now(), NEW.rate_role
-    ) AS resolved;
-    IF v_rerate_source IS DISTINCT FROM 'studio_member' OR v_rerate_cents IS NULL THEN
-      RETURN NULL;
+    SELECT rate.hourly_rate_cents INTO v_rerate_cents
+    FROM public.studio_member_rates AS rate
+    JOIN public.projects AS project
+      ON project.id = NEW.project_id AND project.studio_id = rate.studio_id
+    WHERE rate.id = NULLIF(current_setting('app.rerate_rate_id', true), '')::uuid
+      AND rate.user_id = NEW.user_id
+      AND COALESCE(public.is_org_admin_or_owner(rate.studio_id), false)
+      AND (
+        rate.created_by IS DISTINCT FROM rate.user_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.organization_members AS owner_seat
+          WHERE owner_seat.organization_id = rate.studio_id
+            AND owner_seat.user_id = rate.user_id
+            AND owner_seat.status = 'active'
+            AND owner_seat.role = 'owner'
+        )
+      );
+    IF v_rerate_cents IS NOT NULL THEN
+      v_rate_cents  := v_rerate_cents;
+      v_rate_source := 'studio_member';
     END IF;
-    v_rate_cents  := v_rerate_cents;
-    v_rate_source := v_rerate_source;
   END IF;
 
   -- delta 4: the row records the role that priced it.
@@ -536,17 +559,16 @@ COMMENT ON FUNCTION public.classify_project_time_entry_authority() IS
   'Server-owned classifier for project_time_entries (00412 → 00618): resolves the '
   'one rate chain at started_at and derives authority, rate, amount, billing '
   'state and provenance. 00797 (K8): inside rerate_pending_time_entries only '
-  '(app.rerate_time_entry_id names the row; the actor is an owner/admin of the '
-  'project''s studio), a still-pending, un-invoiced hour that started_at leaves '
-  '''none'' takes the studio_member rate in force now, or is skipped (RETURN '
-  'NULL) so it gains no trace.';
+  '(app.rerate_time_entry_id names the row, app.rerate_rate_id the member''s '
+  'rate row in the project''s studio, and the actor is an owner/admin of that '
+  'studio), a still-pending, un-invoiced hour that started_at leaves ''none'' '
+  'takes that rate row''s rate as studio_member. Nothing is resolved at now().';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (2) rerate_pending_time_entries — the K8 act
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.rerate_pending_time_entries(
-  p_studio_id   uuid,
-  p_designer_id uuid
+  p_rate_id uuid
 )
 RETURNS integer
 LANGUAGE plpgsql
@@ -554,22 +576,53 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_previous text := current_setting('app.rerate_time_entry_id', true);
+  v_previous_entry text := current_setting('app.rerate_time_entry_id', true);
+  v_previous_rate  text := current_setting('app.rerate_rate_id', true);
+  v_today    date := (now() AT TIME ZONE 'UTC')::date;
+  v_rate     public.studio_member_rates%ROWTYPE;
   v_entry_id uuid;
   v_rows     integer;
   v_count    integer := 0;
 BEGIN
-  IF NOT COALESCE(public.is_org_admin_or_owner(p_studio_id), false) THEN
+  SELECT * INTO v_rate
+  FROM public.studio_member_rates
+  WHERE id = p_rate_id
+  FOR SHARE;
+  -- An unknown id and another studio's row get the same refusal: the id says
+  -- nothing to anyone who does not run the studio it belongs to.
+  IF v_rate.id IS NULL
+     OR NOT COALESCE(public.is_org_admin_or_owner(v_rate.studio_id), false) THEN
     RAISE EXCEPTION 'rerate_pending_time_entries: only an owner or admin of the studio may price its pending hours'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
+  -- "The rate just set" is the member's open row, or the row in force today when
+  -- a backdated save sits in front of a later row.
+  IF v_rate.effective_to IS NOT NULL
+     AND NOT (v_rate.effective_from <= v_today AND v_rate.effective_to >= v_today) THEN
+    RAISE EXCEPTION 'rerate_pending_time_entries: rate % has been superseded and is not this member''s current rate', p_rate_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- Tier 2's self-authored test (00615 HT-3-e(2)), which the classifier repeats.
+  IF v_rate.created_by IS NOT DISTINCT FROM v_rate.user_id
+     AND NOT EXISTS (
+       SELECT 1
+       FROM public.organization_members AS owner_seat
+       WHERE owner_seat.organization_id = v_rate.studio_id
+         AND owner_seat.user_id = v_rate.user_id
+         AND owner_seat.status = 'active'
+         AND owner_seat.role = 'owner'
+     ) THEN
+    RAISE EXCEPTION 'rerate_pending_time_entries: a rate members set for themselves prices their hours only in a studio they own'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
 
+  PERFORM set_config('app.rerate_rate_id', v_rate.id::text, true);
   FOR v_entry_id IN
     SELECT entry.id
     FROM public.project_time_entries AS entry
     JOIN public.projects AS project ON project.id = entry.project_id
-    WHERE project.studio_id = p_studio_id
-      AND entry.user_id     = p_designer_id
+    WHERE project.studio_id = v_rate.studio_id
+      AND entry.user_id     = v_rate.user_id
       AND entry.rate_source = 'none'
       AND entry.invoice_id IS NULL
     ORDER BY entry.started_at, entry.id
@@ -577,7 +630,7 @@ BEGIN
   LOOP
     PERFORM set_config('app.rerate_time_entry_id', v_entry_id::text, true);
     -- Supplies nothing: hourly_rate_cents is a watched column, so the
-    -- classifier re-derives the row (or skips it) under the GUC above.
+    -- classifier re-derives the row under the GUCs above.
     UPDATE public.project_time_entries AS entry
        SET hourly_rate_cents = entry.hourly_rate_cents
      WHERE entry.id = v_entry_id
@@ -587,27 +640,31 @@ BEGIN
     v_count := v_count + v_rows;
   END LOOP;
 
-  PERFORM set_config('app.rerate_time_entry_id', COALESCE(v_previous, ''), true);
+  PERFORM set_config('app.rerate_time_entry_id', COALESCE(v_previous_entry, ''), true);
+  PERFORM set_config('app.rerate_rate_id', COALESCE(v_previous_rate, ''), true);
   RETURN v_count;
 EXCEPTION WHEN OTHERS THEN
-  PERFORM set_config('app.rerate_time_entry_id', COALESCE(v_previous, ''), true);
+  PERFORM set_config('app.rerate_time_entry_id', COALESCE(v_previous_entry, ''), true);
+  PERFORM set_config('app.rerate_rate_id', COALESCE(v_previous_rate, ''), true);
   RAISE;
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.rerate_pending_time_entries(uuid, uuid)
+REVOKE ALL ON FUNCTION public.rerate_pending_time_entries(uuid)
   FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.rerate_pending_time_entries(uuid, uuid)
+GRANT EXECUTE ON FUNCTION public.rerate_pending_time_entries(uuid)
   TO authenticated;
 
-COMMENT ON FUNCTION public.rerate_pending_time_entries(uuid, uuid) IS
-  'K8 (00797, amends P-4): an owner/admin of p_studio_id prices p_designer_id''s '
-  'still-pending (rate_source = ''none''), never-invoiced hours on projects that '
-  'studio prices, at the rate the chain gives them: the started_at answer if '
-  'there is one, else the studio_member rate in force now. Rows nothing prices '
-  'stay untouched. Priced and invoiced hours are never changed. Each re-priced '
-  'hour leaves one audit_logs trace (00605) with the caller as actor. Returns '
-  'the number of hours priced.';
+COMMENT ON FUNCTION public.rerate_pending_time_entries(uuid) IS
+  'K8 (00797, amends P-4): p_rate_id is the studio_member_rates row just saved. '
+  'An owner/admin of that row''s studio prices that member''s still-pending '
+  '(rate_source = ''none''), never-invoiced hours on projects the studio prices: '
+  'the started_at answer if the chain has one, else that row''s rate as '
+  'studio_member. Refused: an unknown id or another studio''s row (42501), a '
+  'superseded row (23514), and a self-written row tier 2 ignores (42501). '
+  'Priced and invoiced hours are never changed. Each re-priced hour leaves one '
+  'audit_logs trace (00605) with the caller as actor. Returns the number of '
+  'hours priced.';
 
 -- ─── postconditions ────────────────────────────────────────────────────────
 DO $postcondition$
@@ -618,8 +675,12 @@ DECLARE
     'public.guard_commercial_time_entry_derived_fields()'::regprocedure);
 BEGIN
   ASSERT v_classifier ~ 'app\.rerate_time_entry_id'
-     AND v_classifier ~ 'v_rerate_source IS DISTINCT FROM ''studio_member''',
+     AND v_classifier ~ 'app\.rerate_rate_id'
+     AND v_classifier ~ 'v_rate_source := ''studio_member''',
     '00797: the K8 carve-out is missing from the classifier';
+  -- SQ-1075: the carve-out prices at the saved row, never at a now() answer
+  ASSERT v_classifier !~ 'resolve_time_rate_cents\([^)]*now\(\)',
+    '00797: the K8 carve-out must not re-resolve the rate chain at now()';
   -- the 00618 properties the carve-out sits beside
   ASSERT v_classifier ~ 'time-entry authority and rate provenance are immutable'
      AND v_classifier ~ 'v_rate_source = ''none'' OR OLD\.rate_source IS NULL'
@@ -633,9 +694,9 @@ BEGIN
     'public.classify_project_time_entry_authority()', 'EXECUTE'),
     '00797: the classifier stays revoked from authenticated';
   ASSERT has_function_privilege('authenticated',
-    'public.rerate_pending_time_entries(uuid,uuid)', 'EXECUTE')
+    'public.rerate_pending_time_entries(uuid)', 'EXECUTE')
      AND NOT has_function_privilege('anon',
-    'public.rerate_pending_time_entries(uuid,uuid)', 'EXECUTE'),
+    'public.rerate_pending_time_entries(uuid)', 'EXECUTE'),
     '00797: rerate_pending_time_entries must be granted to authenticated and not to anon';
   ASSERT EXISTS (
     SELECT 1 FROM pg_trigger
