@@ -251,6 +251,21 @@ export interface HouseholdSheetProps {
    *  sheet lands with focus on that repair's control (the relationship's
    *  invite row, else the picker), not on the dialog. */
   landOnRepair?: boolean;
+  /** US-35 — opened from the invoice composer's Link a client act, so the
+   *  sheet (and its picker's popover) must lay above the composer folio. */
+  aboveFolio?: boolean;
+}
+
+/** set_document_client (00387) only lets the engagement's lead designer link
+ *  a client; say so instead of printing the RPC's own refusal. */
+function attachRefusal(error: unknown): string {
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message: unknown }).message)
+      : '';
+  const notLead = /\bno (project|proposal) owned by you\b/.exec(message);
+  if (notLead) return `Only the lead designer can link a client to this ${notLead[1]}.`;
+  return error instanceof Error ? error.message : 'Could not update the client.';
 }
 
 export function HouseholdSheet({
@@ -265,6 +280,7 @@ export function HouseholdSheet({
   proposalStatus,
   startEditing = false,
   landOnRepair = false,
+  aboveFolio = false,
 }: HouseholdSheetProps) {
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const contentRef = useRef<HTMLDivElement>(null);
@@ -381,7 +397,7 @@ export function HouseholdSheet({
   };
 
   return (
-    <DocSheet open={open} onClose={onClose} title="The household">
+    <DocSheet open={open} onClose={onClose} title="The household" aboveFolio={aboveFolio}>
       <div ref={contentRef} className="mx-auto max-w-xl">
         <p className={labelCls}>The household</p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
@@ -444,12 +460,11 @@ export function HouseholdSheet({
                         : 'Link a household…'
                   }
                   disabled={attach.isPending}
+                  popoverClassName={aboveFolio ? 'z-[70]' : undefined}
                 />
                 {attach.isError && (
                   <p className="mt-2 text-[12px] text-[var(--color-clay-ink)]">
-                    {attach.error instanceof Error
-                      ? attach.error.message
-                      : 'Could not update the client.'}
+                    {attachRefusal(attach.error)}
                   </p>
                 )}
               </div>

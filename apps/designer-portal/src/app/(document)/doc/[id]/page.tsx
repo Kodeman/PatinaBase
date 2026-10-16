@@ -1352,8 +1352,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       setCallSheetMode('sheet');
       setCallSheetOpen(true);
     }
-    if (requestedSheet === 'household') setSetupHouseholdOpen(true);
-    const onOpenHousehold = () => setSetupHouseholdOpen(true);
+    // US-35 — the composer's Link a client act is the only door to both the
+    // address and the event; its folio stays open, so the sheet lays above it.
+    const openHouseholdAboveFolio = () => {
+      setSetupHouseholdAboveFolio(true);
+      setSetupHouseholdOpen(true);
+    };
+    if (requestedSheet === 'household') openHouseholdAboveFolio();
+    const onOpenHousehold = () => openHouseholdAboveFolio();
     window.addEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, onOpenHousehold);
     return () => {
       window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
@@ -2579,6 +2585,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // its value is unset and only once the project has answered (a read still in
   // flight is not an unset value). "Linked" is the household chip's own rule.
   const [setupHouseholdOpen, setSetupHouseholdOpen] = useState(false);
+  const [setupHouseholdAboveFolio, setSetupHouseholdAboveFolio] = useState(false);
   const setupReady =
     row?.engagement_kind === 'project' && Boolean(row.project_id) && Boolean(project);
   const noClientLinked = setupReady && !(row?.client_profile_id || designerClientId);
@@ -2588,7 +2595,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const bandSetup = useMemo<LensSetupInput[]>(
     () => [
       ...(noClientLinked
-        ? [{ kind: 'no_client_linked' as const, onAct: () => setSetupHouseholdOpen(true) }]
+        ? [
+            {
+              kind: 'no_client_linked' as const,
+              onAct: () => {
+                setSetupHouseholdAboveFolio(false);
+                setSetupHouseholdOpen(true);
+              },
+            },
+          ]
         : []),
       ...(targetUnset
         ? [{ kind: 'target_date_unset' as const, onAct: () => openVitalsEditor('target') }]
@@ -3559,6 +3574,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             designerClientId={designerClientId}
             clientName={row.client_name}
             proposalStatus={liveProposal?.status ?? null}
+            aboveFolio={setupHouseholdAboveFolio}
           />
         )}
 

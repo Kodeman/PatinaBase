@@ -732,13 +732,6 @@ export function useArAging() {
 // MUTATION HOOKS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Creates a draft invoice header and its initial lines atomically after
- * resolving the canonical project billing tuple under caller RLS.
- *
- * `{ errorSurface: 'inline' }` — see useSendInvoice (R83). The Document's
- * invoice composer renders failures inline; legacy callers keep the toast.
- */
 export type InvoiceBillingGapKind = 'designer' | 'client' | 'studio';
 
 export class InvoiceBillingGapError extends Error {
@@ -756,6 +749,13 @@ export class InvoiceBillingGapError extends Error {
   }
 }
 
+/**
+ * Creates a draft invoice header and its initial lines atomically after
+ * resolving the canonical project billing tuple under caller RLS.
+ *
+ * `{ errorSurface: 'inline' }` — see useSendInvoice (R83). The Document's
+ * invoice composer renders failures inline; legacy callers keep the toast.
+ */
 export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -773,13 +773,12 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
         .eq('id', input.projectId)
         .single();
       if (projectErr) {
-        throw new Error(
-          `Failed to load invoice project: ${projectErr.message ?? String(projectErr)}`
-        );
+        throw new Error("We couldn't open this project to bill it. Reload and try again.");
       }
-      if (!project || project.id !== input.projectId || !project.designer_id) {
-        throw new InvoiceBillingGapError('designer');
+      if (!project || project.id !== input.projectId) {
+        throw new Error("We couldn't find this project. Reload and try again.");
       }
+      if (!project.designer_id) throw new InvoiceBillingGapError('designer');
       if (!project.client_id) throw new InvoiceBillingGapError('client');
       if (!project.studio_id) throw new InvoiceBillingGapError('studio');
       if (input.clientId !== undefined && input.clientId !== project.client_id) {
@@ -821,6 +820,13 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
     },
     onSuccess: (invoice) => {
       invalidateInvoiceEffects(queryClient, invoice.project_id);
+    },
+    onError: (error) => {
+      // The server's tuple disagreed with the cached project: refetch it so the
+      // composer's gap band reflects what the server just saw.
+      if (error instanceof InvoiceBillingGapError) {
+        void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      }
     },
   });
 }

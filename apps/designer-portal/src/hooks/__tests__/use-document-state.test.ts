@@ -34,7 +34,7 @@ type OpenQuery = {
   placeholderData?: unknown;
 };
 
-const open = (id: string) => useDocumentEngagement(id) as unknown as OpenQuery;
+const useOpen = (id: string) => useDocumentEngagement(id) as unknown as OpenQuery;
 
 /** Any table read resolves empty, so a resolver that still walks the tables
  *  answers 'missing' instead of crashing on the mock. */
@@ -75,7 +75,7 @@ describe('useDocumentEngagement — one document_open read over the six resoluti
   ])('%s', async (_branch, resolution) => {
     rpcMock.mockResolvedValue({ data: resolution, error: null });
 
-    await expect(open(ID).queryFn()).resolves.toEqual(resolution);
+    await expect(useOpen(ID).queryFn()).resolves.toEqual(resolution);
 
     expect(rpcMock).toHaveBeenCalledTimes(1);
     expect(rpcMock).toHaveBeenCalledWith('document_open', { p_id: ID });
@@ -86,14 +86,14 @@ describe('useDocumentEngagement — one document_open read over the six resoluti
     const error = { message: 'permission denied for function document_open', code: '42501' };
     rpcMock.mockResolvedValue({ data: null, error });
 
-    await expect(open(ID).queryFn()).rejects.toBe(error);
+    await expect(useOpen(ID).queryFn()).rejects.toBe(error);
   });
 
   it('keys the read on docKeys.engagement and never runs it for a non-uuid id', () => {
-    expect(open(ID)).toEqual(
+    expect(useOpen(ID)).toEqual(
       expect.objectContaining({ queryKey: ['document-state', 'engagement', ID], enabled: true }),
     );
-    expect(open('not-a-uuid').enabled).toBe(false);
+    expect(useOpen('not-a-uuid').enabled).toBe(false);
   });
 });
 
@@ -121,18 +121,18 @@ describe('useDocumentEngagement Desk cache seed', () => {
   });
 
   it('returns the matching Desk row as placeholder data before the query resolves, without ids', () => {
-    expect(open(ID).placeholderData).toEqual({
+    expect(useOpen(ID).placeholderData).toEqual({
       kind: 'engagement',
       row: expect.objectContaining({ title: 'Desk-seeded title' }),
     });
-    expect(open(CHAIN_ROOT_ID).placeholderData).toEqual({
+    expect(useOpen(CHAIN_ROOT_ID).placeholderData).toEqual({
       kind: 'engagement',
       row: expect.objectContaining({ title: 'Desk chain' }),
     });
   });
 
   it('seeds only on the row\'s engagement_id, never on a proposal or lead id that may have moved', () => {
-    expect(open(LIVE_PROPOSAL_ID).placeholderData).toBeUndefined();
-    expect(open(LEAD_ID).placeholderData).toBeUndefined();
+    expect(useOpen(LIVE_PROPOSAL_ID).placeholderData).toBeUndefined();
+    expect(useOpen(LEAD_ID).placeholderData).toBeUndefined();
   });
 });
