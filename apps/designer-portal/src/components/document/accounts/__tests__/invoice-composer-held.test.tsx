@@ -1054,18 +1054,21 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     }
   });
 
+  // useClaimTimeEntries rethrows supabase-js's PostgrestError, an Error.
+  const postgrestError = (message: string) =>
+    Object.assign(new Error(message), { name: "PostgrestError", code: "P0001", details: "", hint: "" });
+
   it.each([
     [
       "a refusal it knows",
-      {
-        message:
-          "Time entry 5b1f0c7e-0000-4000-8000-000000000001 is attached to invoice 9a2e4d10-0000-4000-8000-000000000003; only notes (and detaching the invoice) may change.",
-      },
+      postgrestError(
+        "Time entry 5b1f0c7e-0000-4000-8000-000000000001 is attached to invoice 9a2e4d10-0000-4000-8000-000000000003; only notes (and detaching the invoice) may change.",
+      ),
       "Some of these hours were just billed on another invoice. Nothing was billed.",
     ],
     [
       "one it doesn't",
-      { message: "claim_time_entries: 30000 cents on entry 5b1f0c7e-0000-4000-8000-000000000001 refused" },
+      postgrestError("claim_time_entries: 30000 cents on entry 5b1f0c7e-0000-4000-8000-000000000001 refused"),
       "The hours couldn't be attached to the draft. Nothing was billed.",
     ],
   ])("F13: says claim_time_entries' %s in the composer's words, with no Try again", async (_label, refusal, sentence) => {
