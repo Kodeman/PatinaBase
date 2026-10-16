@@ -41,6 +41,7 @@ import {
   useProjectLead,
   useNeedStates,
   useSetNeedState,
+  useUnbilledTime,
 } from '@patina/supabase';
 import type { DiscoveryRead } from '@patina/supabase';
 import {
@@ -243,6 +244,7 @@ import {
 import { deriveMoneyLadder, type MoneyLadder } from '@/lib/document/money-ladder';
 import { money } from '@/lib/document/project-commerce';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
+import { useProjectInstruments } from '@/hooks/use-commercial-documents';
 import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
 import {
   OPEN_DAMAGE_CLAIM_STATES,
@@ -2592,12 +2594,30 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const targetUnset = setupReady && !project?.target_end_date;
   const budgetBandUnset =
     setupReady && project?.budget_min == null && project?.budget_max == null;
+  // K6 — the job has money once any of these stands. Read only while no client
+  // is linked; the invoice, line and instrument reads share the ticket's and
+  // the money ladder's cache entries, so only the unbilled hours are new.
+  const moneyProjectId = noClientLinked ? (row?.project_id ?? '') : '';
+  const moneyInvoices = useProjectInvoices(moneyProjectId).data;
+  const moneyLines = useProjectFFEItems(moneyProjectId).data as
+    | { unit_price_cents: number | null }[]
+    | undefined;
+  const moneyInstruments = useProjectInstruments(moneyProjectId).data;
+  const moneyHours = useUnbilledTime(moneyProjectId || null).data;
+  const moneyStands =
+    (moneyInvoices?.length ?? 0) > 0 ||
+    (moneyHours?.entries.length ?? 0) + (moneyHours?.ratePendingEntries.length ?? 0) > 0 ||
+    (moneyLines ?? []).some((line) => (line.unit_price_cents ?? 0) > 0) ||
+    (moneyInstruments ?? []).some(
+      (instrument) => instrument.state === 'executed' && instrument.totalAmountCents > 0,
+    );
   const bandSetup = useMemo<LensSetupInput[]>(
     () => [
       ...(noClientLinked
         ? [
             {
               kind: 'no_client_linked' as const,
+              moneyStands,
               onAct: () => {
                 setSetupHouseholdAboveFolio(false);
                 setSetupHouseholdOpen(true);
@@ -2612,7 +2632,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         ? [{ kind: 'budget_band_unset' as const, onAct: () => openVitalsEditor('budget') }]
         : []),
     ],
-    [noClientLinked, targetUnset, budgetBandUnset],
+    [noClientLinked, moneyStands, targetUnset, budgetBandUnset],
   );
   const bandProjectStatus = row?.project_status ?? null;
 

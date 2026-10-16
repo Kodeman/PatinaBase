@@ -11405,3 +11405,13 @@ Four findings from the T-60 QA wave that Kody has not yet ruled on. Recorded her
 **Ruling (Kody, multiple choice).** A live job that stands on a project always prints as a ledger row, even with no current alert. Only leads and drafts (no project) fold behind Show, and with none of those there is no Show. This changes uplift.md (e) "the Show fold" for projects only.
 
 *Entries add: R166 · last id = R166*
+
+---
+
+### R167 · K6 — `Link a client` rises in SETUP when money first appears — Kody 2026-10-16
+
+**Ruled by Kody (US-36 K6, 2026-10-16).** A client stays optional when a project is made. **AMENDS the band order of R157 (D2) and R164 (D10)** inside the `SETUP` group only. A job has money once any of these stands: an invoice in any status, an unbilled billable hour, a live line with a client price, or an executed instrument with a fee. When the job has money and still no client, the `No client linked` row moves to the top of `SETUP` and its sentence reads `Link a client before you bill this job.` Its act stays `Link a client` and still opens the household sheet. Before money appears, every setup row keeps its default place and words. When a client is linked, the row unmounts as before. On `completed` and `on_hold` jobs the row stays suppressed.
+
+**Unchanged.** Setup is still class 4. It never takes line 2, never paints terracotta, and is never Next while anything in classes 1–3 stands. When setup does supply Next, the risen row is the first one the person can take.
+
+*Entries add: R167 · last id = R167*

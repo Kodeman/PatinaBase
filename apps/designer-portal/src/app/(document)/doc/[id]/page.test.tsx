@@ -179,6 +179,13 @@ jest.mock('next/navigation', () => ({
 }));
 
 let mockInvoices: Record<string, unknown>[] = [];
+/** K6 — the unbilled-hours and instruments reads; empty unless a test gives
+ *  the job money. */
+let mockUnbilledTime: { entries: unknown[]; ratePendingEntries: unknown[] } = {
+  entries: [],
+  ratePendingEntries: [],
+};
+let mockInstruments: Record<string, unknown>[] = [];
 /** US-14 — one of the ticket's own reads, held in flight. */
 let mockPlanRoomLoading = false;
 const mockUsePlanRoom = jest.fn(() => ({ data: { sheets: [] }, isLoading: mockPlanRoomLoading }));
@@ -199,6 +206,7 @@ jest.mock('@patina/supabase', () => ({
   useBoards: () => ({ data: [], isLoading: false, isError: false }),
   useProjectBoards: () => ({ data: [], isLoading: false }),
   useProjectInvoices: () => ({ isLoading: false, error: null, data: mockInvoices }),
+  useUnbilledTime: () => ({ data: mockUnbilledTime }),
   usePurchaseOrders: () => ({ isLoading: false, error: null, data: [] }),
   computeArAging: jest.requireActual('@patina/supabase').computeArAging,
   invoiceDaysOverdue: jest.requireActual('@patina/supabase').invoiceDaysOverdue,
@@ -273,7 +281,7 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
     data: { authorizedCents: 0 },
   }),
   useWorkingBudget: () => ({ isLoading: false, error: null, data: null }),
-  useProjectInstruments: () => ({ isLoading: false, error: null, data: [] }),
+  useProjectInstruments: () => ({ isLoading: false, error: null, data: mockInstruments }),
   useTradeScopes: () => ({ isLoading: false, error: null, data: [] }),
 }));
 
@@ -697,6 +705,8 @@ beforeEach(() => {
   mockSectionGates = [];
   mockGateState = () => 'requested';
   mockOwnActFfeItems = [];
+  mockUnbilledTime = { entries: [], ratePendingEntries: [] };
+  mockInstruments = [];
 });
 
 describe('DocumentPage hydration render behavior', () => {
@@ -1710,6 +1720,107 @@ describe('DocumentPage guide activation', () => {
     expect(setupRows()).toEqual([
       expect.stringContaining('Name the phases for this project'),
     ]);
+  });
+
+  // ── K6 (amends D2/D10 order) — once the job has money, `Link a client`
+  // leads SETUP and says why; before that it keeps its default place. ──
+  describe('the no-client row once money appears (K6)', () => {
+    const MONEY_LINE = 'Link a client before you bill this job.';
+    const withPhasesNeed = () => {
+      const nameThePhases = {
+        kind: 'schedule_unconfigured',
+        text: 'Name the phases for this project',
+        actionLabel: 'Open the schedule',
+        urgent: false,
+        stamp: { label: 'BAND' },
+      };
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: nameThePhases,
+          needs: [nameThePhases],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+    };
+    const linkClient = () => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, client_profile_id: 'client-1' } },
+      };
+    };
+    const MONEY: Array<[string, () => void]> = [
+      ['a draft invoice', () => {
+        mockInvoices = [{ id: 'invoice-1', status: 'draft', total_cents: 50_000, amount_paid_cents: 0 }];
+      }],
+      ['an unbilled billable hour', () => {
+        mockUnbilledTime = { entries: [{ id: 'entry-1', duration_minutes: 60 }], ratePendingEntries: [] };
+      }],
+      ['a priced line', () => {
+        mockProjectFfeItems = [{
+          id: 'ffe-1',
+          name: 'Side table, walnut',
+          status: 'approved',
+          product_id: 'product-1',
+          unit_price_cents: 120_000,
+          quantity: 1,
+          removed_at: null,
+          purchase_order: null,
+        }];
+      }],
+      ['a signed agreement with a fee', () => {
+        mockInstruments = [{ id: 'instrument-1', state: 'executed', totalAmountCents: 500_000 }];
+      }],
+    ];
+
+    it('keeps `No client linked` in its default place before money appears', () => {
+      unlinkedProject('active');
+      withPhasesNeed();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      openStanding();
+      expect(setupRows()).toEqual([
+        expect.stringContaining('Name the phases for this project'),
+        expect.stringContaining('No client linked'),
+      ]);
+      expect(screen.queryByText(MONEY_LINE)).toBeNull();
+    });
+
+    it.each(MONEY)('leads SETUP with the billing line once the job has %s', (_label, giveMoney) => {
+      unlinkedProject('active');
+      withPhasesNeed();
+      giveMoney();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      openStanding();
+      expect(setupRows()).toEqual([
+        expect.stringContaining(MONEY_LINE),
+        expect.stringContaining('Name the phases for this project'),
+      ]);
+      expect(screen.queryByText(/No client linked/)).toBeNull();
+      expect(screen.getByRole('button', { name: 'Link a client' })).toBeInTheDocument();
+    });
+
+    it('prints no client row once a client is linked, money or not', () => {
+      unlinkedProject('active');
+      linkClient();
+      withPhasesNeed();
+      MONEY.forEach(([, giveMoney]) => giveMoney());
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      openStanding();
+      expect(setupRows()).toEqual([
+        expect.stringContaining('Name the phases for this project'),
+      ]);
+      expect(screen.queryByText(MONEY_LINE)).toBeNull();
+      expect(screen.queryByText(/No client linked/)).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Link a client' })).toBeNull();
+    });
   });
 
   it('leaves every other kind of need out of SETUP', () => {
