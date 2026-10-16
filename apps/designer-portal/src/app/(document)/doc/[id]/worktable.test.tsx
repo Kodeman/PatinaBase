@@ -28,6 +28,8 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  /* US-36 K6 — the band's money read for a client-less job (SQ-1041). */
+  useUnbilledTime: () => ({ data: undefined }),
   inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
   procurementUnreadCountKey: () => ['procurement-unread-count'],
   useInstallWindow: () => ({ data: null, isSuccess: true }),
