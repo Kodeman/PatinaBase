@@ -4,6 +4,8 @@ import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 import { StrataSweep } from '@/components/ui/strata-sweep';
+import { useHeldAct } from '@/lib/document/spotlight/use-held-act';
+import type { SpotlightHold } from '@/lib/document/spotlight/use-hold-spotlight';
 
 /**
  * Canonical portal button.
@@ -83,9 +85,16 @@ export interface ButtonProps
    * Called when a held act is activated — after the act itself is swallowed,
    * so the caller says WHY rather than doing the thing. Keyboard activation
    * of a native button dispatches a click, so this one path covers Enter,
-   * Space and the pointer. Read only while `held`.
+   * Space and the pointer. Read only while `held`. Without `holds`, it is
+   * the whole answer: no spotlight opens.
    */
   onHeldActivate?: () => void;
+  /**
+   * US-36 K4 — what the press lights up in the act's frame, one window each.
+   * Without it or `onHeldActivate`, the press lights up the act's own
+   * `aria-describedby` reason. Read only while `held`.
+   */
+  holds?: SpotlightHold[];
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -98,6 +107,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       loading = false,
       held = false,
       onHeldActivate,
+      holds,
       children,
       disabled,
       type,
@@ -107,6 +117,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     const unavailable = disabled || loading;
     const isHeld = held && unavailable;
+    const heldAct = useHeldAct(holds, onHeldActivate);
     const classes = cn(
       buttonVariants({ variant, size }),
       // Appended here rather than in the variant base string so an act that
@@ -141,7 +152,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 childOnClick(e);
               }
             : (outerOnClick ?? childOnClick);
-        return React.cloneElement(child, {
+        const clone = React.cloneElement(child, {
           ...props,
           // A held act is held whatever element renders it. Without this the
           // clone came back live, unmarked and unstyled while the caller had
@@ -149,7 +160,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           onClick: isHeld
             ? (event: React.MouseEvent<HTMLElement>) => {
                 event.preventDefault();
-                onHeldActivate?.();
+                heldAct.activate(event.currentTarget);
               }
             : mergedOnClick,
           ...(isHeld ? { 'aria-disabled': true, 'data-held': true } : undefined),
@@ -164,6 +175,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           ),
           ref,
         } as React.Attributes & { className?: string; ref?: React.Ref<unknown> });
+        return (
+          <>
+            {clone}
+            {heldAct.spotlight}
+          </>
+        );
       }
 
       // asChild was requested but children isn't a single valid element.
@@ -178,29 +195,32 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     }
 
     return (
-      <button
-        ref={ref}
-        // Default to type="button" so a ghost "Cancel" inside a <form> never
-        // implicitly submits it; a caller's explicit `type` always wins.
-        type={type ?? 'button'}
-        className={classes}
-        disabled={unavailable && !held}
-        aria-disabled={isHeld || undefined}
-        data-held={isHeld || undefined}
-        aria-busy={loading || undefined}
-        {...props}
-        onClick={
-          isHeld
-            ? (event) => {
-                event.preventDefault();
-                onHeldActivate?.();
-              }
-            : props.onClick
-        }
-      >
-        {loading && <StrataSweep size="xs" label="Working" />}
-        {children}
-      </button>
+      <>
+        <button
+          ref={ref}
+          // Default to type="button" so a ghost "Cancel" inside a <form> never
+          // implicitly submits it; a caller's explicit `type` always wins.
+          type={type ?? 'button'}
+          className={classes}
+          disabled={unavailable && !held}
+          aria-disabled={isHeld || undefined}
+          data-held={isHeld || undefined}
+          aria-busy={loading || undefined}
+          {...props}
+          onClick={
+            isHeld
+              ? (event) => {
+                  event.preventDefault();
+                  heldAct.activate(event.currentTarget);
+                }
+              : props.onClick
+          }
+        >
+          {loading && <StrataSweep size="xs" label="Working" />}
+          {children}
+        </button>
+        {heldAct.spotlight}
+      </>
     );
   }
 );

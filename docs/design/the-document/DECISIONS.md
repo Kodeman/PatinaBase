@@ -11430,4 +11430,12 @@ Four findings from the T-60 QA wave that Kody has not yet ruled on. Recorded her
 
 **Ruling (Kody).** Nothing else opens the spotlight: no page load, no timer, no hover. Before the press, the held act keeps its visible reason and fix (house sheet §held acts, SPEC.md:371–373). `open(fromEl)` records the act. Focus returns there on Esc, on Close, and when the last hold clears. The last clear says "All set."
 
-*Entries add: R167 · R168 · R169 · R170 · last id = R170*
+### R171 · Every held act opens the spotlight — by default one window on its own reason — US-36 K4 — Kody 2026-10-16
+
+**Ruling (Kody).** Every held act in the designer portal answers a press with the spotlight of R168–R170.
+
+**How (SQ-1048).** `DocumentAction` and the portal `Button` (`ui/controls`) carry it for every site. A site that passes `holds` gets one window per hold. A site that passes neither `holds` nor `onHeldActivate` gets one window on the act's own `aria-describedby` reason. When that reason holds a focusable fixer, the fixer is the window's fix and takes focus; when it holds none, the bar says the reason alone. A site with `onHeldActivate` and no `holds` keeps its own answer until its shard adopts. With both, `onHeldActivate` runs and the listed holds open.
+
+**Frames.** The spotlight opens in the act's nearest `[data-spotlight-frame]`: the DocSheet panel, the PaperFolioSheet panel and the Document paper column (`main[data-document-paper]`). The press is swallowed as before when the act has no frame, when its reason is not inside the frame, or when the act sits in a fixed layer inside the frame. Under R169 each such act is evidence for reopening the frame ruling, not a place to draw a second scrim.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · last id = R171*

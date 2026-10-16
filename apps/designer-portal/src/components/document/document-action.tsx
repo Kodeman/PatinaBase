@@ -21,6 +21,8 @@ import type {
   RefObject,
 } from 'react';
 import { documentEvents } from '@/lib/analytics/document-events';
+import { useHeldAct } from '@/lib/document/spotlight/use-held-act';
+import type { SpotlightHold } from '@/lib/document/spotlight/use-hold-spotlight';
 
 function cueHeldFixerAfterMouseActivation() {
   requestAnimationFrame(() => {
@@ -104,9 +106,16 @@ interface DocumentActionBaseProps {
    * Called when a held act is activated — after the act itself is swallowed,
    * so the caller says WHY rather than doing the thing. Keyboard activation
    * of a button or a link dispatches a click, so this one path covers Enter,
-   * Space and the pointer. Read only while `held`.
+   * Space and the pointer. Read only while `held`. Without `holds`, it is
+   * the whole answer: no spotlight opens.
    */
   onHeldActivate?: () => void;
+  /**
+   * US-36 K4 — what the press lights up in the act's frame, one window each.
+   * Without it or `onHeldActivate`, the press lights up the act's own
+   * `aria-describedby` reason. Read only while `held`.
+   */
+  holds?: SpotlightHold[];
   loadingLabel?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
@@ -173,6 +182,7 @@ export const DocumentAction = forwardRef<
     loading = false,
     held = false,
     onHeldActivate,
+    holds,
     loadingLabel,
     leading,
     trailing,
@@ -194,6 +204,7 @@ export const DocumentAction = forwardRef<
   const isHeld = held && unavailable;
   const shown = useRef(new Set<string>());
   const shownKey = `${actionKey}:${presentation}`;
+  const heldAct = useHeldAct(holds, onHeldActivate);
 
   useEffect(() => {
     if (shown.current.has(shownKey)) return;
@@ -272,7 +283,7 @@ export const DocumentAction = forwardRef<
       if (unavailable) {
         event.preventDefault();
         if (isHeld) {
-          onHeldActivate?.();
+          heldAct.activate(event.currentTarget);
           if (event.detail > 0) cueHeldFixerAfterMouseActivation();
         }
         return;
@@ -293,17 +304,20 @@ export const DocumentAction = forwardRef<
     };
 
     return (
-      <Link
-        {...(rest as Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>)}
-        {...shared}
-        href={href}
-        ref={ref as React.Ref<HTMLAnchorElement>}
-        aria-disabled={unavailable || undefined}
-        tabIndex={unavailable && !held ? -1 : rest.tabIndex}
-        onClick={handleClick}
-      >
-        {content}
-      </Link>
+      <>
+        <Link
+          {...(rest as Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>)}
+          {...shared}
+          href={href}
+          ref={ref as React.Ref<HTMLAnchorElement>}
+          aria-disabled={unavailable || undefined}
+          tabIndex={unavailable && !held ? -1 : rest.tabIndex}
+          onClick={handleClick}
+        >
+          {content}
+        </Link>
+        {heldAct.spotlight}
+      </>
     );
   }
 
@@ -318,7 +332,7 @@ export const DocumentAction = forwardRef<
   const handleClick = async (event: MouseEvent<HTMLButtonElement>) => {
     if (unavailable) {
       if (isHeld) {
-        onHeldActivate?.();
+        heldAct.activate(event.currentTarget);
         if (event.detail > 0) cueHeldFixerAfterMouseActivation();
       }
       return;
@@ -338,17 +352,20 @@ export const DocumentAction = forwardRef<
   };
 
   return (
-    <button
-      {...(rest as ButtonHTMLAttributes<HTMLButtonElement>)}
-      {...shared}
-      ref={ref as React.Ref<HTMLButtonElement>}
-      type={(rest as ButtonHTMLAttributes<HTMLButtonElement>).type ?? 'button'}
-      disabled={unavailable && !held}
-      {...heldMark}
-      onClick={handleClick}
-    >
-      {content}
-    </button>
+    <>
+      <button
+        {...(rest as ButtonHTMLAttributes<HTMLButtonElement>)}
+        {...shared}
+        ref={ref as React.Ref<HTMLButtonElement>}
+        type={(rest as ButtonHTMLAttributes<HTMLButtonElement>).type ?? 'button'}
+        disabled={unavailable && !held}
+        {...heldMark}
+        onClick={handleClick}
+      >
+        {content}
+      </button>
+      {heldAct.spotlight}
+    </>
   );
 });
 

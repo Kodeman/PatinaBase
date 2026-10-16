@@ -392,6 +392,7 @@ export function DocSheet({
         data-doc-sheet-panel
         data-doc-sheet-kind={kind}
         data-doc-sheet-scroll-region
+        data-spotlight-frame
         // R126: the sheet settles UP as it opens. The `!` is load-bearing —
         // `.doc-sheet-panel` in globals.css declares `animation: doc-fade` and
         // is unlayered CSS declared after `@tailwind utilities` expands, so at
