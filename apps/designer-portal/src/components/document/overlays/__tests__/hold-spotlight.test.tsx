@@ -276,3 +276,46 @@ describe("HoldSpotlight", () => {
     expect(block.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(banned);
   });
 });
+
+describe("HoldSpotlight when its frame unmounts while open", () => {
+  function DetachHarness({
+    showFrame,
+    onClose,
+  }: {
+    showFrame: boolean;
+    onClose: () => void;
+  }) {
+    const frame = useRef<HTMLDivElement>(null);
+    const target = useRef<HTMLButtonElement>(null);
+    // Stable holds, as a memoizing owner passes them: no [holds] re-sync on rerender.
+    const holds = useRef<SpotlightHold[]>([
+      {
+        ...CLIENT,
+        target: () => target.current,
+        fix: <button type="button">Fix client</button>,
+      },
+    ]).current;
+    return (
+      <div>
+        {showFrame ? (
+          <div ref={frame} data-testid="frame">
+            <button ref={target} type="button">
+              Link a client
+            </button>
+          </div>
+        ) : null}
+        <HoldSpotlight frame={frame} holds={holds} open onClose={onClose} />
+      </div>
+    );
+  }
+
+  it("closes once and stops listening for Esc", async () => {
+    const onClose = jest.fn();
+    const view = render(<DetachHarness showFrame onClose={onClose} />);
+    await waitFor(() => expect(topActiveModalDialog()).not.toBeNull());
+    view.rerender(<DetachHarness showFrame={false} onClose={onClose} />);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

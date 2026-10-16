@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * US-36 K1–K3 — the hold spotlight. Pressing a held act lays a scrim INSIDE
@@ -13,28 +13,34 @@
  * (house sheet SPEC.md:370). Windows are --terracotta-ink hairlines.
  */
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, RefObject } from 'react';
-import { createPortal } from 'react-dom';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { focusableWithin, trapTabWithin } from '@/lib/full-screen-boundary';
-import type { SpotlightHold } from '@/lib/document/spotlight/use-hold-spotlight';
-import { DocumentAction } from '../document-action';
-import { topActiveModalDialog, topDismissiblePopover } from './active-dialog';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties, RefObject } from "react";
+import { createPortal } from "react-dom";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { focusableWithin, trapTabWithin } from "@/lib/full-screen-boundary";
+import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight";
+import { DocumentAction } from "../document-action";
+import { topActiveModalDialog, topDismissiblePopover } from "./active-dialog";
 
 export type { SpotlightHold };
 
 const PAD = 6;
-const NARROW_QUERY = '(max-width: 640px)';
+const NARROW_QUERY = "(max-width: 640px)";
 const LABEL_ROOM = 22;
 const GEOMETRY_MOTION: CSSProperties = {
-  transition: ['x', 'y', 'width', 'height']
+  transition: ["x", "y", "width", "height"]
     .map((property) => `${property} 160ms var(--ease-editorial)`)
-    .join(', '),
+    .join(", "),
 };
 
 type SpotWindow = { id: string; x: number; y: number; w: number; h: number };
-type Geometry = { ids: string[]; windows: SpotWindow[]; width: number; height: number; inset: number };
+type Geometry = {
+  ids: string[];
+  windows: SpotWindow[];
+  width: number;
+  height: number;
+  inset: number;
+};
 
 export interface HoldSpotlightProps {
   frame: RefObject<HTMLElement | null>;
@@ -44,15 +50,21 @@ export interface HoldSpotlightProps {
   onNext?: (hold: SpotlightHold) => void;
 }
 
-const things = (n: number) => (n === 1 ? '1 thing' : `${n} things`);
+const things = (n: number) => (n === 1 ? "1 thing" : `${n} things`);
 
-export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotlightProps) {
+export function HoldSpotlight({
+  frame,
+  holds,
+  open,
+  onClose,
+  onNext,
+}: HoldSpotlightProps) {
   const [frameEl, setFrameEl] = useState<HTMLElement | null>(null);
   const [geo, setGeo] = useState<Geometry | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
   const reduced = useReducedMotion();
-  const maskId = `hold-spotlight-${useId().replace(/[^\w-]/g, '')}`;
+  const maskId = `hold-spotlight-${useId().replace(/[^\w-]/g, "")}`;
 
   const rootRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef<HTMLDivElement>(null);
@@ -92,10 +104,10 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
     let request = 0;
     let count = -1;
     let done = false;
-    let geoKey = '';
-    const staticHost = window.getComputedStyle(host).position === 'static';
+    let geoKey = "";
+    const staticHost = window.getComputedStyle(host).position === "static";
     const priorPosition = host.style.position;
-    if (staticHost) host.style.position = 'relative';
+    if (staticHost) host.style.position = "relative";
     activeRef.current = null;
 
     const resolve = () =>
@@ -112,37 +124,42 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
         for (const child of Array.from(node.children)) {
           if (keep.includes(child)) continue;
           if (keep.some((kept) => child.contains(kept))) walk(child);
-          else if (marked.has(child) || !child.hasAttribute('inert')) desired.add(child);
+          else if (marked.has(child) || !child.hasAttribute("inert"))
+            desired.add(child);
         }
       };
       walk(host);
       marked.forEach((el) => {
         if (desired.has(el)) return;
-        el.removeAttribute('inert');
+        el.removeAttribute("inert");
         marked.delete(el);
       });
       desired.forEach((el) => {
         if (marked.has(el)) return;
-        el.setAttribute('inert', '');
+        el.setAttribute("inert", "");
         marked.add(el);
       });
     };
 
     const focusInto = (el: HTMLElement) => {
       const into =
-        focusableWithin(el)[0] ?? (barRef.current ? focusableWithin(barRef.current)[0] : undefined);
+        focusableWithin(el)[0] ??
+        (barRef.current ? focusableWithin(barRef.current)[0] : undefined);
       into?.focus({ preventScroll: true });
     };
 
     const reveal = (el: HTMLElement) =>
-      el.scrollIntoView?.({ block: 'center', behavior: reducedRef.current ? 'auto' : 'smooth' });
+      el.scrollIntoView?.({
+        block: "center",
+        behavior: reducedRef.current ? "auto" : "smooth",
+      });
 
     const focusLost = () => {
       const active = document.activeElement;
       return (
         !active ||
         active === document.body ||
-        (host.contains(active) && active.closest('[inert]') !== null)
+        (host.contains(active) && active.closest("[inert]") !== null)
       );
     };
 
@@ -158,7 +175,7 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
       const found = resolve();
       if (found.length === 0) {
         done = true;
-        setMessage('All set.');
+        setMessage("All set.");
         onCloseRef.current();
         return;
       }
@@ -210,7 +227,8 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
       for (const child of Array.from(host.children)) {
         if (child === root) continue;
         const r = child.getBoundingClientRect();
-        const margin = Number.parseFloat(window.getComputedStyle(child).marginBottom) || 0;
+        const margin =
+          Number.parseFloat(window.getComputedStyle(child).marginBottom) || 0;
         bottom = Math.max(bottom, r.bottom - oy + margin);
       }
       const hostStyle = window.getComputedStyle(host);
@@ -253,7 +271,9 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
     advanceRef.current = () => {
       const found = resolve();
       if (found.length < 2) return;
-      const index = (found.findIndex((entry) => entry.hold.id === activeRef.current) + 1) % found.length;
+      const index =
+        (found.findIndex((entry) => entry.hold.id === activeRef.current) + 1) %
+        found.length;
       const next = found[index]!;
       activeRef.current = next.hold.id;
       sync();
@@ -266,7 +286,7 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
 
     dismissRef.current = () => {
       done = true;
-      setMessage('');
+      setMessage("");
       onCloseRef.current();
     };
     scheduleRef.current = schedule;
@@ -279,7 +299,9 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
       if (index < 0 || found[index]!.hold.id === activeRef.current) return;
       activeRef.current = found[index]!.hold.id;
       sync();
-      setMessage(`${index + 1} of ${found.length}: ${found[index]!.hold.reason}`);
+      setMessage(
+        `${index + 1} of ${found.length}: ${found[index]!.hold.reason}`,
+      );
     };
 
     // Capture phase, so the host sheet's own Esc never sees the key.
@@ -287,8 +309,9 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
       if (done || topActiveModalDialog() !== layer) return;
       // Focus in a body-level popover (ClientPicker) belongs to that popover.
       const focused = document.activeElement;
-      if (focused && focused !== document.body && !host.contains(focused)) return;
-      if (event.key === 'Escape') {
+      if (focused && focused !== document.body && !host.contains(focused))
+        return;
+      if (event.key === "Escape") {
         if (event.defaultPrevented || topDismissiblePopover()) return;
         event.preventDefault();
         event.stopPropagation();
@@ -298,10 +321,13 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
       trapTabWithin(event, host);
     };
 
-    document.addEventListener('keydown', onKey, true);
-    document.addEventListener('focusin', onFocusIn);
-    window.addEventListener('scroll', schedule, { capture: true, passive: true });
-    window.addEventListener('resize', schedule);
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("focusin", onFocusIn);
+    window.addEventListener("scroll", schedule, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("resize", schedule);
     const mutations = new MutationObserver((records) => {
       if (records.some((record) => !root.contains(record.target))) schedule();
     });
@@ -310,20 +336,27 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
       childList: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ['class', 'style', 'hidden'],
+      attributeFilter: ["class", "style", "hidden"],
     });
+    // The frame can unmount while the spotlight's owner (and `open`) survive;
+    // nothing inside the frame observes its own removal.
+    const detach = new MutationObserver(() => {
+      if (!done && !host.isConnected) dismissRef.current?.();
+    });
+    detach.observe(document.body, { childList: true, subtree: true });
     sync();
 
     return () => {
       done = true;
+      detach.disconnect();
       window.cancelAnimationFrame(request);
-      document.removeEventListener('keydown', onKey, true);
-      document.removeEventListener('focusin', onFocusIn);
-      window.removeEventListener('scroll', schedule, true);
-      window.removeEventListener('resize', schedule);
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("focusin", onFocusIn);
+      window.removeEventListener("scroll", schedule, true);
+      window.removeEventListener("resize", schedule);
       mutations.disconnect();
       resizer.disconnect();
-      marked.forEach((el) => el.removeAttribute('inert'));
+      marked.forEach((el) => el.removeAttribute("inert"));
       if (staticHost) host.style.position = priorPosition;
       advanceRef.current = null;
       dismissRef.current = null;
@@ -334,14 +367,21 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
 
   if (!frameEl) return null;
 
-  const activeHold = open ? (holds.find((hold) => hold.id === activeId) ?? holds[0]) : undefined;
+  const activeHold = open
+    ? (holds.find((hold) => hold.id === activeId) ?? holds[0])
+    : undefined;
   const total = geo?.ids.length ?? holds.length;
-  const activeIndex = geo && activeId ? Math.max(0, geo.ids.indexOf(activeId)) : 0;
+  const activeIndex =
+    geo && activeId ? Math.max(0, geo.ids.indexOf(activeId)) : 0;
   const activeWindow = geo?.windows.find((win) => win.id === activeId);
   const motion = reduced ? undefined : GEOMETRY_MOTION;
 
   return createPortal(
-    <div ref={rootRef} data-hold-spotlight-root="" className="hold-spotlight-root">
+    <div
+      ref={rootRef}
+      data-hold-spotlight-root=""
+      className="hold-spotlight-root"
+    >
       <p role="status" aria-live="polite" className="sr-only">
         {message}
       </p>
@@ -356,14 +396,25 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
               ? ({
                   width: geo.width,
                   height: geo.height,
-                  '--hold-spotlight-inset': `${geo.inset}px`,
+                  "--hold-spotlight-inset": `${geo.inset}px`,
                 } as CSSProperties)
               : undefined
           }
         >
-          <svg className="hold-spotlight__scrim" aria-hidden="true" focusable="false">
+          <svg
+            className="hold-spotlight__scrim"
+            aria-hidden="true"
+            focusable="false"
+          >
             <defs>
-              <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%">
+              <mask
+                id={maskId}
+                maskUnits="userSpaceOnUse"
+                x="0"
+                y="0"
+                width="100%"
+                height="100%"
+              >
                 <rect x="0" y="0" width="100%" height="100%" fill="white" />
                 {geo?.windows.map((win) => (
                   <rect
@@ -391,7 +442,7 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
               <rect
                 key={win.id}
                 data-hold-spotlight-window={win.id}
-                data-active={win.id === activeId ? '' : undefined}
+                data-active={win.id === activeId ? "" : undefined}
                 className="hold-spotlight__ring"
                 x={win.x}
                 y={win.y}
@@ -424,7 +475,9 @@ export function HoldSpotlight({ frame, holds, open, onClose, onNext }: HoldSpotl
             data-hold-spotlight-bar=""
             className="hold-spotlight__bar"
           >
-            {activeHold && <p className="hold-spotlight__reason">{activeHold.reason}</p>}
+            {activeHold && (
+              <p className="hold-spotlight__reason">{activeHold.reason}</p>
+            )}
             {activeHold?.fix}
             <div className="hold-spotlight__acts">
               {total > 1 && (
