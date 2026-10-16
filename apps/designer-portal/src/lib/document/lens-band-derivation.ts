@@ -238,7 +238,14 @@ export interface LensSetupItem {
 export interface LensSetupInput {
   kind: SetupRowKind;
   onAct: () => void;
+  /** K6 — the job already has money (an invoice, unbilled hours, a priced
+   *  line or a signed fee). Read on `no_client_linked` only: the row rises to
+   *  the top of SETUP and says why the client is wanted now. */
+  moneyStands?: boolean;
 }
+
+/** K6 — the no-client row's sentence once the job has money. */
+const NO_CLIENT_MONEY_SENTENCE = 'Link a client before you bill this job.';
 
 /** D10 — the setup rows' own words: the sentence states the gap, the act is
  *  D3's plain act for it. */
@@ -1424,7 +1431,7 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
   // `SETUP` group, so the winner is chosen from classes 1–2 alone and a quiet
   // job falls through to the stage's own guide line.
   const standing = ranked.filter((item) => classOfStandingRow(item) !== 3);
-  const setup: LensSetupItem[] = [
+  const unordered: LensSetupItem[] = [
     ...ranked
       .filter((item) => classOfStandingRow(item) === 3)
       .map(
@@ -1446,7 +1453,10 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
         (row): LensSetupItem => ({
           key: `setup:${row.kind}`,
           setup: row.kind,
-          sentence: SETUP_WORDS[row.kind].sentence,
+          sentence:
+            row.kind === 'no_client_linked' && row.moneyStands
+              ? NO_CLIENT_MONEY_SENTENCE
+              : SETUP_WORDS[row.kind].sentence,
           act: {
             key: `setup:${row.kind}`,
             label: SETUP_WORDS[row.kind].act,
@@ -1456,6 +1466,11 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
         }),
       ),
   ];
+  // K6 (amends D2/D10 order) — once the job has money, the no-client row
+  // leads SETUP; before that every row keeps its default place.
+  const rises = (item: LensSetupItem) =>
+    item.sentence === NO_CLIENT_MONEY_SENTENCE;
+  const setup = [...unordered.filter(rises), ...unordered.filter((item) => !rises(item))];
   const worst = standing[0] ?? null;
   const kind: LensBandLine2['kind'] = worst
     ? 'standing'
