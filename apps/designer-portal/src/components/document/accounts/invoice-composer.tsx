@@ -60,7 +60,7 @@ import {
 } from "react";
 import {
   useAddInvoiceBillingLines,
-  useCanLinkDocumentClient,
+  useDocumentClientLinkHold,
   InvoiceBillingGapError,
   useCreateDraftInvoice,
   useCreateDraftStudioInvoice,
@@ -727,10 +727,14 @@ export function InvoiceComposer({
   // K5 (00796) — set_document_client answers to the lead or an owner/admin of
   // the project's studio; can_link_document_client is that same predicate.
   // The lead is always admitted, so only anyone else waits on the read.
-  const { data: canLinkAsStudio } = useCanLinkDocumentClient(
+  const { data: linkHold } = useDocumentClientLinkHold(
     billingGap === "no-client" && !isLead ? projectId : null,
   );
-  const canLinkClient = isLead || canLinkAsStudio === true;
+  const canLinkClient = isLead || linkHold === null;
+  // SQ-1069 — the lead holds no seat in the studio any more. The setter and
+  // reassign_project_lead both refuse this project, so only support can move it.
+  const leadLeftStudio =
+    billingGap === "no-client" && !isLead && linkHold === "lead_not_in_studio";
   const leadName: string =
     selectedProject?.designer?.display_name ||
     selectedProject?.designer?.full_name ||
@@ -801,6 +805,7 @@ export function InvoiceComposer({
     ? blockerReason(heldBlocker, {
         projectName: selectedProject?.name ?? "This project",
         canLinkClient,
+        leadLeftStudio,
         leadName,
         canNameStudio,
         soloOwnerUnstamped,
@@ -1737,6 +1742,17 @@ export function InvoiceComposer({
                     </span>{" "}
                     and we&apos;ll set it.
                   </p>
+                ) : leadLeftStudio ? (
+                  <p>
+                    The lead on this job has left the studio. Write to{" "}
+                    <span
+                      ref={supportAddressRef}
+                      className="font-mono text-[12px]"
+                    >
+                      {SUPPORT_ADDRESS}
+                    </span>{" "}
+                    and we&apos;ll move the job to someone on your team.
+                  </p>
                 ) : (
                   <p>
                     {billingGap === "no-client"
@@ -1750,7 +1766,7 @@ export function InvoiceComposer({
                           : `${selectedProject.name} isn't tied to a studio yet. Only a studio that employs its designer can name one.`}
                   </p>
                 )}
-                {soloOwnerUnstamped && (
+                {(soloOwnerUnstamped || leadLeftStudio) && (
                   <CopyAct
                     text={SUPPORT_ADDRESS}
                     selectRef={supportAddressRef}
@@ -1759,7 +1775,7 @@ export function InvoiceComposer({
                     Copy the address
                   </CopyAct>
                 )}
-                {billingGap === "no-client" && !canLinkClient && (
+                {billingGap === "no-client" && !canLinkClient && !leadLeftStudio && (
                   // M4 — the note goes nowhere on its own; she sends it herself.
                   <p className="mt-1 text-[var(--color-aged-oak)]">
                     “
@@ -1769,7 +1785,7 @@ export function InvoiceComposer({
                     ”
                   </p>
                 )}
-                {billingGap === "no-client" && !canLinkClient && (
+                {billingGap === "no-client" && !canLinkClient && !leadLeftStudio && (
                   <CopyAct
                     text={askLinkNote(selectedProject.name)}
                     selectRef={askNoteRef}
@@ -1967,6 +1983,7 @@ function blockerReason(
   facts: {
     projectName: string;
     canLinkClient: boolean;
+    leadLeftStudio: boolean;
     leadName: string;
     canNameStudio: boolean;
     soloOwnerUnstamped: boolean;
@@ -1976,9 +1993,11 @@ function blockerReason(
 ): string {
   switch (blocker) {
     case "no-client":
-      return facts.canLinkClient
-        ? "Link a client before drafting this invoice."
-        : `Ask ${facts.leadName} to link a client.`;
+      return facts.leadLeftStudio
+        ? LEAD_LEFT_STUDIO_HOLD
+        : facts.canLinkClient
+          ? "Link a client before drafting this invoice."
+          : `Ask ${facts.leadName} to link a client.`;
     case "no-studio":
       return facts.canNameStudio
         ? "Name the studio before drafting this invoice."
@@ -2009,6 +2028,7 @@ function blockerReason(
 }
 
 const SUPPORT_ADDRESS = "hello@patina.cloud";
+const LEAD_LEFT_STUDIO_HOLD = `The lead on this job has left the studio. Write to ${SUPPORT_ADDRESS} and we'll move the job to someone on your team.`;
 
 /** K5 — the one line a designer who can't link a client copies to its lead. */
 function askLinkNote(projectName: string): string {
