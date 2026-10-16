@@ -596,6 +596,7 @@ describe("billingLinesRefusal", () => {
 
 describe("draftInvoiceRefusal", () => {
   const RPC = "Failed to create draft invoice: ";
+  const STUDIO_RPC = "Failed to create draft studio invoice: ";
 
   it.each([
     [`${RPC}invoice project not found or access denied`, "This project couldn't be billed from your account. Reload the page in case its client or studio just changed."],
@@ -608,6 +609,13 @@ describe("draftInvoiceRefusal", () => {
     ["Not authenticated", "You're signed out. Sign in again, then draw the invoice."],
     ["Invoice client does not match the selected project", "This project's client changed after the invoice was started. Reload the page to bill the current client."],
     ["We couldn't find this project. Reload and try again.", "We couldn't find this project. Reload and try again."],
+    [`${STUDIO_RPC}studio invoice studio not found or access denied`, "This studio couldn't be billed from your account. Reload the page in case your seat just changed."],
+    [`${STUDIO_RPC}studio invoice household not found or access denied`, "That household isn't on this studio's roster. Pick another, or reload the page."],
+    [`${STUDIO_RPC}invalid studio invoice payload`, "One of the lines couldn't be drafted as it stands. Check each line, then draft again."],
+    [
+      `${STUDIO_RPC}a studio invoice carries ad-hoc lines only; milestone, time, and ffe lines are project-bound`,
+      "A studio invoice carries its own lines only. Bill pieces, hours and milestones from their project.",
+    ],
   ])("says %s in the composer's words, with no retry", (message, sentence) => {
     expect(draftInvoiceRefusal(message)).toEqual({ message: sentence, retryable: false });
   });
@@ -622,12 +630,13 @@ describe("draftInvoiceRefusal", () => {
   it.each([
     ["an unrecognised RPC refusal", `${RPC}duplicate key value violates unique constraint "invoices_pkey" (12000 cents)`],
     ["a dropped connection", `${RPC}TypeError: Failed to fetch`],
+    ["an unrecognised studio refusal", `${STUDIO_RPC}null value in column "studio_id" (4d1e0000-0000-4000-8000-000000000001)`],
     ["a recognised reason inside other words", `${RPC}lines for invoice project not found or access denied`],
     ["no message at all", undefined],
   ])("falls back to one plain, retryable sentence for %s", (_label, message) => {
     const said = draftInvoiceRefusal(message);
     expect(said).toEqual({ message: "The invoice couldn't be drafted.", retryable: true });
-    expect(said.message).not.toMatch(/create_draft_invoice|Failed to create|invoices_pkey|cents/);
+    expect(said.message).not.toMatch(/create_draft_invoice|Failed to create|invoices_pkey|cents|studio_id/);
   });
 });
 

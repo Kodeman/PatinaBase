@@ -794,7 +794,7 @@ export function InvoiceComposer({
         });
         onDrafted(studioInvoiceId, null);
       } catch (e) {
-        setError(preWriteFailure(e));
+        setError(draftInvoiceRefusal((e as { message?: unknown } | null)?.message));
       }
       return;
     }

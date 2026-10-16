@@ -880,18 +880,40 @@ const DRAFT_REFUSALS: Array<[RegExp, string, boolean]> = [
     "A selection is priced in another currency. Invoices bill in US dollars only.",
     false,
   ],
+  // create_draft_studio_invoice (00571), the invoice with no house.
+  [
+    /^studio invoice studio not found or access denied$/,
+    "This studio couldn't be billed from your account. Reload the page in case your seat just changed.",
+    false,
+  ],
+  [
+    /^studio invoice household not found or access denied$/,
+    "That household isn't on this studio's roster. Pick another, or reload the page.",
+    false,
+  ],
+  [
+    /^invalid studio invoice payload$/,
+    "One of the lines couldn't be drafted as it stands. Check each line, then draft again.",
+    false,
+  ],
+  [
+    /^a studio invoice carries ad-hoc lines only/,
+    "A studio invoice carries its own lines only. Bill pieces, hours and milestones from their project.",
+    false,
+  ],
 ];
 
 /**
- * A draft that never got written (useCreateDraftInvoice wraps the RPC's words
- * as `Failed to create draft invoice: …`): a recognised refusal is said in the
+ * A draft that never got written (useCreateDraftInvoice and
+ * useCreateDraftStudioInvoice wrap the RPC's words as `Failed to create draft
+ * [studio ]invoice: …`): a recognised refusal is said in the
  * composer's words and is the same refusal next time; anything else — a
  * dropped connection, a timeout, a message this table doesn't know — says only
  * that the invoice wasn't drafted, and may go through on a second try.
  */
 export function draftInvoiceRefusal(message: unknown): { message: string; retryable: boolean } {
   if (typeof message !== "string") return { message: DRAFT_GENERIC, retryable: true };
-  const reason = message.trim().replace(/^Failed to create draft invoice:\s*/, "");
+  const reason = message.trim().replace(/^Failed to create draft (?:studio )?invoice:\s*/, "");
   const known = DRAFT_REFUSALS.find(([pattern]) => pattern.test(reason));
   return known
     ? { message: known[1], retryable: known[2] }

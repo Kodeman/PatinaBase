@@ -792,9 +792,11 @@ describe("InvoiceComposer · studio mode", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders the R83 failure band inline when the draft is refused", async () => {
+  it("renders the R83 failure band inline, in the composer's words, when the draft is refused", async () => {
     mockCreateStudioDraft.mockRejectedValue(
-      new Error("The household is not on this studio’s roster."),
+      new Error(
+        "Failed to create draft studio invoice: studio invoice household not found or access denied",
+      ),
     );
     render(<InvoiceComposer context={{}} onDrafted={jest.fn()} />);
     pickStudio();
@@ -814,9 +816,40 @@ describe("InvoiceComposer · studio mode", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
 
-    expect(
-      await screen.findByRole("alert"),
-    ).toHaveTextContent("The household is not on this studio’s roster.");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "That household isn't on this studio's roster. Pick another, or reload the page.",
+    );
+    expect(alert).not.toHaveTextContent(/Failed to create|access denied/);
+    // The same refusal comes back unchanged, so there is nothing to retry.
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("keeps Try again for a studio draft that failed for an unknown reason", async () => {
+    mockCreateStudioDraft.mockRejectedValue(
+      new Error("Failed to create draft studio invoice: TypeError: Failed to fetch"),
+    );
+    render(<InvoiceComposer context={{}} onDrafted={jest.fn()} />);
+    pickStudio();
+
+    fireEvent.click(screen.getByRole("button", { name: "pick household" }));
+    fireEvent.change(
+      screen.getByPlaceholderText("Design consultation · Sept 2026"),
+      {
+        target: { value: "Design consultation" },
+      },
+    );
+    fireEvent.change(screen.getByLabelText("Line description"), {
+      target: { value: "Design consultation, on site (2 h)" },
+    });
+    fireEvent.change(screen.getByLabelText("Unit price (dollars)"), {
+      target: { value: "450" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("The invoice couldn't be drafted.");
+    expect(alert).not.toHaveTextContent(/Failed to|TypeError/);
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });
