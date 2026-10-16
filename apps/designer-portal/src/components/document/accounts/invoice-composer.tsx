@@ -779,13 +779,18 @@ export function InvoiceComposer({
   // §A5 — the first unmet requirement; the held act names it and lands on it.
   const { holds } = assessInvoiceReadiness({
     clientLinked: !projectId || billingGap !== "no-client",
+    canLinkClient,
+    clientLinkHold: linkHold ?? null,
     projectExists: !!projectId,
     pricingStudioLinked: billingGap !== "no-studio",
+    canNameStudio,
+    soloOwnerUnstamped,
     selectedAnything: studioMode || !projectId || lineCount > 0,
-    selectedRatePendingEntryIds: [...tickedTimeIds].filter((id) => ratePendingEntries.some((entry) => entry.id === id)),
-    selectedUnpricedLineIds: [...tickedFfeIds].filter((id) => ffePartition.unpriced.some((item) => item.id === id)),
-    ratePendingNames: Object.fromEntries(ratePendingEntries.map((entry) => [entry.id, entry.member_name ?? "the designer"])),
-    unpricedLineNames: Object.fromEntries(ffePartition.unpriced.map((item) => [item.id, item.name])),
+    selectedRatePendingEntries: ratePendingEntries
+      .filter((entry) => tickedTimeIds.has(entry.id))
+      .map((entry) => ({ userId: entry.user_id, memberName: entry.member_name })),
+    // A ticked piece that turns unpriced drops out of the lines until SQ-1046 wires this hold.
+    selectedUnpricedLineIds: [],
     noClientReason: blockerReason("no-client", {
       projectName: selectedProject?.name ?? "This project", canLinkClient, leadLeftStudio, leadName,
       canNameStudio, soloOwnerUnstamped, hasStudioOwner, studioLoading: organizationsLoading,
@@ -849,6 +854,11 @@ export function InvoiceComposer({
       }
       return addLineRef.current;
     };
+    // The hold's own key, never a prefix: another hold's row would match too.
+    const holdTarget = (kind: ComposerBlocker) => {
+      const key = holds.find((hold) => hold.kind === kind)?.focusKey;
+      return key ? root?.querySelector<HTMLElement>(`[data-focus-key="${key}"]`) : null;
+    };
     const target: HTMLElement | null | undefined =
       held === "no-client"
         ? linkClientRef.current
@@ -870,16 +880,22 @@ export function InvoiceComposer({
                       )
                     : held === "regarding"
                       ? regardingRef.current
-                      : held === "rate-pending"
-                        ? root?.querySelector<HTMLElement>('[data-focus-key="rate-pending"]')
-                        : held === "price-line"
-                          ? root?.querySelector<HTMLElement>('[data-focus-key^="price-line:"]')
-                          : held === "send-no-recipient"
-                            ? root?.querySelector<HTMLElement>('[data-focus-key="add-email"]')
-                            : null;
+                      : held === "rate-pending" ||
+                          held === "price-line" ||
+                          held === "send-no-recipient"
+                        ? holdTarget(held)
+                        : null;
     // Focus never leaves the composer: a target outside it is no target.
     if (target && root?.contains(target)) target.focus();
   };
+  // The lines hold's key marks where focusBlocker("lines") lands.
+  const firstUnfilledAdhoc = adhoc.findIndex(
+    (line) =>
+      !line.description.trim() || !(dollarsToCents(line.unitDollars) > 0),
+  );
+  const askFocusKey = holds.find(
+    (hold) => hold.kind === billingGap && hold.fixer === "ask",
+  )?.focusKey;
 
   // F5 — a refusal names its purchase, rider or line by the label printed here.
   const billingSubjectName = (id: string): string | null => {
@@ -1079,7 +1095,6 @@ export function InvoiceComposer({
         ) : (
           <select
             ref={forSelectRef}
-            data-focus-key="for-project"
             value={target}
             onChange={(e) => pickTarget(e.target.value)}
             aria-label={studioChoiceAvailable ? "For" : "Project"}
@@ -1281,7 +1296,8 @@ export function InvoiceComposer({
                         key={entry.id}
                         className={`${ROW} opacity-60`}
                         data-rate-pending="true"
-                        data-focus-key="rate-pending"
+                        data-focus-key={`rate-pending:${entry.user_id}`}
+                        tabIndex={-1}
                       >
                         <input
                           type="checkbox"
@@ -1628,6 +1644,9 @@ export function InvoiceComposer({
               <div
                 key={i}
                 data-adhoc-row
+                data-focus-key={
+                  i === firstUnfilledAdhoc ? "invoice-lines" : undefined
+                }
                 className="mb-1.5 grid grid-cols-[minmax(0,1fr)_56px_96px_24px] items-center gap-2"
               >
                 <input
@@ -1685,7 +1704,9 @@ export function InvoiceComposer({
             ))}
             <DocumentAction
               ref={addLineRef}
-              data-focus-key="invoice-lines"
+              data-focus-key={
+                firstUnfilledAdhoc === -1 ? "invoice-lines" : undefined
+              }
               actionKey="add-invoice-line"
               surfaceKey="accounts"
               regionKey="invoice-lines"
@@ -1757,7 +1778,7 @@ export function InvoiceComposer({
             {billingGap && selectedProject && (
               <div className="w-full basis-full text-sm text-[var(--color-charcoal)]">
                 {soloOwnerUnstamped ? (
-                  <p>
+                  <p data-focus-key={askFocusKey}>
                     This job was opened before your studio had one home. Write
                     to{" "}
                     <span
@@ -1769,7 +1790,7 @@ export function InvoiceComposer({
                     and we&apos;ll set it.
                   </p>
                 ) : leadLeftStudio ? (
-                  <p>
+                  <p data-focus-key={askFocusKey}>
                     The lead on this job has left the studio. Write to{" "}
                     <span
                       ref={supportAddressRef}
@@ -1780,7 +1801,7 @@ export function InvoiceComposer({
                     and we&apos;ll move the job to someone on your team.
                   </p>
                 ) : (
-                  <p>
+                  <p data-focus-key={askFocusKey}>
                     {billingGap === "no-client"
                       ? canLinkClient
                         ? `${selectedProject.name} has no client yet. Link one to bill it.`
@@ -2056,9 +2077,9 @@ function blockerReason(
         ? "Wait for your studio to finish loading."
         : "This account belongs to no studio yet, so there is none to bill from.";
     case "rate-pending":
-      return "The selected hours are waiting for a rate.";
+      return "These hours are waiting for a rate.";
     case "price-line":
-      return "The selected piece needs a client price.";
+      return "Set a client price for this piece.";
     case "send-no-recipient":
       return "This household has no email to send to.";
   }

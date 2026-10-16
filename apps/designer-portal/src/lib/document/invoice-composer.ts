@@ -967,16 +967,19 @@ export interface InvoiceHold {
 
 export interface InvoiceReadinessFacts {
   clientLinked: boolean;
+  canLinkClient: boolean;
+  clientLinkHold: "not_permitted" | "lead_not_in_studio" | null;
   studioMode?: boolean;
   projectExists?: boolean;
   pricingStudioLinked: boolean;
-  selectedRatePendingEntryIds: string[];
+  canNameStudio: boolean;
+  soloOwnerUnstamped: boolean;
+  selectedRatePendingEntries: { userId: string; memberName?: string | null }[];
   selectedUnpricedLineIds: string[];
   selectedAnything: boolean;
   sendNoRecipient?: boolean;
   noClientReason?: string;
   noStudioReason?: string;
-  ratePendingNames?: Record<string, string | null | undefined>;
   unpricedLineNames?: Record<string, string | null | undefined>;
   householdName?: string;
 }
@@ -987,14 +990,27 @@ export function assessInvoiceReadiness(facts: InvoiceReadinessFacts): { ready: b
   const add = (kind: InvoiceHoldKind, reason: string, repair: string, fixer: InvoiceHold["fixer"], focusKey: string) =>
     holds.push({ kind, reason, repair, fixer, focusKey });
 
-  if (!facts.studioMode && !facts.clientLinked)
-    add("no-client", facts.noClientReason ?? "Link a client before drafting this invoice.", "Link a client", "link-client", "link-client");
-  if (facts.projectExists !== false && !facts.pricingStudioLinked)
-    add("no-studio", facts.noStudioReason ?? "Name the studio before drafting this invoice.", "Name the studio", "name-studio", "name-studio");
-  for (const id of facts.selectedRatePendingEntryIds)
-    add("rate-pending", `${facts.ratePendingNames?.[id] || id}'s hours are waiting for a rate.`, "Set the rate", "set-rate", "rate-pending");
+  // A viewer who can't make the fix is pointed at the Ask or support line instead.
+  if (!facts.studioMode && !facts.clientLinked) {
+    const reason = facts.noClientReason ?? "Link a client before drafting this invoice.";
+    if (facts.canLinkClient) add("no-client", reason, "Link a client", "link-client", "link-client");
+    else if (facts.clientLinkHold === "lead_not_in_studio")
+      add("no-client", reason, "Copy the address", "ask", "support-link-client");
+    else add("no-client", reason, "Copy a note", "ask", "ask-link-client");
+  }
+  if (facts.projectExists !== false && !facts.pricingStudioLinked) {
+    const reason = facts.noStudioReason ?? "Name the studio before drafting this invoice.";
+    if (facts.canNameStudio) add("no-studio", reason, "Name the studio", "name-studio", "name-studio");
+    else if (facts.soloOwnerUnstamped) add("no-studio", reason, "Copy the address", "ask", "support-name-studio");
+    else add("no-studio", reason, "Ask who can name it", "ask", "ask-name-studio");
+  }
+  const pendingDesigners = new Map<string, string | null | undefined>();
+  for (const entry of facts.selectedRatePendingEntries)
+    if (!pendingDesigners.has(entry.userId)) pendingDesigners.set(entry.userId, entry.memberName);
+  for (const [userId, name] of pendingDesigners)
+    add("rate-pending", name ? `${name}'s hours are waiting for a rate.` : "These hours are waiting for a rate.", "Set the rate", "set-rate", `rate-pending:${userId}`);
   for (const id of facts.selectedUnpricedLineIds)
-    add("price-line", `Set a client price for ${facts.unpricedLineNames?.[id] || id}.`, "Price it", "price-line", `price-line:${id}`);
+    add("price-line", `Set a client price for ${facts.unpricedLineNames?.[id] || "this piece"}.`, "Price it", "price-line", `price-line:${id}`);
   if (!facts.selectedAnything)
     add("nothing-selected", "Add at least one line first.", "Select lines", "select-lines", "invoice-lines");
   if (facts.sendNoRecipient)

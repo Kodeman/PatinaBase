@@ -1543,6 +1543,96 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(act()).not.toHaveAttribute("aria-describedby");
   });
 
+  it("F2: a ticked piece that turns unpriced drops out of the lines and does not hold the draft", async () => {
+    const LAMP = { id: "ffe-2", name: "Floor lamp", quantity: 1, unit_price_cents: 30000, room: null };
+    const context = { projectId: "project-1", initialFfeItemIds: ["ffe-1", "ffe-2"] };
+    mockFfeItems = [SIDE_TABLE, LAMP];
+    const { rerender } = render(composer(context));
+    expect(within(screen.getByText("Floor lamp").closest("label") as HTMLElement).getByRole("checkbox")).toBeChecked();
+
+    mockFfeItems = [SIDE_TABLE, { ...LAMP, unit_price_cents: null }];
+    rerender(composer(context));
+    expect(act()).not.toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(act());
+    await waitFor(() => expect(mockCreateDraft).toHaveBeenCalledTimes(1));
+    const ffeIds = mockCreateDraft.mock.calls[0][0].lines
+      .map((l: { ffeItemId?: string }) => l.ffeItemId)
+      .filter(Boolean);
+    expect(ffeIds).toEqual(["ffe-1"]);
+  });
+
+  it.each([
+    ["ask-link-client", "Hollis House has no client yet. Ask Leah Ames to link one.", () => {
+      mockProjectClientId = null;
+      mockViewerId = "co-member-2";
+      mockLinkHold = "not_permitted";
+    }],
+    ["support-link-client", "The lead on this job has left the studio. Write to hello@patina.cloud", () => {
+      mockProjectClientId = null;
+      mockViewerId = "studio-admin-3";
+      mockLinkHold = "lead_not_in_studio";
+    }],
+    ["ask-name-studio", "Hollis House isn't tied to a studio yet. Ask your studio owner to name it.", () => {
+      mockProjectStudioId = null;
+      mockOrganizations = studioWith("member");
+    }],
+    ["support-name-studio", "This job was opened before your studio had one home. Write to hello@patina.cloud", () => {
+      mockProjectStudioId = null;
+      mockOrganizations = studioWith("owner");
+      mockStudioMembers = [{ user_id: "designer-1", role: "owner", status: "active" }];
+    }],
+  ])("F3: a viewer who can't make the fix has its hold keyed to the %s line", (key, line, arrange) => {
+    arrange();
+    render(composer());
+    const keyed = document.querySelectorAll(`[data-focus-key="${key}"]`);
+    expect(keyed).toHaveLength(1);
+    expect(keyed[0].tagName).toBe("P");
+    expect(keyed[0]).toHaveTextContent(line);
+    expect(document.querySelector('[data-focus-key="link-client"], [data-focus-key="name-studio"]')).toBeNull();
+  });
+
+  it("F3: a viewer who can make the fix has it keyed to the act, never to the line", () => {
+    mockProjectClientId = null;
+    render(composer());
+    expect(screen.getByRole("link", { name: "Link a client" })).toHaveAttribute("data-focus-key", "link-client");
+    expect(document.querySelector("p[data-focus-key]")).toBeNull();
+  });
+
+  it("F4/F6: a ticked hour that turns rate-pending lands the held act on its own designer's row", async () => {
+    const hour = { user_id: "designer-1", duration_minutes: 60, amount_cents: 15000, started_at: "2026-10-01T15:00:00Z" };
+    const context = { projectId: "project-1", initialTimeEntryIds: ["te-1"] };
+    mockUnbilledEntries = [{ ...hour, id: "te-1", notes: "Site visit" }];
+    const { rerender } = render(composer(context));
+    await waitFor(() => expect(act()).not.toHaveAttribute("aria-disabled", "true"));
+
+    mockUnbilledEntries = [];
+    mockRatePendingEntries = [
+      { ...hour, id: "te-0", user_id: "designer-2", notes: "Sketching" },
+      { ...hour, id: "te-1", notes: "Site visit" },
+    ];
+    rerender(composer(context));
+    fireEvent.click(act());
+    expect(screen.getByRole("status")).toHaveTextContent("These hours are waiting for a rate.");
+    const row = screen.getByText("Site visit").closest("[data-rate-pending]");
+    expect(row).toHaveAttribute("data-focus-key", "rate-pending:designer-1");
+    await waitFor(() => expect(row).toHaveFocus());
+  });
+
+  it("F8: keys the lines hold where its press lands, the first unfilled row, then Add line", async () => {
+    render(composer());
+    expect(document.querySelector('[data-focus-key="for-project"]')).toBeNull();
+    fireEvent.click(act());
+    const keyed = document.querySelector('[data-focus-key="invoice-lines"]');
+    expect(keyed).toHaveAttribute("data-adhoc-row");
+    await waitFor(() => expect(keyed).toContainElement(document.activeElement as HTMLElement));
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove line" }));
+    fireEvent.click(act());
+    const addLine = screen.getByRole("button", { name: "Add line" });
+    expect(addLine).toHaveAttribute("data-focus-key", "invoice-lines");
+    await waitFor(() => expect(addLine).toHaveFocus());
+  });
+
   it.each([[60, '1h'], [2, '2m']])('formats %i rate-pending minutes as %s', (minutes, label) => {
     mockRatePendingEntries = [
       { id: "time-1", user_id: "designer-1", started_at: "2026-10-01T09:00:00Z", duration_minutes: minutes },
