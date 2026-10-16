@@ -37163,6 +37163,10 @@ export type Database = {
           status: string
         }[]
       }
+      _k8_rate_row_refusal: {
+        Args: { p_actor: string; p_rate_id: string }
+        Returns: string
+      }
       _lock_studio: {
         Args: { p_org_id: string }
         Returns: {
@@ -44772,7 +44776,7 @@ export type Database = {
         }
       }
       rerate_pending_time_entries: {
-        Args: { p_rate_id: string }
+        Args: { p_expected_rate_cents: number; p_rate_id: string }
         Returns: number
       }
       resend_party_invite: {
