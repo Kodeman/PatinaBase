@@ -9,6 +9,7 @@ import {
   activeDesignStudios,
   asSentence,
   billingLinesRefusal,
+  billingRefusal,
   buildComposerLines,
   canDraftStudioInvoice,
   claimTimeRefusal,
@@ -680,3 +681,34 @@ describe("stampStudioRefusal", () => {
     expect(stampStudioRefusal(message, "Middle West Studio")).toBe(sentence);
   });
 });
+
+describe("billingRefusal", () => {
+  it.each([
+    ["milestone", "generate_milestone_invoice: milestone id not found", "This milestone couldn't be found. Reload the project and try again."],
+    ["milestone", "generate_milestone_invoice: not your project", "This milestone belongs to a project you can't bill from. Open the project and try again."],
+    ["send", "no_recipient", "This invoice has no client email yet. Add their email, then send it."],
+    ["send", "invoice_not_issued", "Issue the invoice before sending it."],
+    ["send", "invoice_void", "This invoice was voided and can't be sent."],
+    ["send", "invoice_not_open", "Only an open invoice can receive a reminder."],
+    ["send", "checkout_attempt_check_failed", "The invoice's payment status couldn't be checked. Try sending it again."],
+    ["send", "checkout_in_flight", "The client is paying this invoice now. Send the note after the payment finishes."],
+    ["send", "send_failed", "The email couldn't be sent. Check the recipient and try again."],
+    ["send", "invoice_not_found", "This invoice couldn't be found. Reload the accounts page and try again."],
+    ["send", "lookup_failed", "The invoice couldn't be loaded. Reload the folio and try again."],
+    ["send", "unauthorized", "Your sign-in couldn't be confirmed. Sign in again, then send the invoice."],
+    ["send", "authorization_failed", "Your sign-in couldn't be confirmed. Sign in again, then send the invoice."],
+    ["send", "invalid_body", "The invoice details couldn't be read. Reload the folio and try again."],
+    ["send", "invoiceId_required", "The invoice details couldn't be read. Reload the folio and try again."],
+    ["send", "method_not_allowed", "The invoice couldn't be sent this way. Open it in the folio and try again."],
+  ] as const)("maps %s refusal %s", (source, err, sentence) => {
+    expect(billingRefusal(source, err).sentence).toBe(sentence);
+  });
+
+  it("never exposes unknown refusal text", () => {
+    const raw = "private database detail";
+    const result = billingRefusal("send", raw).sentence;
+    expect(result).toBe("The invoice couldn't be completed. Check the invoice and try again.");
+    expect(result).not.toContain(raw);
+  });
+});
+

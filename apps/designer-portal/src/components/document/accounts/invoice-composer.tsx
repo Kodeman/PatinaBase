@@ -88,10 +88,9 @@ import {
   STUDIO_TARGET,
   activeDesignStudios,
   balanceCents,
-  billingLinesRefusal,
+  billingRefusal,
   balanceOwedItems,
   buildBillingLines,
-  claimTimeRefusal,
   depositCents,
   lineClientPriceCents,
   buildComposerLines,
@@ -860,7 +859,7 @@ export function InvoiceComposer({
         } catch {
           stranded = true;
         }
-        const reason = claimTimeRefusal((e as { message?: unknown } | null)?.message);
+        const reason = billingRefusal('claim', e).sentence;
         // A money write already ran: never offered again from here.
         setError({
           message: stranded
@@ -892,10 +891,7 @@ export function InvoiceComposer({
         }
         // The writer's refusal arrives as a PostgrestError, not an Error, and in
         // the RPC's own words; say it in the composer's, naming the subject.
-        const reason = billingLinesRefusal(
-          (e as { message?: unknown } | null)?.message,
-          billingSubjectName,
-        );
+        const reason = billingRefusal('lines', e, billingSubjectName).sentence;
         setError({
           message: stranded
             ? `${reason} Nothing was billed; the draft was kept. Delete or void it.`

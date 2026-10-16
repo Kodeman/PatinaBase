@@ -922,6 +922,51 @@ export function draftInvoiceRefusal(message: unknown): { message: string; retrya
 
 const CLAIM_GENERIC = "The hours couldn't be attached to the draft.";
 
+export interface InvoiceHold {
+  fixer: 'link-client' | 'name-studio' | 'set-rate' | 'price-line' | 'add-email' | 'select-lines' | 'ask';
+}
+
+const BILLING_GENERIC = "The invoice couldn't be completed. Check the invoice and try again.";
+
+const MILESTONE_REFUSALS: Array<[RegExp, string]> = [
+  [/^generate_milestone_invoice: milestone \S+ not found(?: or access denied)?$/, "This milestone couldn't be found. Reload the project and try again."],
+  [/^generate_milestone_invoice: not your project$/, "This milestone belongs to a project you can't bill from. Open the project and try again."],
+  [/^milestone is already billed$/, "This milestone is already on an invoice. Open the invoice from the project accounts."],
+];
+
+const SEND_REFUSALS: Array<[RegExp, string]> = [
+  [/^method_not_allowed$/, "The invoice couldn't be sent this way. Open it in the folio and try again."],
+  [/^(?:invalid_body|invoiceId_required)$/, "The invoice details couldn't be read. Reload the folio and try again."],
+  [/^(?:unauthorized|authorization_failed)$/, "Your sign-in couldn't be confirmed. Sign in again, then send the invoice."],
+  [/^invoice_not_found$/, "This invoice couldn't be found. Reload the accounts page and try again."],
+  [/^lookup_failed$/, "The invoice couldn't be loaded. Reload the folio and try again."],
+  [/^invoice_not_issued$/, "Issue the invoice before sending it."],
+  [/^invoice_void$/, "This invoice was voided and can't be sent."],
+  [/^invoice_not_open$/, "Only an open invoice can receive a reminder."],
+  [/^checkout_attempt_check_failed$/, "The invoice's payment status couldn't be checked. Try sending it again."],
+  [/^checkout_in_flight$/, "The client is paying this invoice now. Send the note after the payment finishes."],
+  [/^no_recipient$/, "This invoice has no client email yet. Add their email, then send it."],
+  [/^send_failed$/, "The email couldn't be sent. Check the recipient and try again."],
+];
+
+/** One designer-facing copy table for billing refusal sources. */
+export function billingRefusal(
+  source: 'draft' | 'claim' | 'lines' | 'milestone' | 'send',
+  err: unknown,
+  nameOf?: (id: string) => string | null | undefined,
+): { sentence: string; fixer?: InvoiceHold['fixer'] } {
+  const raw = typeof err === 'string' ? err : err && typeof err === 'object' && 'message' in err ? (err as { message?: unknown }).message : undefined;
+  if (source === 'draft') return { sentence: draftInvoiceRefusal(raw).message };
+  if (source === 'claim') return { sentence: claimTimeRefusal(raw) };
+  if (source === 'lines') return { sentence: billingLinesRefusal(raw, nameOf) };
+  if (typeof raw !== 'string') return { sentence: BILLING_GENERIC };
+  const reason = raw.trim();
+  const table = source === 'milestone' ? MILESTONE_REFUSALS : SEND_REFUSALS;
+  const match = table.find(([pattern]) => pattern.test(reason));
+  return { sentence: match?.[1] ?? BILLING_GENERIC };
+}
+
+
 /**
  * claim_time_entries (00595/00617) and useClaimTimeEntries refuse in their own
  * words, some carrying entry and invoice ids; the composer says only the ones
