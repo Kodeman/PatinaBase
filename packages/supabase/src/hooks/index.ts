@@ -2164,7 +2164,9 @@ export type { DocumentShare, CreatedShare } from "./use-document-shares";
 export {
   documentClientAuthorityKeys,
   useCanLinkDocumentClient,
+  useDocumentClientLinkHold,
 } from "./use-document-client-authority";
+export type { DocumentClientLinkHold } from "./use-document-client-authority";
 
 export {
   useBoardTemplates,

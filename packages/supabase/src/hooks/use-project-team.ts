@@ -4,6 +4,7 @@ import { getSessionUserId } from '../auth/session-user';
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { documentClientAuthorityKeys } from './use-document-client-authority';
 
 const getSupabase = () => createBrowserClient();
 
@@ -272,6 +273,9 @@ export function useReassignLead() {
       queryClient.invalidateQueries({ queryKey: ['client-activity'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      queryClient.invalidateQueries({
+        queryKey: documentClientAuthorityKeys.canLink(vars.projectId),
+      });
     },
   });
 }

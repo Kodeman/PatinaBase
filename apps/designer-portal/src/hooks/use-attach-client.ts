@@ -10,7 +10,7 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { createBrowserClient, documentClientAuthorityKeys } from '@patina/supabase';
 
 export type AttachEngagementKind = 'project' | 'proposal';
 
@@ -49,6 +49,8 @@ export function useAttachDocumentClient() {
         qc.invalidateQueries({ queryKey: ['project-v2', vars.targetId] });
         qc.invalidateQueries({ queryKey: ['project'] });
         qc.invalidateQueries({ queryKey: ['projects'] });
+        // 00563 stamps a NULL studio on this write, and K5 standing reads it.
+        qc.invalidateQueries({ queryKey: documentClientAuthorityKeys.canLink(vars.targetId) });
       }
     },
   });

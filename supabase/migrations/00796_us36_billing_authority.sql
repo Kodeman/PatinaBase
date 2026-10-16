@@ -3,7 +3,7 @@
 --         (K9); K11 is delivered by creation-time stamping, with no code here
 --
 -- Number reserved in the US-36 execution contract (00796–00805). Additive: one
--- redefined body, two new functions, no table, policy or trigger change.
+-- redefined body, three new functions, no table, policy or trigger change.
 --
 -- ── K5 (Kody 2026-10-16) — who may link a client to a project ───────────────
 -- Lineage (set_document_client): 00225 → 00385 → 00387 → 00796. The 00387 body
@@ -22,6 +22,16 @@
 --     with a message that names the lead's book.
 -- public.can_link_document_client(p_project_id) is the same predicate as a
 -- read, so the composer gates on the server's answer instead of guessing.
+--   · SQ-1066 repair. set_project_studio_id (00563, NOT redefined, its authority
+--     boundary kept) admits the UPDATE only while the lead holds an active
+--     non-guest seat in the project's studio. Without that seat an owner/admin
+--     passed K5 and then hit studio_id_not_designer_studio (F1). The setter now
+--     refuses that case up front as 'set_document_client: lead_not_in_studio',
+--     and public.document_client_link_hold(p_project_id) names why a caller may
+--     not link: NULL (she may), 'not_permitted', or 'lead_not_in_studio'.
+--     can_link_document_client is that function IS NULL. The setter reads
+--     owner/admin standing only after it locks the caller's and the lead's
+--     seats FOR SHARE (F3), so a demotion committed meanwhile is the one it reads.
 --
 -- ── K9 (Kody 2026-10-16) — studio picker at creation ───────────────────────
 -- open_project_direct(text, uuid, integer, integer, date, uuid, uuid) is a NEW
@@ -109,6 +119,20 @@ BEGIN
 
   -- K5: the project's lead, or an owner/admin of the project's studio.
   IF FOUND THEN
+    -- SQ-1066 F3: standing is read after the caller's and the lead's seats are
+    -- share-locked, in 00563's membership order. 00563 re-checks only an
+    -- active non-guest seat, never owner/admin, so a demotion committed while
+    -- this call waits must be the one read below. Seats are taken before the
+    -- trigger's role rows, the order a seat change takes them (00713's sync).
+    IF p_engagement_kind = 'project' AND v_target_studio IS NOT NULL THEN
+      PERFORM membership.id
+      FROM public.organization_members AS membership
+      WHERE membership.organization_id = v_target_studio
+        AND membership.user_id = ANY(ARRAY[v_target_designer, v_designer]::uuid[])
+      ORDER BY membership.user_id, membership.id
+      FOR SHARE;
+    END IF;
+
     v_authorized := v_target_designer IS NOT DISTINCT FROM v_designer
       OR (
         p_engagement_kind = 'project'
@@ -120,6 +144,24 @@ BEGIN
   IF NOT v_authorized THEN
     RAISE EXCEPTION 'no % owned by you with id %', p_engagement_kind, p_target_id
       USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- SQ-1066 F1: 00563 admits this UPDATE only while the lead holds an active
+  -- non-guest seat in the project's studio. Refuse here, in
+  -- document_client_link_hold's word, before the trigger can.
+  IF p_engagement_kind = 'project'
+     AND v_target_studio IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1
+       FROM public.organization_members AS lead_membership
+       WHERE lead_membership.organization_id = v_target_studio
+         AND lead_membership.user_id = v_target_designer
+         AND lead_membership.status = 'active'
+         AND lead_membership.role <> 'guest'
+     )
+  THEN
+    RAISE EXCEPTION 'set_document_client: lead_not_in_studio — the lead of project % holds no active seat in its studio', p_target_id
+      USING ERRCODE = 'object_not_in_prerequisite_state';
   END IF;
 
   IF p_engagement_kind = 'proposal' AND v_proposal_status <> 'draft' THEN
@@ -208,11 +250,59 @@ GRANT EXECUTE ON FUNCTION public.set_document_client(text, uuid, uuid)
 
 COMMENT ON FUNCTION public.set_document_client(text, uuid, uuid) IS
   'Document attachment. A project''s client may be set by its lead or by an '
-  'owner/admin of its studio (K5, 00796); a proposal''s only by its owner. The '
+  'owner/admin of its studio (K5, 00796), standing read under a share lock on '
+  'the caller''s and the lead''s seats; a proposal''s only by its owner. A '
+  'project whose lead holds no active non-guest seat in its studio is refused '
+  'up front as ''set_document_client: lead_not_in_studio''. The '
   'client must be on the lead''s designer_clients book. Proposal identity may '
   'change only while draft and only as matching client_id/designer_client_id '
   'legs under the same proposal row lock; exact app.project_identity_id/'
   'app.proposal_identity_id tokens authorize only the chosen document update.';
+
+CREATE OR REPLACE FUNCTION public.document_client_link_hold(p_project_id uuid)
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT CASE
+    WHEN project.id IS NULL
+      OR auth.uid() IS NULL
+      OR NOT (
+        project.designer_id IS NOT DISTINCT FROM auth.uid()
+        OR (
+          project.studio_id IS NOT NULL
+          AND public.is_org_admin_or_owner(project.studio_id)
+        )
+      )
+      THEN 'not_permitted'
+    WHEN project.studio_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.organization_members AS lead_membership
+        WHERE lead_membership.organization_id = project.studio_id
+          AND lead_membership.user_id = project.designer_id
+          AND lead_membership.status = 'active'
+          AND lead_membership.role <> 'guest'
+      )
+      THEN 'lead_not_in_studio'
+  END
+  FROM (SELECT p_project_id AS id) AS requested
+  LEFT JOIN public.projects AS project ON project.id = requested.id;
+$$;
+
+REVOKE ALL ON FUNCTION public.document_client_link_hold(uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.document_client_link_hold(uuid)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.document_client_link_hold(uuid) IS
+  'K5 (00796, SQ-1066): why the caller may not link a client to this project '
+  'through set_document_client, or NULL when she may. ''not_permitted'': she is '
+  'neither its lead nor an owner/admin of its studio, or the project is '
+  'unknown. ''lead_not_in_studio'': she has that standing, but the lead holds '
+  'no active non-guest seat in the project''s studio, so the setter refuses.';
 
 CREATE OR REPLACE FUNCTION public.can_link_document_client(p_project_id uuid)
 RETURNS boolean
@@ -221,19 +311,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT auth.uid() IS NOT NULL
-     AND EXISTS (
-       SELECT 1
-       FROM public.projects AS project
-       WHERE project.id = p_project_id
-         AND (
-           project.designer_id = auth.uid()
-           OR (
-             project.studio_id IS NOT NULL
-             AND public.is_org_admin_or_owner(project.studio_id)
-           )
-         )
-     );
+  SELECT public.document_client_link_hold(p_project_id) IS NULL;
 $$;
 
 REVOKE ALL ON FUNCTION public.can_link_document_client(uuid)
@@ -243,9 +321,10 @@ GRANT EXECUTE ON FUNCTION public.can_link_document_client(uuid)
 
 COMMENT ON FUNCTION public.can_link_document_client(uuid) IS
   'K5 (00796): whether the caller may link a client to this project through '
-  'set_document_client — its lead, or an owner/admin of its studio. The same '
-  'predicate as the act, so gating UI asks the server instead of guessing. '
-  'False for an unknown project.';
+  'set_document_client — document_client_link_hold(p_project_id) IS NULL, so '
+  'it is false for an unknown project, for a caller who is neither its lead nor '
+  'an owner/admin of its studio, and while its lead holds no active non-guest '
+  'seat in that studio. Gating UI asks the server instead of guessing.';
 
 -- ── K9 · open_project_direct with a chosen studio ──────────────────────────
 
