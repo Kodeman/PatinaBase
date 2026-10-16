@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Needs attention study</title>
+<meta name="description" content="Study C (US-35): three prototypes of how the invoice composer points at what holds Draft the invoice, compared.">
+<!-- Study C (SQ-1023, US-35). Self-contained prototype: inline CSS and JS, no build.
+     Tokens and type: docs/design/house-sheet/SPEC.md §A1–§A6, §G; composer layout:
+     apps/designer-portal/src/components/document/accounts/invoice-composer.tsx. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── House sheet A1 tokens (docs/design/house-sheet/SPEC.md), light set only:
+   the designer portal paints no dark paper (apps/designer-portal/src/app/globals.css). */
+:root {
+  --paper: #FAF7F2;
+  --paper-doc: #FCFAF6;
+  --rail: #E8E3DB;
+  --ink: #2C2926;
+  --ink-muted: #4E4339;
+  --ink-subtle: #5A4E43;
+  --ink-faint: #65594E;
+  --ink-paper: #FAF7F2;
+  --hairline: #E8E3DB;
+  --hairline-strong: rgba(44, 41, 38, .14);
+  --oak: #8B7355;            /* non-text only (N-14) */
+  --card-edge: #8F8C88;
+  --clay: #C4A57B;           --clay-ink: #7C5E30;
+  --terracotta: #D4A090;     --terracotta-ink: #9C5340;
+  --sage-ink: #5F6B57;
+  --radius-hair: 2px;
+  --radius-box: 3px;
+  --press-in: 70ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --paper-lift: #FFFFFF;
+  --veil: rgba(20, 18, 16, .55); /* §G-3: the L4 sheet veil, doc-sheet.tsx:379 */
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta: 'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+p { margin: 0; }
+
+/* ── A3 type scale ── */
+.t-d3 { font-family: var(--font-display); font-size: 20px; line-height: 1.3; font-weight: 500; margin: 0; }
+.t-d4 { font-family: var(--font-display); font-size: 17px; line-height: 24px; font-weight: 500; margin: 0; }
+.t-body { font-size: 16px; line-height: 1.55; }
+.t-body-sm { font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+.t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.5; letter-spacing: .08em; color: var(--ink-subtle); }
+.t-head { font-family: var(--font-meta); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); margin: 0; }
+.t-money { font-family: var(--font-meta); font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.held-word { color: var(--terracotta-ink); } /* §G-13: terracotta-ink marks only a blocked word */
+
+/* ── A5 acts ── */
+.act {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; min-width: 44px; padding: 4px 6px 10px; border: 0; background: none;
+  font-family: var(--font-meta); font-size: 13px; font-weight: 500; letter-spacing: .06em;
+  text-transform: uppercase; text-decoration: none; white-space: nowrap; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.act .label { position: relative; display: inline-block; line-height: 13px; }
+.act .label::before, .act .label::after {
+  content: ''; position: absolute; left: 0; right: 0; transform-origin: left center;
+  transition: background-color 150ms linear, height 150ms var(--ease);
+}
+.act .label::before { bottom: -5px; height: 1px; }
+.act .label::after { bottom: -8.5px; height: 1px; }
+.act--tertiary { color: var(--ink-subtle); }
+.act--tertiary .label::before { background: var(--oak); }
+.act--tertiary .label::after { content: none; }
+.act--tertiary:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.act--secondary { color: var(--ink); }
+.act--secondary .label::before { height: 1.5px; background: var(--ink); }
+.act--secondary .label::after { background: var(--clay); }
+.act--secondary:hover .label::after { height: 2px; }
+/* the composer's "primary" (document-action.tsx da-primary): two scores, charcoal over clay */
+.act--primary { color: var(--ink); letter-spacing: .12em; }
+.act--primary .label::before { height: 1.5px; background: var(--ink); }
+.act--primary .label::after { background: var(--clay); }
+.act--primary:hover .label::after { height: 2px; }
+.act:active { transform: translateY(1px); transition: transform var(--press-in) linear; }
+.act--inline {
+  display: inline; min-height: 0; min-width: 0; padding: 0; font: inherit; letter-spacing: inherit;
+  text-transform: inherit; color: inherit; white-space: normal; text-align: left;
+}
+.act--inline .label { line-height: inherit; }
+.act--inline .label::before { bottom: -2px; height: 1px; background: var(--oak); }
+.act--inline .label::after { content: none; }
+.act--inline:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.act:focus-visible, .pick:focus-visible, [tabindex="-1"]:focus-visible {
+  outline: 2px solid var(--clay-ink); outline-offset: 2px;
+}
+[tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
+/* §A5 held: aria-disabled, never `disabled`, never opacity */
+.act[aria-disabled="true"] { cursor: not-allowed; color: var(--ink-faint); }
+.act[aria-disabled="true"] .label::before,
+.act[aria-disabled="true"] .label::after { background: var(--hairline-strong); }
+.act[aria-disabled="true"]:active { transform: none; }
+
+/* ── the page frame: a meta strip, the desk under its veil, the sheet ── */
+.meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+  padding: 8px 24px; border-bottom: 1px solid var(--hairline); background: var(--paper);
+}
+.meta .t-head { color: var(--ink); }
+.meta-spacer { flex: 1 1 auto; }
+.meta label { display: inline-flex; align-items: center; gap: 8px; }
+.meta select {
+  min-height: 44px; padding: 4px 8px; border: 1px solid var(--card-edge); border-radius: var(--radius-hair);
+  background: var(--paper-doc); font-family: var(--font-meta); font-size: 13px; max-width: 100%;
+}
+.desk { background: linear-gradient(var(--veil), var(--veil)), var(--paper); padding: 48px 24px 72px; }
+.sheet {
+  position: relative; max-width: 760px; margin: 0 auto; padding: 24px 32px 32px;
+  background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: var(--radius-hair);
+}
+.sheet-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.sheet-head .t-head { color: var(--ink-faint); letter-spacing: .1em; }
+.intro { margin-top: 4px; }
+
+/* ── composer sections ── */
+.block { margin-top: 24px; }
+.block-first { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.block > .t-head { margin-bottom: 4px; }
+.region { position: relative; scroll-margin: 96px 0 160px; }
+.region-body > * + * { margin-top: 4px; }
+.row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--hairline);
+}
+.row:last-child { border-bottom: 0; }
+.row input[type="checkbox"] { position: relative; top: 2px; width: 16px; height: 16px; margin: 0; accent-color: var(--clay-ink); }
+.row .gap { display: inline-block; width: 16px; }
+.row .name { flex: 1 1 220px; min-width: 0; font-size: 14px; }
+.row .name .room { color: var(--ink-subtle); margin-left: 6px; }
+.row .qty { color: var(--ink-subtle); }
+.row .fig { min-width: 96px; text-align: right; }
+.row--held .name { color: var(--ink-muted); }
+.row--held .fig { color: var(--ink-subtle); }
+.row-fix { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-left: 28px; }
+.row--left .name { color: var(--ink-faint); }
+.note { margin-top: 8px; font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+.fieldline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.money-in { display: inline-flex; align-items: center; gap: 4px; }
+.field {
+  min-height: 44px; padding: 6px 8px; border: 1px solid var(--card-edge); border-radius: var(--radius-hair);
+  background: var(--paper-lift); font-size: 16px; font-family: var(--font-meta);
+}
+.field:focus { outline: 2px solid var(--clay-ink); outline-offset: 1px; border-color: var(--clay-ink); }
+.field.w-price { width: 128px; text-align: right; }
+.field.w-short { width: 88px; text-align: right; }
+.field-err { color: var(--terracotta-ink); font-size: 14px; }
+.terms { display: grid; grid-template-columns: repeat(2, minmax(0, 200px)); gap: 12px; }
+.terms label, .memo { display: flex; flex-direction: column; gap: 4px; }
+.memo { margin-top: 12px; }
+.memo textarea { min-height: 64px; resize: vertical; font-family: var(--font-body); font-size: 16px; }
+
+/* the household picker (stands in for ClientPicker, client-picker.tsx) */
+.picker { margin: 8px 0 0; padding: 12px; border: 1px solid var(--card-edge); border-radius: var(--radius-hair); background: var(--paper-lift); }
+.picker-h { margin-bottom: 4px; }
+.pick {
+  display: flex; width: 100%; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-height: 44px;
+  padding: 8px; border: 0; border-bottom: 1px solid var(--hairline); background: none; text-align: left; cursor: pointer;
+}
+.pick:hover { background: var(--paper-doc); }
+.picker-foot { margin-top: 8px; }
+.sub-head { margin-top: 12px; }
+.pick .who { font-family: var(--font-display); font-size: 17px; font-weight: 500; }
+
+/* ── totals, consequence, the act, the status line ── */
+.foot { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--hairline-strong); }
+.totals { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 20px; }
+.totals .t-money { color: var(--ink); }
+.totals .grand { font-weight: 500; }
+.consequence { font-family: var(--font-body); font-size: 15px; line-height: 1.55; color: var(--ink); max-width: 56ch; margin: 12px 0 0; }
+.act-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 8px; }
+.status { min-height: 24px; margin-top: 4px; font-size: 14px; color: var(--ink-muted); max-width: 60ch; }
+.record { margin-top: 12px; font-size: 15px; }
+
+/* ── review notes under the desk ── */
+.notes { max-width: 760px; margin: 0 auto; padding: 48px 24px 72px; }
+.notes h2 { font-family: var(--font-display); font-size: 26px; line-height: 1.2; font-weight: 500; margin: 0 0 12px; }
+.notes h3 { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); margin: 24px 0 8px; }
+.notes p, .notes li { font-size: 15px; max-width: 65ch; }
+.notes ul { padding-left: 20px; margin: 0; }
+.notes li + li { margin-top: 6px; }
+.notes code { font-family: var(--font-meta); font-size: 13px; background: var(--rail); padding: 0 4px; border-radius: var(--radius-hair); }
+kbd { font-family: var(--font-meta); font-size: 12px; border: 1px solid var(--card-edge); border-radius: var(--radius-hair); padding: 0 4px; background: var(--paper-doc); color: var(--ink); }
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+@media (max-width: 640px) {
+  .meta { padding: 8px 16px; }
+  .meta label { flex: 1 1 100%; min-width: 0; }
+  .meta select { flex: 1 1 auto; min-width: 0; width: 100%; }
+  .desk { padding: 16px 0 48px; }
+  .sheet { padding: 16px; border-left: 0; border-right: 0; border-radius: 0; }
+  .notes { padding: 32px 16px 48px; }
+  .terms { grid-template-columns: 1fr 1fr; }
+  .row .fig { min-width: 0; }
+  .row-fix { padding-left: 0; }
+}
+
+/* ── A11 ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important; scroll-behavior: auto !important;
+  }
+}
+@media (forced-colors: active) {
+  .act .label::before, .act .label::after { forced-color-adjust: none; background: ButtonText; }
+  .act:focus-visible { outline: 2px solid Highlight; }
+  .sheet, .picker { border-color: CanvasText; }
+}
+
+.ix { max-width: 1100px; margin: 0 auto; padding: 48px 24px 72px; }
+.ix-title { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; margin: 0; }
+.ix-lede { margin-top: 12px; max-width: 65ch; font-size: 16px; }
+.ix-h { font-family: var(--font-display); font-size: 26px; line-height: 1.2; font-weight: 500; margin: 48px 0 12px; }
+.ix-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.ix-card { padding: 24px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: var(--radius-hair); }
+.ix-card-title { font-family: var(--font-display); font-size: 20px; line-height: 1.3; font-weight: 500; margin: 4px 0 12px; }
+.ix-card p:not(.t-head) { font-size: 15px; }
+.ix-table-wrap { overflow-x: auto; border: 1px solid var(--card-edge); border-radius: var(--radius-hair); background: var(--paper-doc); }
+.ix-table-wrap:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.ix-table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.5; }
+.ix-table th, .ix-table td { padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--hairline); }
+.ix-table tbody tr:last-child th, .ix-table tbody tr:last-child td { border-bottom: 0; }
+.ix-table thead th { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); border-bottom: 1px solid var(--hairline-strong); }
+.ix-table tbody th { font-weight: 500; width: 16%; }
+.ix-table td { width: 28%; }
+.ix-rec, .ix-list li { font-size: 16px; max-width: 70ch; }
+.ix-list { padding-left: 20px; margin: 0; }
+.ix-list li + li { margin-top: 8px; }
+.ix code { font-family: var(--font-meta); font-size: 13px; background: var(--rail); padding: 0 4px; border-radius: var(--radius-hair); }
+@media (max-width: 900px) { .ix-cards { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .ix { padding: 32px 16px 48px; }
+  .ix-title { font-size: 28px; }
+  .ix-table { min-width: 720px; }
+}
+</style>
+</head>
+<body>
+<header class="meta">
+  <p class="t-head">US-35 · Study C · Billing errors that tell you what to fix</p>
+</header>
+<main class="ix">
+  <h1 class="ix-title">Needs attention: three ways to say it</h1>
+  <p class="ix-lede">Leah presses <em>Draft the invoice</em> on the Kuehn Whole Home Renovation and gets "INVOICE PROJECT IS MISSING ITS CANONICAL BILLING TUPLE". The document had no client. Each of these three prototypes stages the same moment with two holds at once: no client linked, and two pieces she asked to bill with no client price. That tests whether the pattern holds past a single hold. The fixes are the same in all three and they work in place. Only the way the composer points at them differs.</p>
+
+  <h2 class="ix-h">The three</h2>
+  <div class="ix-cards">
+    <article class="ix-card">
+      <p class="t-head">1 · Kody's idea</p>
+      <h3 class="ix-card-title"><a class="act act--inline" href="spotlight.html"><span class="label">Spotlight</span></a></h3>
+      <p>Pressing the held act lays a scrim over the page with a window cut around each region that holds it, plus a short label on each. Inside the scrim you Tab and step with Next, <kbd>Esc</kbd> lets you out, and the scrim lifts when the last hold is fixed. It is the most emphatic way to say "these, here, now". The page points at the problem, and nothing else competes for attention. To fit the house rules it uses a hairline instead of a glow and the ladder's own <code>--veil</code> layer over inert content instead of faded ink. It pays for that in interruption, a new overlay primitive, and a second veil the ladder reserves for L5.</p>
+    </article>
+    <article class="ix-card">
+      <p class="t-head">2 · §A5 as written, upgraded</p>
+      <h3 class="ix-card-title"><a class="act act--inline" href="held-and-land.html"><span class="label">Held and land</span></a></h3>
+      <p>The act is held. The consequence sentence names both holds. Pressing the act scrolls to the first hold, focuses its fix, writes the reason to the status line, and draws a terracotta margin rule that fades. A "Next" line inside the landed region reaches the second hold. This is the house primitive taken one step further. It is cheap, has no new layers, and never locks the page. Its weakness is that it shows one hold at a time, so the second hold depends on reading the sentence or following Next.</p>
+    </article>
+    <article class="ix-card">
+      <p class="t-head">3 · Pre-flight</p>
+      <h3 class="ix-card-title"><a class="act act--inline" href="checklist.html"><span class="label">Before this can go</span></a></h3>
+      <p>A compact list above the act, there before anyone presses anything, with one row per hold. Each row's fix opens in a drawer inside the row, such as the household picker or the two price fields, and the row turns to <em>Done</em> with what was done. The held act still lands on the first open row. It tells Leah before she fails, scales to any number of holds, and copies the agreement room's readiness pattern. In exchange it adds weight to a long sheet and creates a second place to fix the same thing.</p>
+    </article>
+  </div>
+
+  <h2 class="ix-h">Side by side</h2>
+  <div class="ix-table-wrap" role="region" aria-label="Comparison table" tabindex="0">
+    <table class="ix-table">
+      <caption class="vh">How the three compare</caption>
+      <thead><tr><th scope="col"></th><th scope="col">Spotlight</th><th scope="col">Held and land</th><th scope="col">Before this can go</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Clarity</th>
+          <td>Highest at the moment of pressing: the page itself points, and every hold is labelled.</td>
+          <td>High for the first hold. The rest are named in the sentence but reached one at a time.</td>
+          <td>High, and earliest: every reason sits in one place before she presses.</td></tr>
+        <tr><th scope="row">Interruption cost</th>
+          <td>High. A modal layer arrives at the moment she meant to finish, and the page is locked until she fixes everything or presses <kbd>Esc</kbd>.</td>
+          <td>Low. Focus moves and nothing locks.</td>
+          <td>Lowest. Nothing happens until she chooses to fix something; pressing the act moves focus a few lines up.</td></tr>
+        <tr><th scope="row">One hold vs many</th>
+          <td>Good at two or three. Labels start to crowd past about four, and on a phone the windows are rarely on screen together.</td>
+          <td>Fine at one. At many it becomes serial hopping with Next.</td>
+          <td>Best at many, since a list grows by one row per hold. Heavy for a single hold.</td></tr>
+        <tr><th scope="row">Accessibility risk</th>
+          <td>Highest: a custom focus trap, <code>inert</code> management, live geometry, and how screen readers handle inert content all need a device pass.</td>
+          <td>Low: native focus plus the status line, the primitive already in use.</td>
+          <td>Low: list semantics and <code>aria-expanded</code> drawers. The two fix paths must stay one write.</td></tr>
+        <tr><th scope="row">Mobile, 390px</th>
+          <td>Works, but the fixed bar and the windows compete for a short viewport, and you step one window at a time.</td>
+          <td>Good: each landing scrolls its region into view and the Next line sits inside it.</td>
+          <td>Good: the list sits by the act and drawers stack full width.</td></tr>
+        <tr><th scope="row">Fit with §A5 · D4 · R83</th>
+          <td>§A5 yes, since it lands. D4 yes, with a hairline and no glow, but a second veil needs an L5 ruling. R83 is not reached because the hold prevents the error.</td>
+          <td>§A5 exactly, §A6 exactly, D4 yes. R83 is not reached.</td>
+          <td>§A5 and §A6 yes, D4 yes, and it matches the readiness.ts precedent. R83 is not reached.</td></tr>
+        <tr><th scope="row">Build cost</th>
+          <td>High: a new overlay primitive (SVG mask, inert, trap, ResizeObserver). Coachmark/TourController has no scrim to reuse.</td>
+          <td>Low: <code>held</code> + <code>onHeldActivate</code> and <code>landOnControl</code> exist. It adds a fade class and a <code>'price'</code> landing cell.</td>
+          <td>Medium: an <code>invoiceReadiness()</code> pure function, a list component, and drawers reusing <code>ClientPicker</code> and a client-price write.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="ix-h">Recommendation</h2>
+  <p class="ix-rec"><strong>Before this can go, with held-and-land's landing as the held act's behaviour</strong>, which the checklist prototype already does. Both holds are visible before Leah presses anything, so the composer never sets her up to fail. That is the promise this study exists for: the studio shouldn't notice Patina. It handles one hold or five without changing shape. It uses only primitives the house already has, and it can share a single readiness function with <code>canDraft</code> and the consequence sentence. Held-and-land is the right fallback anywhere a list would be too heavy, such as a sheet with one possible hold. The spotlight is the most vivid of the three and the one that best answers "show me where". It is worth keeping as a teaching moment, for example the desk walkthrough's tour, rather than as the default response to a held act: as the default it interrupts at the point of intent, it needs an L5 ruling for its second veil, and it costs the most to build and to test with assistive tech.</p>
+
+  <h2 class="ix-h">What all three share</h2>
+  <ul class="ix-list">
+    <li><strong>The root fix is the same.</strong> <code>canDraft</code> learns client and studio, so the throw at <code>use-invoices.ts:770</code> can no longer be reached from the composer, whichever pattern ships.</li>
+    <li><strong>Who can fix what.</strong> Any designer can link a client in place. A missing studio is fixable only by a studio owner; everyone else is told to ask theirs and is never shown a dead act (case 3 in each prototype).</li>
+    <li><strong>Copy.</strong> Designer language and sentence case, naming the thing and the fix. No codes, no IDs, no "tuple".</li>
+    <li><strong>Each prototype</strong> is one self-contained file using the house sheet tokens and type, with no build. Each works at 1280px and 390px, works from the keyboard, honours reduced motion, and has three cases: the brief, one hold only, and both holds plus a studio no one here can name.</li>
+  </ul>
+
+  <h2 class="ix-h">Not decided here</h2>
+  <ul class="ix-list">
+    <li>Whether unpriced pieces should <em>hold</em> the draft or only warn. Today the composer drops them quietly. Here they hold, and "Leave them off this invoice" is offered beside the fix.</li>
+    <li>The act names "Set a client price" and "Set the prices" would need rows in <code>lib/document/act-names.ts</code>.</li>
+    <li>Whether a held-act spotlight is an allowed use of the L5 second veil.</li>
+  </ul>
+</main>
+
+</body>
+</html>
