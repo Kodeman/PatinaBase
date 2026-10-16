@@ -1036,6 +1036,29 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     );
   });
 
+  it("SQ-1084: a viewer who can't link lands on the Ask line when the held act is pressed", async () => {
+    mockProjectClientId = null;
+    mockViewerId = "co-member-2";
+    mockLinkHold = "not_permitted";
+    render(composer());
+    fireEvent.click(act());
+    await waitFor(() =>
+      expect(screen.getByText("Hollis House has no client yet. Ask Leah Ames to link one.")).toHaveFocus(),
+    );
+  });
+
+  it("SQ-1084: with the lead gone, the owner lands on the support line when the held act is pressed", async () => {
+    mockProjectClientId = null;
+    mockViewerId = "studio-admin-3";
+    mockLinkHold = "lead_not_in_studio";
+    render(composer());
+    fireEvent.click(act());
+    // The held reason repeats the support sentence in the status line, so find the line itself.
+    const supportLine = document.querySelector<HTMLElement>('[data-focus-key="support-link-client"]');
+    expect(supportLine).toHaveTextContent(/^The lead on this job has left the studio/);
+    await waitFor(() => expect(supportLine).toHaveFocus());
+  });
+
   it("K5: an owner/admin of the project's studio is offered Link a client, though not its lead", async () => {
     mockProjectClientId = null;
     mockViewerId = "studio-admin-3";

@@ -861,9 +861,9 @@ export function InvoiceComposer({
     };
     const target: HTMLElement | null | undefined =
       held === "no-client"
-        ? linkClientRef.current
+        ? (linkClientRef.current ?? holdTarget(held))
         : held === "no-studio"
-          ? nameStudioRef.current
+          ? (nameStudioRef.current ?? holdTarget(held))
           : held === "no-project"
             ? forSelectRef.current
             : held === "lines"
@@ -1778,7 +1778,10 @@ export function InvoiceComposer({
             {billingGap && selectedProject && (
               <div className="w-full basis-full text-sm text-[var(--color-charcoal)]">
                 {soloOwnerUnstamped ? (
-                  <p data-focus-key={askFocusKey}>
+                  <p
+                    data-focus-key={askFocusKey}
+                    tabIndex={askFocusKey ? -1 : undefined}
+                  >
                     This job was opened before your studio had one home. Write
                     to{" "}
                     <span
@@ -1790,7 +1793,10 @@ export function InvoiceComposer({
                     and we&apos;ll set it.
                   </p>
                 ) : leadLeftStudio ? (
-                  <p data-focus-key={askFocusKey}>
+                  <p
+                    data-focus-key={askFocusKey}
+                    tabIndex={askFocusKey ? -1 : undefined}
+                  >
                     The lead on this job has left the studio. Write to{" "}
                     <span
                       ref={supportAddressRef}
@@ -1801,7 +1807,10 @@ export function InvoiceComposer({
                     and we&apos;ll move the job to someone on your team.
                   </p>
                 ) : (
-                  <p data-focus-key={askFocusKey}>
+                  <p
+                    data-focus-key={askFocusKey}
+                    tabIndex={askFocusKey ? -1 : undefined}
+                  >
                     {billingGap === "no-client"
                       ? canLinkClient
                         ? `${selectedProject.name} has no client yet. Link one to bill it.`
