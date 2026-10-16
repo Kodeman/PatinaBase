@@ -764,7 +764,7 @@ window.Variant = (function () {
     const el = byId('r-client');
     const body = S.client
       ? `<p class="t-d4">${esc(S.client)}</p><p class="t-meta" id="r-client-done" tabindex="-1">Linked just now · the invoice is addressed to them</p>`
-      : `<p class="t-d4">No client linked</p><p class="t-body-sm">An invoice is addressed to a household, and this document has none yet. Any designer on the job can link one.</p>
+      : `<p class="t-d4">No client linked</p><p class="t-body-sm">An invoice is addressed to a household, and this document has none yet. Only the project&rsquo;s own designer can link one; anyone else is asked to.</p>
          ${S.picker === 'region' ? pickerHTML('region') : '<button type="button" class="act act--tertiary" data-act="open-picker" data-scope="region" data-fix aria-expanded="false"><span class="label">Link a client</span></button>'}`;
     el.innerHTML = `${extra('client')}<p class="t-head" id="r-client-h" tabindex="-1">Household${heldMark('client')}</p><div class="region-body">${body}</div>`;
   }

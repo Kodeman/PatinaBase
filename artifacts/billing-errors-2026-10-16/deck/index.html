@@ -268,7 +268,7 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
         </div>
         <div class="stack-6">
           <p class="t-head ink-faint">Built from four studies</p>
-          <p class="t-body-sm"><strong>A</strong> inventory (27 failure states, from code) · <strong>B</strong> a walk of the running portal with screenshots · <strong>C</strong> three &ldquo;needs attention&rdquo; prototypes · <strong>D</strong> recovery flows per blocker. Plus the SQ-1019 fix, merged to main but not yet in production.</p>
+          <p class="t-body-sm"><strong>A</strong> inventory (27 failure states, from code) · <strong>B</strong> a walk of the running portal with screenshots · <strong>C</strong> three &ldquo;needs attention&rdquo; prototypes · <strong>D</strong> recovery flows per blocker. Plus the SQ-1019 fix: merged to main, not in production, and under repair in SQ-1028 after its review and walk.</p>
         </div>
       </div>
       <p class="t-meta ink-faint">Confidence marks: <span class="conf">[H]</span> seen in the walk or read in code by two studies · <span class="conf">[M]</span> read in code by one study · <span class="conf">[L]</span> inference.</p>
@@ -304,12 +304,12 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
 </section>
 
 <!-- ============ 03 WHAT SQ-1019 FIXED ============ -->
-<section class="slide" id="sheet-3" data-label="Fixed in code: SQ-1019">
+<section class="slide" id="sheet-3" data-label="In code, under repair: SQ-1019">
   <div class="inner">
-    <div class="gutter"><span class="t-head sheet-no">Sheet 03 / 17</span><div class="rule"></div><span class="t-head chapter">Already fixed</span></div>
+    <div class="gutter"><span class="t-head sheet-no">Sheet 03 / 17</span><div class="rule"></div><span class="t-head chapter">In code, under repair</span></div>
     <div class="main">
-      <h2 class="t-d1">Fixed in code, ships on Kody&rsquo;s go</h2>
-      <p class="t-body prose">SQ-1019 is merged to main (<code>64d2a180b</code>, follow-up <code>9af30e16e</code>). It is not in production. It takes the house&rsquo;s §A5 &ldquo;held&rdquo; act as far as one gap at a time.</p>
+      <h2 class="t-d1">Half fixed in code: the hold works, the fix it points to doesn&rsquo;t yet</h2>
+      <p class="t-body prose">SQ-1019 is merged to main (<code>64d2a180b</code>, follow-up <code>9af30e16e</code>). It is not in production. The code review (SQ-1020) and the post-fix walk (SQ-1027, <a href="../walk-after/walk-after.md">walk-after/</a>) found that the hold works but <em>Link a client</em> opens its sheet out of sight. The repair, SQ-1028, is in progress. It ships only after a second review and a re-walk, and only on Kody&rsquo;s go.</p>
       <div class="cols-2">
         <div class="stack">
           <p class="t-head ink-faint">What it does</p>
@@ -319,18 +319,21 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
             <li>No studio: an owner or admin gets <em>Name the studio</em>; everyone else reads &ldquo;Ask your studio owner to name it.&rdquo; Nobody sees a dead act.</li>
             <li>Pressing the held act writes the reason to a status line and moves focus to the fix.</li>
             <li>The project picker marks &ldquo;— no client yet&rdquo;.</li>
-            <li>The uppercase box is gone. Failures use the house failure line, and <em>Try again</em> appears only when a retry can help.</li>
+            <li>The uppercase box is gone, and failures use the house failure line.</li>
             <li>Rollback messages no longer print the invoice&rsquo;s id.</li>
+            <li>Walk-after: the held act, the sentence, the status line and the focus landing all <strong>pass</strong>, at 1400 px, at 390 px and by keyboard (<a href="../walk-after/01a-draft-pressed-held-link-a-client.png">01a</a>, <a href="../walk-after/04-390-draft-pressed-held-reason.png">04</a>).</li>
           </ul>
         </div>
         <div class="stack">
-          <p class="t-head ink-faint">What it leaves, and what to check</p>
+          <p class="t-head ink-faint">What the review and the walk found (SQ-1028 repairs these)</p>
           <ul class="look">
-            <li><strong>The repair may open behind the composer.</strong> The household sheet sits on layer <code>z-50</code>; the composer sits on <code>z-[60]</code>. <em>Link a client</em> likely opens the sheet underneath (Study D, F2). <span class="conf">[M]</span> The post-fix walk (SQ-1027) will confirm.</li>
-            <li><strong>Everyone sees <em>Link a client</em>.</strong> The server lets only the project&rsquo;s own designer link a client (D, F5). A teammate gets a live act that will be refused. <span class="conf">[M]</span></li>
-            <li><strong>One gap at a time.</strong> No studio shows only after the client is linked.</li>
-            <li><strong>Billing-line refusals still pass through raw</strong> (&ldquo;add_invoice_billing_lines: …&rdquo;), and they still offer <em>Try again</em>, which repeats the refusal.</li>
-            <li>Unpriced FF&amp;E, rate-pending hours, sends and project creation are untouched.</li>
+            <li><strong><em>Link a client</em> opens its sheet behind the composer.</strong> The household sheet sits on <code>z-50</code> and the composer on <code>z-[60]</code>. Nothing visible happens, and keyboard focus goes into the hidden sheet. This happens on the Document and from the desk or ⌘K. <span class="conf">[H]</span> Confirmed in the walk (<a href="../walk-after/02a-link-a-client-pressed-sheet-hidden-under-composer.png">02a</a>, <a href="../walk-after/03b-cmdk-link-navigated-sheet-hidden-under-composer.png">03b</a>, <a href="../walk-after/05b-keyboard-tab-focus-inside-hidden-sheet.png">05b</a>).</li>
+            <li><strong>The lines survive, and Draft works after linking</strong> (<a href="../walk-after/02d-draft-succeeds.png">02d</a>). But the old reason stays on screen after the gap is gone (<a href="../walk-after/02c-returned-lines-kept-stale-reason.png">02c</a>). <span class="conf">[H]</span></li>
+            <li><strong><em>Try again</em> shows for every failure,</strong> including after a draft already exists. A retry there can make a second draft. <span class="conf">[H]</span> (code review)</li>
+            <li><strong>Billing-line refusals still pass through raw</strong> (&ldquo;add_invoice_billing_lines: …&rdquo;). <span class="conf">[H]</span></li>
+            <li><strong>Everyone sees <em>Link a client</em>,</strong> but the server accepts only the project&rsquo;s own designer. SQ-1028 offers the act only to the lead designer. Who else should be allowed is Q6. <span class="conf">[H]</span></li>
+            <li><strong><em>Name the studio</em> fails silently.</strong> For an owner of several studios, it can stamp the wrong one. <span class="conf">[H]</span></li>
+            <li>Gaps show one at a time, and no studio appears only after the client is linked. Unpriced FF&amp;E, rate-pending hours, sends and project creation are untouched.</li>
           </ul>
         </div>
       </div>
@@ -346,7 +349,7 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
       <h2 class="t-d1">Most billing failures can be known before the press</h2>
       <div class="tally" role="list">
         <div role="listitem"><span class="n">27</span><span class="l">failure states across five billing surfaces (Study A)</span></div>
-        <div role="listitem"><span class="n">21</span><span class="l">knowable before the press: 10 fully, 11 in part</span></div>
+        <div role="listitem"><span class="n">21</span><span class="l">knowable before the press: 10 fully, 11 in part (counted from inventory.json; the prose summary in inventory.md says 10 / 12 / 5)</span></div>
         <div role="listitem"><span class="n">20</span><span class="l">show the designer raw database text or a bare code</span></div>
         <div role="listitem"><span class="n">7</span><span class="l">have no place to fix it that the screen links to</span></div>
       </div>
@@ -564,8 +567,8 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
             <tr><th scope="row">Clarity</th><td data-label="Spotlight">Highest at the press: the page itself points, every hold labelled.</td><td data-label="Held and land">High for the first hold; the rest are named but reached one at a time.</td><td class="pick" data-label="Before this can go">High, and earliest: every reason in one place before she presses.</td></tr>
             <tr><th scope="row">Interruption</th><td data-label="Spotlight">High. A modal layer at the moment of intent; page locked.</td><td data-label="Held and land">Low. Focus moves; nothing locks.</td><td class="pick" data-label="Before this can go">Lowest. Nothing happens until she chooses to fix something.</td></tr>
             <tr><th scope="row">One hold vs many</th><td data-label="Spotlight">Good at two or three; crowds past four.</td><td data-label="Held and land">Fine at one; serial hopping at many.</td><td class="pick" data-label="Before this can go">Best at many; heavy for a single hold.</td></tr>
-            <tr><th scope="row">Accessibility risk</th><td data-label="Spotlight">Highest: custom trap, inert, live geometry.</td><td data-label="Held and land">Low: native focus and the status line.</td><td class="pick" data-label="Before this can go">Low: list semantics and expandable rows.</td></tr>
-            <tr><th scope="row">390 px</th><td data-label="Spotlight">Works, but windows compete with the fixed bar.</td><td data-label="Held and land">Good.</td><td class="pick" data-label="Before this can go">Good; drawers stack full width.</td></tr>
+            <tr><th scope="row">Accessibility risk</th><td data-label="Spotlight">Highest: custom trap, inert, live geometry. Its trap and announcements are untested with a screen reader.</td><td data-label="Held and land">Low: native focus and the status line.</td><td class="pick" data-label="Before this can go">Low: list semantics and expandable rows.</td></tr>
+            <tr><th scope="row">390 px</th><td data-label="Spotlight">One window at a time, stepped with Next; windows compete with the fixed bar. Not tested on a device.</td><td data-label="Held and land">Good.</td><td class="pick" data-label="Before this can go">Good; drawers stack full width.</td></tr>
             <tr><th scope="row">House fit</th><td data-label="Spotlight">§A5 yes. D4 yes. Second veil needs an L5 ruling.</td><td data-label="Held and land">§A5 and §A6 exactly. D4 yes.</td><td class="pick" data-label="Before this can go">§A5, §A6, D4 yes. Matches the agreement room&rsquo;s readiness list.</td></tr>
             <tr><th scope="row">Build cost</th><td data-label="Spotlight">High: new overlay primitive.</td><td data-label="Held and land">Low: the held act and landing exist; SQ-1019 built half.</td><td class="pick" data-label="Before this can go">Medium: one readiness function, a list, drawers that reuse the client picker.</td></tr>
             <tr><th scope="row">Where it breaks</th><td data-label="Spotlight">Interrupting Leah is the opposite of &ldquo;the studio won&rsquo;t notice Patina&rdquo;.</td><td data-label="Held and land">The second hold depends on reading the sentence or following Next.</td><td class="pick" data-label="Before this can go">A second place to fix the same thing; must stay one write. The price drawer assumes a writer most lines lack (sheet 13).</td></tr>
@@ -638,7 +641,7 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
         <table class="sheet">
           <thead><tr><th>Question</th><th>What the studies say</th><th>Sided with</th><th>Why</th></tr></thead>
           <tbody>
-            <tr><td data-label="Question">Who can link a client?</td><td data-label="What the studies say">The brief and C: any designer on the project. D (F5): the server refuses unless the caller is the project&rsquo;s own designer (<code>00385:44-61</code>). SQ-1019 shows the act to everyone.</td><td data-label="Sided with"><strong>D</strong> <span class="conf">[M]</span></td><td data-label="Why">The server decides, not the brief. A teammate would get a live act that fails. Phase 1, item 2; who <em>should</em> be allowed is Q6.</td></tr>
+            <tr><td data-label="Question">Who can link a client?</td><td data-label="What the studies say">The brief and C: any designer on the project. D (F5): the server refuses unless the caller is the project&rsquo;s own designer (<code>00385:44-61</code>). SQ-1019 shows the act to everyone; SQ-1028 narrows it to the lead designer.</td><td data-label="Sided with"><strong>D</strong> <span class="conf">[H]</span></td><td data-label="Why">The server decides, not the brief. A teammate would get a live act that fails. Phase 1, item 2; who <em>should</em> be allowed is Q6.</td></tr>
             <tr><td data-label="Question">Where is an unpriced piece priced?</td><td data-label="What the studies say">A: &ldquo;the FF&amp;E schedule price control&rdquo;. B: Edit FF&amp;E schedule → Pricing tab, about 6 steps (estimated; not completed). C: price fields in a drawer. D (F6): only labor lines have an editable client price; placed lines have no writer.</td><td data-label="Sided with"><strong>D</strong>, to confirm <span class="conf">[M]</span></td><td data-label="Why">D cites the writer; B didn&rsquo;t finish the path; C&rsquo;s drawer assumes a write that doesn&rsquo;t exist for most lines. The plan prices labor inline and lands the rest. Q4 decides the rest.</td></tr>
             <tr><td data-label="Question">What does the deposit guard check?</td><td data-label="What the studies say">The brief and A (C07): deposit over the remaining balance. B observed only a 0–100 % range check; D reads the same code.</td><td data-label="Sided with"><strong>B + D</strong> <span class="conf">[H]</span></td><td data-label="Why">Seen and read. A&rsquo;s rewrite should name the range: &ldquo;The deposit needs a percent between 0 and 100.&rdquo;</td></tr>
             <tr><td data-label="Question">Does the rate link reach the rate?</td><td data-label="What the studies say">A lists it as the destination. D (F3) predicted it opens beneath the composer. B saw it open Account at Password, behind the composer.</td><td data-label="Sided with"><strong>B</strong> <span class="conf">[H]</span></td><td data-label="Why">Observed. The destination exists in name only; it counts as an eighth with nowhere to go.</td></tr>
@@ -699,9 +702,10 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
         <div class="phase-col p0">
           <p class="t-head">Phase 0 · in code, awaiting go</p>
           <ol>
-            <li>SQ-1019: held Draft for no client and no studio, reason and fix beside it, picker note, house failure line, no ids.<span class="sz">done · composer (Document, Desk, ⌘K)</span></li>
+            <li>SQ-1019: held Draft for no client and no studio, reason and fix beside it, picker note, house failure line, no ids.<span class="sz">merged · hold passes the walk</span></li>
+            <li>SQ-1028: the sheet opens above the composer, no retry on money writes, refusals in plain words, focus kept in the composer, the right studio-mode reason, <em>Name studio</em> made safe.<span class="sz">in progress · then a second review and a re-walk</span></li>
           </ol>
-          <p class="t-body-sm ink-muted">Ship it on Kody&rsquo;s go after the post-fix walk (SQ-1027) confirms it.</p>
+          <p class="t-body-sm ink-muted">Ships on Kody&rsquo;s go, once SQ-1028 passes its review and the re-walk.</p>
         </div>
         <div class="phase-col p1">
           <p class="t-head">Phase 1 · make the fix hold up</p>
@@ -797,8 +801,8 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
           </ol>
           <hr class="rule-hair">
           <p class="t-head ink-faint">Not decided here</p>
-          <p class="t-body-sm ink-muted">The open VISION rulings V1–V5 are untouched. Nothing here changes product code; the spotlight pattern stays out of product code until Kody picks a direction.</p>
-          <p class="t-meta ink-faint">Sources in this folder: <a href="../inventory/inventory.md">inventory/</a> (A), <a href="../walk/walk.md">walk/</a> (B), <a href="../prototypes/index.html">prototypes/</a> (C), <a href="../flows/flows.md">flows/</a> (D); SQ-1019 at <code>64d2a180b</code> and <code>9af30e16e</code> on main <code>91c1d5100</code>. The post-fix walk (SQ-1027) was not an input.</p>
+          <p class="t-body-sm ink-muted">None of the recommendations here rules on an open VISION question (V1–V5). Where one could touch them (who may link a client, Q6; required client at creation, Q7), it is left to you as a question. Act names this deck uses that aren&rsquo;t in act-names.ts yet (&ldquo;Set a client price&rdquo;; &ldquo;Name the studio&rdquo; vs &ldquo;Name studio&rdquo;) are proposals pending Q9. The deck itself changes no product code. Only SQ-1019 and SQ-1028 do, and the spotlight stays out of product code until Kody picks a direction.</p>
+          <p class="t-meta ink-faint">Sources in this folder: <a href="../inventory/inventory.md">inventory/</a> (A), <a href="../walk/walk.md">walk/</a> (B), <a href="../prototypes/index.html">prototypes/</a> (C), <a href="../flows/flows.md">flows/</a> (D), <a href="../walk-after/walk-after.md">walk-after/</a> (SQ-1027); SQ-1019 at <code>64d2a180b</code> and <code>9af30e16e</code> on main <code>91c1d5100</code>. The deck was reviewed by the other provider (SQ-1026), and its findings are folded in.</p>
         </div>
       </div>
     </div>
