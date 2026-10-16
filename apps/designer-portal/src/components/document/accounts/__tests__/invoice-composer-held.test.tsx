@@ -33,6 +33,7 @@ let mockViewerId: string | null = "designer-1";
 let mockStudioMembers: Array<Record<string, unknown>> = [];
 let mockPathname = "/";
 let mockExtraProjects: Array<Record<string, unknown>> = [];
+let mockCanLink: boolean | undefined = false;
 const mockStampStudio = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
@@ -46,6 +47,10 @@ jest.mock("@patina/supabase", () => ({
     }
   },
   useStampProjectPricingStudio: () => ({ mutate: mockStampStudio, isPending: false }),
+  // K5 (00796) — can_link_document_client, asked only off the lead.
+  useCanLinkDocumentClient: (projectId: string | null) => ({
+    data: projectId ? mockCanLink : undefined,
+  }),
   useSessionUserId: () => mockViewerId,
   useOrganizationMembers: (orgId: string) => ({
     data: orgId ? mockStudioMembers : undefined,
@@ -129,6 +134,7 @@ beforeEach(() => {
   mockPathname = "/";
   mockExtraProjects = [];
   mockStampStudio.mockReset();
+  mockCanLink = false;
 });
 
 // The Link a client act opens the sheet in place only on its own project's
@@ -985,16 +991,69 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     }
   });
 
-  it("F9: anyone but the lead is told who can link a client, with no act", () => {
+  it("K5: anyone the server won't admit is told to ask the lead, with a note to copy and no Link act", () => {
     mockProjectClientId = null;
     mockViewerId = "co-member-2";
+    mockCanLink = false;
     render(composer());
     expect(screen.getByText("Hollis House has no client yet. Ask Leah Ames to link one.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Link a client" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy a note" })).toBeInTheDocument();
     fireEvent.click(act());
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Ask Leah Ames to link a client before drafting this invoice.",
+    expect(document.getElementById(act().getAttribute("aria-describedby") ?? "")).toHaveTextContent(
+      "Ask Leah Ames to link a client.",
     );
+  });
+
+  it("K5: an owner/admin of the project's studio is offered Link a client, though not its lead", async () => {
+    mockProjectClientId = null;
+    mockViewerId = "studio-admin-3";
+    mockCanLink = true;
+    render(composer());
+    expect(screen.getByText("Hollis House has no client yet. Link one to bill it.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy a note" })).not.toBeInTheDocument();
+    fireEvent.click(act());
+    expect(document.getElementById(act().getAttribute("aria-describedby") ?? "")).toHaveTextContent(
+      "Link a client before drafting this invoice.",
+    );
+    await waitFor(() => expect(screen.getByRole("link", { name: "Link a client" })).toHaveFocus());
+  });
+
+  describe("K5: Copy a note", () => {
+    const NOTE = "Could you link a client to Hollis House? I'm drafting its invoice.";
+    const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    afterEach(() => {
+      if (original) Object.defineProperty(navigator, "clipboard", original);
+      else delete (navigator as unknown as Record<string, unknown>).clipboard;
+      window.getSelection()?.removeAllRanges();
+    });
+    const withClipboard = (writeText: jest.Mock) =>
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+    it("copies the one-line note inside the click and says Copied., sending nothing", async () => {
+      mockProjectClientId = null;
+      mockViewerId = "co-member-2";
+      const writeText = jest.fn().mockResolvedValue(undefined);
+      withClipboard(writeText);
+      render(composer());
+      fireEvent.click(screen.getByRole("button", { name: "Copy a note" }));
+      // Called synchronously, inside the click.
+      expect(writeText).toHaveBeenCalledWith(NOTE);
+      const copyRow = screen.getByRole("button", { name: "Copy a note" }).parentElement as HTMLElement;
+      await waitFor(() => expect(within(copyRow).getByRole("status")).toHaveTextContent("Copied."));
+      expect(mockCreateDraft).not.toHaveBeenCalled();
+    });
+
+    it("selects the note's text for a manual copy when the clipboard refuses", async () => {
+      mockProjectClientId = null;
+      mockViewerId = "co-member-2";
+      withClipboard(jest.fn().mockRejectedValue(new Error("NotAllowedError")));
+      render(composer());
+      fireEvent.click(screen.getByRole("button", { name: "Copy a note" }));
+      await waitFor(() => expect(window.getSelection()?.toString()).toBe(NOTE));
+      const copyRow = screen.getByRole("button", { name: "Copy a note" }).parentElement as HTMLElement;
+      expect(within(copyRow).getByRole("status").textContent).toBe("");
+    });
   });
 
   it.each([
@@ -1295,6 +1354,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     render(composer());
     expect(screen.getByText("Hollis House isn't tied to your studio yet.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Name studio" }));
+    fireEvent.click(screen.getByRole("button", { name: "Name" }));
     expect(mockStampStudio).toHaveBeenCalledWith(
       { projectId: "project-1", studioId: "studio-1" },
       expect.objectContaining({ onError: expect.any(Function) }),
@@ -1304,12 +1364,80 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     );
   });
 
-  it("F8/F13: never offers a studio its own designer owns, and never tells a solo designer to ask an owner", () => {
+  it("K12: Name studio says what it stamps, then asks once inline before it does", async () => {
+    mockProjectStudioId = null;
+    mockViewerId = "owner-1";
+    mockOrganizations = studioWith("owner");
+    mockStudioMembers = [{ user_id: "designer-1", role: "member", status: "active" }];
+    render(composer());
+    expect(
+      screen.getByText("Naming a studio stamps it on every invoice this project sends."),
+    ).toBeInTheDocument();
+    const nameStudio = screen.getByRole("button", { name: "Name studio" });
+    expect(nameStudio).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("group", { name: "Confirm naming the studio" })).not.toBeInTheDocument();
+
+    fireEvent.click(nameStudio);
+    expect(mockStampStudio).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const confirm = screen.getByRole("group", { name: "Confirm naming the studio" });
+    expect(confirm).toHaveTextContent("Name Middle West Studio? This can't be undone.");
+    expect(nameStudio).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(within(confirm).getByRole("button", { name: "Name" })).toHaveFocus());
+
+    fireEvent.click(within(confirm).getByRole("button", { name: "Not yet" }));
+    expect(mockStampStudio).not.toHaveBeenCalled();
+    expect(screen.queryByRole("group", { name: "Confirm naming the studio" })).not.toBeInTheDocument();
+    expect(nameStudio).toHaveFocus();
+
+    fireEvent.click(nameStudio);
+    fireEvent.click(screen.getByRole("button", { name: "Name" }));
+    expect(mockStampStudio).toHaveBeenCalledTimes(1);
+    expect(mockStampStudio).toHaveBeenCalledWith(
+      { projectId: "project-1", studioId: "studio-1" },
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
+  });
+
+  it("R173: a solo owner on a project opened before her studio had one gets the support path, never Name studio or 'ask an owner'", async () => {
     mockProjectStudioId = null;
     mockOrganizations = studioWith("owner");
     mockStudioMembers = [{ user_id: "designer-1", role: "owner", status: "active" }];
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    try {
+      render(composer());
+      expect(screen.queryByRole("button", { name: "Name studio" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /mailto/i })).not.toBeInTheDocument();
+      expect(document.querySelector('a[href^="mailto:"]')).toBeNull();
+      const support =
+        "This job was opened before your studio had one home. Write to hello@patina.cloud and we'll set it.";
+      expect(screen.getByText(/This job was opened before your studio had one home/)).toHaveTextContent(support);
+      fireEvent.click(act());
+      expect(document.getElementById(act().getAttribute("aria-describedby") ?? "")).toHaveTextContent(support);
+      expect(screen.queryByText(/studio owner|ask an owner/i)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Copy the address" }));
+      expect(writeText).toHaveBeenCalledWith("hello@patina.cloud");
+      const copyRow = screen.getByRole("button", { name: "Copy the address" }).parentElement as HTMLElement;
+      await waitFor(() => expect(within(copyRow).getByRole("status")).toHaveTextContent("Copied."));
+    } finally {
+      if (original) Object.defineProperty(navigator, "clipboard", original);
+      else delete (navigator as unknown as Record<string, unknown>).clipboard;
+    }
+  });
+
+  it("R173: an owner who shares her studio is not a solo owner, and is never told to ask an owner", () => {
+    mockProjectStudioId = null;
+    mockOrganizations = studioWith("owner");
+    mockStudioMembers = [
+      { user_id: "designer-1", role: "owner", status: "active" },
+      { user_id: "designer-2", role: "member", status: "active" },
+    ];
     render(composer());
     expect(screen.queryByRole("button", { name: "Name studio" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy the address" })).not.toBeInTheDocument();
     expect(
       screen.getByText(
         "Hollis House isn't tied to a studio yet. Only a studio that employs its designer can name one.",

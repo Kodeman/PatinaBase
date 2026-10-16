@@ -21,11 +21,16 @@
  * instrument on the open document (R79); it is deliberately NOT asked here.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useOrganizations } from '@patina/supabase';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { useOpenProjectDirect } from '@/hooks/use-project-lifecycle';
 import { dollarsToCents } from '@/lib/document/closure-derivation';
+import {
+  activeDesignStudios,
+  type ComposerStudio,
+} from '@/lib/document/invoice-composer';
 import { todayYmd } from '@/lib/document/format';
 import { DateTextInput } from '../date-text-input';
 import { DocSheet } from './doc-sheet';
@@ -50,11 +55,22 @@ export function OpenProjectSheet({
   const [startDate, setStartDate] = useState(todayYmd());
   const [dateValid, setDateValid] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // K9 (00796) — which studio the project belongs to, asked only when there is
+  // a choice; one studio is stamped by the server as before.
+  const { data: organizations } = useOrganizations();
+  const studios = useMemo(
+    () => activeDesignStudios((organizations ?? []) as ComposerStudio[]),
+    [organizations],
+  );
+  const multiStudio = studios.length > 1;
+  const [studioId, setStudioId] = useState('');
+  const studioRef = useRef<HTMLSelectElement>(null);
 
   // Fresh form (and a fresh retry-id) every open; clear any prior error.
   useEffect(() => {
     if (open) {
       setProjectId(crypto.randomUUID());
+      setStudioId('');
       setClientId(null);
       setTitle('');
       setBandMin('');
@@ -81,6 +97,11 @@ export function OpenProjectSheet({
       );
       return;
     }
+    if (multiStudio && !studioId) {
+      setError('Choose the studio this project belongs to.');
+      studioRef.current?.focus();
+      return;
+    }
 
     openProject.mutate(
       {
@@ -90,6 +111,7 @@ export function OpenProjectSheet({
         budgetMinCents: min,
         budgetMaxCents: max,
         startDate: startDate || null,
+        ...(multiStudio ? { studioId } : {}),
       },
       {
         onSuccess: (newId) => {
@@ -97,7 +119,7 @@ export function OpenProjectSheet({
           router.push(`/doc/${newId}`);
         },
         onError: (err: Error) => {
-          setError(err.message ?? 'Could not open the project. Try again.');
+          setError(openProjectRefusal(err?.message));
         },
       },
     );
@@ -125,6 +147,25 @@ export function OpenProjectSheet({
               placeholder="e.g. Marlowe lake house refresh"
             />
           </Field>
+
+          {multiStudio && (
+            <Field label="Studio">
+              <select
+                ref={studioRef}
+                aria-required="true"
+                value={studioId}
+                onChange={(e) => setStudioId(e.target.value)}
+                className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 text-[14px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+              >
+                <option value="">Choose a studio</option>
+                {studios.map((studio) => (
+                  <option key={studio.id} value={studio.id}>
+                    {studio.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
 
           <Field label="Client">
             {/* The R73 picker: linked clients select directly; a captured
@@ -213,6 +254,21 @@ export function OpenProjectSheet({
       </form>
     </DocSheet>
   );
+}
+
+/** The refusal in words; a raw server or trigger message is never printed. */
+function openProjectRefusal(message: unknown): string {
+  const text = typeof message === 'string' ? message : '';
+  if (/studio_not_member/.test(text)) {
+    return "You don't hold a seat in that studio. Choose another.";
+  }
+  if (/studio_id_not_designer_studio/.test(text)) {
+    return 'You belong to more than one studio. Choose the one this project belongs to.';
+  }
+  if (/requires an authenticated user/.test(text)) {
+    return "You're signed out. Sign in again to create the project file.";
+  }
+  return "The project file couldn't be created. Try again.";
 }
 
 function Field({

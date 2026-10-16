@@ -48,9 +48,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   useAddInvoiceBillingLines,
+  useCanLinkDocumentClient,
   InvoiceBillingGapError,
   useCreateDraftInvoice,
   useCreateDraftStudioInvoice,
@@ -278,6 +279,8 @@ export function InvoiceComposer({
     seenAt: number;
   } | null>(null);
   const [nameStudioError, setNameStudioError] = useState<string | null>(null);
+  // K12 — Name studio asks once, inline, before it stamps.
+  const [confirmingName, setConfirmingName] = useState(false);
   const statusId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const forSelectRef = useRef<HTMLSelectElement>(null);
@@ -288,6 +291,9 @@ export function InvoiceComposer({
   const addLineRef = useRef<HTMLButtonElement>(null);
   const linkClientRef = useRef<HTMLAnchorElement>(null);
   const nameStudioRef = useRef<HTMLButtonElement>(null);
+  const confirmNameRef = useRef<HTMLButtonElement>(null);
+  const askNoteRef = useRef<HTMLSpanElement>(null);
+  const supportAddressRef = useRef<HTMLSpanElement>(null);
   const draftActRef = useRef<HTMLButtonElement>(null);
   // The project whose Link a client opened the household sheet, which hands
   // focus back to it.
@@ -683,9 +689,15 @@ export function InvoiceComposer({
     };
   }, [billingGap, projectId]);
 
-  // F9 — set_document_client (00387) answers only to the project's lead.
   const isLead =
     !!viewerId && !!selectedProject && selectedProject.designer_id === viewerId;
+  // K5 (00796) — set_document_client answers to the lead or an owner/admin of
+  // the project's studio; can_link_document_client is that same predicate.
+  // The lead is always admitted, so only anyone else waits on the read.
+  const { data: canLinkAsStudio } = useCanLinkDocumentClient(
+    billingGap === "no-client" && !isLead ? projectId : null,
+  );
+  const canLinkClient = isLead || canLinkAsStudio === true;
   const leadName: string =
     selectedProject?.designer?.display_name ||
     selectedProject?.designer?.full_name ||
@@ -708,6 +720,22 @@ export function InvoiceComposer({
         member.role !== "guest" &&
         member.role !== "owner",
     );
+  // R173 — a solo owner (the only active non-guest seat in the one studio she
+  // holds) on a project opened before it had a studio. The server keeps that
+  // project closed to her (HT-3-g(3)), so the only fix is support's.
+  const seatedMembers = (viewerStudioMembers ?? []).filter(
+    (member: AnyRecord) => member.status === "active" && member.role !== "guest",
+  );
+  const soloOwnerUnstamped =
+    billingGap === "no-studio" &&
+    isLead &&
+    !!viewerStudio &&
+    studios.length === 1 &&
+    studios[0].id === viewerStudio.id &&
+    studios[0].membership?.role === "owner" &&
+    seatedMembers.length === 1 &&
+    seatedMembers[0].user_id === viewerId;
+  useEffect(() => setConfirmingName(false), [projectId]);
 
   // §A5 — the first unmet requirement; the held act names it and lands on it.
   const blocker: ComposerBlocker | null = studioMode
@@ -738,9 +766,10 @@ export function InvoiceComposer({
   const heldReason = heldBlocker
     ? blockerReason(heldBlocker, {
         projectName: selectedProject?.name ?? "This project",
-        isLead,
+        canLinkClient,
         leadName,
         canNameStudio,
+        soloOwnerUnstamped,
         hasStudioOwner,
         studioLoading: organizationsLoading,
       })
@@ -1591,18 +1620,52 @@ export function InvoiceComposer({
             </div>
             {billingGap && selectedProject && (
               <div className="w-full basis-full text-sm text-[var(--color-charcoal)]">
-                <p>
-                  {billingGap === "no-client"
-                    ? isLead
-                      ? `${selectedProject.name} has no client yet. Link one to bill it.`
-                      : `${selectedProject.name} has no client yet. Ask ${leadName} to link one.`
-                    : canNameStudio
-                      ? `${selectedProject.name} isn't tied to your studio yet.`
-                      : hasStudioOwner
-                        ? `${selectedProject.name} isn't tied to a studio yet. Ask your studio owner to name it.`
-                        : `${selectedProject.name} isn't tied to a studio yet. Only a studio that employs its designer can name one.`}
-                </p>
-                {billingGap === "no-client" && isLead && (
+                {soloOwnerUnstamped ? (
+                  <p>
+                    This job was opened before your studio had one home. Write to{" "}
+                    <span ref={supportAddressRef} className="font-mono text-[12px]">
+                      {SUPPORT_ADDRESS}
+                    </span>{" "}
+                    and we&apos;ll set it.
+                  </p>
+                ) : (
+                  <p>
+                    {billingGap === "no-client"
+                      ? canLinkClient
+                        ? `${selectedProject.name} has no client yet. Link one to bill it.`
+                        : `${selectedProject.name} has no client yet. Ask ${leadName} to link one.`
+                      : canNameStudio
+                        ? `${selectedProject.name} isn't tied to your studio yet.`
+                        : hasStudioOwner
+                          ? `${selectedProject.name} isn't tied to a studio yet. Ask your studio owner to name it.`
+                          : `${selectedProject.name} isn't tied to a studio yet. Only a studio that employs its designer can name one.`}
+                  </p>
+                )}
+                {soloOwnerUnstamped && (
+                  <CopyAct
+                    text={SUPPORT_ADDRESS}
+                    selectRef={supportAddressRef}
+                    actionKey="copy-support-address"
+                  >
+                    Copy the address
+                  </CopyAct>
+                )}
+                {billingGap === "no-client" && !canLinkClient && (
+                  // M4 — the note goes nowhere on its own; she sends it herself.
+                  <p className="mt-1 text-[var(--color-aged-oak)]">
+                    “<span ref={askNoteRef}>{askLinkNote(selectedProject.name)}</span>”
+                  </p>
+                )}
+                {billingGap === "no-client" && !canLinkClient && (
+                  <CopyAct
+                    text={askLinkNote(selectedProject.name)}
+                    selectRef={askNoteRef}
+                    actionKey="copy-link-client-note"
+                  >
+                    Copy a note
+                  </CopyAct>
+                )}
+                {billingGap === "no-client" && canLinkClient && (
                   // One anchor on every page, so the sheet hands focus back to
                   // it on Esc. On this project's document it opens the sheet in
                   // place, above the folio and its draft; anywhere else it walks
@@ -1628,32 +1691,74 @@ export function InvoiceComposer({
                   </DocumentAction>
                 )}
                 {canNameStudio && viewerStudio && (
+                  <p className="mt-1">Naming a studio stamps it on every invoice this project sends.</p>
+                )}
+                {canNameStudio && viewerStudio && (
                   <DocumentAction
                     ref={nameStudioRef}
                     actionKey="name-invoice-studio"
                     surfaceKey="accounts"
                     regionKey="invoice-composer"
                     variant="tertiary"
-                    loading={stampProjectStudio.isPending}
-                    loadingLabel="Naming…"
+                    aria-expanded={confirmingName}
                     onClick={() => {
                       setNameStudioError(null);
-                      stampProjectStudio.mutate(
-                        { projectId, studioId: viewerStudio.id },
-                        {
-                          onError: (e) =>
-                            setNameStudioError(
-                              stampStudioRefusal(
-                                (e as { message?: unknown } | null)?.message,
-                                viewerStudio.name,
-                              ),
-                            ),
-                        },
-                      );
+                      setConfirmingName(true);
+                      requestAnimationFrame(() => confirmNameRef.current?.focus());
                     }}
                   >
                     Name studio
                   </DocumentAction>
+                )}
+                {canNameStudio && viewerStudio && confirmingName && (
+                  // K12 — one inline confirm, no modal: the stamp is final.
+                  <div
+                    role="group"
+                    aria-label="Confirm naming the studio"
+                    className="mt-1 flex flex-wrap items-center gap-x-3"
+                  >
+                    <p>Name {viewerStudio.name}? This can&apos;t be undone.</p>
+                    <DocumentAction
+                      ref={confirmNameRef}
+                      actionKey="confirm-name-invoice-studio"
+                      surfaceKey="accounts"
+                      regionKey="invoice-composer"
+                      variant="tertiary"
+                      loading={stampProjectStudio.isPending}
+                      loadingLabel="Naming…"
+                      onClick={() => {
+                        stampProjectStudio.mutate(
+                          { projectId, studioId: viewerStudio.id },
+                          {
+                            onError: (e) => {
+                              setConfirmingName(false);
+                              nameStudioRef.current?.focus();
+                              setNameStudioError(
+                                stampStudioRefusal(
+                                  (e as { message?: unknown } | null)?.message,
+                                  viewerStudio.name,
+                                ),
+                              );
+                            },
+                          },
+                        );
+                      }}
+                    >
+                      Name
+                    </DocumentAction>
+                    <DocumentAction
+                      actionKey="cancel-name-invoice-studio"
+                      surfaceKey="accounts"
+                      regionKey="invoice-composer"
+                      variant="tertiary"
+                      onClick={() => {
+                        setConfirmingName(false);
+                        nameStudioRef.current?.focus();
+                      }}
+                    >
+                      Not yet
+                    </DocumentAction>
+                  </div>
                 )}
                 <ActFailLine
                   error={
@@ -1729,22 +1834,25 @@ function blockerReason(
   blocker: ComposerBlocker,
   facts: {
     projectName: string;
-    isLead: boolean;
+    canLinkClient: boolean;
     leadName: string;
     canNameStudio: boolean;
+    soloOwnerUnstamped: boolean;
     hasStudioOwner: boolean;
     studioLoading: boolean;
   },
 ): string {
   switch (blocker) {
     case "no-client":
-      return facts.isLead
+      return facts.canLinkClient
         ? "Link a client before drafting this invoice."
-        : `Ask ${facts.leadName} to link a client before drafting this invoice.`;
+        : `Ask ${facts.leadName} to link a client.`;
     case "no-studio":
       return facts.canNameStudio
         ? "Name the studio before drafting this invoice."
-        : facts.hasStudioOwner
+        : facts.soloOwnerUnstamped
+          ? `This job was opened before your studio had one home. Write to ${SUPPORT_ADDRESS} and we'll set it.`
+          : facts.hasStudioOwner
           ? "Ask your studio owner to name this project’s studio."
           : `${facts.projectName} can’t be billed until a studio that employs its designer names it.`;
     case "no-project":
@@ -1766,6 +1874,64 @@ function blockerReason(
         ? "Wait for your studio to finish loading."
         : "This account belongs to no studio yet, so there is none to bill from.";
   }
+}
+
+const SUPPORT_ADDRESS = "hello@patina.cloud";
+
+/** K5 — the one line a designer who can't link a client copies to its lead. */
+function askLinkNote(projectName: string): string {
+  return `Could you link a client to ${projectName}? I'm drafting its invoice.`;
+}
+
+/**
+ * A quiet copy act. Nothing is sent (M4): the text goes to the clipboard, or,
+ * where the clipboard refuses, the visible text is selected for a manual copy.
+ * writeText is called inside the click, which Safari requires.
+ */
+function CopyAct({
+  text,
+  selectRef,
+  actionKey,
+  children,
+}: {
+  text: string;
+  selectRef: RefObject<HTMLElement | null>;
+  actionKey: string;
+  children: ReactNode;
+}) {
+  const [copied, setCopied] = useState(false);
+  const selectText = () => {
+    const node = selectRef.current;
+    const selection = window.getSelection();
+    if (!node || !selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-x-3">
+      <DocumentAction
+        actionKey={actionKey}
+        surfaceKey="accounts"
+        regionKey="invoice-composer"
+        variant="tertiary"
+        onClick={() => {
+          setCopied(false);
+          try {
+            navigator.clipboard.writeText(text).then(() => setCopied(true), selectText);
+          } catch {
+            selectText();
+          }
+        }}
+      >
+        {children}
+      </DocumentAction>
+      <span role="status" className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        {copied ? "Copied." : ""}
+      </span>
+    </div>
+  );
 }
 
 /** A refusal before anything was written: a billing gap or a bad request is
