@@ -21,10 +21,25 @@ let mockOrganizations: Array<Record<string, unknown>> = [
   },
 ];
 let mockOrganizationsLoading = false;
+const mockViewerId = "designer-1";
+const mockStudioMembers: Array<Record<string, unknown>> = [];
+const mockStampStudio = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
-  InvoiceBillingGapError: class InvoiceBillingGapError extends Error {},
-  useStampProjectPricingStudio: () => ({ mutate: jest.fn(), isPending: false }),
+  // Faithful to use-invoices: the composer reads `gap` off the refusal.
+  InvoiceBillingGapError: class InvoiceBillingGapError extends Error {
+    gap: string;
+    constructor(gap: string, message = `billing gap: ${gap}`) {
+      super(message);
+      this.name = "InvoiceBillingGapError";
+      this.gap = gap;
+    }
+  },
+  useStampProjectPricingStudio: () => ({ mutate: mockStampStudio, isPending: false }),
+  useSessionUserId: () => mockViewerId,
+  useOrganizationMembers: (orgId: string) => ({
+    data: orgId ? mockStudioMembers : undefined,
+  }),
   useCreateDraftInvoice: () => ({
     mutateAsync: mockCreateDraft,
     isPending: false,
@@ -57,8 +72,10 @@ jest.mock("@patina/supabase", () => ({
         status: "active",
         client_id: "client-9",
         studio_id: "studio-1",
+        designer_id: "designer-1",
       },
     ],
+    dataUpdatedAt: 1,
   }),
   useClaimTimeEntries: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUnbilledTime: () => ({ data: { entries: [] }, isLoading: false }),
@@ -286,7 +303,13 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
-    expect(await screen.findByText(/Nothing was billed/)).toBeInTheDocument();
+    // F5 — the refusal in the composer's words, naming the purchase by the
+    // label it was printed under: no RPC name, no id, and one sentence each.
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Pair of table lamps is already on another invoice. Nothing was billed.",
+    );
+    expect(alert).not.toHaveTextContent(/add_invoice_billing_lines|\bp1\b/);
     expect(mockDeleteDraft).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1" });
     expect(onDrafted).not.toHaveBeenCalled();
   });

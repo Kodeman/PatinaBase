@@ -7,11 +7,15 @@
 import {
   STUDIO_TARGET,
   activeDesignStudios,
+  asSentence,
+  billingLinesRefusal,
   buildComposerLines,
   canDraftStudioInvoice,
   deriveInvoiceBillingGap,
   dollarsToCents,
   partitionFfeBillable,
+  stampStudioRefusal,
+  studioInvoiceBlocker,
   unbilledMilestones,
   unfilledAllowanceText,
   type ComposerFfeItem,
@@ -505,5 +509,99 @@ describe("deriveInvoiceBillingGap", () => {
     expect(deriveInvoiceBillingGap({ client_id: "c1", studio_id: null })).toBe("no-studio");
     expect(deriveInvoiceBillingGap({ client_id: null, studio_id: null })).toBe("no-client");
     expect(deriveInvoiceBillingGap({ client_id: "c1", studio_id: "s1" })).toBeNull();
+  });
+});
+
+// ── US-35 (SQ-1028) — the held act's reasons and the writers' refusals ───────
+
+describe("studioInvoiceBlocker", () => {
+  const ready = {
+    clientId: "client-1",
+    title: "Design consultation",
+    studioId: "studio-1",
+    lines: [{ kind: "adhoc" as const, description: "Fee", quantity: 1, unitAmountCents: 100, sortOrder: 0 }],
+  };
+
+  it("names the first unmet requirement, in the order the composer asks", () => {
+    expect(studioInvoiceBlocker({ ...ready, clientId: null, title: "  " })).toBe("household");
+    expect(studioInvoiceBlocker({ ...ready, title: "  ", studioId: "" })).toBe("regarding");
+    expect(studioInvoiceBlocker({ ...ready, studioId: "", lines: [] })).toBe("studio");
+    expect(studioInvoiceBlocker({ ...ready, lines: [] })).toBe("lines");
+    expect(studioInvoiceBlocker(ready)).toBeNull();
+  });
+});
+
+describe("asSentence", () => {
+  it("ends a reason with one full stop, never two", () => {
+    expect(asSentence("Could not attach the time entries")).toBe("Could not attach the time entries.");
+    expect(asSentence("Already ended.")).toBe("Already ended.");
+    expect(asSentence("Is it billed?")).toBe("Is it billed?");
+  });
+});
+
+describe("billingLinesRefusal", () => {
+  const names: Record<string, string> = {
+    "11111111-1111-1111-1111-111111111111": "Pair of table lamps",
+    "22222222-2222-2222-2222-222222222222": "White Glove",
+    "33333333-3333-3333-3333-333333333333": "Bespoke sofa",
+  };
+  const nameOf = (id: string) => names[id];
+  const P = "11111111-1111-1111-1111-111111111111";
+  const R = "22222222-2222-2222-2222-222222222222";
+  const L = "33333333-3333-3333-3333-333333333333";
+  const refuse = (reason: string) => billingLinesRefusal(`add_invoice_billing_lines: ${reason}`, nameOf);
+
+  it.each([
+    [`purchase ${P} is already billed`, "Pair of table lamps is already on another invoice."],
+    [`purchase ${P} was voided`, "Pair of table lamps was voided."],
+    [`purchase ${P} is on another project`, "Pair of table lamps belongs to another project."],
+    [`purchase ${P} is not billable to the client`, "Pair of table lamps isn't billable to the client."],
+    [`purchase ${P} is in EUR, the invoice in USD`, "Pair of table lamps is in a different currency from the invoice."],
+    [`purchase ${P} is over the line limit`, "Pair of table lamps is over the $10,000,000 line limit."],
+    [`purchase ${P} was refunded`, "Pair of table lamps can no longer be billed."],
+    [`rider ${R} has no estimate or actual; enter amountCents`, "White Glove has no estimate or actual yet. Enter a billed amount."],
+    [`rider ${R} amount is outside 0 to 1000000000`, "White Glove must bill between $0 and $10,000,000."],
+    [`line ${L} has no client price; enter amountCents`, "Bespoke sofa has no client price yet. Set one to bill it."],
+    [`line ${L} has no deposit billed; bill it in full instead`, "Bespoke sofa has no deposit billed yet. Bill it in full instead."],
+    [`line ${L} was removed`, "Bespoke sofa was removed from the schedule."],
+    [`line ${L} is not on this invoice's project`, "Bespoke sofa belongs to another project."],
+    [`a deposit of 120000 cents is more than the 100000 cents left to bill on line ${L}`, "The deposit on Bespoke sofa is more than is left to bill."],
+    [`a balance of 90000 cents is more than the 50000 cents left on line ${L} after its deposit`, "The balance on Bespoke sofa is more than is left after its deposit."],
+    ["a deposit needs depositPct above 0 and at most 100, to two places", "A deposit must be above 0% and at most 100%, to two decimal places."],
+    ["invoice 44444444-4444-4444-4444-444444444444 is sent, not a draft", "The invoice stopped being a draft before its lines were added."],
+    ["lines must be an array of 1 to 200 objects", "An invoice takes at most 200 billing lines. Untick some and draft again."],
+  ])("says %s in the composer's words", (reason, sentence) => {
+    expect(refuse(reason)).toBe(sentence);
+  });
+
+  it("names an unknown subject by its kind, never by its id", () => {
+    const said = billingLinesRefusal(
+      "add_invoice_billing_lines: purchase 99999999-9999-9999-9999-999999999999 is already billed",
+    );
+    expect(said).toBe("A purchase is already on another invoice.");
+  });
+
+  it.each([
+    ["an unrecognised reason", "add_invoice_billing_lines: purchase p1 exploded into 12 cents"],
+    ["an unprefixed message", "TypeError: Failed to fetch"],
+    ["no message at all", undefined],
+  ])("falls back to one plain sentence for %s", (_label, message) => {
+    const said = billingLinesRefusal(message, nameOf);
+    expect(said).toBe("The billing lines couldn't be added to the draft.");
+    expect(said).not.toMatch(/add_invoice_billing_lines|p1|cents/);
+  });
+});
+
+describe("stampStudioRefusal", () => {
+  it.each([
+    ["stamp_project_pricing_studio: this project already names a studio", "This project already names a studio. Reload to see which."],
+    ["only an owner or admin of the studio being named may name it", "Only an owner or admin of Middle West Studio can name it here."],
+    ["the studio being named must be the studio that EMPLOYS its designer", "Middle West Studio doesn't employ this project's designer, so it can't be named here."],
+    ["this studio holds no rate for this project's designer that somebody other than she wrote", "Middle West Studio has no rate for this project's designer yet. Add one on the studio rate card first."],
+    ["no actor", "You're signed out. Sign in again to name the studio."],
+    ["this project cannot be stamped", "The studio could not be named on this document."],
+    [undefined, "The studio could not be named on this document."],
+  ])("maps %s", (message, sentence) => {
+    expect(stampStudioRefusal(message, "Middle West Studio")).toBe(sentence);
   });
 });

@@ -220,6 +220,7 @@ export function DocSheet({
   initialFocusRef,
   labelledBy,
   kind,
+  aboveFolio = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -256,6 +257,10 @@ export function DocSheet({
   /** OD-6 — which sheet this is, published beside `data-doc-sheet-origin` so a
    *  walk can name the panel it is standing in. */
   kind?: string;
+  /** US-35 — the sheet is opened from inside a PaperFolioSheet (z-[60]) and
+   *  must lay above it rather than beneath its backdrop. Only
+   *  that caller sets it; every other sheet keeps the z-50 layer. */
+  aboveFolio?: boolean;
 }) {
   const restoreRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -366,7 +371,7 @@ export function DocSheet({
       data-doc-sheet-stack-state={isTopModal ? 'top' : 'covered'}
       aria-hidden={isTopModal ? undefined : true}
       inert={isTopModal ? undefined : true}
-      className="doc-sheet-layer fixed inset-0 z-50 box-border flex items-start justify-center overflow-hidden overscroll-contain pb-[var(--doc-sheet-inset-bottom)] pl-[var(--doc-sheet-inset-left)] pr-[var(--doc-sheet-inset-right)] pt-[var(--doc-sheet-inset-top)]"
+      className={`doc-sheet-layer fixed inset-0 ${aboveFolio ? 'z-[65]' : 'z-50'} box-border flex items-start justify-center overflow-hidden overscroll-contain pb-[var(--doc-sheet-inset-bottom)] pl-[var(--doc-sheet-inset-left)] pr-[var(--doc-sheet-inset-right)] pt-[var(--doc-sheet-inset-top)]`}
     >
       {/* The `--veil` over the desk (L4), a backdrop button so a click in the
           margin puts the sheet back. */}

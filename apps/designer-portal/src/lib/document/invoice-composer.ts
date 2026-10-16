@@ -713,16 +713,151 @@ export function deriveInvoiceBillingGap(project: { client_id?: string | null; st
   return null;
 }
 
+/** The first thing a studio invoice still lacks, in the order the composer
+ *  asks for them (§A5: the held act names it and lands on it). */
+export type StudioInvoiceBlocker = "household" | "regarding" | "studio" | "lines";
+
+export function studioInvoiceBlocker(
+  draft: StudioInvoiceDraft,
+): StudioInvoiceBlocker | null {
+  if (!draft.clientId) return "household";
+  if (draft.title.trim().length === 0) return "regarding";
+  if (!draft.studioId) return "studio";
+  if (draft.lines.length === 0) return "lines";
+  return null;
+}
+
 /**
  * The pure twin of the composer's Draft act in studio mode: a household, a
  * regarding line, a studio to bill from, and at least one line that carries
  * money. (Busy/pending state stays in the component, as it does for houses.)
  */
 export function canDraftStudioInvoice(draft: StudioInvoiceDraft): boolean {
-  return (
-    Boolean(draft.clientId) &&
-    draft.title.trim().length > 0 &&
-    Boolean(draft.studioId) &&
-    draft.lines.length > 0
-  );
+  return studioInvoiceBlocker(draft) === null;
+}
+
+/** Ends a reason with a full stop, so a sentence can follow it. */
+export function asSentence(text: string): string {
+  const trimmed = text.trim();
+  return /[.!?…]["”’)]*$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+const BILLING_LINES_GENERIC = "The billing lines couldn't be added to the draft.";
+const LINE_LIMIT = "$10,000,000";
+
+type BillingSubjectKind = "purchase" | "rider" | "line";
+
+const SUBJECT_FALLBACK: Record<BillingSubjectKind, string> = {
+  purchase: "a purchase",
+  rider: "a rider",
+  line: "a line",
+};
+
+/** What each subject-scoped refusal of add_invoice_billing_lines means. */
+const SUBJECT_REFUSALS: Array<[RegExp, (subject: string) => string]> = [
+  [/^not found or access denied$/, (s) => `${s} couldn't be found. It may have been removed.`],
+  [/^(is on another project|is not on this invoice's project)$/, (s) => `${s} belongs to another project.`],
+  [/^was voided$/, (s) => `${s} was voided.`],
+  [/^is already billed$/, (s) => `${s} is already on another invoice.`],
+  [/^was removed$/, (s) => `${s} was removed from the schedule.`],
+  [/^was \S+$/, (s) => `${s} can no longer be billed.`],
+  [/^is not billable to the client$/, (s) => `${s} isn't billable to the client.`],
+  [/^is in \S+, the invoice in \S+$/, (s) => `${s} is in a different currency from the invoice.`],
+  [/^is over the line limit$/, (s) => `${s} is over the ${LINE_LIMIT} line limit.`],
+  [/^has no estimate or actual; enter amountCents$/, (s) => `${s} has no estimate or actual yet. Enter a billed amount.`],
+  [/^amount is outside 0 to 1000000000$/, (s) => `${s} must bill between $0 and ${LINE_LIMIT}.`],
+  [/^has no client price; enter amountCents$/, (s) => `${s} has no client price yet. Set one to bill it.`],
+  [/^has no deposit billed; bill it in full instead$/, (s) => `${s} has no deposit billed yet. Bill it in full instead.`],
+  [/^has nothing left to bill after its deposit$/, (s) => `${s} has nothing left to bill after its deposit.`],
+];
+
+/**
+ * add_invoice_billing_lines (00718) refuses in its own words: the RPC's name,
+ * the subject's id, cents. None of that reaches the designer (US-35 copy):
+ * each refusal becomes a sentence that names the purchase, rider or line by
+ * the label the composer printed for it, and anything unrecognised — a
+ * malformed request, a dropped connection — says only that the lines were not
+ * added.
+ */
+export function billingLinesRefusal(
+  message: unknown,
+  nameOf: (id: string) => string | null | undefined = () => null,
+): string {
+  if (typeof message !== "string") return BILLING_LINES_GENERIC;
+  const prefixed = /^add_invoice_billing_lines:\s*(.+)$/.exec(message.trim());
+  if (!prefixed) return BILLING_LINES_GENERIC;
+  const reason = prefixed[1].trim();
+  const subject = (kind: BillingSubjectKind, id: string, start: boolean) => {
+    const named = nameOf(id)?.trim();
+    if (named) return named;
+    const fallback = SUBJECT_FALLBACK[kind];
+    return start ? fallback[0].toUpperCase() + fallback.slice(1) : fallback;
+  };
+
+  if (/^not authenticated$/.test(reason)) {
+    return "You're signed out. Sign in again, then draw the invoice.";
+  }
+  if (/^invoice \S+ not found or access denied$/.test(reason)) {
+    return "You can't add billing lines to this project's invoices.";
+  }
+  if (/^invoice \S+ is \S+, not a draft$/.test(reason)) {
+    return "The invoice stopped being a draft before its lines were added.";
+  }
+  if (/^a studio invoice has no project to bill from$/.test(reason)) {
+    return "A studio invoice can't carry purchases, riders, deposits or balances.";
+  }
+  if (/^lines must be an array of 1 to 200 objects$/.test(reason)) {
+    return "An invoice takes at most 200 billing lines. Untick some and draft again.";
+  }
+  if (/^amountCents must be whole cents from 0 to 1000000000$/.test(reason)) {
+    return `A billed amount must be between $0 and ${LINE_LIMIT}.`;
+  }
+  if (/^description is at most 2000 characters$/.test(reason)) {
+    return "A line description can be at most 2,000 characters.";
+  }
+  if (/^a deposit needs depositPct above 0 and at most 100, to two places$/.test(reason)) {
+    return "A deposit must be above 0% and at most 100%, to two decimal places.";
+  }
+  if (/^a deposit needs depositPct above 0 and at most 100$/.test(reason)) {
+    return "A deposit must be above 0% and at most 100%.";
+  }
+  const deposit = /^a deposit of \S+ cents is more than the \S+ cents left to bill on line (\S+)$/.exec(reason);
+  if (deposit) {
+    return `The deposit on ${subject("line", deposit[1], false)} is more than is left to bill.`;
+  }
+  const balance = /^a balance of \S+ cents is more than the \S+ cents left on line (\S+) after its deposit$/.exec(reason);
+  if (balance) {
+    return `The balance on ${subject("line", balance[1], false)} is more than is left after its deposit.`;
+  }
+  const scoped = /^(purchase|rider|line) (\S+) (.+)$/.exec(reason);
+  if (scoped) {
+    const [, kind, id, rest] = scoped;
+    const refusal = SUBJECT_REFUSALS.find(([pattern]) => pattern.test(rest));
+    if (refusal) return refusal[1](subject(kind as BillingSubjectKind, id, true));
+  }
+  return BILLING_LINES_GENERIC;
+}
+
+/**
+ * stamp_project_pricing_studio (00606) refuses in the same register; the
+ * composer's Name studio act says why in the studio's own name.
+ */
+export function stampStudioRefusal(message: unknown, studioName: string): string {
+  const text = typeof message === "string" ? message : "";
+  if (/already names a studio/.test(text)) {
+    return "This project already names a studio. Reload to see which.";
+  }
+  if (/only an owner or admin of the studio being named/.test(text)) {
+    return `Only an owner or admin of ${studioName} can name it here.`;
+  }
+  if (/EMPLOYS its designer/i.test(text)) {
+    return `${studioName} doesn't employ this project's designer, so it can't be named here.`;
+  }
+  if (/holds no rate for this project's designer/.test(text)) {
+    return `${studioName} has no rate for this project's designer yet. Add one on the studio rate card first.`;
+  }
+  if (/no actor/.test(text)) {
+    return "You're signed out. Sign in again to name the studio.";
+  }
+  return "The studio could not be named on this document.";
 }

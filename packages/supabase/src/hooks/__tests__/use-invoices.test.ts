@@ -396,10 +396,39 @@ describe('useCreateDraftInvoice', () => {
     supabaseClient.from.mockReturnValue(project);
 
     const config = useCreateDraftInvoice() as unknown as CreateConfig;
-    await expect(config.mutationFn(input)).rejects.toThrow(
-      'Failed to load invoice project: row hidden by RLS'
+    const failure = config.mutationFn(input);
+    await expect(failure).rejects.toThrow(
+      "We couldn't open this project to bill it. Reload and try again."
     );
+    await expect(failure).rejects.not.toThrow(/row hidden by RLS/);
     expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no row', null],
+    ['another project', { id: 'project-b', designer_id: 'lead-a', client_id: 'client-a', studio_id: 'studio-a' }],
+  ] as const)('reports a missing project (%s) as missing, not as a missing designer', async (_label, data) => {
+    supabaseClient.from.mockReturnValue(projectRead({ data, error: null }));
+    const config = useCreateDraftInvoice() as unknown as CreateConfig;
+    const failure = config.mutationFn(input);
+    await expect(failure).rejects.toThrow("We couldn't find this project. Reload and try again.");
+    await expect(failure).rejects.not.toMatchObject({ name: 'InvoiceBillingGapError' });
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it('refetches projects when a billing gap refuses the draft, and only then', async () => {
+    type ErrorConfig = { onError: (error: unknown) => void };
+    supabaseClient.from.mockReturnValue(
+      projectRead({ data: { id: 'project-a', designer_id: 'lead-a', client_id: null, studio_id: 'studio-a' }, error: null })
+    );
+    const config = useCreateDraftInvoice() as unknown as CreateConfig & ErrorConfig;
+    const gap = await config.mutationFn(input).catch((e: unknown) => e);
+    config.onError(gap);
+    expect(invalidatedKeys()).toEqual([['projects']]);
+
+    invalidateQueries.mockClear();
+    config.onError(new Error('network down'));
+    expect(invalidateQueries).not.toHaveBeenCalled();
   });
 
   it('does not create a header when a supplied client mismatches the project', async () => {

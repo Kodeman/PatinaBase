@@ -8,6 +8,7 @@
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { InvoiceComposer } from "../invoice-composer";
+import { OPEN_HOUSEHOLD_SHEET_EVENT } from "@/lib/document/registry";
 
 const mockCreateStudioDraft = jest.fn();
 const mockCreateDraft = jest.fn();
@@ -22,10 +23,29 @@ let mockOrganizations: Array<Record<string, unknown>> = [
 ];
 let mockOrganizationsLoading = false;
 let mockProjectClientId: string | null = "client-9";
+let mockProjectStudioId: string | null = "studio-1";
+let mockProjectDesignerId: string | null = "designer-1";
+let mockProjectsUpdatedAt = 1;
+let mockViewerId: string | null = "designer-1";
+let mockStudioMembers: Array<Record<string, unknown>> = [];
+let mockPathname = "/";
+const mockStampStudio = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
-  InvoiceBillingGapError: class InvoiceBillingGapError extends Error {},
-  useStampProjectPricingStudio: () => ({ mutate: jest.fn(), isPending: false }),
+  // Faithful to use-invoices: the composer reads `gap` off the refusal.
+  InvoiceBillingGapError: class InvoiceBillingGapError extends Error {
+    gap: string;
+    constructor(gap: string, message = `billing gap: ${gap}`) {
+      super(message);
+      this.name = "InvoiceBillingGapError";
+      this.gap = gap;
+    }
+  },
+  useStampProjectPricingStudio: () => ({ mutate: mockStampStudio, isPending: false }),
+  useSessionUserId: () => mockViewerId,
+  useOrganizationMembers: (orgId: string) => ({
+    data: orgId ? mockStudioMembers : undefined,
+  }),
   useCreateDraftInvoice: () => ({
     mutateAsync: mockCreateDraft,
     isPending: false,
@@ -57,9 +77,12 @@ jest.mock("@patina/supabase", () => ({
         name: "Hollis House",
         status: "active",
         client_id: mockProjectClientId,
-        studio_id: "studio-1",
+        studio_id: mockProjectStudioId,
+        designer_id: mockProjectDesignerId,
+        designer: { id: mockProjectDesignerId, display_name: "Leah Ames", full_name: "Leah Ames" },
       },
     ],
+    dataUpdatedAt: mockProjectsUpdatedAt,
   }),
   useClaimTimeEntries: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUnbilledTime: () => ({ data: { entries: [] }, isLoading: false }),
@@ -87,7 +110,22 @@ beforeEach(() => {
   mockPurchases = [];
   mockRiders = [];
   mockProjectClientId = "client-9";
+  mockProjectStudioId = "studio-1";
+  mockProjectDesignerId = "designer-1";
+  mockProjectsUpdatedAt = 1;
+  mockViewerId = "designer-1";
+  mockStudioMembers = [];
+  mockPathname = "/";
+  mockStampStudio.mockReset();
 });
+
+// The Link a client act opens the sheet in place only on its own project's
+// document; everywhere else it is a link to the sheet's address.
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), prefetch: jest.fn(), back: jest.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => mockPathname,
+}));
 
 jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: () => mockFlag,
@@ -288,7 +326,13 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
-    expect(await screen.findByText(/Nothing was billed/)).toBeInTheDocument();
+    // F5 — the refusal in the composer's words, naming the purchase by the
+    // label it was printed under: no RPC name, no id, and one sentence each.
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Pair of table lamps is already on another invoice. Nothing was billed.",
+    );
+    expect(alert).not.toHaveTextContent(/add_invoice_billing_lines|\bp1\b/);
     expect(mockDeleteDraft).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1" });
     expect(onDrafted).not.toHaveBeenCalled();
   });
@@ -796,8 +840,314 @@ describe("InvoiceComposer · studio mode", () => {
     );
     expect(screen.getByRole("button", { name: "Draft the invoice" })).toBeEnabled();
   });
+});
 
-  it("puts the billing gap coverage through existing studio-mode scenarios", () => {
-    expect(mockProjectClientId).toBe("client-9");
+// ─────────────────────────────────────────────────────────────────────────────
+// US-35 repairs (SQ-1028) — the held act says what holds it, lands on the fix,
+// and never offers a door the server would shut.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("InvoiceComposer · held, said and landed (US-35)", () => {
+  const SIDE_TABLE = { id: "ffe-1", name: "Side table", quantity: 1, unit_price_cents: 12000, room: null };
+  const LAMPS = {
+    id: "p1",
+    status: "recorded",
+    billable_to_client: true,
+    invoice_line_id: null,
+    payee_name: "CB2",
+    description: "Pair of table lamps",
+    purchased_on: "2026-10-03",
+    amount_cents: 120050,
+    tax_cents: 9600,
+    buyer_premium_cents: 0,
+    shipping_cents: 0,
+  };
+  const studioWith = (role: string) => [
+    {
+      id: "studio-1",
+      name: "Middle West Studio",
+      type: "design_studio",
+      status: "active",
+      membership: { role, status: "active" },
+    },
+  ];
+  const GapError = () =>
+    jest.requireMock("@patina/supabase").InvoiceBillingGapError as new (
+      gap: string,
+      message?: string,
+    ) => Error;
+  const act = () => screen.getByRole("button", { name: "Draft the invoice" });
+  const composer = (context: Record<string, unknown> = { projectId: "project-1" }) => (
+    <InvoiceComposer context={context} onDrafted={jest.fn()} />
+  );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFlag = { value: false, isLoading: false };
+    mockOrganizations = [
+      { id: "studio-1", name: "Middle West Studio", type: "design_studio", status: "active" },
+    ];
+    mockOrganizationsLoading = false;
+    mockFfeItems = [];
+    mockCoverage = undefined;
+    mockStages = undefined;
+  });
+
+  it("F3: keeps the server's gap past the next render, until a newer projects read shows it filled", async () => {
+    mockFfeItems = [SIDE_TABLE];
+    const Gap = GapError();
+    mockCreateDraft.mockRejectedValue(new Gap("client", "This project has no client yet. Link one to bill it."));
+    const context = { projectId: "project-1", initialFfeItemIds: ["ffe-1"] };
+    const view = render(composer(context));
+    // The cached project still says linked; the server says otherwise.
+    expect(act()).toBeEnabled();
+    fireEvent.click(act());
+    expect(await screen.findByText("Hollis House has no client yet. Link one to bill it.")).toBeInTheDocument();
+
+    view.rerender(composer(context));
+    expect(act()).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText("Hollis House has no client yet. Link one to bill it.")).toBeInTheDocument();
+
+    // The refetch the refusal asked for comes back with the client linked.
+    mockProjectsUpdatedAt = 2;
+    view.rerender(composer(context));
+    await waitFor(() => expect(act()).toBeEnabled());
+    expect(screen.queryByText(/has no client yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("F1/F9: the lead's Link a client opens the sheet in place on its document, keeping the draft", () => {
+    mockProjectClientId = null;
+    mockPathname = "/doc/project-1";
+    const opened = jest.fn();
+    window.addEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, opened);
+    try {
+      const view = render(composer());
+      fireEvent.change(screen.getByLabelText("Line description"), { target: { value: "Design fee" } });
+      fireEvent.change(screen.getByLabelText("Unit price (dollars)"), { target: { value: "450" } });
+      fireEvent.change(screen.getByLabelText("memo · shown to the client"), { target: { value: "Thank you" } });
+
+      const link = screen.getByRole("link", { name: "Link a client" });
+      expect(link).toHaveAttribute("href", "/doc/project-1?sheet=household");
+      // Default prevented: no navigation, the folio and its draft stay put.
+      expect(fireEvent.click(link)).toBe(false);
+      expect(opened).toHaveBeenCalledTimes(1);
+      // The sheet captures the opener as its return point.
+      expect(link).toHaveFocus();
+
+      // Linked in the sheet: the projects read refreshes underneath.
+      mockProjectClientId = "client-9";
+      mockProjectsUpdatedAt = 2;
+      view.rerender(composer());
+      expect(act()).toBeEnabled();
+      expect(screen.getByLabelText("Line description")).toHaveValue("Design fee");
+      expect(screen.getByLabelText("memo · shown to the client")).toHaveValue("Thank you");
+    } finally {
+      window.removeEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, opened);
+    }
+  });
+
+  it("F2: off its document, Link a client walks to the sheet's address instead", () => {
+    mockProjectClientId = null;
+    mockPathname = "/desk";
+    const opened = jest.fn();
+    // Records whether the click was left to walk, then stops jsdom, which
+    // cannot navigate.
+    let walked: boolean | null = null;
+    const stopNavigation = (e: MouseEvent) => {
+      walked = !e.defaultPrevented;
+      e.preventDefault();
+    };
+    window.addEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, opened);
+    window.addEventListener("click", stopNavigation);
+    try {
+      render(composer());
+      const link = screen.getByRole("link", { name: "Link a client" });
+      expect(link).toHaveAttribute("href", "/doc/project-1?sheet=household");
+      fireEvent.click(link);
+      expect(walked).toBe(true);
+      expect(opened).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, opened);
+      window.removeEventListener("click", stopNavigation);
+    }
+  });
+
+  it("F9: anyone but the lead is told who can link a client, with no act", () => {
+    mockProjectClientId = null;
+    mockViewerId = "co-member-2";
+    render(composer());
+    expect(screen.getByText("Hollis House has no client yet. Ask Leah Ames to link one.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Link a client" })).not.toBeInTheDocument();
+    fireEvent.click(act());
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Ask Leah Ames to link a client before drafting this invoice.",
+    );
+  });
+
+  it.each([
+    ["a dropped connection before anything was written", true, () => {
+      mockCreateDraft.mockRejectedValue(new Error("Failed to fetch"));
+    }],
+    ["a billing gap", false, () => {
+      mockCreateDraft.mockRejectedValue(new (GapError())("studio", "This project isn't tied to a studio yet."));
+    }],
+    ["a refused request", false, () => {
+      mockCreateDraft.mockRejectedValue(new Error("Invoice client does not match the selected project"));
+    }],
+  ])("F4: Try again after %s: %s", async (_label, retryable, arrange) => {
+    mockFfeItems = [SIDE_TABLE];
+    arrange();
+    render(composer({ projectId: "project-1", initialFfeItemIds: ["ffe-1"] }));
+    fireEvent.click(act());
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    if (retryable) {
+      expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    } else {
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    }
+  });
+
+  it("F4/F5: never offers Try again after a money write, and never prints an unknown refusal", async () => {
+    mockPurchases = [LAMPS];
+    mockAddBilling.mockRejectedValue({ message: "network error" });
+    render(composer({ projectId: "project-1", initialPurchaseIds: ["p1"] }));
+    fireEvent.click(act());
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The billing lines couldn't be added to the draft. Nothing was billed.",
+    );
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("F6: lands a held deposit on Deposit percent", async () => {
+    mockFfeItems = [SIDE_TABLE];
+    render(composer({ projectId: "project-1", initialFfeItemIds: ["ffe-1"] }));
+    fireEvent.click(screen.getByLabelText("as a deposit of"));
+    fireEvent.change(screen.getByLabelText("Deposit percent"), { target: { value: "120" } });
+    fireEvent.click(act());
+    expect(screen.getByRole("status")).toHaveTextContent("Adjust the deposit before drafting.");
+    await waitFor(() => expect(screen.getByLabelText("Deposit percent")).toHaveFocus());
+  });
+
+  it("F6: lands a project with no line on its empty line", async () => {
+    render(composer());
+    fireEvent.click(act());
+    expect(screen.getByRole("status")).toHaveTextContent("Add at least one line first.");
+    await waitFor(() => expect(screen.getByLabelText("Line description")).toHaveFocus());
+  });
+
+  it("F6: lands a figure-less rider on its billed amount", async () => {
+    mockRiders = [
+      {
+        id: "r2",
+        kind: "liftgate",
+        note: null,
+        billable_to_client: true,
+        invoice_line_id: null,
+        estimate_cents: null,
+        actual_cents: null,
+        purchase_order: { id: "po-1", po_number: "1042", project_id: "project-1" },
+      },
+    ];
+    render(composer({ projectId: "project-1", initialCostLineIds: ["r2"] }));
+    fireEvent.click(act());
+    expect(screen.getByRole("status")).toHaveTextContent("Add the missing billing figures first.");
+    await waitFor(() => expect(screen.getByLabelText("Billed amount · Liftgate")).toHaveFocus());
+  });
+
+  it("F7: in studio mode names and lands on what the studio invoice lacks, never a project", async () => {
+    mockFlag = { value: true, isLoading: false };
+    render(composer({}));
+    pickStudio();
+    const status = screen.getByRole("status");
+
+    fireEvent.click(act());
+    expect(status).toHaveTextContent("Choose the household this invoice is for first.");
+    expect(status).not.toHaveTextContent("Choose a project first.");
+    await waitFor(() => expect(screen.getByRole("button", { name: "pick household" })).toHaveFocus());
+
+    fireEvent.click(screen.getByRole("button", { name: "pick household" }));
+    expect(status.textContent).toBe("");
+    fireEvent.click(act());
+    expect(status).toHaveTextContent("Add what this invoice is regarding first.");
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText("Design consultation · Sept 2026")).toHaveFocus(),
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Design consultation · Sept 2026"), {
+      target: { value: "Design consultation" },
+    });
+    fireEvent.click(act());
+    expect(status).toHaveTextContent("Add at least one line first.");
+    await waitFor(() => expect(screen.getByLabelText("Line description")).toHaveFocus());
+  });
+
+  it("F8: offers Name studio to the owner of a studio that employs the designer, and says why it was refused", async () => {
+    mockProjectStudioId = null;
+    mockViewerId = "owner-1";
+    mockOrganizations = studioWith("owner");
+    mockStudioMembers = [{ user_id: "designer-1", role: "member", status: "active" }];
+    mockStampStudio.mockImplementation(
+      (_vars: unknown, options?: { onError?: (e: unknown) => void }) =>
+        options?.onError?.({
+          message:
+            "stamp_project_pricing_studio: this studio holds no rate for this project's designer that somebody other than she wrote",
+        }),
+    );
+    render(composer());
+    expect(screen.getByText("Hollis House isn't tied to your studio yet.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Name studio" }));
+    expect(mockStampStudio).toHaveBeenCalledWith(
+      { projectId: "project-1", studioId: "studio-1" },
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Middle West Studio has no rate for this project's designer yet. Add one on the studio rate card first.",
+    );
+  });
+
+  it("F8/F13: never offers a studio its own designer owns, and never tells a solo designer to ask an owner", () => {
+    mockProjectStudioId = null;
+    mockOrganizations = studioWith("owner");
+    mockStudioMembers = [{ user_id: "designer-1", role: "owner", status: "active" }];
+    render(composer());
+    expect(screen.queryByRole("button", { name: "Name studio" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Hollis House isn't tied to a studio yet. Only a studio that employs its designer can name one.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(act());
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Hollis House can’t be billed until a studio that employs its designer names it.",
+    );
+    expect(screen.queryByText(/studio owner/)).not.toBeInTheDocument();
+  });
+
+  it("F8: an employee is told to ask her studio owner, with no act", () => {
+    mockProjectStudioId = null;
+    mockOrganizations = studioWith("member");
+    render(composer());
+    expect(
+      screen.getByText("Hollis House isn't tied to a studio yet. Ask your studio owner to name it."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Name studio" })).not.toBeInTheDocument();
+  });
+
+  it("F11: one status region from mount; the held act points at it until the blocker resolves", () => {
+    render(composer());
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe("");
+    expect(act()).toHaveAttribute("aria-describedby", status.id);
+
+    fireEvent.click(act());
+    expect(screen.getByRole("status")).toBe(status);
+    expect(status).toHaveTextContent("Add at least one line first.");
+
+    fireEvent.change(screen.getByLabelText("Line description"), { target: { value: "Design fee" } });
+    fireEvent.change(screen.getByLabelText("Unit price (dollars)"), { target: { value: "450" } });
+    expect(act()).toBeEnabled();
+    expect(status.textContent).toBe("");
+    expect(act()).not.toHaveAttribute("aria-describedby");
   });
 });

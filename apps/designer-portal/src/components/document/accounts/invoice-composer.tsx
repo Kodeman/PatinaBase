@@ -47,7 +47,8 @@
  */
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   useAddInvoiceBillingLines,
   InvoiceBillingGapError,
@@ -58,7 +59,9 @@ import {
   useFfeInvoiceCoverage,
   useFfeInvoiceStageCoverage,
   useProjectPoCostLines,
+  useOrganizationMembers,
   useOrganizations,
+  useSessionUserId,
   useProjectFFEItems,
   useProjectRoster,
   useProjectInvoices,
@@ -71,6 +74,7 @@ import {
 import { computeInvoiceTotals, formatCurrency } from "@patina/shared";
 import { formatHoursLabel } from "@/lib/time-billing";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { useViewerStudio } from "@/hooks/use-viewer-studio";
 import { ClientPicker } from "@/components/portal/client-picker";
 import { documentEvents } from "@/lib/analytics/document-events";
 import { OPEN_HOUSEHOLD_SHEET_EVENT } from "@/lib/document/registry";
@@ -81,15 +85,17 @@ import {
   EMPTY_ADHOC,
   STUDIO_TARGET,
   activeDesignStudios,
+  asSentence,
   balanceCents,
+  billingLinesRefusal,
   balanceOwedItems,
   buildBillingLines,
   depositCents,
   lineClientPriceCents,
   buildComposerLines,
-  canDraftStudioInvoice,
   deriveInvoiceBillingGap,
   centsToDollarText,
+  dollarsToCents,
   isValidDepositPct,
   lineBillingByItem,
   parseOverrideCents,
@@ -98,6 +104,8 @@ import {
   riderAtCostCents,
   riderLabel,
   stageSlotWords,
+  stampStudioRefusal,
+  studioInvoiceBlocker,
   unbilledMilestones,
   unbilledPurchases,
   unbilledRiders,
@@ -109,6 +117,8 @@ import {
   type ComposerRider,
   type ComposerStageSlot,
   type ComposerStudio,
+  type InvoiceBillingGap,
+  type StudioInvoiceBlocker,
 } from "@/lib/document/invoice-composer";
 import { fmtDay } from "@/lib/document/format";
 import type { InvoiceComposerContext } from "./invoice-overlays";
@@ -161,7 +171,7 @@ export function InvoiceComposer({
     studioInvoiceOn && !flagLoading && !context.projectId;
   const studioMode = studioChoiceAvailable && target === STUDIO_TARGET;
 
-  const { data: projects } = useProjects();
+  const { data: projects, dataUpdatedAt: projectsUpdatedAt = 0 } = useProjects();
   const { data: organizations, isLoading: organizationsLoading } =
     useOrganizations();
   const { data: milestones } = useProjectPaymentMilestones(projectId);
@@ -246,9 +256,37 @@ export function InvoiceComposer({
   const [taxRatePercent, setTaxRatePercent] = useState("0");
   const [termsDays, setTermsDays] = useState("15");
   const [memo, setMemo] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [heldReason, setHeldReason] = useState<string | null>(null);
-  const [billingGapOverride, setBillingGapOverride] = useState<"no-client" | "no-studio" | null>(null);
+  // `retryable` is decided where the failure is caught: only a transient
+  // failure before anything was written may be tried again (act-fail-line.tsx
+  // §money writes). `gap` marks a billing-gap refusal, which clears itself once
+  // the gap does.
+  const [error, setError] = useState<{
+    message: string;
+    retryable: boolean;
+    gap?: InvoiceBillingGap;
+  } | null>(null);
+  const [heldBlocker, setHeldBlocker] = useState<ComposerBlocker | null>(null);
+  // The server's word on a gap the cached project hides. It stands until the
+  // project changes, or a projects read newer than the refusal shows the gap
+  // filled — never merely because the stale cache still looks complete.
+  const [billingGapOverride, setBillingGapOverride] = useState<{
+    projectId: string;
+    gap: InvoiceBillingGap;
+    seenAt: number;
+  } | null>(null);
+  const [nameStudioError, setNameStudioError] = useState<string | null>(null);
+  const statusId = useId();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const forSelectRef = useRef<HTMLSelectElement>(null);
+  const householdRef = useRef<HTMLDivElement>(null);
+  const regardingRef = useRef<HTMLInputElement>(null);
+  const depositPctRef = useRef<HTMLInputElement>(null);
+  const adhocRef = useRef<HTMLDivElement>(null);
+  const addLineRef = useRef<HTMLButtonElement>(null);
+  const linkClientRef = useRef<HTMLAnchorElement>(null);
+  const nameStudioRef = useRef<HTMLButtonElement>(null);
+  const pathname = usePathname();
+  const viewerId = useSessionUserId();
 
   const activeProjects = useMemo(
     () =>
@@ -270,9 +308,14 @@ export function InvoiceComposer({
   const multiStudio = studios.length > 1;
   const studioId = chosenStudioId || studios[0]?.id || "";
   const stampProjectStudio = useStampProjectPricingStudio();
-  const ownerStudio = studios.find((studio) =>
-    studio.membership?.role === "owner" || studio.membership?.role === "admin",
-  );
+  // F8 — the studio this viewer answers for, chosen the way hours-ledger's
+  // stamp door chooses it (one choice keys every surface).
+  const { studio: viewerStudio } = useViewerStudio();
+  // Someone above her can name it: she holds a seat that is not her own studio.
+  const hasStudioOwner = studios.some((studio) => {
+    const role = studio.membership?.role;
+    return !!role && role !== "owner" && role !== "admin";
+  });
   // Nothing to bill from: the Draft act can never open, so say so (R83).
   const studioMissing =
     studioMode && !organizationsLoading && studios.length === 0;
@@ -574,28 +617,130 @@ export function InvoiceComposer({
       (context.initialTimeEntryIds ?? []).length > 0 ||
       (context.initialPurchaseIds ?? []).length > 0 ||
       (context.initialCostLineIds ?? []).length > 0);
+  const overrideGap =
+    billingGapOverride?.projectId === projectId ? billingGapOverride.gap : null;
   const billingGap = !studioMode
-    ? billingGapOverride ?? deriveInvoiceBillingGap(selectedProject)
+    ? overrideGap ?? deriveInvoiceBillingGap(selectedProject)
     : null;
   useEffect(() => {
-    if (billingGapOverride && deriveInvoiceBillingGap(selectedProject) === null) {
+    if (!billingGapOverride) return;
+    const filled =
+      billingGapOverride.gap === "no-client"
+        ? selectedProject?.client_id != null
+        : selectedProject?.studio_id != null;
+    if (
+      billingGapOverride.projectId !== projectId ||
+      (projectsUpdatedAt > billingGapOverride.seenAt && filled)
+    ) {
       setBillingGapOverride(null);
     }
-  }, [billingGapOverride, selectedProject]);
-  const canDraft = studioMode
-    ? canDraftStudioInvoice({
-        clientId: studioClientId,
-        title,
-        studioId,
-        lines,
-      }) && !creating
-    : !!projectId &&
-      !billingGap &&
-      lineCount > 0 &&
-      !billingFiguresMissing &&
-      !depositBlocked &&
-      !creating &&
-      !prefillPending;
+  }, [billingGapOverride, projectId, projectsUpdatedAt, selectedProject]);
+
+  // F9 — set_document_client (00387) answers only to the project's lead.
+  const isLead =
+    !!viewerId && !!selectedProject && selectedProject.designer_id === viewerId;
+  const leadName: string =
+    selectedProject?.designer?.display_name ||
+    selectedProject?.designer?.full_name ||
+    "the lead designer";
+  // F8 — stamp_project_pricing_studio (00606) names a studio only for its
+  // owner or admin, and only one that EMPLOYS the designer (an active seat that
+  // is neither guest nor owner). The rate-card condition it also checks is not
+  // readable here; that refusal comes back through ActFailLine.
+  const { data: viewerStudioMembers } = useOrganizationMembers(
+    billingGap === "no-studio" && viewerStudio ? viewerStudio.id : "",
+  );
+  const canNameStudio =
+    billingGap === "no-studio" &&
+    !!viewerStudio &&
+    !!projectId &&
+    (viewerStudioMembers ?? []).some(
+      (member: AnyRecord) =>
+        member.user_id === selectedProject?.designer_id &&
+        member.status === "active" &&
+        member.role !== "guest" &&
+        member.role !== "owner",
+    );
+
+  // §A5 — the first unmet requirement; the held act names it and lands on it.
+  const blocker: ComposerBlocker | null = studioMode
+    ? studioInvoiceBlocker({ clientId: studioClientId, title, studioId, lines })
+    : billingGap
+      ? billingGap
+      : !projectId
+        ? "no-project"
+        : lineCount === 0
+          ? "lines"
+          : // An invalid deposit also leaves its line without a figure; the
+            // percent is the thing to fix, so it is named first.
+            depositBlocked
+            ? "deposit"
+            : billingFiguresMissing
+              ? "billing-figures"
+              : prefillPending
+                ? "prefill"
+                : null;
+  const canDraft = blocker === null && !creating;
+  // F11 — a reason outlives its blocker by not one render.
+  useEffect(() => {
+    if (heldBlocker && heldBlocker !== blocker) setHeldBlocker(null);
+  }, [heldBlocker, blocker]);
+  useEffect(() => {
+    if (error?.gap && billingGap !== error.gap) setError(null);
+  }, [error, billingGap]);
+  const heldReason = heldBlocker
+    ? blockerReason(heldBlocker, {
+        projectName: selectedProject?.name ?? "This project",
+        isLead,
+        leadName,
+        canNameStudio,
+        hasStudioOwner,
+        studioLoading: organizationsLoading,
+      })
+    : null;
+
+  const focusBlocker = (held: ComposerBlocker) => {
+    const root = containerRef.current;
+    const firstUnfilledLine = () => {
+      const rows = adhocRef.current?.querySelectorAll<HTMLElement>("[data-adhoc-row]") ?? [];
+      for (const row of Array.from(rows)) {
+        const description = row.querySelector<HTMLInputElement>('input[aria-label="Line description"]');
+        const price = row.querySelector<HTMLInputElement>('input[aria-label="Unit price (dollars)"]');
+        if (description && !description.value.trim()) return description;
+        if (price && !(dollarsToCents(price.value) > 0)) return price;
+      }
+      return addLineRef.current;
+    };
+    const target: HTMLElement | null | undefined =
+      held === "no-client"
+        ? linkClientRef.current
+        : held === "no-studio"
+          ? nameStudioRef.current
+          : held === "no-project"
+            ? forSelectRef.current
+            : held === "lines"
+              ? firstUnfilledLine()
+              : held === "deposit"
+                ? depositPctRef.current
+                : held === "billing-figures"
+                  ? root?.querySelector<HTMLElement>('[data-at-cost-row] input[aria-invalid="true"]')
+                  : held === "household"
+                    ? householdRef.current?.querySelector<HTMLElement>("button, input")
+                    : held === "regarding"
+                      ? regardingRef.current
+                      : null;
+    // Focus never leaves the composer: a target outside it is no target.
+    if (target && root?.contains(target)) target.focus();
+  };
+
+  // F5 — a refusal names its purchase, rider or line by the label printed here.
+  const billingSubjectName = (id: string): string | null => {
+    const purchase = ((purchases ?? []) as ComposerPurchase[]).find((p) => p.id === id);
+    if (purchase) return purchase.description?.trim() || purchase.payee_name;
+    const rider = ((riders ?? []) as ComposerRider[]).find((r) => r.id === id);
+    if (rider) return riderLabel(rider);
+    return ((ffeItems ?? []) as ComposerFfeItem[]).find((i) => i.id === id)?.name ?? null;
+  };
 
   const draft = async () => {
     setError(null);
@@ -615,9 +760,7 @@ export function InvoiceComposer({
         });
         onDrafted(studioInvoiceId, null);
       } catch (e) {
-        setError(
-          e instanceof Error ? e.message : "Could not draft the invoice",
-        );
+        setError(preWriteFailure(e));
       }
       return;
     }
@@ -635,10 +778,11 @@ export function InvoiceComposer({
         lines,
       });
     } catch (e) {
-      if (e instanceof InvoiceBillingGapError) {
-        setBillingGapOverride(e.gap === "client" ? "no-client" : e.gap === "studio" ? "no-studio" : null);
+      const failure = preWriteFailure(e);
+      if (failure.gap) {
+        setBillingGapOverride({ projectId, gap: failure.gap, seenAt: projectsUpdatedAt });
       }
-      setError(e instanceof Error ? e.message : "Could not draft the invoice");
+      setError(failure);
       return;
     }
 
@@ -665,13 +809,16 @@ export function InvoiceComposer({
         } catch {
           stranded = true;
         }
-        const reason =
-          e instanceof Error ? e.message : "Could not attach the time entries";
-        setError(
-          stranded
+        const reason = asSentence(
+          e instanceof Error && e.message ? e.message : "Could not attach the time entries",
+        );
+        // A money write already ran: never offered again from here.
+        setError({
+          message: stranded
             ? `${reason} Nothing was billed; the draft still holds those hours. Void it to release them.`
             : `${reason} Nothing was billed.`,
-        );
+          retryable: false,
+        });
         return;
       }
     }
@@ -694,17 +841,18 @@ export function InvoiceComposer({
         } catch {
           stranded = true;
         }
-        // The writer's refusal arrives as a PostgrestError, not an Error.
-        const message = (e as { message?: unknown } | null)?.message;
-        const reason =
-          typeof message === "string" && message
-            ? message
-            : "Could not add the billing lines";
-        setError(
-          stranded
+        // The writer's refusal arrives as a PostgrestError, not an Error, and in
+        // the RPC's own words; say it in the composer's, naming the subject.
+        const reason = billingLinesRefusal(
+          (e as { message?: unknown } | null)?.message,
+          billingSubjectName,
+        );
+        setError({
+          message: stranded
             ? `${reason} Nothing was billed; the draft was kept. Delete or void it.`
             : `${reason} Nothing was billed.`,
-        );
+          retryable: false,
+        });
         return;
       }
     }
@@ -723,7 +871,7 @@ export function InvoiceComposer({
 
   // ── The sheet ─────────────────────────────────────────────────────────────
   return (
-    <div>
+    <div ref={containerRef}>
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="font-heading text-[20px] font-medium text-[var(--color-charcoal)]">
           Draw an invoice
@@ -748,6 +896,7 @@ export function InvoiceComposer({
           </p>
         ) : (
           <select
+            ref={forSelectRef}
             value={target}
             onChange={(e) => pickTarget(e.target.value)}
             aria-label={studioChoiceAvailable ? "For" : "Project"}
@@ -787,7 +936,7 @@ export function InvoiceComposer({
             </div>
           )}
 
-          <div className="mt-4 max-w-[360px]">
+          <div ref={householdRef} className="mt-4 max-w-[360px]">
             <p className={`${LABEL} mb-1`}>household</p>
             {/* The picker portals to <body>; this sheet is z-[60], so the panel
                 is lifted clear of it (client-picker.tsx popoverClassName). */}
@@ -803,6 +952,7 @@ export function InvoiceComposer({
           <label className="mt-4 flex max-w-[420px] flex-col gap-0.5">
             <span className={LABEL}>regarding</span>
             <input
+              ref={regardingRef}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Design consultation · Sept 2026"
@@ -1025,6 +1175,7 @@ export function InvoiceComposer({
                     </label>
                     <span className="flex items-center gap-1">
                       <input
+                        ref={depositPctRef}
                         aria-label="Deposit percent"
                         inputMode="decimal"
                         value={depositPctText}
@@ -1261,11 +1412,12 @@ export function InvoiceComposer({
           )}
 
           {/* ── Ad-hoc lines ───────────────────────────────────────────── */}
-          <div className="mt-4">
+          <div ref={adhocRef} className="mt-4">
             <p className={`${LABEL} mb-1`}>ad-hoc lines</p>
             {adhoc.map((line, i) => (
               <div
                 key={i}
+                data-adhoc-row
                 className="mb-1.5 grid grid-cols-[1fr_56px_96px_24px] items-center gap-2"
               >
                 <input
@@ -1322,6 +1474,7 @@ export function InvoiceComposer({
               </div>
             ))}
             <DocumentAction
+              ref={addLineRef}
               actionKey="add-invoice-line"
               surfaceKey="accounts"
               regionKey="invoice-lines"
@@ -1394,42 +1547,77 @@ export function InvoiceComposer({
               <div className="w-full basis-full text-sm text-[var(--color-charcoal)]">
                 <p>
                   {billingGap === "no-client"
-                    ? `${selectedProject.name} has no client yet. Link one to bill it.`
-                  : ownerStudio
-                    ? `${selectedProject.name} isn't tied to your studio yet.`
-                    : `${selectedProject.name} isn't tied to a studio yet. Ask your studio owner to name it.`}
+                    ? isLead
+                      ? `${selectedProject.name} has no client yet. Link one to bill it.`
+                      : `${selectedProject.name} has no client yet. Ask ${leadName} to link one.`
+                    : canNameStudio
+                      ? `${selectedProject.name} isn't tied to your studio yet.`
+                      : hasStudioOwner
+                        ? `${selectedProject.name} isn't tied to a studio yet. Ask your studio owner to name it.`
+                        : `${selectedProject.name} isn't tied to a studio yet. Only a studio that employs its designer can name one.`}
                 </p>
-                {billingGap === "no-client" && (
-                  typeof window !== "undefined" && window.location.pathname === `/doc/${projectId}` ? (
-                    <DocumentAction
-                      actionKey="link-invoice-client"
-                      surfaceKey="accounts"
-                      regionKey="invoice-composer"
-                      variant="tertiary"
-                      onClick={() => { window.dispatchEvent(new CustomEvent(OPEN_HOUSEHOLD_SHEET_EVENT)); }}
-                    >
-                      Link a client
-                    </DocumentAction>
-                  ) : (
-                    <Link className="underline" href={`/doc/${projectId}?sheet=household`}>Link a client</Link>
-                  )
-                )}
-                {billingGap === "no-studio" && ownerStudio && projectId && (
+                {billingGap === "no-client" && isLead && (
+                  // One anchor on every page, so the sheet hands focus back to
+                  // it on Esc. On this project's document it opens the sheet in
+                  // place, above the folio and its draft; anywhere else it walks
+                  // to the sheet's address. Focused on click because Safari
+                  // does not focus a link it activates.
                   <DocumentAction
+                    ref={linkClientRef}
+                    href={`/doc/${projectId}?sheet=household`}
+                    actionKey="link-invoice-client"
+                    surfaceKey="accounts"
+                    regionKey="invoice-composer"
+                    variant="tertiary"
+                    onClick={(e) => {
+                      e.currentTarget.focus();
+                      if (pathname === `/doc/${projectId}`) {
+                        e.preventDefault();
+                        window.dispatchEvent(new CustomEvent(OPEN_HOUSEHOLD_SHEET_EVENT));
+                      }
+                    }}
+                  >
+                    Link a client
+                  </DocumentAction>
+                )}
+                {canNameStudio && viewerStudio && (
+                  <DocumentAction
+                    ref={nameStudioRef}
                     actionKey="name-invoice-studio"
                     surfaceKey="accounts"
                     regionKey="invoice-composer"
                     variant="tertiary"
                     loading={stampProjectStudio.isPending}
                     loadingLabel="Naming…"
-                    onClick={() => stampProjectStudio.mutate({ projectId, studioId: ownerStudio.id })}
+                    onClick={() => {
+                      setNameStudioError(null);
+                      stampProjectStudio.mutate(
+                        { projectId, studioId: viewerStudio.id },
+                        {
+                          onError: (e) =>
+                            setNameStudioError(
+                              stampStudioRefusal(
+                                (e as { message?: unknown } | null)?.message,
+                                viewerStudio.name,
+                              ),
+                            ),
+                        },
+                      );
+                    }}
                   >
-                    Name the studio
+                    Name studio
                   </DocumentAction>
                 )}
+                <ActFailLine
+                  error={
+                    nameStudioError
+                      ? new AppError({ code: "NAME_STUDIO", message: nameStudioError })
+                      : null
+                  }
+                  className="mt-1"
+                />
               </div>
             )}
-            {heldReason && <p role="status" className="w-full basis-full text-sm">{heldReason}</p>}
             <DocumentAction
               actionKey="draft-invoice"
               surfaceKey="accounts"
@@ -1437,33 +1625,11 @@ export function InvoiceComposer({
               variant="primary"
               held={!canDraft && !creating}
               disabled={!canDraft && !creating}
+              aria-describedby={!canDraft && !creating ? statusId : undefined}
               onHeldActivate={() => {
-                const reason = billingGap === "no-client"
-                  ? "Link a client before drafting this invoice."
-                  : billingGap === "no-studio"
-                    ? ownerStudio
-                      ? "Name the studio before drafting this invoice."
-                      : "Ask your studio owner to name this project’s studio."
-                    : !projectId
-                      ? "Choose a project first."
-                      : lineCount === 0
-                        ? "Add at least one line first."
-                        : billingFiguresMissing
-                          ? "Add the missing billing figures first."
-                          : depositBlocked
-                            ? "Adjust the deposit before drafting."
-                            : "Wait for the invoice details to finish loading.";
-                setHeldReason(reason);
-                requestAnimationFrame(() => {
-                  const target = billingGap === "no-client"
-                    ? document.querySelector<HTMLElement>('a[href*="sheet=household"], [data-action-key="link-invoice-client"]')
-                    : billingGap === "no-studio" && ownerStudio
-                      ? document.querySelector<HTMLElement>('[data-action-key="name-invoice-studio"]')
-                      : !projectId
-                        ? document.querySelector<HTMLElement>('select[aria-label="Project"], select[aria-label="For"]')
-                        : document.querySelector<HTMLElement>('input:not([type="checkbox"]), button[aria-label]');
-                  target?.focus();
-                });
+                if (!blocker) return;
+                setHeldBlocker(blocker);
+                requestAnimationFrame(() => focusBlocker(blocker));
               }}
               loading={creating}
               loadingLabel="Drafting…"
@@ -1481,23 +1647,93 @@ export function InvoiceComposer({
 
           {/* R83 — the inline failure band, at the act site. */}
           <ActFailLine
-            error={error ? new AppError({ code: "INVOICE_DRAFT", message: error }) : null}
+            error={error ? new AppError({ code: "INVOICE_DRAFT", message: error.message }) : null}
             className="mt-2"
-            onRetry={isRetryableDraftError(error) ? () => void draft() : undefined}
+            onRetry={error?.retryable ? () => void draft() : undefined}
             retryKey="retry-draft-invoice"
           />
         </>
       )}
+      {/* F11 — in the DOM from mount, so a screen reader hears the reason the
+          moment it is written; only its words change. */}
+      <p
+        id={statusId}
+        role="status"
+        className={heldReason ? "mt-2 text-sm text-[var(--color-charcoal)]" : "sr-only"}
+      >
+        {heldReason ?? ""}
+      </p>
     </div>
   );
 }
 
-function isRetryableDraftError(error: unknown): boolean {
-  if (!error) return false;
-  if (error instanceof InvoiceBillingGapError) return false;
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
-  if (/validation|invalid|must be|does not match|not allowed/.test(message)) return false;
-  return true;
+/** What holds the Draft act, in the order the composer asks for it. */
+type ComposerBlocker =
+  | InvoiceBillingGap
+  | StudioInvoiceBlocker
+  | "no-project"
+  | "lines"
+  | "billing-figures"
+  | "deposit"
+  | "prefill";
+
+function blockerReason(
+  blocker: ComposerBlocker,
+  facts: {
+    projectName: string;
+    isLead: boolean;
+    leadName: string;
+    canNameStudio: boolean;
+    hasStudioOwner: boolean;
+    studioLoading: boolean;
+  },
+): string {
+  switch (blocker) {
+    case "no-client":
+      return facts.isLead
+        ? "Link a client before drafting this invoice."
+        : `Ask ${facts.leadName} to link a client before drafting this invoice.`;
+    case "no-studio":
+      return facts.canNameStudio
+        ? "Name the studio before drafting this invoice."
+        : facts.hasStudioOwner
+          ? "Ask your studio owner to name this project’s studio."
+          : `${facts.projectName} can’t be billed until a studio that employs its designer names it.`;
+    case "no-project":
+      return "Choose a project first.";
+    case "lines":
+      return "Add at least one line first.";
+    case "billing-figures":
+      return "Add the missing billing figures first.";
+    case "deposit":
+      return "Adjust the deposit before drafting.";
+    case "prefill":
+      return "Wait for the invoice details to finish loading.";
+    case "household":
+      return "Choose the household this invoice is for first.";
+    case "regarding":
+      return "Add what this invoice is regarding first.";
+    case "studio":
+      return facts.studioLoading
+        ? "Wait for your studio to finish loading."
+        : "This account belongs to no studio yet, so there is none to bill from.";
+  }
+}
+
+/** A refusal before anything was written: a billing gap or a bad request is
+ *  the same refusal next time; anything else (a dropped connection, a timeout)
+ *  may go through on a second try. */
+function preWriteFailure(e: unknown): { message: string; retryable: boolean; gap?: InvoiceBillingGap } {
+  if (e instanceof InvoiceBillingGapError) {
+    const gap: InvoiceBillingGap | undefined =
+      e.gap === "client" ? "no-client" : e.gap === "studio" ? "no-studio" : undefined;
+    return { message: e.message, retryable: false, gap };
+  }
+  const message = e instanceof Error && e.message ? e.message : "Could not draft the invoice.";
+  return {
+    message,
+    retryable: !/validation|invalid|must be|does not match|not allowed/i.test(message),
+  };
 }
 
 function toggled(prev: Set<string>, id: string, on: boolean): Set<string> {
