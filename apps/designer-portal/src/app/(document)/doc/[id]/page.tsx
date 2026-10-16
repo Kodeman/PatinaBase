@@ -1358,7 +1358,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       setSetupHouseholdAboveFolio(true);
       setSetupHouseholdOpen(true);
     };
-    if (requestedSheet === 'household') openHouseholdAboveFolio();
+    // Household is a one-shot arrival instruction, not a persistent address:
+    // consume it before opening so closing or navigating away cannot replay it.
+    if (requestedSheet === 'household') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('sheet');
+      window.history.replaceState(window.history.state, '', url);
+      openHouseholdAboveFolio();
+    }
     const onOpenHousehold = () => openHouseholdAboveFolio();
     window.addEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, onOpenHousehold);
     return () => {

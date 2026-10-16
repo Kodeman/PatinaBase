@@ -90,7 +90,7 @@ jest.mock("@patina/supabase", () => ({
     dataUpdatedAt: mockProjectsUpdatedAt,
   }),
   useClaimTimeEntries: () => ({ mutateAsync: mockClaimTime, isPending: false }),
-  useUnbilledTime: () => ({ data: { entries: mockUnbilledEntries }, isLoading: false }),
+  useUnbilledTime: () => ({ data: { entries: mockUnbilledEntries, ratePendingEntries: mockRatePendingEntries }, isLoading: false }),
   // HT-21 (W5) — names the composer's time rows; unused by this suite's
   // studio-mode/empty-selection scenarios but called unconditionally.
   useProjectRoster: () => ({ data: [] }),
@@ -109,11 +109,13 @@ const mockAddBilling = jest.fn();
 const mockDeleteDraft = jest.fn();
 const mockClaimTime = jest.fn();
 let mockUnbilledEntries: Array<Record<string, unknown>> = [];
+let mockRatePendingEntries: Array<Record<string, unknown>> = [];
 
 beforeEach(() => {
   mockCreateDraft.mockReset().mockResolvedValue({ id: "inv-1" });
   mockClaimTime.mockReset().mockResolvedValue([]);
   mockUnbilledEntries = [];
+  mockRatePendingEntries = [];
   mockAddBilling.mockReset().mockResolvedValue([]);
   mockDeleteDraft.mockReset().mockResolvedValue(undefined);
   mockPurchases = [];
@@ -1345,5 +1347,14 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(act()).toBeEnabled();
     expect(status.textContent).toBe("");
     expect(act()).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("sums rate-pending durations in the waiting copy", () => {
+    mockRatePendingEntries = [
+      { id: "time-1", user_id: "designer-1", started_at: "2026-10-01T09:00:00Z", duration_minutes: 30 },
+      { id: "time-2", user_id: "designer-1", started_at: "2026-10-02T09:00:00Z", duration_minutes: 45 },
+    ];
+    render(composer());
+    expect(screen.getByText(/1\.3 hours waiting for a rate/)).toBeInTheDocument();
   });
 });

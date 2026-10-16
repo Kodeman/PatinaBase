@@ -143,3 +143,19 @@ it('a successful send clears the note — re-arming the same row later starts em
   await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
   expect(mutateAsync.mock.calls[1][0].note).toBeUndefined();
 });
+
+it('renders one option for duplicate rows with the same client id', () => {
+  const duplicate = {
+    id: 'dc2',
+    client_id: 'profile-1',
+    client_email: 'client@example.com',
+    client_name: 'Client User',
+  };
+  const first = { ...duplicate, id: 'dc1' };
+  renderWithClient(
+    <ClientPicker value={null} onChange={() => {}} clientOptions={[first, duplicate]} />,
+  );
+  fireEvent.click(screen.getByTestId('client-picker-trigger'));
+  expect(screen.getAllByRole('option', { name: /Client User/ })).toHaveLength(1);
+  expect(screen.getByText('client@example.com')).toBeInTheDocument();
+});

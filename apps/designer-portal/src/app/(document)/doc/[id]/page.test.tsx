@@ -829,6 +829,17 @@ describe('DocumentPage guide activation', () => {
     HTMLElement.prototype.scrollIntoView = jest.fn();
   });
 
+  it('consumes ?sheet=household so leaving through ⌘K cannot reopen it from the URL', () => {
+    window.history.pushState({}, '', '/doc/lead-1?sheet=household');
+    render(<DocumentPage params={fulfilledParams} />);
+    expect(window.location.search).toBe('');
+
+    // ⌘K navigates to another route; the consumed doorway is not carried into
+    // that address or restored by revisiting the document in this mount.
+    window.history.pushState({}, '', '/desk');
+    expect(new URLSearchParams(window.location.search).get('sheet')).toBeNull();
+  });
+
   it('activates the guide anchor and honors reduced motion', () => {
     // A3-L7 — a Brief with nothing outstanding is at rest and states no act
     // ("Nothing to decide yet."), so the anchor machinery is exercised through

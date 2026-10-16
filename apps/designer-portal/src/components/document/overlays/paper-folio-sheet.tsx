@@ -81,7 +81,7 @@ export function PaperFolioSheet({
         type="button"
         aria-label="Close sheet"
         onClick={onClose}
-        className="paper-folio-backdrop absolute inset-0 h-full w-full cursor-default bg-[rgba(20,18,16,0.55)]"
+        className="paper-folio-backdrop fixed inset-0 cursor-default bg-[var(--veil)]"
       />
       <div
         ref={panelRef}
