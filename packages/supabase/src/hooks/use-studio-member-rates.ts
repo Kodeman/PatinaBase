@@ -136,20 +136,20 @@ export function useSetStudioMemberRate() {
 }
 
 export interface RerateRatePendingHoursInput {
-  studioId: string;
-  /** The member whose rate-pending hours take the rate just set. */
-  userId: string;
+  /** The `id` of the row useSetStudioMemberRate resolved to. The server reads
+   *  the studio, the member and the rate from that row. */
+  rateId: string;
 }
 
 /**
  * K8 (amends P-4): after a rate is set, prices that member's rate-pending hours
  * (`rate_source = 'none'`, never on an invoice) on the studio's documents at the
- * rate now in force — `rerate_pending_time_entries`, 00797. Resolves to how many
- * hours were priced. Priced or invoiced hours are never touched, and an hour no
- * rate covers yet stays pending.
+ * saved row's rate — `rerate_pending_time_entries`, 00797. Resolves to how many
+ * hours were priced. Priced or invoiced hours are never touched. The server
+ * refuses a row a later save has superseded.
  *
- * The server admits only an owner or admin of the studio and prints its own
- * refusal; this hook never pre-judges standing.
+ * The server admits only an owner or admin of the row's studio and prints its
+ * own refusal; this hook never pre-judges standing.
  */
 export function useRerateRatePendingHours() {
   const queryClient = useQueryClient();
@@ -158,8 +158,7 @@ export function useRerateRatePendingHours() {
     mutationFn: async (input: RerateRatePendingHoursInput): Promise<number> => {
       const supabase = getSupabase();
       const { data, error } = await supabase.rpc('rerate_pending_time_entries', {
-        p_studio_id: input.studioId,
-        p_designer_id: input.userId,
+        p_rate_id: input.rateId,
       });
       if (error) throw error;
       return (data as number | null) ?? 0;

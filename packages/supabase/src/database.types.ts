@@ -44772,7 +44772,7 @@ export type Database = {
         }
       }
       rerate_pending_time_entries: {
-        Args: { p_designer_id: string; p_studio_id: string }
+        Args: { p_rate_id: string }
         Returns: number
       }
       resend_party_invite: {

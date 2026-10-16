@@ -225,18 +225,29 @@ describe('useRerateRatePendingHours', () => {
     onSuccess: (data: unknown, input: unknown) => void;
   };
 
-  it('sends the studio and member to the server and resolves to how many hours it priced', async () => {
+  it("sends the saved row's id, from the upsert's returning row, and resolves to how many hours it priced", async () => {
+    const setRate = useSetStudioMemberRate() as unknown as {
+      mutationFn: (input: unknown) => Promise<{ id: string }>;
+    };
+    const saved = await setRate.mutationFn({
+      studioId: 'studio-1',
+      userId: 'member-1',
+      hourlyRateCents: 18000,
+    });
+    vi.clearAllMocks();
+
     supabaseClient.rpc.mockReturnValue(Promise.resolve({ data: 3, error: null }) as never);
     const mutation = useRerateRatePendingHours() as unknown as RerateMutation;
 
-    const priced = await mutation.mutationFn({ studioId: 'studio-1', userId: 'member-1' });
+    const priced = await mutation.mutationFn({ rateId: saved.id });
 
+    // Only the row's identity: the server reads the studio, the member and the
+    // rate from it (SQ-1075 — never a rate it re-resolves at now()).
     expect(supabaseClient.rpc).toHaveBeenCalledWith('rerate_pending_time_entries', {
-      p_studio_id: 'studio-1',
-      p_designer_id: 'member-1',
+      p_rate_id: 'rate-2',
     });
     expect(priced).toBe(3);
-    // The rate is the server's to resolve; nothing is written from here.
+    // Nothing is written from here.
     expect(from).not.toHaveBeenCalled();
   });
 
@@ -248,15 +259,13 @@ describe('useRerateRatePendingHours', () => {
     supabaseClient.rpc.mockReturnValue(Promise.resolve({ data: null, error: refusal }) as never);
     const mutation = useRerateRatePendingHours() as unknown as RerateMutation;
 
-    await expect(
-      mutation.mutationFn({ studioId: 'studio-1', userId: 'member-1' }),
-    ).rejects.toBe(refusal);
+    await expect(mutation.mutationFn({ rateId: 'rate-2' })).rejects.toBe(refusal);
   });
 
   it("refreshes every document's hours reads, the composer's unbilled read among them", () => {
     const mutation = useRerateRatePendingHours() as unknown as RerateMutation;
 
-    mutation.onSuccess(2, { studioId: 'studio-1', userId: 'member-1' });
+    mutation.onSuccess(2, { rateId: 'rate-2' });
 
     const calls = invalidateQueries.mock.calls.map((c) => c[0]) as Array<{
       queryKey?: unknown[];

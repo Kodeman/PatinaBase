@@ -22592,13 +22592,13 @@ END $g$;
 
 -- 00797_us36_rerate_pending_hours.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.rerate_pending_time_entries(uuid, uuid) FROM PUBLIC, anon;
+  REVOKE ALL ON FUNCTION public.rerate_pending_time_entries(uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00797_us36_rerate_pending_hours.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.rerate_pending_time_entries(uuid, uuid) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.rerate_pending_time_entries(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
