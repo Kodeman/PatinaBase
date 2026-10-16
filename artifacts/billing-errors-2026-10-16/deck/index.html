@@ -268,7 +268,7 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
         </div>
         <div class="stack-6">
           <p class="t-head ink-faint">Built from four studies</p>
-          <p class="t-body-sm"><strong>A</strong> inventory (27 failure states, from code) · <strong>B</strong> a walk of the running portal with screenshots · <strong>C</strong> three &ldquo;needs attention&rdquo; prototypes · <strong>D</strong> recovery flows per blocker. Plus the SQ-1019 fix: merged to main, not in production, and under repair in SQ-1028 after its review and walk.</p>
+          <p class="t-body-sm"><strong>A</strong> inventory (27 failure states, from code) · <strong>B</strong> a walk of the running portal with screenshots · <strong>C</strong> three &ldquo;needs attention&rdquo; prototypes · <strong>D</strong> recovery flows per blocker. Plus the SQ-1019 fix: merged to main and repaired twice, after two reviews and two walks (SQ-1028, SQ-1031). It is not in production and waits on Kody&rsquo;s go.</p>
         </div>
       </div>
       <p class="t-meta ink-faint">Confidence marks: <span class="conf">[H]</span> seen in the walk or read in code by two studies · <span class="conf">[M]</span> read in code by one study · <span class="conf">[L]</span> inference.</p>
@@ -304,36 +304,34 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
 </section>
 
 <!-- ============ 03 WHAT SQ-1019 FIXED ============ -->
-<section class="slide" id="sheet-3" data-label="In code, under repair: SQ-1019">
+<section class="slide" id="sheet-3" data-label="In code, ready: SQ-1019">
   <div class="inner">
-    <div class="gutter"><span class="t-head sheet-no">Sheet 03 / 17</span><div class="rule"></div><span class="t-head chapter">In code, under repair</span></div>
+    <div class="gutter"><span class="t-head sheet-no">Sheet 03 / 17</span><div class="rule"></div><span class="t-head chapter">In code, awaiting go</span></div>
     <div class="main">
-      <h2 class="t-d1">Half fixed in code: the hold works, the fix it points to doesn&rsquo;t yet</h2>
-      <p class="t-body prose">SQ-1019 is merged to main (<code>64d2a180b</code>, follow-up <code>9af30e16e</code>). It is not in production. The code review (SQ-1020) and the post-fix walk (SQ-1027, <a href="../walk-after/walk-after.md">walk-after/</a>) found that the hold works but <em>Link a client</em> opens its sheet out of sight. The repair, SQ-1028, is in progress. It ships only after a second review and a re-walk, and only on Kody&rsquo;s go.</p>
+      <h2 class="t-d1">Fixed in code: the hold explains itself, and the fix it points to now works</h2>
+      <p class="t-body prose">SQ-1019 is merged to main. It went through two cross-provider reviews (SQ-1020, SQ-1029) and two walks of the running portal (SQ-1027, SQ-1030). Each round found real defects, and each was repaired (SQ-1028, SQ-1031). A third review (SQ-1033) covers the last repair. It is not in production and ships only on Kody&rsquo;s go.</p>
       <div class="cols-2">
         <div class="stack">
-          <p class="t-head ink-faint">What it does</p>
+          <p class="t-head ink-faint">What it does now</p>
           <ul class="look">
-            <li>The composer reads the project&rsquo;s client and studio <em>before</em> the press. <em>Draft the invoice</em> is held (aria-disabled, still focusable) while either is missing.</li>
-            <li>A sentence above the act names the gap: &ldquo;Kuehn Whole Home Renovation has no client yet. Link one to bill it.&rdquo; <em>Link a client</em> sits beside it.</li>
-            <li>No studio: an owner or admin gets <em>Name the studio</em>; everyone else reads &ldquo;Ask your studio owner to name it.&rdquo; Nobody sees a dead act.</li>
-            <li>Pressing the held act writes the reason to a status line and moves focus to the fix.</li>
-            <li>The project picker marks &ldquo;— no client yet&rdquo;.</li>
-            <li>The uppercase box is gone, and failures use the house failure line.</li>
-            <li>Rollback messages no longer print the invoice&rsquo;s id.</li>
-            <li>Walk-after: the held act, the sentence, the status line and the focus landing all <strong>pass</strong>, at 1400 px, at 390 px and by keyboard (<a href="../walk-after/01a-draft-pressed-held-link-a-client.png">01a</a>, <a href="../walk-after/04-390-draft-pressed-held-reason.png">04</a>).</li>
+            <li>The composer reads the project&rsquo;s client and studio <em>before</em> the press. <em>Draft the invoice</em> is held (aria-disabled, still focusable) while either is missing, and the project picker marks &ldquo;— no client yet&rdquo;.</li>
+            <li>A sentence above the act names the gap: &ldquo;Halloran House has no client yet. Link one to bill it.&rdquo; Pressing the held act writes the reason to a status line and moves focus to <em>Link a client</em> (<a href="../walk-after-repair/01b-draft-pressed-held-focus-link-a-client.png">01b</a>).</li>
+            <li><em>Link a client</em> opens the household sheet <strong>above</strong> the composer, on the Document and after ⌘K, and focus goes into it. Esc closes only the sheet. After linking, the lines are intact, the reason clears, focus lands on <em>Draft the invoice</em>, and the draft goes through (<a href="../walk-after-repair/02a-link-a-client-sheet-above-composer.png">02a</a>, <a href="../walk-after-repair/03b-cmdk-link-navigated-sheet-above-composer.png">03b</a>, <a href="../walk-after-repair/02f-draft-succeeds.png">02f</a>).</li>
+            <li>Only the project&rsquo;s lead designer gets the act. Anyone else reads &ldquo;Ask Leah Hartwell to link one.&rdquo; and sees no dead act (<a href="../walk-after-repair/06-nonlead-ask-lead-no-act.png">06</a>).</li>
+            <li>No studio: <em>Name studio</em> is offered only to someone the server will accept, and its refusals are said plainly.</li>
+            <li>Every failure is said in the composer&rsquo;s words, with no RPC text, ids or cents. This covers drafts, studio drafts, hours and billing lines. <em>Try again</em> appears only when nothing was written and a retry could work.</li>
+            <li>At 390 px the line&rsquo;s &times; and the TOTAL now fit inside the panel.</li>
           </ul>
         </div>
         <div class="stack">
-          <p class="t-head ink-faint">What the review and the walk found (SQ-1028 repairs these)</p>
+          <p class="t-head ink-faint">Still open (none blocks the ship)</p>
           <ul class="look">
-            <li><strong><em>Link a client</em> opens its sheet behind the composer.</strong> The household sheet sits on <code>z-50</code> and the composer on <code>z-[60]</code>. Nothing visible happens, and keyboard focus goes into the hidden sheet. This happens on the Document and from the desk or ⌘K. <span class="conf">[H]</span> Confirmed in the walk (<a href="../walk-after/02a-link-a-client-pressed-sheet-hidden-under-composer.png">02a</a>, <a href="../walk-after/03b-cmdk-link-navigated-sheet-hidden-under-composer.png">03b</a>, <a href="../walk-after/05b-keyboard-tab-focus-inside-hidden-sheet.png">05b</a>).</li>
-            <li><strong>The lines survive, and Draft works after linking</strong> (<a href="../walk-after/02d-draft-succeeds.png">02d</a>). But the old reason stays on screen after the gap is gone (<a href="../walk-after/02c-returned-lines-kept-stale-reason.png">02c</a>). <span class="conf">[H]</span></li>
-            <li><strong><em>Try again</em> shows for every failure,</strong> including after a draft already exists. A retry there can make a second draft. <span class="conf">[H]</span> (code review)</li>
-            <li><strong>Billing-line refusals still pass through raw</strong> (&ldquo;add_invoice_billing_lines: …&rdquo;). <span class="conf">[H]</span></li>
-            <li><strong>Everyone sees <em>Link a client</em>,</strong> but the server accepts only the project&rsquo;s own designer. SQ-1028 offers the act only to the lead designer. Who else should be allowed is Q6. <span class="conf">[H]</span></li>
-            <li><strong><em>Name the studio</em> fails silently.</strong> For an owner of several studios, it can stamp the wrong one. <span class="conf">[H]</span></li>
-            <li>Gaps show one at a time, and no studio appears only after the client is linked. Unpriced FF&amp;E, rate-pending hours, sends and project creation are untouched.</li>
+            <li>The folio&rsquo;s grey scrim stops short of the bottom of the viewport, so a band of the Document shows un-dimmed. <span class="conf">[H]</span> (walk, low)</li>
+            <li>The household picker lists two identical &ldquo;Client User&rdquo; rows. That is probably seed data, but the picker gives no detail to tell them apart. (walk, low)</li>
+            <li>After ⌘K, <code>?sheet=household</code> stays in the address, so a reload reopens the sheet. (walk, low)</li>
+            <li>A mouse press on held Draft moves focus with no visible ring; the status sentence is the only cue. (walk, low)</li>
+            <li>A solo designer with no studio owner reads that only an employing studio can name it, and gets no next step. That is a product question: Q19.</li>
+            <li>Gaps show one at a time. Unpriced FF&amp;E, rate-pending hours, sends and project creation are untouched. That is phase 1 onward.</li>
           </ul>
         </div>
       </div>
@@ -702,10 +700,11 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
         <div class="phase-col p0">
           <p class="t-head">Phase 0 · in code, awaiting go</p>
           <ol>
-            <li>SQ-1019: held Draft for no client and no studio, reason and fix beside it, picker note, house failure line, no ids.<span class="sz">merged · hold passes the walk</span></li>
-            <li>SQ-1028: the sheet opens above the composer, no retry on money writes, refusals in plain words, focus kept in the composer, the right studio-mode reason, <em>Name studio</em> made safe.<span class="sz">in progress · then a second review and a re-walk</span></li>
+            <li>SQ-1019: held Draft for no client and no studio, reason and fix beside it, picker note, house failure line, no ids.<span class="sz">merged · walked twice</span></li>
+            <li>SQ-1028: the sheet opens above the composer, no retry on money writes, refusals in plain words, focus kept in the composer, the right studio-mode reason, <em>Name studio</em> made safe.<span class="sz">merged · reviewed (SQ-1029) · re-walked (SQ-1030)</span></li>
+            <li>SQ-1031 and a follow-up: draft, hours and studio-draft refusals in plain words; focus lands on Draft after linking; the 390 px fit.<span class="sz">merged · review SQ-1033</span></li>
           </ol>
-          <p class="t-body-sm ink-muted">Ships on Kody&rsquo;s go, once SQ-1028 passes its review and the re-walk.</p>
+          <p class="t-body-sm ink-muted">Ships on Kody&rsquo;s go, once SQ-1033 comes back clean. One portal deploy, with no migration.</p>
         </div>
         <div class="phase-col p1">
           <p class="t-head">Phase 1 · make the fix hold up</p>
@@ -788,6 +787,7 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
             <li><span class="qn">Q11</span><span>A send with no email: fix it in the household sheet (proposed) or in People, where bounced addresses are fixed today?</span></li>
             <li><span class="qn">Q12</span><span>Schedule the one-transaction draft (a migration, outside US-35) to remove rollback and stranded drafts?</span></li>
             <li><span class="qn">Q13</span><span>Should a studio owner also see a &ldquo;no studio&rdquo; gap on their own Desk, so a copied note isn&rsquo;t the only way they hear?</span></li>
+            <li><span class="qn">Q19</span><span>A solo designer with no studio owner can&rsquo;t name a project&rsquo;s studio themselves (the server needs an employing studio). What should they be told to do?</span></li>
           </ol>
         </div>
         <div class="stack">
@@ -801,8 +801,8 @@ figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
           </ol>
           <hr class="rule-hair">
           <p class="t-head ink-faint">Not decided here</p>
-          <p class="t-body-sm ink-muted">None of the recommendations here rules on an open VISION question (V1–V5). Where one could touch them (who may link a client, Q6; required client at creation, Q7), it is left to you as a question. Act names this deck uses that aren&rsquo;t in act-names.ts yet (&ldquo;Set a client price&rdquo;; &ldquo;Name the studio&rdquo; vs &ldquo;Name studio&rdquo;) are proposals pending Q9. The deck itself changes no product code. Only SQ-1019 and SQ-1028 do, and the spotlight stays out of product code until Kody picks a direction.</p>
-          <p class="t-meta ink-faint">Sources in this folder: <a href="../inventory/inventory.md">inventory/</a> (A), <a href="../walk/walk.md">walk/</a> (B), <a href="../prototypes/index.html">prototypes/</a> (C), <a href="../flows/flows.md">flows/</a> (D), <a href="../walk-after/walk-after.md">walk-after/</a> (SQ-1027); SQ-1019 at <code>64d2a180b</code> and <code>9af30e16e</code> on main <code>91c1d5100</code>. The deck was reviewed by the other provider (SQ-1026), and its findings are folded in.</p>
+          <p class="t-body-sm ink-muted">None of the recommendations here rules on an open VISION question (V1–V5). Where one could touch them (who may link a client, Q6; required client at creation, Q7), it is left to you as a question. Act names this deck uses that aren&rsquo;t in act-names.ts yet (&ldquo;Set a client price&rdquo;; &ldquo;Name the studio&rdquo; vs &ldquo;Name studio&rdquo;) are proposals pending Q9. The deck itself changes no product code. Only SQ-1019 and its repairs (SQ-1028, SQ-1031) do, and the spotlight stays out of product code until Kody picks a direction.</p>
+          <p class="t-meta ink-faint">Sources in this folder: <a href="../inventory/inventory.md">inventory/</a> (A), <a href="../walk/walk.md">walk/</a> (B), <a href="../prototypes/index.html">prototypes/</a> (C), <a href="../flows/flows.md">flows/</a> (D), <a href="../walk-after/walk-after.md">walk-after/</a> (SQ-1027), <a href="../walk-after-repair/walk-after-repair.md">walk-after-repair/</a> (SQ-1030). SQ-1019 at <code>64d2a180b</code> and <code>9af30e16e</code>, the repairs at <code>60d038a74</code>, <code>641c750ab</code> and <code>1630ad321</code>. The deck was reviewed by the other provider (SQ-1026), and its findings are folded in.</p>
         </div>
       </div>
     </div>
