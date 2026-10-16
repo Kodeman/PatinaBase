@@ -63,8 +63,12 @@ describe("I91 shared action grammar", () => {
       actionRegion(proposalDraft, "proposal-draft-actions"),
       actionRegion(library, "room-head"),
       actionRegion(captureLead, "capture-lead-sheet"),
-      actionRegion(invoiceComposer, "invoice-draft-error"),
     ].forEach(expectOneStaticPrimary);
+  });
+
+  it("routes invoice draft refusals through ActFailLine, not a bespoke error region (US-35 SQ-1019)", () => {
+    expect(invoiceComposer).not.toContain('regionKey="invoice-draft-error"');
+    expect(invoiceComposer).toContain("<ActFailLine");
   });
 
   it("leaves the People head with no filled act (US-28 S10, uplift (c) area 4: Add contact is secondary)", () => {
