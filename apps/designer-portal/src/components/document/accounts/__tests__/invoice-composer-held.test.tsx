@@ -1151,6 +1151,44 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(act()).toBeEnabled();
   });
 
+  it("F1: linking the client of a project that has no studio either lands on Name studio, the next fix", async () => {
+    mockProjectClientId = null;
+    mockProjectStudioId = null;
+    mockPathname = "/doc/project-1";
+    // The lead is an admin of the studio that employs them, so they may name it.
+    mockOrganizations = studioWith("admin");
+    mockStudioMembers = [{ user_id: "designer-1", role: "admin", status: "active" }];
+    function Stack() {
+      const [householdOpen, setHouseholdOpen] = useState(false);
+      useEffect(() => {
+        const open = () => setHouseholdOpen(true);
+        window.addEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, open);
+        return () => window.removeEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, open);
+      }, []);
+      return (
+        <>
+          <PaperFolioSheet open onClose={jest.fn()} title="Draw an invoice" wide>
+            {composer()}
+          </PaperFolioSheet>
+          <DocSheet open={householdOpen} onClose={() => setHouseholdOpen(false)} title="The household" aboveFolio>
+            <button type="button">Link a household…</button>
+          </DocSheet>
+        </>
+      );
+    }
+    const household = () => screen.queryByRole("dialog", { name: "The household" });
+    const view = render(<Stack />);
+    fireEvent.click(screen.getByRole("link", { name: "Link a client" }));
+    await waitFor(() => expect(household()).toHaveFocus());
+    mockProjectClientId = "client-9";
+    mockProjectsUpdatedAt = 2;
+    view.rerender(<Stack />);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    expect(household()).toBeNull();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Name studio" })).toHaveFocus());
+    expect(act()).toHaveAttribute("aria-disabled", "true");
+  });
+
   it("F1: a link left pending on one project never lands focus on another project's Draft", async () => {
     mockProjectClientId = null;
     mockPathname = "/doc/project-1";

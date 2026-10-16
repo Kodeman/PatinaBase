@@ -664,7 +664,8 @@ export function InvoiceComposer({
       frame = window.requestAnimationFrame(() => {
         const active = document.activeElement;
         if (active && active !== document.body && active.isConnected) return;
-        draftActRef.current?.focus();
+        // A studio still missing: land on its fix when this viewer has one.
+        (nameStudioRef.current ?? draftActRef.current)?.focus();
       });
     };
     // DocSheet portals into <body>, so its put-back is a body child removed.
