@@ -17,16 +17,16 @@ import { DiscoveryMargin } from '@/components/document/discovery/discovery-margi
 const mockResolveFn = jest.fn();
 const mockCreateNoteFn = jest.fn();
 
-function mockRealMutation(fn: jest.Mock) {
+function useMockRealMutation(fn: jest.Mock) {
   const { useMutation: useRealMutation } = jest.requireActual('@tanstack/react-query');
   return useRealMutation({ mutationFn: (vars: unknown) => fn(vars) });
 }
 
 jest.mock('@patina/supabase', () => ({
-  useResolveCoordinationItem: () => mockRealMutation(mockResolveFn),
+  useResolveCoordinationItem: () => useMockRealMutation(mockResolveFn),
 }));
 jest.mock('@/hooks/use-margin-notes', () => ({
-  useCreateMarginNote: () => mockRealMutation(mockCreateNoteFn),
+  useCreateMarginNote: () => useMockRealMutation(mockCreateNoteFn),
 }));
 jest.mock('@/hooks/use-discovery-margin', () => ({
   useDiscoveryMarginNotes: () => ({ data: [] }),
