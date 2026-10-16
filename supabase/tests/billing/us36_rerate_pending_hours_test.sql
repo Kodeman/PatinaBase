@@ -1,8 +1,10 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00797 — US-36 R1: re-rate pending hours on set (K8, amends P-4)
 --
--- rerate_pending_time_entries(p_rate_id) prices a member's pending hours at the
--- rate on the studio_member_rates row just saved (SQ-1077, repairing SQ-1075).
+-- rerate_pending_time_entries(p_rate_id, p_expected_rate_cents) prices a
+-- member's pending hours at the rate on the studio_member_rates row just saved
+-- (SQ-1077, repairing SQ-1075; SQ-1081, repairing SQ-1079). Every call below
+-- passes the rate the save returned as p_expected_rate_cents.
 --
 --   (k8a) an unknown rate id is refused like a row the caller does not run,
 --         and nothing moves.
@@ -21,9 +23,12 @@
 --         hour, an invoiced pending hour, the member's hour on a project
 --         another studio prices, and another member's hour. A second run
 --         returns 0.
---   (k8e) P-4 stands afterwards: an owner's direct rate UPDATE of a priced hour
---         and of a re-priced hour is refused (aab_), even with both GUCs
---         forged. A later edit by the member keeps the K8 price.
+--   (k8e) P-4's refusal stands afterwards: an owner's direct rate UPDATE of a
+--         priced hour and of a re-priced hour is refused (aab_), even with both
+--         GUCs forged. A later edit by the member keeps the K8 price while the
+--         hour's started_at still answers 'none'. Not claimed: once a rate is
+--         later backdated over the hour, its next edit re-prices it (00618's
+--         delta 5, inherited; open in DECISIONS R177).
 --   (k8f) the carve-out is the RPC's alone: a member who forges both GUCs on his
 --         own pending hour stays pending. The admin's re-rate then prices it.
 --   (k8g) F2: the saved row is dated the studio's LOCAL tomorrow, while the
@@ -33,6 +38,17 @@
 --         Forging the GUCs with it prices nothing.
 --   (k8i) the refusal is per studio: this studio's owner is refused another
 --         studio's row, and that studio's owner is admitted with it.
+--   (k8j) SQ-1079 F1: a row that a tomorrow-dated save closed at today is
+--         superseded (23514), though the UTC day is still inside it. The
+--         successor prices the hour.
+--   (k8k) SQ-1079 F2: after a second admin's same-day correction (same row id,
+--         new rate), the first save's re-rate is refused (40001) and prices
+--         nothing. A re-rate that names the corrected rate prices it.
+--   (k8l) SQ-1079 F3: an owner who forges both GUCs with a superseded row
+--         prices nothing. Her edit itself lands.
+--   (k8m) SQ-1079 F5: the count is the hours this call moved off 'none'. An
+--         hour whose eligibility is lost during the walk (the self-rate's
+--         member hands her ownership away) stays pending and is not counted.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -176,23 +192,23 @@ END;
 $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
--- rerate_pending_time_entries(p_rate) as p_actor: the count, or
+-- rerate_pending_time_entries(p_rate, p_expected) as p_actor: the count, or
 -- 'ERR|SQLSTATE|message'.
-CREATE OR REPLACE FUNCTION pg_temp.rerate_as(p_actor UUID, p_rate UUID)
+CREATE OR REPLACE FUNCTION pg_temp.rerate_as(p_actor UUID, p_rate UUID, p_expected INTEGER)
 RETURNS TEXT AS $$
 DECLARE
   v_out TEXT;
 BEGIN
   PERFORM pg_temp.assume_user(p_actor);
   BEGIN
-    v_out := public.rerate_pending_time_entries(p_rate)::text;
+    v_out := public.rerate_pending_time_entries(p_rate, p_expected)::text;
   EXCEPTION WHEN OTHERS THEN v_out := 'ERR|' || SQLSTATE || '|' || SQLERRM;
   END;
   PERFORM pg_temp.reset_role();
   RETURN v_out;
 END;
 $$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION pg_temp.rerate_as(UUID, UUID) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_temp.rerate_as(UUID, UUID, INTEGER) TO PUBLIC;
 
 -- A row nobody has re-priced: still what it was, no updated_by, and no trace
 -- written by a person (the fixture's own invoice stamp ran as postgres).
@@ -246,7 +262,7 @@ DECLARE
   v_out TEXT;
 BEGIN
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
-                             'c7970000-0000-4000-8000-0000000000c0');
+                             'c7970000-0000-4000-8000-0000000000c0', 0);
   ASSERT v_out LIKE 'ERR|42501|rerate_pending_time_entries: only an owner or admin%',
     'FAIL k8a1: an unknown rate id gets the same refusal as another studio''s row; got ' || COALESCE(v_out, 'NULL');
   ASSERT pg_temp.pending('c7970000-0000-4000-8000-0000000000b1')
@@ -286,12 +302,12 @@ DECLARE
 BEGIN
   -- the RPC's own refusal, not a 42501 raised further down the resolver
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000005',
-                             'c7970000-0000-4000-8000-0000000000c1');
+                             'c7970000-0000-4000-8000-0000000000c1', 9000);
   ASSERT v_out LIKE 'ERR|42501|rerate_pending_time_entries: only an owner or admin%',
     'FAIL k8b1: an outsider (owner of another studio) handed this studio''s row is refused; got ' || COALESCE(v_out, 'NULL');
 
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000003',
-                             'c7970000-0000-4000-8000-0000000000c1');
+                             'c7970000-0000-4000-8000-0000000000c1', 9000);
   ASSERT v_out LIKE 'ERR|42501|rerate_pending_time_entries: only an owner or admin%',
     'FAIL k8b2: a plain member (the subject herself) is refused; got ' || COALESCE(v_out, 'NULL');
 
@@ -321,7 +337,7 @@ BEGIN
           WHERE id = 'c7970000-0000-4000-8000-0000000000c1') = (NOW() AT TIME ZONE 'UTC')::date - 1,
     'FAIL k8c0 (precondition): c2 closed c1 at yesterday';
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
-                             'c7970000-0000-4000-8000-0000000000c1');
+                             'c7970000-0000-4000-8000-0000000000c1', 9000);
   ASSERT v_out LIKE 'ERR|23514|rerate_pending_time_entries: rate % has been superseded%',
     'FAIL k8c1: a superseded row is refused; got ' || COALESCE(v_out, 'NULL');
   ASSERT pg_temp.pending('c7970000-0000-4000-8000-0000000000b1')
@@ -339,7 +355,7 @@ DECLARE
   v_row RECORD;
 BEGIN
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
-                             'c7970000-0000-4000-8000-0000000000c2');
+                             'c7970000-0000-4000-8000-0000000000c2', 15000);
 
   -- F1 (SQ-1075): the card signed after the hour, and in force now, does not
   -- mask the member rate just set.
@@ -416,7 +432,7 @@ BEGIN
     'FAIL k8d13: the owner''s re-rate prices exactly b1, b2, b7 and b9; got ' || COALESCE(v_out, 'NULL');
 
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
-                             'c7970000-0000-4000-8000-0000000000c2');
+                             'c7970000-0000-4000-8000-0000000000c2', 15000);
   ASSERT v_out = '0',
     'FAIL k8d14: a second re-rate has nothing left to price; got ' || COALESCE(v_out, 'NULL');
 
@@ -478,11 +494,11 @@ BEGIN
   FROM public.project_time_entries WHERE id = 'c7970000-0000-4000-8000-0000000000b1';
   ASSERT v_row.duration_minutes = 150 AND v_row.hourly_rate_cents = 15000
      AND v_row.rate_source = 'studio_member' AND v_row.rated_amount_cents = 37500,
-    'FAIL k8e5: a later edit keeps the K8 price; got '
+    'FAIL k8e5: a later edit keeps the K8 price while started_at still answers none; got '
     || COALESCE(v_row.duration_minutes::text, 'NULL') || ' / ' || COALESCE(v_row.hourly_rate_cents::text, 'NULL')
     || ' / ' || COALESCE(v_row.rate_source, 'NULL');
 
-  RAISE NOTICE 'us36r: case (k8e) passed — P-4''s refusal stands for owner and GUCs alike.';
+  RAISE NOTICE 'us36r: case (k8e) passed — P-4''s refusal stands for owner and GUCs alike; an edit keeps the K8 price while started_at answers none.';
 END
 $$;
 
@@ -514,7 +530,7 @@ BEGIN
     'FAIL k8f1: a member who forges both GUCs on his own pending hour stays pending';
 
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000002',
-                             'c7970000-0000-4000-8000-0000000000c3');
+                             'c7970000-0000-4000-8000-0000000000c3', 12000);
   ASSERT v_out = '1',
     'FAIL k8f2: the admin''s re-rate prices N''s hour; got ' || COALESCE(v_out, 'NULL');
   ASSERT (SELECT hourly_rate_cents = 12000 AND rate_source = 'studio_member' AND rated_amount_cents = 15000
@@ -561,7 +577,7 @@ BEGIN
     'FAIL k8g0c (precondition): b10 is pending — c4 starts after it';
 
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
-                             'c7970000-0000-4000-8000-0000000000c5');
+                             'c7970000-0000-4000-8000-0000000000c5', 15000);
   SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_row
   FROM public.project_time_entries WHERE id = 'c7970000-0000-4000-8000-000000000b10';
   ASSERT v_row.hourly_rate_cents = 15000 AND v_row.rate_source = 'studio_member'
@@ -589,7 +605,7 @@ DECLARE
   v_count INTEGER;
 BEGIN
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
-                             'c7970000-0000-4000-8000-0000000000c6');
+                             'c7970000-0000-4000-8000-0000000000c6', 99000);
   ASSERT v_out LIKE 'ERR|42501|rerate_pending_time_entries: a rate members set for themselves%',
     'FAIL k8h1: a self-written rate of a non-owner is refused; got ' || COALESCE(v_out, 'NULL');
   ASSERT pg_temp.pending('c7970000-0000-4000-8000-000000000b11')
@@ -628,14 +644,14 @@ DECLARE
   v_out TEXT;
 BEGIN
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
-                             'c7970000-0000-4000-8000-0000000000c7');
+                             'c7970000-0000-4000-8000-0000000000c7', 13000);
   ASSERT v_out LIKE 'ERR|42501|rerate_pending_time_entries: only an owner or admin%',
     'FAIL k8i1: this studio''s owner is refused another studio''s row; got ' || COALESCE(v_out, 'NULL');
   ASSERT pg_temp.pending('c7970000-0000-4000-8000-0000000000b6'),
     'FAIL k8i2: the refused re-rate leaves b6 pending';
 
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000005',
-                             'c7970000-0000-4000-8000-0000000000c7');
+                             'c7970000-0000-4000-8000-0000000000c7', 13000);
   ASSERT v_out = '1',
     'FAIL k8i3: the outsider re-rates in her own studio; got ' || COALESCE(v_out, 'NULL');
   ASSERT (SELECT hourly_rate_cents = 13000 AND rate_source = 'studio_member'
@@ -645,6 +661,279 @@ BEGIN
   RAISE NOTICE 'us36r: case (k8i) passed.';
 END
 $$;
+
+-- ─── (k8j) SQ-1079 F1: a row a later-dated save closed is superseded ───────
+-- k8g's shape, asked with the older row. Q (8), a member of studio A, logged
+-- b12 40 days ago. c8: Q's rate from 10 days ago. c9: the rate the owner saves
+-- dated the studio's local tomorrow, through RLS. The ladder closes c8 at
+-- today, so the UTC day is still c8's, but a later row supersedes it.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES ('c7970000-0000-4000-8000-000000000008', 'us36r-member-q@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+VALUES ('c7970000-0000-4000-8000-000000000008', 'c7970000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+INSERT INTO public.project_time_entries
+  (id, project_id, user_id, started_at, duration_minutes, billable, source)
+VALUES ('c7970000-0000-4000-8000-000000000b12', 'c7970000-0000-4000-8000-0000000000e1',
+        'c7970000-0000-4000-8000-000000000008', NOW() - INTERVAL '40 days', 60, true, 'manual_entry');
+INSERT INTO public.studio_member_rates (id, studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('c7970000-0000-4000-8000-0000000000c8', 'c7970000-0000-4000-8000-0000000000a1',
+        'c7970000-0000-4000-8000-000000000008', 9000, (NOW() AT TIME ZONE 'UTC')::date - 10,
+        'c7970000-0000-4000-8000-000000000001');
+
+SELECT pg_temp.assume_user('c7970000-0000-4000-8000-000000000001');
+INSERT INTO public.studio_member_rates (id, studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('c7970000-0000-4000-8000-0000000000c9', 'c7970000-0000-4000-8000-0000000000a1',
+        'c7970000-0000-4000-8000-000000000008', 15000, (NOW() AT TIME ZONE 'UTC')::date + 1,
+        'c7970000-0000-4000-8000-000000000001');
+SELECT pg_temp.reset_role();
+
+DO $$
+DECLARE
+  v_out TEXT;
+BEGIN
+  ASSERT (SELECT effective_to FROM public.studio_member_rates
+          WHERE id = 'c7970000-0000-4000-8000-0000000000c8') = (NOW() AT TIME ZONE 'UTC')::date,
+    'FAIL k8j0 (precondition): c9 closed c8 at today';
+  ASSERT pg_temp.pending('c7970000-0000-4000-8000-000000000b12'),
+    'FAIL k8j0b (precondition): b12 is pending — c8 starts after it';
+
+  v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
+                             'c7970000-0000-4000-8000-0000000000c8', 9000);
+  ASSERT v_out LIKE 'ERR|23514|rerate_pending_time_entries: rate % has been superseded%',
+    'FAIL k8j1 (SQ-1079 F1): a row a later-dated save closed is superseded, though today is still inside it; got '
+    || COALESCE(v_out, 'NULL');
+  ASSERT pg_temp.pending('c7970000-0000-4000-8000-000000000b12')
+     AND pg_temp.untouched('c7970000-0000-4000-8000-000000000b12'),
+    'FAIL k8j2 (SQ-1079 F1): the superseded row prices nothing';
+
+  v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
+                             'c7970000-0000-4000-8000-0000000000c9', 15000);
+  ASSERT v_out = '1'
+     AND (SELECT hourly_rate_cents = 15000 AND rate_source = 'studio_member'
+          FROM public.project_time_entries WHERE id = 'c7970000-0000-4000-8000-000000000b12'),
+    'FAIL k8j3: the row that superseded it prices the hour; got ' || COALESCE(v_out, 'NULL');
+
+  RAISE NOTICE 'us36r: case (k8j) passed — SQ-1079 F1: any later-dated row supersedes.';
+END
+$$;
+
+-- ─── (k8k) SQ-1079 F2: a same-day correction keeps the row's id ────────────
+-- R (9), a member of studio A, logged b13 50 days ago, before any rate. The
+-- owner saves ca at 15000 today through RLS. The admin then corrects it the
+-- same day, the way useSetStudioMemberRate's upsert writes. The row keeps its
+-- id and now carries 20000.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES ('c7970000-0000-4000-8000-000000000009', 'us36r-member-r@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+VALUES ('c7970000-0000-4000-8000-000000000009', 'c7970000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+INSERT INTO public.project_time_entries
+  (id, project_id, user_id, started_at, duration_minutes, billable, source)
+VALUES ('c7970000-0000-4000-8000-000000000b13', 'c7970000-0000-4000-8000-0000000000e1',
+        'c7970000-0000-4000-8000-000000000009', NOW() - INTERVAL '50 days', 120, true, 'manual_entry');
+
+SELECT pg_temp.assume_user('c7970000-0000-4000-8000-000000000001');
+INSERT INTO public.studio_member_rates (id, studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('c7970000-0000-4000-8000-0000000000ca', 'c7970000-0000-4000-8000-0000000000a1',
+        'c7970000-0000-4000-8000-000000000009', 15000, (NOW() AT TIME ZONE 'UTC')::date,
+        'c7970000-0000-4000-8000-000000000001');
+SELECT pg_temp.reset_role();
+
+SELECT pg_temp.assume_user('c7970000-0000-4000-8000-000000000002');
+INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('c7970000-0000-4000-8000-0000000000a1', 'c7970000-0000-4000-8000-000000000009', 20000,
+        (NOW() AT TIME ZONE 'UTC')::date, 'c7970000-0000-4000-8000-000000000002')
+ON CONFLICT (studio_id, user_id, effective_from)
+DO UPDATE SET hourly_rate_cents = EXCLUDED.hourly_rate_cents, created_by = EXCLUDED.created_by;
+SELECT pg_temp.reset_role();
+
+DO $$
+DECLARE
+  v_out TEXT;
+BEGIN
+  ASSERT (SELECT hourly_rate_cents FROM public.studio_member_rates
+          WHERE id = 'c7970000-0000-4000-8000-0000000000ca') = 20000
+     AND (SELECT count(*) FROM public.studio_member_rates
+          WHERE user_id = 'c7970000-0000-4000-8000-000000000009') = 1,
+    'FAIL k8k0 (precondition): the admin''s correction rewrote the owner''s row in place';
+
+  -- the owner's re-rate, sent with the rate her save returned
+  v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
+                             'c7970000-0000-4000-8000-0000000000ca', 15000);
+  ASSERT v_out = 'ERR|40001|rerate_pending_time_entries: the rate changed since you saved it; save it again to price these hours',
+    'FAIL k8k1 (SQ-1079 F2): a re-rate whose saved rate was corrected since is refused; got ' || COALESCE(v_out, 'NULL');
+  ASSERT pg_temp.pending('c7970000-0000-4000-8000-000000000b13')
+     AND pg_temp.untouched('c7970000-0000-4000-8000-000000000b13'),
+    'FAIL k8k2 (SQ-1079 F2): the refused re-rate prices nothing, at either rate';
+
+  v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000002',
+                             'c7970000-0000-4000-8000-0000000000ca', 20000);
+  ASSERT v_out = '1'
+     AND (SELECT hourly_rate_cents = 20000 AND rate_source = 'studio_member' AND rated_amount_cents = 40000
+          FROM public.project_time_entries WHERE id = 'c7970000-0000-4000-8000-000000000b13'),
+    'FAIL k8k3: a re-rate that names the corrected rate prices the hour at it; got ' || COALESCE(v_out, 'NULL');
+
+  RAISE NOTICE 'us36r: case (k8k) passed — SQ-1079 F2: the act prices the rate its caller saved, or nothing.';
+END
+$$;
+
+-- ─── (k8l) SQ-1079 F3: forged GUCs with a superseded row price nothing ─────
+-- S (a), a member of studio A, logged b14 50 days ago. cb: S's rate from 30
+-- days ago, which does not reach b14. cc: today's rate, saved by the owner
+-- through RLS, closes cb at yesterday.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES ('c7970000-0000-4000-8000-00000000000a', 'us36r-member-s@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+VALUES ('c7970000-0000-4000-8000-00000000000a', 'c7970000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+INSERT INTO public.project_time_entries
+  (id, project_id, user_id, started_at, duration_minutes, billable, source)
+VALUES ('c7970000-0000-4000-8000-000000000b14', 'c7970000-0000-4000-8000-0000000000e1',
+        'c7970000-0000-4000-8000-00000000000a', NOW() - INTERVAL '50 days', 120, true, 'manual_entry');
+INSERT INTO public.studio_member_rates (id, studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('c7970000-0000-4000-8000-0000000000cb', 'c7970000-0000-4000-8000-0000000000a1',
+        'c7970000-0000-4000-8000-00000000000a', 9000, (NOW() AT TIME ZONE 'UTC')::date - 30,
+        'c7970000-0000-4000-8000-000000000001');
+
+SELECT pg_temp.assume_user('c7970000-0000-4000-8000-000000000001');
+INSERT INTO public.studio_member_rates (id, studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('c7970000-0000-4000-8000-0000000000cc', 'c7970000-0000-4000-8000-0000000000a1',
+        'c7970000-0000-4000-8000-00000000000a', 15000, (NOW() AT TIME ZONE 'UTC')::date,
+        'c7970000-0000-4000-8000-000000000001');
+SELECT pg_temp.reset_role();
+
+DO $$
+DECLARE
+  v_out TEXT;
+  v_count INTEGER;
+  v_row RECORD;
+BEGIN
+  v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
+                             'c7970000-0000-4000-8000-0000000000cb', 9000);
+  ASSERT v_out LIKE 'ERR|23514|rerate_pending_time_entries: rate % has been superseded%',
+    'FAIL k8l0 (precondition): the RPC refuses cb as superseded; got ' || COALESCE(v_out, 'NULL');
+
+  -- the owner sets both GUCs herself, naming cb, and corrects S's duration
+  PERFORM pg_temp.assume_user('c7970000-0000-4000-8000-000000000001');
+  PERFORM set_config('app.rerate_time_entry_id', 'c7970000-0000-4000-8000-000000000b14', true);
+  PERFORM set_config('app.rerate_rate_id', 'c7970000-0000-4000-8000-0000000000cb', true);
+  UPDATE public.project_time_entries SET duration_minutes = 121
+   WHERE id = 'c7970000-0000-4000-8000-000000000b14';
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  PERFORM set_config('app.rerate_time_entry_id', '', true);
+  PERFORM set_config('app.rerate_rate_id', '', true);
+  PERFORM pg_temp.reset_role();
+  ASSERT v_count = 1, 'FAIL k8l1 (precondition): the owner may correct a member''s hour';
+  SELECT duration_minutes, hourly_rate_cents, rate_source INTO v_row
+  FROM public.project_time_entries WHERE id = 'c7970000-0000-4000-8000-000000000b14';
+  ASSERT v_row.duration_minutes = 121 AND v_row.rate_source = 'none' AND v_row.hourly_rate_cents IS NULL,
+    'FAIL k8l2 (SQ-1079 F3): forged GUCs naming a superseded row price nothing, and the edit itself lands; got '
+    || COALESCE(v_row.duration_minutes::text, 'NULL') || ' / ' || COALESCE(v_row.hourly_rate_cents::text, 'NULL')
+    || ' / ' || COALESCE(v_row.rate_source, 'NULL');
+
+  v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
+                             'c7970000-0000-4000-8000-0000000000cc', 15000);
+  ASSERT v_out = '1'
+     AND (SELECT hourly_rate_cents = 15000 AND rate_source = 'studio_member' AND rated_amount_cents = 30250
+          FROM public.project_time_entries WHERE id = 'c7970000-0000-4000-8000-000000000b14'),
+    'FAIL k8l3: the current row still prices the hour through the act; got ' || COALESCE(v_out, 'NULL');
+
+  RAISE NOTICE 'us36r: case (k8l) passed — SQ-1079 F3: forged GUCs get no more than the RPC.';
+END
+$$;
+
+-- ─── (k8m) SQ-1079 F5: the count is the hours that moved ───────────────────
+-- Studio C: B (b) its owner, A (c) an admin, D (d) a member. B leads e4 and
+-- logged b15 and b16 before any rate. cd: the rate B wrote for herself today,
+-- which tier 2 honours while she owns the studio (00615). A re-rates with it.
+-- The walk classifies b15, then b16. A test trigger fired by b16's touch
+-- UPDATE, before the classifier, has B hand her ownership to D through
+-- transfer_studio_ownership. The RPC's opening check passed, but when b16 is
+-- classified, cd no longer prices B's hours.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('c7970000-0000-4000-8000-00000000000b', 'us36r-owner-b@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c7970000-0000-4000-8000-00000000000c', 'us36r-admin-a@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c7970000-0000-4000-8000-00000000000d', 'us36r-member-d@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('c7970000-0000-4000-8000-0000000000a3', 'design_studio', 'US36R Studio C', 'us36r-studio-c-test', 'active');
+
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+VALUES ('c7970000-0000-4000-8000-00000000000b', 'c7970000-0000-4000-8000-0000000000a3', 'owner', 'active', NOW());
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+VALUES
+  ('c7970000-0000-4000-8000-00000000000c', 'c7970000-0000-4000-8000-0000000000a3', 'admin',  'active', NOW()),
+  ('c7970000-0000-4000-8000-00000000000d', 'c7970000-0000-4000-8000-0000000000a3', 'member', 'active', NOW());
+
+INSERT INTO public.projects (id, name, designer_id, created_by, studio_id, status)
+VALUES ('c7970000-0000-4000-8000-0000000000e4', 'US36R Studio C House',
+        'c7970000-0000-4000-8000-00000000000b', 'c7970000-0000-4000-8000-00000000000b',
+        'c7970000-0000-4000-8000-0000000000a3', 'active');
+
+INSERT INTO public.project_time_entries
+  (id, project_id, user_id, started_at, duration_minutes, billable, source)
+VALUES
+  ('c7970000-0000-4000-8000-000000000b15', 'c7970000-0000-4000-8000-0000000000e4',
+   'c7970000-0000-4000-8000-00000000000b', NOW() - INTERVAL '50 days', 60, true, 'manual_entry'),
+  ('c7970000-0000-4000-8000-000000000b16', 'c7970000-0000-4000-8000-0000000000e4',
+   'c7970000-0000-4000-8000-00000000000b', NOW() - INTERVAL '40 days', 60, true, 'manual_entry');
+
+INSERT INTO public.studio_member_rates (id, studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('c7970000-0000-4000-8000-0000000000cd', 'c7970000-0000-4000-8000-0000000000a3',
+        'c7970000-0000-4000-8000-00000000000b', 11000, (NOW() AT TIME ZONE 'UTC')::date,
+        'c7970000-0000-4000-8000-00000000000b');
+
+CREATE FUNCTION public.us36r_test_hand_over_ownership()
+RETURNS trigger AS $$
+DECLARE
+  v_claims TEXT := current_setting('request.jwt.claims', true);
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', 'c7970000-0000-4000-8000-00000000000b', 'role', 'authenticated')::text, true);
+  PERFORM public.transfer_studio_ownership('c7970000-0000-4000-8000-0000000000a3',
+                                           'c7970000-0000-4000-8000-00000000000d');
+  PERFORM set_config('request.jwt.claims', v_claims, true);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER aaa_us36r_test_hand_over_ownership_trg
+BEFORE UPDATE ON public.project_time_entries
+FOR EACH ROW WHEN (NEW.id = 'c7970000-0000-4000-8000-000000000b16')
+EXECUTE FUNCTION public.us36r_test_hand_over_ownership();
+
+DO $$
+DECLARE
+  v_out TEXT;
+BEGIN
+  ASSERT pg_temp.pending('c7970000-0000-4000-8000-000000000b15')
+     AND pg_temp.pending('c7970000-0000-4000-8000-000000000b16'),
+    'FAIL k8m0 (precondition): b15 and b16 start pending';
+
+  v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-00000000000c',
+                             'c7970000-0000-4000-8000-0000000000cd', 11000);
+
+  ASSERT (SELECT role FROM public.organization_members
+          WHERE organization_id = 'c7970000-0000-4000-8000-0000000000a3'
+            AND user_id = 'c7970000-0000-4000-8000-00000000000b') = 'admin'
+     AND (SELECT role FROM public.organization_members
+          WHERE organization_id = 'c7970000-0000-4000-8000-0000000000a3'
+            AND user_id = 'c7970000-0000-4000-8000-00000000000d') = 'owner',
+    'FAIL k8m1 (precondition): B handed her ownership to D during the walk; got ' || COALESCE(v_out, 'NULL');
+  ASSERT (SELECT hourly_rate_cents = 11000 AND rate_source = 'studio_member'
+                 AND updated_by = 'c7970000-0000-4000-8000-00000000000c'
+          FROM public.project_time_entries WHERE id = 'c7970000-0000-4000-8000-000000000b15'),
+    'FAIL k8m2: b15, classified while B still owned the studio, takes her rate';
+  ASSERT pg_temp.pending('c7970000-0000-4000-8000-000000000b16'),
+    'FAIL k8m3: b16, classified after she handed it over, stays pending';
+  ASSERT v_out = '1',
+    'FAIL k8m4 (SQ-1079 F5): the count is the hours this call moved off none, b15 alone; got ' || COALESCE(v_out, 'NULL');
+
+  RAISE NOTICE 'us36r: case (k8m) passed — SQ-1079 F5: only real transitions are counted.';
+END
+$$;
+
+DROP TRIGGER aaa_us36r_test_hand_over_ownership_trg ON public.project_time_entries;
+DROP FUNCTION public.us36r_test_hand_over_ownership();
 
 DO $$ BEGIN RAISE NOTICE 'All us36_rerate_pending_hours assertions passed.'; END $$;
 

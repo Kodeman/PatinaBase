@@ -139,17 +139,26 @@ export interface RerateRatePendingHoursInput {
   /** The `id` of the row useSetStudioMemberRate resolved to. The server reads
    *  the studio, the member and the rate from that row. */
   rateId: string;
+  /** That row's `hourly_rate_cents`, as the save returned it. A same-day
+   *  correction keeps the row's id, so the server prices only while the row
+   *  still carries this rate. */
+  expectedRateCents: number;
 }
 
 /**
  * K8 (amends P-4): after a rate is set, prices that member's rate-pending hours
  * (`rate_source = 'none'`, never on an invoice) on the studio's documents at the
- * saved row's rate — `rerate_pending_time_entries`, 00797. Resolves to how many
- * hours were priced. Priced or invoiced hours are never touched. The server
- * refuses a row a later save has superseded.
+ * saved row's rate — `rerate_pending_time_entries`, 00797. Callers chain it on
+ * the save: `const saved = await setRate.mutateAsync(...);
+ * rerate.mutate({ rateId: saved.id, expectedRateCents: saved.hourly_rate_cents })`.
+ * Resolves to how many hours this call priced. Priced or invoiced hours are
+ * never touched.
  *
  * The server admits only an owner or admin of the row's studio and prints its
- * own refusal; this hook never pre-judges standing.
+ * own refusal; this hook never pre-judges standing. It also refuses a row any
+ * later-dated row has superseded (23514), and a row whose rate is no longer
+ * `expectedRateCents` because someone corrected it since (40001: "the rate
+ * changed since you saved it; save it again to price these hours").
  */
 export function useRerateRatePendingHours() {
   const queryClient = useQueryClient();
@@ -159,6 +168,7 @@ export function useRerateRatePendingHours() {
       const supabase = getSupabase();
       const { data, error } = await supabase.rpc('rerate_pending_time_entries', {
         p_rate_id: input.rateId,
+        p_expected_rate_cents: input.expectedRateCents,
       });
       if (error) throw error;
       return (data as number | null) ?? 0;

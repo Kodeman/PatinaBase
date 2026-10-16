@@ -225,9 +225,9 @@ describe('useRerateRatePendingHours', () => {
     onSuccess: (data: unknown, input: unknown) => void;
   };
 
-  it("sends the saved row's id, from the upsert's returning row, and resolves to how many hours it priced", async () => {
+  it("sends the saved row's id and rate, from the upsert's returning row, and resolves to how many hours it priced", async () => {
     const setRate = useSetStudioMemberRate() as unknown as {
-      mutationFn: (input: unknown) => Promise<{ id: string }>;
+      mutationFn: (input: unknown) => Promise<{ id: string; hourly_rate_cents: number }>;
     };
     const saved = await setRate.mutationFn({
       studioId: 'studio-1',
@@ -239,12 +239,17 @@ describe('useRerateRatePendingHours', () => {
     supabaseClient.rpc.mockReturnValue(Promise.resolve({ data: 3, error: null }) as never);
     const mutation = useRerateRatePendingHours() as unknown as RerateMutation;
 
-    const priced = await mutation.mutationFn({ rateId: saved.id });
+    const priced = await mutation.mutationFn({
+      rateId: saved.id,
+      expectedRateCents: saved.hourly_rate_cents,
+    });
 
-    // Only the row's identity: the server reads the studio, the member and the
-    // rate from it (SQ-1075 — never a rate it re-resolves at now()).
+    // The row's identity, from which the server reads the studio, the member and
+    // the rate (SQ-1075 — never a rate it re-resolves at now()), and the rate
+    // this save returned: a same-day correction keeps the id (SQ-1079 F2).
     expect(supabaseClient.rpc).toHaveBeenCalledWith('rerate_pending_time_entries', {
       p_rate_id: 'rate-2',
+      p_expected_rate_cents: 18000,
     });
     expect(priced).toBe(3);
     // Nothing is written from here.
@@ -259,13 +264,15 @@ describe('useRerateRatePendingHours', () => {
     supabaseClient.rpc.mockReturnValue(Promise.resolve({ data: null, error: refusal }) as never);
     const mutation = useRerateRatePendingHours() as unknown as RerateMutation;
 
-    await expect(mutation.mutationFn({ rateId: 'rate-2' })).rejects.toBe(refusal);
+    await expect(
+      mutation.mutationFn({ rateId: 'rate-2', expectedRateCents: 18000 }),
+    ).rejects.toBe(refusal);
   });
 
   it("refreshes every document's hours reads, the composer's unbilled read among them", () => {
     const mutation = useRerateRatePendingHours() as unknown as RerateMutation;
 
-    mutation.onSuccess(2, { rateId: 'rate-2' });
+    mutation.onSuccess(2, { rateId: 'rate-2', expectedRateCents: 18000 });
 
     const calls = invalidateQueries.mock.calls.map((c) => c[0]) as Array<{
       queryKey?: unknown[];
