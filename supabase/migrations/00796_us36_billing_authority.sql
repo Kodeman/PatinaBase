@@ -10,9 +10,10 @@
 -- is carried verbatim (SECURITY DEFINER, search_path, REVOKE/GRANT unchanged)
 -- with one delta, on the PROJECT branch only:
 --   · authority: the project's lead (projects.designer_id, today's rule) OR an
---     owner/admin of the project's studio (projects.studio_id), asked through
---     public.is_org_admin_or_owner (00484) — the helper the rate RPCs already
---     use. Everyone else keeps today's refusal, word for word. Proposals stay
+--     owner/admin of the project's studio (projects.studio_id): an active
+--     owner/admin seat, public.is_org_admin_or_owner's (00484) predicate, which
+--     the setter reads from the caller's locked seat row (SQ-1073 R2).
+--     Everyone else keeps today's refusal, word for word. Proposals stay
 --     owner-only: K5 names the project's studio and nothing else.
 --   · 00385's relationship consistency is kept and asked of the PROJECT LEAD's
 --     book. The designer_clients row is the lead's, so the client must be one
@@ -30,8 +31,10 @@
 --     and public.document_client_link_hold(p_project_id) names why a caller may
 --     not link: NULL (she may), 'not_permitted', or 'lead_not_in_studio'.
 --     can_link_document_client is that function IS NULL. The setter reads
---     owner/admin standing only after it locks the caller's and the lead's
---     seats FOR SHARE (F3), so a demotion committed meanwhile is the one it reads.
+--     owner/admin standing from the caller's seat row in the statement that
+--     locks the caller's and the lead's seats FOR SHARE (F3, SQ-1073 R2): a
+--     demotion committed meanwhile is the one it reads, and a seat inserted
+--     after that statement's snapshot grants nothing.
 --
 -- ── K9 (Kody 2026-10-16) — studio picker at creation ───────────────────────
 -- open_project_direct(text, uuid, integer, integer, date, uuid, uuid) is a NEW
@@ -86,6 +89,8 @@ DECLARE
   v_designer uuid := auth.uid();
   v_target_designer uuid;
   v_target_studio uuid;
+  v_seat record;
+  v_caller_is_admin boolean := false;
   v_authorized boolean := false;
   v_current_designer_client_id uuid;
   v_proposal_status text;
@@ -119,25 +124,35 @@ BEGIN
 
   -- K5: the project's lead, or an owner/admin of the project's studio.
   IF FOUND THEN
-    -- SQ-1066 F3: standing is read after the caller's and the lead's seats are
-    -- share-locked, in 00563's membership order. 00563 re-checks only an
-    -- active non-guest seat, never owner/admin, so a demotion committed while
-    -- this call waits must be the one read below. Seats are taken before the
-    -- trigger's role rows, the order a seat change takes them (00713's sync).
+    -- SQ-1066 F3 / SQ-1073 R2: the caller's and the lead's seats are
+    -- share-locked in 00563's membership order, and owner/admin standing is
+    -- read from the caller's row as this statement locks it. 00563 re-checks
+    -- only an active non-guest seat, never owner/admin, so the row the standing
+    -- comes from must be one this call holds: a demotion committed while it
+    -- waits is the version read, and a seat that appears after the lock
+    -- snapshot grants nothing. Seats are taken before the trigger's role rows,
+    -- the order a seat change takes them (00713's sync).
     IF p_engagement_kind = 'project' AND v_target_studio IS NOT NULL THEN
-      PERFORM membership.id
-      FROM public.organization_members AS membership
-      WHERE membership.organization_id = v_target_studio
-        AND membership.user_id = ANY(ARRAY[v_target_designer, v_designer]::uuid[])
-      ORDER BY membership.user_id, membership.id
-      FOR SHARE;
+      FOR v_seat IN
+        SELECT membership.user_id, membership.role, membership.status
+        FROM public.organization_members AS membership
+        WHERE membership.organization_id = v_target_studio
+          AND membership.user_id = ANY(ARRAY[v_target_designer, v_designer]::uuid[])
+        ORDER BY membership.user_id, membership.id
+        FOR SHARE
+      LOOP
+        IF v_seat.user_id = v_designer THEN
+          v_caller_is_admin := v_seat.status = 'active'
+            AND v_seat.role IN ('owner', 'admin');
+        END IF;
+      END LOOP;
     END IF;
 
     v_authorized := v_target_designer IS NOT DISTINCT FROM v_designer
       OR (
         p_engagement_kind = 'project'
         AND v_target_studio IS NOT NULL
-        AND public.is_org_admin_or_owner(v_target_studio)
+        AND v_caller_is_admin
       );
   END IF;
 
@@ -250,8 +265,8 @@ GRANT EXECUTE ON FUNCTION public.set_document_client(text, uuid, uuid)
 
 COMMENT ON FUNCTION public.set_document_client(text, uuid, uuid) IS
   'Document attachment. A project''s client may be set by its lead or by an '
-  'owner/admin of its studio (K5, 00796), standing read under a share lock on '
-  'the caller''s and the lead''s seats; a proposal''s only by its owner. A '
+  'owner/admin of its studio (K5, 00796), standing read from the caller''s seat '
+  'row as it is share-locked with the lead''s; a proposal''s only by its owner. A '
   'project whose lead holds no active non-guest seat in its studio is refused '
   'up front as ''set_document_client: lead_not_in_studio''. The '
   'client must be on the lead''s designer_clients book. Proposal identity may '

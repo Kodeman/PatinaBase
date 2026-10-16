@@ -25,7 +25,9 @@ const getSupabase = () => createBrowserClient();
 //                         the way out.
 //
 // Anything that changes the lead, the project's studio or the client
-// invalidates documentClientAuthorityKeys.canLink(projectId).
+// invalidates documentClientAuthorityKeys.canLink(projectId). A seat change
+// (a member's role, a removal) invalidates documentClientAuthorityKeys.all,
+// since any project in that studio may read that seat.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type DocumentClientLinkHold = 'not_permitted' | 'lead_not_in_studio';

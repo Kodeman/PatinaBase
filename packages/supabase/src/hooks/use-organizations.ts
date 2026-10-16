@@ -2,6 +2,7 @@ import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import type { StaffRole } from '@patina/types';
+import { documentClientAuthorityKeys } from './use-document-client-authority';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ORGANIZATION HOOKS
@@ -470,6 +471,9 @@ export function useUpdateMemberRole() {
       queryClient.invalidateQueries({
         queryKey: ['organization-members', data.organization_id],
       });
+      // Any project in this studio may have this member as its lead or its
+      // owner/admin, so the whole K5 family is stale.
+      queryClient.invalidateQueries({ queryKey: documentClientAuthorityKeys.all });
     },
   });
 }
@@ -506,6 +510,7 @@ export function useRemoveMember() {
         });
       }
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: documentClientAuthorityKeys.all });
     },
   });
 }
