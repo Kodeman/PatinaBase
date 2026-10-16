@@ -1,0 +1,1328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Billing recovery flows</title>
+<meta name="description" content="US-35 Study D: the shortest path from each billing blocker to fixed and billed, today versus proposed.">
+<style>
+:root {
+  --paper: #FAF7F2; --sheet: #FFFFFF; --ink: #2B2622; --muted: #6B6158; --line: #D9D1C5;
+  --clay: #9A5A43; --clay-bg: #F6EAE3; --terra: #A9432C; --terra-bg: #F8E6E0;
+  --oak: #7A6347; --ok: #3F6340; --ok-bg: #E7EFE4; --wait: #5B5F86; --wait-bg: #ECEDF5;
+  --num-bg: #2B2622; --num-ink: #FAF7F2;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1A1815; --sheet: #23201C; --ink: #EDE6DA; --muted: #A99E90; --line: #3D3730;
+    --clay: #E0A287; --clay-bg: #3A2A22; --terra: #F0927A; --terra-bg: #3C231D;
+    --oak: #C9AB82; --ok: #A5C79A; --ok-bg: #233023; --wait: #B4B8E0; --wait-bg: #272A3C;
+    --num-bg: #EDE6DA; --num-ink: #1A1815;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1A1815; --sheet: #23201C; --ink: #EDE6DA; --muted: #A99E90; --line: #3D3730;
+  --clay: #E0A287; --clay-bg: #3A2A22; --terra: #F0927A; --terra-bg: #3C231D;
+  --oak: #C9AB82; --ok: #A5C79A; --ok-bg: #233023; --wait: #B4B8E0; --wait-bg: #272A3C;
+  --num-bg: #EDE6DA; --num-ink: #1A1815;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 80px; }
+h1, h2 { font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif; font-weight: 500; letter-spacing: -0.01em; }
+h1 { font-size: 30px; margin: 0 0 6px; }
+h2 { font-size: 21px; margin: 0 0 6px; }
+.eyebrow, figcaption, .meta, th, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--oak); }
+.lede { color: var(--muted); max-width: 70ch; margin: 0 0 18px; }
+header.top { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 22px; }
+.theme { display: flex; gap: 6px; margin-top: 12px; }
+.theme button { font: inherit; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 3px; padding: 6px 10px; min-height: 32px; cursor: pointer; }
+.theme button[aria-pressed="true"] { border-color: var(--ink); }
+.theme button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
+a { color: var(--clay); }
+.panel { background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; padding: 16px; margin: 0 0 22px; }
+.legend { width: 100%; max-width: 360px; display: block; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.num { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; white-space: nowrap; }
+td.num.prop { color: var(--ok); font-weight: 600; }
+@media (max-width: 520px) { td.num { white-space: normal; } th, td { padding-right: 6px; } table { font-size: 12.5px; } }
+.findings { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.findings li { display: grid; grid-template-columns: 34px 1fr; gap: 8px; }
+.findings b { font-family: ui-monospace, Menlo, monospace; color: var(--clay); }
+.findings small { display: block; color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 11px; overflow-wrap: anywhere; }
+.blocker { border-top: 1px solid var(--line); padding: 26px 0 8px; }
+.meta { list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-wrap: wrap; gap: 4px 18px; text-transform: none; letter-spacing: .02em; color: var(--muted); }
+.lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+@media (max-width: 720px) { .lanes { grid-template-columns: 1fr; } }
+figure { margin: 0; background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; padding: 10px 6px 6px; }
+figcaption { padding: 0 8px 4px; }
+.lane.today figcaption { color: var(--terra); }
+.lane.proposed figcaption { color: var(--ok); }
+svg.flow { width: 100%; height: auto; display: block; }
+svg .node rect { fill: var(--sheet); stroke: var(--ink); stroke-width: 1; }
+svg .k-sys rect { fill: transparent; stroke: var(--muted); stroke-dasharray: 4 3; }
+svg .k-dead rect { fill: var(--terra-bg); stroke: var(--terra); stroke-width: 1.5; }
+svg .k-repair rect { fill: var(--sheet); stroke: var(--clay); stroke-width: 2.5; }
+svg .k-repair .t { fill: var(--clay); font-weight: 600; }
+svg .k-done rect { fill: var(--ok-bg); stroke: var(--ok); stroke-width: 1.5; }
+svg .k-wait rect { fill: var(--wait-bg); stroke: var(--wait); stroke-dasharray: 2 3; stroke-width: 1.5; }
+svg text { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+svg .t { fill: var(--ink); font-size: 12.5px; }
+svg .k-sys .t { fill: var(--muted); font-style: italic; }
+svg .k-dead .t { fill: var(--terra); }
+svg .num { fill: var(--num-bg); }
+svg .num-t { fill: var(--num-ink); font: 600 11px ui-monospace, Menlo, monospace; }
+svg .k-dead .num, svg .k-repair .num { fill: var(--clay); }
+svg .k-done .num { fill: var(--ok); }
+svg .arrow { stroke: var(--muted); stroke-width: 1.25; fill: none; }
+svg .arrowhead { fill: var(--muted); }
+svg .badge.bad { fill: var(--terra-bg); stroke: var(--terra); }
+svg .badge.good { fill: var(--ok-bg); stroke: var(--ok); }
+svg .badge-t { font: 600 10.5px ui-monospace, Menlo, monospace; letter-spacing: .04em; text-transform: uppercase; }
+svg .badge-t.bad { fill: var(--terra); }
+svg .badge-t.good { fill: var(--ok); }
+.qs { margin: 12px 0 0; }
+.qs summary { cursor: pointer; font-family: ui-monospace, Menlo, monospace; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--clay); min-height: 32px; display: flex; align-items: center; }
+.qs ul { margin: 6px 0 0; padding-left: 20px; color: var(--ink); }
+.qs li { margin: 4px 0; }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); margin-top: 30px; padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+<header class="top">
+  <p class="eyebrow">US-35 · Study D · SQ-1024 · 2026-10-16</p>
+  <h1>Billing recovery flows</h1>
+  <p class="lede">The shortest path from each billing blocker to fixed and billed: a drafted invoice that opens as the folio, or a sent email. Today’s path is read from code at f3c7fb53a. The proposed path uses house primitives only: held acts (§A5), the consequence sentence (§A6), ActFailLine (R83), and repair sheets stacked above the composer. Step counts are read from code; Study B’s walk confirms them. The full reasoning, evidence lines and trade-offs are in flows.md.</p>
+  <div class="theme" role="group" aria-label="Theme">
+    <button type="button" data-set="system" aria-pressed="true">System</button>
+    <button type="button" data-set="light" aria-pressed="false">Light</button>
+    <button type="button" data-set="dark" aria-pressed="false">Dark</button>
+  </div>
+</header>
+
+<div class="panel">
+  <p class="eyebrow" style="margin:0 0 8px">How to read a flow</p>
+  <svg class="legend" viewBox="0 0 346 104" role="img" aria-labelledby="legend-t" xmlns="http://www.w3.org/2000/svg"><title id="legend-t">Legend: press, Patina, repair, dead end, someone else, done</title><g class="node k-step"><rect x="10" y="10" width="26" height="20" rx="3"/></g><text class="t" x="44" y="24">A press (counted)</text><g class="node k-sys"><rect x="178" y="10" width="26" height="20" rx="3"/></g><text class="t" x="212" y="24">What Patina does</text><g class="node k-repair"><rect x="10" y="40" width="26" height="20" rx="3"/></g><text class="t" x="44" y="54">The repair act</text><g class="node k-dead"><rect x="178" y="40" width="26" height="20" rx="3"/></g><text class="t" x="212" y="54">Dead end or guess</text><g class="node k-wait"><rect x="10" y="70" width="26" height="20" rx="3"/></g><text class="t" x="44" y="84">Someone else acts</text><g class="node k-done"><rect x="178" y="70" width="26" height="20" rx="3"/></g><text class="t" x="212" y="84">Fixed and billed</text></svg>
+  <p class="mono" style="margin:10px 0 0;text-transform:none;letter-spacing:.02em;color:var(--muted)">Numbered boxes are counted presses. Ticking the lines is the work and is not counted; “+N” is re-ticking after the work was lost. Badges show what happens to the designer’s entered work.</p>
+</div>
+
+<div class="panel">
+  <p class="eyebrow" style="margin:0 0 8px">Steps, today → proposed</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th scope="col">Blocker</th><th scope="col">Today</th><th scope="col">Proposed</th><th scope="col">Fix path</th></tr></thead>
+    <tbody><tr><td><a href="#b1a">1a No client (designer)</a></td><td class="num">11 + N, unguided</td><td class="num prop">5</td><td>Sheet over the composer</td></tr><tr><td><a href="#b1b">1b No client (teammate)</a></td><td class="num">no path</td><td class="num prop">3 + wait</td><td>Ask the project’s designer</td></tr><tr><td><a href="#b1c">1c No studio (owner)</a></td><td class="num">8 + N, unguided</td><td class="num prop">3</td><td>Inline</td></tr><tr><td><a href="#b1d">1d No studio (others)</a></td><td class="num">no path</td><td class="num prop">3 + wait</td><td>Ask the studio owner</td></tr><tr><td><a href="#b2">2 Unpriced FF&amp;E</a></td><td class="num">10 + N, often none</td><td class="num prop">4 / 6</td><td>Inline (labor) / price landing</td></tr><tr><td><a href="#b3">3 Rate pending</a></td><td class="num">9 + N, may not release</td><td class="num prop">4</td><td>Inline or sheet over the composer</td></tr><tr><td><a href="#b4">4 Deposit / figures</a></td><td class="num">1, reason hidden</td><td class="num prop">1</td><td>Focus the input</td></tr><tr><td><a href="#b5">5 Partial failure</a></td><td class="num">2–4, raw ids</td><td class="num prop">2</td><td>Name and untick, then redraft</td></tr><tr><td><a href="#b6">6 No recipient</a></td><td class="num">7, after issue</td><td class="num prop">3, before issue</td><td>Sheet over the folio</td></tr><tr><td><a href="#b8">8 Studio invoice</a></td><td class="num">no act</td><td class="num prop">3</td><td>Sheet over the composer / ask</td></tr></tbody>
+  </table></div>
+</div>
+
+<div class="panel">
+  <p class="eyebrow" style="margin:0 0 10px">What the code says, and why it shapes every flow</p>
+  <ul class="findings"><li><b>F1</b><span>The composer’s work lives only while it is mounted. One overlay slot; closing or handing off to the folio drops every tick.<small>invoice-composer.tsx:209-243 · invoice-overlays.tsx:67-131</small></span></li><li><b>F2</b><span>Repair sheets render beneath the composer: PaperFolioSheet z-60, DocSheet (household, Account) z-50.<small>paper-folio-sheet.tsx · doc-sheet.tsx:369</small></span></li><li><b>F3</b><span>A route change keeps the composer open (host in the (document) layout), so “set the studio rate →” opens Account · Studio underneath it.<small>(document)/layout.tsx:148 · invoice-composer.tsx:962-967</small></span></li><li><b>F4</b><span>Client, studio, unpriced, rate-pending, deposit and figures are all known before Draft.<small>invoice-composer.tsx:252-337, 517-577</small></span></li><li><b>F5</b><span>Contract correction: set_document_client admits only the project’s designer, not any designer on the project.<small>00385_set_document_client…sql:44-87</small></span></li><li><b>F6</b><span>Placed non-labor lines have no client-price writer (D19 not built). Only labor rows are editable.<small>price-lens.tsx:13-17, 402 · line-card.tsx:9-12</small></span></li><li><b>F7</b><span>A studio stamp prices only later hours (P-4). The rate resolver runs only when an entry is written, so existing pending hours may stay pending.<small>use-time-tracking.ts:1150-1177 · 00599:559-601 · 00617</small></span></li><li><b>F8</b><span>Send issues first. no_recipient arrives after the invoice is numbered, as a bare code.<small>invoice-folio.tsx:257-298 · invoice-send/index.ts:255-288</small></span></li></ul>
+</div>
+
+
+<section class="blocker" id="b1a" aria-labelledby="b1a-h">
+  <h2 id="b1a-h">1a · No client on the project, seen by its designer</h2>
+  <ul class="meta"><li>Pre-knowable: yes, selectedProject.client_id</li><li>Who fixes: the project’s designer (F5)</li><li>Work: lost → kept</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today · 11 steps + N re-ticks</figcaption><svg class="flow" viewBox="0 0 340 826" role="img" aria-labelledby="b1a-today-t b1a-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b1a-today-t">Today · 11 steps + N re-ticks</title>
+<desc id="b1a-today-d">1. step: Open Draw an invoice; Patina: Tick the lines (the work, not counted); 2. step: Draft the invoice: canDraft ignores client and studio; dead end: “INVOICE PROJECT IS MISSING ITS CANONICAL BILLING TUPLE”, uppercase mono, no role=alert; 3. step: Try again: the same throw; dead end: Guess the cause. Nothing names the client.; 4. step: Close the composer (ticks lost); 5. step: Open the band sheet; find SETUP “No client linked” at its foot; 6. step: Link a client opens The household; 7. step: Pick the household; 8. step: Link it; 9. step: Close the sheet; 10. step: Reopen Draw an invoice; re-tick +N; 11. done: Draft the invoice: the folio opens</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open Draw an invoice</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-sys">
+<rect x="10" y="62" width="320" height="30" rx="3"/>
+<text class="t" x="26" y="82">Tick the lines (the work, not counted)</text>
+</g>
+<path class="arrow" d="M170 94 L170 108"/>
+<path class="arrowhead" d="M165 105 L170 112 L175 105 Z"/>
+<g class="node k-step">
+<rect x="10" y="114" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="131" r="10"/>
+<text class="num-t" x="27" y="135" text-anchor="middle">2</text>
+<text class="t" x="52" y="134">Draft the invoice: canDraft ignores</text>
+<text class="t" x="52" y="150">client and studio</text>
+</g>
+<path class="arrow" d="M170 162 L170 176"/>
+<path class="arrowhead" d="M165 173 L170 180 L175 173 Z"/>
+<g class="node k-dead">
+<rect x="10" y="182" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="202">“INVOICE PROJECT IS MISSING ITS</text>
+<text class="t" x="26" y="218">CANONICAL BILLING TUPLE”, uppercase</text>
+<text class="t" x="26" y="234">mono, no role=alert</text>
+</g>
+<path class="arrow" d="M170 246 L170 260"/>
+<path class="arrowhead" d="M165 257 L170 264 L175 257 Z"/>
+<g class="node k-step">
+<rect x="10" y="266" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="283" r="10"/>
+<text class="num-t" x="27" y="287" text-anchor="middle">3</text>
+<text class="t" x="52" y="286">Try again: the same throw</text>
+</g>
+<path class="arrow" d="M170 298 L170 312"/>
+<path class="arrowhead" d="M165 309 L170 316 L175 309 Z"/>
+<g class="node k-dead">
+<rect x="10" y="318" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="338">Guess the cause. Nothing names the</text>
+<text class="t" x="26" y="354">client.</text>
+</g>
+<path class="arrow" d="M170 366 L170 380"/>
+<path class="arrowhead" d="M165 377 L170 384 L175 377 Z"/>
+<g class="node k-step">
+<rect x="10" y="386" width="320" height="50" rx="3"/>
+<circle class="num" cx="27" cy="403" r="10"/>
+<text class="num-t" x="27" y="407" text-anchor="middle">4</text>
+<text class="t" x="52" y="406">Close the composer</text>
+<rect class="badge bad" x="52" y="414" width="80" height="16" rx="8"/>
+<text class="badge-t bad" x="59" y="426">ticks lost</text>
+</g>
+<path class="arrow" d="M170 438 L170 452"/>
+<path class="arrowhead" d="M165 449 L170 456 L175 449 Z"/>
+<g class="node k-step">
+<rect x="10" y="458" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="475" r="10"/>
+<text class="num-t" x="27" y="479" text-anchor="middle">5</text>
+<text class="t" x="52" y="478">Open the band sheet; find SETUP “No</text>
+<text class="t" x="52" y="494">client linked” at its foot</text>
+</g>
+<path class="arrow" d="M170 506 L170 520"/>
+<path class="arrowhead" d="M165 517 L170 524 L175 517 Z"/>
+<g class="node k-step">
+<rect x="10" y="526" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="543" r="10"/>
+<text class="num-t" x="27" y="547" text-anchor="middle">6</text>
+<text class="t" x="52" y="546">Link a client opens The household</text>
+</g>
+<path class="arrow" d="M170 558 L170 572"/>
+<path class="arrowhead" d="M165 569 L170 576 L175 569 Z"/>
+<g class="node k-step">
+<rect x="10" y="578" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="595" r="10"/>
+<text class="num-t" x="27" y="599" text-anchor="middle">7</text>
+<text class="t" x="52" y="598">Pick the household</text>
+</g>
+<path class="arrow" d="M170 610 L170 624"/>
+<path class="arrowhead" d="M165 621 L170 628 L175 621 Z"/>
+<g class="node k-step">
+<rect x="10" y="630" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="647" r="10"/>
+<text class="num-t" x="27" y="651" text-anchor="middle">8</text>
+<text class="t" x="52" y="650">Link it</text>
+</g>
+<path class="arrow" d="M170 662 L170 676"/>
+<path class="arrowhead" d="M165 673 L170 680 L175 673 Z"/>
+<g class="node k-step">
+<rect x="10" y="682" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="699" r="10"/>
+<text class="num-t" x="27" y="703" text-anchor="middle">9</text>
+<text class="t" x="52" y="702">Close the sheet</text>
+</g>
+<path class="arrow" d="M170 714 L170 728"/>
+<path class="arrowhead" d="M165 725 L170 732 L175 725 Z"/>
+<g class="node k-step">
+<rect x="10" y="734" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="751" r="10"/>
+<text class="num-t" x="27" y="755" text-anchor="middle">10</text>
+<text class="t" x="52" y="754">Reopen Draw an invoice; re-tick +N</text>
+</g>
+<path class="arrow" d="M170 766 L170 780"/>
+<path class="arrowhead" d="M165 777 L170 784 L175 777 Z"/>
+<g class="node k-done">
+<rect x="10" y="786" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="803" r="10"/>
+<text class="num-t" x="27" y="807" text-anchor="middle">11</text>
+<text class="t" x="52" y="806">Draft the invoice: the folio opens</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed · 5 steps</figcaption><svg class="flow" viewBox="0 0 340 426" role="img" aria-labelledby="b1a-proposed-t b1a-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b1a-proposed-t">Proposed · 5 steps</title>
+<desc id="b1a-proposed-d">1. step: Open Draw an invoice (the project is named, or picked as “· no client yet”); Patina: Draft held. §A6: “Kuehn Whole Home Renovation has no client yet. Link one to draft this invoice.”; 2. repair: Link a client opens The household ABOVE the composer (M2); 3. step: Pick the household; 4. step: Link it; focus returns to Draft, now live (ticks kept); 5. done: Draft the invoice: the folio opens</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="62" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open Draw an invoice (the project is</text>
+<text class="t" x="52" y="46">named, or picked as “· no client</text>
+<text class="t" x="52" y="62">yet”)</text>
+</g>
+<path class="arrow" d="M170 74 L170 88"/>
+<path class="arrowhead" d="M165 85 L170 92 L175 85 Z"/>
+<g class="node k-sys">
+<rect x="10" y="94" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="114">Draft held. §A6: “Kuehn Whole Home</text>
+<text class="t" x="26" y="130">Renovation has no client yet. Link one</text>
+<text class="t" x="26" y="146">to draft this invoice.”</text>
+</g>
+<path class="arrow" d="M170 158 L170 172"/>
+<path class="arrowhead" d="M165 169 L170 176 L175 169 Z"/>
+<g class="node k-repair">
+<rect x="10" y="178" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="195" r="10"/>
+<text class="num-t" x="27" y="199" text-anchor="middle">2</text>
+<text class="t" x="52" y="198">Link a client opens The household</text>
+<text class="t" x="52" y="214">ABOVE the composer (M2)</text>
+</g>
+<path class="arrow" d="M170 226 L170 240"/>
+<path class="arrowhead" d="M165 237 L170 244 L175 237 Z"/>
+<g class="node k-step">
+<rect x="10" y="246" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="263" r="10"/>
+<text class="num-t" x="27" y="267" text-anchor="middle">3</text>
+<text class="t" x="52" y="266">Pick the household</text>
+</g>
+<path class="arrow" d="M170 278 L170 292"/>
+<path class="arrowhead" d="M165 289 L170 296 L175 289 Z"/>
+<g class="node k-step">
+<rect x="10" y="298" width="320" height="66" rx="3"/>
+<circle class="num" cx="27" cy="315" r="10"/>
+<text class="num-t" x="27" y="319" text-anchor="middle">4</text>
+<text class="t" x="52" y="318">Link it; focus returns to Draft, now</text>
+<text class="t" x="52" y="334">live</text>
+<rect class="badge good" x="52" y="342" width="80" height="16" rx="8"/>
+<text class="badge-t good" x="59" y="354">ticks kept</text>
+</g>
+<path class="arrow" d="M170 366 L170 380"/>
+<path class="arrowhead" d="M165 377 L170 384 L175 377 Z"/>
+<g class="node k-done">
+<rect x="10" y="386" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="403" r="10"/>
+<text class="num-t" x="27" y="407" text-anchor="middle">5</text>
+<text class="t" x="52" y="406">Draft the invoice: the folio opens</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (3)</summary><ul><li>Prevention: require the client in open-project-sheet (A), raise the band’s SETUP row when money first appears (B), or composer only (C)? C is needed regardless. A and B are Kody’s call.</li><li>Picker: annotate projects without a client, rather than hiding them (hiding moves the dead end one step earlier)?</li><li>Leah: how often is the household not in Patina yet when a project opens on a handshake?</li></ul></details>
+</section>
+
+<section class="blocker" id="b1b" aria-labelledby="b1b-h">
+  <h2 id="b1b-h">1b · No client, seen by a teammate who isn’t the project’s designer</h2>
+  <ul class="meta"><li>Pre-knowable: yes</li><li>Who fixes: only projects.designer_id (00385:44-61)</li><li>Work: kept while open</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today · no path in Patina</figcaption><svg class="flow" viewBox="0 0 340 238" role="img" aria-labelledby="b1b-today-t b1b-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b1b-today-t">Today · no path in Patina</title>
+<desc id="b1b-today-d">1. step: Open Draw an invoice; 2. step: Draft the invoice; dead end: The same “canonical billing tuple” throw; dead end: set_document_client refuses anyone but the project’s designer. No path inside Patina.</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open Draw an invoice</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-step">
+<rect x="10" y="62" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="79" r="10"/>
+<text class="num-t" x="27" y="83" text-anchor="middle">2</text>
+<text class="t" x="52" y="82">Draft the invoice</text>
+</g>
+<path class="arrow" d="M170 94 L170 108"/>
+<path class="arrowhead" d="M165 105 L170 112 L175 105 Z"/>
+<g class="node k-dead">
+<rect x="10" y="114" width="320" height="30" rx="3"/>
+<text class="t" x="26" y="134">The same “canonical billing tuple” throw</text>
+</g>
+<path class="arrow" d="M170 146 L170 160"/>
+<path class="arrowhead" d="M165 157 L170 164 L175 157 Z"/>
+<g class="node k-dead">
+<rect x="10" y="166" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="186">set_document_client refuses anyone but</text>
+<text class="t" x="26" y="202">the project’s designer. No path inside</text>
+<text class="t" x="26" y="218">Patina.</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed · 3 steps + the wait</figcaption><svg class="flow" viewBox="0 0 340 306" role="img" aria-labelledby="b1b-proposed-t b1b-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b1b-proposed-t">Proposed · 3 steps + the wait</title>
+<desc id="b1b-proposed-d">1. step: Open Draw an invoice; Patina: Held: “…has no client yet. Only Leah, who runs this project, can link one.”; 2. repair: Copy a note for Leah (the designer sends it; nothing automated); someone else: Leah links the client (flow 1a, steps 2 to 4); 3. done: Draft the invoice</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open Draw an invoice</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-sys">
+<rect x="10" y="62" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="82">Held: “…has no client yet. Only Leah,</text>
+<text class="t" x="26" y="98">who runs this project, can link one.”</text>
+</g>
+<path class="arrow" d="M170 110 L170 124"/>
+<path class="arrowhead" d="M165 121 L170 128 L175 121 Z"/>
+<g class="node k-repair">
+<rect x="10" y="130" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="147" r="10"/>
+<text class="num-t" x="27" y="151" text-anchor="middle">2</text>
+<text class="t" x="52" y="150">Copy a note for Leah (the designer</text>
+<text class="t" x="52" y="166">sends it; nothing automated)</text>
+</g>
+<path class="arrow" d="M170 178 L170 192"/>
+<path class="arrowhead" d="M165 189 L170 196 L175 189 Z"/>
+<g class="node k-wait">
+<rect x="10" y="198" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="218">Leah links the client (flow 1a, steps 2</text>
+<text class="t" x="26" y="234">to 4)</text>
+</g>
+<path class="arrow" d="M170 246 L170 260"/>
+<path class="arrowhead" d="M165 257 L170 264 L175 257 Z"/>
+<g class="node k-done">
+<rect x="10" y="266" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="283" r="10"/>
+<text class="num-t" x="27" y="287" text-anchor="middle">3</text>
+<text class="t" x="52" y="286">Draft the invoice</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (2)</summary><ul><li>Should set_document_client admit studio owners/admins or project team members? That turns this flow into 1a.</li><li>Is there a studio channel Patina should use for the note, rather than the clipboard?</li></ul></details>
+</section>
+
+<section class="blocker" id="b1c" aria-labelledby="b1c-h">
+  <h2 id="b1c-h">1c · No studio on the project, seen by a studio owner or admin</h2>
+  <ul class="meta"><li>Pre-knowable: yes, studio_id plus the role from useOrganizations</li><li>Who fixes: an owner/admin of a studio employing the designer</li><li>Work: lost → kept</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today · 8 steps + N re-ticks</figcaption><svg class="flow" viewBox="0 0 340 518" role="img" aria-labelledby="b1c-today-t b1c-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b1c-today-t">Today · 8 steps + N re-ticks</title>
+<desc id="b1c-today-d">1. step: Open the composer; 2. step: Draft the invoice; dead end: The same tuple throw, for a different cause; 3. step: Try again: the same throw; 4. step: Close the composer (ticks lost); 5. step: Open Hours; find “priced by · no studio yet”; 6. step: Name studio; 7. step: Reopen the composer; re-tick +N; 8. done: Draft the invoice</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open the composer</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-step">
+<rect x="10" y="62" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="79" r="10"/>
+<text class="num-t" x="27" y="83" text-anchor="middle">2</text>
+<text class="t" x="52" y="82">Draft the invoice</text>
+</g>
+<path class="arrow" d="M170 94 L170 108"/>
+<path class="arrowhead" d="M165 105 L170 112 L175 105 Z"/>
+<g class="node k-dead">
+<rect x="10" y="114" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="134">The same tuple throw, for a different</text>
+<text class="t" x="26" y="150">cause</text>
+</g>
+<path class="arrow" d="M170 162 L170 176"/>
+<path class="arrowhead" d="M165 173 L170 180 L175 173 Z"/>
+<g class="node k-step">
+<rect x="10" y="182" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="199" r="10"/>
+<text class="num-t" x="27" y="203" text-anchor="middle">3</text>
+<text class="t" x="52" y="202">Try again: the same throw</text>
+</g>
+<path class="arrow" d="M170 214 L170 228"/>
+<path class="arrowhead" d="M165 225 L170 232 L175 225 Z"/>
+<g class="node k-step">
+<rect x="10" y="234" width="320" height="50" rx="3"/>
+<circle class="num" cx="27" cy="251" r="10"/>
+<text class="num-t" x="27" y="255" text-anchor="middle">4</text>
+<text class="t" x="52" y="254">Close the composer</text>
+<rect class="badge bad" x="52" y="262" width="80" height="16" rx="8"/>
+<text class="badge-t bad" x="59" y="274">ticks lost</text>
+</g>
+<path class="arrow" d="M170 286 L170 300"/>
+<path class="arrowhead" d="M165 297 L170 304 L175 297 Z"/>
+<g class="node k-step">
+<rect x="10" y="306" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="323" r="10"/>
+<text class="num-t" x="27" y="327" text-anchor="middle">5</text>
+<text class="t" x="52" y="326">Open Hours; find “priced by · no</text>
+<text class="t" x="52" y="342">studio yet”</text>
+</g>
+<path class="arrow" d="M170 354 L170 368"/>
+<path class="arrowhead" d="M165 365 L170 372 L175 365 Z"/>
+<g class="node k-step">
+<rect x="10" y="374" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="391" r="10"/>
+<text class="num-t" x="27" y="395" text-anchor="middle">6</text>
+<text class="t" x="52" y="394">Name studio</text>
+</g>
+<path class="arrow" d="M170 406 L170 420"/>
+<path class="arrowhead" d="M165 417 L170 424 L175 417 Z"/>
+<g class="node k-step">
+<rect x="10" y="426" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="443" r="10"/>
+<text class="num-t" x="27" y="447" text-anchor="middle">7</text>
+<text class="t" x="52" y="446">Reopen the composer; re-tick +N</text>
+</g>
+<path class="arrow" d="M170 458 L170 472"/>
+<path class="arrowhead" d="M165 469 L170 476 L175 469 Z"/>
+<g class="node k-done">
+<rect x="10" y="478" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="495" r="10"/>
+<text class="num-t" x="27" y="499" text-anchor="middle">8</text>
+<text class="t" x="52" y="498">Draft the invoice</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed · 3 steps (4 with two studios)</figcaption><svg class="flow" viewBox="0 0 340 306" role="img" aria-labelledby="b1c-proposed-t b1c-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b1c-proposed-t">Proposed · 3 steps (4 with two studios)</title>
+<desc id="b1c-proposed-d">1. step: Open the composer; Patina: Held: “Kuehn Whole Home Renovation isn’t under a studio yet. Name the studio to draft.”; 2. repair: Name studio, inline (one RPC). §A6: “It can’t be changed later, and only hours logged from now on are priced by it.” (ticks kept); 3. done: Draft the invoice</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open the composer</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-sys">
+<rect x="10" y="62" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="82">Held: “Kuehn Whole Home Renovation isn’t</text>
+<text class="t" x="26" y="98">under a studio yet. Name the studio to</text>
+<text class="t" x="26" y="114">draft.”</text>
+</g>
+<path class="arrow" d="M170 126 L170 140"/>
+<path class="arrowhead" d="M165 137 L170 144 L175 137 Z"/>
+<g class="node k-repair">
+<rect x="10" y="146" width="320" height="98" rx="3"/>
+<circle class="num" cx="27" cy="163" r="10"/>
+<text class="num-t" x="27" y="167" text-anchor="middle">2</text>
+<text class="t" x="52" y="166">Name studio, inline (one RPC). §A6:</text>
+<text class="t" x="52" y="182">“It can’t be changed later, and only</text>
+<text class="t" x="52" y="198">hours logged from now on are priced</text>
+<text class="t" x="52" y="214">by it.”</text>
+<rect class="badge good" x="52" y="222" width="80" height="16" rx="8"/>
+<text class="badge-t good" x="59" y="234">ticks kept</text>
+</g>
+<path class="arrow" d="M170 246 L170 260"/>
+<path class="arrowhead" d="M165 257 L170 264 L175 257 Z"/>
+<g class="node k-done">
+<rect x="10" y="266" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="283" r="10"/>
+<text class="num-t" x="27" y="287" text-anchor="middle">3</text>
+<text class="t" x="52" y="286">Draft the invoice</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (3)</summary><ul><li>One act name: “Name studio” (hours ledger) or “Name the studio” (contract)?</li><li>Is the stamp final enough to need a confirm, or is the consequence sentence enough?</li><li>Hours logged before the stamp stay rate pending (P-4). See flow 3.</li></ul></details>
+</section>
+
+<section class="blocker" id="b1d" aria-labelledby="b1d-h">
+  <h2 id="b1d-h">1d · No studio on the project, seen by everyone else</h2>
+  <ul class="meta"><li>Pre-knowable: yes</li><li>Who fixes: a studio owner or admin</li><li>Work: kept while open</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today · no path in Patina</figcaption><svg class="flow" viewBox="0 0 340 222" role="img" aria-labelledby="b1d-today-t b1d-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b1d-today-t">Today · no path in Patina</title>
+<desc id="b1d-today-d">1. step: Open the composer; 2. step: Draft the invoice; dead end: The tuple throw; dead end: Hours shows “no studio yet” with no act and no direction</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open the composer</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-step">
+<rect x="10" y="62" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="79" r="10"/>
+<text class="num-t" x="27" y="83" text-anchor="middle">2</text>
+<text class="t" x="52" y="82">Draft the invoice</text>
+</g>
+<path class="arrow" d="M170 94 L170 108"/>
+<path class="arrowhead" d="M165 105 L170 112 L175 105 Z"/>
+<g class="node k-dead">
+<rect x="10" y="114" width="320" height="30" rx="3"/>
+<text class="t" x="26" y="134">The tuple throw</text>
+</g>
+<path class="arrow" d="M170 146 L170 160"/>
+<path class="arrowhead" d="M165 157 L170 164 L175 157 Z"/>
+<g class="node k-dead">
+<rect x="10" y="166" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="186">Hours shows “no studio yet” with no act</text>
+<text class="t" x="26" y="202">and no direction</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed · 3 steps + the wait</figcaption><svg class="flow" viewBox="0 0 340 306" role="img" aria-labelledby="b1d-proposed-t b1d-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b1d-proposed-t">Proposed · 3 steps + the wait</title>
+<desc id="b1d-proposed-d">1. step: Open the composer; Patina: Held: “…isn’t under a studio yet. Only a studio owner or admin can name it. Ask Leah.”; 2. repair: Copy a note for Leah (the name comes from the studio roster); someone else: The owner names the studio (flow 1c); 3. done: Draft the invoice</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open the composer</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-sys">
+<rect x="10" y="62" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="82">Held: “…isn’t under a studio yet. Only a</text>
+<text class="t" x="26" y="98">studio owner or admin can name it. Ask</text>
+<text class="t" x="26" y="114">Leah.”</text>
+</g>
+<path class="arrow" d="M170 126 L170 140"/>
+<path class="arrowhead" d="M165 137 L170 144 L175 137 Z"/>
+<g class="node k-repair">
+<rect x="10" y="146" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="163" r="10"/>
+<text class="num-t" x="27" y="167" text-anchor="middle">2</text>
+<text class="t" x="52" y="166">Copy a note for Leah (the name comes</text>
+<text class="t" x="52" y="182">from the studio roster)</text>
+</g>
+<path class="arrow" d="M170 194 L170 208"/>
+<path class="arrowhead" d="M165 205 L170 212 L175 205 Z"/>
+<g class="node k-wait">
+<rect x="10" y="214" width="320" height="30" rx="3"/>
+<text class="t" x="26" y="234">The owner names the studio (flow 1c)</text>
+</g>
+<path class="arrow" d="M170 246 L170 260"/>
+<path class="arrowhead" d="M165 257 L170 264 L175 257 Z"/>
+<g class="node k-done">
+<rect x="10" y="266" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="283" r="10"/>
+<text class="num-t" x="27" y="287" text-anchor="middle">3</text>
+<text class="t" x="52" y="286">Draft the invoice</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (1)</summary><ul><li>Should the owner also see this gap on their own surfaces (a Desk or Studio SETUP line)?</li></ul></details>
+</section>
+
+<section class="blocker" id="b2" aria-labelledby="b2-h">
+  <h2 id="b2-h">2 · Unpriced FF&amp;E lines</h2>
+  <ul class="meta"><li>Pre-knowable: yes, ffePartition.unpriced</li><li>Who fixes: a designer with a money seat</li><li>Work: lost → kept (parked)</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today · 10 steps + N, often no path</figcaption><svg class="flow" viewBox="0 0 340 706" role="img" aria-labelledby="b2-today-t b2-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b2-today-t">Today · 10 steps + N, often no path</title>
+<desc id="b2-today-d">1. step: Open the composer; dead end: “3 unpriced lines — set a client price to bill”, muted, no names, no link; 2. step: Close the composer (ticks lost); 3. step: Pieces → the Price lens; 4. step: Find the line; dead end: Non-labor line: no client-price field (D19 not built, F6); 5. step: Labor: type the price. Active job: Record a change; 6. step: On a piece; 7. step: Choose the piece (a change order only if it’s on a live PO); 8. step: Back to the Document; 9. step: Reopen the composer; re-tick +N; 10. done: Draft the invoice</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open the composer</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-dead">
+<rect x="10" y="62" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="82">“3 unpriced lines — set a client price</text>
+<text class="t" x="26" y="98">to bill”, muted, no names, no link</text>
+</g>
+<path class="arrow" d="M170 110 L170 124"/>
+<path class="arrowhead" d="M165 121 L170 128 L175 121 Z"/>
+<g class="node k-step">
+<rect x="10" y="130" width="320" height="50" rx="3"/>
+<circle class="num" cx="27" cy="147" r="10"/>
+<text class="num-t" x="27" y="151" text-anchor="middle">2</text>
+<text class="t" x="52" y="150">Close the composer</text>
+<rect class="badge bad" x="52" y="158" width="80" height="16" rx="8"/>
+<text class="badge-t bad" x="59" y="170">ticks lost</text>
+</g>
+<path class="arrow" d="M170 182 L170 196"/>
+<path class="arrowhead" d="M165 193 L170 200 L175 193 Z"/>
+<g class="node k-step">
+<rect x="10" y="202" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="219" r="10"/>
+<text class="num-t" x="27" y="223" text-anchor="middle">3</text>
+<text class="t" x="52" y="222">Pieces → the Price lens</text>
+</g>
+<path class="arrow" d="M170 234 L170 248"/>
+<path class="arrowhead" d="M165 245 L170 252 L175 245 Z"/>
+<g class="node k-step">
+<rect x="10" y="254" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="271" r="10"/>
+<text class="num-t" x="27" y="275" text-anchor="middle">4</text>
+<text class="t" x="52" y="274">Find the line</text>
+</g>
+<path class="arrow" d="M170 286 L170 300"/>
+<path class="arrowhead" d="M165 297 L170 304 L175 297 Z"/>
+<g class="node k-dead">
+<rect x="10" y="306" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="326">Non-labor line: no client-price field</text>
+<text class="t" x="26" y="342">(D19 not built, F6)</text>
+</g>
+<path class="arrow" d="M170 354 L170 368"/>
+<path class="arrowhead" d="M165 365 L170 372 L175 365 Z"/>
+<g class="node k-step">
+<rect x="10" y="374" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="391" r="10"/>
+<text class="num-t" x="27" y="395" text-anchor="middle">5</text>
+<text class="t" x="52" y="394">Labor: type the price. Active job:</text>
+<text class="t" x="52" y="410">Record a change</text>
+</g>
+<path class="arrow" d="M170 422 L170 436"/>
+<path class="arrowhead" d="M165 433 L170 440 L175 433 Z"/>
+<g class="node k-step">
+<rect x="10" y="442" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="459" r="10"/>
+<text class="num-t" x="27" y="463" text-anchor="middle">6</text>
+<text class="t" x="52" y="462">On a piece</text>
+</g>
+<path class="arrow" d="M170 474 L170 488"/>
+<path class="arrowhead" d="M165 485 L170 492 L175 485 Z"/>
+<g class="node k-step">
+<rect x="10" y="494" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="511" r="10"/>
+<text class="num-t" x="27" y="515" text-anchor="middle">7</text>
+<text class="t" x="52" y="514">Choose the piece (a change order</text>
+<text class="t" x="52" y="530">only if it’s on a live PO)</text>
+</g>
+<path class="arrow" d="M170 542 L170 556"/>
+<path class="arrowhead" d="M165 553 L170 560 L175 553 Z"/>
+<g class="node k-step">
+<rect x="10" y="562" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="579" r="10"/>
+<text class="num-t" x="27" y="583" text-anchor="middle">8</text>
+<text class="t" x="52" y="582">Back to the Document</text>
+</g>
+<path class="arrow" d="M170 594 L170 608"/>
+<path class="arrowhead" d="M165 605 L170 612 L175 605 Z"/>
+<g class="node k-step">
+<rect x="10" y="614" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="631" r="10"/>
+<text class="num-t" x="27" y="635" text-anchor="middle">9</text>
+<text class="t" x="52" y="634">Reopen the composer; re-tick +N</text>
+</g>
+<path class="arrow" d="M170 646 L170 660"/>
+<path class="arrowhead" d="M165 657 L170 664 L175 657 Z"/>
+<g class="node k-done">
+<rect x="10" y="666" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="683" r="10"/>
+<text class="num-t" x="27" y="687" text-anchor="middle">10</text>
+<text class="t" x="52" y="686">Draft the invoice</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed · 4 (labor) / 6 (landing)</figcaption><svg class="flow" viewBox="0 0 340 510" role="img" aria-labelledby="b2-proposed-t b2-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b2-proposed-t">Proposed · 4 (labor) / 6 (landing)</title>
+<desc id="b2-proposed-d">1. step: Open the composer: the unpriced lines are listed by name; 2. repair: Labor: type the client price in the row (set_labor_line_price) → step 5. Others: Price it; Patina: Composer parks (M3). FOCUS_FFE_LINE_EVENT {cell:'price'} → Price lens, room, row; focus ring only; 3. step: Make the change the house allows (Record a change; D19 field if built); 4. step: Back to the invoice: the parked composer returns (ticks kept); 5. step: Tick the now-priced line; 6. done: Draft the invoice</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open the composer: the unpriced</text>
+<text class="t" x="52" y="46">lines are listed by name</text>
+</g>
+<path class="arrow" d="M170 58 L170 72"/>
+<path class="arrowhead" d="M165 69 L170 76 L175 69 Z"/>
+<g class="node k-repair">
+<rect x="10" y="78" width="320" height="62" rx="3"/>
+<circle class="num" cx="27" cy="95" r="10"/>
+<text class="num-t" x="27" y="99" text-anchor="middle">2</text>
+<text class="t" x="52" y="98">Labor: type the client price in the</text>
+<text class="t" x="52" y="114">row (set_labor_line_price) → step 5.</text>
+<text class="t" x="52" y="130">Others: Price it</text>
+</g>
+<path class="arrow" d="M170 142 L170 156"/>
+<path class="arrowhead" d="M165 153 L170 160 L175 153 Z"/>
+<g class="node k-sys">
+<rect x="10" y="162" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="182">Composer parks (M3).</text>
+<text class="t" x="26" y="198">FOCUS_FFE_LINE_EVENT {cell:'price'} →</text>
+<text class="t" x="26" y="214">Price lens, room, row; focus ring only</text>
+</g>
+<path class="arrow" d="M170 226 L170 240"/>
+<path class="arrowhead" d="M165 237 L170 244 L175 237 Z"/>
+<g class="node k-step">
+<rect x="10" y="246" width="320" height="62" rx="3"/>
+<circle class="num" cx="27" cy="263" r="10"/>
+<text class="num-t" x="27" y="267" text-anchor="middle">3</text>
+<text class="t" x="52" y="266">Make the change the house allows</text>
+<text class="t" x="52" y="282">(Record a change; D19 field if</text>
+<text class="t" x="52" y="298">built)</text>
+</g>
+<path class="arrow" d="M170 310 L170 324"/>
+<path class="arrowhead" d="M165 321 L170 328 L175 321 Z"/>
+<g class="node k-step">
+<rect x="10" y="330" width="320" height="66" rx="3"/>
+<circle class="num" cx="27" cy="347" r="10"/>
+<text class="num-t" x="27" y="351" text-anchor="middle">4</text>
+<text class="t" x="52" y="350">Back to the invoice: the parked</text>
+<text class="t" x="52" y="366">composer returns</text>
+<rect class="badge good" x="52" y="374" width="80" height="16" rx="8"/>
+<text class="badge-t good" x="59" y="386">ticks kept</text>
+</g>
+<path class="arrow" d="M170 398 L170 412"/>
+<path class="arrowhead" d="M165 409 L170 416 L175 409 Z"/>
+<g class="node k-step">
+<rect x="10" y="418" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="435" r="10"/>
+<text class="num-t" x="27" y="439" text-anchor="middle">5</text>
+<text class="t" x="52" y="438">Tick the now-priced line</text>
+</g>
+<path class="arrow" d="M170 450 L170 464"/>
+<path class="arrowhead" d="M165 461 L170 468 L175 461 Z"/>
+<g class="node k-done">
+<rect x="10" y="470" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="487" r="10"/>
+<text class="num-t" x="27" y="491" text-anchor="middle">6</text>
+<text class="t" x="52" y="490">Draft the invoice</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (3)</summary><ul><li>D19: should a placed line’s client price be typeable? This decides whether the landing path exists for most lines.</li><li>Inline price in the billing sheet (labor only): is that acceptable, or should money be typed only in Pieces?</li><li>Parking (M3), or a small price sheet over the composer (needs a writer first)?</li></ul></details>
+</section>
+
+<section class="blocker" id="b3" aria-labelledby="b3-h">
+  <h2 id="b3-h">3 · Rate-pending hours</h2>
+  <ul class="meta"><li>Pre-knowable: yes, ratePendingEntries plus rate_source/rate_role</li><li>Who fixes: a studio owner/admin</li><li>Work: lost → kept</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today · 9 steps + N, may not release (F7)</figcaption><svg class="flow" viewBox="0 0 340 702" role="img" aria-labelledby="b3-today-t b3-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b3-today-t">Today · 9 steps + N, may not release (F7)</title>
+<desc id="b3-today-d">1. step: Open the composer; rate-pending rows can’t be ticked; 2. step: “set the studio rate →” Link to /desk?account=studio; dead end: The route changes under the open composer (z-60). Account · Studio (z-50) opens BENEATH it (F2, F3); 3. step: Close the composer (ticks lost); 4. step: Find the member’s rate; type it; blur saves; 5. step: Close the Account sheet; 6. step: Back to the Document; 7. step: Reopen the composer; re-tick +N; dead end: The rate resolves only when an entry is written: the hours may still read “rate pending”; 8. step: Tick what became billable; 9. done: Draft the invoice</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open the composer; rate-pending rows</text>
+<text class="t" x="52" y="46">can’t be ticked</text>
+</g>
+<path class="arrow" d="M170 58 L170 72"/>
+<path class="arrowhead" d="M165 69 L170 76 L175 69 Z"/>
+<g class="node k-step">
+<rect x="10" y="78" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="95" r="10"/>
+<text class="num-t" x="27" y="99" text-anchor="middle">2</text>
+<text class="t" x="52" y="98">“set the studio rate →” Link to</text>
+<text class="t" x="52" y="114">/desk?account=studio</text>
+</g>
+<path class="arrow" d="M170 126 L170 140"/>
+<path class="arrowhead" d="M165 137 L170 144 L175 137 Z"/>
+<g class="node k-dead">
+<rect x="10" y="146" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="166">The route changes under the open</text>
+<text class="t" x="26" y="182">composer (z-60). Account · Studio (z-50)</text>
+<text class="t" x="26" y="198">opens BENEATH it (F2, F3)</text>
+</g>
+<path class="arrow" d="M170 210 L170 224"/>
+<path class="arrowhead" d="M165 221 L170 228 L175 221 Z"/>
+<g class="node k-step">
+<rect x="10" y="230" width="320" height="50" rx="3"/>
+<circle class="num" cx="27" cy="247" r="10"/>
+<text class="num-t" x="27" y="251" text-anchor="middle">3</text>
+<text class="t" x="52" y="250">Close the composer</text>
+<rect class="badge bad" x="52" y="258" width="80" height="16" rx="8"/>
+<text class="badge-t bad" x="59" y="270">ticks lost</text>
+</g>
+<path class="arrow" d="M170 282 L170 296"/>
+<path class="arrowhead" d="M165 293 L170 300 L175 293 Z"/>
+<g class="node k-step">
+<rect x="10" y="302" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="319" r="10"/>
+<text class="num-t" x="27" y="323" text-anchor="middle">4</text>
+<text class="t" x="52" y="322">Find the member’s rate; type it;</text>
+<text class="t" x="52" y="338">blur saves</text>
+</g>
+<path class="arrow" d="M170 350 L170 364"/>
+<path class="arrowhead" d="M165 361 L170 368 L175 361 Z"/>
+<g class="node k-step">
+<rect x="10" y="370" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="387" r="10"/>
+<text class="num-t" x="27" y="391" text-anchor="middle">5</text>
+<text class="t" x="52" y="390">Close the Account sheet</text>
+</g>
+<path class="arrow" d="M170 402 L170 416"/>
+<path class="arrowhead" d="M165 413 L170 420 L175 413 Z"/>
+<g class="node k-step">
+<rect x="10" y="422" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="439" r="10"/>
+<text class="num-t" x="27" y="443" text-anchor="middle">6</text>
+<text class="t" x="52" y="442">Back to the Document</text>
+</g>
+<path class="arrow" d="M170 454 L170 468"/>
+<path class="arrowhead" d="M165 465 L170 472 L175 465 Z"/>
+<g class="node k-step">
+<rect x="10" y="474" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="491" r="10"/>
+<text class="num-t" x="27" y="495" text-anchor="middle">7</text>
+<text class="t" x="52" y="494">Reopen the composer; re-tick +N</text>
+</g>
+<path class="arrow" d="M170 506 L170 520"/>
+<path class="arrowhead" d="M165 517 L170 524 L175 517 Z"/>
+<g class="node k-dead">
+<rect x="10" y="526" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="546">The rate resolves only when an entry is</text>
+<text class="t" x="26" y="562">written: the hours may still read “rate</text>
+<text class="t" x="26" y="578">pending”</text>
+</g>
+<path class="arrow" d="M170 590 L170 604"/>
+<path class="arrowhead" d="M165 601 L170 608 L175 601 Z"/>
+<g class="node k-step">
+<rect x="10" y="610" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="627" r="10"/>
+<text class="num-t" x="27" y="631" text-anchor="middle">8</text>
+<text class="t" x="52" y="630">Tick what became billable</text>
+</g>
+<path class="arrow" d="M170 642 L170 656"/>
+<path class="arrowhead" d="M165 653 L170 660 L175 653 Z"/>
+<g class="node k-done">
+<rect x="10" y="662" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="679" r="10"/>
+<text class="num-t" x="27" y="683" text-anchor="middle">9</text>
+<text class="t" x="52" y="682">Draft the invoice</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed · 4 steps (owner)</figcaption><svg class="flow" viewBox="0 0 340 358" role="img" aria-labelledby="b3-proposed-t b3-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b3-proposed-t">Proposed · 4 steps (owner)</title>
+<desc id="b3-proposed-d">1. step: Open the composer: “2 hours by Sam have no rate yet.”; 2. repair: Set Sam’s rate, inline (useSetStudioMemberRate) or Account · Studio ABOVE the composer; Patina: Hours re-read. If F7 holds, a re-price act, or the honest “these 2 hours stay pending” (ticks kept); 3. step: Tick the hours; 4. done: Draft the invoice</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Open the composer: “2 hours by Sam</text>
+<text class="t" x="52" y="46">have no rate yet.”</text>
+</g>
+<path class="arrow" d="M170 58 L170 72"/>
+<path class="arrowhead" d="M165 69 L170 76 L175 69 Z"/>
+<g class="node k-repair">
+<rect x="10" y="78" width="320" height="62" rx="3"/>
+<circle class="num" cx="27" cy="95" r="10"/>
+<text class="num-t" x="27" y="99" text-anchor="middle">2</text>
+<text class="t" x="52" y="98">Set Sam’s rate, inline</text>
+<text class="t" x="52" y="114">(useSetStudioMemberRate) or Account</text>
+<text class="t" x="52" y="130">· Studio ABOVE the composer</text>
+</g>
+<path class="arrow" d="M170 142 L170 156"/>
+<path class="arrowhead" d="M165 153 L170 160 L175 153 Z"/>
+<g class="node k-sys">
+<rect x="10" y="162" width="320" height="82" rx="3"/>
+<text class="t" x="26" y="182">Hours re-read. If F7 holds, a re-price</text>
+<text class="t" x="26" y="198">act, or the honest “these 2 hours stay</text>
+<text class="t" x="26" y="214">pending”</text>
+<rect class="badge good" x="26" y="222" width="80" height="16" rx="8"/>
+<text class="badge-t good" x="33" y="234">ticks kept</text>
+</g>
+<path class="arrow" d="M170 246 L170 260"/>
+<path class="arrowhead" d="M165 257 L170 264 L175 257 Z"/>
+<g class="node k-step">
+<rect x="10" y="266" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="283" r="10"/>
+<text class="num-t" x="27" y="287" text-anchor="middle">3</text>
+<text class="t" x="52" y="286">Tick the hours</text>
+</g>
+<path class="arrow" d="M170 298 L170 312"/>
+<path class="arrowhead" d="M165 309 L170 316 L175 309 Z"/>
+<g class="node k-done">
+<rect x="10" y="318" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="335" r="10"/>
+<text class="num-t" x="27" y="339" text-anchor="middle">4</text>
+<text class="t" x="52" y="338">Draft the invoice</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (2)</summary><ul><li>F7: should setting a rate re-price pending hours, or are they billed as an ad-hoc line? This is a money-truth ruling.</li><li>Non-owners see “Only a studio owner or admin sets rates. Ask Leah.” plus a note, never a link to a read-only page.</li></ul></details>
+</section>
+
+<section class="blocker" id="b4" aria-labelledby="b4-h">
+  <h2 id="b4-h">4 · Deposit percent out of range, or a rider with no figure</h2>
+  <ul class="meta"><li>Pre-knowable: yes, depositPctValid and billingFiguresMissing</li><li>Who fixes: the designer</li><li>Work: kept (today too)</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today · 1 step, reason not at the act</figcaption><svg class="flow" viewBox="0 0 340 202" role="img" aria-labelledby="b4-today-t b4-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b4-today-t">Today · 1 step, reason not at the act</title>
+<desc id="b4-today-d">Patina: Deposit input: role=alert “a percent above 0, at most 100”; dead end: Draft natively disabled: out of tab order; a missing rider figure gives no reason at all; 1. step: Find the input, fix it</desc>
+<g class="node k-sys">
+<rect x="10" y="10" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="30">Deposit input: role=alert “a percent</text>
+<text class="t" x="26" y="46">above 0, at most 100”</text>
+</g>
+<path class="arrow" d="M170 58 L170 72"/>
+<path class="arrowhead" d="M165 69 L170 76 L175 69 Z"/>
+<g class="node k-dead">
+<rect x="10" y="78" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="98">Draft natively disabled: out of tab</text>
+<text class="t" x="26" y="114">order; a missing rider figure gives no</text>
+<text class="t" x="26" y="130">reason at all</text>
+</g>
+<path class="arrow" d="M170 142 L170 156"/>
+<path class="arrowhead" d="M165 153 L170 160 L175 153 Z"/>
+<g class="node k-step">
+<rect x="10" y="162" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="179" r="10"/>
+<text class="num-t" x="27" y="183" text-anchor="middle">1</text>
+<text class="t" x="52" y="182">Find the input, fix it</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed · 1 step</figcaption><svg class="flow" viewBox="0 0 340 222" role="img" aria-labelledby="b4-proposed-t b4-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b4-proposed-t">Proposed · 1 step</title>
+<desc id="b4-proposed-d">Patina: Draft held. §A6: “The deposit needs a percent between 0 and 100.”; 1. repair: Activating Draft moves focus to the deposit field or the rider amount; the reason goes to the status line (ticks kept); done: Draft the invoice (the goal act)</desc>
+<g class="node k-sys">
+<rect x="10" y="10" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="30">Draft held. §A6: “The deposit needs a</text>
+<text class="t" x="26" y="46">percent between 0 and 100.”</text>
+</g>
+<path class="arrow" d="M170 58 L170 72"/>
+<path class="arrowhead" d="M165 69 L170 76 L175 69 Z"/>
+<g class="node k-repair">
+<rect x="10" y="78" width="320" height="82" rx="3"/>
+<circle class="num" cx="27" cy="95" r="10"/>
+<text class="num-t" x="27" y="99" text-anchor="middle">1</text>
+<text class="t" x="52" y="98">Activating Draft moves focus to the</text>
+<text class="t" x="52" y="114">deposit field or the rider amount;</text>
+<text class="t" x="52" y="130">the reason goes to the status line</text>
+<rect class="badge good" x="52" y="138" width="80" height="16" rx="8"/>
+<text class="badge-t good" x="59" y="150">ticks kept</text>
+</g>
+<path class="arrow" d="M170 162 L170 176"/>
+<path class="arrowhead" d="M165 173 L170 180 L175 173 Z"/>
+<g class="node k-done">
+<rect x="10" y="182" width="320" height="30" rx="3"/>
+<text class="t" x="26" y="202">Draft the invoice (the goal act)</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (1)</summary><ul><li>The deposit input’s disabled:opacity-50 conflicts with SPEC “never opacity:.5”. Flag it for T1.</li></ul></details>
+</section>
+
+<section class="blocker" id="b5" aria-labelledby="b5-h">
+  <h2 id="b5-h">5 · Partial failure and rollback</h2>
+  <ul class="meta"><li>Pre-knowable: no (server refusals and races)</li><li>Who fixes: the designer; support only if stranded</li><li>Work: kept; the refused line is unticked</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today · 2–4 steps, raw ids</figcaption><svg class="flow" viewBox="0 0 340 338" role="img" aria-labelledby="b5-today-t b5-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b5-today-t">Today · 2–4 steps, raw ids</title>
+<desc id="b5-today-d">1. step: Draft the invoice: the draft is created; Patina: Claim time or add billing lines refuses; the draft is deleted; dead end: “add_invoice_billing_lines: purchase 3f2a… is already billed”, or “The draft {uuid} was kept”; 2. step: Try again: the refused line is still ticked; dead end: The same refusal again</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Draft the invoice: the draft is</text>
+<text class="t" x="52" y="46">created</text>
+</g>
+<path class="arrow" d="M170 58 L170 72"/>
+<path class="arrowhead" d="M165 69 L170 76 L175 69 Z"/>
+<g class="node k-sys">
+<rect x="10" y="78" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="98">Claim time or add billing lines refuses;</text>
+<text class="t" x="26" y="114">the draft is deleted</text>
+</g>
+<path class="arrow" d="M170 126 L170 140"/>
+<path class="arrowhead" d="M165 137 L170 144 L175 137 Z"/>
+<g class="node k-dead">
+<rect x="10" y="146" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="166">“add_invoice_billing_lines: purchase</text>
+<text class="t" x="26" y="182">3f2a… is already billed”, or “The draft</text>
+<text class="t" x="26" y="198">{uuid} was kept”</text>
+</g>
+<path class="arrow" d="M170 210 L170 224"/>
+<path class="arrowhead" d="M165 221 L170 228 L175 221 Z"/>
+<g class="node k-step">
+<rect x="10" y="230" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="247" r="10"/>
+<text class="num-t" x="27" y="251" text-anchor="middle">2</text>
+<text class="t" x="52" y="250">Try again: the refused line is still</text>
+<text class="t" x="52" y="266">ticked</text>
+</g>
+<path class="arrow" d="M170 278 L170 292"/>
+<path class="arrowhead" d="M165 289 L170 296 L175 289 Z"/>
+<g class="node k-dead">
+<rect x="10" y="298" width="320" height="30" rx="3"/>
+<text class="t" x="26" y="318">The same refusal again</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed · 2 steps</figcaption><svg class="flow" viewBox="0 0 340 322" role="img" aria-labelledby="b5-proposed-t b5-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b5-proposed-t">Proposed · 2 steps</title>
+<desc id="b5-proposed-d">1. step: Draft the invoice; Patina: ActFailLine at the act: “The Holloway sconce purchase was billed on another invoice after you opened this. It’s been unticked.” (other ticks kept); 2. done: Draft the invoice with the rest (Try again only for transient failures); repair: Stranded: “This draft couldn’t be cleaned up.” Open the draft, never a uuid</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Draft the invoice</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-sys">
+<rect x="10" y="62" width="320" height="98" rx="3"/>
+<text class="t" x="26" y="82">ActFailLine at the act: “The Holloway</text>
+<text class="t" x="26" y="98">sconce purchase was billed on another</text>
+<text class="t" x="26" y="114">invoice after you opened this. It’s been</text>
+<text class="t" x="26" y="130">unticked.”</text>
+<rect class="badge good" x="26" y="138" width="119.6" height="16" rx="8"/>
+<text class="badge-t good" x="33" y="150">other ticks kept</text>
+</g>
+<path class="arrow" d="M170 162 L170 176"/>
+<path class="arrowhead" d="M165 173 L170 180 L175 173 Z"/>
+<g class="node k-done">
+<rect x="10" y="182" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="199" r="10"/>
+<text class="num-t" x="27" y="203" text-anchor="middle">2</text>
+<text class="t" x="52" y="202">Draft the invoice with the rest (Try</text>
+<text class="t" x="52" y="218">again only for transient failures)</text>
+</g>
+<path class="arrow" d="M170 230 L170 244"/>
+<path class="arrowhead" d="M165 241 L170 248 L175 241 Z"/>
+<g class="node k-repair">
+<rect x="10" y="250" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="270">Stranded: “This draft couldn’t be</text>
+<text class="t" x="26" y="286">cleaned up.” Open the draft, never a</text>
+<text class="t" x="26" y="302">uuid</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (1)</summary><ul><li>Root alternative (architecture, out of US-35 scope): one server transaction for draft + claim + billing lines.</li></ul></details>
+</section>
+
+<section class="blocker" id="b6" aria-labelledby="b6-h">
+  <h2 id="b6-h">6 · Send with no recipient email</h2>
+  <ul class="meta"><li>Pre-knowable: mostly (three-tier recipient chain)</li><li>Who fixes: the project’s designer</li><li>Work: message kept; not issued early</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today · 7 steps, issued before the fix</figcaption><svg class="flow" viewBox="0 0 340 462" role="img" aria-labelledby="b6-today-t b6-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b6-today-t">Today · 7 steps, issued before the fix</title>
+<desc id="b6-today-d">1. step: Send the invoice: issue_invoice succeeds (numbered); dead end: invoice-send 422: “Could not send — issued as INV-0042; no_recipient. Resend to retry.”; 2. step: Leave the folio; 3. step: Go to the Document; 4. step: Open The household; 5. step: Edit; add the email; save; 6. step: Reopen the invoice and its folio; 7. done: Resend</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Send the invoice: issue_invoice</text>
+<text class="t" x="52" y="46">succeeds (numbered)</text>
+</g>
+<path class="arrow" d="M170 58 L170 72"/>
+<path class="arrowhead" d="M165 69 L170 76 L175 69 Z"/>
+<g class="node k-dead">
+<rect x="10" y="78" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="98">invoice-send 422: “Could not send —</text>
+<text class="t" x="26" y="114">issued as INV-0042; no_recipient. Resend</text>
+<text class="t" x="26" y="130">to retry.”</text>
+</g>
+<path class="arrow" d="M170 142 L170 156"/>
+<path class="arrowhead" d="M165 153 L170 160 L175 153 Z"/>
+<g class="node k-step">
+<rect x="10" y="162" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="179" r="10"/>
+<text class="num-t" x="27" y="183" text-anchor="middle">2</text>
+<text class="t" x="52" y="182">Leave the folio</text>
+</g>
+<path class="arrow" d="M170 194 L170 208"/>
+<path class="arrowhead" d="M165 205 L170 212 L175 205 Z"/>
+<g class="node k-step">
+<rect x="10" y="214" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="231" r="10"/>
+<text class="num-t" x="27" y="235" text-anchor="middle">3</text>
+<text class="t" x="52" y="234">Go to the Document</text>
+</g>
+<path class="arrow" d="M170 246 L170 260"/>
+<path class="arrowhead" d="M165 257 L170 264 L175 257 Z"/>
+<g class="node k-step">
+<rect x="10" y="266" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="283" r="10"/>
+<text class="num-t" x="27" y="287" text-anchor="middle">4</text>
+<text class="t" x="52" y="286">Open The household</text>
+</g>
+<path class="arrow" d="M170 298 L170 312"/>
+<path class="arrowhead" d="M165 309 L170 316 L175 309 Z"/>
+<g class="node k-step">
+<rect x="10" y="318" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="335" r="10"/>
+<text class="num-t" x="27" y="339" text-anchor="middle">5</text>
+<text class="t" x="52" y="338">Edit; add the email; save</text>
+</g>
+<path class="arrow" d="M170 350 L170 364"/>
+<path class="arrowhead" d="M165 361 L170 368 L175 361 Z"/>
+<g class="node k-step">
+<rect x="10" y="370" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="387" r="10"/>
+<text class="num-t" x="27" y="391" text-anchor="middle">6</text>
+<text class="t" x="52" y="390">Reopen the invoice and its folio</text>
+</g>
+<path class="arrow" d="M170 402 L170 416"/>
+<path class="arrowhead" d="M165 413 L170 420 L175 413 Z"/>
+<g class="node k-done">
+<rect x="10" y="422" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="439" r="10"/>
+<text class="num-t" x="27" y="443" text-anchor="middle">7</text>
+<text class="t" x="52" y="442">Resend</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed · 3 steps, before issue</figcaption><svg class="flow" viewBox="0 0 340 290" role="img" aria-labelledby="b6-proposed-t b6-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b6-proposed-t">Proposed · 3 steps, before issue</title>
+<desc id="b6-proposed-d">Patina: Folio reads the resolved recipient. Send held: “There’s no email for the Kuehns yet.”; 1. repair: Add their email opens The household in EDIT, ABOVE the folio; 2. step: Type the email; save; focus returns to Send (message kept); 3. done: Send the invoice</desc>
+<g class="node k-sys">
+<rect x="10" y="10" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="30">Folio reads the resolved recipient. Send</text>
+<text class="t" x="26" y="46">held: “There’s no email for the Kuehns</text>
+<text class="t" x="26" y="62">yet.”</text>
+</g>
+<path class="arrow" d="M170 74 L170 88"/>
+<path class="arrowhead" d="M165 85 L170 92 L175 85 Z"/>
+<g class="node k-repair">
+<rect x="10" y="94" width="320" height="46" rx="3"/>
+<circle class="num" cx="27" cy="111" r="10"/>
+<text class="num-t" x="27" y="115" text-anchor="middle">1</text>
+<text class="t" x="52" y="114">Add their email opens The household</text>
+<text class="t" x="52" y="130">in EDIT, ABOVE the folio</text>
+</g>
+<path class="arrow" d="M170 142 L170 156"/>
+<path class="arrowhead" d="M165 153 L170 160 L175 153 Z"/>
+<g class="node k-step">
+<rect x="10" y="162" width="320" height="66" rx="3"/>
+<circle class="num" cx="27" cy="179" r="10"/>
+<text class="num-t" x="27" y="183" text-anchor="middle">2</text>
+<text class="t" x="52" y="182">Type the email; save; focus returns</text>
+<text class="t" x="52" y="198">to Send</text>
+<rect class="badge good" x="52" y="206" width="93.19999999999999" height="16" rx="8"/>
+<text class="badge-t good" x="59" y="218">message kept</text>
+</g>
+<path class="arrow" d="M170 230 L170 244"/>
+<path class="arrowhead" d="M165 241 L170 248 L175 241 Z"/>
+<g class="node k-done">
+<rect x="10" y="250" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="267" r="10"/>
+<text class="num-t" x="27" y="271" text-anchor="middle">3</text>
+<text class="t" x="52" y="270">Send the invoice</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (2)</summary><ul><li>Is “issue now, send later” a real need (an Issue only sibling act)?</li><li>One door for addresses: the household sheet (proposed) or “Fix the address in People” (existing bounce path)?</li></ul></details>
+</section>
+
+<section class="blocker" id="b7" aria-labelledby="b7-h">
+  <h2 id="b7-h">7 · Raw error text across invoice hooks</h2>
+  <ul class="meta"><li>Pre-knowable: no</li><li>Who fixes: depends on the refusal</li><li>Work: n/a (copy and retry rules)</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today</figcaption><svg class="flow" viewBox="0 0 340 150" role="img" aria-labelledby="b7-today-t b7-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b7-today-t">Today</title>
+<desc id="b7-today-d">1. step: Any invoice act (update, issue, record payment, chase, void, band milestone draft); dead end: A raw PostgrestError, or “Could not draft the invoice — {raw}”</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="62" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Any invoice act (update, issue,</text>
+<text class="t" x="52" y="46">record payment, chase, void, band</text>
+<text class="t" x="52" y="62">milestone draft)</text>
+</g>
+<path class="arrow" d="M170 74 L170 88"/>
+<path class="arrowhead" d="M165 85 L170 92 L175 85 Z"/>
+<g class="node k-dead">
+<rect x="10" y="94" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="114">A raw PostgrestError, or “Could not</text>
+<text class="t" x="26" y="130">draft the invoice — {raw}”</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed</figcaption><svg class="flow" viewBox="0 0 340 270" role="img" aria-labelledby="b7-proposed-t b7-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b7-proposed-t">Proposed</title>
+<desc id="b7-proposed-d">1. step: The act; Patina: Refusal with a fixer → name the gap and who (as in 1a–1d, 3, 6); Patina: Refusal without a fix → designer words, no retry; repair: Transient → Try again, except sends and money writes (“Check the invoice before trying again”)</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">The act</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-sys">
+<rect x="10" y="62" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="82">Refusal with a fixer → name the gap and</text>
+<text class="t" x="26" y="98">who (as in 1a–1d, 3, 6)</text>
+</g>
+<path class="arrow" d="M170 110 L170 124"/>
+<path class="arrowhead" d="M165 121 L170 128 L175 121 Z"/>
+<g class="node k-sys">
+<rect x="10" y="130" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="150">Refusal without a fix → designer words,</text>
+<text class="t" x="26" y="166">no retry</text>
+</g>
+<path class="arrow" d="M170 178 L170 192"/>
+<path class="arrowhead" d="M165 189 L170 196 L175 189 Z"/>
+<g class="node k-repair">
+<rect x="10" y="198" width="320" height="62" rx="3"/>
+<text class="t" x="26" y="218">Transient → Try again, except sends and</text>
+<text class="t" x="26" y="234">money writes (“Check the invoice before</text>
+<text class="t" x="26" y="250">trying again”)</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (1)</summary><ul><li>Map refusals in one table in @patina/supabase, or at each act site? That is for the implementation ticket.</li></ul></details>
+</section>
+
+<section class="blocker" id="b8" aria-labelledby="b8-h">
+  <h2 id="b8-h">8 · Studio invoice: no studio, or missing fields</h2>
+  <ul class="meta"><li>Pre-knowable: yes, studioMissing and canDraftStudioInvoice</li><li>Who fixes: the designer (create) / owner (invite)</li><li>Work: lost → kept</li></ul>
+  <div class="lanes">
+    <figure class="lane today"><figcaption>Today · no act</figcaption><svg class="flow" viewBox="0 0 340 186" role="img" aria-labelledby="b8-today-t b8-today-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b8-today-t">Today · no act</title>
+<desc id="b8-today-d">1. step: Pick “the studio · no house”; dead end: “no studio to draw from · this account belongs to none yet”, muted, no act; dead end: Missing household or regarding: Draft natively disabled, no reason</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Pick “the studio · no house”</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-dead">
+<rect x="10" y="62" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="82">“no studio to draw from · this account</text>
+<text class="t" x="26" y="98">belongs to none yet”, muted, no act</text>
+</g>
+<path class="arrow" d="M170 110 L170 124"/>
+<path class="arrowhead" d="M165 121 L170 128 L175 121 Z"/>
+<g class="node k-dead">
+<rect x="10" y="130" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="150">Missing household or regarding: Draft</text>
+<text class="t" x="26" y="166">natively disabled, no reason</text>
+</g>
+</svg></figure>
+    <figure class="lane proposed"><figcaption>Proposed · 3 steps (no studio)</figcaption><svg class="flow" viewBox="0 0 340 290" role="img" aria-labelledby="b8-proposed-t b8-proposed-d" xmlns="http://www.w3.org/2000/svg">
+<title id="b8-proposed-t">Proposed · 3 steps (no studio)</title>
+<desc id="b8-proposed-d">1. step: Pick “the studio · no house”; 2. repair: Set up your studio opens Account · Studio ABOVE the composer, or “Ask your studio owner to invite you”; 3. done: Back with the fields kept; Draft the invoice (fields kept); Patina: Missing field: Draft held → focus the first empty field</desc>
+<g class="node k-step">
+<rect x="10" y="10" width="320" height="30" rx="3"/>
+<circle class="num" cx="27" cy="27" r="10"/>
+<text class="num-t" x="27" y="31" text-anchor="middle">1</text>
+<text class="t" x="52" y="30">Pick “the studio · no house”</text>
+</g>
+<path class="arrow" d="M170 42 L170 56"/>
+<path class="arrowhead" d="M165 53 L170 60 L175 53 Z"/>
+<g class="node k-repair">
+<rect x="10" y="62" width="320" height="62" rx="3"/>
+<circle class="num" cx="27" cy="79" r="10"/>
+<text class="num-t" x="27" y="83" text-anchor="middle">2</text>
+<text class="t" x="52" y="82">Set up your studio opens Account ·</text>
+<text class="t" x="52" y="98">Studio ABOVE the composer, or “Ask</text>
+<text class="t" x="52" y="114">your studio owner to invite you”</text>
+</g>
+<path class="arrow" d="M170 126 L170 140"/>
+<path class="arrowhead" d="M165 137 L170 144 L175 137 Z"/>
+<g class="node k-done">
+<rect x="10" y="146" width="320" height="66" rx="3"/>
+<circle class="num" cx="27" cy="163" r="10"/>
+<text class="num-t" x="27" y="167" text-anchor="middle">3</text>
+<text class="t" x="52" y="166">Back with the fields kept; Draft the</text>
+<text class="t" x="52" y="182">invoice</text>
+<rect class="badge good" x="52" y="190" width="86.6" height="16" rx="8"/>
+<text class="badge-t good" x="59" y="202">fields kept</text>
+</g>
+<path class="arrow" d="M170 214 L170 228"/>
+<path class="arrowhead" d="M165 225 L170 232 L175 225 Z"/>
+<g class="node k-sys">
+<rect x="10" y="234" width="320" height="46" rx="3"/>
+<text class="t" x="26" y="254">Missing field: Draft held → focus the</text>
+<text class="t" x="26" y="270">first empty field</text>
+</g>
+</svg></figure>
+  </div>
+  <details class="qs"><summary>Open questions for Kody / Leah (1)</summary><ul><li>Studio setup from inside billing: acceptable, or should a studio-less account never see the choice?</li></ul></details>
+</section>
+
+<footer>
+  Assumed mechanisms (for Study E to reconcile, not decided here): M1 one readiness read that holds Draft · M2 repair sheets stack above the composer and folio · M3 park the composer for fixes that must leave it · M4 “ask your studio owner” is a note the designer sends, never an automated send. No product source was changed.
+</footer>
+</main>
+<script>
+(function () {
+  var root = document.documentElement;
+  var buttons = document.querySelectorAll('.theme button');
+  function apply(mode) {
+    if (mode === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.set === mode)); });
+    try { localStorage.setItem('flows-theme', mode); } catch (e) {}
+  }
+  var saved = null;
+  try { saved = localStorage.getItem('flows-theme'); } catch (e) {}
+  var hash = location.hash.replace('#theme-', '');
+  if (hash === 'dark' || hash === 'light') saved = hash;
+  if (saved) apply(saved);
+  buttons.forEach(function (b) { b.addEventListener('click', function () { apply(b.dataset.set); }); });
+})();
+</script>
+</body>
+</html>
