@@ -1,0 +1,912 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Billing Errors Review</title>
+<meta name="description" content="US-35 synthesis: what Leah hit when she drafted an invoice, how big the billing-error problem is, three ways to say needs attention, recovery flows, a recommendation with a phased build list, and the questions owed.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Billing errors that tell you what to fix - US-35 synthesis, 16 October 2026.
+   CSS architecture from artifacts/procurement-buying-review-2026-10-05/deck/src.
+   No shadow anywhere. Rules, words in hairline boxes, plates.
+   ============================================================ */
+:root {
+  color-scheme: light dark;
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+  --rail:             #E8E3DB;
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+  --oak:              #8B7355;
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.55; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration-color: var(--oak); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+.t-d0   { font-family: var(--font-display); font-size: clamp(36px, 6vw, 68px); line-height: 1.05; font-weight: 500; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.t-d1   { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; margin: 0; text-wrap: balance; overflow-wrap: break-word; }
+.t-d2   { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; margin: 0; text-wrap: balance; overflow-wrap: break-word; }
+.t-d3   { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; margin: 0; overflow-wrap: break-word; }
+.t-body { font-size: 16px; line-height: 1.55; margin: 0; }
+.t-body-sm { font-size: 14px; line-height: 1.50; margin: 0; }
+.t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.5; letter-spacing: .04em; margin: 0; }
+.t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.5; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; margin: 0; }
+@media (max-width: 760px) { .t-d1 { font-size: 27px; } .t-d2 { font-size: 22px; } }
+
+.ink-muted { color: var(--ink-muted); }
+.ink-subtle { color: var(--ink-subtle); }
+.ink-faint { color: var(--ink-faint); }
+.prose { max-width: 68ch; }
+.measure { max-width: 56ch; }
+code, .cite { font-family: var(--font-meta); font-size: 12px; letter-spacing: .02em; color: var(--ink-subtle); overflow-wrap: anywhere; }
+.conf { font-family: var(--font-meta); font-size: 11px; color: var(--oak); letter-spacing: .04em; white-space: nowrap; }
+
+/* ---------- deck shell ---------- */
+#deck { height: 100dvh; overflow-y: auto; overflow-x: hidden; scroll-snap-type: y proximity; }
+#deck:focus { outline: none; }
+#deck:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: -2px; }
+.slide { min-height: 100dvh; scroll-snap-align: start; display: flex; align-items: center; padding: 48px clamp(16px, 4vw, 64px) 104px; border-bottom: 1px solid var(--hairline); position: relative; }
+.inner { width: 100%; max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 24px; align-items: start; }
+.gutter { display: flex; flex-direction: column; gap: 12px; }
+.gutter .sheet-no { color: var(--ink); font-variant-numeric: tabular-nums; }
+.gutter .chapter { color: var(--ink-faint); }
+.gutter .rule { height: 1px; background: var(--oak); width: 24px; }
+.main { min-width: 0; display: flex; flex-direction: column; gap: 24px; }
+@media (max-width: 900px) {
+  .inner { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .gutter { flex-direction: row; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .gutter .rule { display: none; }
+  .slide { align-items: flex-start; }
+}
+@media (max-width: 760px) { .slide { padding: 40px 16px 96px; } }
+.slide.wide .inner { grid-template-columns: minmax(0, 1fr); max-width: 1320px; gap: 12px; }
+.slide.wide .gutter { flex-direction: row; align-items: baseline; gap: 12px; }
+.slide.wide .gutter .rule { display: none; }
+
+/* ---------- furniture ---------- */
+.rule-hair { height: 1px; background: var(--hairline); border: 0; margin: 0; }
+.rule-strong { height: 1px; background: var(--hairline-strong); border: 0; margin: 0; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.stack-6 { display: flex; flex-direction: column; gap: 6px; }
+.cols-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 48px; }
+.cols-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 36px; }
+@media (max-width: 980px) { .cols-3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 820px) { .cols-2 { grid-template-columns: minmax(0, 1fr); } }
+ol.steps, ul.look { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 72ch; }
+ol.steps li, ul.look li { font-size: 15px; line-height: 1.5; }
+ol.steps li::marker, ul.look li::marker { color: var(--oak); font-family: var(--font-meta); font-size: 12px; }
+
+.word { display: inline-block; flex: none; min-width: 72px; text-align: center; padding: 2px 8px; border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); font-family: var(--font-meta); font-size: 11px; font-weight: 500; line-height: 1.5; letter-spacing: .06em; text-transform: uppercase; background: transparent; white-space: nowrap; }
+.word--current { border-color: var(--sage); color: var(--sage-ink); }
+.word--pending { border-color: var(--golden); color: var(--golden-ink); }
+.word--blocked { border-color: var(--terracotta); color: var(--terracotta-ink); }
+.word--dormant { border-color: var(--hairline-strong); color: var(--ink-faint); }
+
+/* the error, quoted as the designer saw it */
+.said { margin: 0; padding: 10px 12px; border: 1px solid var(--terracotta); border-radius: var(--radius-box); color: var(--terracotta-ink); font-family: var(--font-meta); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; overflow-wrap: anywhere; }
+.said--plain { text-transform: none; letter-spacing: .02em; }
+.fixed { margin: 0; padding: 10px 12px; border-left: 2px solid var(--sage); font-size: 15px; line-height: 1.5; }
+
+/* hero numbers (not a chart: one number, one label, text tokens only) */
+.tally { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--hairline-strong); border-bottom: 1px solid var(--hairline-strong); }
+.tally > div { padding: 16px 16px 16px 0; display: flex; flex-direction: column; gap: 4px; }
+.tally > div + div { border-left: 1px solid var(--hairline); padding-left: 16px; }
+.tally .n { font-family: var(--font-display); font-size: 48px; line-height: 1; font-weight: 500; font-variant-numeric: tabular-nums; }
+.tally .l { font-size: 14px; line-height: 1.4; color: var(--ink-muted); }
+@media (max-width: 820px) {
+  .tally { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tally > div:nth-child(3) { border-left: 0; padding-left: 0; }
+  .tally > div:nth-child(n+3) { border-top: 1px solid var(--hairline); }
+}
+
+/* ---------- tables ---------- */
+.scroller { overflow-x: auto; overflow-y: hidden; max-width: 100%; }
+table.sheet { border-collapse: collapse; width: 100%; font-size: 14px; }
+table.sheet th, table.sheet td { text-align: left; vertical-align: top; padding: 8px 16px 8px 0; border-top: 1px solid var(--hairline); }
+table.sheet thead th { border-top: 0; border-bottom: 1px solid var(--hairline-strong); color: var(--ink-faint); font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+table.sheet tbody tr:last-child td { border-bottom: 1px solid var(--hairline); }
+table.sheet td.id { white-space: nowrap; color: var(--oak); font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; }
+table.sheet td:last-child, table.sheet th:last-child { padding-right: 0; }
+table.sheet th[scope="row"] { font-weight: 500; font-size: 13px; }
+table.sheet tr.phase td { padding-top: 20px; font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); border-top: 1px solid var(--hairline-strong); }
+table.sheet .pick { border-left: 2px solid var(--sage); padding-left: 10px; }
+table.sheet .before { color: var(--terracotta-ink); font-family: var(--font-meta); font-size: 12px; letter-spacing: .02em; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .stackable table.sheet { min-width: 0; display: block; }
+  .stackable table.sheet thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .stackable table.sheet tbody, .stackable table.sheet tr, .stackable table.sheet td, .stackable table.sheet th { display: block; width: 100%; }
+  .stackable table.sheet tr { border-top: 1px solid var(--hairline); padding: 12px 0; }
+  .stackable table.sheet td, .stackable table.sheet th { border: 0; padding: 0 0 6px; }
+  .stackable table.sheet .pick { padding-left: 10px; }
+  .stackable table.sheet tr.phase td { padding-top: 12px; border: 0; }
+  .stackable table.sheet td[data-label]::before { content: attr(data-label); display: block; font-family: var(--font-meta); font-size: 11px; line-height: 1.5; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .stackable table.sheet td.id { white-space: normal; }
+}
+
+/* ---------- friction list ---------- */
+.friction { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 36px; }
+@media (max-width: 900px) { .friction { grid-template-columns: minmax(0, 1fr); } }
+.friction li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--hairline); }
+.pin { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid var(--terracotta-ink); border-radius: var(--radius-hair); color: var(--terracotta-ink); font-family: var(--font-meta); font-size: 11px; background: var(--paper); }
+.pin--q { border-color: var(--clay-ink); color: var(--clay-ink); width: auto; min-width: 30px; padding: 0 4px; }
+.friction p { margin: 0; font-size: 14.5px; line-height: 1.5; }
+.friction .cite { display: block; margin-top: 3px; }
+
+/* ---------- screenshots ---------- */
+.shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 24px; }
+.shots.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .shots, .shots.two { grid-template-columns: minmax(0, 1fr); } }
+figure.shot { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+figure.shot a { display: block; border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); overflow: hidden; background: var(--paper-doc); }
+figure.shot img { display: block; width: 100%; height: auto; }
+figure.shot.phone a { max-width: 260px; }
+figure.shot figcaption { font-size: 13.5px; line-height: 1.45; color: var(--ink-muted); }
+figure.shot figcaption .t-meta { color: var(--ink-faint); display: block; }
+.lead-shot { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px 40px; align-items: start; }
+@media (max-width: 900px) { .lead-shot { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- prototype stage ---------- */
+.switch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.switch .t-head { margin-right: 4px; }
+.switch button { min-height: 44px; padding: 8px 14px; cursor: pointer; font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink); background: var(--paper); border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); }
+.switch button[aria-pressed="true"] { background: var(--rail); border-color: var(--ink-faint); }
+.proto { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px 40px; align-items: start; }
+@media (max-width: 980px) { .proto { grid-template-columns: minmax(0, 1fr); } }
+.stage { overflow: hidden; max-width: 100%; border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); background: var(--paper); }
+.scaler { transform-origin: top left; width: max-content; }
+.stage iframe { border: 0; display: block; background: var(--paper); color-scheme: light dark; }
+.dir-note { display: flex; flex-direction: column; gap: 8px; }
+.dir-note[hidden] { display: none; }
+
+/* ---------- phases ---------- */
+.phase-col { border-top: 2px solid var(--ink); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.phase-col.p0 { border-top-color: var(--sage); }
+.phase-col.p1 { border-top-color: var(--clay); }
+.phase-col.p2 { border-top-color: var(--oak); }
+.phase-col.p3 { border-top-color: var(--hairline-strong); }
+.phase-col ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+.phase-col li { font-size: 14px; line-height: 1.45; }
+.phase-col li::marker { color: var(--oak); font-family: var(--font-meta); font-size: 12px; }
+.phase-col .sz { font-family: var(--font-meta); font-size: 11px; color: var(--ink-faint); letter-spacing: .04em; display: block; }
+.phases { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px 28px; }
+@media (max-width: 1100px) { .phases { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .phases { grid-template-columns: minmax(0, 1fr); } }
+
+.qlist { list-style: none; margin: 0; padding: 0; }
+.qlist li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--hairline); font-size: 14.5px; line-height: 1.5; }
+.qlist .qn { font-family: var(--font-meta); font-size: 12px; color: var(--clay-ink); padding-top: 2px; }
+.qlist .cite { display: block; margin-top: 2px; }
+
+/* ---------- pager ---------- */
+.pager { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; align-items: center; gap: 4px; background: var(--paper-doc); border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); padding: 2px; }
+.pager button { min-width: 44px; min-height: 44px; background: transparent; border: 0; color: var(--ink); cursor: pointer; font-family: var(--font-meta); font-size: 14px; border-radius: var(--radius-hair); }
+.pager button:hover { background: var(--rail); }
+.pager .where { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-muted); padding: 0 8px; white-space: nowrap; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 760px) { .pager { left: 16px; right: 16px; justify-content: space-between; } .pager .where { max-width: none; flex: 1; text-align: center; } }
+.skip { position: absolute; left: -9999px; top: 0; }
+.skip:focus { left: 12px; top: 12px; z-index: 70; background: var(--paper-doc); color: var(--ink); padding: 12px; border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); font-family: var(--font-meta); font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+@media (forced-colors: active) {
+  .word, .pin, .stage, .pager, .said, figure.shot a { border-color: CanvasText; }
+  a:focus-visible, button:focus-visible { outline-color: Highlight; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#sheet-2">Skip the cover</a>
+<div id="deck" tabindex="0" role="region" aria-label="Billing errors that tell you what to fix, seventeen sheets. Arrow keys move between sheets.">
+
+<!-- ============ 01 COVER ============ -->
+<section class="slide" id="sheet-1" data-label="Cover">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 01 / 17</span><div class="rule"></div><span class="t-head chapter">Cover</span></div>
+    <div class="main">
+      <p class="t-head ink-faint">US-35 · a synthesis for Kody · 16 October 2026</p>
+      <h1 class="t-d0">Billing errors that tell you what to fix</h1>
+      <p class="t-d3 ink-muted measure">Leah pressed <em>Draft the invoice</em> and got a sentence written for the database. Most billing failures can be known before the press. This deck shows how big the problem is, three ways to say &ldquo;this needs attention&rdquo;, and what to build first.</p>
+      <div class="cols-2">
+        <div class="stack-6">
+          <p class="t-head ink-faint">Feature test</p>
+          <p class="t-body-sm"><strong>Surface:</strong> The Document. <strong>Moment:</strong> the studio bills its client. <strong>Stream:</strong> subscription floor and the margin on furniture. <strong>Promise:</strong> the studio won&rsquo;t notice Patina, and a dead-end error breaks that.</p>
+        </div>
+        <div class="stack-6">
+          <p class="t-head ink-faint">Built from four studies</p>
+          <p class="t-body-sm"><strong>A</strong> inventory (27 failure states, from code) · <strong>B</strong> a walk of the running portal with screenshots · <strong>C</strong> three &ldquo;needs attention&rdquo; prototypes · <strong>D</strong> recovery flows per blocker. Plus the SQ-1019 fix, merged to main but not yet in production.</p>
+        </div>
+      </div>
+      <p class="t-meta ink-faint">Confidence marks: <span class="conf">[H]</span> seen in the walk or read in code by two studies · <span class="conf">[M]</span> read in code by one study · <span class="conf">[L]</span> inference.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 WHAT LEAH HIT ============ -->
+<section class="slide" id="sheet-2" data-label="What Leah hit today">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 02 / 17</span><div class="rule"></div><span class="t-head chapter">What happened</span></div>
+    <div class="main">
+      <h2 class="t-d1">She pressed Draft and the page answered in database</h2>
+      <div class="lead-shot">
+        <figure class="shot">
+          <a href="../walk/01c-draft-pressed-tuple-error.png"><img src="../walk/01c-draft-pressed-tuple-error.png" width="1600" height="986" alt="The Draw an invoice sheet with an $850 consultation line. Under Draft the invoice, an uppercase terracotta box reads Invoice project is missing its canonical billing tuple, with a Try again act." loading="lazy"></a>
+          <figcaption><span class="t-meta">walk/01c · reproduced locally on Fenwick Lodge, which has no client, like Kuehn</span>The composer took her lines, showed a total and an enabled Draft act. Only the press revealed the problem.</figcaption>
+        </figure>
+        <div class="stack">
+          <p class="said">Invoice project is missing its canonical billing tuple</p>
+          <ol class="steps">
+            <li><strong>What was wrong.</strong> The Kuehn Whole Home Renovation project had no client linked. It had a designer and a studio. One message covered three causes: no designer, no client, no studio. <span class="conf">[H]</span></li>
+            <li><strong>Why it happened.</strong> A project can be opened without a client (&ldquo;Select client (optional)&rdquo;), and the composer didn&rsquo;t check before the press, although it already had the project&rsquo;s client and studio in hand.</li>
+            <li><strong>Try again</strong> gave the same error every time. Closing the composer to go and fix it threw away every typed line and the memo (<a href="../walk/01d-reopened-work-lost.png">01d</a>).</li>
+          </ol>
+          <hr class="rule-hair">
+          <p class="t-head ink-faint">Leah&rsquo;s unblock today</p>
+          <p class="fixed">On the Kuehn Document, open the band row <strong>Link a client</strong>, link the household, then <strong>Draft the invoice</strong> again. Her lines need typing again (<a href="../walk/01e-fix-path-household-sheet.png">01e</a> → <a href="../walk/01f-after-linking-client-draft-succeeds.png">01f</a>).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 WHAT SQ-1019 FIXED ============ -->
+<section class="slide" id="sheet-3" data-label="Fixed in code: SQ-1019">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 03 / 17</span><div class="rule"></div><span class="t-head chapter">Already fixed</span></div>
+    <div class="main">
+      <h2 class="t-d1">Fixed in code, ships on Kody&rsquo;s go</h2>
+      <p class="t-body prose">SQ-1019 is merged to main (<code>64d2a180b</code>, follow-up <code>9af30e16e</code>). It is not in production. It takes the house&rsquo;s §A5 &ldquo;held&rdquo; act as far as one gap at a time.</p>
+      <div class="cols-2">
+        <div class="stack">
+          <p class="t-head ink-faint">What it does</p>
+          <ul class="look">
+            <li>The composer reads the project&rsquo;s client and studio <em>before</em> the press. <em>Draft the invoice</em> is held (aria-disabled, still focusable) while either is missing.</li>
+            <li>A sentence above the act names the gap: &ldquo;Kuehn Whole Home Renovation has no client yet. Link one to bill it.&rdquo; <em>Link a client</em> sits beside it.</li>
+            <li>No studio: an owner or admin gets <em>Name the studio</em>; everyone else reads &ldquo;Ask your studio owner to name it.&rdquo; Nobody sees a dead act.</li>
+            <li>Pressing the held act writes the reason to a status line and moves focus to the fix.</li>
+            <li>The project picker marks &ldquo;— no client yet&rdquo;.</li>
+            <li>The uppercase box is gone. Failures use the house failure line, and <em>Try again</em> appears only when a retry can help.</li>
+            <li>Rollback messages no longer print the invoice&rsquo;s id.</li>
+          </ul>
+        </div>
+        <div class="stack">
+          <p class="t-head ink-faint">What it leaves, and what to check</p>
+          <ul class="look">
+            <li><strong>The repair may open behind the composer.</strong> The household sheet sits on layer <code>z-50</code>; the composer sits on <code>z-[60]</code>. <em>Link a client</em> likely opens the sheet underneath (Study D, F2). <span class="conf">[M]</span> The post-fix walk (SQ-1027) will confirm.</li>
+            <li><strong>Everyone sees <em>Link a client</em>.</strong> The server lets only the project&rsquo;s own designer link a client (D, F5). A teammate gets a live act that will be refused. <span class="conf">[M]</span></li>
+            <li><strong>One gap at a time.</strong> No studio shows only after the client is linked.</li>
+            <li><strong>Billing-line refusals still pass through raw</strong> (&ldquo;add_invoice_billing_lines: …&rdquo;), and they still offer <em>Try again</em>, which repeats the refusal.</li>
+            <li>Unpriced FF&amp;E, rate-pending hours, sends and project creation are untouched.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 SIZE ============ -->
+<section class="slide" id="sheet-4" data-label="The size of it">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 04 / 17</span><div class="rule"></div><span class="t-head chapter">The size of it</span></div>
+    <div class="main">
+      <h2 class="t-d1">Most billing failures can be known before the press</h2>
+      <div class="tally" role="list">
+        <div role="listitem"><span class="n">27</span><span class="l">failure states across five billing surfaces (Study A)</span></div>
+        <div role="listitem"><span class="n">21</span><span class="l">knowable before the press: 10 fully, 11 in part</span></div>
+        <div role="listitem"><span class="n">20</span><span class="l">show the designer raw database text or a bare code</span></div>
+        <div role="listitem"><span class="n">7</span><span class="l">have no place to fix it that the screen links to</span></div>
+      </div>
+      <div class="cols-2">
+        <div class="stack">
+          <p class="t-head ink-faint">Where they are</p>
+          <div class="scroller stackable">
+            <table class="sheet">
+              <thead><tr><th>Surface</th><th>States</th><th>Knowable before</th></tr></thead>
+              <tbody>
+                <tr><td data-label="Surface">Project invoice composer</td><td data-label="States">9</td><td data-label="Knowable before">5 yes, 2 in part</td></tr>
+                <tr><td data-label="Surface">Studio invoice composer</td><td data-label="States">3</td><td data-label="Knowable before">3 yes</td></tr>
+                <tr><td data-label="Surface">Account band, milestone</td><td data-label="States">1</td><td data-label="Knowable before">1 yes</td></tr>
+                <tr><td data-label="Surface">Send, checkout, payment link</td><td data-label="States">7</td><td data-label="Knowable before">1 yes, 3 in part</td></tr>
+                <tr><td data-label="Surface">Record, chase, void, delete, lines</td><td data-label="States">7</td><td data-label="Knowable before">6 in part</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="stack">
+          <p class="t-head ink-faint">The seven with nowhere to go</p>
+          <ul class="look">
+            <li><strong>C05</strong> unpriced FF&amp;E: the notice links nowhere, and for most lines there is no client-price field at all (D, F6).</li>
+            <li><strong>C08</strong> a draft that couldn&rsquo;t be cleaned up after a failed step.</li>
+            <li><strong>C10, C11</strong> studio invoice: household not on the roster; studio access.</li>
+            <li><strong>A01</strong> milestone already billed: the band doesn&rsquo;t link to its invoice.</li>
+            <li><strong>K03</strong> payment link on a draft or void invoice.</li>
+            <li><strong>D01</strong> removing a draft that is no longer a draft.</li>
+          </ul>
+          <p class="t-body-sm ink-muted">The walk adds an eighth in practice: the one fix link that exists, &ldquo;set the studio rate →&rdquo;, lands on the Password section (sheet 07).</p>
+        </div>
+      </div>
+      <p class="t-meta ink-faint">Counts from <code>inventory/inventory.json</code>. Study A&rsquo;s prose says 12 in part and 5 not knowable; its own rows read 11 and 6. This deck uses the rows. Raw-text count: rows whose &ldquo;today&rdquo; is a raw message, a code, or &ldquo;Failed to …&rdquo; passthrough.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 WORST OFFENDERS ============ -->
+<section class="slide wide" id="sheet-5" data-label="Worst offenders, before and after">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 05 / 17</span><span class="t-head chapter">The size of it</span></div>
+    <div class="main">
+      <h2 class="t-d1">The worst offenders, word for word</h2>
+      <div class="scroller stackable">
+        <table class="sheet">
+          <thead><tr><th>Row</th><th>Today, verbatim</th><th>Proposed</th><th>Source of the rewrite</th></tr></thead>
+          <tbody>
+            <tr><td class="id" data-label="Row">C01</td><td class="before" data-label="Today">INVOICE PROJECT IS MISSING ITS CANONICAL BILLING TUPLE · TRY AGAIN</td><td data-label="Proposed">&ldquo;Kuehn Whole Home Renovation has no client yet. Link one to bill it.&rdquo; <em>Link a client</em></td><td data-label="Source">In code (SQ-1019). It splits by cause, which beats A&rsquo;s one sentence for both causes.</td></tr>
+            <tr><td class="id" data-label="Row">7a</td><td class="before" data-label="Today">studio_id_not_designer_studio</td><td data-label="Proposed">&ldquo;Patina couldn&rsquo;t tell which of your studios this project is under. Choose one, then create the project.&rdquo;</td><td data-label="Source">This deck. Found by the walk only; the cause (two owned studios) is unconfirmed.</td></tr>
+            <tr><td class="id" data-label="Row">C09</td><td class="before" data-label="Today">add_invoice_billing_lines: purchase {id} is already billed</td><td data-label="Proposed">&ldquo;The Holloway sconce purchase was billed on another invoice after you opened this. It&rsquo;s been unticked.&rdquo; No retry.</td><td data-label="Source">D §5</td></tr>
+            <tr><td class="id" data-label="Row">S01</td><td class="before" data-label="Today">Could not send — issued as INV-0042; no_recipient. Resend to retry.</td><td data-label="Proposed">Before issue, Send is held: &ldquo;There&rsquo;s no email for the Kuehns yet. Add one to send, or issue and share the link.&rdquo; <em>Add their email</em></td><td data-label="Source">D §6 (A&rsquo;s rewrite only covers after issue)</td></tr>
+            <tr><td class="id" data-label="Row">C06</td><td class="before" data-label="Today">ONE HOUR HAS NO RATE YET · THEY CANNOT BE INVOICED UNTIL THE STUDIO PRICES THEM · SET THE STUDIO RATE →</td><td data-label="Proposed">Owner: &ldquo;2 hours by Sam have no rate yet.&rdquo; <em>Set Sam&rsquo;s rate</em>. Others: &ldquo;These hours need a studio rate before they can be billed. Ask your studio owner to set the rate.&rdquo;</td><td data-label="Source">D §3 and A. The entry was 2 h; the copy counts entries (B).</td></tr>
+            <tr><td class="id" data-label="Row">C05</td><td class="before" data-label="Today">2 UNPRICED LINES — SET A CLIENT PRICE TO BILL (under &ldquo;Nothing uninvoiced — every priced line is billed.&rdquo;)</td><td data-label="Proposed">Each line named. Labor: its price typed in place. Others: <em>Price it</em> lands on the line, or, with no field yet, &ldquo;Client price for Walnut console isn&rsquo;t set, and it can&rsquo;t be typed yet on an active job.&rdquo;</td><td data-label="Source">D §2. A&rsquo;s rewrite points at a price control most lines don&rsquo;t have.</td></tr>
+            <tr><td class="id" data-label="Row">C10</td><td class="before" data-label="Today">Failed to create draft studio invoice: studio invoice household not found or access denied</td><td data-label="Proposed">&ldquo;This household is not on the studio&rsquo;s client list. Add the household to the studio roster, then draft the invoice again.&rdquo;</td><td data-label="Source">A</td></tr>
+            <tr><td class="id" data-label="Row">A01</td><td class="before" data-label="Today">Could not draft the invoice — milestone is already billed</td><td data-label="Proposed">&ldquo;This milestone is already on an invoice. Open its invoice to review it.&rdquo;</td><td data-label="Source">A</td></tr>
+            <tr><td class="id" data-label="Row">C08</td><td class="before" data-label="Today">The draft {id} still holds those hours — void it to release them.</td><td data-label="Proposed">&ldquo;This draft couldn&rsquo;t be cleaned up, and it still holds 6 hours. Open it to delete it.&rdquo; <em>Open the draft</em></td><td data-label="Source">D §5. SQ-1019 removed the id; the act is still missing.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 WALK: FRICTION ============ -->
+<section class="slide wide" id="sheet-6" data-label="The walk: friction by state">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 06 / 17</span><span class="t-head chapter">The walk</span></div>
+    <div class="main">
+      <h2 class="t-d1">Three dead ends in nine states</h2>
+      <p class="t-body prose">Study B walked the running portal locally as Leah, before the SQ-1019 fix, at 1400 px and 390 px. Friction 1 is none, 5 is a dead end.</p>
+      <div class="cols-2">
+        <div class="scroller stackable">
+          <table class="sheet">
+            <thead><tr><th>State</th><th>Knows what / where</th><th>Steps</th><th>Work kept</th><th>Friction</th></tr></thead>
+            <tbody>
+              <tr><td data-label="State">1 No client → Draft</td><td data-label="Knows what / where">no / no</td><td data-label="Steps">7+</td><td data-label="Work kept">no</td><td data-label="Friction"><span class="word word--blocked">5</span></td></tr>
+              <tr><td data-label="State">6 Desk and ⌘K composer</td><td data-label="Knows what / where">no / no</td><td data-label="Steps">8+</td><td data-label="Work kept">no</td><td data-label="Friction"><span class="word word--blocked">5</span></td></tr>
+              <tr><td data-label="State">7a Create project</td><td data-label="Knows what / where">no / no</td><td data-label="Steps">unknown</td><td data-label="Work kept">title only</td><td data-label="Friction"><span class="word word--blocked">5</span></td></tr>
+              <tr><td data-label="State">2 Unpriced FF&amp;E</td><td data-label="Knows what / where">partly / no</td><td data-label="Steps">~6</td><td data-label="Work kept">no</td><td data-label="Friction"><span class="word word--blocked">4</span></td></tr>
+              <tr><td data-label="State">7b Time logged non-billable</td><td data-label="Knows what / where">no / no</td><td data-label="Steps">relog</td><td data-label="Work kept">n/a</td><td data-label="Friction"><span class="word word--blocked">4</span></td></tr>
+              <tr><td data-label="State">3 Rate-pending hours</td><td data-label="Knows what / where">yes / misleads</td><td data-label="Steps">5+</td><td data-label="Work kept">yes</td><td data-label="Friction"><span class="word word--pending">3</span></td></tr>
+              <tr><td data-label="State">7c Document reflows</td><td data-label="Knows what / where">n/a</td><td data-label="Steps">press again</td><td data-label="Work kept">yes</td><td data-label="Friction"><span class="word word--pending">3</span></td></tr>
+              <tr><td data-label="State">4 Deposit over 100 %</td><td data-label="Knows what / where">yes / yes</td><td data-label="Steps">1</td><td data-label="Work kept">yes</td><td data-label="Friction"><span class="word word--current">2</span></td></tr>
+              <tr><td data-label="State">5 Client with no email</td><td data-label="Knows what / where">guarded upstream</td><td data-label="Steps">n/a</td><td data-label="Work kept">n/a</td><td data-label="Friction"><span class="word word--dormant">n/a</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="stack">
+          <p class="t-head ink-faint">Study B&rsquo;s top five, worst first</p>
+          <ol class="friction" style="grid-template-columns:minmax(0,1fr)">
+            <li><span class="pin">1</span><p>The no-client draft is a dead end, and closing the composer to fix it throws the work away. Same from the Document, the Desk and ⌘K.<span class="cite">states 1, 6 · 01c, 01d, 06b</span></p></li>
+            <li><span class="pin">2</span><p>Raw database codes reach the designer before billing starts: creating a project printed <code>studio_id_not_designer_studio</code>.<span class="cite">7a · 07a</span></p></li>
+            <li><span class="pin">3</span><p><em>Draft the invoice</em> was natively disabled, looked enabled and did nothing: no reason, no focus move. SQ-1019 now holds it instead.<span class="cite">states 2, 4 · 02b, 04b</span></p></li>
+            <li><span class="pin">4</span><p>Unpriced FF&amp;E has no fix link, under a line that contradicts it.<span class="cite">state 2 · 02a</span></p></li>
+            <li><span class="pin">5</span><p>Billable hours vanish or mislead: time defaults to non-billable, the rate copy miscounts, and the rate link lands on Password.<span class="cite">3, 7b · 03b, 03c, 07c</span></p></li>
+          </ol>
+        </div>
+      </div>
+      <p class="t-meta ink-faint">Walked on local main <code>f3c7fb53a</code>, local Supabase only. Send (state 5) was not pressed: no automated external sends. Full notes: <a href="../walk/walk.md">walk/walk.md</a>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 WALK: BEYOND THE SEED LIST ============ -->
+<section class="slide wide" id="sheet-7" data-label="The walk: beyond the seed list">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 07 / 17</span><span class="t-head chapter">The walk</span></div>
+    <div class="main">
+      <h2 class="t-d1">What the code reading missed</h2>
+      <p class="t-body prose">Neither the inventory nor the flows list these. Each is a screenshot; select one to open it full size.</p>
+      <div class="shots">
+        <figure class="shot"><a href="../walk/01d-reopened-work-lost.png"><img src="../walk/01d-reopened-work-lost.png" width="1600" height="986" alt="The composer reopened empty after closing it: the typed consultation line and memo are gone." loading="lazy"></a><figcaption><span class="t-meta">01d · work lost</span>Closing the composer to go and fix the client drops every typed line and the memo.</figcaption></figure>
+        <figure class="shot"><a href="../walk/03b-rate-pending-copy-zoom.png"><img src="../walk/03b-rate-pending-copy-zoom.png" width="1600" height="257" alt="Close-up: a 2H rate pending entry above the line One hour has no rate yet, they cannot be invoiced until the studio prices them, set the studio rate." loading="lazy"></a><figcaption><span class="t-meta">03b · &ldquo;one hour&rdquo; for 2 h</span>The copy counts entries, not hours, and mixes &ldquo;one hour&rdquo; with &ldquo;they&rdquo;.</figcaption></figure>
+        <figure class="shot"><a href="../walk/03c-rate-link-pressed-composer-stacked-over-password.png"><img src="../walk/03c-rate-link-pressed-composer-stacked-over-password.png" width="1600" height="986" alt="After pressing set the studio rate, the composer is still open on top of the Account sheet, which has opened at its Password section." loading="lazy"></a><figcaption><span class="t-meta">03c, <a href="../walk/03d-escape-closed-hidden-sheet-composer-remains.png">03d</a> · the only fix link misleads</span>It opens Account at Password, behind the open composer. Esc closes the sheet you can&rsquo;t see.</figcaption></figure>
+        <figure class="shot"><a href="../walk/07a-create-project-raw-studio-error.png"><img src="../walk/07a-create-project-raw-studio-error.png" width="1600" height="986" alt="The new project sheet with studio_id_not_designer_studio printed in red under the fields." loading="lazy"></a><figcaption><span class="t-meta">07a · a code at project creation</span>For a designer who owns two studios, a realistic case for a studio that keeps a personal one.</figcaption></figure>
+        <figure class="shot"><a href="../walk/07c-logged-hours-missing-from-composer.png"><img src="../walk/07c-logged-hours-missing-from-composer.png" width="1600" height="986" alt="The composer says No unbilled hours on this document while the footer shows In hand today 1h 30m." loading="lazy"></a><figcaption><span class="t-meta">07c · logged hours missing</span>Record time started at non-billable. The composer says &ldquo;No unbilled hours&rdquo; while the footer shows 1h 30m.</figcaption></figure>
+        <figure class="shot"><a href="../walk/07e-doc-reflowed-click-lands-elsewhere.png"><img src="../walk/07e-doc-reflowed-click-lands-elsewhere.png" width="1600" height="986" alt="The Document after its sections expanded, with Draft an invoice pushed further down the page." loading="lazy"></a><figcaption><span class="t-meta"><a href="../walk/07d-doc-first-paint-draft-act-here.png">07d</a> → 07e · the act moves</span>Sections expand after first paint and push <em>Draft an invoice</em> down. 4 of 5 automated first clicks missed.</figcaption></figure>
+      </div>
+      <div class="shots two">
+        <figure class="shot phone"><a href="../walk/01g-390-composer-no-client.png"><img src="../walk/01g-390-composer-no-client.png" width="739" height="1600" alt="The composer at 390 px: the ad-hoc line's remove control and line count fall outside the panel." loading="lazy"></a><figcaption><span class="t-meta">01g · 390 px</span>The ad-hoc row overflows; the remove &ldquo;×&rdquo; and line count fall outside the panel (also <a href="../walk/02c-390-unpriced-and-rate-pending.png">02c</a>).</figcaption></figure>
+        <figure class="shot"><a href="../walk/05a-no-email-households-unselectable.png"><img src="../walk/05a-no-email-households-unselectable.png" width="1600" height="1531" alt="The household picker with Elena Marlowe and The Ashfords marked No email on file and unselectable." loading="lazy"></a><figcaption><span class="t-meta">05a · picker dead end</span>Households with no email can&rsquo;t be picked, and the picker offers no way to add one.</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 THREE DIRECTIONS ============ -->
+<section class="slide wide" id="sheet-8" data-label="Three ways to say needs attention">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 08 / 17</span><span class="t-head chapter">Directions</span></div>
+    <div class="main">
+      <h2 class="t-d1">Three ways to say &ldquo;this needs attention&rdquo;</h2>
+      <p class="t-body prose">Study C staged the same moment three times: Kuehn with no client <em>and</em> two pieces with no client price, so each pattern is tested past a single hold. The fixes are identical; only the pointing differs. Each prototype is live below and has three cases.</p>
+      <div class="switch" role="group" aria-label="Prototype">
+        <span class="t-head ink-faint">Prototype</span>
+        <button type="button" aria-pressed="true" data-proto="spotlight">1 · Spotlight</button>
+        <button type="button" aria-pressed="false" data-proto="held-and-land">2 · Held and land</button>
+        <button type="button" aria-pressed="false" data-proto="checklist">3 · Before this can go</button>
+      </div>
+      <div class="proto">
+        <div class="stage" id="proto-stage"><div class="scaler" id="proto-scaler"><iframe id="proto-frame" title="Spotlight prototype" src="../prototypes/spotlight.html" loading="lazy"></iframe></div></div>
+        <div class="stack">
+          <div class="dir-note" data-note="spotlight">
+            <p class="t-d3">Spotlight <span class="t-meta ink-faint">Kody&rsquo;s idea</span></p>
+            <p class="t-body-sm">Pressing the held act lays a scrim over the page with a window cut around each hold and a short label on each. Tab and <em>Next</em> step between windows; Esc lets you out; the scrim lifts when the last hold is fixed.</p>
+            <p class="t-body-sm ink-muted">The most emphatic of the three. It pays in interruption, a new overlay primitive, and a second veil. See sheet 09.</p>
+            <p class="t-meta"><a href="../prototypes/spotlight.html">Open prototypes/spotlight.html full size</a></p>
+          </div>
+          <div class="dir-note" data-note="held-and-land" hidden>
+            <p class="t-d3">Held and land <span class="t-meta ink-faint">§A5 as written, one step further</span></p>
+            <p class="t-body-sm">The act is held and the consequence sentence names both holds. Pressing it scrolls to the first hold, focuses its fix, writes the reason to the status line and draws a terracotta margin rule that fades. A <em>Next</em> line in the landed region reaches the second hold.</p>
+            <p class="t-body-sm ink-muted">Cheap, no new layers, never locks the page. Shows one hold at a time. SQ-1019 already built the first half of it.</p>
+            <p class="t-meta"><a href="../prototypes/held-and-land.html">Open prototypes/held-and-land.html full size</a></p>
+          </div>
+          <div class="dir-note" data-note="checklist" hidden>
+            <p class="t-d3">Before this can go <span class="t-meta ink-faint">pre-flight list</span></p>
+            <p class="t-body-sm">A compact list above the act, there before anyone presses, one row per hold. Each row&rsquo;s fix opens in a drawer inside the row, and the row turns to Done with what was done. The held act still lands on the first open row.</p>
+            <p class="t-body-sm ink-muted">Tells Leah before she fails and scales to any number of holds. Adds weight to a long sheet.</p>
+            <p class="t-meta"><a href="../prototypes/checklist.html">Open prototypes/checklist.html full size</a></p>
+          </div>
+          <hr class="rule-hair">
+          <p class="t-body-sm ink-muted">All three share the root fix (the composer learns client and studio, which SQ-1019 did), the same who-can-fix rules, and the same copy rules. Study C&rsquo;s comparison page: <a href="../prototypes/index.html">prototypes/index.html</a>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 SPOTLIGHT HONESTLY ============ -->
+<section class="slide" id="sheet-9" data-label="The spotlight, honestly">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 09 / 17</span><div class="rule"></div><span class="t-head chapter">Directions</span></div>
+    <div class="main">
+      <h2 class="t-d1">The spotlight, honestly</h2>
+      <p class="t-body prose">It is the best answer to &ldquo;show me where&rdquo;. It also runs into two house rules and one ladder rule. Study C&rsquo;s prototype reconciles the first two. The third needs a ruling.</p>
+      <div class="scroller stackable">
+        <table class="sheet">
+          <thead><tr><th>House rule</th><th>The tension</th><th>How the prototype meets it</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td data-label="House rule"><strong>D4</strong>, zero shadows</td><td data-label="The tension">A spotlight usually glows.</td><td data-label="How the prototype meets it">No glow, blur or box-shadow. Each window is a hole in the scrim edged by a 1.5 px terracotta-ink hairline; the active one gets a 2.5 px rule and an inked label.</td><td data-label="Status"><span class="word word--current">Met</span></td></tr>
+            <tr><td data-label="House rule"><strong>&ldquo;Never opacity: .5&rdquo;</strong></td><td data-label="The tension">A scrim dims the page, which is what the rule forbids.</td><td data-label="How the prototype meets it">Nothing is faded. The scrim is its own layer, a solid fill at the existing <code>--veil</code> token, <code>rgba(20, 18, 16, .55)</code>, the same layer every sheet already lays over the desk. Everything outside the windows is <code>inert</code>, so it is not an available control, and WCAG 1.4.3 exempts inactive interface. Text inside a window keeps 13.53:1.</td><td data-label="Status"><span class="word word--current">Met</span></td></tr>
+            <tr><td data-label="House rule"><strong>Depth ladder L5</strong></td><td data-label="The tension">The composer already sits on one veil (L4). A spotlight over it is a second veil, which the ladder reserves for an irreversible confirm.</td><td data-label="How the prototype meets it">Not met. It needs a ruling that a held-act spotlight may use L5, or a scrim drawn inside the sheet only.</td><td data-label="Status"><span class="word word--blocked">Ruling</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="cols-2">
+        <div class="stack">
+          <p class="t-head ink-faint">What it costs</p>
+          <ul class="look">
+            <li>A new overlay primitive: SVG mask, inert management, a focus trap, live geometry. The help system&rsquo;s Coachmark and TourController have no scrim to reuse.</li>
+            <li>The highest accessibility risk of the three. It needs a device pass with a screen reader.</li>
+            <li>It interrupts at the moment Leah meant to finish, and locks the page until she fixes everything or presses Esc.</li>
+            <li>At 390 px the windows are rarely on screen together; you step one at a time.</li>
+          </ul>
+        </div>
+        <div class="stack">
+          <p class="t-head ink-faint">Where it could earn its place</p>
+          <p class="t-body-sm">As a teaching moment, for example inside the Desk walkthrough tour, where interruption is the point. Not as the default answer to a held act. This deck doesn&rsquo;t build it; it waits for Q2.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 COMPARED ============ -->
+<section class="slide wide" id="sheet-10" data-label="The three compared">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 10 / 17</span><span class="t-head chapter">Directions</span></div>
+    <div class="main">
+      <h2 class="t-d1">The three on one table</h2>
+      <div class="scroller stackable">
+        <table class="sheet">
+          <thead><tr><th>&nbsp;</th><th>1 · Spotlight</th><th>2 · Held and land</th><th class="pick">3 · Before this can go</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Clarity</th><td data-label="Spotlight">Highest at the press: the page itself points, every hold labelled.</td><td data-label="Held and land">High for the first hold; the rest are named but reached one at a time.</td><td class="pick" data-label="Before this can go">High, and earliest: every reason in one place before she presses.</td></tr>
+            <tr><th scope="row">Interruption</th><td data-label="Spotlight">High. A modal layer at the moment of intent; page locked.</td><td data-label="Held and land">Low. Focus moves; nothing locks.</td><td class="pick" data-label="Before this can go">Lowest. Nothing happens until she chooses to fix something.</td></tr>
+            <tr><th scope="row">One hold vs many</th><td data-label="Spotlight">Good at two or three; crowds past four.</td><td data-label="Held and land">Fine at one; serial hopping at many.</td><td class="pick" data-label="Before this can go">Best at many; heavy for a single hold.</td></tr>
+            <tr><th scope="row">Accessibility risk</th><td data-label="Spotlight">Highest: custom trap, inert, live geometry.</td><td data-label="Held and land">Low: native focus and the status line.</td><td class="pick" data-label="Before this can go">Low: list semantics and expandable rows.</td></tr>
+            <tr><th scope="row">390 px</th><td data-label="Spotlight">Works, but windows compete with the fixed bar.</td><td data-label="Held and land">Good.</td><td class="pick" data-label="Before this can go">Good; drawers stack full width.</td></tr>
+            <tr><th scope="row">House fit</th><td data-label="Spotlight">§A5 yes. D4 yes. Second veil needs an L5 ruling.</td><td data-label="Held and land">§A5 and §A6 exactly. D4 yes.</td><td class="pick" data-label="Before this can go">§A5, §A6, D4 yes. Matches the agreement room&rsquo;s readiness list.</td></tr>
+            <tr><th scope="row">Build cost</th><td data-label="Spotlight">High: new overlay primitive.</td><td data-label="Held and land">Low: the held act and landing exist; SQ-1019 built half.</td><td class="pick" data-label="Before this can go">Medium: one readiness function, a list, drawers that reuse the client picker.</td></tr>
+            <tr><th scope="row">Where it breaks</th><td data-label="Spotlight">Interrupting Leah is the opposite of &ldquo;the studio won&rsquo;t notice Patina&rdquo;.</td><td data-label="Held and land">The second hold depends on reading the sentence or following Next.</td><td class="pick" data-label="Before this can go">A second place to fix the same thing; must stay one write. The price drawer assumes a writer most lines lack (sheet 13).</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="t-meta ink-faint">Rows condensed from Study C&rsquo;s comparison (<a href="../prototypes/index.html">prototypes/index.html</a>); the last row is this deck&rsquo;s.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 RECOVERY FLOWS ============ -->
+<section class="slide wide" id="sheet-11" data-label="Recovery flows">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 11 / 17</span><span class="t-head chapter">Recovery</span></div>
+    <div class="main">
+      <h2 class="t-d1">From each blocker to billed, without losing the work</h2>
+      <div class="scroller stackable">
+        <table class="sheet">
+          <thead><tr><th>Blocker</th><th>Who can fix</th><th>Proposed path</th><th>Steps today → proposed</th><th>Work during the detour</th></tr></thead>
+          <tbody>
+            <tr><td data-label="Blocker"><strong>No client</strong>, project&rsquo;s designer</td><td data-label="Who can fix">Project&rsquo;s designer only</td><td data-label="Proposed path">Held Draft names it; <em>Link a client</em> opens the household sheet <em>over</em> the composer; focus returns to Draft.</td><td data-label="Steps">11 + re-tick → 5</td><td data-label="Work">Lost → kept</td></tr>
+            <tr><td data-label="Blocker"><strong>No client</strong>, a teammate</td><td data-label="Who can fix">Project&rsquo;s designer</td><td data-label="Proposed path">Reason, who can fix, and <em>Copy a note for Leah</em>. Never a dead act.</td><td data-label="Steps">no path → 3 + wait</td><td data-label="Work">Kept while open</td></tr>
+            <tr><td data-label="Blocker"><strong>No studio</strong>, owner or admin</td><td data-label="Who can fix">Studio owner or admin</td><td data-label="Proposed path"><em>Name the studio</em> inline (one write). The sentence must say the stamp is final and prices only new hours.</td><td data-label="Steps">8 + re-tick → 3</td><td data-label="Work">Lost → kept</td></tr>
+            <tr><td data-label="Blocker"><strong>No studio</strong>, everyone else</td><td data-label="Who can fix">Studio owner or admin</td><td data-label="Proposed path">&ldquo;Only a studio owner or admin can name it. Ask Leah.&rdquo; and a note to copy.</td><td data-label="Steps">no path → 3 + wait</td><td data-label="Work">Kept while open</td></tr>
+            <tr><td data-label="Blocker"><strong>Unpriced FF&amp;E</strong></td><td data-label="Who can fix">Designer with a money seat</td><td data-label="Proposed path">Labor: type the price in its row. Others: <em>Price it</em> lands on the line in the Price lens, then <em>Back to the invoice</em>. With no field, say so.</td><td data-label="Steps">9 + re-tick, often no path → 4 / 6</td><td data-label="Work">Lost → kept (needs parking)</td></tr>
+            <tr><td data-label="Blocker"><strong>Rate-pending hours</strong></td><td data-label="Who can fix">Studio owner or admin</td><td data-label="Proposed path">Group names the cause; owner sets the member&rsquo;s rate inline; others copy a note. May not release hours already logged (F7).</td><td data-label="Steps">9 + re-tick → 4</td><td data-label="Work">Lost → kept</td></tr>
+            <tr><td data-label="Blocker"><strong>Billing-line refusal</strong></td><td data-label="Who can fix">Designer</td><td data-label="Proposed path">Failure line names the line and unticks it; draft the rest. Retry only for a network failure.</td><td data-label="Steps">2–4 → 2</td><td data-label="Work">Kept; refused line unticked</td></tr>
+            <tr><td data-label="Blocker"><strong>Send, no email</strong></td><td data-label="Who can fix">Project&rsquo;s designer</td><td data-label="Proposed path">Send is held <em>before</em> issue; <em>Add their email</em> opens the household sheet in edit over the folio.</td><td data-label="Steps">7, after issue → 3, before issue</td><td data-label="Work">Message kept; nothing issued early</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="cols-2">
+        <p class="t-body-sm"><strong>Four mechanisms every path assumes.</strong> M1 one readiness read for the composer (reason, repair, who, focus target). M2 repair sheets stack above the composer, so it stays mounted. M3 parking, for a fix that must leave the sheet. M4 &ldquo;ask your owner&rdquo; is a note the designer copies and sends; nothing is sent automatically.</p>
+        <p class="t-body-sm ink-muted">Steps are counted from code by Study D: one deliberate act each; re-ticking lost lines is extra. Diagrams per blocker, today on the left and proposed on the right: <a href="../flows/flows.html">flows/flows.html</a>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 PREVENTION ============ -->
+<section class="slide" id="sheet-12" data-label="Prevention at project creation">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 12 / 17</span><div class="rule"></div><span class="t-head chapter">Recovery</span></div>
+    <div class="main">
+      <h2 class="t-d1">Prevent it at project creation? A trade-off, not a decision</h2>
+      <p class="t-body prose">The new-project sheet labels the client &ldquo;Select client (optional)&rdquo; and never mentions billing (<a href="../walk/01a-new-project-client-optional.png">01a</a>). Three options, and they don&rsquo;t exclude each other:</p>
+      <div class="scroller stackable">
+        <table class="sheet">
+          <thead><tr><th>Option</th><th>For</th><th>Against</th></tr></thead>
+          <tbody>
+            <tr><td data-label="Option"><strong>A.</strong> Require a client when the project is opened</td><td data-label="For">No project ever reaches billing without one; the blocker disappears at its source.</td><td data-label="Against">The sheet serves handshake projects (&ldquo;a repeat client calls&rdquo;); the household may not be in Patina yet. A gate at creation works against &ldquo;the studio won&rsquo;t notice Patina&rdquo;. Projects arriving by capture, Field or import bypass it anyway.</td></tr>
+            <tr><td data-label="Option"><strong>B.</strong> Keep it optional; the band raises its &ldquo;Link a client&rdquo; setup row when money first appears</td><td data-label="For">Asks at the moment of need, no creation friction, reuses an existing row.</td><td data-label="Against">Still after the work. Needs a rule for &ldquo;money appears&rdquo;. Moving a setup row up the band touches its ordering rules (D2/D10), which is a design ruling.</td></tr>
+            <tr><td data-label="Option"><strong>C.</strong> Composer only: picker note and held act</td><td data-label="For">Smallest. It is the act where the gap matters. SQ-1019 built it.</td><td data-label="Against">Leah meets it mid-billing, though now with a reason and a fix beside it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="t-body-sm prose">C is needed in every case, because projects reach billing by other roads. Whether to add A or B is Q7. The same sheet also printed <code>studio_id_not_designer_studio</code> when Leah&rsquo;s account owned two studios (<a href="../walk/07a-create-project-raw-studio-error.png">07a</a>); that one is a plain fix in phase 1, whatever Q7 decides.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 RECONCILIATION ============ -->
+<section class="slide wide" id="sheet-13" data-label="Where the studies disagree">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 13 / 17</span><span class="t-head chapter">Reconciling</span></div>
+    <div class="main">
+      <h2 class="t-d1">Where the studies disagree, and which way this deck went</h2>
+      <div class="scroller stackable">
+        <table class="sheet">
+          <thead><tr><th>Question</th><th>What the studies say</th><th>Sided with</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td data-label="Question">Who can link a client?</td><td data-label="What the studies say">The brief and C: any designer on the project. D (F5): the server refuses unless the caller is the project&rsquo;s own designer (<code>00385:44-61</code>). SQ-1019 shows the act to everyone.</td><td data-label="Sided with"><strong>D</strong> <span class="conf">[M]</span></td><td data-label="Why">The server decides, not the brief. A teammate would get a live act that fails. Phase 1, item 2; who <em>should</em> be allowed is Q6.</td></tr>
+            <tr><td data-label="Question">Where is an unpriced piece priced?</td><td data-label="What the studies say">A: &ldquo;the FF&amp;E schedule price control&rdquo;. B: Edit FF&amp;E schedule → Pricing tab, about 6 steps (estimated; not completed). C: price fields in a drawer. D (F6): only labor lines have an editable client price; placed lines have no writer.</td><td data-label="Sided with"><strong>D</strong>, to confirm <span class="conf">[M]</span></td><td data-label="Why">D cites the writer; B didn&rsquo;t finish the path; C&rsquo;s drawer assumes a write that doesn&rsquo;t exist for most lines. The plan prices labor inline and lands the rest. Q4 decides the rest.</td></tr>
+            <tr><td data-label="Question">What does the deposit guard check?</td><td data-label="What the studies say">The brief and A (C07): deposit over the remaining balance. B observed only a 0–100 % range check; D reads the same code.</td><td data-label="Sided with"><strong>B + D</strong> <span class="conf">[H]</span></td><td data-label="Why">Seen and read. A&rsquo;s rewrite should name the range: &ldquo;The deposit needs a percent between 0 and 100.&rdquo;</td></tr>
+            <tr><td data-label="Question">Does the rate link reach the rate?</td><td data-label="What the studies say">A lists it as the destination. D (F3) predicted it opens beneath the composer. B saw it open Account at Password, behind the composer.</td><td data-label="Sided with"><strong>B</strong> <span class="conf">[H]</span></td><td data-label="Why">Observed. The destination exists in name only; it counts as an eighth with nowhere to go.</td></tr>
+            <tr><td data-label="Question">How many steps is the no-client fix today?</td><td data-label="What the studies say">B observed 7 or more. D counted 11 + re-tick from code.</td><td data-label="Sided with">Both, labelled</td><td data-label="Why">Different counting (D counts closing sheets and finding the row). The walk slides quote B; the flows table quotes D on both sides, so today and proposed are counted the same way.</td></tr>
+            <tr><td data-label="Question">How many failures are knowable?</td><td data-label="What the studies say">A&rsquo;s prose: 10 yes, 12 in part, 5 no. A&rsquo;s rows: 10, 11, 6.</td><td data-label="Sided with"><strong>The rows</strong></td><td data-label="Why">They are the source the prose summarises.</td></tr>
+            <tr><td data-label="Question">Show one hold or all of them?</td><td data-label="What the studies say">SQ-1019 shows one gap; no studio appears only after the client is linked. C stages two at once.</td><td data-label="Sided with"><strong>C</strong></td><td data-label="Why">Fixing one gap to discover the next is the same surprise, smaller. The list in phase 2 shows all of them.</td></tr>
+            <tr><td data-label="Question">Which direction?</td><td data-label="What the studies say">The brief starts from the spotlight, Kody&rsquo;s idea. C recommends the pre-flight list with held-and-land&rsquo;s landing.</td><td data-label="Sided with"><strong>C</strong></td><td data-label="Why">Sheets 09, 10 and 14. The spotlight stays on the table for tours.</td></tr>
+            <tr><td data-label="Question">What&rsquo;s on the list at all?</td><td data-label="What the studies say">A: 27 rows. D: the brief&rsquo;s 8 blockers. B: 9 states, with 7a, 7b, 7c, work loss and the miscount, which neither A nor D list.</td><td data-label="Sided with">The union</td><td data-label="Why">The build list covers B&rsquo;s finds too. 7c (reflow) is a Document issue, not a billing one, and is listed separately.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="t-meta ink-faint">Left open on purpose: whether unpriced pieces hold the draft or only warn (Q3); the studio act&rsquo;s name, &ldquo;Name the studio&rdquo; in SQ-1019 and &ldquo;Name studio&rdquo; in the hours ledger (Q9).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 RECOMMENDATION ============ -->
+<section class="slide" id="sheet-14" data-label="Recommendation">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 14 / 17</span><div class="rule"></div><span class="t-head chapter">Recommendation</span></div>
+    <div class="main">
+      <p class="t-head ink-faint">Recommended direction</p>
+      <h2 class="t-d1">Before this can go, with held-and-land&rsquo;s landing</h2>
+      <p class="t-d3 ink-muted measure">A short list above <em>Draft the invoice</em> names every hold before Leah presses. Each row carries its fix. Pressing the held act lands on the first open row.</p>
+      <div class="cols-2">
+        <div class="stack">
+          <p class="t-head ink-faint">Why this one</p>
+          <ul class="look">
+            <li><strong>It never sets her up to fail.</strong> The reason is there before the press. That is the promise: the studio shouldn&rsquo;t notice Patina.</li>
+            <li><strong>One hold or five, same shape.</strong> No serial discovery.</li>
+            <li><strong>House primitives only.</strong> The held act, the §A6 sentence, the status line, the agreement room&rsquo;s readiness list.</li>
+            <li><strong>One readiness function</strong> feeds the list, the held act, the sentence and the focus target. Today those are separate nested conditions in the composer.</li>
+            <li><strong>It builds on SQ-1019</strong>, which already is held-and-land for one gap.</li>
+          </ul>
+        </div>
+        <div class="stack">
+          <p class="t-head ink-faint">Where this deck goes further than Study C</p>
+          <ul class="look">
+            <li><strong>Make the shipped fix hold up first.</strong> Repair sheets must open above the composer, and only people who can act may see an act. Without that, any direction loses work or offers a dead act.</li>
+            <li><strong>Price in the drawer for labor lines only.</strong> Other lines land on the Price lens, or say plainly that they can&rsquo;t be priced yet.</li>
+            <li><strong>Held-and-land alone</strong> wherever a list is too heavy: a sheet with one possible hold, such as the account band&rsquo;s milestone draft or Send in the folio.</li>
+            <li><strong>Spotlight</strong> kept for teaching moments, after the L5 ruling, not as the default response to a held act.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 PHASED BUILD ============ -->
+<section class="slide wide" id="sheet-15" data-label="Phased build list">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 15 / 17</span><span class="t-head chapter">Recommendation</span></div>
+    <div class="main">
+      <h2 class="t-d1">What to build, in order</h2>
+      <p class="t-meta ink-faint">Rough sizes: S about a day, M two to four days, L a week or more, from reading the code, not from estimates by the people who will build it.</p>
+      <div class="phases">
+        <div class="phase-col p0">
+          <p class="t-head">Phase 0 · in code, awaiting go</p>
+          <ol>
+            <li>SQ-1019: held Draft for no client and no studio, reason and fix beside it, picker note, house failure line, no ids.<span class="sz">done · composer (Document, Desk, ⌘K)</span></li>
+          </ol>
+          <p class="t-body-sm ink-muted">Ship it on Kody&rsquo;s go after the post-fix walk (SQ-1027) confirms it.</p>
+        </div>
+        <div class="phase-col p1">
+          <p class="t-head">Phase 1 · make the fix hold up</p>
+          <ol>
+            <li>Repair sheets open above the composer and folio; the composer stays mounted (M2).<span class="sz">S–M · composer, folio, household and account sheets</span></li>
+            <li><em>Link a client</em> only for the project&rsquo;s designer; others get the reason and a note to copy (M4).<span class="sz">S · composer</span></li>
+            <li>One table that turns billing refusals and send codes into designer sentences; unticks a refused line; retry only for network failures.<span class="sz">M · composer, folio, receivables, account band</span></li>
+            <li>Rate-pending copy counts hours, not entries; the link becomes an inline act for owners or a note for others.<span class="sz">S · composer</span></li>
+            <li>Project creation explains the two-studio refusal and lets the designer choose.<span class="sz">S–M · new-project sheet (cause to confirm)</span></li>
+            <li>Composer at 390 px: the ad-hoc row and line count stay inside the panel.<span class="sz">S · composer</span></li>
+          </ol>
+        </div>
+        <div class="phase-col p2">
+          <p class="t-head">Phase 2 · the direction</p>
+          <ol>
+            <li>One readiness function for the composer (M1): reason, repair, who, focus target. Drives the held act, the sentence and the status line.<span class="sz">M · project and studio composer</span></li>
+            <li>The &ldquo;Before this can go&rdquo; list, with drawers that reuse the client picker; the held act lands on the first open row.<span class="sz">M · composer</span></li>
+            <li>Unpriced pieces named; labor priced inline; a <code>price</code> landing for other lines, with <em>Back to the invoice</em>.<span class="sz">M · composer, Pieces price lens</span></li>
+            <li>Send held before issue, from a read of the address the email will actually use.<span class="sz">M · folio</span></li>
+            <li>The account band&rsquo;s milestone draft reads the same readiness.<span class="sz">S · account band</span></li>
+          </ol>
+        </div>
+        <div class="phase-col p3">
+          <p class="t-head">Phase 3 · after a ruling</p>
+          <ol>
+            <li>Parking: a fix that leaves the sheet keeps the composer&rsquo;s work (Q8).<span class="sz">M</span></li>
+            <li>A client-price field for placed lines (D19, Q4).<span class="sz">L</span></li>
+            <li>Re-price hours that were pending when the rate or studio is set (Q5).<span class="sz">M–L · may need a migration</span></li>
+            <li>One server transaction for draft, time and lines, which removes rollback and stranded drafts (Q12).<span class="sz">L · migration, outside US-35</span></li>
+            <li>Spotlight for tours (Q2).<span class="sz">L</span></li>
+            <li>Not billing: the Document&rsquo;s first-paint reflow (7c) and the non-billable time default (Q18).<span class="sz">M / S · separate tickets</span></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 COPY RULES ============ -->
+<section class="slide" id="sheet-16" data-label="Error-copy rules">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 16 / 17</span><div class="rule"></div><span class="t-head chapter">Recommendation</span></div>
+    <div class="main">
+      <h2 class="t-d1">Seven rules for billing error copy</h2>
+      <p class="t-body prose">Proposed by Study A, grounded in R83, SPEC §A5 and §A6, the act-name list and the brand voice. Adopt them with the phase 1 translation table.</p>
+      <ol class="friction">
+        <li><span class="pin pin--q">1</span><p><strong>Put the reason where the act failed.</strong> The quiet terracotta failure line at the act. No toast with it.</p></li>
+        <li><span class="pin pin--q">2</span><p><strong>Name the thing and the next step.</strong> Sentence case, one or two sentences. No ids, codes, database words or cents. One name per act.</p></li>
+        <li><span class="pin pin--q">3</span><p><strong>A known blocker is held, not failed.</strong> Held act, focus to the unmet input, reason in the status line. Server checks still need a failure path.</p></li>
+        <li><span class="pin pin--q">4</span><p><strong>Keep the consequence sentence.</strong> It says what the act will do, in every state. Error text doesn&rsquo;t replace it.</p></li>
+        <li><span class="pin pin--q">5</span><p><strong>Retry only when retry helps.</strong> Never for a send or money write whose outcome is uncertain. Changed state means &ldquo;review it&rdquo;, not &ldquo;try again&rdquo;.</p></li>
+        <li><span class="pin pin--q">6</span><p><strong>Route to the person who can act.</strong> Owners name studios and set rates; others are told to ask. Never show an act someone can&rsquo;t take. Mark a missing destination instead of inventing one.</p></li>
+        <li><span class="pin pin--q">7</span><p><strong>Plain voice, quiet look.</strong> Confident and unpretentious. No blame, no acronyms, no shadows, no faded disabled styling.</p></li>
+      </ol>
+      <p class="t-meta ink-faint">Full text: <a href="../inventory/error-copy-rules.md">inventory/error-copy-rules.md</a>. Every row&rsquo;s rewrite: <a href="../inventory/inventory.md">inventory/inventory.md</a>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 17 QUESTIONS ============ -->
+<section class="slide" id="sheet-17" data-label="Open questions">
+  <div class="inner">
+    <div class="gutter"><span class="t-head sheet-no">Sheet 17 / 17</span><div class="rule"></div><span class="t-head chapter">Questions</span></div>
+    <div class="main">
+      <h2 class="t-d1">Questions owed</h2>
+      <div class="cols-2">
+        <div class="stack">
+          <p class="t-head ink-faint">For Kody</p>
+          <ol class="qlist">
+            <li><span class="qn">Q1</span><span>Which direction: &ldquo;Before this can go&rdquo; (recommended), held-and-land alone, or the spotlight?</span></li>
+            <li><span class="qn">Q2</span><span>If the spotlight is wanted anywhere, may it use the second veil the depth ladder keeps for L5, or must it stay inside the sheet?</span></li>
+            <li><span class="qn">Q3</span><span>Should unpriced pieces hold the draft, or go out without them with a warning?</span></li>
+            <li><span class="qn">Q4</span><span>D19: should a placed line&rsquo;s client price be typeable (before release, or always), or is <em>Record a change</em> the only door on an active job?</span></li>
+            <li><span class="qn">Q5</span><span>When a rate is set or a studio named, do hours already pending get re-priced, or billed as a custom line?</span></li>
+            <li><span class="qn">Q6</span><span>Who may link a client: only the project&rsquo;s designer (today&rsquo;s server rule), or also studio owners, admins, or anyone on the project?</span></li>
+            <li><span class="qn">Q7</span><span>Prevention: the composer alone, or also a required client at creation (A), or the band&rsquo;s setup row when money first appears (B)?</span></li>
+            <li><span class="qn">Q8</span><span>For a fix that leaves the sheet: park the composer, remember its selection per project, or open a price sheet over it?</span></li>
+            <li><span class="qn">Q9</span><span>Act names: &ldquo;Name the studio&rdquo; or &ldquo;Name studio&rdquo;; &ldquo;Set a client price&rdquo;; <em>Link a client</em> inside the composer. Each needs an act-names row.</span></li>
+            <li><span class="qn">Q10</span><span>Naming the studio can&rsquo;t be undone. Confirm before stamping, or is the consequence sentence enough?</span></li>
+            <li><span class="qn">Q11</span><span>A send with no email: fix it in the household sheet (proposed) or in People, where bounced addresses are fixed today?</span></li>
+            <li><span class="qn">Q12</span><span>Schedule the one-transaction draft (a migration, outside US-35) to remove rollback and stranded drafts?</span></li>
+            <li><span class="qn">Q13</span><span>Should a studio owner also see a &ldquo;no studio&rdquo; gap on their own Desk, so a copied note isn&rsquo;t the only way they hear?</span></li>
+          </ol>
+        </div>
+        <div class="stack">
+          <p class="t-head ink-faint">For Leah</p>
+          <ol class="qlist">
+            <li><span class="qn">Q14</span><span>When you open a project on a handshake, how often is the household not yet in Patina?</span></li>
+            <li><span class="qn">Q15</span><span>Does anyone bill a project they don&rsquo;t run? When something only you can fix is missing, how should they ask you: a note they paste, or something inside Patina?</span></li>
+            <li><span class="qn">Q16</span><span>If two pieces have no client price yet, would you rather the invoice stop you, or go out without them?</span></li>
+            <li><span class="qn">Q17</span><span>Do you ever hand an invoice over yourself instead of emailing it, so Patina should issue without sending?</span></li>
+            <li><span class="qn">Q18</span><span>When you record time on a job with no agreement yet, should it count as billable by default?</span></li>
+          </ol>
+          <hr class="rule-hair">
+          <p class="t-head ink-faint">Not decided here</p>
+          <p class="t-body-sm ink-muted">The open VISION rulings V1–V5 are untouched. Nothing here changes product code; the spotlight pattern stays out of product code until Kody picks a direction.</p>
+          <p class="t-meta ink-faint">Sources in this folder: <a href="../inventory/inventory.md">inventory/</a> (A), <a href="../walk/walk.md">walk/</a> (B), <a href="../prototypes/index.html">prototypes/</a> (C), <a href="../flows/flows.md">flows/</a> (D); SQ-1019 at <code>64d2a180b</code> and <code>9af30e16e</code> on main <code>91c1d5100</code>. The post-fix walk (SQ-1027) was not an input.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+
+<nav class="pager" aria-label="Sheets">
+  <button type="button" id="pg-prev" aria-label="Previous sheet">&uarr;</button>
+  <span class="where" id="pg-where" aria-live="polite">01 / 17 &middot; Cover</span>
+  <button type="button" id="pg-next" aria-label="Next sheet">&darr;</button>
+</nav>
+<script>
+(function () {
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(document.querySelectorAll('section.slide'));
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- prototype stage: a 1280 frame scaled to fit, or a native 390 frame on a phone ---------- */
+  var stage = document.getElementById('proto-stage');
+  var scaler = document.getElementById('proto-scaler');
+  var frame = document.getElementById('proto-frame');
+  var titles = { 'spotlight': 'Spotlight prototype', 'held-and-land': 'Held and land prototype', 'checklist': 'Before this can go prototype' };
+  function fit() {
+    if (!stage) return;
+    var avail = stage.clientWidth || 1280;
+    var w = avail < 700 ? 390 : 1280;
+    var h = avail < 700 ? 760 : 860;
+    var k = Math.min(1, avail / w);
+    frame.style.width = w + 'px';
+    frame.style.height = h + 'px';
+    scaler.style.transform = 'scale(' + k + ')';
+    stage.style.height = Math.round(h * k) + 'px';
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('button[data-proto]'), function (btn) {
+    btn.addEventListener('click', function () {
+      var name = btn.getAttribute('data-proto');
+      frame.src = '../prototypes/' + name + '.html';
+      frame.title = titles[name];
+      Array.prototype.forEach.call(document.querySelectorAll('button[data-proto]'), function (b) { b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
+      Array.prototype.forEach.call(document.querySelectorAll('.dir-note'), function (n) { n.hidden = n.getAttribute('data-note') !== name; });
+    });
+  });
+  var t = null;
+  window.addEventListener('resize', function () { if (t) { clearTimeout(t); } t = setTimeout(fit, 120); });
+  window.addEventListener('load', fit);
+  fit();
+
+  /* ---------- navigation: keys, pager, hash ---------- */
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function current() {
+    var top = deck.scrollTop + 2, idx = 0;
+    for (var i = 0; i < slides.length; i++) { if (slides[i].offsetTop <= top) { idx = i; } }
+    return idx;
+  }
+  function go(i) {
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    deck.scrollTo({ top: slides[i].offsetTop, behavior: reduce ? 'auto' : 'smooth' });
+  }
+  function step(dir) {
+    var i = current(), s = slides[i], view = deck.clientHeight;
+    if (dir > 0) {
+      if (s.offsetTop + s.offsetHeight - (deck.scrollTop + view) > 8) { deck.scrollBy({ top: Math.round(view * 0.85), behavior: reduce ? 'auto' : 'smooth' }); return; }
+      go(i + 1);
+    } else {
+      if (deck.scrollTop - s.offsetTop > 8) { deck.scrollTo({ top: Math.max(s.offsetTop, deck.scrollTop - Math.round(view * 0.85)), behavior: reduce ? 'auto' : 'smooth' }); return; }
+      go(i - 1);
+    }
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    var tag = (e.target && e.target.tagName) || '';
+    if (/^(INPUT|TEXTAREA|SELECT|IFRAME)$/.test(tag)) return;
+    var onButton = tag === 'BUTTON' || tag === 'A';
+    switch (e.key) {
+      case 'ArrowDown': case 'PageDown': step(1); e.preventDefault(); break;
+      case 'ArrowUp': case 'PageUp': step(-1); e.preventDefault(); break;
+      case ' ': if (onButton) return; step(e.shiftKey ? -1 : 1); e.preventDefault(); break;
+      case 'ArrowRight': case 'j': go(current() + 1); e.preventDefault(); break;
+      case 'ArrowLeft': case 'k': go(current() - 1); e.preventDefault(); break;
+      case 'Home': go(0); e.preventDefault(); break;
+      case 'End': go(slides.length - 1); e.preventDefault(); break;
+    }
+  });
+  document.getElementById('pg-prev').addEventListener('click', function () { go(current() - 1); });
+  document.getElementById('pg-next').addEventListener('click', function () { go(current() + 1); });
+  var where = document.getElementById('pg-where'), last = -1, raf = 0;
+  function mark() {
+    raf = 0;
+    var i = current();
+    if (i === last) return;
+    last = i;
+    where.textContent = pad(i + 1) + ' / ' + slides.length + ' · ' + slides[i].getAttribute('data-label');
+    if (history.replaceState) { try { history.replaceState(null, '', '#sheet-' + (i + 1)); } catch (e) {} }
+  }
+  deck.addEventListener('scroll', function () { if (!raf) { raf = requestAnimationFrame(mark); } }, { passive: true });
+  function place() {
+    var m = /^#sheet-(\d+)$/.exec(location.hash || '');
+    if (!m) return;
+    var el = document.getElementById('sheet-' + m[1]);
+    if (el) { deck.scrollTop = el.offsetTop; }
+  }
+  try { deck.focus({ preventScroll: true }); } catch (e) { deck.focus(); }
+  place();
+  setTimeout(function () { place(); mark(); }, 400);
+  window.addEventListener('hashchange', place);
+  mark();
+})();
+</script>
+</body>
+</html>
