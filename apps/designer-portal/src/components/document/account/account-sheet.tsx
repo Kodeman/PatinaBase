@@ -84,20 +84,12 @@ export function openAccount() {
   window.dispatchEvent(new CustomEvent('document:open-account'));
 }
 
-/** R21 dissolve — open the Account sheet ONTO a page. Same event, optional
- *  `{ page }` detail; the listener below falls back to 'profile' when the
- *  detail is absent or carries an unknown page, so every existing dispatcher
- *  (nameplate, mobile drawer, ⌘K) keeps its old behaviour. This is what
- *  /desk?account=<page> rides on. */
-export function openAccountPage(page: AccountPage) {
-  window.dispatchEvent(
-    new CustomEvent('document:open-account', { detail: { page } }),
-  );
-}
+export { openAccountPage } from './open-account-page';
 
 export function AccountSheet() {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState<AccountPage>('profile');
+  const [rateFor, setRateFor] = useState<string | null>(null);
 
   // Flag hook stays above every early return / conditional branch below
   // (hook-order stability) even though this component has no early return
@@ -118,12 +110,14 @@ export function AccountSheet() {
 
   useEffect(() => {
     const onOpen = (e: Event) => {
-      const detail = (e as CustomEvent<{ page?: AccountPage } | undefined>)
-        .detail;
+      const detail = (
+        e as CustomEvent<{ page?: AccountPage; rateFor?: string } | undefined>
+      ).detail;
       const wanted = detail?.page;
       setPage(
         wanted && ACCOUNT_PAGES.includes(wanted) ? wanted : 'profile',
       );
+      setRateFor(detail?.rateFor ?? null);
       setOpen(true);
     };
     window.addEventListener('document:open-account', onOpen);
@@ -272,7 +266,9 @@ export function AccountSheet() {
         {page === 'security' && <AccountSecurityPage />}
         {page === 'devices' && <AccountDevicesPage />}
         {page === 'extension' && <AccountExtensionPage />}
-        {page === 'studio' && studioEnabled && <AccountStudioPage />}
+        {page === 'studio' && studioEnabled && (
+          <AccountStudioPage focusRateFor={rateFor} />
+        )}
 
         {/* Sign out */}
         <div className="mt-7 border-t border-[var(--color-pearl)] pt-4">

@@ -46,7 +46,6 @@
  * composer's own: ad-hoc lines, tax, terms, memo, totals, one Draft act.
  */
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Fragment,
@@ -92,6 +91,7 @@ import { MESSAGE_WITHHELD } from "@/lib/document/act-names";
 import { topActiveModalDialog } from "../overlays/active-dialog";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { ActFailLine } from "@/components/feedback/act-fail-line";
+import { openAccountPage } from "../account/open-account-page";
 import { AppError } from "@/lib/error-handler";
 import {
   EMPTY_ADHOC,
@@ -309,6 +309,7 @@ export function InvoiceComposer({
   const nameStudioRef = useRef<HTMLButtonElement>(null);
   const confirmNameRef = useRef<HTMLButtonElement>(null);
   const askNoteRef = useRef<HTMLSpanElement>(null);
+  const askRateNoteRef = useRef<HTMLSpanElement>(null);
   const supportAddressRef = useRef<HTMLSpanElement>(null);
   const draftActRef = useRef<HTMLButtonElement>(null);
   // The project whose Link a client opened the household sheet, which hands
@@ -739,6 +740,42 @@ export function InvoiceComposer({
     selectedProject?.designer?.display_name ||
     selectedProject?.designer?.full_name ||
     "the lead designer";
+  // K8 — the rate-pending group's fix. Rates are set by an owner/admin of the
+  // project's pricing studio, which must be the studio she answers for: the
+  // Account page's rate fields are that studio's.
+  const canSetRates =
+    !!viewerStudio &&
+    !!selectedProject?.studio_id &&
+    viewerStudio.id === selectedProject.studio_id;
+  // One fix per person; the roster leaves the project's own designer unnamed.
+  const ratePendingMembers = useMemo(() => {
+    const names = new Map<string, string | null>();
+    for (const entry of ratePendingEntries) {
+      if (names.has(entry.user_id)) continue;
+      names.set(
+        entry.user_id,
+        entry.member_name ??
+          (entry.user_id === selectedProject?.designer_id ? leadName : null),
+      );
+    }
+    return [...names].map(([userId, name]) => ({ userId, name }));
+  }, [ratePendingEntries, selectedProject?.designer_id, leadName]);
+  const { data: pricingStudioMembers } = useOrganizationMembers(
+    ratePendingEntries.length > 0 && !canSetRates && selectedProject?.studio_id
+      ? selectedProject.studio_id
+      : "",
+  );
+  const pricingStudioOwner = (pricingStudioMembers ?? []).find(
+    (member: AnyRecord) => member.role === "owner" && member.status === "active",
+  );
+  const rateOwnerName: string =
+    pricingStudioOwner?.profiles?.display_name ||
+    pricingStudioOwner?.profiles?.full_name ||
+    "your studio owner";
+  const rateNote = askRateNote(
+    selectedProject?.name ?? "this project",
+    ratePendingMembers.flatMap((member) => (member.name ? [member.name] : [])),
+  );
   // F8 — stamp_project_pricing_studio (00606) names a studio only for its
   // owner or admin, and only one that EMPLOYS the designer (an active seat that
   // is neither guest nor owner). The rate-card condition it also checks is not
@@ -1290,14 +1327,56 @@ export function InvoiceComposer({
                     ))}
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {formatHoursLabel(ratePendingMinutes)} waiting for a rate
-                      · they cannot be invoiced until the studio prices them ·{" "}
-                      <Link
-                        href="/desk?account=studio"
-                        className="underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
-                      >
-                        set the studio rate →
-                      </Link>
+                      · they cannot be invoiced until the studio prices them
                     </p>
+                    {/* K8 — with no pricing studio there is no rate to set;
+                        the studio hold below names that fix. */}
+                    {selectedProject?.studio_id &&
+                      (canSetRates ? (
+                        <div className="flex flex-wrap gap-x-3">
+                          {ratePendingMembers.map((member) => (
+                            // The Account sheet opens over the composer, onto
+                            // this member's rate field; the address is the
+                            // same sheet's doorway.
+                            <DocumentAction
+                              key={member.userId}
+                              href="/desk?account=studio"
+                              actionKey="set-member-rate"
+                              surfaceKey="accounts"
+                              regionKey="invoice-composer"
+                              variant="tertiary"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.focus();
+                                openAccountPage("studio", {
+                                  rateFor: member.userId,
+                                });
+                              }}
+                            >
+                              {member.name
+                                ? `Set ${member.name}’s rate`
+                                : "Set the studio rate"}
+                            </DocumentAction>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-sm text-[var(--color-charcoal)]">
+                          <p>Ask {rateOwnerName} to set a rate.</p>
+                          {/* M4 — the note goes nowhere on its own. */}
+                          <p className="mt-1 text-[var(--color-aged-oak)]">
+                            “
+                            <span ref={askRateNoteRef}>{rateNote}</span>
+                            ”
+                          </p>
+                          <CopyAct
+                            text={rateNote}
+                            selectRef={askRateNoteRef}
+                            actionKey="copy-set-rate-note"
+                          >
+                            Copy a note
+                          </CopyAct>
+                        </div>
+                      ))}
                   </>
                 )}
               </div>
@@ -2033,6 +2112,13 @@ const LEAD_LEFT_STUDIO_HOLD = `The lead on this job has left the studio. Write t
 /** K5 — the one line a designer who can't link a client copies to its lead. */
 function askLinkNote(projectName: string): string {
   return `Could you link a client to ${projectName}? I'm drafting its invoice.`;
+}
+
+/** K8 — the one line a designer who can't set rates copies to the owner. */
+function askRateNote(projectName: string, memberNames: string[]): string {
+  return memberNames.length > 0
+    ? `Could you set a rate for ${new Intl.ListFormat("en", { type: "conjunction" }).format(memberNames)}? I'm drafting ${projectName}'s invoice.`
+    : `Could you set a rate for the hours on ${projectName}? I'm drafting its invoice.`;
 }
 
 /**

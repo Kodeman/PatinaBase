@@ -26,11 +26,14 @@
  * taking the keystroke: the history still reads, the field is gone.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  useRerateRatePendingHours,
   useSetStudioMemberRate,
   type StudioMemberRate,
 } from '@patina/supabase';
+import { DocumentAction } from '../document-action';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 const FIELD =
   'w-[9rem] border-0 border-b border-[var(--color-pearl)] bg-transparent py-1.5 t-body-sm text-[var(--color-charcoal)] outline-none transition-colors placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] disabled:opacity-50';
@@ -38,6 +41,8 @@ const META =
   't-head text-[var(--color-aged-oak)]';
 
 const dollars = (cents: number) => (cents / 100).toFixed(2);
+/** K8 counts hours, never entries. */
+const hoursOf = (minutes: number) => (minutes / 60).toFixed(1);
 
 /** Returns null for an empty or unparseable field, and for anything ≤ 0 — the
  *  00598 CHECK refuses a non-positive rate, so a cleared field is "no answer",
@@ -63,6 +68,8 @@ export function StudioRateRows({
   memberLabel,
   rates,
   selfAuthoredInert = false,
+  pendingMinutes = 0,
+  focusOnMount = false,
 }: {
   studioId: string;
   userId: string;
@@ -72,8 +79,29 @@ export function StudioRateRows({
   /** HT-3-e(2) — this is the acting user's own row and she is not the studio's
    *  owner, so anything she writes here would not price her hours. */
   selfAuthoredInert?: boolean;
+  /** K8 — this member's rate-pending, never-invoiced minutes in this studio. */
+  pendingMinutes?: number;
+  /** The composer's "Set <name>'s rate" landed here. */
+  focusOnMount?: boolean;
 }) {
   const setRate = useSetStudioMemberRate();
+  const rerate = useRerateRatePendingHours();
+  const fieldRef = useRef<HTMLInputElement>(null);
+  // K8 — the row the last save on this field wrote. The offer prices at that
+  // row and no other, so it never appears for a rate already in force.
+  const [saved, setSaved] = useState<StudioMemberRate | null>(null);
+  const [priced, setPriced] = useState<{ rateId: string; minutes: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!focusOnMount) return;
+    // Two frames: the sheet lands its own focus the frame after it opens, and
+    // a cached roster mounts this row in that same commit.
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => fieldRef.current?.focus());
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusOnMount]);
   const history = rates
     .filter((row) => row.user_id === userId)
     .sort((a, b) => b.effective_from.localeCompare(a.effective_from));
@@ -102,6 +130,11 @@ export function StudioRateRows({
     setRate.mutate(
       { studioId, userId, hourlyRateCents: cents },
       {
+        onSuccess: (row) => {
+          rerate.reset();
+          setPriced(null);
+          setSaved(row);
+        },
         onError: (err) => {
           setError(
             err instanceof Error ? err.message : 'Could not save that rate.',
@@ -147,6 +180,7 @@ export function StudioRateRows({
         <span className="sr-only">{`Hourly rate for ${memberLabel}`}</span>
         <span className={META}>$</span>
         <input
+          ref={fieldRef}
           type="text"
           inputMode="decimal"
           aria-label={`Hourly rate for ${memberLabel}`}
@@ -168,6 +202,38 @@ export function StudioRateRows({
           {error}
         </p>
       )}
+
+      {/* K8 — pricing the hours logged before this rate is her act, never
+          the save's. */}
+      {saved && pendingMinutes > 0 && priced?.rateId !== saved.id && (
+        <div className="flex max-w-[38ch] flex-wrap items-baseline justify-end gap-x-3 text-right">
+          <p className="t-body-sm text-[var(--color-charcoal)]">
+            {`${hoursOf(pendingMinutes)} hours were logged before this rate. Price them at $${dollars(saved.hourly_rate_cents)}/hr?`}
+          </p>
+          <DocumentAction
+            actionKey="price-rate-pending-hours"
+            surfaceKey="account"
+            regionKey="studio-rates"
+            variant="tertiary"
+            loading={rerate.isPending}
+            loadingLabel="Pricing…"
+            onClick={() => {
+              const rateId = saved.id;
+              const minutes = pendingMinutes;
+              rerate.mutate(
+                { rateId },
+                { onSuccess: () => setPriced({ rateId, minutes }) },
+              );
+            }}
+          >
+            Price them
+          </DocumentAction>
+        </div>
+      )}
+      <ActFailLine error={rerate.error} />
+      <p role="status" className={META}>
+        {priced ? `Priced ${hoursOf(priced.minutes)} hours.` : ''}
+      </p>
 
       {history.length > 0 && (
         <ul>

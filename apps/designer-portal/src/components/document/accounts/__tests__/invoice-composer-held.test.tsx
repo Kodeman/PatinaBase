@@ -98,7 +98,7 @@ jest.mock("@patina/supabase", () => ({
   useUnbilledTime: () => ({ data: { entries: mockUnbilledEntries, ratePendingEntries: mockRatePendingEntries }, isLoading: false }),
   // HT-21 (W5) — names the composer's time rows; unused by this suite's
   // studio-mode/empty-selection scenarios but called unconditionally.
-  useProjectRoster: () => ({ data: [] }),
+  useProjectRoster: () => ({ data: mockRoster }),
   // C-25 — the purchases the "Bill N unbilled purchases" door asked for.
   useStudioPurchases: (filter: unknown) => ({
     data: filter ? mockPurchases : undefined,
@@ -115,12 +115,14 @@ const mockDeleteDraft = jest.fn();
 const mockClaimTime = jest.fn();
 let mockUnbilledEntries: Array<Record<string, unknown>> = [];
 let mockRatePendingEntries: Array<Record<string, unknown>> = [];
+let mockRoster: Array<Record<string, unknown>> = [];
 
 beforeEach(() => {
   mockCreateDraft.mockReset().mockResolvedValue({ id: "inv-1" });
   mockClaimTime.mockReset().mockResolvedValue([]);
   mockUnbilledEntries = [];
   mockRatePendingEntries = [];
+  mockRoster = [];
   mockAddBilling.mockReset().mockResolvedValue([]);
   mockDeleteDraft.mockReset().mockResolvedValue(undefined);
   mockPurchases = [];
@@ -1550,5 +1552,86 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     render(composer());
     expect(screen.getByText(new RegExp(`${label} waiting for a rate`))).toBeInTheDocument();
     expect(screen.queryByText(/0\.0 hours waiting for a rate/)).not.toBeInTheDocument();
+  });
+});
+
+describe("InvoiceComposer · rate-pending hours name their fix (K8)", () => {
+  const studio = (id: string, role: string) => [
+    {
+      id,
+      name: "Middle West Studio",
+      type: "design_studio",
+      status: "active",
+      membership: { role, status: "active" },
+    },
+  ];
+  const composer = () => (
+    <InvoiceComposer context={{ projectId: "project-1" }} onDrafted={jest.fn()} />
+  );
+
+  beforeEach(() => {
+    mockFlag = { value: false, isLoading: false };
+    mockOrganizationsLoading = false;
+    mockFfeItems = [];
+    mockCoverage = undefined;
+    mockStages = undefined;
+    mockRoster = [{ profile_id: "maria", display_name: "Maria Obi" }];
+    mockRatePendingEntries = [
+      { id: "time-1", user_id: "maria", started_at: "2026-10-01T09:00:00Z", duration_minutes: 60 },
+      { id: "time-2", user_id: "maria", started_at: "2026-10-02T09:00:00Z", duration_minutes: 30 },
+    ];
+    mockStudioMembers = [
+      { user_id: "ruth", role: "owner", status: "active", profiles: { display_name: "Ruth Hale" } },
+      { user_id: "maria", role: "member", status: "active", profiles: { display_name: "Maria Obi" } },
+    ];
+  });
+
+  it("offers an owner/admin of the pricing studio Set <name>'s rate, which opens Studio onto that member's field", () => {
+    mockOrganizations = studio("studio-1", "admin");
+    const opened = jest.fn();
+    const onOpen = (e: Event) => opened((e as CustomEvent).detail);
+    window.addEventListener("document:open-account", onOpen);
+    try {
+      render(composer());
+      const setRate = screen.getByRole("link", { name: "Set Maria Obi’s rate" });
+      expect(screen.queryByText(/to set a rate/)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Copy a note" })).not.toBeInTheDocument();
+
+      fireEvent.click(setRate);
+      expect(opened).toHaveBeenCalledWith({ page: "studio", rateFor: "maria" });
+      expect(setRate).toHaveFocus();
+    } finally {
+      window.removeEventListener("document:open-account", onOpen);
+    }
+  });
+
+  it("tells anyone else to ask the studio's owner, with a note to copy and no Set act", () => {
+    mockOrganizations = studio("studio-1", "member");
+    render(composer());
+
+    expect(screen.getByText("Ask Ruth Hale to set a rate.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Could you set a rate for Maria Obi? I'm drafting Hollis House's invoice."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy a note" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Set .* rate/ })).not.toBeInTheDocument();
+  });
+
+  it("does not offer Set to an owner answering for a studio that does not price this project", () => {
+    mockOrganizations = studio("studio-2", "owner");
+    render(composer());
+
+    expect(screen.queryByRole("link", { name: /Set .* rate/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Ask Ruth Hale to set a rate.")).toBeInTheDocument();
+  });
+
+  it("offers no rate fix where no studio prices the project; the studio hold names that fix", () => {
+    mockOrganizations = studio("studio-1", "owner");
+    mockProjectStudioId = null;
+    render(composer());
+
+    expect(screen.getByText(/1h 30m waiting for a rate/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Set .* rate/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/to set a rate/)).not.toBeInTheDocument();
   });
 });

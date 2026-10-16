@@ -16,7 +16,11 @@ import { getSessionUserId } from '../auth/session-user';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import { invalidateEveryProjectTime } from './use-time-tracking';
+import {
+  invalidateEveryProjectTime,
+  isRatePendingTimeEntry,
+  type TimeRateSource,
+} from './use-time-tracking';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
@@ -49,6 +53,8 @@ export interface SetStudioMemberRateInput {
 export const studioMemberRateKeys = {
   list: (studioId: string | null | undefined) => ['studio-member-rates', studioId] as const,
   entity: (userId: string | null | undefined) => ['studio-member-rate', userId] as const,
+  pendingMinutes: (studioId: string | null | undefined) =>
+    ['studio-rate-pending-minutes', studioId] as const,
 };
 
 /** TODAY where the studio is standing, not in UTC: an evening save in a US
@@ -80,6 +86,40 @@ export function useStudioMemberRates(studioId: string | null | undefined) {
         .order('effective_from', { ascending: false });
       if (error) throw error;
       return (data ?? []) as StudioMemberRate[];
+    },
+    enabled: !!studioId,
+  });
+}
+
+/**
+ * K8 — each member's rate-pending minutes on this studio's documents: the
+ * hours `rerate_pending_time_entries` (00797) would price once the member has
+ * a rate. Read from project_unbilled_time (un-invoiced, authorized, completed)
+ * and kept to projects this studio prices. RLS is the scope, as for
+ * useStudioUnbilledTime: an owner/admin reads the studio's hours (00606
+ * time_entries_owner_admin_read), anyone else only their own.
+ */
+export function useStudioRatePendingMinutes(studioId: string | null | undefined) {
+  return useQuery({
+    queryKey: studioMemberRateKeys.pendingMinutes(studioId),
+    queryFn: async (): Promise<Map<string, number>> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('project_unbilled_time')
+        .select('user_id, duration_minutes, rate_source, projects!inner(studio_id)')
+        .eq('projects.studio_id', studioId)
+        .eq('rate_source', 'none');
+      if (error) throw error;
+      const minutes = new Map<string, number>();
+      for (const row of (data ?? []) as Array<{
+        user_id: string;
+        duration_minutes: number | null;
+        rate_source: TimeRateSource | null;
+      }>) {
+        if (!isRatePendingTimeEntry(row)) continue;
+        minutes.set(row.user_id, (minutes.get(row.user_id) ?? 0) + (row.duration_minutes ?? 0));
+      }
+      return minutes;
     },
     enabled: !!studioId,
   });
@@ -180,6 +220,8 @@ export function useRerateRatePendingHours() {
       queryClient.invalidateQueries({ queryKey: ['document-hours-unbilled'] });
       // A priced hour can cross an authority's ceiling (00575).
       queryClient.invalidateQueries({ queryKey: ['document-hours-pending-authorization'] });
+      // The offer under the rate field (useStudioRatePendingMinutes).
+      queryClient.invalidateQueries({ queryKey: ['studio-rate-pending-minutes'] });
     },
   });
 }
