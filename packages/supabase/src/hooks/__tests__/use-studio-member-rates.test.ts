@@ -60,6 +60,7 @@ import {
   useStudioMemberRates,
   useSetStudioMemberRate,
   useRerateRatePendingHours,
+  useStudioRatePendingMinutes,
 } from '../use-studio-member-rates';
 
 beforeEach(() => {
@@ -111,6 +112,53 @@ describe('useStudioMemberRates', () => {
 
   it('stays disabled with no studio', () => {
     const query = useStudioMemberRates(null) as unknown as { enabled: boolean };
+    expect(query.enabled).toBe(false);
+  });
+});
+
+describe('useStudioRatePendingMinutes', () => {
+  type PendingQuery = {
+    queryKey: unknown;
+    enabled: boolean;
+    queryFn: () => Promise<Map<string, number>>;
+  };
+
+  it("sums each member's rate-pending minutes on this studio's documents, by duration and never by entry", async () => {
+    const eqSource = vi.fn(() =>
+      Promise.resolve({
+        data: [
+          { user_id: 'member-1', duration_minutes: 30, rate_source: 'none', projects: { studio_id: 'studio-1' } },
+          { user_id: 'member-1', duration_minutes: 60, rate_source: 'none', projects: { studio_id: 'studio-1' } },
+          { user_id: 'member-2', duration_minutes: 45, rate_source: 'none', projects: { studio_id: 'studio-1' } },
+          // A priced hour is not pending, whatever the read returned.
+          { user_id: 'member-1', duration_minutes: 120, rate_source: 'studio_member', projects: { studio_id: 'studio-1' } },
+        ],
+        error: null,
+      }),
+    );
+    const eqStudio = vi.fn(() => ({ eq: eqSource }));
+    select.mockReturnValueOnce({ eq: eqStudio } as never);
+
+    const query = useStudioRatePendingMinutes('studio-1') as unknown as PendingQuery;
+    expect(query.queryKey).toEqual(['studio-rate-pending-minutes', 'studio-1']);
+    expect(query.enabled).toBe(true);
+
+    const minutes = await query.queryFn();
+    expect(from).toHaveBeenCalledWith('project_unbilled_time');
+    // Scoped to the documents this studio prices — the walk 00797 runs.
+    expect(select).toHaveBeenCalledWith(expect.stringContaining('projects!inner(studio_id)'));
+    expect(eqStudio).toHaveBeenCalledWith('projects.studio_id', 'studio-1');
+    expect(eqSource).toHaveBeenCalledWith('rate_source', 'none');
+    expect(minutes).toEqual(
+      new Map([
+        ['member-1', 90],
+        ['member-2', 45],
+      ]),
+    );
+  });
+
+  it('stays disabled with no studio', () => {
+    const query = useStudioRatePendingMinutes(null) as unknown as PendingQuery;
     expect(query.enabled).toBe(false);
   });
 });
@@ -299,6 +347,8 @@ describe('useRerateRatePendingHours', () => {
       ['document-hours-week'],
       ['document-hours-unbilled'],
       ['document-hours-pending-authorization'],
+      // K8 — the offer under the rate field, every studio's.
+      ['studio-rate-pending-minutes'],
     ]);
   });
 });

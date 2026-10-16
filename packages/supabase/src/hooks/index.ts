@@ -2539,6 +2539,7 @@ export {
   useStudioMemberRates,
   useSetStudioMemberRate,
   useRerateRatePendingHours,
+  useStudioRatePendingMinutes,
 } from "./use-studio-member-rates";
 export type {
   StudioMemberRate,

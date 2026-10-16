@@ -70,7 +70,18 @@ jest.mock('@patina/supabase', () => ({
   // covered in agreement-defaults-card.test.tsx.
   // HT-3's Studio rates section reads the dated rows and writes on blur.
   useStudioMemberRates: () => ({ data: [] }),
-  useSetStudioMemberRate: () => ({ mutate: jest.fn(), isPending: false }),
+  useSetStudioMemberRate: () => ({ mutate: mockSetRate, isPending: false }),
+  // K8 — the page asks for the studio's pending minutes only for a manager.
+  useStudioRatePendingMinutes: (studioId: string | null | undefined) => {
+    mockPendingRead(studioId);
+    return { data: studioId ? mockPendingMinutes : undefined };
+  },
+  useRerateRatePendingHours: () => ({
+    mutate: jest.fn(),
+    reset: jest.fn(),
+    isPending: false,
+    error: null,
+  }),
   useStudioAgreementDefaults: () => ({
     data: {
       studioId: 'studio-1',
@@ -129,6 +140,10 @@ jest.mock('../member-title-line', () => ({
 jest.mock('../../people/directory/rolodex-seed-sheet', () => ({
   RolodexSeedSheet: () => null,
 }));
+
+const mockSetRate = jest.fn();
+const mockPendingRead = jest.fn();
+let mockPendingMinutes = new Map<string, number>();
 
 const mockUseOrganizations = useOrganizations as jest.Mock;
 const mockUseOrganizationMembers = useOrganizationMembers as jest.Mock;
@@ -747,4 +762,59 @@ describe('AccountStudioPage — locations (C-13)', () => {
       expect(mockLocationsEditor).toHaveBeenLastCalledWith({ organizationId: 'studio-1' });
     },
   );
+});
+
+describe('AccountStudioPage — re-rate pending hours (K8)', () => {
+  const LINE = /hours were logged before this rate/;
+
+  beforeEach(() => {
+    mockSetRate.mockReset();
+    mockPendingRead.mockReset();
+    mockPendingMinutes = new Map([['member-user', 90]]);
+  });
+
+  it("offers an owner the member's pending hours, in hours, under the rate she just saved", () => {
+    mockSetRate.mockImplementation(
+      (input: { userId: string }, options: { onSuccess: (row: unknown) => void }) =>
+        options.onSuccess({
+          id: 'rate-new',
+          studio_id: 'studio-1',
+          user_id: input.userId,
+          hourly_rate_cents: 17_500,
+          effective_from: '2026-10-16',
+          effective_to: null,
+          created_by: 'owner-user',
+          created_at: '2026-10-16T00:00:00.000Z',
+          updated_at: '2026-10-16T00:00:00.000Z',
+        }),
+    );
+    render(<AccountStudioPage />);
+
+    expect(mockPendingRead).toHaveBeenLastCalledWith('studio-1');
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+    fireEvent.blur(screen.getByLabelText('Hourly rate for Team Member'), {
+      target: { value: '175' },
+    });
+
+    expect(
+      screen.getByText(
+        '1.5 hours were logged before this rate. Price them at $175.00/hr?',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('never reads pending hours for a plain member, and never offers her the line', () => {
+    mockUseOrganizations.mockReturnValue({
+      data: [organization('member')],
+      isLoading: false,
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: organizationMembers('member'),
+    });
+    render(<AccountStudioPage />);
+
+    expect(mockPendingRead).not.toHaveBeenCalledWith('studio-1');
+    expect(screen.queryByLabelText('Hourly rate for Team Member')).not.toBeInTheDocument();
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+  });
 });

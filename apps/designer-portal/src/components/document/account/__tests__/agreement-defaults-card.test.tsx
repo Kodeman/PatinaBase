@@ -57,6 +57,8 @@ jest.mock("@patina/supabase", () => ({
   // HT-3's Studio rates section reads the dated rows and writes on blur.
   useStudioMemberRates: () => ({ data: [] }),
   useSetStudioMemberRate: () => ({ mutate: jest.fn(), isPending: false }),
+  useStudioRatePendingMinutes: () => ({ data: undefined }),
+  useRerateRatePendingHours: () => ({ mutate: jest.fn(), reset: jest.fn(), isPending: false, error: null }),
   useStudioAgreementDefaults: () => ({ data: agreementDefaultsRow }),
   useUpdateStudioAgreementDefaults: () => ({
     mutate: mockUpdateAgreementDefaults,

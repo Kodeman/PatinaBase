@@ -16,6 +16,7 @@ const setRate = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   useSetStudioMemberRate: () => ({ mutate: setRate, isPending: false }),
+  useRerateRatePendingHours: () => ({ mutate: jest.fn(), reset: jest.fn(), isPending: false, error: null }),
 }));
 
 const rate = (over: Partial<StudioMemberRate> = {}): StudioMemberRate => ({

@@ -33,6 +33,7 @@ import {
   useStudioAgreementDefaults,
   useUpdateStudioAgreementDefaults,
   useStudioMemberRates,
+  useStudioRatePendingMinutes,
   type MemberRole,
   type OrganizationMemberWithProfile,
 } from '@patina/supabase';
@@ -199,7 +200,12 @@ const STATUS_TONE: Record<string, StatusTone> = {
   invited: 'warning',
 };
 
-export function AccountStudioPage() {
+export function AccountStudioPage({
+  focusRateFor = null,
+}: {
+  /** The member whose rate field the Account sheet was opened onto. */
+  focusRateFor?: string | null;
+} = {}) {
   const { user } = useAuth();
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
   // Call Sheet Wave 2 — row 4 ("Seed the rolodex") goes live only behind the
@@ -385,6 +391,11 @@ export function AccountStudioPage() {
 
   const myRole = studio?.membership.role ?? null;
   const canManage = myRole === 'owner' || myRole === 'admin';
+  // K8 — what each member's hours waiting on a rate add up to, for the offer
+  // beneath a saved rate. Read only for those who hold the rate fields.
+  const { data: ratePendingMinutes } = useStudioRatePendingMinutes(
+    canManage ? studio?.id : null,
+  );
   // Day-1 checklist inputs (U3) — own title + crew count read off the same
   // members list the roster below renders. contactsCount/seedSkipped (Call
   // Sheet Wave 2) only read real data behind the flag — flag-off leaves them
@@ -1850,6 +1861,8 @@ export function AccountStudioPage() {
                       selfAuthoredInert={
                         m.user_id === user?.id && myRole !== 'owner'
                       }
+                      pendingMinutes={ratePendingMinutes?.get(m.user_id) ?? 0}
+                      focusOnMount={m.user_id === focusRateFor}
                     />
                   </li>
                 );
