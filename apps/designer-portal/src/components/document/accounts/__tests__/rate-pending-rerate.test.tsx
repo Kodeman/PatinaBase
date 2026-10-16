@@ -101,7 +101,10 @@ describe('StudioRateRows · re-rate pending hours (K8)', () => {
     expect(mockRerate).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Price them' }));
-    expect(mockRerate).toHaveBeenCalledWith({ rateId: 'rate-new' }, expect.anything());
+    expect(mockRerate).toHaveBeenCalledWith(
+      { rateId: 'rate-new', expectedRateCents: 17_500 },
+      expect.anything(),
+    );
 
     const [, options] = mockRerate.mock.calls[0] as [unknown, { onSuccess: (n: number) => void }];
     act(() => options.onSuccess(2));
@@ -120,15 +123,36 @@ describe('StudioRateRows · re-rate pending hours (K8)', () => {
   });
 
   it("prints the server's refusal in its own words", () => {
+    // 00797's text, verbatim: its function's name and the row's id lead it.
     mockRerateError = {
       code: '23514',
-      message: 'This rate has been superseded and is not this member’s current rate',
+      message:
+        "rerate_pending_time_entries: rate 6f1c2a9e-0000-4000-8000-000000000001 has been superseded and is not this member's current rate",
     };
     render(rows({ pendingMinutes: 90 }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'This rate has been superseded and is not this member’s current rate',
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(
+      'This rate has been superseded and is not this member’s current rate.',
     );
+    expect(alert).not.toHaveTextContent('rerate_pending_time_entries');
+    expect(alert).not.toHaveTextContent('6f1c2a9e');
+  });
+
+  it('says a rate corrected since the save must be saved again, in the server’s words (40001)', () => {
+    mockRerateError = {
+      code: '40001',
+      message:
+        'rerate_pending_time_entries: the rate changed since you saved it; save it again to price these hours',
+    };
+    render(rows({ pendingMinutes: 90 }));
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(
+      'The rate changed since you saved it; save it again to price these hours.',
+    );
+    expect(alert).not.toHaveTextContent('rerate_pending_time_entries');
+    expect(alert).not.toHaveTextContent('40001');
   });
 
   it("lands focus on the field when the composer's Set rate sent her here", async () => {

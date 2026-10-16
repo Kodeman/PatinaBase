@@ -44,6 +44,25 @@ const dollars = (cents: number) => (cents / 100).toFixed(2);
 /** K8 counts hours, never entries. */
 const hoursOf = (minutes: number) => (minutes / 60).toFixed(1);
 
+/** K8 — 00797 refuses in its own words behind its function's name, and the
+ *  superseded refusal carries the row's id. Say the words without either;
+ *  any other failure (a lapsed session, the network) is ActFailLine's. */
+const RERATE_REFUSALS: Array<[RegExp, string]> = [
+  [/the rate changed since you saved it/, 'The rate changed since you saved it; save it again to price these hours.'],
+  [/has been superseded/, 'This rate has been superseded and is not this member’s current rate.'],
+  [/a rate members set for themselves/, 'A rate members set for themselves prices their hours only in a studio they own.'],
+  [/only an owner or admin of the studio/, 'Only an owner or admin of the studio may price its pending hours.'],
+];
+function rerateRefusal(error: unknown): unknown {
+  const message =
+    error && typeof error === 'object' && 'message' in error ? String(error.message) : '';
+  if (!message.startsWith('rerate_pending_time_entries:')) return error;
+  return new Error(
+    RERATE_REFUSALS.find(([pattern]) => pattern.test(message))?.[1] ??
+      'These hours could not be priced at this rate.',
+  );
+}
+
 /** Returns null for an empty or unparseable field, and for anything ≤ 0 — the
  *  00598 CHECK refuses a non-positive rate, so a cleared field is "no answer",
  *  never "this person's hour is worth nothing". */
@@ -221,7 +240,7 @@ export function StudioRateRows({
               const rateId = saved.id;
               const minutes = pendingMinutes;
               rerate.mutate(
-                { rateId },
+                { rateId, expectedRateCents: saved.hourly_rate_cents },
                 { onSuccess: () => setPriced({ rateId, minutes }) },
               );
             }}
@@ -230,7 +249,7 @@ export function StudioRateRows({
           </DocumentAction>
         </div>
       )}
-      <ActFailLine error={rerate.error} />
+      <ActFailLine error={rerate.error && rerateRefusal(rerate.error)} />
       <p role="status" className={META}>
         {priced ? `Priced ${hoursOf(priced.minutes)} hours.` : ''}
       </p>
