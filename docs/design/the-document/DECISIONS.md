@@ -11405,3 +11405,21 @@ Four findings from the T-60 QA wave that Kody has not yet ruled on. Recorded her
 **Ruling (Kody, multiple choice).** A live job that stands on a project always prints as a ledger row, even with no current alert. Only leads and drafts (no project) fold behind Show, and with none of those there is no Show. This changes uplift.md (e) "the Show fold" for projects only.
 
 *Entries add: R166 · last id = R166*
+
+---
+
+### R168 · K5 — Link a client: the lead, or an owner/admin of the project's studio — Kody 2026-10-16
+
+**Ruled by Kody (US-36 K5, 2026-10-16).** On a project, `set_document_client` admits the project's lead (`projects.designer_id`, unchanged) or an owner/admin of the project's studio (`projects.studio_id`, asked through `is_org_admin_or_owner`). Every other caller keeps today's refusal. A proposal stays lead-only. The client must still be on the **lead's** `designer_clients` book (00385). An owner who picks a client from her own book is refused with a message that names the lead's book, and the lead's row is the one advanced to `active`. `can_link_document_client(project)` is the same predicate as a read, so the composer gates on the server's answer. Everyone else sees "Ask <name>" plus **Copy a note**, and nothing is sent (M4). Migration 00796.
+
+### R169 · K9 — Studio picker at creation — Kody 2026-10-16
+
+**Ruled by Kody (US-36 K9, 2026-10-16).** When a designer holds two or more studios, the new-project sheet shows a studio picker. `open_project_direct` gains an overload with `p_studio_id`. It stamps the chosen studio when the caller holds an active non-guest seat there, and otherwise refuses with `open_project_direct: studio_not_member`. Without a chosen studio, a two-studio designer is still refused as today (00563). The 6-argument signature is unchanged. A named studio is final at creation (HT-3-c arm (a)), the same standing a direct insert already has. Migration 00796.
+
+### R170 · K11 — A solo owner's studio and rate: delivered at creation — Kody 2026-10-16, narrowed by the orchestrator, pending Kody
+
+**Ruled by Kody (US-36 K11, 2026-10-16).** A solo owner may name her own studio and set her own rate. This amends 00606's arm's-length rule (Q19). A solo owner is the studio's only active non-guest member, and she holds the owner role.
+
+**Narrowed by the orchestrator (2026-10-16), pending Kody.** K11(a) is delivered by stamping at creation. A solo owner's new project gets her one studio from 00563, and K9 lets a two-studio designer name one. Naming a studio on an already-NULL legacy project stays closed by HT-3-g(3), because it is the same data as form G (`time_rate_resolution_test.sql` aj5). Reopening it needs Kody to accept form G. K11(b) needs no change: an owner's self-authored rate already prices her own hours (00615/00618 owner exemption), and the 00598 insert policy admits it. A studio with two or more designers keeps the arm's-length rule exactly. Migration 00796 (no K11 code), measured by `supabase/tests/billing/us36_billing_authority_test.sql` (k11).
+
+*Entries add: R168 · R169 · R170 · last id = R170*

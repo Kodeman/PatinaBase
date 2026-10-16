@@ -39201,6 +39201,10 @@ export type Database = {
         Args: { p_owner: string }
         Returns: boolean
       }
+      can_link_document_client: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
       can_manage_board_deck_import: {
         Args: { p_board_id: string }
         Returns: boolean
@@ -43015,17 +43019,30 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      open_project_direct: {
-        Args: {
-          p_budget_max_cents?: number
-          p_budget_min_cents?: number
-          p_client_id?: string
-          p_id?: string
-          p_start_date?: string
-          p_title: string
-        }
-        Returns: string
-      }
+      open_project_direct:
+        | {
+            Args: {
+              p_budget_max_cents?: number
+              p_budget_min_cents?: number
+              p_client_id?: string
+              p_id?: string
+              p_start_date?: string
+              p_title: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_budget_max_cents: number
+              p_budget_min_cents: number
+              p_client_id: string
+              p_id: string
+              p_start_date: string
+              p_studio_id: string
+              p_title: string
+            }
+            Returns: string
+          }
       outbound_review_active: { Args: { p_studio: string }; Returns: boolean }
       override_budget_checkpoint: {
         Args: { p_checkpoint_id: string; p_reason: string }

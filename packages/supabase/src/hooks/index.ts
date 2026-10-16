@@ -2160,6 +2160,12 @@ export {
 } from "./use-document-shares";
 export type { DocumentShare, CreatedShare } from "./use-document-shares";
 
+// US-36 K5 — who may link a client to a project (00796)
+export {
+  documentClientAuthorityKeys,
+  useCanLinkDocumentClient,
+} from "./use-document-client-authority";
+
 export {
   useBoardTemplates,
   useSaveBoardAsTemplate,

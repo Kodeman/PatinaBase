@@ -22536,6 +22536,42 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00796_us36_billing_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_document_client(text, uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00796_us36_billing_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_document_client(text, uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00796_us36_billing_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_link_document_client(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00796_us36_billing_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_link_document_client(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00796_us36_billing_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.open_project_direct(text, uuid, integer, integer, date, uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00796_us36_billing_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.open_project_direct(text, uuid, integer, integer, date, uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
