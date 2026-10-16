@@ -32,10 +32,16 @@ export function bandNextAct(): HTMLElement | null {
   return window.matchMedia?.('(min-width: 1180px)').matches ? (band ?? dock) : (dock ?? band);
 }
 
+/**
+ * `[data-modal-layer]` is a modal layer that cannot wear `aria-modal`: the
+ * hold spotlight (US-36) keeps its windows — the host's own content — live,
+ * and `aria-modal` on its bar would hide them from assistive tech. It renders
+ * inside its frame, so it sorts after the sheet that holds it.
+ */
 export function topActiveModalDialog() {
   return Array.from(
     document.querySelectorAll<HTMLElement>(
-      '[role="dialog"][aria-modal="true"]',
+      '[role="dialog"][aria-modal="true"], [data-modal-layer]',
     ),
   )
     .filter(isElementRendered)

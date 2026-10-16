@@ -3252,3 +3252,59 @@ html:has([data-document-shell]) {
   color: var(--text-primary);
 }
 /* end US-28 walk-fix paper */
+
+/* US-36 K1/K2 · the hold spotlight ════════════════════════════════════════
+   hold-spotlight.tsx. The scrim lives INSIDE the held act's frame, at the
+   frame's scroll origin, never over the page (K2: no second veil, no L5).
+   Depth is the --veil fill alone: no shadow, no blur, no fade (D4, house
+   sheet SPEC.md:370). Geometry transitions are inline and never written
+   under reduced motion; the rule below is the backstop. */
+.hold-spotlight-root { position: absolute; top: 0; left: 0; width: 0; height: 0; }
+.hold-spotlight {
+  position: absolute; top: 0; left: 0; z-index: 40;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  pointer-events: none;
+}
+.hold-spotlight__scrim { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.hold-spotlight__fill { fill: var(--veil); }
+.hold-spotlight__ring { fill: none; stroke: var(--terracotta-ink); stroke-width: 1.5; }
+.hold-spotlight__ring[data-active] { stroke-width: 2.5; }
+.hold-spotlight__label {
+  position: absolute; max-width: calc(100% - 16px); padding: 2px 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-meta); font-size: 11px; line-height: 16px; font-weight: 500;
+  letter-spacing: .08em; text-transform: uppercase;
+  background: var(--ink); color: var(--ink-paper); border-radius: var(--radius-hair);
+}
+.hold-spotlight__bar {
+  position: sticky; bottom: calc(16px - var(--hold-spotlight-inset, 0px)); align-self: center;
+  width: min(640px, calc(100% - 32px)); margin-bottom: 16px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
+  padding: 8px 8px 8px 16px; pointer-events: auto;
+  background: var(--paper-doc); color: var(--ink);
+  border: 1px solid var(--ink); border-radius: var(--radius-hair);
+}
+.hold-spotlight__reason {
+  flex: 1 1 16rem; min-width: 0; margin: 0;
+  font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+}
+.hold-spotlight__acts { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+/* The phone: the bar docks to the frame's foot, one window at a time. */
+@media (max-width: 640px) {
+  .hold-spotlight__bar {
+    bottom: calc(0px - var(--hold-spotlight-inset, 0px)); width: 100%; margin-bottom: 0;
+    padding: 4px 4px 4px 16px;
+    border-width: 1px 0 0; border-radius: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hold-spotlight * { transition: none !important; }
+}
+@media (forced-colors: active) {
+  .hold-spotlight__fill { fill: Canvas; }
+  .hold-spotlight__ring { stroke: CanvasText; }
+  .hold-spotlight__ring[data-active] { stroke: Highlight; }
+  .hold-spotlight__label { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .hold-spotlight__bar { border-color: CanvasText; }
+}
+/* end US-36 hold spotlight */

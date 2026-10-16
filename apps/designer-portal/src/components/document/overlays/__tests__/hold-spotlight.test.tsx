@@ -1,0 +1,278 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { useEffect, useRef } from "react";
+import { HoldSpotlight } from "../hold-spotlight";
+import { topActiveModalDialog } from "../active-dialog";
+import { focusableWithin } from "@/lib/full-screen-boundary";
+import { useHoldSpotlight } from "@/lib/document/spotlight/use-hold-spotlight";
+import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight";
+
+jest.mock("@/lib/analytics/document-events", () => ({
+  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
+}));
+
+type Item = { id: string; label: string; reason: string };
+
+const CLIENT: Item = {
+  id: "client",
+  label: "No client linked",
+  reason: "Link a client before drafting this invoice.",
+};
+const PRICE: Item = {
+  id: "price",
+  label: "No client price",
+  reason: "Set a client price for the walnut table.",
+};
+const STUDIO: Item = {
+  id: "studio",
+  label: "No studio named",
+  reason: "Name the studio this invoice bills from.",
+};
+
+function Harness({
+  items,
+  fixed = [],
+  onParentEsc,
+}: {
+  items: Item[];
+  /** Holds whose target has unmounted: fixed in place, still in the list. */
+  fixed?: string[];
+  onParentEsc?: () => void;
+}) {
+  const frame = useRef<HTMLDivElement>(null);
+  const targets = useRef<Record<string, HTMLElement | null>>({});
+  const holds: SpotlightHold[] = items.map((item) => ({
+    ...item,
+    target: () => targets.current[item.id] ?? null,
+    fix: <button type="button">Fix {item.id}</button>,
+  }));
+  const spotlight = useHoldSpotlight(holds);
+
+  // The host sheet's own Esc, as DocSheet wires it: a bubble-phase document listener.
+  useEffect(() => {
+    if (!onParentEsc) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onParentEsc();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onParentEsc]);
+
+  return (
+    <div>
+      <button type="button">Outside the frame</button>
+      <div ref={frame} data-testid="frame">
+        <header data-testid="head">
+          <button type="button">Put back</button>
+        </header>
+        <section data-testid="already-inert" inert>
+          <button type="button">Long since inert</button>
+        </section>
+        {items
+          .filter((item) => !fixed.includes(item.id))
+          .map((item) => (
+            <div
+              key={item.id}
+              data-testid={`target-${item.id}`}
+              ref={(el) => {
+                targets.current[item.id] = el;
+              }}
+            >
+              <input aria-label={`Field ${item.id}`} />
+            </div>
+          ))}
+        <p data-testid="between">Totals</p>
+        <button
+          type="button"
+          onClick={(event) => spotlight.open(event.currentTarget)}
+        >
+          Draft the invoice
+        </button>
+      </div>
+      <HoldSpotlight frame={frame} {...spotlight.props} />
+    </div>
+  );
+}
+
+const layer = () =>
+  document.querySelector<HTMLElement>("[data-hold-spotlight]");
+const windows = () =>
+  Array.from(document.querySelectorAll("[data-hold-spotlight-window]"));
+const status = () => screen.getByRole("status");
+
+function openWith(items: Item[], onParentEsc?: () => void) {
+  const view = render(<Harness items={items} onParentEsc={onParentEsc} />);
+  fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+  return view;
+}
+
+function mockReducedMotion(reduce: boolean) {
+  window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+    matches: reduce && query.includes("prefers-reduced-motion"),
+    media: query,
+    onchange: null,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  }));
+}
+
+beforeEach(() => mockReducedMotion(false));
+
+describe("HoldSpotlight", () => {
+  it("renders one window per hold, inside the frame and never at body level (K2)", () => {
+    openWith([CLIENT, PRICE, STUDIO]);
+    expect(
+      windows().map((el) => el.getAttribute("data-hold-spotlight-window")),
+    ).toEqual(["client", "price", "studio"]);
+    const frame = screen.getByTestId("frame");
+    expect(frame.contains(layer())).toBe(true);
+    expect(
+      Array.from(document.body.children).some((el) =>
+        el.matches("[data-hold-spotlight-root]"),
+      ),
+    ).toBe(false);
+    expect(topActiveModalDialog()).toBe(layer());
+  });
+
+  it("inerts the frame outside the windows and restores exactly, keeping pre-existing inert", () => {
+    openWith([CLIENT, PRICE]);
+    expect(screen.getByTestId("head")).toHaveAttribute("inert");
+    expect(screen.getByTestId("between")).toHaveAttribute("inert");
+    expect(
+      screen.getByRole("button", { name: "Draft the invoice", hidden: true }),
+    ).toHaveAttribute("inert");
+    expect(screen.getByTestId("target-client")).not.toHaveAttribute("inert");
+    expect(screen.getByTestId("target-price")).not.toHaveAttribute("inert");
+    // Body-level nodes outside the frame stay live for the z-65/z-70 popovers.
+    expect(
+      screen
+        .getByRole("button", { name: "Outside the frame" })
+        .closest("[inert]"),
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(layer()).toBeNull();
+    expect(screen.getByTestId("head")).not.toHaveAttribute("inert");
+    expect(screen.getByTestId("between")).not.toHaveAttribute("inert");
+    expect(
+      screen.getByRole("button", { name: "Draft the invoice" }),
+    ).not.toHaveAttribute("inert");
+    expect(screen.getByTestId("already-inert")).toHaveAttribute("inert");
+  });
+
+  it("keeps Tab within the windows and the bar", () => {
+    openWith([CLIENT, PRICE]);
+    const frame = screen.getByTestId("frame");
+    const reachable = focusableWithin(frame).map(
+      (el) => el.getAttribute("aria-label") ?? el.textContent,
+    );
+    expect(reachable).toEqual([
+      "Field client",
+      "Field price",
+      "Fix client",
+      "Next",
+      "Close",
+    ]);
+
+    const close = screen.getByRole("button", { name: "Close" });
+    close.focus();
+    fireEvent.keyDown(close, { key: "Tab" });
+    expect(document.activeElement).toBe(screen.getByLabelText("Field client"));
+    fireEvent.keyDown(document.activeElement!, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(close);
+  });
+
+  it("closes on Esc in the capture phase so the host sheet never sees it", () => {
+    const parentEsc = jest.fn();
+    openWith([CLIENT, PRICE], parentEsc);
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(layer()).toBeNull();
+    expect(parentEsc).not.toHaveBeenCalled();
+    // With the spotlight gone, the host's Esc is live again.
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(parentEsc).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a window when its target goes, and closes itself on the last", async () => {
+    const view = openWith([CLIENT, PRICE]);
+    expect(windows()).toHaveLength(2);
+
+    view.rerender(<Harness items={[CLIENT, PRICE]} fixed={["client"]} />);
+    await waitFor(() => expect(windows()).toHaveLength(1));
+    expect(windows()[0]).toHaveAttribute("data-hold-spotlight-window", "price");
+    expect(status()).toHaveTextContent(`1 thing left. 1 of 1: ${PRICE.reason}`);
+
+    view.rerender(
+      <Harness items={[CLIENT, PRICE]} fixed={["client", "price"]} />,
+    );
+    await waitFor(() => expect(layer()).toBeNull());
+    expect(status()).toHaveTextContent("All set.");
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Draft the invoice" }),
+    );
+  });
+
+  it("returns focus to the act that opened it", () => {
+    openWith([CLIENT]);
+    const opener = screen.getByRole("button", {
+      name: "Draft the invoice",
+      hidden: true,
+    });
+    expect(document.activeElement).toBe(screen.getByLabelText("Field client"));
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    });
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("speaks through a role=status line outside the inert subtree", () => {
+    openWith([CLIENT, PRICE]);
+    expect(status()).toHaveTextContent(
+      `2 things need attention. First: ${CLIENT.reason}`,
+    );
+    expect(status().closest("[inert]")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(status()).toHaveTextContent(`2 of 2: ${PRICE.reason}`);
+    expect(windows()[1]).toHaveAttribute("data-active");
+  });
+
+  it("writes no transition at all under reduced motion", () => {
+    mockReducedMotion(true);
+    const reducedView = openWith([CLIENT, PRICE]);
+    expect(layer()!.outerHTML).not.toMatch(/transition/);
+    reducedView.unmount();
+
+    // The other branch does write one, so the assertion above can fail.
+    mockReducedMotion(false);
+    openWith([CLIENT, PRICE]);
+    expect(layer()!.outerHTML).toMatch(/transition/);
+  });
+
+  it("emits no shadow, blur or opacity, in the markup or its stylesheet block (D4)", () => {
+    openWith([CLIENT, PRICE]);
+    const banned = /opacity|box.?shadow|drop.?shadow|blur\(/i;
+    expect(layer()!.outerHTML).not.toMatch(banned);
+
+    const css = readFileSync(
+      join(__dirname, "../../../../app/globals.css"),
+      "utf8",
+    );
+    const block = css.slice(
+      css.indexOf("US-36 K1/K2"),
+      css.indexOf("end US-36 hold spotlight"),
+    );
+    expect(block).toContain(".hold-spotlight__fill { fill: var(--veil); }");
+    expect(block.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(banned);
+  });
+});

@@ -11405,3 +11405,23 @@ Four findings from the T-60 QA wave that Kody has not yet ruled on. Recorded her
 **Ruling (Kody, multiple choice).** A live job that stands on a project always prints as a ledger row, even with no current alert. Only leads and drafts (no project) fold behind Show, and with none of those there is no Show. This changes uplift.md (e) "the Show fold" for projects only.
 
 *Entries add: R166 · last id = R166*
+
+---
+
+### R167 · A held act opens a spotlight, not a checklist — US-36 K1 — Kody 2026-10-16
+
+**Finding (US-35 billing-errors deck, Q1).** The deck recommended a checklist of what holds the act. Kody chose the spotlight prototype (`artifacts/billing-errors-2026-10-16/prototypes/spotlight.html`) instead.
+
+**Ruling (Kody).** Pressing a held act lays a scrim with a window cut around each thing that holds it. The active window gets a heavier rule and a "1 of N · label" tag, and a bar carries that hold's reason, its fix, Next and Close. This overrides the deck's checklist recommendation. The primitive is `HoldSpotlight` + `useHoldSpotlight` (`components/document/overlays/hold-spotlight.tsx`, `lib/document/spotlight/`). Every adopting site passes its holds and never draws its own scrim. Depth is the `--veil` fill alone, and windows are `--terracotta-ink` hairlines (1.5px, active 2.5px). It uses no shadow, blur or opacity fade (D4, house sheet SPEC.md:370).
+
+### R168 · The spotlight's scrim stays inside the act's own frame — no L5 — US-36 K2 — Kody 2026-10-16
+
+**Finding.** The composer already sits in an L4 sheet on one veil. A page-wide spotlight would be a second veil, and the depth ladder reserves L5 (a second veil) for an irreversible confirm.
+
+**Ruling (Kody).** The scrim is drawn INSIDE the held act's frame (the sheet panel or paper column), portalled into it at its scroll origin, and never over the page. There is no L5 exception: no second page veil exists, so the ladder is unchanged. Inside the frame, everything outside the windows and the bar is `inert`. Nothing outside the frame is touched, so body-portalled popovers above it (ClientPicker z-70, aboveFolio sheets z-65) stay usable. While it is open, `topActiveModalDialog()` treats it as topmost (`[data-modal-layer]`), so the host sheet's Esc and Tab trap stand down. Its own Esc closes it in the capture phase. A held act whose frame is neither a sheet nor a paper column reopens this ruling.
+
+### R169 · The spotlight opens only when a held act is pressed — US-36 K3 — Kody 2026-10-16
+
+**Ruling (Kody).** Nothing else opens the spotlight: no page load, no timer, no hover. Before the press, the held act keeps its visible reason and fix (house sheet §held acts, SPEC.md:371–373). `open(fromEl)` records the act. Focus returns there on Esc, on Close, and when the last hold clears. The last clear says "All set."
+
+*Entries add: R167 · R168 · R169 · last id = R169*
