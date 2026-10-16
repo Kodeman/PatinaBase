@@ -6,6 +6,10 @@
 --         refused exactly as before. can_link_document_client answers the same
 --         for each. The relationship is still read from the lead's book (00385),
 --         and a proposal stays owner-only.
+--   (k5h–k5k) SQ-1066 F1: while the lead's seat is inactive, guest or removed,
+--         the owner is refused up front ('set_document_client:
+--         lead_not_in_studio') and document_client_link_hold names
+--         'lead_not_in_studio'; with the seat active again she links as before.
 --   (k9)  open_project_direct with p_studio_id: stamps a studio the caller sits
 --         in, refuses one she does not ('open_project_direct: studio_not_member'),
 --         admits a two-studio designer who names one, and the 6-argument
@@ -39,7 +43,8 @@ VALUES
   ('c7960000-0000-4000-8000-000000000008', 'us36-two-studio@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c7960000-0000-4000-8000-000000000009', 'us36-solo-owner@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c7960000-0000-4000-8000-00000000000a', 'us36-pair-owner@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('c7960000-0000-4000-8000-00000000000b', 'us36-pair-designer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('c7960000-0000-4000-8000-00000000000b', 'us36-pair-designer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c7960000-0000-4000-8000-00000000000c', 'us36-leaving-lead@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 UPDATE public.profiles SET full_name = 'US36 Lead'          WHERE id = 'c7960000-0000-4000-8000-000000000001';
 UPDATE public.profiles SET full_name = 'US36 Owner'         WHERE id = 'c7960000-0000-4000-8000-000000000002';
@@ -52,6 +57,7 @@ UPDATE public.profiles SET full_name = 'US36 Two Studio'    WHERE id = 'c7960000
 UPDATE public.profiles SET full_name = 'US36 Solo Owner'    WHERE id = 'c7960000-0000-4000-8000-000000000009';
 UPDATE public.profiles SET full_name = 'US36 Pair Owner'    WHERE id = 'c7960000-0000-4000-8000-00000000000a';
 UPDATE public.profiles SET full_name = 'US36 Pair Designer' WHERE id = 'c7960000-0000-4000-8000-00000000000b';
+UPDATE public.profiles SET full_name = 'US36 Leaving Lead'  WHERE id = 'c7960000-0000-4000-8000-00000000000c';
 
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES
@@ -77,6 +83,8 @@ VALUES
   ('c7960000-0000-4000-8000-000000000001', 'c7960000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
   ('c7960000-0000-4000-8000-000000000003', 'c7960000-0000-4000-8000-0000000000a1', 'admin',  'active', NOW()),
   ('c7960000-0000-4000-8000-000000000004', 'c7960000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
+  -- the lead whose seat (k5h–k5k) goes inactive, guest and removed
+  ('c7960000-0000-4000-8000-00000000000c', 'c7960000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
   ('c7960000-0000-4000-8000-000000000005', 'c7960000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW()),
   -- the two-studio designer: a seat in each studio, so 00563 cannot choose
   ('c7960000-0000-4000-8000-000000000008', 'c7960000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
@@ -94,15 +102,19 @@ FROM (VALUES
   ('c7960000-0000-4000-8000-000000000008'::uuid),
   ('c7960000-0000-4000-8000-000000000009'::uuid),
   ('c7960000-0000-4000-8000-00000000000a'::uuid),
-  ('c7960000-0000-4000-8000-00000000000b'::uuid)
+  ('c7960000-0000-4000-8000-00000000000b'::uuid),
+  ('c7960000-0000-4000-8000-00000000000c'::uuid)
 ) AS designer(id)
 CROSS JOIN public.roles AS role
 WHERE role.name = 'studio_designer';
 
--- The lead's project, in her one studio (00563 derives it).
+-- The lead's project, in her one studio (00563 derives it), and the leaving
+-- lead's, in the same studio.
 INSERT INTO public.projects (id, name, designer_id, created_by, status)
 VALUES ('c7960000-0000-4000-8000-0000000000e1', 'US36 Lead House',
-        'c7960000-0000-4000-8000-000000000001', 'c7960000-0000-4000-8000-000000000001', 'active');
+        'c7960000-0000-4000-8000-000000000001', 'c7960000-0000-4000-8000-000000000001', 'active'),
+       ('c7960000-0000-4000-8000-0000000000e2', 'US36 Leaving Lead House',
+        'c7960000-0000-4000-8000-00000000000c', 'c7960000-0000-4000-8000-00000000000c', 'active');
 
 -- The lead's book holds the client as a 'lead' row (linking makes it active).
 -- The owner's own book holds a different client.
@@ -111,7 +123,9 @@ VALUES
   ('c7960000-0000-4000-8000-0000000000d1', 'c7960000-0000-4000-8000-000000000001',
    'c7960000-0000-4000-8000-000000000006', 'us36-client@test.invalid', 'US36 Client', 'lead', 'direct'),
   ('c7960000-0000-4000-8000-0000000000d2', 'c7960000-0000-4000-8000-000000000002',
-   'c7960000-0000-4000-8000-000000000007', 'us36-owner-client@test.invalid', 'US36 Owner Client', 'active', 'direct');
+   'c7960000-0000-4000-8000-000000000007', 'us36-owner-client@test.invalid', 'US36 Owner Client', 'active', 'direct'),
+  ('c7960000-0000-4000-8000-0000000000d3', 'c7960000-0000-4000-8000-00000000000c',
+   'c7960000-0000-4000-8000-000000000006', 'us36-client@test.invalid', 'US36 Client', 'active', 'direct');
 
 INSERT INTO public.proposals (id, designer_id, designer_client_id, client_id, title, total_amount, status)
 VALUES ('c7960000-0000-4000-8000-0000000000f1', 'c7960000-0000-4000-8000-000000000001',
@@ -167,12 +181,39 @@ END;
 $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION pg_temp.can_link_as(UUID, UUID) TO PUBLIC;
 
+CREATE OR REPLACE FUNCTION pg_temp.link_hold_as(p_actor UUID, p_project UUID)
+RETURNS TEXT AS $$
+DECLARE
+  v_answer TEXT;
+BEGIN
+  PERFORM pg_temp.assume_user(p_actor);
+  SELECT public.document_client_link_hold(p_project) INTO v_answer;
+  PERFORM pg_temp.reset_role();
+  RETURN v_answer;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.link_hold_as(UUID, UUID) TO PUBLIC;
+
+-- The leaving lead's seat in the studio, set as the fixture owner.
+CREATE OR REPLACE FUNCTION pg_temp.set_leaving_lead_seat(p_role public.member_role, p_status public.member_status)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE public.organization_members
+  SET role = p_role, status = p_status
+  WHERE user_id = 'c7960000-0000-4000-8000-00000000000c'
+    AND organization_id = 'c7960000-0000-4000-8000-0000000000a1';
+END;
+$$ LANGUAGE plpgsql;
+
 -- ─── preconditions ─────────────────────────────────────────────────────────
 DO $$
 BEGIN
   ASSERT (SELECT studio_id FROM public.projects WHERE id = 'c7960000-0000-4000-8000-0000000000e1')
          = 'c7960000-0000-4000-8000-0000000000a1',
     'FAIL p0 (precondition): the lead''s project sits in her one studio';
+  ASSERT (SELECT studio_id FROM public.projects WHERE id = 'c7960000-0000-4000-8000-0000000000e2')
+         = 'c7960000-0000-4000-8000-0000000000a1',
+    'FAIL p0e (precondition): the leaving lead''s project sits in the same studio';
   ASSERT (SELECT client_id IS NULL FROM public.projects WHERE id = 'c7960000-0000-4000-8000-0000000000e1'),
     'FAIL p0b (precondition): the project starts with no client';
   ASSERT (SELECT bool_and(studio_id IS NULL) FROM public.projects
@@ -182,7 +223,7 @@ BEGIN
     SELECT 1 FROM public.organization_members
     WHERE user_id IN ('c7960000-0000-4000-8000-000000000001', 'c7960000-0000-4000-8000-000000000009',
                       'c7960000-0000-4000-8000-00000000000a', 'c7960000-0000-4000-8000-00000000000b',
-                      'c7960000-0000-4000-8000-000000000008')
+                      'c7960000-0000-4000-8000-000000000008', 'c7960000-0000-4000-8000-00000000000c')
       AND organization_id NOT IN ('c7960000-0000-4000-8000-0000000000a1', 'c7960000-0000-4000-8000-0000000000a2',
                                   'c7960000-0000-4000-8000-0000000000a3', 'c7960000-0000-4000-8000-0000000000a4')),
     'FAIL p0d (precondition): 00295 provisioned no extra workspace';
@@ -276,6 +317,118 @@ BEGIN
     'FAIL k5g (K5): the studio owner may not link a client to the lead''s proposal; got ' || COALESCE(v_err, 'NO RAISE');
 
   RAISE NOTICE 'us36: case (k5) passed — lead, studio owner and studio admin link; member, outsider and proposal refused.';
+END
+$$;
+
+-- ─── (k5h–k5k) the lead has left the studio (SQ-1066 F1) ──────────────────
+-- 00563 admits the client UPDATE only while the lead holds an active non-guest
+-- seat in the project's studio. The setter refuses that up front, and
+-- document_client_link_hold / can_link_document_client say the same.
+
+-- k5h: the lead's seat is inactive (suspended).
+DO $$
+DECLARE
+  v_err TEXT;
+BEGIN
+  PERFORM pg_temp.set_leaving_lead_seat('member', 'suspended');
+
+  v_err := pg_temp.link_as('c7960000-0000-4000-8000-000000000002', 'project',
+                           'c7960000-0000-4000-8000-0000000000e2', 'c7960000-0000-4000-8000-000000000006');
+  ASSERT v_err LIKE '55000|set_document_client: lead_not_in_studio%',
+    'FAIL k5h1 (SQ-1066 F1): the owner is refused up front when the lead''s seat is inactive; got '
+    || COALESCE(v_err, 'NO RAISE');
+  ASSERT pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2')
+         IS NOT DISTINCT FROM 'lead_not_in_studio',
+    'FAIL k5h2 (SQ-1066 F1): document_client_link_hold names lead_not_in_studio for an inactive lead; got '
+    || COALESCE(pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2'), 'NULL');
+  ASSERT pg_temp.can_link_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2') IS FALSE,
+    'FAIL k5h3 (SQ-1066 F1): can_link_document_client says no while the lead''s seat is inactive';
+  ASSERT (SELECT client_id IS NULL FROM public.projects WHERE id = 'c7960000-0000-4000-8000-0000000000e2'),
+    'FAIL k5h4: the refused call wrote nothing';
+  -- Standing is asked first: a plain member is still not_permitted.
+  ASSERT pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000004', 'c7960000-0000-4000-8000-0000000000e2')
+         IS NOT DISTINCT FROM 'not_permitted',
+    'FAIL k5h5: a plain member is not_permitted whatever the lead''s seat; got '
+    || COALESCE(pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000004', 'c7960000-0000-4000-8000-0000000000e2'), 'NULL');
+
+  PERFORM pg_temp.set_leaving_lead_seat('member', 'active');
+  RAISE NOTICE 'us36: case (k5h) passed — inactive lead: lead_not_in_studio, refused up front.';
+END
+$$;
+
+-- k5i: the lead is a guest.
+DO $$
+DECLARE
+  v_err TEXT;
+BEGIN
+  PERFORM pg_temp.set_leaving_lead_seat('guest', 'active');
+
+  v_err := pg_temp.link_as('c7960000-0000-4000-8000-000000000002', 'project',
+                           'c7960000-0000-4000-8000-0000000000e2', 'c7960000-0000-4000-8000-000000000006');
+  ASSERT v_err LIKE '55000|set_document_client: lead_not_in_studio%',
+    'FAIL k5i1 (SQ-1066 F1): the owner is refused up front when the lead is a guest; got '
+    || COALESCE(v_err, 'NO RAISE');
+  ASSERT pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2')
+         IS NOT DISTINCT FROM 'lead_not_in_studio',
+    'FAIL k5i2 (SQ-1066 F1): document_client_link_hold names lead_not_in_studio for a guest lead; got '
+    || COALESCE(pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2'), 'NULL');
+  ASSERT pg_temp.can_link_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2') IS FALSE,
+    'FAIL k5i3 (SQ-1066 F1): can_link_document_client says no while the lead is a guest';
+  ASSERT (SELECT client_id IS NULL FROM public.projects WHERE id = 'c7960000-0000-4000-8000-0000000000e2'),
+    'FAIL k5i4: the refused call wrote nothing';
+
+  PERFORM pg_temp.set_leaving_lead_seat('member', 'active');
+  RAISE NOTICE 'us36: case (k5i) passed — guest lead: lead_not_in_studio, refused up front.';
+END
+$$;
+
+-- k5j: the lead was removed from the studio.
+DO $$
+DECLARE
+  v_err TEXT;
+BEGIN
+  PERFORM pg_temp.set_leaving_lead_seat('member', 'removed');
+
+  v_err := pg_temp.link_as('c7960000-0000-4000-8000-000000000002', 'project',
+                           'c7960000-0000-4000-8000-0000000000e2', 'c7960000-0000-4000-8000-000000000006');
+  ASSERT v_err LIKE '55000|set_document_client: lead_not_in_studio%',
+    'FAIL k5j1 (SQ-1066 F1): the owner is refused up front when the lead was removed; got '
+    || COALESCE(v_err, 'NO RAISE');
+  ASSERT pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2')
+         IS NOT DISTINCT FROM 'lead_not_in_studio',
+    'FAIL k5j2 (SQ-1066 F1): document_client_link_hold names lead_not_in_studio for a removed lead; got '
+    || COALESCE(pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2'), 'NULL');
+  ASSERT pg_temp.can_link_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2') IS FALSE,
+    'FAIL k5j3 (SQ-1066 F1): can_link_document_client says no once the lead was removed';
+  ASSERT (SELECT client_id IS NULL FROM public.projects WHERE id = 'c7960000-0000-4000-8000-0000000000e2'),
+    'FAIL k5j4: the refused call wrote nothing';
+
+  PERFORM pg_temp.set_leaving_lead_seat('member', 'active');
+  RAISE NOTICE 'us36: case (k5j) passed — removed lead: lead_not_in_studio, refused up front.';
+END
+$$;
+
+-- k5k: the lead's seat is active again: unchanged, the owner links.
+DO $$
+DECLARE
+  v_err TEXT;
+BEGIN
+  ASSERT pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2') IS NULL,
+    'FAIL k5k1: document_client_link_hold is NULL while the lead holds an active seat; got '
+    || COALESCE(pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2'), 'NULL');
+  ASSERT pg_temp.can_link_as('c7960000-0000-4000-8000-000000000002', 'c7960000-0000-4000-8000-0000000000e2') IS TRUE,
+    'FAIL k5k2: can_link_document_client says yes to the owner while the lead holds an active seat';
+  v_err := pg_temp.link_as('c7960000-0000-4000-8000-000000000002', 'project',
+                           'c7960000-0000-4000-8000-0000000000e2', 'c7960000-0000-4000-8000-000000000006');
+  ASSERT v_err IS NULL AND (SELECT client_id FROM public.projects
+                             WHERE id = 'c7960000-0000-4000-8000-0000000000e2')
+                           = 'c7960000-0000-4000-8000-000000000006',
+    'FAIL k5k3: the owner links the active lead''s client; got ' || COALESCE(v_err, 'NULL');
+  ASSERT has_function_privilege('authenticated', 'public.document_client_link_hold(uuid)', 'EXECUTE')
+     AND NOT has_function_privilege('anon', 'public.document_client_link_hold(uuid)', 'EXECUTE'),
+    'FAIL k5k4: document_client_link_hold is granted to authenticated and not to anon';
+
+  RAISE NOTICE 'us36: case (k5k) passed — active lead: may link, unchanged.';
 END
 $$;
 

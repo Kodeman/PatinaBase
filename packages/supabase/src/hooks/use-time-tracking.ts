@@ -17,6 +17,7 @@ import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { normalizePhaseSlug, ALL_PHASE_SLUGS, type PhaseSlug } from '@patina/types';
+import { documentClientAuthorityKeys } from './use-document-client-authority';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
@@ -1186,6 +1187,10 @@ export function useStampProjectPricingStudio() {
       });
       queryClient.invalidateQueries({
         queryKey: ['document-hours-pending-authorization'],
+      });
+      // A named studio is what an owner/admin's K5 standing is read from.
+      queryClient.invalidateQueries({
+        queryKey: documentClientAuthorityKeys.canLink(projectId),
       });
     },
   });

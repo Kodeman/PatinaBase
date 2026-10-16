@@ -40667,6 +40667,10 @@ export type Database = {
         Returns: number
       }
       dispatch_board_deck_import_resolve: { Args: never; Returns: number }
+      document_client_link_hold: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
       document_open: { Args: { p_id: string }; Returns: Json }
       draft_invoice_from_milestone: {
         Args: { p_milestone_id: string }

@@ -22550,6 +22550,18 @@ END $g$;
 
 -- 00796_us36_billing_authority.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.document_client_link_hold(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00796_us36_billing_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.document_client_link_hold(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00796_us36_billing_authority.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.can_link_document_client(uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
