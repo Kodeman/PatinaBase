@@ -10,6 +10,8 @@
 --         the owner is refused up front ('set_document_client:
 --         lead_not_in_studio') and document_client_link_hold names
 --         'lead_not_in_studio'; with the seat active again she links as before.
+--   (k5l) SQ-1073 R2: owner/admin standing comes from the caller's locked
+--         seat row: an admin with no seat, or a suspended one, is refused.
 --   (k9)  open_project_direct with p_studio_id: stamps a studio the caller sits
 --         in, refuses one she does not ('open_project_direct: studio_not_member'),
 --         admits a two-studio designer who names one, and the 6-argument
@@ -429,6 +431,56 @@ BEGIN
     'FAIL k5k4: document_client_link_hold is granted to authenticated and not to anon';
 
   RAISE NOTICE 'us36: case (k5k) passed — active lead: may link, unchanged.';
+END
+$$;
+
+-- k5l (SQ-1073 R2): owner/admin standing is read from the caller's seat row as
+-- the setter locks it. An admin with no seat at call time is refused, and so is
+-- one whose seat is suspended; with the active seat back she acts as before.
+-- The two-session phantom (a seat committed after the lock's snapshot) cannot
+-- be scheduled from this one rollback-only session; SQ-1074 records the probe.
+DO $$
+DECLARE
+  v_err TEXT;
+BEGIN
+  DELETE FROM public.organization_members
+  WHERE user_id = 'c7960000-0000-4000-8000-000000000003'
+    AND organization_id = 'c7960000-0000-4000-8000-0000000000a1';
+
+  v_err := pg_temp.link_as('c7960000-0000-4000-8000-000000000003', 'project',
+                           'c7960000-0000-4000-8000-0000000000e1', NULL);
+  ASSERT v_err = '42501|no project owned by you with id c7960000-0000-4000-8000-0000000000e1',
+    'FAIL k5l1 (SQ-1073 R2): an admin with no seat at call time is refused; got ' || COALESCE(v_err, 'NO RAISE');
+  ASSERT pg_temp.link_hold_as('c7960000-0000-4000-8000-000000000003', 'c7960000-0000-4000-8000-0000000000e1') = 'not_permitted',
+    'FAIL k5l2: document_client_link_hold names not_permitted for an admin with no seat';
+
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+  VALUES ('c7960000-0000-4000-8000-000000000003', 'c7960000-0000-4000-8000-0000000000a1', 'admin', 'suspended', NOW());
+  v_err := pg_temp.link_as('c7960000-0000-4000-8000-000000000003', 'project',
+                           'c7960000-0000-4000-8000-0000000000e1', NULL);
+  ASSERT v_err = '42501|no project owned by you with id c7960000-0000-4000-8000-0000000000e1',
+    'FAIL k5l3 (SQ-1073 R2): a suspended admin seat grants no standing; got ' || COALESCE(v_err, 'NO RAISE');
+
+  ASSERT (SELECT client_id FROM public.projects WHERE id = 'c7960000-0000-4000-8000-0000000000e1')
+         = 'c7960000-0000-4000-8000-000000000006',
+    'FAIL k5l4: the refused calls wrote nothing';
+
+  UPDATE public.organization_members SET status = 'active'
+  WHERE user_id = 'c7960000-0000-4000-8000-000000000003'
+    AND organization_id = 'c7960000-0000-4000-8000-0000000000a1';
+  v_err := pg_temp.link_as('c7960000-0000-4000-8000-000000000003', 'project',
+                           'c7960000-0000-4000-8000-0000000000e1', NULL);
+  ASSERT v_err IS NULL AND (SELECT client_id IS NULL FROM public.projects
+                             WHERE id = 'c7960000-0000-4000-8000-0000000000e1'),
+    'FAIL k5l5: with her active admin seat back she may unlink; got ' || COALESCE(v_err, 'NULL');
+  v_err := pg_temp.link_as('c7960000-0000-4000-8000-000000000003', 'project',
+                           'c7960000-0000-4000-8000-0000000000e1', 'c7960000-0000-4000-8000-000000000006');
+  ASSERT v_err IS NULL AND (SELECT client_id FROM public.projects
+                             WHERE id = 'c7960000-0000-4000-8000-0000000000e1')
+                           = 'c7960000-0000-4000-8000-000000000006',
+    'FAIL k5l6: with her active admin seat back she may link; got ' || COALESCE(v_err, 'NULL');
+
+  RAISE NOTICE 'us36: case (k5l) passed — standing from the locked seat: admin with no seat and suspended admin refused, active admin acts.';
 END
 $$;
 

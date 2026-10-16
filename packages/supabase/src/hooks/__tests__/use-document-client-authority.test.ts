@@ -30,8 +30,10 @@ import {
 } from '../use-document-client-authority';
 import { useReassignLead } from '../use-project-team';
 import { useStampProjectPricingStudio } from '../use-time-tracking';
+import { useRemoveMember, useUpdateMemberRole } from '../use-organizations';
 
 const LINK_KEY = ['document-client-authority', 'can-link', 'project-1'];
+const LINK_FAMILY = ['document-client-authority'];
 
 type QueryConfig = {
   queryKey: unknown;
@@ -93,5 +95,29 @@ describe('acts that change K5 standing invalidate it', () => {
     const mutation = useStampProjectPricingStudio() as unknown as MutationConfig;
     mutation.onSuccess('studio-1', { projectId: 'project-1', studioId: 'studio-1' });
     expect(invalidatedKeys()).toContainEqual(LINK_KEY);
+  });
+});
+
+// SQ-1073 R1: the hold reads the lead's seat and the caller's owner/admin seat,
+// and a seat change does not say which projects it moves, so it invalidates
+// the whole family (a prefix of every canLink key).
+describe('seat changes invalidate every K5 answer', () => {
+  it('the family key is a prefix of each canLink key', () => {
+    expect(LINK_KEY.slice(0, LINK_FAMILY.length)).toEqual(LINK_FAMILY);
+  });
+
+  it('useUpdateMemberRole: a lead made guest, or an admin made member, changes who may link', () => {
+    const mutation = useUpdateMemberRole() as unknown as MutationConfig;
+    mutation.onSuccess(
+      { id: 'member-1', organization_id: 'studio-1', role: 'guest' },
+      { memberId: 'member-1', role: 'guest' },
+    );
+    expect(invalidatedKeys()).toContainEqual(LINK_FAMILY);
+  });
+
+  it("useRemoveMember: a removed lead leaves her projects lead_not_in_studio", () => {
+    const mutation = useRemoveMember() as unknown as MutationConfig;
+    mutation.onSuccess({ organizationId: 'studio-1' }, 'member-1');
+    expect(invalidatedKeys()).toContainEqual(LINK_FAMILY);
   });
 });
