@@ -103,6 +103,7 @@ import {
   buildBillingLines,
   depositCents,
   lineClientPriceCents,
+  assessInvoiceReadiness,
   buildComposerLines,
   deriveInvoiceBillingGap,
   draftInvoiceRefusal,
@@ -776,23 +777,39 @@ export function InvoiceComposer({
   useEffect(() => setConfirmingName(false), [projectId]);
 
   // §A5 — the first unmet requirement; the held act names it and lands on it.
-  const blocker: ComposerBlocker | null = studioMode
+  const { holds } = assessInvoiceReadiness({
+    clientLinked: !projectId || billingGap !== "no-client",
+    projectExists: !!projectId,
+    pricingStudioLinked: billingGap !== "no-studio",
+    selectedAnything: studioMode || !projectId || lineCount > 0,
+    selectedRatePendingEntryIds: [...tickedTimeIds].filter((id) => ratePendingEntries.some((entry) => entry.id === id)),
+    selectedUnpricedLineIds: [...tickedFfeIds].filter((id) => ffePartition.unpriced.some((item) => item.id === id)),
+    ratePendingNames: Object.fromEntries(ratePendingEntries.map((entry) => [entry.id, entry.member_name ?? "the designer"])),
+    unpricedLineNames: Object.fromEntries(ffePartition.unpriced.map((item) => [item.id, item.name])),
+    noClientReason: blockerReason("no-client", {
+      projectName: selectedProject?.name ?? "This project", canLinkClient, leadLeftStudio, leadName,
+      canNameStudio, soloOwnerUnstamped, hasStudioOwner, studioLoading: organizationsLoading,
+    }),
+    noStudioReason: blockerReason("no-studio", {
+      projectName: selectedProject?.name ?? "This project", canLinkClient, leadLeftStudio, leadName,
+      canNameStudio, soloOwnerUnstamped, hasStudioOwner, studioLoading: organizationsLoading,
+    }),
+  });
+  const readinessBlocker: ComposerBlocker | null =
+    holds[0]?.kind === "nothing-selected" ? "lines" : holds[0]?.kind ?? null;
+  const blocker: ComposerBlocker | null = readinessBlocker ?? (studioMode
     ? studioInvoiceBlocker({ clientId: studioClientId, title, studioId, lines })
-    : billingGap
-      ? billingGap
-      : !projectId
-        ? "no-project"
-        : lineCount === 0
-          ? "lines"
-          : // An invalid deposit also leaves its line without a figure; the
-            // percent is the thing to fix, so it is named first.
-            depositBlocked
-            ? "deposit"
-            : billingFiguresMissing
-              ? "billing-figures"
-              : prefillPending
-                ? "prefill"
-                : null;
+    : !projectId
+      ? "no-project"
+      : lineCount === 0
+        ? "lines"
+        : depositBlocked
+          ? "deposit"
+          : billingFiguresMissing
+            ? "billing-figures"
+            : prefillPending
+              ? "prefill"
+              : null);
   const canDraft = blocker === null && !creating;
   // F11 — a reason outlives its blocker by not one render.
   useEffect(() => {
@@ -802,7 +819,7 @@ export function InvoiceComposer({
     if (error?.gap && billingGap !== error.gap) setError(null);
   }, [error, billingGap]);
   const heldReason = heldBlocker
-    ? blockerReason(heldBlocker, {
+    ? holds.find((hold) => hold.kind === heldBlocker)?.reason ?? blockerReason(heldBlocker, {
         projectName: selectedProject?.name ?? "This project",
         canLinkClient,
         leadLeftStudio,
@@ -853,7 +870,13 @@ export function InvoiceComposer({
                       )
                     : held === "regarding"
                       ? regardingRef.current
-                      : null;
+                      : held === "rate-pending"
+                        ? root?.querySelector<HTMLElement>('[data-focus-key="rate-pending"]')
+                        : held === "price-line"
+                          ? root?.querySelector<HTMLElement>('[data-focus-key^="price-line:"]')
+                          : held === "send-no-recipient"
+                            ? root?.querySelector<HTMLElement>('[data-focus-key="add-email"]')
+                            : null;
     // Focus never leaves the composer: a target outside it is no target.
     if (target && root?.contains(target)) target.focus();
   };
@@ -1056,6 +1079,7 @@ export function InvoiceComposer({
         ) : (
           <select
             ref={forSelectRef}
+            data-focus-key="for-project"
             value={target}
             onChange={(e) => pickTarget(e.target.value)}
             aria-label={studioChoiceAvailable ? "For" : "Project"}
@@ -1257,6 +1281,7 @@ export function InvoiceComposer({
                         key={entry.id}
                         className={`${ROW} opacity-60`}
                         data-rate-pending="true"
+                        data-focus-key="rate-pending"
                       >
                         <input
                           type="checkbox"
@@ -1660,6 +1685,7 @@ export function InvoiceComposer({
             ))}
             <DocumentAction
               ref={addLineRef}
+              data-focus-key="invoice-lines"
               actionKey="add-invoice-line"
               surfaceKey="accounts"
               regionKey="invoice-lines"
@@ -1802,6 +1828,7 @@ export function InvoiceComposer({
                   // does not focus a link it activates.
                   <DocumentAction
                     ref={linkClientRef}
+                    data-focus-key="link-client"
                     href={`/doc/${projectId}?sheet=household`}
                     actionKey="link-invoice-client"
                     surfaceKey="accounts"
@@ -1830,6 +1857,7 @@ export function InvoiceComposer({
                 {canNameStudio && viewerStudio && (
                   <DocumentAction
                     ref={nameStudioRef}
+                    data-focus-key="name-studio"
                     actionKey="name-invoice-studio"
                     surfaceKey="accounts"
                     regionKey="invoice-composer"
@@ -1976,7 +2004,10 @@ type ComposerBlocker =
   | "lines"
   | "billing-figures"
   | "deposit"
-  | "prefill";
+  | "prefill"
+  | "rate-pending"
+  | "price-line"
+  | "send-no-recipient";
 
 function blockerReason(
   blocker: ComposerBlocker,
@@ -2024,6 +2055,12 @@ function blockerReason(
       return facts.studioLoading
         ? "Wait for your studio to finish loading."
         : "This account belongs to no studio yet, so there is none to bill from.";
+    case "rate-pending":
+      return "The selected hours are waiting for a rate.";
+    case "price-line":
+      return "The selected piece needs a client price.";
+    case "send-no-recipient":
+      return "This household has no email to send to.";
   }
 }
 
