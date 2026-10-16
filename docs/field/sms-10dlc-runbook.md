@@ -67,6 +67,8 @@ All five are pure GSM-7 basic set (no em dash, no curly quotes, no en dash) and 
 - **HELP:** `Patina relays project updates for your design studio. ~1 msg/day. Reply STOP to opt out. Questions: hello@patina.cloud`
 - STOP suppresses the phone number on this sender number globally, independent of any party row, and survives being added to a new project or studio. START re-asks eligible pending invitations; it never grants consent by itself. Freeform revocation ("stop texting me") is honored the same as the keyword.
 
+**If the console's Edit dialog opens with every field disabled** (observed 2026-09-22 on the VERIFIED campaign, even after a reload), use the API instead: `scripts/field-line/twilio-campaign-update.mjs` carries the merged text below and sends it through the Usa2p update endpoint (`list` → `update <QE-sid>` dry run → `update <QE-sid> --yes`). It keeps the existing website OTP/order wording in the description and message flow rather than replacing it, because that traffic still runs on this campaign; the five sample slots hold two website samples and three Field Line samples. On this account the API refused too (2026-09-22: `400 Campaign update is allowed only for FAILURE state(s)`), so the change goes through a Twilio support ticket; the paste-ready ticket is `docs/field/sms-10dlc-campaign-update-ticket.md`.
+
 **Console fields to edit** (Twilio Console → Messaging → Regulatory Compliance → A2P 10DLC → Campaigns → the existing Low-Volume Mixed campaign → Edit):
 
 | Field | Action |
