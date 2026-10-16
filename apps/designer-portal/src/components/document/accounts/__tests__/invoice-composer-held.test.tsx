@@ -32,6 +32,7 @@ let mockProjectsUpdatedAt = 1;
 let mockViewerId: string | null = "designer-1";
 let mockStudioMembers: Array<Record<string, unknown>> = [];
 let mockPathname = "/";
+let mockExtraProjects: Array<Record<string, unknown>> = [];
 const mockStampStudio = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
@@ -84,6 +85,7 @@ jest.mock("@patina/supabase", () => ({
         designer_id: mockProjectDesignerId,
         designer: { id: mockProjectDesignerId, display_name: "Leah Ames", full_name: "Leah Ames" },
       },
+      ...mockExtraProjects,
     ],
     dataUpdatedAt: mockProjectsUpdatedAt,
   }),
@@ -123,6 +125,7 @@ beforeEach(() => {
   mockViewerId = "designer-1";
   mockStudioMembers = [];
   mockPathname = "/";
+  mockExtraProjects = [];
   mockStampStudio.mockReset();
 });
 
@@ -1146,6 +1149,32 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(household()).toBeNull();
     await waitFor(() => expect(act()).toHaveFocus());
     expect(act()).toBeEnabled();
+  });
+
+  it("F1: a link left pending on one project never lands focus on another project's Draft", async () => {
+    mockProjectClientId = null;
+    mockPathname = "/doc/project-1";
+    mockExtraProjects = [
+      {
+        id: "project-2",
+        name: "Quill Lane Porch",
+        status: "active",
+        client_id: "client-7",
+        studio_id: "studio-1",
+        designer_id: "designer-1",
+        designer: { id: "designer-1", display_name: "Leah Ames", full_name: "Leah Ames" },
+      },
+    ];
+    render(composer({}));
+    fireEvent.change(screen.getByLabelText("Project"), { target: { value: "project-1" } });
+    fireEvent.click(screen.getByRole("link", { name: "Link a client" }));
+    // The sheet went back unlinked, and focus has since left the composer.
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.change(screen.getByLabelText("Project"), { target: { value: "project-2" } });
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    expect(act()).not.toHaveFocus();
+    expect(document.activeElement).toBe(document.body);
   });
 
   it("F6: lands a held deposit on Deposit percent", async () => {

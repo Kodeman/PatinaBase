@@ -289,8 +289,9 @@ export function InvoiceComposer({
   const linkClientRef = useRef<HTMLAnchorElement>(null);
   const nameStudioRef = useRef<HTMLButtonElement>(null);
   const draftActRef = useRef<HTMLButtonElement>(null);
-  // Link a client opened the household sheet, which hands focus back to it.
-  const linkingClientRef = useRef(false);
+  // The project whose Link a client opened the household sheet, which hands
+  // focus back to it.
+  const linkingClientRef = useRef<string | null>(null);
   const pathname = usePathname();
   const viewerId = useSessionUserId();
 
@@ -646,8 +647,14 @@ export function InvoiceComposer({
   // Draft act instead — after the sheet is put back (it may still lie above
   // the composer), and never over focus that already went somewhere live.
   useEffect(() => {
-    if (billingGap === "no-client" || !linkingClientRef.current) return;
-    linkingClientRef.current = false;
+    if (!linkingClientRef.current) return;
+    // Another project's gap is not this link landing.
+    if (linkingClientRef.current !== projectId) {
+      linkingClientRef.current = null;
+      return;
+    }
+    if (billingGap === "no-client") return;
+    linkingClientRef.current = null;
     let frame = 0;
     const land = () => {
       const root = containerRef.current;
@@ -668,7 +675,7 @@ export function InvoiceComposer({
       observer.disconnect();
       window.cancelAnimationFrame(frame);
     };
-  }, [billingGap]);
+  }, [billingGap, projectId]);
 
   // F9 — set_document_client (00387) answers only to the project's lead.
   const isLead =
@@ -1607,7 +1614,7 @@ export function InvoiceComposer({
                     variant="tertiary"
                     onClick={(e) => {
                       e.currentTarget.focus();
-                      linkingClientRef.current = true;
+                      linkingClientRef.current = projectId;
                       if (pathname === `/doc/${projectId}`) {
                         e.preventDefault();
                         window.dispatchEvent(new CustomEvent(OPEN_HOUSEHOLD_SHEET_EVENT));
