@@ -78,6 +78,8 @@ import { useViewerStudio } from "@/hooks/use-viewer-studio";
 import { ClientPicker } from "@/components/portal/client-picker";
 import { documentEvents } from "@/lib/analytics/document-events";
 import { OPEN_HOUSEHOLD_SHEET_EVENT } from "@/lib/document/registry";
+import { MESSAGE_WITHHELD } from "@/lib/document/act-names";
+import { topActiveModalDialog } from "../overlays/active-dialog";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { ActFailLine } from "@/components/feedback/act-fail-line";
 import { AppError } from "@/lib/error-handler";
@@ -85,15 +87,16 @@ import {
   EMPTY_ADHOC,
   STUDIO_TARGET,
   activeDesignStudios,
-  asSentence,
   balanceCents,
   billingLinesRefusal,
   balanceOwedItems,
   buildBillingLines,
+  claimTimeRefusal,
   depositCents,
   lineClientPriceCents,
   buildComposerLines,
   deriveInvoiceBillingGap,
+  draftInvoiceRefusal,
   centsToDollarText,
   dollarsToCents,
   isValidDepositPct,
@@ -285,6 +288,9 @@ export function InvoiceComposer({
   const addLineRef = useRef<HTMLButtonElement>(null);
   const linkClientRef = useRef<HTMLAnchorElement>(null);
   const nameStudioRef = useRef<HTMLButtonElement>(null);
+  const draftActRef = useRef<HTMLButtonElement>(null);
+  // Link a client opened the household sheet, which hands focus back to it.
+  const linkingClientRef = useRef(false);
   const pathname = usePathname();
   const viewerId = useSessionUserId();
 
@@ -635,6 +641,34 @@ export function InvoiceComposer({
       setBillingGapOverride(null);
     }
   }, [billingGapOverride, projectId, projectsUpdatedAt, selectedProject]);
+  // Once the client is linked, Link a client unmounts with its gap row, so the
+  // sheet's put-back finds no opener and focus falls to the page. Land on the
+  // Draft act instead — after the sheet is put back (it may still lie above
+  // the composer), and never over focus that already went somewhere live.
+  useEffect(() => {
+    if (billingGap === "no-client" || !linkingClientRef.current) return;
+    linkingClientRef.current = false;
+    let frame = 0;
+    const land = () => {
+      const root = containerRef.current;
+      const top = topActiveModalDialog();
+      if (root && top && !top.contains(root)) return;
+      observer.disconnect();
+      frame = window.requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active && active !== document.body && active.isConnected) return;
+        draftActRef.current?.focus();
+      });
+    };
+    // DocSheet portals into <body>, so its put-back is a body child removed.
+    const observer = new MutationObserver(land);
+    observer.observe(document.body, { childList: true });
+    land();
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+    };
+  }, [billingGap]);
 
   // F9 — set_document_client (00387) answers only to the project's lead.
   const isLead =
@@ -778,7 +812,11 @@ export function InvoiceComposer({
         lines,
       });
     } catch (e) {
-      const failure = preWriteFailure(e);
+      // create_draft_invoice refuses in its own words; say it in the composer's.
+      const failure: ReturnType<typeof preWriteFailure> =
+        e instanceof InvoiceBillingGapError
+          ? preWriteFailure(e)
+          : draftInvoiceRefusal((e as { message?: unknown } | null)?.message);
       if (failure.gap) {
         setBillingGapOverride({ projectId, gap: failure.gap, seenAt: projectsUpdatedAt });
       }
@@ -809,9 +847,7 @@ export function InvoiceComposer({
         } catch {
           stranded = true;
         }
-        const reason = asSentence(
-          e instanceof Error && e.message ? e.message : "Could not attach the time entries",
-        );
+        const reason = claimTimeRefusal((e as { message?: unknown } | null)?.message);
         // A money write already ran: never offered again from here.
         setError({
           message: stranded
@@ -1418,7 +1454,7 @@ export function InvoiceComposer({
               <div
                 key={i}
                 data-adhoc-row
-                className="mb-1.5 grid grid-cols-[1fr_56px_96px_24px] items-center gap-2"
+                className="mb-1.5 grid grid-cols-[minmax(0,1fr)_56px_96px_24px] items-center gap-2"
               >
                 <input
                   placeholder="Description — e.g. design consultation"
@@ -1431,7 +1467,7 @@ export function InvoiceComposer({
                       ),
                     )
                   }
-                  className={INPUT}
+                  className={`${INPUT} min-w-0`}
                 />
                 <input
                   placeholder="Qty"
@@ -1520,7 +1556,7 @@ export function InvoiceComposer({
 
           {/* ── Running totals + the act ───────────────────────────────── */}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3">
-            <div className="flex items-baseline gap-4">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
               <span className="flex items-baseline gap-1.5">
                 <span className={LABEL}>subtotal</span>
                 <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
@@ -1571,13 +1607,14 @@ export function InvoiceComposer({
                     variant="tertiary"
                     onClick={(e) => {
                       e.currentTarget.focus();
+                      linkingClientRef.current = true;
                       if (pathname === `/doc/${projectId}`) {
                         e.preventDefault();
                         window.dispatchEvent(new CustomEvent(OPEN_HOUSEHOLD_SHEET_EVENT));
                       }
                     }}
                   >
-                    Link a client
+                    {MESSAGE_WITHHELD.repair}
                   </DocumentAction>
                 )}
                 {canNameStudio && viewerStudio && (
@@ -1619,6 +1656,7 @@ export function InvoiceComposer({
               </div>
             )}
             <DocumentAction
+              ref={draftActRef}
               actionKey="draft-invoice"
               surfaceKey="accounts"
               regionKey="invoice-composer"

@@ -6,8 +6,11 @@
  * household, the regarding line and the resolved studio (S4 · S12 · S8).
  */
 
+import { useEffect, useState } from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { InvoiceComposer } from "../invoice-composer";
+import { DocSheet } from "../../overlays/doc-sheet";
+import { PaperFolioSheet } from "../../overlays/paper-folio-sheet";
 import { OPEN_HOUSEHOLD_SHEET_EVENT } from "@/lib/document/registry";
 
 const mockCreateStudioDraft = jest.fn();
@@ -84,8 +87,8 @@ jest.mock("@patina/supabase", () => ({
     ],
     dataUpdatedAt: mockProjectsUpdatedAt,
   }),
-  useClaimTimeEntries: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useUnbilledTime: () => ({ data: { entries: [] }, isLoading: false }),
+  useClaimTimeEntries: () => ({ mutateAsync: mockClaimTime, isPending: false }),
+  useUnbilledTime: () => ({ data: { entries: mockUnbilledEntries }, isLoading: false }),
   // HT-21 (W5) — names the composer's time rows; unused by this suite's
   // studio-mode/empty-selection scenarios but called unconditionally.
   useProjectRoster: () => ({ data: [] }),
@@ -102,9 +105,13 @@ let mockCoverage: Record<string, unknown> | undefined = undefined;
 let mockStages: Array<Record<string, unknown>> | undefined = undefined;
 const mockAddBilling = jest.fn();
 const mockDeleteDraft = jest.fn();
+const mockClaimTime = jest.fn();
+let mockUnbilledEntries: Array<Record<string, unknown>> = [];
 
 beforeEach(() => {
   mockCreateDraft.mockReset().mockResolvedValue({ id: "inv-1" });
+  mockClaimTime.mockReset().mockResolvedValue([]);
+  mockUnbilledEntries = [];
   mockAddBilling.mockReset().mockResolvedValue([]);
   mockDeleteDraft.mockReset().mockResolvedValue(undefined);
   mockPurchases = [];
@@ -1017,6 +1024,128 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
       "The billing lines couldn't be added to the draft. Nothing was billed.",
     );
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      "a refusal it knows",
+      "Failed to create draft invoice: invoices are denominated in USD; selection 3f0c9d2e-0000-4000-8000-000000000002 is priced in another currency",
+      "A selection is priced in another currency. Invoices bill in US dollars only.",
+      false,
+    ],
+    [
+      "one it doesn't",
+      'Failed to create draft invoice: duplicate key value violates unique constraint "invoices_pkey" (12000 cents)',
+      "The invoice couldn't be drafted.",
+      true,
+    ],
+  ])("F13: says create_draft_invoice's %s in the composer's words", async (_label, raw, sentence, retryable) => {
+    mockFfeItems = [SIDE_TABLE];
+    mockCreateDraft.mockRejectedValue(new Error(raw));
+    render(composer({ projectId: "project-1", initialFfeItemIds: ["ffe-1"] }));
+    fireEvent.click(act());
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(sentence);
+    expect(alert).not.toHaveTextContent(/Failed to create|create_draft_invoice|3f0c9d2e|invoices_pkey|cents/);
+    if (retryable) {
+      expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    } else {
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    }
+  });
+
+  // useClaimTimeEntries rethrows supabase-js's PostgrestError, an Error.
+  const postgrestError = (message: string) =>
+    Object.assign(new Error(message), { name: "PostgrestError", code: "P0001", details: "", hint: "" });
+
+  it.each([
+    [
+      "a refusal it knows",
+      postgrestError(
+        "Time entry 5b1f0c7e-0000-4000-8000-000000000001 is attached to invoice 9a2e4d10-0000-4000-8000-000000000003; only notes (and detaching the invoice) may change.",
+      ),
+      "Some of these hours were just billed on another invoice. Nothing was billed.",
+    ],
+    [
+      "one it doesn't",
+      postgrestError("claim_time_entries: 30000 cents on entry 5b1f0c7e-0000-4000-8000-000000000001 refused"),
+      "The hours couldn't be attached to the draft. Nothing was billed.",
+    ],
+  ])("F13: says claim_time_entries' %s in the composer's words, with no Try again", async (_label, refusal, sentence) => {
+    mockUnbilledEntries = [
+      {
+        id: "te-1",
+        user_id: "designer-1",
+        duration_minutes: 120,
+        amount_cents: 30000,
+        started_at: "2026-10-01T15:00:00Z",
+      },
+    ];
+    mockClaimTime.mockRejectedValue(refusal);
+    render(composer({ projectId: "project-1", initialTimeEntryIds: ["te-1"] }));
+    await waitFor(() => expect(act()).toBeEnabled());
+    fireEvent.click(act());
+    const alert = await screen.findByRole("alert");
+    expect(mockClaimTime).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1", entryIds: ["te-1"] });
+    expect(mockDeleteDraft).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1" });
+    expect(alert).toHaveTextContent(sentence);
+    expect(alert).not.toHaveTextContent(/claim_time_entries|Time entry|5b1f0c7e|9a2e4d10|cents/);
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("F1: once the client is linked, putting the sheet back lands on Draft the invoice; Esc unlinked still returns to Link a client", async () => {
+    mockProjectClientId = null;
+    mockPathname = "/doc/project-1";
+    // The page's half of the stack: the household sheet opens on the composer's
+    // event, above the folio the composer is drawn in.
+    function Stack() {
+      const [householdOpen, setHouseholdOpen] = useState(false);
+      useEffect(() => {
+        const open = () => setHouseholdOpen(true);
+        window.addEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, open);
+        return () => window.removeEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, open);
+      }, []);
+      return (
+        <>
+          <PaperFolioSheet open onClose={jest.fn()} title="Draw an invoice" wide>
+            {composer()}
+          </PaperFolioSheet>
+          <DocSheet open={householdOpen} onClose={() => setHouseholdOpen(false)} title="The household" aboveFolio>
+            <button type="button">Link a household…</button>
+          </DocSheet>
+        </>
+      );
+    }
+    const household = () => screen.queryByRole("dialog", { name: "The household" });
+    const putBack = () => fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    const view = render(<Stack />);
+    fireEvent.change(screen.getByLabelText("Line description"), { target: { value: "Design fee" } });
+    fireEvent.change(screen.getByLabelText("Unit price (dollars)"), { target: { value: "450" } });
+
+    // Put back without linking: the sheet hands focus back to its opener.
+    fireEvent.click(screen.getByRole("link", { name: "Link a client" }));
+    await waitFor(() => expect(household()).toHaveFocus());
+    putBack();
+    expect(household()).toBeNull();
+    await waitFor(() => expect(screen.getByRole("link", { name: "Link a client" })).toHaveFocus());
+    expect(act()).toHaveAttribute("aria-disabled", "true");
+
+    // Linked in the sheet: the projects read refreshes underneath while it is
+    // still open, and the opener goes with the gap.
+    fireEvent.click(screen.getByRole("link", { name: "Link a client" }));
+    await waitFor(() => expect(household()).toHaveFocus());
+    mockProjectClientId = "client-9";
+    mockProjectsUpdatedAt = 2;
+    view.rerender(<Stack />);
+    expect(screen.queryByRole("link", { name: "Link a client" })).not.toBeInTheDocument();
+    // The sheet keeps focus while it lies above the composer.
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    expect(household()?.contains(document.activeElement)).toBe(true);
+
+    putBack();
+    expect(household()).toBeNull();
+    await waitFor(() => expect(act()).toHaveFocus());
+    expect(act()).toBeEnabled();
   });
 
   it("F6: lands a held deposit on Deposit percent", async () => {

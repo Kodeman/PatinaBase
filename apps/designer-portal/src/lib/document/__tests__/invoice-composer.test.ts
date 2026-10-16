@@ -11,8 +11,10 @@ import {
   billingLinesRefusal,
   buildComposerLines,
   canDraftStudioInvoice,
+  claimTimeRefusal,
   deriveInvoiceBillingGap,
   dollarsToCents,
+  draftInvoiceRefusal,
   partitionFfeBillable,
   stampStudioRefusal,
   studioInvoiceBlocker,
@@ -589,6 +591,70 @@ describe("billingLinesRefusal", () => {
     const said = billingLinesRefusal(message, nameOf);
     expect(said).toBe("The billing lines couldn't be added to the draft.");
     expect(said).not.toMatch(/add_invoice_billing_lines|p1|cents/);
+  });
+});
+
+describe("draftInvoiceRefusal", () => {
+  const RPC = "Failed to create draft invoice: ";
+
+  it.each([
+    [`${RPC}invoice project not found or access denied`, "This project couldn't be billed from your account. Reload the page in case its client or studio just changed."],
+    [`${RPC}invalid draft invoice payload`, "One of the lines couldn't be drafted as it stands. Check each line, then draft again."],
+    [`${RPC}An allowance bills once it's filled.`, "An allowance bills once it's filled. Reload the page to see which one isn't yet."],
+    [
+      `${RPC}invoices are denominated in USD; selection 3f0c9d2e-0000-4000-8000-000000000002 is priced in another currency`,
+      "A selection is priced in another currency. Invoices bill in US dollars only.",
+    ],
+    ["Not authenticated", "You're signed out. Sign in again, then draw the invoice."],
+    ["Invoice client does not match the selected project", "This project's client changed after the invoice was started. Reload the page to bill the current client."],
+    ["We couldn't find this project. Reload and try again.", "We couldn't find this project. Reload and try again."],
+  ])("says %s in the composer's words, with no retry", (message, sentence) => {
+    expect(draftInvoiceRefusal(message)).toEqual({ message: sentence, retryable: false });
+  });
+
+  it("keeps a failed project read retryable", () => {
+    expect(draftInvoiceRefusal("We couldn't open this project to bill it. Reload and try again.")).toEqual({
+      message: "We couldn't open this project to bill it. Reload and try again.",
+      retryable: true,
+    });
+  });
+
+  it.each([
+    ["an unrecognised RPC refusal", `${RPC}duplicate key value violates unique constraint "invoices_pkey" (12000 cents)`],
+    ["a dropped connection", `${RPC}TypeError: Failed to fetch`],
+    ["a recognised reason inside other words", `${RPC}lines for invoice project not found or access denied`],
+    ["no message at all", undefined],
+  ])("falls back to one plain, retryable sentence for %s", (_label, message) => {
+    const said = draftInvoiceRefusal(message);
+    expect(said).toEqual({ message: "The invoice couldn't be drafted.", retryable: true });
+    expect(said.message).not.toMatch(/create_draft_invoice|Failed to create|invoices_pkey|cents/);
+  });
+});
+
+describe("claimTimeRefusal", () => {
+  it.each([
+    [
+      "Some of the selected time entries were just billed on another invoice. Refresh and try again.",
+      "Some of these hours were just billed on another invoice.",
+    ],
+    [
+      "Time entry 5b1f0c7e-0000-4000-8000-000000000001 is attached to invoice 9a2e4d10-0000-4000-8000-000000000003; only notes (and detaching the invoice) may change.",
+      "Some of these hours were just billed on another invoice.",
+    ],
+    ["JWT expired", "You're signed out. Sign in again, then draw the invoice."],
+    ["permission denied for function claim_time_entries", "You're signed out. Sign in again, then draw the invoice."],
+  ])("says %s in the composer's words", (message, sentence) => {
+    expect(claimTimeRefusal(message)).toBe(sentence);
+  });
+
+  it.each([
+    ["an unrecognised refusal", "claim_time_entries: 30000 cents on entry 5b1f0c7e-0000-4000-8000-000000000001 refused"],
+    ["a foreign-key refusal", 'insert or update on table "project_time_entries" violates foreign key constraint "fk_time_entries_invoice"'],
+    ["no message at all", undefined],
+  ])("falls back to one plain sentence for %s", (_label, message) => {
+    const said = claimTimeRefusal(message);
+    expect(said).toBe("The hours couldn't be attached to the draft.");
+    expect(said).not.toMatch(/claim_time_entries|project_time_entries|5b1f0c7e|cents/);
   });
 });
 

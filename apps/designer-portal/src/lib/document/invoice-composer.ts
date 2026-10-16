@@ -838,6 +838,92 @@ export function billingLinesRefusal(
   return BILLING_LINES_GENERIC;
 }
 
+const DRAFT_GENERIC = "The invoice couldn't be drafted.";
+
+/** Each refusal useCreateDraftInvoice or create_draft_invoice (00511, and the
+ *  line triggers it fires: 00666, 00764) can give, the composer's sentence
+ *  for it, and whether drafting again unchanged could go through. */
+const DRAFT_REFUSALS: Array<[RegExp, string, boolean]> = [
+  [/^Not authenticated$/, "You're signed out. Sign in again, then draw the invoice.", false],
+  [
+    /^We couldn't open this project to bill it\. Reload and try again\.$/,
+    "We couldn't open this project to bill it. Reload and try again.",
+    true,
+  ],
+  [
+    /^We couldn't find this project\. Reload and try again\.$/,
+    "We couldn't find this project. Reload and try again.",
+    false,
+  ],
+  [
+    /^Invoice client does not match the selected project$/,
+    "This project's client changed after the invoice was started. Reload the page to bill the current client.",
+    false,
+  ],
+  [
+    /^invoice project not found or access denied$/,
+    "This project couldn't be billed from your account. Reload the page in case its client or studio just changed.",
+    false,
+  ],
+  [
+    /^invalid draft invoice payload$/,
+    "One of the lines couldn't be drafted as it stands. Check each line, then draft again.",
+    false,
+  ],
+  [
+    /^An allowance bills once it['’]s filled\.$/,
+    "An allowance bills once it's filled. Reload the page to see which one isn't yet.",
+    false,
+  ],
+  [
+    /^invoices are denominated in USD; selection \S+ is priced in another currency$/,
+    "A selection is priced in another currency. Invoices bill in US dollars only.",
+    false,
+  ],
+];
+
+/**
+ * A draft that never got written (useCreateDraftInvoice wraps the RPC's words
+ * as `Failed to create draft invoice: …`): a recognised refusal is said in the
+ * composer's words and is the same refusal next time; anything else — a
+ * dropped connection, a timeout, a message this table doesn't know — says only
+ * that the invoice wasn't drafted, and may go through on a second try.
+ */
+export function draftInvoiceRefusal(message: unknown): { message: string; retryable: boolean } {
+  if (typeof message !== "string") return { message: DRAFT_GENERIC, retryable: true };
+  const reason = message.trim().replace(/^Failed to create draft invoice:\s*/, "");
+  const known = DRAFT_REFUSALS.find(([pattern]) => pattern.test(reason));
+  return known
+    ? { message: known[1], retryable: known[2] }
+    : { message: DRAFT_GENERIC, retryable: true };
+}
+
+const CLAIM_GENERIC = "The hours couldn't be attached to the draft.";
+
+/**
+ * claim_time_entries (00595/00617) and useClaimTimeEntries refuse in their own
+ * words, some carrying entry and invoice ids; the composer says only the ones
+ * it recognises, and anything else as one plain sentence.
+ */
+export function claimTimeRefusal(message: unknown): string {
+  if (typeof message !== "string") return CLAIM_GENERIC;
+  const reason = message.trim();
+  // The hook's short-claim refusal, or the 00177 guard on an entry another
+  // invoice already holds.
+  if (
+    /^Some of the selected time entries were just billed on another invoice\b/.test(reason) ||
+    /^Time entry \S+ is attached to invoice \S+/.test(reason)
+  ) {
+    return "Some of these hours were just billed on another invoice.";
+  }
+  // EXECUTE is granted to authenticated only, so a refusal of it is a session
+  // that has lapsed.
+  if (/^JWT expired$|^permission denied for function claim_time_entries$/.test(reason)) {
+    return "You're signed out. Sign in again, then draw the invoice.";
+  }
+  return CLAIM_GENERIC;
+}
+
 /**
  * stamp_project_pricing_studio (00606) refuses in the same register; the
  * composer's Name studio act says why in the studio's own name.
