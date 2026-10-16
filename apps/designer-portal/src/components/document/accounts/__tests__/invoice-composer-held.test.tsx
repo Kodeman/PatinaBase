@@ -288,7 +288,7 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
-    expect(await screen.findByText(/purchase p1 is already billed/)).toBeInTheDocument();
+    expect(await screen.findByText(/Nothing was billed/)).toBeInTheDocument();
     expect(mockDeleteDraft).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1" });
     expect(onDrafted).not.toHaveBeenCalled();
   });
@@ -345,7 +345,8 @@ describe("InvoiceComposer · riders at cost (C-31)", () => {
       />,
     );
     const act = screen.getByRole("button", { name: "Draft the invoice" });
-    expect(act).toBeDisabled();
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act).not.toBeDisabled();
     fireEvent.change(screen.getByLabelText("Billed amount · Liftgate"), {
       target: { value: "175" },
     });
@@ -405,7 +406,8 @@ describe("InvoiceComposer · deposit, then balance (C-31)", () => {
       target: { value: "120" },
     });
     expect(screen.getByRole("alert")).toHaveTextContent("a percent above 0, at most 100");
-    expect(screen.getByRole("button", { name: "Draft the invoice" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Draft the invoice" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Draft the invoice" })).not.toBeDisabled();
   });
 
   it("offers the balance of a deposited line, showing what it has had billed", async () => {
@@ -659,10 +661,12 @@ describe("InvoiceComposer · studio mode", () => {
     pickStudio();
 
     const act = () => screen.getByRole("button", { name: "Draft the invoice" });
-    expect(act()).toBeDisabled();
+    expect(act()).toHaveAttribute("aria-disabled", "true");
+    expect(act()).not.toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "pick household" }));
-    expect(act()).toBeDisabled();
+    expect(act()).toHaveAttribute("aria-disabled", "true");
+    expect(act()).not.toBeDisabled();
 
     fireEvent.change(
       screen.getByPlaceholderText("Design consultation · Sept 2026"),
@@ -670,7 +674,8 @@ describe("InvoiceComposer · studio mode", () => {
         target: { value: "Design consultation · 12 Sept 2026" },
       },
     );
-    expect(act()).toBeDisabled();
+    expect(act()).toHaveAttribute("aria-disabled", "true");
+    expect(act()).not.toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("Line description"), {
       target: { value: "Design consultation, on site (2 h)" },
@@ -752,7 +757,8 @@ describe("InvoiceComposer · studio mode", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Draft the invoice" }),
-    ).toBeDisabled();
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Draft the invoice" })).not.toBeDisabled();
     expect(screen.queryByLabelText("Studio")).not.toBeInTheDocument();
   });
 
@@ -769,7 +775,7 @@ describe("InvoiceComposer · studio mode", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("holds a client-less project, explains the fix, and focuses Link a client", () => {
+  it("holds a client-less project, explains the fix, and focuses Link a client", async () => {
     mockProjectClientId = null;
     render(
       <InvoiceComposer context={{ projectId: "project-1" }} onDrafted={jest.fn()} />,
@@ -780,7 +786,7 @@ describe("InvoiceComposer · studio mode", () => {
     expect(screen.getByText("Hollis House has no client yet. Link one to bill it.")).toBeInTheDocument();
     fireEvent.click(act);
     expect(screen.getByRole("status")).toHaveTextContent("Link a client before drafting this invoice.");
-    expect(screen.getByRole("link", { name: "Link a client" })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole("link", { name: "Link a client" })).toHaveFocus());
   });
 
   it("allows a complete project to draft when it has a billable line", () => {

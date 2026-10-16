@@ -56,6 +56,7 @@ jest.mock("@patina/supabase", () => ({
         name: "Hollis House",
         status: "active",
         client_id: "client-9",
+        studio_id: "studio-1",
       },
     ],
   }),
@@ -285,7 +286,7 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
-    expect(await screen.findByText(/purchase p1 is already billed/)).toBeInTheDocument();
+    expect(await screen.findByText(/Nothing was billed/)).toBeInTheDocument();
     expect(mockDeleteDraft).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1" });
     expect(onDrafted).not.toHaveBeenCalled();
   });
@@ -750,7 +751,8 @@ describe("InvoiceComposer · studio mode", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Draft the invoice" }),
-    ).toBeDisabled();
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Draft the invoice" })).not.toBeDisabled();
     expect(screen.queryByLabelText("Studio")).not.toBeInTheDocument();
   });
 
@@ -790,10 +792,8 @@ describe("InvoiceComposer · studio mode", () => {
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
 
     expect(
-      await screen.findByText("The household is not on this studio’s roster."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Try again" }),
-    ).toBeInTheDocument();
+      await screen.findByRole("alert"),
+    ).toHaveTextContent("The household is not on this studio’s roster.");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });

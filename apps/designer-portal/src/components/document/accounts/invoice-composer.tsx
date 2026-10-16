@@ -76,6 +76,7 @@ import { documentEvents } from "@/lib/analytics/document-events";
 import { OPEN_HOUSEHOLD_SHEET_EVENT } from "@/lib/document/registry";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { ActFailLine } from "@/components/feedback/act-fail-line";
+import { AppError } from "@/lib/error-handler";
 import {
   EMPTY_ADHOC,
   STUDIO_TARGET,
@@ -1405,7 +1406,7 @@ export function InvoiceComposer({
                       surfaceKey="accounts"
                       regionKey="invoice-composer"
                       variant="tertiary"
-                      onClick={() => window.dispatchEvent(new CustomEvent(OPEN_HOUSEHOLD_SHEET_EVENT))}
+                      onClick={() => { window.dispatchEvent(new CustomEvent(OPEN_HOUSEHOLD_SHEET_EVENT)); }}
                     >
                       Link a client
                     </DocumentAction>
@@ -1435,6 +1436,7 @@ export function InvoiceComposer({
               regionKey="invoice-composer"
               variant="primary"
               held={!canDraft && !creating}
+              disabled={!canDraft && !creating}
               onHeldActivate={() => {
                 const reason = billingGap === "no-client"
                   ? "Link a client before drafting this invoice."
@@ -1458,8 +1460,8 @@ export function InvoiceComposer({
                     : billingGap === "no-studio" && ownerStudio
                       ? document.querySelector<HTMLElement>('[data-action-key="name-invoice-studio"]')
                       : !projectId
-                      ? document.querySelector<HTMLElement>('select[aria-label="Project"], select[aria-label="For"]')
-                      : document.querySelector<HTMLElement>('input:not([type="checkbox"]), button[aria-label]');
+                        ? document.querySelector<HTMLElement>('select[aria-label="Project"], select[aria-label="For"]')
+                        : document.querySelector<HTMLElement>('input:not([type="checkbox"]), button[aria-label]');
                   target?.focus();
                 });
               }}
@@ -1479,7 +1481,7 @@ export function InvoiceComposer({
 
           {/* R83 — the inline failure band, at the act site. */}
           <ActFailLine
-            error={error}
+            error={error ? new AppError({ code: "INVOICE_DRAFT", message: error }) : null}
             className="mt-2"
             onRetry={isRetryableDraftError(error) ? () => void draft() : undefined}
             retryKey="retry-draft-invoice"
