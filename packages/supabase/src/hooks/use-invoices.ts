@@ -739,6 +739,23 @@ export function useArAging() {
  * `{ errorSurface: 'inline' }` — see useSendInvoice (R83). The Document's
  * invoice composer renders failures inline; legacy callers keep the toast.
  */
+export type InvoiceBillingGapKind = 'designer' | 'client' | 'studio';
+
+export class InvoiceBillingGapError extends Error {
+  readonly gap: InvoiceBillingGapKind;
+
+  constructor(gap: InvoiceBillingGapKind) {
+    const copy: Record<InvoiceBillingGapKind, string> = {
+      designer: "We couldn't find this project's designer — reload and try again.",
+      client: 'This project has no client yet. Link one to bill it.',
+      studio: "This project isn't tied to a studio yet.",
+    };
+    super(copy[gap]);
+    this.name = 'InvoiceBillingGapError';
+    this.gap = gap;
+  }
+}
+
 export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -760,15 +777,11 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
           `Failed to load invoice project: ${projectErr.message ?? String(projectErr)}`
         );
       }
-      if (
-        !project ||
-        project.id !== input.projectId ||
-        !project.designer_id ||
-        !project.client_id ||
-        !project.studio_id
-      ) {
-        throw new Error('Invoice project is missing its canonical billing tuple');
+      if (!project || project.id !== input.projectId || !project.designer_id) {
+        throw new InvoiceBillingGapError('designer');
       }
+      if (!project.client_id) throw new InvoiceBillingGapError('client');
+      if (!project.studio_id) throw new InvoiceBillingGapError('studio');
       if (input.clientId !== undefined && input.clientId !== project.client_id) {
         throw new Error('Invoice client does not match the selected project');
       }

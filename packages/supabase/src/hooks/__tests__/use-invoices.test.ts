@@ -421,22 +421,14 @@ describe('useCreateDraftInvoice', () => {
     expect(supabaseClient.rpc).not.toHaveBeenCalled();
   });
 
-  it('does not create a header from an incomplete project tuple', async () => {
-    const project = projectRead({
-      data: {
-        id: 'project-a',
-        designer_id: 'project-lead-a',
-        client_id: 'client-a',
-        studio_id: null,
-      },
-      error: null,
-    });
-    supabaseClient.from.mockReturnValue(project);
-
+  it.each([
+    [{ id: 'project-a', designer_id: 'lead-a', client_id: 'client-a', studio_id: null }, 'studio', "This project isn't tied to a studio yet."],
+    [{ id: 'project-a', designer_id: 'lead-a', client_id: null, studio_id: 'studio-a' }, 'client', 'This project has no client yet. Link one to bill it.'],
+    [{ id: 'project-a', designer_id: null, client_id: 'client-a', studio_id: 'studio-a' }, 'designer', "We couldn't find this project's designer — reload and try again."],
+  ] as const)('throws a typed billing gap for missing project data', async (data, gap, message) => {
+    supabaseClient.from.mockReturnValue(projectRead({ data, error: null }));
     const config = useCreateDraftInvoice() as unknown as CreateConfig;
-    await expect(config.mutationFn(input)).rejects.toThrow(
-      'Invoice project is missing its canonical billing tuple'
-    );
+    await expect(config.mutationFn(input)).rejects.toMatchObject({ name: 'InvoiceBillingGapError', gap, message });
     expect(supabaseClient.rpc).not.toHaveBeenCalled();
   });
 

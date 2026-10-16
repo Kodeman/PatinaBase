@@ -23,6 +23,8 @@ let mockOrganizations: Array<Record<string, unknown>> = [
 let mockOrganizationsLoading = false;
 
 jest.mock("@patina/supabase", () => ({
+  InvoiceBillingGapError: class InvoiceBillingGapError extends Error {},
+  useStampProjectPricingStudio: () => ({ mutate: jest.fn(), isPending: false }),
   useCreateDraftInvoice: () => ({
     mutateAsync: mockCreateDraft,
     isPending: false,
@@ -340,7 +342,8 @@ describe("InvoiceComposer · riders at cost (C-31)", () => {
       />,
     );
     const act = screen.getByRole("button", { name: "Draft the invoice" });
-    expect(act).toBeDisabled();
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act).not.toBeDisabled();
     fireEvent.change(screen.getByLabelText("Billed amount · Liftgate"), {
       target: { value: "175" },
     });
@@ -400,7 +403,7 @@ describe("InvoiceComposer · deposit, then balance (C-31)", () => {
       target: { value: "120" },
     });
     expect(screen.getByRole("alert")).toHaveTextContent("a percent above 0, at most 100");
-    expect(screen.getByRole("button", { name: "Draft the invoice" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Draft the invoice" })).toHaveAttribute("aria-disabled", "true");
   });
 
   it("offers the balance of a deposited line, showing what it has had billed", async () => {
@@ -654,10 +657,10 @@ describe("InvoiceComposer · studio mode", () => {
     pickStudio();
 
     const act = () => screen.getByRole("button", { name: "Draft the invoice" });
-    expect(act()).toBeDisabled();
+    expect(act()).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "pick household" }));
-    expect(act()).toBeDisabled();
+    expect(act()).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.change(
       screen.getByPlaceholderText("Design consultation · Sept 2026"),
@@ -665,7 +668,7 @@ describe("InvoiceComposer · studio mode", () => {
         target: { value: "Design consultation · 12 Sept 2026" },
       },
     );
-    expect(act()).toBeDisabled();
+    expect(act()).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.change(screen.getByLabelText("Line description"), {
       target: { value: "Design consultation, on site (2 h)" },
