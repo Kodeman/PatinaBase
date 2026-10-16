@@ -30,7 +30,13 @@ import {
 } from '../use-document-client-authority';
 import { useReassignLead } from '../use-project-team';
 import { useStampProjectPricingStudio } from '../use-time-tracking';
-import { useRemoveMember, useUpdateMemberRole } from '../use-organizations';
+import {
+  useAcceptInvitation,
+  useLeaveOrganization,
+  useRemoveMember,
+  useTransferOrganizationOwnership,
+  useUpdateMemberRole,
+} from '../use-organizations';
 
 const LINK_KEY = ['document-client-authority', 'can-link', 'project-1'];
 const LINK_FAMILY = ['document-client-authority'];
@@ -118,6 +124,24 @@ describe('seat changes invalidate every K5 answer', () => {
   it("useRemoveMember: a removed lead leaves her projects lead_not_in_studio", () => {
     const mutation = useRemoveMember() as unknown as MutationConfig;
     mutation.onSuccess({ organizationId: 'studio-1' }, 'member-1');
+    expect(invalidatedKeys()).toContainEqual(LINK_FAMILY);
+  });
+
+  it('useLeaveOrganization: a departing lead changes who may link', () => {
+    const mutation = useLeaveOrganization() as unknown as MutationConfig;
+    mutation.onSuccess(undefined, 'studio-1');
+    expect(invalidatedKeys()).toContainEqual(LINK_FAMILY);
+  });
+
+  it('useTransferOrganizationOwnership: owner/admin standing moves', () => {
+    const mutation = useTransferOrganizationOwnership() as unknown as MutationConfig;
+    mutation.onSuccess(undefined, { organizationId: 'studio-1', newOwnerUserId: 'new-owner' });
+    expect(invalidatedKeys()).toContainEqual(LINK_FAMILY);
+  });
+
+  it('useAcceptInvitation: a seat is added or returned', () => {
+    const mutation = useAcceptInvitation() as unknown as MutationConfig;
+    mutation.onSuccess({ organization_id: 'studio-1', organization_name: 'Studio' }, 'token');
     expect(invalidatedKeys()).toContainEqual(LINK_FAMILY);
   });
 });
