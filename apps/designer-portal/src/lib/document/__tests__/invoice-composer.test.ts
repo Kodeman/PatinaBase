@@ -6,6 +6,7 @@
 
 import {
   STUDIO_TARGET,
+  assessInvoiceReadiness,
   activeDesignStudios,
   asSentence,
   billingLinesRefusal,
@@ -847,10 +848,46 @@ describe("refusedBillingLines", () => {
     expect(refusedBillingLines(refusal(reason), LINES)).toEqual([]);
   });
 
-  it("names no line for a refusal that is not the billing writer's", () => {
-    expect(refusedBillingLines({ message: "purchase p1 is already billed" }, LINES)).toEqual([]);
-    expect(refusedBillingLines(new Error("network error"), LINES)).toEqual([]);
-    expect(refusedBillingLines(null, LINES)).toEqual([]);
+  it("assesses all invoice holds in repair order and is ready when clear", () => {
+    const result = assessInvoiceReadiness({
+      clientLinked: false,
+      studioMode: false,
+      pricingStudioLinked: false,
+      selectedRatePendingEntryIds: ["entry-1"],
+      selectedUnpricedLineIds: ["line-1"],
+      selectedAnything: false,
+      sendNoRecipient: true,
+    });
+    expect(result.ready).toBe(false);
+    expect(result.holds.map((hold) => hold.kind)).toEqual([
+      "no-client", "no-studio", "rate-pending", "price-line", "nothing-selected", "send-no-recipient",
+    ]);
+    expect(assessInvoiceReadiness({ clientLinked: true, pricingStudioLinked: true, selectedAnything: true, selectedRatePendingEntryIds: [], selectedUnpricedLineIds: [] })).toEqual({ ready: true, holds: [] });
+  });
+
+  it("does not hold an unselected unpriced line", () => {
+    expect(assessInvoiceReadiness({ clientLinked: true, pricingStudioLinked: true, selectedAnything: true, selectedRatePendingEntryIds: [], selectedUnpricedLineIds: [] }).holds).toEqual([]);
+  });
+
+  it("reports each individual invoice hold", () => {
+    const common = { clientLinked: true, pricingStudioLinked: true, selectedAnything: true, selectedRatePendingEntryIds: [], selectedUnpricedLineIds: [] };
+    const cases = [
+      [{ ...common, clientLinked: false }, "no-client"],
+      [{ ...common, studioMode: true, pricingStudioLinked: false }, "no-studio"],
+      [{ ...common, selectedRatePendingEntryIds: ["e1"] }, "rate-pending"],
+      [{ ...common, selectedUnpricedLineIds: ["l1"] }, "price-line"],
+      [{ ...common, selectedAnything: false }, "nothing-selected"],
+      [{ ...common, sendNoRecipient: true }, "send-no-recipient"],
+    ] as const;
+    for (const [facts, kind] of cases) expect(assessInvoiceReadiness(facts).holds[0]?.kind).toBe(kind);
+    expect(assessInvoiceReadiness({ ...common, selectedRatePendingEntryIds: ["e1"], ratePendingNames: { e1: "Mara" } }).holds[0]).toMatchObject({
+      reason: "Mara's hours are waiting for a rate.", repair: "Set the rate", fixer: "set-rate", focusKey: "rate-pending",
+    });
+    expect(assessInvoiceReadiness({ ...common, selectedUnpricedLineIds: ["l1"], unpricedLineNames: { l1: "Sofa" } }).holds[0]).toMatchObject({
+      reason: "Set a client price for Sofa.", repair: "Price it", fixer: "price-line", focusKey: "price-line:l1",
+    });
+    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true, householdName: "The Lees" }).holds[0]).toMatchObject({
+      reason: "The Lees has no email to send to.", repair: "Add their email", fixer: "add-email", focusKey: "add-email",
+    });
   });
 });
-

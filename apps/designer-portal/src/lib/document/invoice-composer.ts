@@ -949,8 +949,58 @@ export function draftInvoiceRefusal(message: unknown): { message: string; retrya
 
 const CLAIM_GENERIC = "The hours couldn't be attached to the draft.";
 
+export type InvoiceHoldKind =
+  | "no-client"
+  | "no-studio"
+  | "rate-pending"
+  | "price-line"
+  | "nothing-selected"
+  | "send-no-recipient";
+
 export interface InvoiceHold {
+  kind: InvoiceHoldKind;
+  reason: string;
+  repair: string;
   fixer: "link-client" | "name-studio" | "set-rate" | "price-line" | "add-email" | "select-lines" | "ask";
+  focusKey: string;
+}
+
+export interface InvoiceReadinessFacts {
+  clientLinked: boolean;
+  studioMode?: boolean;
+  projectExists?: boolean;
+  pricingStudioLinked: boolean;
+  selectedRatePendingEntryIds: string[];
+  selectedUnpricedLineIds: string[];
+  selectedAnything: boolean;
+  sendNoRecipient?: boolean;
+  noClientReason?: string;
+  noStudioReason?: string;
+  ratePendingNames?: Record<string, string | null | undefined>;
+  unpricedLineNames?: Record<string, string | null | undefined>;
+  householdName?: string;
+}
+
+/** Readiness is derived without mutating composer state; holds follow repair order. */
+export function assessInvoiceReadiness(facts: InvoiceReadinessFacts): { ready: boolean; holds: InvoiceHold[] } {
+  const holds: InvoiceHold[] = [];
+  const add = (kind: InvoiceHoldKind, reason: string, repair: string, fixer: InvoiceHold["fixer"], focusKey: string) =>
+    holds.push({ kind, reason, repair, fixer, focusKey });
+
+  if (!facts.studioMode && !facts.clientLinked)
+    add("no-client", facts.noClientReason ?? "Link a client before drafting this invoice.", "Link a client", "link-client", "link-client");
+  if (facts.projectExists !== false && !facts.pricingStudioLinked)
+    add("no-studio", facts.noStudioReason ?? "Name the studio before drafting this invoice.", "Name the studio", "name-studio", "name-studio");
+  for (const id of facts.selectedRatePendingEntryIds)
+    add("rate-pending", `${facts.ratePendingNames?.[id] || id}'s hours are waiting for a rate.`, "Set the rate", "set-rate", "rate-pending");
+  for (const id of facts.selectedUnpricedLineIds)
+    add("price-line", `Set a client price for ${facts.unpricedLineNames?.[id] || id}.`, "Price it", "price-line", `price-line:${id}`);
+  if (!facts.selectedAnything)
+    add("nothing-selected", "Add at least one line first.", "Select lines", "select-lines", "invoice-lines");
+  if (facts.sendNoRecipient)
+    add("send-no-recipient", `${facts.householdName || "This household"} has no email to send to.`, "Add their email", "add-email", "add-email");
+
+  return { ready: holds.length === 0, holds };
 }
 
 const BILLING_GENERIC = "The invoice couldn't be completed. Check the invoice and try again.";
