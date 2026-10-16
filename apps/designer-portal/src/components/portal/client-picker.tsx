@@ -144,15 +144,25 @@ export function ClientPicker({
     return dc.client?.email ?? dc.client_email ?? null;
   }, []);
 
+  const distinctClients = React.useMemo(() => {
+    const seenClientIds = new Set<string>();
+    return (clients ?? []).filter((dc) => {
+      if (!dc.client_id) return true;
+      if (seenClientIds.has(dc.client_id)) return false;
+      seenClientIds.add(dc.client_id);
+      return true;
+    });
+  }, [clients]);
+
   const selected = React.useMemo(
-    () => (clients ?? []).find((dc) => dc.client_id && dc.client_id === value) ?? null,
-    [clients, value]
+    () => distinctClients.find((dc) => dc.client_id && dc.client_id === value) ?? null,
+    [distinctClients, value],
   );
 
   const trimmedSearch = search.trim();
 
   const filtered = React.useMemo(() => {
-    const list = clients ?? [];
+    const list = distinctClients;
     if (trimmedSearch.length === 0) return list;
     const q = trimmedSearch.toLowerCase();
     return list.filter((dc) => {
@@ -160,7 +170,7 @@ export function ClientPicker({
       const sub = (subtitleFor(dc) ?? '').toLowerCase();
       return label.includes(q) || sub.includes(q);
     });
-  }, [clients, trimmedSearch, labelFor, subtitleFor]);
+  }, [distinctClients, trimmedSearch, labelFor, subtitleFor]);
 
   // Arming is a transient UI state, not a commitment — it drops whenever the
   // list RE-DERIVES for any reason (a search change, a background useClients

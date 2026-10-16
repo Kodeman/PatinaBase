@@ -398,6 +398,11 @@ export function InvoiceComposer({
     [unbilledTime, memberNames],
   );
 
+  const ratePendingHours = useMemo(
+    () => (ratePendingEntries.reduce((total, entry) => total + entry.duration_minutes, 0) / 60).toFixed(1),
+    [ratePendingEntries],
+  );
+
   // ── Prefill seeding — once per project, after the section queries settle ──
   // (An intersection seed, not a blind copy: covered FF&E items and
   // already-claimed entries fall out here; the notice below narrates it.)
@@ -1173,10 +1178,7 @@ export function InvoiceComposer({
                       </div>
                     ))}
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {ratePendingEntries.length === 1
-                        ? "one hour has no rate yet"
-                        : `${ratePendingEntries.length} hours have no rate yet`}{" "}
-                      · they cannot be invoiced until the studio prices them ·{" "}
+                      {ratePendingHours} hours waiting for a rate · they cannot be invoiced until the studio prices them ·{" "}
                       <Link
                         href="/desk?account=studio"
                         className="underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"

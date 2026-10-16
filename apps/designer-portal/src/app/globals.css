@@ -1181,6 +1181,10 @@ html[data-loading-register] [data-register-off] {
   outline: 2px solid var(--color-clay-ink);
   outline-offset: 2px;
 }
+[data-held-focus-cue] {
+  outline: 2px solid var(--color-clay-ink) !important;
+  outline-offset: 2px !important;
+}
 .da-act::before {
   /* A caret is a mark, not a word. The `/ ''` alt text keeps the glyph out of
      the accessible name — without it every action would announce as

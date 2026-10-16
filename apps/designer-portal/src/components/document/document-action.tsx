@@ -22,6 +22,22 @@ import type {
 } from 'react';
 import { documentEvents } from '@/lib/analytics/document-events';
 
+function cueHeldFixerAfterMouseActivation() {
+  requestAnimationFrame(() => {
+    const target = document.activeElement;
+    if (!(target instanceof HTMLElement) || target === document.body) return;
+    try {
+      (target.focus as (options?: FocusOptions & { focusVisible?: boolean }) => void)({
+        focusVisible: true,
+      });
+    } catch {
+      target.focus();
+    }
+    target.setAttribute('data-held-focus-cue', '');
+    window.setTimeout(() => target.removeAttribute('data-held-focus-cue'), 900);
+  });
+}
+
 export type DocumentActionVariant =
   | 'primary'
   | 'inked'
@@ -255,7 +271,10 @@ export const DocumentAction = forwardRef<
     const handleClick = async (event: MouseEvent<HTMLAnchorElement>) => {
       if (unavailable) {
         event.preventDefault();
-        if (isHeld) onHeldActivate?.();
+        if (isHeld) {
+          onHeldActivate?.();
+          if (event.detail > 0) cueHeldFixerAfterMouseActivation();
+        }
         return;
       }
       // A capture failure must never block the act itself — the same
@@ -298,7 +317,10 @@ export const DocumentAction = forwardRef<
   const buttonOnClick = onClick as DocumentActionButtonProps['onClick'];
   const handleClick = async (event: MouseEvent<HTMLButtonElement>) => {
     if (unavailable) {
-      if (isHeld) onHeldActivate?.();
+      if (isHeld) {
+        onHeldActivate?.();
+        if (event.detail > 0) cueHeldFixerAfterMouseActivation();
+      }
       return;
     }
     // Same isolate-and-log guard as the Link branch above — a capture

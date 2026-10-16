@@ -143,6 +143,17 @@ describe('HouseholdSheet above the composer folio (US-35 F1/F2)', () => {
     expect(screen.queryByText(/owned by you|0b6f1c2e/)).not.toBeInTheDocument();
   });
 
+  it('keeps the paper folio scrim fixed to the viewport and uses the veil token', () => {
+    render(
+      <PaperFolioSheet open onClose={jest.fn()} title="Invoice">
+        <div style={{ height: 1200 }}>Long folio</div>
+      </PaperFolioSheet>,
+    );
+    const backdrop = screen.getByRole('button', { name: 'Close sheet' });
+    expect(backdrop).toHaveClass('fixed', 'inset-0', 'bg-[var(--veil)]');
+    expect(backdrop).not.toHaveClass('absolute', 'h-full');
+  });
+
   it('keeps any other attach failure as it was', () => {
     mockAttach = {
       mutate: jest.fn(),
