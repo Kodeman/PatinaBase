@@ -33,7 +33,7 @@ let mockViewerId: string | null = "designer-1";
 let mockStudioMembers: Array<Record<string, unknown>> = [];
 let mockPathname = "/";
 let mockExtraProjects: Array<Record<string, unknown>> = [];
-let mockCanLink: boolean | undefined = false;
+let mockLinkHold: "not_permitted" | "lead_not_in_studio" | null | undefined = "not_permitted";
 const mockStampStudio = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
@@ -47,9 +47,9 @@ jest.mock("@patina/supabase", () => ({
     }
   },
   useStampProjectPricingStudio: () => ({ mutate: mockStampStudio, isPending: false }),
-  // K5 (00796) — can_link_document_client, asked only off the lead.
-  useCanLinkDocumentClient: (projectId: string | null) => ({
-    data: projectId ? mockCanLink : undefined,
+  // K5 (00796) — document_client_link_hold, asked only off the lead.
+  useDocumentClientLinkHold: (projectId: string | null) => ({
+    data: projectId ? mockLinkHold : undefined,
   }),
   useSessionUserId: () => mockViewerId,
   useOrganizationMembers: (orgId: string) => ({
@@ -134,7 +134,7 @@ beforeEach(() => {
   mockPathname = "/";
   mockExtraProjects = [];
   mockStampStudio.mockReset();
-  mockCanLink = false;
+  mockLinkHold = "not_permitted";
 });
 
 // The Link a client act opens the sheet in place only on its own project's
@@ -1025,7 +1025,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
   it("K5: anyone the server won't admit is told to ask the lead, with a note to copy and no Link act", () => {
     mockProjectClientId = null;
     mockViewerId = "co-member-2";
-    mockCanLink = false;
+    mockLinkHold = "not_permitted";
     render(composer());
     expect(screen.getByText("Hollis House has no client yet. Ask Leah Ames to link one.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Link a client" })).not.toBeInTheDocument();
@@ -1039,7 +1039,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
   it("K5: an owner/admin of the project's studio is offered Link a client, though not its lead", async () => {
     mockProjectClientId = null;
     mockViewerId = "studio-admin-3";
-    mockCanLink = true;
+    mockLinkHold = null;
     render(composer());
     expect(screen.getByText("Hollis House has no client yet. Link one to bill it.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Copy a note" })).not.toBeInTheDocument();
@@ -1048,6 +1048,39 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
       "Link a client before drafting this invoice.",
     );
     await waitFor(() => expect(screen.getByRole("link", { name: "Link a client" })).toHaveFocus());
+  });
+
+  it("SQ-1069: when the lead has left the studio, the owner gets the support path, never Link, Reassign or a note", async () => {
+    mockProjectClientId = null;
+    mockViewerId = "studio-admin-3";
+    mockLinkHold = "lead_not_in_studio";
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    try {
+      render(composer());
+      const support =
+        "The lead on this job has left the studio. Write to hello@patina.cloud and we'll move the job to someone on your team.";
+      expect(screen.getByText(/The lead on this job has left the studio/)).toHaveTextContent(support);
+      expect(screen.getByText("hello@patina.cloud").tagName).toBe("SPAN");
+      expect(screen.queryByRole("link", { name: "Link a client" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /reassign/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /reassign/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Copy a note" })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Ask Leah Ames/)).not.toBeInTheDocument();
+      expect(document.querySelector('a[href^="mailto:"]')).toBeNull();
+      fireEvent.click(act());
+      expect(document.getElementById(act().getAttribute("aria-describedby") ?? "")).toHaveTextContent(support);
+      expect(mockCreateDraft).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "Copy the address" }));
+      expect(writeText).toHaveBeenCalledWith("hello@patina.cloud");
+      const copyRow = screen.getByRole("button", { name: "Copy the address" }).parentElement as HTMLElement;
+      await waitFor(() => expect(within(copyRow).getByRole("status")).toHaveTextContent("Copied."));
+    } finally {
+      if (original) Object.defineProperty(navigator, "clipboard", original);
+      else delete (navigator as unknown as Record<string, unknown>).clipboard;
+    }
   });
 
   describe("K5: Copy a note", () => {
