@@ -62,6 +62,13 @@ export interface OpenProjectDirectInput {
   budgetMaxCents: number | null;
   /** YYYY-MM-DD */
   startDate: string | null;
+  /** K9 (00796) — the studio chosen in the sheet. When given, the 7-argument
+   *  overload stamps it; a studio the caller holds no seat in is refused with
+   *  `open_project_direct: studio_not_member`. Omit it to keep the 6-argument
+   *  call, which derives the studio (and refuses a two-studio designer). The
+   *  caller's studios are `useOrganizations()` rows with type 'design_studio',
+   *  status 'active' and a non-guest membership role. */
+  studioId?: string | null;
 }
 
 /** R79 — open a project that skips the proposal (00237). Returns the id. */
@@ -71,14 +78,18 @@ export function useOpenProjectDirect() {
     // R83: the sheet renders failures inline at the act site.
     meta: { errorSurface: 'inline' as const },
     mutationFn: async (input: OpenProjectDirectInput): Promise<string> => {
-      const { data, error } = await getSupabase().rpc('open_project_direct', {
+      const args = {
         p_title: input.title,
         p_client_id: input.clientId,
         p_budget_min_cents: input.budgetMinCents,
         p_budget_max_cents: input.budgetMaxCents,
         p_start_date: input.startDate,
         p_id: input.id,
-      });
+      };
+      const { data, error } = await getSupabase().rpc(
+        'open_project_direct',
+        input.studioId ? { ...args, p_studio_id: input.studioId } : args,
+      );
       if (error) throw error;
       return data as string;
     },
