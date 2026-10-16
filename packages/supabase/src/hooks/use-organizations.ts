@@ -415,6 +415,7 @@ export function useAcceptInvitation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
       queryClient.invalidateQueries({ queryKey: ['pending-invitations'] });
+      queryClient.invalidateQueries({ queryKey: documentClientAuthorityKeys.all });
     },
   });
 }
@@ -538,6 +539,7 @@ export function useLeaveOrganization() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: documentClientAuthorityKeys.all });
     },
   });
 }
@@ -573,6 +575,7 @@ export function useTransferOrganizationOwnership() {
         queryKey: ['organization-members', variables.organizationId],
       });
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: documentClientAuthorityKeys.all });
     },
   });
 }
