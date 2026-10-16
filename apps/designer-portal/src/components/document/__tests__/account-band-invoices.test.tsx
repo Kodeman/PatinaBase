@@ -192,18 +192,23 @@ describe('AccountBand invoice handoff', () => {
     expect(mockRefetch).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces a failed recovery draft at the milestone', () => {
+  it('surfaces a failed recovery draft at the milestone, in the band’s words', () => {
+    // The RPC's own words: its name and the milestone's id.
+    const raw =
+      'generate_milestone_invoice: milestone 5b1f0c7e-0000-4000-8000-000000000001 not found or access denied';
     mockGenerate.mockImplementation((_id: string, callbacks: { onError: (error: Error) => void }) =>
-      callbacks.onError(new Error('milestone is already billed')),
+      callbacks.onError(Object.assign(new Error(raw), { name: 'PostgrestError', code: 'P0001' })),
     );
 
     render(<AccountBand projectId="project-1" />);
     fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate invoice' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Could not draft the invoice — milestone is already billed',
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(
+      "Could not draft the invoice — This milestone couldn't be found. Reload the project and try again.",
     );
+    expect(alert).not.toHaveTextContent(/generate_milestone_invoice|5b1f0c7e|access denied/);
   });
 
   it('opens an existing activation invoice instead of showing a dead label', () => {

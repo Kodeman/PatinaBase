@@ -269,7 +269,7 @@ export function InvoiceFolio({
         projectId: invoice.project_id ?? undefined,
       });
     } catch (e) {
-      setNote(`Could not issue — ${billingRefusal('draft', e).sentence}`);
+      setNote(`Could not issue — ${billingRefusal('issue', e).sentence}`);
       return;
     }
     try {
@@ -287,7 +287,11 @@ export function InvoiceFolio({
       setAct(null);
       setMessage('');
     } catch (e) {
-      setNote(`Could not send — issued as ${issued.invoice_number ?? 'this invoice'}; ${billingRefusal('send', e).sentence} Resend to retry.`);
+      setNote(
+        `Could not send — issued as ${issued.invoice_number ?? 'this invoice'}. ${
+          billingRefusal('send', e).sentence
+        } Resend to retry.`,
+      );
       setShowClientFallback(true);
       setAct(null);
     }

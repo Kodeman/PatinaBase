@@ -48,7 +48,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   useAddInvoiceBillingLines,
   InvoiceBillingGapError,
@@ -103,6 +103,7 @@ import {
   parseOverrideCents,
   partitionFfeBillable,
   purchaseAtCostCents,
+  refusedBillingLines,
   riderAtCostCents,
   riderLabel,
   stageSlotWords,
@@ -267,6 +268,11 @@ export function InvoiceComposer({
     retryable: boolean;
     gap?: InvoiceBillingGap;
   } | null>(null);
+  // The billing writer's refusal of one named line, by its subject id: shown
+  // beside that line, which the refusal unticked.
+  const [refusedLines, setRefusedLines] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
   const [heldBlocker, setHeldBlocker] = useState<ComposerBlocker | null>(null);
   // The server's word on a gap the cached project hides. It stands until the
   // project changes, or a projects read newer than the refusal shows the gap
@@ -494,6 +500,7 @@ export function InvoiceComposer({
     setOverrides(new Map());
     setSeededFor(null);
     setError(null);
+    setRefusedLines(new Map());
   };
 
   // The shown half of the pair, fired once the choice is actually on offer.
@@ -790,6 +797,7 @@ export function InvoiceComposer({
 
   const draft = async () => {
     setError(null);
+    setRefusedLines(new Map());
 
     if (studioMode) {
       // No project, no milestones, no time to claim — one call, then the folio.
@@ -859,7 +867,7 @@ export function InvoiceComposer({
         } catch {
           stranded = true;
         }
-        const reason = billingRefusal('claim', e).sentence;
+        const reason = billingRefusal("claim", e).sentence;
         // A money write already ran: never offered again from here.
         setError({
           message: stranded
@@ -891,7 +899,30 @@ export function InvoiceComposer({
         }
         // The writer's refusal arrives as a PostgrestError, not an Error, and in
         // the RPC's own words; say it in the composer's, naming the subject.
-        const reason = billingRefusal('lines', e, billingSubjectName).sentence;
+        const reason = billingRefusal("lines", e, billingSubjectName).sentence;
+        // With the draft gone, a refusal that names its line unticks just that
+        // line and says why beside it; Draft again bills the rest. A kept draft
+        // must be cleared first, so its refusal stays at the act.
+        const refused = stranded ? [] : refusedBillingLines(e, billingLines);
+        if (refused.length > 0) {
+          const notes = new Map<string, string>();
+          for (const { request } of refused) {
+            const id =
+              "purchaseId" in request
+                ? request.purchaseId
+                : "costLineId" in request
+                  ? request.costLineId
+                  : request.ffeItemId;
+            notes.set(id, `${reason} Nothing was billed.`);
+            const untick = (prev: Set<string>) => toggled(prev, id, false);
+            if ("purchaseId" in request) setTickedPurchaseIds(untick);
+            else if ("costLineId" in request) setTickedRiderIds(untick);
+            else if (request.stage === "deposit") setTickedFfeIds(untick);
+            else setTickedBalanceIds(untick);
+          }
+          setRefusedLines(notes);
+          return;
+        }
         setError({
           message: stranded
             ? `${reason} Nothing was billed; the draft was kept. Delete or void it.`
@@ -1244,49 +1275,52 @@ export function InvoiceComposer({
                   </p>
                 ) : ffePartition.billable.length > 0 ? (
                   ffePartition.billable.map((it) => (
-                    <label key={it.id} className={ROW}>
-                      <input
-                        type="checkbox"
-                        className={CHECK}
-                        checked={tickedFfeIds.has(it.id)}
-                        onChange={(e) =>
-                          setTickedFfeIds((prev) => {
-                            const next = new Set(prev);
-                            if (e.target.checked) next.add(it.id);
-                            else next.delete(it.id);
-                            return next;
-                          })
-                        }
-                      />
-                      <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
-                        {it.name}
-                        {it.room?.name && (
-                          <span className="ml-1.5 text-[var(--text-muted)]">
-                            {it.room.name}
-                          </span>
-                        )}
-                      </span>
-                      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                        ×{it.quantity ?? 1}
-                      </span>
-                      <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
-                        {ffeStage === "deposit" && depositPctValid && (
-                          <span className="mr-1.5 text-[var(--text-muted)]">
-                            deposit{" "}
-                            {formatCurrency(
-                              depositCents(
-                                (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
-                                depositPct,
-                              ),
-                            )}{" "}
-                            of
-                          </span>
-                        )}
-                        {formatCurrency(
-                          (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
-                        )}
-                      </span>
-                    </label>
+                    <Fragment key={it.id}>
+                      <label className={ROW}>
+                        <input
+                          type="checkbox"
+                          className={CHECK}
+                          checked={tickedFfeIds.has(it.id)}
+                          onChange={(e) =>
+                            setTickedFfeIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(it.id);
+                              else next.delete(it.id);
+                              return next;
+                            })
+                          }
+                        />
+                        <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+                          {it.name}
+                          {it.room?.name && (
+                            <span className="ml-1.5 text-[var(--text-muted)]">
+                              {it.room.name}
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                          ×{it.quantity ?? 1}
+                        </span>
+                        <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
+                          {ffeStage === "deposit" && depositPctValid && (
+                            <span className="mr-1.5 text-[var(--text-muted)]">
+                              deposit{" "}
+                              {formatCurrency(
+                                depositCents(
+                                  (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
+                                  depositPct,
+                                ),
+                              )}{" "}
+                              of
+                            </span>
+                          )}
+                          {formatCurrency(
+                            (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
+                          )}
+                        </span>
+                      </label>
+                      <RefusedLineNote note={refusedLines.get(it.id)} />
+                    </Fragment>
                   ))
                 ) : ffePartition.unfilled.length === 0 ? (
                   <p className="py-1 text-[11px] italic text-[var(--text-muted)]">
@@ -1326,32 +1360,35 @@ export function InvoiceComposer({
                       const b = billing.get(it.id);
                       const price = lineClientPriceCents(it) ?? 0;
                       return (
-                        <label key={it.id} className={ROW}>
-                          <input
-                            type="checkbox"
-                            className={CHECK}
-                            checked={tickedBalanceIds.has(it.id)}
-                            onChange={(e) =>
-                              setTickedBalanceIds((prev) => {
-                                const next = new Set(prev);
-                                if (e.target.checked) next.add(it.id);
-                                else next.delete(it.id);
-                                return next;
-                              })
-                            }
-                          />
-                          <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
-                            {it.name}
-                            <span className="ml-1.5 text-[var(--text-muted)]">
-                              {(b?.slots ?? []).map(stageSlotWords).join(" · ")}
+                        <Fragment key={it.id}>
+                          <label className={ROW}>
+                            <input
+                              type="checkbox"
+                              className={CHECK}
+                              checked={tickedBalanceIds.has(it.id)}
+                              onChange={(e) =>
+                                setTickedBalanceIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(it.id);
+                                  else next.delete(it.id);
+                                  return next;
+                                })
+                              }
+                            />
+                            <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+                              {it.name}
+                              <span className="ml-1.5 text-[var(--text-muted)]">
+                                {(b?.slots ?? []).map(stageSlotWords).join(" · ")}
+                              </span>
                             </span>
-                          </span>
-                          <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
-                            {formatCurrency(
-                              balanceCents(price, b?.depositedCents ?? 0),
-                            )}
-                          </span>
-                        </label>
+                            <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
+                              {formatCurrency(
+                                balanceCents(price, b?.depositedCents ?? 0),
+                              )}
+                            </span>
+                          </label>
+                          <RefusedLineNote note={refusedLines.get(it.id)} />
+                        </Fragment>
                       );
                     })}
                   </div>
@@ -1411,6 +1448,7 @@ export function InvoiceComposer({
                       onOverride={(text) => setOverrides((prev) => new Map(prev).set(p.id, text))}
                       label={p.description?.trim() || p.payee_name}
                       detail={`${p.description?.trim() ? `${p.payee_name} · ` : ""}${fmtDay(p.purchased_on)}`}
+                      refusal={refusedLines.get(p.id)}
                     />
                   ))}
                   {doubleBilledPurchases > 0 && (
@@ -1446,6 +1484,7 @@ export function InvoiceComposer({
                           .filter(Boolean)
                           .join(" · ")
                       }
+                      refusal={refusedLines.get(r.id)}
                     />
                   ))}
                 </div>
@@ -1802,6 +1841,7 @@ function AtCostRow({
   onOverride,
   label,
   detail,
+  refusal,
 }: {
   id: string;
   ticked: boolean;
@@ -1811,37 +1851,51 @@ function AtCostRow({
   onOverride: (text: string) => void;
   label: string;
   detail: string;
+  refusal?: string;
 }) {
   const text = override ?? centsToDollarText(costCents);
   const invalid = ticked && parseOverrideCents(text) === null;
   return (
-    <div className={`${ROW} cursor-default`} data-at-cost-row={id}>
-      <input
-        type="checkbox"
-        className={CHECK}
-        checked={ticked}
-        aria-label={`Bill ${label}`}
-        onChange={(e) => onTick(e.target.checked)}
-      />
-      <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
-        {label}
-        {detail && (
-          <span className="ml-1.5 text-[var(--text-muted)]">{detail}</span>
-        )}
-      </span>
-      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-        cost {costCents === null ? "—" : formatCurrency(costCents)}
-      </span>
-      <input
-        aria-label={`Billed amount · ${label}`}
-        aria-invalid={invalid || undefined}
-        inputMode="decimal"
-        placeholder="Billed $"
-        value={text}
-        onChange={(e) => onOverride(e.target.value)}
-        className={`${INPUT} w-[96px] text-right`}
-        style={invalid ? { borderColor: TERRACOTTA_INK } : undefined}
-      />
-    </div>
+    <>
+      <div className={`${ROW} cursor-default`} data-at-cost-row={id}>
+        <input
+          type="checkbox"
+          className={CHECK}
+          checked={ticked}
+          aria-label={`Bill ${label}`}
+          onChange={(e) => onTick(e.target.checked)}
+        />
+        <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+          {label}
+          {detail && (
+            <span className="ml-1.5 text-[var(--text-muted)]">{detail}</span>
+          )}
+        </span>
+        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+          cost {costCents === null ? "—" : formatCurrency(costCents)}
+        </span>
+        <input
+          aria-label={`Billed amount · ${label}`}
+          aria-invalid={invalid || undefined}
+          inputMode="decimal"
+          placeholder="Billed $"
+          value={text}
+          onChange={(e) => onOverride(e.target.value)}
+          className={`${INPUT} w-[96px] text-right`}
+          style={invalid ? { borderColor: TERRACOTTA_INK } : undefined}
+        />
+      </div>
+      <RefusedLineNote note={refusal} />
+    </>
+  );
+}
+
+/** Why the billing writer refused this line: said beside it, at its row. */
+function RefusedLineNote({ note }: { note: string | undefined }) {
+  return (
+    <ActFailLine
+      error={note ? new AppError({ code: "INVOICE_LINE_REFUSED", message: note }) : null}
+      className="pl-6"
+    />
   );
 }
