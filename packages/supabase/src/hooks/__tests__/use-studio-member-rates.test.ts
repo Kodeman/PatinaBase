@@ -59,6 +59,7 @@ import {
   studioMemberRateKeys,
   useStudioMemberRates,
   useSetStudioMemberRate,
+  useRerateRatePendingHours,
 } from '../use-studio-member-rates';
 
 beforeEach(() => {
@@ -210,6 +211,78 @@ describe('useSetStudioMemberRate', () => {
       ['studio-member-rate', 'member-1'],
       ['document-hours-week'],
       ['document-hours-unbilled'],
+    ]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// K8 — re-rate on set (00797 rerate_pending_time_entries).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useRerateRatePendingHours', () => {
+  type RerateMutation = {
+    mutationFn: (input: unknown) => Promise<unknown>;
+    onSuccess: (data: unknown, input: unknown) => void;
+  };
+
+  it('sends the studio and member to the server and resolves to how many hours it priced', async () => {
+    supabaseClient.rpc.mockReturnValue(Promise.resolve({ data: 3, error: null }) as never);
+    const mutation = useRerateRatePendingHours() as unknown as RerateMutation;
+
+    const priced = await mutation.mutationFn({ studioId: 'studio-1', userId: 'member-1' });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('rerate_pending_time_entries', {
+      p_studio_id: 'studio-1',
+      p_designer_id: 'member-1',
+    });
+    expect(priced).toBe(3);
+    // The rate is the server's to resolve; nothing is written from here.
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the server's refusal instead of pre-judging standing", async () => {
+    const refusal = {
+      code: '42501',
+      message: 'rerate_pending_time_entries: only an owner or admin of the studio may price its pending hours',
+    };
+    supabaseClient.rpc.mockReturnValue(Promise.resolve({ data: null, error: refusal }) as never);
+    const mutation = useRerateRatePendingHours() as unknown as RerateMutation;
+
+    await expect(
+      mutation.mutationFn({ studioId: 'studio-1', userId: 'member-1' }),
+    ).rejects.toBe(refusal);
+  });
+
+  it("refreshes every document's hours reads, the composer's unbilled read among them", () => {
+    const mutation = useRerateRatePendingHours() as unknown as RerateMutation;
+
+    mutation.onSuccess(2, { studioId: 'studio-1', userId: 'member-1' });
+
+    const calls = invalidateQueries.mock.calls.map((c) => c[0]) as Array<{
+      queryKey?: unknown[];
+      predicate?: (query: { queryKey: unknown[] }) => boolean;
+    }>;
+    const predicate = calls.find((call) => call.predicate)?.predicate;
+    expect(predicate).toBeDefined();
+    const matches = (queryKey: unknown[]) => predicate!({ queryKey });
+    // The composer's read (useUnbilledTime) and the other per-document hours
+    // reads, on ANY document — the RPC does not say which held the hours.
+    expect(matches(['projects', 'doc-7', 'unbilled-time'])).toBe(true);
+    expect(matches(['projects', 'doc-9', 'time-entries'])).toBe(true);
+    expect(matches(['projects', 'doc-9', 'time-entries', { phase: 'design' }])).toBe(true);
+    expect(matches(['projects', 'doc-9', 'time-tracking'])).toBe(true);
+    expect(matches(['projects', 'doc-9', 'key-metrics'])).toBe(true);
+    // Not the whole document, and not reads a price never reaches.
+    expect(matches(['projects', 'doc-9'])).toBe(false);
+    expect(matches(['projects', 'doc-9', 'timeline'])).toBe(false);
+    expect(matches(['studio-member-rates', 'studio-1'])).toBe(false);
+
+    expect(calls.filter((call) => call.queryKey).map((call) => call.queryKey)).toEqual([
+      ['time'],
+      ['desk-contents-unbilled-time'],
+      ['document-hours-week'],
+      ['document-hours-unbilled'],
+      ['document-hours-pending-authorization'],
     ]);
   });
 });

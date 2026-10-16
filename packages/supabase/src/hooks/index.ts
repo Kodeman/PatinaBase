@@ -2538,10 +2538,12 @@ export {
   studioMemberRateKeys,
   useStudioMemberRates,
   useSetStudioMemberRate,
+  useRerateRatePendingHours,
 } from "./use-studio-member-rates";
 export type {
   StudioMemberRate,
   SetStudioMemberRateInput,
+  RerateRatePendingHoursInput,
 } from "./use-studio-member-rates";
 export {
   isInvoiceEligibleTimeEntry,

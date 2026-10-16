@@ -44771,6 +44771,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      rerate_pending_time_entries: {
+        Args: { p_designer_id: string; p_studio_id: string }
+        Returns: number
+      }
       resend_party_invite: {
         Args: { p_evidence: Json; p_party_id: string }
         Returns: Json

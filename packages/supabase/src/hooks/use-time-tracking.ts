@@ -268,6 +268,25 @@ function invalidateStudioTime(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: timeKeys.weekEntries() });
 }
 
+// The third key part of each per-project read invalidateProjectTime names.
+const projectTimeReads = new Set<unknown>(
+  [timeKeys.timeEntries, timeKeys.timeTracking, timeKeys.unbilledTime, timeKeys.keyMetrics].map(
+    (key) => key('')[2],
+  ),
+);
+
+/**
+ * invalidateProjectTime for EVERY project at once: K8's re-rate
+ * (`rerate_pending_time_entries`, 00797) prices a member's pending hours across
+ * a studio's documents and does not say which documents those were.
+ */
+export function invalidateEveryProjectTime(queryClient: QueryClient) {
+  queryClient.invalidateQueries({
+    predicate: ({ queryKey }) => queryKey[0] === 'projects' && projectTimeReads.has(queryKey[2]),
+  });
+  invalidateStudioTime(queryClient);
+}
+
 // ── Queries ──
 
 /** Unbilled rollup from the project_unbilled_time view (00177). */
