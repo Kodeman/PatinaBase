@@ -10,6 +10,7 @@ import {
   useInviteAndLinkClient,
   type DesignerClient,
 } from '@/hooks/use-clients';
+import { useSession } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { LetterLineField } from '../document/people/directory/letter-line-field';
 import { cn } from '@/lib/utils';
@@ -105,6 +106,8 @@ export function ClientPicker({
   }, [open]);
 
   const { data: queriedClients, isLoading } = useClients();
+  const { session } = useSession();
+  const viewerId = session?.user?.id;
   const clients = clientOptions ?? queriedClients;
   const addClient = useAddClient();
   const inviteAndLink = useInviteAndLinkClient();
@@ -131,28 +134,47 @@ export function ClientPicker({
   }, []);
 
   // Only contacts that are linkable carry a non-null client_id (a profiles.id).
+  const displayRowFor = React.useCallback(
+    (dc: DesignerClient) => {
+      const email = (dc.client?.email ?? dc.client_email)?.toLowerCase();
+      return (clients ?? []).find((row) =>
+        row.designer_id === viewerId && (
+          (email && (row.client?.email ?? row.client_email)
+            ? email === (row.client?.email ?? row.client_email)?.toLowerCase()
+            : !!dc.client_id && row.client_id === dc.client_id)
+        ),
+      ) ?? dc;
+    },
+    [clients, viewerId],
+  );
+
   const labelFor = React.useCallback((dc: DesignerClient) => {
-    return (
-      dc.client?.full_name ??
-      dc.client_name ??
-      dc.client_email ??
-      'Unknown'
-    );
-  }, []);
+    const display = displayRowFor(dc);
+    return display.client?.full_name ?? display.client_name ?? display.client_email ?? dc.client?.full_name ?? dc.client_name ?? dc.client_email ?? 'Unknown';
+  }, [displayRowFor]);
 
   const subtitleFor = React.useCallback((dc: DesignerClient) => {
-    return dc.client?.email ?? dc.client_email ?? null;
+    const email = dc.client?.email ?? dc.client_email;
+    return [email, dc.last_project_name].filter(Boolean).join(' · ') || null;
   }, []);
 
   const distinctClients = React.useMemo(() => {
-    const seenClientIds = new Set<string>();
-    return (clients ?? []).filter((dc) => {
-      if (!dc.client_id) return true;
-      if (seenClientIds.has(dc.client_id)) return false;
-      seenClientIds.add(dc.client_id);
-      return true;
-    });
-  }, [clients]);
+    const groups: DesignerClient[][] = [];
+    for (const dc of clients ?? []) {
+      const email = (dc.client?.email ?? dc.client_email)?.toLowerCase();
+      const group = groups.find((rows) =>
+        rows.some((row) => {
+          const rowEmail = (row.client?.email ?? row.client_email)?.toLowerCase();
+          return email && rowEmail
+            ? email === rowEmail
+            : !!dc.client_id && row.client_id === dc.client_id;
+        }),
+      );
+      if (group) group.push(dc);
+      else groups.push([dc]);
+    }
+    return groups.map((group) => group.find((dc) => dc.client_id) ?? group[0]);
+  }, [clients, viewerId]);
 
   const selected = React.useMemo(
     () => distinctClients.find((dc) => dc.client_id && dc.client_id === value) ?? null,

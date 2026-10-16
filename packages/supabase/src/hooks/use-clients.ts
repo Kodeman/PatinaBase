@@ -50,6 +50,7 @@ export interface DesignerClient {
     avatar_url: string | null;
     phone: string | null;
   } | null;
+  last_project_name?: string | null;
   /**
    * The owning designer's profile (Wave 5 — shared-workspace attribution).
    * Populated by `useClients()`'s join only; `undefined` from callers that
@@ -145,7 +146,26 @@ export function useClients(filters?: ClientFilters) {
       const { data, error } = await query;
 
       if (error) throw error;
-      return (data ?? []) as DesignerClient[];
+      const rows = (data ?? []) as DesignerClient[];
+      const clientIds = [...new Set(rows.flatMap((row) => row.client_id ? [row.client_id] : []))];
+      if (clientIds.length === 0) return rows;
+
+      const { data: projects, error: projectsError } = await supabase
+        .from('projects')
+        .select('client_id, name, updated_at')
+        .in('client_id', clientIds)
+        .order('updated_at', { ascending: false });
+      if (projectsError) throw projectsError;
+      const latestProjectByClient = new Map<string, string>();
+      for (const project of projects ?? []) {
+        if (project.client_id && project.name && !latestProjectByClient.has(project.client_id)) {
+          latestProjectByClient.set(project.client_id, project.name);
+        }
+      }
+      return rows.map((row) => ({
+        ...row,
+        last_project_name: row.client_id ? latestProjectByClient.get(row.client_id) ?? null : null,
+      }));
     },
   });
 }

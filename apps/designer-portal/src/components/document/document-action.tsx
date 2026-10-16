@@ -22,19 +22,20 @@ import type {
 } from 'react';
 import { documentEvents } from '@/lib/analytics/document-events';
 
+const heldFocusCueTimers = new WeakMap<HTMLElement, number>();
+
 function cueHeldFixerAfterMouseActivation() {
   requestAnimationFrame(() => {
     const target = document.activeElement;
     if (!(target instanceof HTMLElement) || target === document.body) return;
-    try {
-      (target.focus as (options?: FocusOptions & { focusVisible?: boolean }) => void)({
-        focusVisible: true,
-      });
-    } catch {
-      target.focus();
-    }
     target.setAttribute('data-held-focus-cue', '');
-    window.setTimeout(() => target.removeAttribute('data-held-focus-cue'), 900);
+    const previousTimer = heldFocusCueTimers.get(target);
+    if (previousTimer !== undefined) window.clearTimeout(previousTimer);
+    const timer = window.setTimeout(() => {
+      target.removeAttribute('data-held-focus-cue');
+      heldFocusCueTimers.delete(target);
+    }, 900);
+    heldFocusCueTimers.set(target, timer);
   });
 }
 

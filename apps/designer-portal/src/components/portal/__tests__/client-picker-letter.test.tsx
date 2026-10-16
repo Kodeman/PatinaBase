@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientPicker } from '../client-picker';
+import type { DesignerClient } from '@/hooks/use-clients';
 
 // cmdk scrolls the highlighted item into view on selection; jsdom has no
 // scrollIntoView implementation.
@@ -25,6 +26,7 @@ const MOCK_CLIENT_ROWS = [
 jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => flagValue }));
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
+  useSession: () => ({ session: { user: { id: 'designer-1' } } }),
   useInviteAndLinkClient: () => ({ mutateAsync, isPending: false }),
   useClients: () => ({
     data: MOCK_CLIENT_ROWS,
@@ -46,6 +48,35 @@ function renderWithClient(ui: React.ReactElement) {
   });
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
+
+it('shows email and most recent project to distinguish same-name households', () => {
+  const rows = [
+    { ...MOCK_CLIENT_ROWS[0], id: 'linked-1', client_id: 'profile-1', client_email: 'jane@x.com', client_name: 'Jane Smith', last_project_name: 'Kuehn Whole Home' },
+    { ...MOCK_CLIENT_ROWS[0], id: 'linked-2', client_id: 'profile-2', client_email: 'jane@y.com', client_name: 'Jane Smith', last_project_name: 'Westlake Kitchen' },
+  ] as DesignerClient[];
+  renderWithClient(<ClientPicker value={null} onChange={() => {}} clientOptions={rows} />);
+  fireEvent.click(screen.getByTestId('client-picker-trigger'));
+  expect(screen.getByText('jane@x.com · Kuehn Whole Home')).toBeInTheDocument();
+  expect(screen.getByText('jane@y.com · Westlake Kitchen')).toBeInTheDocument();
+});
+
+it('dedupes null-client rows by normalized email and prefers the linked row', () => {
+  const rows = [
+    { ...MOCK_CLIENT_ROWS[0], id: 'unlinked-1', designer_id: 'designer-1', client_email: 'Jane@x.com', client_name: 'Henderson' },
+    { ...MOCK_CLIENT_ROWS[0], id: 'unlinked-2', client_email: 'jane@X.com', client_name: 'Jane duplicate' },
+    { ...MOCK_CLIENT_ROWS[0], id: 'linked', client_id: 'profile-1', client_email: 'jane@x.com', client_name: 'Jane Smith' },
+    { ...MOCK_CLIENT_ROWS[0], id: 'other', client_id: 'profile-2', client_email: 'other@x.com', client_name: 'Other household' },
+  ] as DesignerClient[];
+  renderWithClient(<ClientPicker value={null} onChange={() => {}} clientOptions={rows} />);
+  fireEvent.click(screen.getByTestId('client-picker-trigger'));
+  expect(screen.getAllByTestId('client-picker-option-profile-1')).toHaveLength(1);
+  expect(screen.queryByTestId('client-picker-option-unlinked-1')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('client-picker-option-unlinked-2')).not.toBeInTheDocument();
+  expect(screen.getByTestId('client-picker-option-profile-2')).toBeInTheDocument();
+  expect(screen.getByText('Henderson')).toBeInTheDocument();
+  fireEvent.change(screen.getByTestId('client-picker-search'), { target: { value: 'Henderson' } });
+  expect(screen.getByTestId('client-picker-option-profile-1')).toBeInTheDocument();
+});
 
 // The row has to be opened and armed (J2) before the confirm block — where the
 // folded letter field lives — exists in the DOM at all.

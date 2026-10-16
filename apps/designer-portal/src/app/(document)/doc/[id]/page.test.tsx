@@ -839,15 +839,26 @@ describe('DocumentPage guide activation', () => {
     HTMLElement.prototype.scrollIntoView = jest.fn();
   });
 
-  it('consumes ?sheet=household so leaving through ⌘K cannot reopen it from the URL', () => {
-    window.history.pushState({}, '', '/doc/lead-1?sheet=household');
-    render(<DocumentPage params={fulfilledParams} />);
-    expect(window.location.search).toBe('');
+  it('consumes ?sheet=household through the router and opens the sheet', () => {
+    const data = mockDocumentQuery.data as { kind: string; row: Record<string, unknown> };
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { ...data, row: { ...data.row, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1', project_status: 'active' } },
+    };
+    window.history.pushState({}, '', '/doc/lead-1?sheet=household&keep=1#details');
+    const historyLength = window.history.length;
+    mockRouter.replace.mockImplementation((url: string) => {
+      window.history.replaceState({}, '', url);
+    });
 
-    // ⌘K navigates to another route; the consumed doorway is not carried into
-    // that address or restored by revisiting the document in this mount.
-    window.history.pushState({}, '', '/desk');
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockRouter.replace).toHaveBeenCalledWith('/doc/lead-1?keep=1#details', { scroll: false });
     expect(new URLSearchParams(window.location.search).get('sheet')).toBeNull();
+    expect(window.location.search).toBe('?keep=1');
+    expect(window.location.hash).toBe('#details');
+    expect(window.history.length).toBe(historyLength);
+    expect(screen.getByRole('dialog', { name: 'The household' })).toBeInTheDocument();
   });
 
   it('activates the guide anchor and honors reduced motion', () => {

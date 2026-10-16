@@ -420,14 +420,12 @@ export function InvoiceComposer({
     [unbilledTime, memberNames],
   );
 
-  const ratePendingHours = useMemo(
+  const ratePendingMinutes = useMemo(
     () =>
-      (
-        ratePendingEntries.reduce(
-          (total, entry) => total + entry.duration_minutes,
-          0,
-        ) / 60
-      ).toFixed(1),
+      ratePendingEntries.reduce(
+        (total, entry) => total + entry.duration_minutes,
+        0,
+      ),
     [ratePendingEntries],
   );
 
@@ -1286,8 +1284,8 @@ export function InvoiceComposer({
                       </div>
                     ))}
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {ratePendingHours} hours waiting for a rate · they cannot
-                      be invoiced until the studio prices them ·{" "}
+                      {formatHoursLabel(ratePendingMinutes)} waiting for a rate
+                      · they cannot be invoiced until the studio prices them ·{" "}
                       <Link
                         href="/desk?account=studio"
                         className="underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
