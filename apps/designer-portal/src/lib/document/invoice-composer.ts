@@ -704,6 +704,15 @@ export interface StudioInvoiceDraft {
   lines: DraftLineInput[];
 }
 
+export type InvoiceBillingGap = "no-client" | "no-studio";
+
+export function deriveInvoiceBillingGap(project: { client_id?: string | null; studio_id?: string | null } | null | undefined): InvoiceBillingGap | null {
+  if (!project) return null;
+  if (project.client_id == null) return "no-client";
+  if (project.studio_id == null) return "no-studio";
+  return null;
+}
+
 /**
  * The pure twin of the composer's Draft act in studio mode: a household, a
  * regarding line, a studio to bill from, and at least one line that carries

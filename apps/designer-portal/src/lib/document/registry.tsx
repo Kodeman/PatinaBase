@@ -742,6 +742,9 @@ export function matchPaperSynonyms(query: string): PaperSynonymGroup[] {
 /** ⌘K asks the Pieces region to land on a line; `ffe-section.tsx` answers. */
 export const FOCUS_FFE_LINE_EVENT = 'document:focus-ffe-line';
 
+/** Opens the project's household setup sheet without unmounting a composer. */
+export const OPEN_HOUSEHOLD_SHEET_EVENT = 'document:open-household-sheet';
+
 export interface FocusFfeLineRequest {
   /** The line, by id; or, with `purchaseOrderId` (FR8 F8-2), the PO's first
    *  line in the schedule's order. */

@@ -9,6 +9,7 @@ import {
   activeDesignStudios,
   buildComposerLines,
   canDraftStudioInvoice,
+  deriveInvoiceBillingGap,
   dollarsToCents,
   partitionFfeBillable,
   unbilledMilestones,
@@ -495,5 +496,14 @@ describe("activeDesignStudios", () => {
 describe("STUDIO_TARGET", () => {
   it("is not a shape a project id could take", () => {
     expect(STUDIO_TARGET).toBe("__studio__");
+  });
+});
+
+describe("deriveInvoiceBillingGap", () => {
+  it("distinguishes client, studio, both missing, and complete projects", () => {
+    expect(deriveInvoiceBillingGap({ client_id: null, studio_id: "s1" })).toBe("no-client");
+    expect(deriveInvoiceBillingGap({ client_id: "c1", studio_id: null })).toBe("no-studio");
+    expect(deriveInvoiceBillingGap({ client_id: null, studio_id: null })).toBe("no-client");
+    expect(deriveInvoiceBillingGap({ client_id: "c1", studio_id: "s1" })).toBeNull();
   });
 });

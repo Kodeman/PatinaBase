@@ -169,7 +169,7 @@ import {
   ownAct,
   placeholderCount,
 } from '@/lib/document/act-names';
-import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending, landRecordPayment } from '@/lib/document/registry';
+import { FOCUS_FFE_LINE_EVENT, OPEN_HOUSEHOLD_SHEET_EVENT, focusFfeLinePending, landRecordPayment } from '@/lib/document/registry';
 import {
   expandPoSilences,
   type PoSilenceLine,
@@ -1347,11 +1347,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     // destination a People-room seat line walks to. Read on arrival the way
     // `ffeItemId` above is, so the link opens the sheet rather than landing on
     // the document beside it. The param stays in the bar: it is the address.
-    if (new URLSearchParams(window.location.search).get('sheet') === 'call') {
+    const requestedSheet = new URLSearchParams(window.location.search).get('sheet');
+    if (requestedSheet === 'call') {
       setCallSheetMode('sheet');
       setCallSheetOpen(true);
     }
-    return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
+    if (requestedSheet === 'household') setSetupHouseholdOpen(true);
+    const onOpenHousehold = () => setSetupHouseholdOpen(true);
+    window.addEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, onOpenHousehold);
+    return () => {
+      window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
+      window.removeEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, onOpenHousehold);
+    };
   }, []);
 
   // DL-04 — the sections sheet's fifth door (`The client's copy`). The sheet

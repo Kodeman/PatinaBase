@@ -23,6 +23,8 @@ let mockOrganizations: Array<Record<string, unknown>> = [
 let mockOrganizationsLoading = false;
 
 jest.mock("@patina/supabase", () => ({
+  InvoiceBillingGapError: class InvoiceBillingGapError extends Error {},
+  useStampProjectPricingStudio: () => ({ mutate: jest.fn(), isPending: false }),
   useCreateDraftInvoice: () => ({
     mutateAsync: mockCreateDraft,
     isPending: false,
@@ -54,6 +56,7 @@ jest.mock("@patina/supabase", () => ({
         name: "Hollis House",
         status: "active",
         client_id: "client-9",
+        studio_id: "studio-1",
       },
     ],
   }),
@@ -283,7 +286,7 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
-    expect(await screen.findByText(/purchase p1 is already billed/)).toBeInTheDocument();
+    expect(await screen.findByText(/Nothing was billed/)).toBeInTheDocument();
     expect(mockDeleteDraft).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1" });
     expect(onDrafted).not.toHaveBeenCalled();
   });
@@ -340,7 +343,8 @@ describe("InvoiceComposer · riders at cost (C-31)", () => {
       />,
     );
     const act = screen.getByRole("button", { name: "Draft the invoice" });
-    expect(act).toBeDisabled();
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act).not.toBeDisabled();
     fireEvent.change(screen.getByLabelText("Billed amount · Liftgate"), {
       target: { value: "175" },
     });
@@ -400,7 +404,7 @@ describe("InvoiceComposer · deposit, then balance (C-31)", () => {
       target: { value: "120" },
     });
     expect(screen.getByRole("alert")).toHaveTextContent("a percent above 0, at most 100");
-    expect(screen.getByRole("button", { name: "Draft the invoice" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Draft the invoice" })).toHaveAttribute("aria-disabled", "true");
   });
 
   it("offers the balance of a deposited line, showing what it has had billed", async () => {
@@ -654,10 +658,10 @@ describe("InvoiceComposer · studio mode", () => {
     pickStudio();
 
     const act = () => screen.getByRole("button", { name: "Draft the invoice" });
-    expect(act()).toBeDisabled();
+    expect(act()).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "pick household" }));
-    expect(act()).toBeDisabled();
+    expect(act()).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.change(
       screen.getByPlaceholderText("Design consultation · Sept 2026"),
@@ -665,7 +669,7 @@ describe("InvoiceComposer · studio mode", () => {
         target: { value: "Design consultation · 12 Sept 2026" },
       },
     );
-    expect(act()).toBeDisabled();
+    expect(act()).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.change(screen.getByLabelText("Line description"), {
       target: { value: "Design consultation, on site (2 h)" },
@@ -747,7 +751,8 @@ describe("InvoiceComposer · studio mode", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Draft the invoice" }),
-    ).toBeDisabled();
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Draft the invoice" })).not.toBeDisabled();
     expect(screen.queryByLabelText("Studio")).not.toBeInTheDocument();
   });
 
@@ -787,10 +792,8 @@ describe("InvoiceComposer · studio mode", () => {
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
 
     expect(
-      await screen.findByText("The household is not on this studio’s roster."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Try again" }),
-    ).toBeInTheDocument();
+      await screen.findByRole("alert"),
+    ).toHaveTextContent("The household is not on this studio’s roster.");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });
