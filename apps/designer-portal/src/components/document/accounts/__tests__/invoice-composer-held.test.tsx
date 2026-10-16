@@ -1349,12 +1349,12 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(act()).not.toHaveAttribute("aria-describedby");
   });
 
-  it("sums rate-pending durations in the waiting copy", () => {
+  it.each([[60, '1h'], [2, '2m']])('formats %i rate-pending minutes as %s', (minutes, label) => {
     mockRatePendingEntries = [
-      { id: "time-1", user_id: "designer-1", started_at: "2026-10-01T09:00:00Z", duration_minutes: 30 },
-      { id: "time-2", user_id: "designer-1", started_at: "2026-10-02T09:00:00Z", duration_minutes: 45 },
+      { id: "time-1", user_id: "designer-1", started_at: "2026-10-01T09:00:00Z", duration_minutes: minutes },
     ];
     render(composer());
-    expect(screen.getByText(/1\.3 hours waiting for a rate/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${label} waiting for a rate`))).toBeInTheDocument();
+    expect(screen.queryByText(/0\.0 hours waiting for a rate/)).not.toBeInTheDocument();
   });
 });

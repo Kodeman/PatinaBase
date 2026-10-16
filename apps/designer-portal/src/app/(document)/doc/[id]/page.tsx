@@ -1365,7 +1365,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     if (requestedSheet === 'household') {
       const url = new URL(window.location.href);
       url.searchParams.delete('sheet');
-      window.history.replaceState(window.history.state, '', url);
+      router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false });
       openHouseholdAboveFolio();
     }
     const onOpenHousehold = () => openHouseholdAboveFolio();
