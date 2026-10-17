@@ -690,9 +690,9 @@ BEGIN
     'proposal_items_design_studio_delete:DELETE',
     'proposal_items_design_studio_insert:INSERT',
     'proposal_items_design_studio_select:SELECT',
-    'proposal_items_design_studio_update:UPDATE',
-    'proposal_items_legacy_ios_client_select:SELECT'
+    'proposal_items_design_studio_update:UPDATE'
   ],
+    -- 00811 §2 (US-37 D6): no raw client read; lines carry trade cost and markup.
     'proposal_items policy catalog drifted';
 
   ASSERT (
@@ -1267,9 +1267,11 @@ BEGIN
   ASSERT (SELECT count(*) = 1 FROM public.proposals
           WHERE id = 'e8300000-0000-4000-8000-000000000001'),
     'installed iOS must retain scoped issued-proposal read compatibility';
-  ASSERT (SELECT count(*) = 1 FROM public.proposal_items
+  -- 00811 (US-37 D6): raw lines carry trade cost and markup; the client
+  -- reads them only through get_client_proposal_bundle.
+  ASSERT (SELECT count(*) = 0 FROM public.proposal_items
           WHERE proposal_id = 'e8300000-0000-4000-8000-000000000001'),
-    'installed iOS must retain scoped proposal-item read compatibility';
+    'client must not raw-read proposal lines (00811)';
   ASSERT (SELECT count(*) = 2 FROM public.proposal_sections
           WHERE proposal_id = 'e8300000-0000-4000-8000-000000000001'),
     'installed iOS must retain scoped proposal-section read compatibility';
