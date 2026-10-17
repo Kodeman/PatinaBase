@@ -503,7 +503,7 @@ BEGIN
     NULL,
     'd7710000-0000-4000-8000-000000000001',
     'Schedule Test Vendor',
-    'LR-06',
+    'LR-07',
     6,
     NULL,
     'selected'
@@ -1769,6 +1769,11 @@ END $$;
 --      two documents differ. The test therefore reconstructs the furnishings
 --      projection itself: the pre-00422 shape (which omitted the citation) and
 --      the current one, over the same two snapshot rows.
+--
+--      Since 00808 two live lines in a job never share a label (doc_code), so
+--      the snapshot's docCode alone would tell them apart. It is set aside in
+--      every projection below, so the test still proves the projection keys
+--      on the cited line rather than on look-alike content.
 -- ═══════════════════════════════════════════════════════════════════════════
 DO $$
 DECLARE
@@ -1790,7 +1795,7 @@ BEGIN
   -- The two snapshots agree on everything a price-only fingerprint could see.
   ASSERT (SELECT count(DISTINCT (a.name, a.room_name, a.category, a.item_type,
                                  a.quantity, a.client_unit_price_cents,
-                                 a.client_line_total_cents, a.snapshot, a.sort_order))
+                                 a.client_line_total_cents, a.snapshot - 'docCode', a.sort_order))
           FROM public.furnishing_authorization_items a
           WHERE a.source_ffe_item_id IN (v_a, v_b)) = 1,
     'fixture broken: the two sconce snapshots must be indistinguishable on price';
@@ -1801,7 +1806,7 @@ BEGIN
     'category', a.category, 'itemType', a.item_type, 'quantity', a.quantity,
     'clientUnitPriceCents', a.client_unit_price_cents,
     'clientLineTotalCents', a.client_line_total_cents,
-    'snapshot', a.snapshot, 'sortOrder', a.sort_order))
+    'snapshot', a.snapshot - 'docCode', 'sortOrder', a.sort_order))
   INTO v_old_a FROM public.furnishing_authorization_items a
   WHERE a.source_ffe_item_id = v_a;
   SELECT jsonb_agg(jsonb_build_object(
@@ -1810,7 +1815,7 @@ BEGIN
     'category', a.category, 'itemType', a.item_type, 'quantity', a.quantity,
     'clientUnitPriceCents', a.client_unit_price_cents,
     'clientLineTotalCents', a.client_line_total_cents,
-    'snapshot', a.snapshot, 'sortOrder', a.sort_order))
+    'snapshot', a.snapshot - 'docCode', 'sortOrder', a.sort_order))
   INTO v_old_b FROM public.furnishing_authorization_items a
   WHERE a.source_ffe_item_id = v_b;
   ASSERT v_old_a = v_old_b,
@@ -1824,7 +1829,7 @@ BEGIN
     'category', a.category, 'itemType', a.item_type, 'quantity', a.quantity,
     'clientUnitPriceCents', a.client_unit_price_cents,
     'clientLineTotalCents', a.client_line_total_cents,
-    'snapshot', a.snapshot, 'sortOrder', a.sort_order))
+    'snapshot', a.snapshot - 'docCode', 'sortOrder', a.sort_order))
   INTO v_new_a FROM public.furnishing_authorization_items a
   WHERE a.source_ffe_item_id = v_a;
   SELECT jsonb_agg(jsonb_build_object(
@@ -1835,7 +1840,7 @@ BEGIN
     'category', a.category, 'itemType', a.item_type, 'quantity', a.quantity,
     'clientUnitPriceCents', a.client_unit_price_cents,
     'clientLineTotalCents', a.client_line_total_cents,
-    'snapshot', a.snapshot, 'sortOrder', a.sort_order))
+    'snapshot', a.snapshot - 'docCode', 'sortOrder', a.sort_order))
   INTO v_new_b FROM public.furnishing_authorization_items a
   WHERE a.source_ffe_item_id = v_b;
   ASSERT v_new_a <> v_new_b,

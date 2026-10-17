@@ -2639,6 +2639,9 @@ export * from "./use-add-to-the-job";
 // US-21 W2: the pieces primitives — room placements, batch needs, build fields, restore, labor lines.
 export * from "./use-pieces";
 
+// US-37 #3: per-job item labels (doc_code, 00808) — the writer and the clash sentence.
+export { itemLabelRefusal, useSetFfeItemLabel, type SetFfeItemLabelInput } from "./use-item-labels";
+
 // US-34 N2: optimistic ink for internal records, and the never-optimistic list.
 export {
   useOptimisticMutation,
