@@ -939,6 +939,9 @@ describe("the recorded studio, while it is still resolving", () => {
     const note = document.getElementById("add-person-recorded-studio-held");
     expect(note).toHaveTextContent(/Press again to try once more/);
     expect(note?.closest("[inert]")).toBeNull();
+    // A note-only window holds nothing to focus: focus goes to the bar.
+    const bar = document.querySelector<HTMLElement>("[data-hold-spotlight-bar]")!;
+    expect(within(bar).getAllByRole("button")[0]).toHaveFocus();
     expect(addParty).not.toHaveBeenCalled();
   });
 
