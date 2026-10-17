@@ -23685,6 +23685,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -23737,6 +23738,7 @@ export type Database = {
           signed_by_name?: string | null
           signed_ip?: string | null
           status?: string
+          studio_id?: string | null
           subject?: string | null
           subtotal?: number | null
           superseded_at?: string | null
@@ -23789,6 +23791,7 @@ export type Database = {
           signed_by_name?: string | null
           signed_ip?: string | null
           status?: string
+          studio_id?: string | null
           subject?: string | null
           subtotal?: number | null
           superseded_at?: string | null
@@ -23887,6 +23890,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "proposal_send_dispatches"
             referencedColumns: ["proposal_id", "id"]
+          },
+          {
+            foreignKeyName: "proposals_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "proposals_template_id_fkey"
@@ -36624,6 +36648,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -37013,6 +37038,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -37536,6 +37562,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -37776,8 +37803,26 @@ export type Database = {
         Args: { p_context: string; p_proposal_id: string }
         Returns: string
       }
+      _proposal_recorded_studio: {
+        Args: {
+          p_parent_proposal_id: string
+          p_project_id: string
+          p_proposal_id: string
+        }
+        Returns: string
+      }
       _proposal_review_fingerprint: {
         Args: { p_proposal_id: string }
+        Returns: string
+      }
+      _proposal_studio_for: {
+        Args: {
+          p_designer_client_id: string
+          p_designer_id: string
+          p_parent_proposal_id: string
+          p_project_id: string
+          p_proposal_id: string
+        }
         Returns: string
       }
       _provision_studio: {
@@ -38075,6 +38120,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -39319,6 +39365,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -45875,6 +45922,7 @@ export type Database = {
               signed_by_name: string | null
               signed_ip: string | null
               status: string
+              studio_id: string | null
               subject: string | null
               subtotal: number | null
               superseded_at: string | null
@@ -45941,6 +45989,7 @@ export type Database = {
               signed_by_name: string | null
               signed_ip: string | null
               status: string
+              studio_id: string | null
               subject: string | null
               subtotal: number | null
               superseded_at: string | null

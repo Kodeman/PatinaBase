@@ -11550,4 +11550,18 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 - Any other line: *Price it* parks the composer, puts it away, and walks to `/doc/<id>/pieces?lens=price`. `FocusFfeLineRequest.cell` gains `price`, and only the Price lens answers it: on the typeable client price, or on the printed one where none can be typed.
 - Parking keeps the ticks, hours, notes and billing mode per project, in memory only (`lib/document/registry.tsx`, never storage). Reopening the composer on that project restores it. Drafting or discarding that composer clears it. While a job's composer is parked, its Price lens shows *Back to the invoice*.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · last id = R187*
+### R189 · The catalog product GETs are designer-private; a proposal's studio is recorded authority, with present seats only for a draft written now — US-37 SQ-1218 2026-10-17 (Astra SQ-1213 F2–F4)
+
+**F4: six GET routes are designer-private.** `GET /api/catalog/products`, `/api/catalog/products/[id]`, `/api/catalog/collections/[id]`, `/api/catalog/collections/[id]/products`, `/api/search/search` and `/api/search/search/similar` read every products column, `price_trade` included. SQ-1199 answered 401 with no user, but any signed-in account passed, so a homeowner's session read tradePrice. Each now goes through `getAuthenticatedDesignerAdmin`, as `/api/catalog/vendors` does: 401 with no session, 403 to a signed-in account with no designer- or admin-domain role, and a designer keeps the shape. The read stays on the session client, under RLS. "Anon catalog reads still work" now means the public readers that name their columns (the client-portal piece page, quiz matches, the edge catalog, the iOS product columns, the facets and autocomplete routes), not these six. Anon also loses `products.commission_rate`, which no anon or public reader names. Authenticated's table-level SELECT on products (F1's database half) is a separate ticket.
+
+**F2: who stamps `proposals.studio_id` (ruled B, coordinator).** The first answer wins:
+- **Recorded authority, every row.** The job's studio. Then the studio of the job a `project_commercial_documents` row binds the proposal to (00412's authorizations carry no `project_id`). Then the parent's stamp.
+- **On insert only, a draft written now.** The drafter's present seats: the client relationship's household studio, else her only active non-guest design-studio seat. Two seats and no household is NULL; SQ-1199's narrowing stands. `clone_proposal` stamps the copy from its source.
+- **Backfill, once.** Rows that predate the column take recorded authority only, otherwise NULL. A seat today says nothing about whom a past proposal was drafted for. The backfill runs only in the block that adds the column. A replay finds the column and touches no stamp, NULL included, whatever memberships or studios changed since.
+- NULL means only the designer reads a job-less proposal's lines.
+
+**Narrowing, measured on the fixture only.** A historical job-less proposal with no binding or parent (a duplicate, a household-only or sole-seat draft) is NULL after the backfill. Its designer keeps its lines; teammates read its header, not its lines.
+
+**Where.** Migration 00813 (`_proposal_recorded_studio`, `_proposal_studio_for`, the guarded column block, the anon column grant); `supabase/tests/ffe/us37_inherited_pricing_paths_test.sql`; `apps/designer-portal/src/app/api/{catalog,search}/__tests__/anon-product-read-guard.test.ts`.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R189 · last id = R189 (R188 is held by SQ-1194, in flight)*
