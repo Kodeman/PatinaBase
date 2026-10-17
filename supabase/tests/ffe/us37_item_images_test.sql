@@ -32,6 +32,14 @@
 --               the new primary, not the live piece's first image
 --   rpc-only F5     a team member's direct INSERT, UPDATE and DELETE get
 --               42501; her SELECT still reads
+-- SQ-1143 (Astra SQ-1141 repair):
+--   no parent keys  project_id and source_product_id have no foreign key
+--               (R1/R2 lock cycles); the item cascade is kept; an insert takes
+--               the item's job even over a job that does not exist; add still
+--               refuses an unknown library piece (23503)
+--   move        an item moved to another job takes every picture with it,
+--               an upload stored under the old job included, and the new
+--               job's studio reads them
 --
 -- Run: cd supabase && supabase test db tests/ffe/us37_item_images_test.sql
 --  or: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
@@ -40,7 +48,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(54);
+SELECT plan(62);
 
 -- ─── fixtures (as postgres) ────────────────────────────────────────────────
 -- O owner of studio A (job P) · C the client · X owner of studio B (job Q,
@@ -595,6 +603,104 @@ SELECT is(
    WHERE item_id = '80700000-0000-4000-8000-000000000101' AND is_primary),
   1,
   'rpc-only: a team member still reads the pictures, one primary'
+);
+RESET ROLE;
+
+-- ─── no parent foreign keys (SQ-1143, Astra SQ-1141 R1/R2) ────────────────
+-- A picture written under an item lock must take no projects or products
+-- lock after it: furnishings execution locks the job first (00578), and
+-- merge_studio_product locks the piece first (00753).
+
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.project_ffe_item_images'::regclass
+      AND contype = 'f'
+      AND confrelid = 'public.projects'::regclass),
+  'no parent keys: project_id has no foreign key to projects (R1)'
+);
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.project_ffe_item_images'::regclass
+      AND contype = 'f'
+      AND confrelid = 'public.products'::regclass),
+  'no parent keys: source_product_id has no foreign key to products (R2)'
+);
+SELECT is(
+  (SELECT string_agg(parent.relname::text || ':' || constraint_row.confdeltype::text, ',' ORDER BY parent.relname)
+   FROM pg_constraint AS constraint_row
+   JOIN pg_class AS parent ON parent.oid = constraint_row.confrelid
+   WHERE constraint_row.conrelid = 'public.project_ffe_item_images'::regclass
+     AND constraint_row.contype = 'f'),
+  'profiles:n,project_ffe_items:c',
+  'no parent keys: the item cascade (and created_by) are the only foreign keys left'
+);
+
+-- A row that claims a job that does not exist still gets the item's job.
+INSERT INTO public.project_ffe_item_images (item_id, project_id, url, source, position)
+VALUES ('80700000-0000-4000-8000-000000000102', '80700000-0000-4000-8000-0000000000ff',
+        'https://img.test/claims-no-job.jpg', 'upload', 9);
+SELECT is(
+  (SELECT project_id FROM public.project_ffe_item_images WHERE url = 'https://img.test/claims-no-job.jpg'),
+  '80700000-0000-4000-8000-000000000001'::uuid,
+  'no parent keys: an insert copies project_id from the item, even over a job that does not exist'
+);
+DELETE FROM public.project_ffe_item_images WHERE url = 'https://img.test/claims-no-job.jpg';
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"80700000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+SELECT throws_ok(
+  $$SELECT public.add_ffe_item_image(
+      '80700000-0000-4000-8000-000000000102', 'https://img.test/ghost.jpg', NULL,
+      'library', '80700000-0000-4000-8000-0000000000fe')$$,
+  '23503',
+  'That library piece no longer exists.',
+  'no parent keys: add still refuses a library piece that does not exist'
+);
+RESET ROLE;
+
+-- ─── an item moves to another job (SQ-1143) ───────────────────────────────
+-- I5 has two library pictures and an upload stored under P's folder.
+SELECT set_config('app.ffe_mutation_rpc', 'on', true);
+INSERT INTO public.project_ffe_items (
+  id, project_id, name, status, item_type, product_id, quantity,
+  unit_price_cents, line_total_cents, design_disposition, assignment_scope, sort_order
+) VALUES
+  ('80700000-0000-4000-8000-000000000105', '80700000-0000-4000-8000-000000000001', 'Nesting tables',
+   'specified', 'fixed', '80700000-0000-4000-8000-000000000022', 1, 30000, 30000, 'selected', 'unassigned', 4);
+SELECT set_config('app.ffe_mutation_rpc', '', true);
+INSERT INTO public.project_ffe_item_images (item_id, url, storage_path, source, position)
+VALUES ('80700000-0000-4000-8000-000000000105', 'https://storage.test/project-item-images/nest.jpg',
+        '80700000-0000-4000-8000-000000000001/80700000-0000-4000-8000-000000000105/nest.jpg',
+        'upload', 2);
+
+SELECT set_config('app.ffe_mutation_rpc', 'on', true);
+SELECT lives_ok(
+  -- A NULL thread gets a new one in the new job (00438's selection guard).
+  $$UPDATE public.project_ffe_items
+       SET project_id = '80700000-0000-4000-8000-000000000002', selection_thread_id = NULL
+     WHERE id = '80700000-0000-4000-8000-000000000105'$$,
+  'move: an item whose upload is stored under its old job still moves'
+);
+SELECT set_config('app.ffe_mutation_rpc', '', true);
+SELECT is(
+  (SELECT string_agg(project_id::text || ':' || count::text, ',')
+   FROM (SELECT project_id, count(*) FROM public.project_ffe_item_images
+         WHERE item_id = '80700000-0000-4000-8000-000000000105'
+         GROUP BY project_id) AS by_job),
+  '80700000-0000-4000-8000-000000000002:3',
+  'move: every picture follows the item to its new job'
+);
+
+-- The read policy asks the row's project_id, so the new job's studio sees them.
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"80700000-0000-4000-8000-0000000000a5","role":"authenticated"}';
+SELECT is(
+  (SELECT count(*)::integer FROM public.project_ffe_item_images
+   WHERE item_id = '80700000-0000-4000-8000-000000000105'),
+  3,
+  'move: the new job''s studio reads the moved pictures'
 );
 RESET ROLE;
 

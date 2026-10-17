@@ -18537,62 +18537,6 @@ export type Database = {
             referencedRelation: "project_ffe_items"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "project_ffe_item_images_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "field_activity_summary"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "project_ffe_item_images_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
-            columns: ["source_product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
-            columns: ["source_product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
-            columns: ["source_product_id"]
-            isOneToOne: false
-            referencedRelation: "v_aesthete_catalog_input"
-            referencedColumns: ["product_id"]
-          },
-          {
-            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
-            columns: ["source_product_id"]
-            isOneToOne: false
-            referencedRelation: "v_aesthete_personal_input"
-            referencedColumns: ["product_id"]
-          },
-          {
-            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
-            columns: ["source_product_id"]
-            isOneToOne: false
-            referencedRelation: "v_aesthete_studio_input"
-            referencedColumns: ["product_id"]
-          },
-          {
-            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
-            columns: ["source_product_id"]
-            isOneToOne: false
-            referencedRelation: "v_promotion_candidates"
-            referencedColumns: ["product_id"]
-          },
         ]
       }
       project_ffe_items: {

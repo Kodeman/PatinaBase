@@ -31,6 +31,8 @@ export interface SpecProgressLine {
   product_id?: string | null;
   vendor_id?: string | null;
   vendor_name?: string | null;
+  /** The item's own primary picture (00807); null when it has none. */
+  primary_image_url?: string | null;
   product?: { images?: unknown } | null;
 }
 
@@ -49,13 +51,19 @@ export function selectedMediaUrl(media: unknown): string | null {
   return null;
 }
 
-/** The image the line prints: its own (D15), else its product's first. */
+/**
+ * The image the line prints: the spec's chosen image (D15), else the item's
+ * own primary picture (00807, US-37 D1), else, only when the item has no
+ * pictures of its own, its product's first.
+ */
 export function lineImageUrl(
   line: SpecProgressLine,
   spec: SpecProgressSpec | null | undefined,
 ): string | null {
-  const own = selectedMediaUrl(spec?.selected_media);
-  if (own) return own;
+  const chosen = selectedMediaUrl(spec?.selected_media);
+  if (chosen) return chosen;
+  const own = line.primary_image_url;
+  if (typeof own === "string" && own.trim()) return own;
   const images = line.product?.images;
   return Array.isArray(images) && typeof images[0] === "string" && images[0]
     ? images[0]

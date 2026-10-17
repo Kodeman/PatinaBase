@@ -15,7 +15,14 @@
 --    upload, source_product_id, position (0 first), is_primary. A partial
 --    unique index allows one primary per item; the RPCs keep exactly one
 --    whenever the item has pictures. project_id is DERIVED from the item by a
---    BEFORE trigger, so a row can never claim another job's item.
+--    BEFORE trigger, so a row can never claim another job's item, and an
+--    AFTER UPDATE OF project_id trigger on the item carries its pictures when
+--    it moves to another job. project_id and source_product_id have NO
+--    foreign key (SQ-1143, Astra SQ-1141 R1/R2): a picture written under an
+--    item lock would take its job's or piece's KEY SHARE after the item,
+--    against furnishings execution (projects → item, 00578) and
+--    merge_studio_product (products → item, 00753). The item_id cascade does
+--    the cleanup; add_ffe_item_image still refuses an unknown piece.
 --    READ: RLS on the FF&E studio leg's predicate, can_buy_for_project(
 --    project_id) (00721 project_ffe_items_studio_rw; it includes the owner).
 --    No client policy: clients read pictures only through the curated
@@ -120,16 +127,33 @@ ON CONFLICT (id) DO UPDATE SET
 CREATE TABLE IF NOT EXISTS public.project_ffe_item_images (
   id                uuid        PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
   item_id           uuid        NOT NULL REFERENCES public.project_ffe_items(id) ON DELETE CASCADE,
-  project_id        uuid        NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  -- No foreign keys on project_id or source_product_id (SQ-1143). Each would
+  -- take a KEY SHARE lock on its parent AFTER the inserter already holds the
+  -- item, the reverse of writers that lock the parent first: furnishings
+  -- execution locks projects FOR UPDATE, then the item (00578), and
+  -- merge_studio_product locks products FOR UPDATE, then the item (00753).
+  -- project_id is the item's, kept so by the triggers below, and the item_id
+  -- cascade removes these rows with the item (items cascade with their job,
+  -- 00066). source_product_id is provenance: the piece a picture came from.
+  -- Nothing joins on it, and it is not cleared if the piece is later deleted.
+  project_id        uuid        NOT NULL,
   url               text        NOT NULL CHECK (btrim(url) <> ''),
-  storage_path      text        CHECK (storage_path IS NULL OR storage_path LIKE project_id::text || '/%'),
+  -- Under ${project_id}/ when linked; checked by the BEFORE trigger, not a
+  -- CHECK, so a picture keeps its stored path when its item moves to another job.
+  storage_path      text,
   source            text        NOT NULL CHECK (source IN ('library', 'upload')),
-  source_product_id uuid        REFERENCES public.products(id) ON DELETE SET NULL,
+  source_product_id uuid,
   position          integer     NOT NULL DEFAULT 0 CHECK (position >= 0),
   is_primary        boolean     NOT NULL DEFAULT false,
   created_by        uuid        REFERENCES public.profiles(id) ON DELETE SET NULL DEFAULT auth.uid(),
   created_at        timestamptz NOT NULL DEFAULT now()
 );
+
+-- A database that ran an earlier draft of 00807 has these; drop them there.
+ALTER TABLE public.project_ffe_item_images
+  DROP CONSTRAINT IF EXISTS project_ffe_item_images_project_id_fkey,
+  DROP CONSTRAINT IF EXISTS project_ffe_item_images_source_product_id_fkey,
+  DROP CONSTRAINT IF EXISTS project_ffe_item_images_storage_path_check;
 
 CREATE UNIQUE INDEX IF NOT EXISTS project_ffe_item_images_one_primary
   ON public.project_ffe_item_images (item_id)
@@ -142,10 +166,12 @@ CREATE INDEX IF NOT EXISTS idx_project_ffe_item_images_project
 COMMENT ON TABLE public.project_ffe_item_images IS
   'A project item''s own pictures (00807, US-37 D1/D2): a snapshot of products.images taken when the '
   'piece is added, plus uploads. One primary per item (partial unique index). project_id is derived '
-  'from the item. Read: can_buy_for_project. Write: the 00807 RPCs only (authenticated holds SELECT '
-  'alone). Clients read through the curated readers only. Deleting a row never deletes a stored file.';
+  'from the item (no foreign key; kept in step with the item by triggers). Read: can_buy_for_project. '
+  'Write: the 00807 RPCs only (authenticated holds SELECT alone). Clients read through the curated '
+  'readers only. Deleting a row never deletes a stored file.';
 
--- project_id always comes from the item.
+-- project_id always comes from the item. A stored path must sit in the item's
+-- job folder when the picture is linked or its path changes.
 CREATE OR REPLACE FUNCTION public.project_ffe_item_images_derive_project()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -158,6 +184,12 @@ BEGIN
     (SELECT item.project_id FROM public.project_ffe_items AS item WHERE item.id = NEW.item_id),
     NEW.project_id
   );
+  IF NEW.storage_path IS NOT NULL
+     AND (TG_OP = 'INSERT' OR NEW.storage_path IS DISTINCT FROM OLD.storage_path)
+     AND NEW.storage_path NOT LIKE NEW.project_id::text || '/%' THEN
+    RAISE EXCEPTION 'A stored picture must sit in its job''s folder.'
+      USING ERRCODE = 'check_violation';
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -167,8 +199,36 @@ REVOKE ALL ON FUNCTION public.project_ffe_item_images_derive_project()
 
 DROP TRIGGER IF EXISTS trg_project_ffe_item_images_derive_project ON public.project_ffe_item_images;
 CREATE TRIGGER trg_project_ffe_item_images_derive_project
-  BEFORE INSERT OR UPDATE OF item_id, project_id ON public.project_ffe_item_images
+  BEFORE INSERT OR UPDATE OF item_id, project_id, storage_path ON public.project_ffe_item_images
   FOR EACH ROW EXECUTE FUNCTION public.project_ffe_item_images_derive_project();
+
+-- An item that moves to another job takes its pictures with it, so the read
+-- policy below (which asks the row's project_id) follows the item. The mover
+-- already holds the item; these rows are leaves under it, so no lock cycle.
+CREATE OR REPLACE FUNCTION public.project_ffe_items_carry_images()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+BEGIN
+  UPDATE public.project_ffe_item_images
+  SET project_id = NEW.project_id
+  WHERE item_id = NEW.id
+    AND project_id IS DISTINCT FROM NEW.project_id;
+  RETURN NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.project_ffe_items_carry_images()
+  FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_project_ffe_items_carry_images ON public.project_ffe_items;
+CREATE TRIGGER trg_project_ffe_items_carry_images
+  AFTER UPDATE OF project_id ON public.project_ffe_items
+  FOR EACH ROW
+  WHEN (OLD.project_id IS DISTINCT FROM NEW.project_id)
+  EXECUTE FUNCTION public.project_ffe_items_carry_images();
 
 ALTER TABLE public.project_ffe_item_images ENABLE ROW LEVEL SECURITY;
 
@@ -347,9 +407,11 @@ SELECT public._backfill_ffe_item_library_images();
 -- 00808's job label lock (_ffe_lock_job_labels), so every FF&E writer agrees:
 -- job, then item. Furnishings execution (00578
 -- _execute_furnishings_authorization_*) takes the projects row FOR UPDATE and
--- then updates the item. If a picture act locked the item first, its INSERT's
--- foreign-key KEY SHARE on the projects row would wait on execution, which
--- would be waiting on the item: a deadlock (40P01).
+-- then updates the item. If a picture act locked the item first, any later
+-- wait on the projects row would wait on execution, which would be waiting
+-- on the item: a deadlock (40P01). Since SQ-1143 the picture table has no
+-- foreign key to projects or products, so an INSERT under the item lock
+-- (here, or in the snapshot trigger) takes no parent lock after the item.
 CREATE OR REPLACE FUNCTION public._ffe_item_images_require_team(p_item_id uuid)
 RETURNS public.project_ffe_items
 LANGUAGE plpgsql
@@ -440,6 +502,14 @@ BEGIN
   IF p_source IS NULL OR p_source NOT IN ('library', 'upload') THEN
     RAISE EXCEPTION 'A picture comes from the library or an upload.'
       USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  -- The refusal the dropped products foreign key gave, read without a lock:
+  -- the gate already holds the item, and merge_studio_product locks products
+  -- before items (00753), so a KEY SHARE here would close a cycle (SQ-1143).
+  IF p_source_product_id IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM public.products WHERE id = p_source_product_id) THEN
+    RAISE EXCEPTION 'That library piece no longer exists.'
+      USING ERRCODE = 'foreign_key_violation';
   END IF;
 
   INSERT INTO public.project_ffe_item_images (
@@ -781,8 +851,8 @@ BEGIN
         'productId', item.product_id,
         -- 00807: the item's own primary picture, no longer the live product's
         -- first image; and every picture in order.
-        'imageUrl', public.primary_image_url(item),
-        'primaryImageUrl', public.primary_image_url(item),
+        'imageUrl', item_primary.url,
+        'primaryImageUrl', item_primary.url,
         'imageUrls', to_jsonb(public.image_urls(item)),
         'docCode', item.doc_code
       ) ORDER BY room.sort_order NULLS FIRST, item.sort_order, item.created_at, item.id)
@@ -800,6 +870,8 @@ BEGIN
         -- 00755 (F-E4): the snapshot's unit, defaulting to 'each'.
         SELECT COALESCE(authorization_item.snapshot->>'unit', 'each') AS unit
       ) AS line_unit
+      -- The primary picture, looked up once per line (SQ-1143).
+      CROSS JOIN LATERAL (SELECT public.primary_image_url(item) AS url) AS item_primary
       WHERE item.project_id = p_project_id
         AND item.removed_at IS NULL
         AND item.design_disposition NOT IN ('not_selected', 'superseded')
@@ -846,8 +918,8 @@ BEGIN
         'productId', item.product_id,
         -- 00807: the item's own primary picture, no longer the live product's
         -- first image; and every picture in order.
-        'imageUrl', public.primary_image_url(item),
-        'primaryImageUrl', public.primary_image_url(item),
+        'imageUrl', item_primary.url,
+        'primaryImageUrl', item_primary.url,
         'imageUrls', to_jsonb(public.image_urls(item)),
         'docCode', item.doc_code
       ) ORDER BY room.sort_order NULLS FIRST, item.sort_order, item.created_at, item.id)
@@ -868,6 +940,8 @@ BEGIN
         ORDER BY scope_section.sort_order, scope_section.id
         LIMIT 1
       ) AS section ON true
+      -- The primary picture, looked up once per line (SQ-1143).
+      CROSS JOIN LATERAL (SELECT public.primary_image_url(item) AS url) AS item_primary
       WHERE item.project_id = p_project_id
         AND item.removed_at IS NULL
         AND item.design_disposition NOT IN ('not_selected', 'superseded')
