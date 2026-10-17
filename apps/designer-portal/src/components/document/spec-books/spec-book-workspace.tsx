@@ -51,6 +51,32 @@ import {
   type SpecField,
 } from "@/lib/spec-books/model";
 
+type ServerIssueWarning = {
+  id: string;
+  code: string;
+  ffeItemId: string;
+};
+
+function serverWarningsFromError(error: unknown): ServerIssueWarning[] | null {
+  const candidate = error as { message?: string; details?: unknown };
+  if (candidate?.message !== "spec_book_warnings_unacknowledged") return null;
+  let details: unknown = candidate.details;
+  if (typeof details === "string") {
+    try { details = JSON.parse(details); } catch { return null; }
+  }
+  const warnings = (details as { warnings?: unknown } | null)?.warnings;
+  if (!Array.isArray(warnings)) return null;
+  return warnings.filter((warning): warning is ServerIssueWarning =>
+    typeof warning?.id === "string" && typeof warning?.code === "string" && typeof warning?.ffeItemId === "string",
+  );
+}
+
+function serverWarningMessage(warning: ServerIssueWarning): string {
+  if (warning.code === "missing_optional_note") return "Add a client note or acknowledge that it is absent.";
+  if (warning.code === "stale_source_verification") return "Source verification is more than 180 days old; review and refresh it.";
+  return "Review this item warning before issuing.";
+}
+
 const AUDIENCES: Array<{
   id: SpecBookAudience;
   label: string;
@@ -1018,7 +1044,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   const requestedItemId = useSearchParams()?.get("ffeItemId") ?? null;
   const workbench = useSpecBookWorkbench(projectId);
   const project = useProjectV2(projectId) as {
-    data: { name?: string; title?: string } | undefined;
+    data: { name?: string; title?: string; studio_id?: string | null } | undefined;
   };
   const updateSetting = useUpdateSpecBookItemSetting(projectId);
   const prepareIssue = usePrepareSpecBookIssue();
@@ -1041,6 +1067,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   const [issueType, setIssueType] = useState<SpecBookIssueType>("full");
   const [issueReason, setIssueReason] = useState("");
   const [warningReason, setWarningReason] = useState("");
+  const [serverIssueWarnings, setServerIssueWarnings] = useState<ServerIssueWarning[] | null>(null);
   const [issueFeedback, setIssueFeedback] = useState<string | null>(null);
   const [shareResult, setShareResult] = useState<{
     artifactId: string;
@@ -1080,6 +1107,28 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
     () => runSpecBookPreflight(data?.items ?? [], audiences),
     [data?.items, audiences],
   );
+  const issueWarnings = serverIssueWarnings ?? preflight.warnings.map((warning) => ({
+    id: warning.code === "optional_client_note_absent" && warning.itemId
+      ? `missing-client-note:${warning.itemId}`
+      : warning.code.startsWith("stale_source_") && warning.itemId
+        ? `stale-source:${warning.itemId}`
+        : null,
+    code: warning.code === "optional_client_note_absent"
+      ? "missing_optional_note"
+      : warning.code.startsWith("stale_source_")
+        ? "stale_source_verification"
+        : warning.code,
+    ffeItemId: warning.itemId ?? "",
+  })).filter((warning): warning is ServerIssueWarning => warning.id !== null)
+    .filter((warning, index, all) => all.findIndex((candidate) => candidate.id === warning.id) === index);
+  const visibleWarningIssues = serverIssueWarnings
+    ? serverIssueWarnings.map((warning) => ({
+        code: warning.code,
+        severity: "warning" as const,
+        message: serverWarningMessage(warning),
+        itemId: warning.ffeItemId,
+      }))
+    : preflight.warnings;
   const visibleItems = useMemo(() => {
     const items = data?.items ?? [];
     if (readiness === "all") return items;
@@ -1172,6 +1221,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   }, [data?.items, requestedItemId, selectedItemId]);
 
   const toggleAudience = (audience: SpecBookAudience) => {
+    setServerIssueWarnings(null);
     setAudiences((current) =>
       current.includes(audience)
         ? current.filter((value) => value !== audience)
@@ -1185,19 +1235,23 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
       project_id: projectId,
       audience_count: audiences.length,
       blocker_count: preflight.blockers.length,
-      warning_count: preflight.warnings.length,
+      warning_count: issueWarnings.length,
     });
   };
 
   const issue = useCallback(async () => {
     if (!data || audiences.length === 0) return;
     setIssueFeedback(null);
+    if (project.data && project.data.studio_id == null) {
+      setIssueFeedback("This job isn't in a studio yet. Name its studio, then issue.");
+      return;
+    }
     if (!preflight.ready) {
       setIssueFeedback("Resolve blocking preflight items before issuing.");
       setView("preflight");
       return;
     }
-    if (preflight.warnings.length > 0 && !warningReason.trim()) {
+    if (issueWarnings.length > 0 && !warningReason.trim()) {
       setIssueFeedback("Acknowledging warnings requires a reason.");
       setView("preflight");
       return;
@@ -1210,7 +1264,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
       project_id: projectId,
       issue_type: issueType,
       audiences,
-      warning_count: preflight.warnings.length,
+      warning_count: issueWarnings.length,
     });
     const issueStarted = performance.now();
     try {
@@ -1223,8 +1277,8 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         baseRevisionId:
           issueType === "full" ? null : (latestIssued?.id ?? null),
         idempotencyKey: crypto.randomUUID(),
-        warningAcknowledgements: preflight.warnings.map((warning) => ({
-          code: warning.code,
+        warningAcknowledgements: issueWarnings.map((warning) => ({
+          id: warning.id,
           reason: warningReason.trim(),
         })),
       });
@@ -1257,6 +1311,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         issue_type: issueType,
         duration_ms: Math.round(performance.now() - issueStarted),
       });
+      setServerIssueWarnings(null);
       setIssueFeedback(
         rendered.some((result) => result.finalized)
           ? "Revision issued. Every audience artifact is durable."
@@ -1264,11 +1319,19 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
       );
       setView("history");
     } catch (error) {
-      setIssueFeedback(
-        error instanceof Error
-          ? error.message
-          : "The issue could not complete.",
-      );
+      const serverWarnings = serverWarningsFromError(error);
+      if (serverWarnings) {
+        setServerIssueWarnings(serverWarnings);
+        setIssueFeedback("The server found warnings to acknowledge. Review them, then issue again.");
+        setView("preflight");
+      } else {
+        const message = (error as { message?: string })?.message ?? "";
+        setIssueFeedback(
+          project.data && project.data.studio_id == null && /spec book not found or not accessible/i.test(message)
+            ? "This job isn't in a studio yet. Name its studio, then issue."
+            : "The issue could not complete.",
+        );
+      }
     }
   }, [
     audiences,
@@ -1277,7 +1340,9 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
     issueType,
     latestIssued?.id,
     preflight,
+    issueWarnings,
     prepareIssue,
+    project,
     projectId,
     renderArtifact,
     warningReason,
@@ -1413,8 +1478,8 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
     ) + 1;
   const editionWord = `Edition ${workingEdition}`;
   const frontSentence = preflight.ready
-    ? preflight.warnings.length > 0
-      ? `Nothing blocks ${editionWord.toLowerCase()}; ${preflight.warnings.length === 1 ? "one warning needs" : `${preflight.warnings.length} warnings need`} a reason before it issues.`
+    ? issueWarnings.length > 0
+      ? `Nothing blocks ${editionWord.toLowerCase()}; ${issueWarnings.length === 1 ? "one warning needs" : `${issueWarnings.length} warnings need`} a reason before it issues.`
       : `Everything is ready for ${editionWord.toLowerCase()}.`
     : `${preflight.blockers.length === 1 ? "One thing stands" : `${preflight.blockers.length} things stand`} between this book and ${editionWord.toLowerCase()}. ${preflight.blockers[0]?.message ?? ""}`;
   const openPiece = (itemId: string, focusField?: SpecField) => {
@@ -1782,7 +1847,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                     : `${preflight.blockers.length} blockers remain`}
                 </h2>
                 <p className="t-body-sm sb-help">
-                  {preflight.warnings.length} warnings · {data.items.length}{" "}
+                  {issueWarnings.length} warnings · {data.items.length}{" "}
                   lines checked
                 </p>
               </div>
@@ -1827,12 +1892,12 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                 <div className="sec-head">
                   <p className="eb">Issue warnings</p>
                 </div>
-                {preflight.warnings.length === 0 ? (
+                {issueWarnings.length === 0 ? (
                   <p className="empty-s">No warnings.</p>
                 ) : (
                   <div className="ledger">
                     <ul className="rows">
-                      {preflight.warnings.map((issue, index) => (
+                      {visibleWarningIssues.map((issue, index) => (
                         <li
                           key={`${issue.code}-${issue.itemId}-${index}`}
                           className="lrow sb-issue-row"
@@ -1843,7 +1908,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                     </ul>
                   </div>
                 )}
-                {preflight.warnings.length > 0 && (
+                {issueWarnings.length > 0 && (
                   <label className="sb-label sb-group">
                     Issue-with-warnings reason
                     <Textarea
@@ -1915,12 +1980,17 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                   {issueFeedback}
                 </p>
               )}
+              {project.data && project.data.studio_id == null && (
+                <p className="t-body-sm sb-help" role="status">
+                  This job isn't in a studio yet. Name its studio, then issue.
+                </p>
+              )}
               <div className="sb-foot">
                 <DocumentAction
                   actionKey="spec-book-issue"
                   variant="terminal"
                   loading={issueBusy}
-                  disabled={!preflight.ready || audiences.length === 0}
+                  disabled={!preflight.ready || audiences.length === 0 || (project.data != null && project.data.studio_id == null)}
                   onClick={() => void issue()}
                 >
                   Issue {audiences.length} edition

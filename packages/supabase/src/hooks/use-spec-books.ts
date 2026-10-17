@@ -466,7 +466,7 @@ export interface PrepareSpecBookIssueInput {
   reason: string | null;
   baseRevisionId: string | null;
   idempotencyKey: string;
-  warningAcknowledgements: Array<{ code: string; reason: string }>;
+  warningAcknowledgements: Array<{ id: string; reason: string }>;
 }
 
 export function usePrepareSpecBookIssue() {
