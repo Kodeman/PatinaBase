@@ -59,7 +59,8 @@ export type FfePricingEventField =
   | 'line_total_cents'
   | 'markup_percent'
   | 'trade_price_cents'
-  | 'line_kind';
+  | 'line_kind'
+  | 'currency';
 
 /** One logged change to a line's pricing after the approval (get_ffe_pricing_events). */
 export interface FfePricingEvent {

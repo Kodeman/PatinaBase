@@ -1,14 +1,17 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00810 — What the client approved and the post-approval change log
--- (pgTAP, US-37 #4, SQ-1106; repaired by SQ-1169 for Astra SQ-1168)
+-- (pgTAP, US-37 #4, SQ-1106; repaired by SQ-1169 for Astra SQ-1168 and by
+-- SQ-1194 for Astra SQ-1190)
 --
 -- Studio A: owner D (designer, the job's lead) and client C (the frozen
--- decision lead) on Project P. Studio B: owner X (the outsider).
+-- decision lead) on Project P. Studio B: owner X (the outsider). Last, a
+-- studio-less job P9 of D's, with household client H and Studio A teammate T.
 --
 -- Cases, in order:
 --   grants            team-read tables with RLS; snapshot + trigger internal;
 --                     readers authenticated-only; both approval paths record
---                     and stay private; the job label lock comes first (F2)
+--                     and stay private; the job label lock comes first in
+--                     the approval path and in every pricing writer (F2)
 --   before approval   an edit logs nothing; the reader returns NULL
 --   plan_issue        a client approval of drawings records nothing
 --   budget_version    records the approval event with no lines (F1)
@@ -18,19 +21,24 @@
 --                     count; per-currency totals (F1, F3); a replay records
 --                     nothing new; a masked-price edition records no lines;
 --                     a line added after it is not in the baseline
---   after approval    edits log who, when, field, old and new; differs flips
---                     on unit, quantity, total and currency, each on its own
+--   after approval    edits log who, when, field, old and new; a currency
+--                     change logs one event (SQ-1190 F3); differs flips on
+--                     unit, quantity, total and currency, each on its own
 --   option consent    apply_client_decision's product option records its
 --                     one line only (F4)
 --   tie-break         equal approved_at falls back to the id
---   interleave        a line edit waits on the job label lock held by an
---                     open approval, then is logged (F2, dblink)
+--   interleave        a line edit and a labor price edit each wait on the
+--                     job label lock held by an open approval, then are
+--                     logged (F2, dblink)
 --   outsider/client   42501 on both readers and no rows from the tables
+--   studio-less job   a client who shares an unrelated organization with the
+--                     lead reads nothing and is refused; the lead and her
+--                     design-studio teammate still read (SQ-1190 F1)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
 
-SELECT plan(42);
+SELECT plan(54);
 
 -- ── fixture ────────────────────────────────────────────────────────────────
 
@@ -293,6 +301,63 @@ SELECT is(
   'reset_ffe_line_markup,resolve_ffe_cost_change,set_ffe_line_kind,set_ffe_line_pricing',
   'F2: the 00809 line writers take the job label lock before their line lock'
 );
+
+-- SQ-1194 (Astra SQ-1190 F2): every other pricing writer takes the job label
+-- lock before its line row lock (00810 §7c). The first three lock nothing
+-- before the line; the other three lock rows no job-lock holder takes first.
+SELECT ok(
+  strpos(def, 'PERFORM public._ffe_lock_job_labels(') > 0
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(')
+      < regexp_instr(def, 'FOR (UPDATE|SHARE|KEY SHARE|NO KEY UPDATE)')
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(')
+      < strpos(def, 'SELECT * INTO v_item FROM public.project_ffe_items WHERE id = p_item_id FOR UPDATE'),
+  'F2: set_project_ffe_line_commercials takes the job label lock before its line lock'
+)
+FROM (SELECT pg_get_functiondef('public.set_project_ffe_line_commercials(uuid,jsonb)'::regprocedure) AS def) AS fn;
+
+SELECT ok(
+  strpos(def, 'PERFORM public._ffe_lock_job_labels(') > 0
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(')
+      < regexp_instr(def, 'FOR (UPDATE|SHARE|KEY SHARE|NO KEY UPDATE)')
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(')
+      < strpos(def, 'SELECT * INTO v_item FROM public.project_ffe_items'),
+  'F2: set_labor_line_price takes the job label lock before its line lock'
+)
+FROM (SELECT pg_get_functiondef('public.set_labor_line_price(uuid,integer)'::regprocedure) AS def) AS fn;
+
+SELECT ok(
+  strpos(def, 'PERFORM public._ffe_lock_job_labels(') > 0
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(')
+      < regexp_instr(def, 'FOR (UPDATE|SHARE|KEY SHARE|NO KEY UPDATE)')
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(')
+      < strpos(def, 'SELECT * INTO v_item FROM public.project_ffe_items WHERE id = p_item_id FOR UPDATE'),
+  'F2: set_project_ffe_line_build_fields takes the job label lock before its line lock'
+)
+FROM (SELECT pg_get_functiondef('public.set_project_ffe_line_build_fields(uuid,jsonb)'::regprocedure) AS def) AS fn;
+
+SELECT ok(
+  strpos(def, 'PERFORM public._ffe_lock_job_labels(') > 0
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(')
+      < strpos(def, 'SELECT * INTO v_item FROM public.project_ffe_items'),
+  'F2: resolve_ack_line takes the job label lock before its line lock'
+)
+FROM (SELECT pg_get_functiondef('public.resolve_ack_line(uuid,text,text)'::regprocedure) AS def) AS fn;
+
+SELECT ok(
+  strpos(def, 'PERFORM public._ffe_lock_job_labels(') > 0
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(') < strpos(def, 'FOR UPDATE OF item'),
+  'F2: reprice_replacement_purchase_order takes the job label lock before its line locks'
+)
+FROM (SELECT pg_get_functiondef('public.reprice_replacement_purchase_order(uuid,jsonb,jsonb)'::regprocedure) AS def) AS fn;
+
+SELECT ok(
+  strpos(def, 'PERFORM public._ffe_lock_job_labels(') > 0
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(')
+      < strpos(def, 'SELECT * INTO v_item FROM public.project_ffe_items'),
+  'F2: revise_project_ffe_configuration takes the job label lock before its line lock'
+)
+FROM (SELECT pg_get_functiondef(
+  'public.revise_project_ffe_configuration(uuid,uuid,uuid,integer,text,uuid,integer)'::regprocedure) AS def) AS fn;
 
 -- ── before approval (D) ────────────────────────────────────────────────────
 
@@ -625,6 +690,15 @@ SELECT is(
 );
 
 UPDATE public.project_ffe_items SET currency = 'USD' WHERE id = '81000000-0000-4000-8000-000000000105';
+
+SELECT is(
+  (SELECT string_agg(concat_ws(':', event.field, event.old_value, event.new_value), ',' ORDER BY event.at, event.id)
+   FROM public.ffe_pricing_events AS event
+   WHERE event.item_id = '81000000-0000-4000-8000-000000000105'),
+  'currency:EUR:USD',
+  'F3 (SQ-1190): a currency-only change after approval writes one event with the old and the new currency'
+);
+
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"81000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
 
@@ -848,6 +922,115 @@ SELECT is(
   'F2: a line edit waits on the job label lock an open first approval holds, then is logged (dblink interleave)'
 );
 
+-- ── F2 (SQ-1190): a labor price edit waits on an open approval too ─────────
+-- The same interleave through set_labor_line_price (00810 §7c). Session A
+-- holds the job label lock and records the job's first approval, still open.
+-- Session B prices the job's labor line. B must wait on the job label lock,
+-- then log its edit once A commits. Without the lock B would take the line at
+-- once, write before A's approval is visible, and log nothing.
+CREATE TEMP TABLE p810_labor_interleave (result text) ON COMMIT DROP;
+DO $p810_labor_interleave$
+DECLARE
+  v_dsn text := format(
+    'host=%s port=54322 dbname=%s user=postgres password=postgres connect_timeout=5',
+    host(network(set_masklen(inet_server_addr(), 16)) + 1), current_database());
+  v_cleanup text := $c$
+    SET statement_timeout = '20s';
+    SET lock_timeout = '10s';
+    SET app.ffe_mutation_rpc = 'on';
+    DELETE FROM public.ffe_pricing_approvals WHERE project_id = '81092000-0000-4000-8000-000000000001';
+    DELETE FROM public.projects WHERE id = '81092000-0000-4000-8000-000000000001';
+    DELETE FROM public.profiles WHERE id = '81092000-0000-4000-8000-0000000000d1';
+    DELETE FROM auth.users WHERE id = '81092000-0000-4000-8000-0000000000d1';
+  $c$;
+  v_b_pid integer;
+  v_wait text;
+  v_logged integer;
+  v_result text;
+  v_conn text;
+BEGIN
+  PERFORM extensions.dblink_connect('p810l_setup', v_dsn);
+  PERFORM extensions.dblink_connect('p810l_a', v_dsn);
+  PERFORM extensions.dblink_connect('p810l_b', v_dsn);
+  BEGIN
+    PERFORM extensions.dblink_exec('p810l_setup', v_cleanup);
+    PERFORM extensions.dblink_exec('p810l_setup', $f$
+      INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+      VALUES ('81092000-0000-4000-8000-0000000000d1', 'p810-labor-interleave@test.invalid', '', now(), now(), now(),
+              '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+      INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
+      VALUES ('81092000-0000-4000-8000-0000000000d1', 'p810-labor-interleave@test.invalid', 'P810 Labor Interleave', now(), now())
+      ON CONFLICT (id) DO NOTHING;
+      INSERT INTO public.projects (id, name, designer_id, created_by, status)
+      VALUES ('81092000-0000-4000-8000-000000000001', 'P810 Labor interleave job', '81092000-0000-4000-8000-0000000000d1',
+              '81092000-0000-4000-8000-0000000000d1', 'active');
+      INSERT INTO public.project_ffe_items (id, project_id, name, status, item_type, quantity, unit,
+        trade_price_cents, unit_price_cents, line_total_cents, design_disposition,
+        line_kind, link_kind, parent_ffe_item_id)
+      VALUES
+        ('81092000-0000-4000-8000-0000000000b1', '81092000-0000-4000-8000-000000000001', 'Labor interleave sofa',
+         'specified', 'fixed', 1, 'each', 10000, 15000, 15000, 'selected', 'goods', NULL, NULL),
+        ('81092000-0000-4000-8000-0000000000b2', '81092000-0000-4000-8000-000000000001', 'Labor interleave install',
+         'specified', 'fixed', 2, 'hour', NULL, 0, 0, 'selected', 'labor', 'labor',
+         '81092000-0000-4000-8000-0000000000b1');
+    $f$);
+    PERFORM extensions.dblink_exec('p810l_a', $q$SET lock_timeout = '20s'$q$);
+    PERFORM extensions.dblink_exec('p810l_b', $q$SET lock_timeout = '20s'$q$);
+    PERFORM * FROM extensions.dblink('p810l_b', $q$SELECT set_config('request.jwt.claims',
+      '{"sub":"81092000-0000-4000-8000-0000000000d1","role":"authenticated"}', false),
+      set_config('request.jwt.claim.sub', '81092000-0000-4000-8000-0000000000d1', false)$q$)
+      AS r(claims text, sub text);
+
+    PERFORM extensions.dblink_exec('p810l_a', 'BEGIN');
+    PERFORM * FROM extensions.dblink('p810l_a',
+      $q$SELECT public._ffe_lock_job_labels('81092000-0000-4000-8000-000000000001')::text$q$) AS r(x text);
+    PERFORM extensions.dblink_exec('p810l_a', $q$INSERT INTO public.ffe_pricing_approvals
+      (project_id, approval_source, approval_ref)
+      VALUES ('81092000-0000-4000-8000-000000000001', 'project_approval', '81092000-0000-4000-8000-0000000000e1')$q$);
+    SELECT pid INTO v_b_pid FROM extensions.dblink('p810l_b', 'SELECT pg_backend_pid()') AS r(pid integer);
+    PERFORM extensions.dblink_exec('p810l_b', 'BEGIN');
+    PERFORM extensions.dblink_send_query('p810l_b',
+      $q$SELECT public.set_labor_line_price('81092000-0000-4000-8000-0000000000b2', 16000)::text$q$);
+    FOR i IN 1..50 LOOP
+      SELECT wait INTO v_wait FROM extensions.dblink('p810l_setup', format(
+        $q$SELECT wait_event FROM pg_stat_activity WHERE pid = %s AND wait_event_type = 'Lock'$q$, v_b_pid))
+        AS r(wait text);
+      EXIT WHEN v_wait IS NOT NULL;
+      PERFORM pg_sleep(0.1);
+    END LOOP;
+
+    PERFORM extensions.dblink_exec('p810l_a', 'COMMIT');
+    PERFORM * FROM extensions.dblink_get_result('p810l_b', false) AS r(x text);
+    PERFORM * FROM extensions.dblink_get_result('p810l_b', false) AS r(x text);
+    SELECT n INTO v_logged FROM extensions.dblink('p810l_b', $q$SELECT count(*)::integer
+      FROM public.ffe_pricing_events WHERE item_id = '81092000-0000-4000-8000-0000000000b2'
+        AND field = 'unit_price_cents' AND old_value = '0' AND new_value = '16000'$q$) AS r(n integer);
+    PERFORM extensions.dblink_exec('p810l_b', 'ROLLBACK');
+    v_result := CASE WHEN v_wait IS NULL THEN 'the labor edit never waited' ELSE 'waits on ' || v_wait END
+      || CASE WHEN v_logged > 0 THEN '; logged' ELSE '; unlogged' END;
+  EXCEPTION WHEN OTHERS THEN
+    v_result := COALESCE(v_result, 'interleave error: ' || SQLERRM);
+  END;
+  -- A and B close first, so nothing they still hold can block the cleanup.
+  FOREACH v_conn IN ARRAY COALESCE(extensions.dblink_get_connections(), ARRAY[]::text[]) LOOP
+    IF v_conn IN ('p810l_a', 'p810l_b') THEN PERFORM extensions.dblink_disconnect(v_conn); END IF;
+  END LOOP;
+  BEGIN
+    PERFORM extensions.dblink_exec('p810l_setup', v_cleanup);
+  EXCEPTION WHEN OTHERS THEN
+    v_result := COALESCE(v_result, '') || ' / cleanup error: ' || SQLERRM;
+  END;
+  PERFORM extensions.dblink_disconnect('p810l_setup');
+  INSERT INTO p810_labor_interleave VALUES (v_result);
+END
+$p810_labor_interleave$;
+
+SELECT is(
+  (SELECT result FROM p810_labor_interleave),
+  'waits on advisory; logged',
+  'F2 (SQ-1190): a labor price edit waits on the job label lock an open first approval holds, then is logged (dblink interleave)'
+);
+
 -- ── the outsider (X) ───────────────────────────────────────────────────────
 
 SET LOCAL ROLE authenticated;
@@ -891,6 +1074,112 @@ SELECT is(
   + (SELECT count(*) FROM public.ffe_pricing_events),
   0::bigint,
   'the client reads no rows from the three tables'
+);
+
+-- ── F1 (SQ-1190): a studio-less job's household client ─────────────────────
+-- Job P9 has no studio (studio_id NULL). Its lead is D. Its client H shares an
+-- unrelated active organization (a contractor) with D, which 00702's
+-- fallback (is_studio_comember: any shared organization) counted as the
+-- job's team. 00813 narrows that fallback to D's design-studio co-members who
+-- are not the job's client. H reads nothing and is refused the change log;
+-- D and her Studio A teammate T still read.
+
+RESET ROLE;
+
+INSERT INTO auth.users (
+  id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+  instance_id, aud, role
+) VALUES
+  ('81000000-0000-4000-8000-0000000000a3', 'p810-household@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('81000000-0000-4000-8000-0000000000a4', 'p810-teammate@test.invalid',  '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO public.profiles (id, email, full_name, is_designer)
+VALUES
+  ('81000000-0000-4000-8000-0000000000a3', 'p810-household@test.invalid', 'P810 Household', false),
+  ('81000000-0000-4000-8000-0000000000a4', 'p810-teammate@test.invalid',  'P810 Teammate',  true)
+ON CONFLICT (id) DO UPDATE
+SET email = EXCLUDED.email, full_name = EXCLUDED.full_name, is_designer = EXCLUDED.is_designer;
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('81000000-0000-4000-8000-0000000000f3', 'contractor', 'P810 Shared Co-op', 'p810-shared-coop-test', 'active');
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('81000000-0000-4000-8000-0000000000e3', '81000000-0000-4000-8000-0000000000a1', '81000000-0000-4000-8000-0000000000f3', 'member', 'active', now()),
+  ('81000000-0000-4000-8000-0000000000e4', '81000000-0000-4000-8000-0000000000a3', '81000000-0000-4000-8000-0000000000f3', 'member', 'active', now()),
+  ('81000000-0000-4000-8000-0000000000e6', '81000000-0000-4000-8000-0000000000a4', '81000000-0000-4000-8000-0000000000f1', 'member', 'active', now());
+
+INSERT INTO public.designer_clients (id, designer_id, client_id, client_name, client_email, status, source)
+VALUES ('81000000-0000-4000-8000-0000000000c3', '81000000-0000-4000-8000-0000000000a1',
+        '81000000-0000-4000-8000-0000000000a3', 'P810 Household', 'p810-household@test.invalid',
+        'active', 'direct');
+
+INSERT INTO public.projects (id, name, designer_id, client_id, created_by, status, current_phase)
+VALUES ('81000000-0000-4000-8000-000000000901', 'P810 Studio-less cottage',
+        '81000000-0000-4000-8000-0000000000a1', '81000000-0000-4000-8000-0000000000a3',
+        '81000000-0000-4000-8000-0000000000a1', 'active', 'design');
+DO $$ BEGIN
+  ASSERT (SELECT studio_id IS NULL FROM public.projects WHERE id = '81000000-0000-4000-8000-000000000901'),
+    'the F1 job must stay studio-less';
+END $$;
+
+SELECT set_config('app.ffe_mutation_rpc', 'on', true);
+INSERT INTO public.project_ffe_items (
+  id, project_id, name, status, item_type, quantity, trade_price_cents,
+  unit_price_cents, line_total_cents, currency, design_disposition
+) VALUES ('81000000-0000-4000-8000-000000000911', '81000000-0000-4000-8000-000000000901', 'P810 Cottage bench',
+          'specified', 'fixed', 1, 40000, 60000, 60000, 'USD', 'selected');
+SELECT set_config('app.ffe_mutation_rpc', '', true);
+INSERT INTO public.ffe_pricing_approvals (id, project_id, approval_source, approval_ref)
+VALUES ('81000000-0000-4000-8000-000000000921', '81000000-0000-4000-8000-000000000901', 'project_approval',
+        '81000000-0000-4000-8000-000000000922');
+INSERT INTO public.ffe_pricing_approval_lines (approval_id, item_id, unit_client_cents, quantity, line_total_cents, currency)
+VALUES ('81000000-0000-4000-8000-000000000921', '81000000-0000-4000-8000-000000000911', 60000, 1, 60000, 'USD');
+INSERT INTO public.ffe_pricing_events (id, item_id, project_id, actor, field, old_value, new_value)
+VALUES ('81000000-0000-4000-8000-000000000931', '81000000-0000-4000-8000-000000000911',
+        '81000000-0000-4000-8000-000000000901', '81000000-0000-4000-8000-0000000000a1',
+        'trade_price_cents', '35000', '40000');
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81000000-0000-4000-8000-0000000000a3","role":"authenticated"}';
+
+SELECT is(
+  (SELECT count(*) FROM public.ffe_pricing_events WHERE project_id = '81000000-0000-4000-8000-000000000901')
+  + (SELECT count(*) FROM public.ffe_pricing_approvals WHERE project_id = '81000000-0000-4000-8000-000000000901')
+  + (SELECT count(*) FROM public.ffe_pricing_approval_lines
+     WHERE approval_id = '81000000-0000-4000-8000-000000000921'),
+  0::bigint,
+  'F1 (SQ-1190): a studio-less job''s client who shares an unrelated organization with the lead reads no pricing history'
+);
+
+SELECT throws_ok(
+  $$SELECT public.get_ffe_pricing_events('81000000-0000-4000-8000-000000000901', NULL)$$,
+  '42501', NULL,
+  'F1 (SQ-1190): that client is refused the change log (42501)'
+);
+
+SET LOCAL request.jwt.claims = '{"sub":"81000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+
+SELECT is(
+  ((SELECT count(*) FROM public.ffe_pricing_events WHERE project_id = '81000000-0000-4000-8000-000000000901')
+   + (SELECT count(*) FROM public.ffe_pricing_approvals WHERE project_id = '81000000-0000-4000-8000-000000000901')
+   + (SELECT count(*) FROM public.ffe_pricing_approval_lines
+      WHERE approval_id = '81000000-0000-4000-8000-000000000921'))::text
+  || ':' || jsonb_array_length(public.get_ffe_pricing_events('81000000-0000-4000-8000-000000000901', NULL)),
+  '3:1',
+  'F1 (SQ-1190): the studio-less job''s lead still reads its pricing history and change log'
+);
+
+SET LOCAL request.jwt.claims = '{"sub":"81000000-0000-4000-8000-0000000000a4","role":"authenticated"}';
+
+SELECT is(
+  ((SELECT count(*) FROM public.ffe_pricing_events WHERE project_id = '81000000-0000-4000-8000-000000000901')
+   + (SELECT count(*) FROM public.ffe_pricing_approvals WHERE project_id = '81000000-0000-4000-8000-000000000901')
+   + (SELECT count(*) FROM public.ffe_pricing_approval_lines
+      WHERE approval_id = '81000000-0000-4000-8000-000000000921'))::text
+  || ':' || jsonb_array_length(public.get_ffe_pricing_events('81000000-0000-4000-8000-000000000901', NULL)),
+  '3:1',
+  'F1 (SQ-1190): the lead''s design-studio teammate still reads its pricing history and change log'
 );
 
 RESET ROLE;

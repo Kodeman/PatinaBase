@@ -1,13 +1,14 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00810 · US-37 #4 server: what the client approved, and the post-approval
---         change log (SQ-1106, repaired by SQ-1169 for Astra SQ-1168)
+--         change log (SQ-1106, repaired by SQ-1169 for Astra SQ-1168 and by
+--         SQ-1194 for Astra SQ-1190)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- When a client approves FF&E pricing, the lines and prices she approved are
 -- recorded as an approval. From then on, every change to a line's price fields
 -- is logged: who changed it, when, which field, the old value and the new
 -- value. That lets the studio see what moved since the client said yes.
--- Designer team only: no client role can read any of it (D6). R185 records
+-- Designer team only: no client role can read any of it (D6). R188 records
 -- the amended D5 rule.
 --
 -- ── What an approval records (F1, F3) ─────────────────────────────────────
@@ -71,11 +72,24 @@
 --     set_ffe_line_pricing and no other common boundary exists.
 --     reset_project_markups, supersede_project_selection and configured
 --     placement took it already (00809). The triggers run inside a writer.
---   * Not changed: legacy line writers outside 00809, for example
---     set_project_ffe_line_commercials (00692) and resolve_ack_line (00718),
---     and raw service writes. They lock the line without the job lock, so an
---     edit through them committed while a first approval is still open can go
---     unlogged. The UI writes pricing through the 00809 writers only.
+--   * Every other function that writes unit_price_cents, trade_price_cents,
+--     markup_percent, quantity, line_total_cents or currency on
+--     project_ffe_items now takes it before its line row lock (§7c, SQ-1194
+--     for Astra SQ-1190 F2): set_project_ffe_line_commercials (00692),
+--     resolve_ack_line (00718), set_labor_line_price (00755),
+--     set_project_ffe_line_build_fields (00758),
+--     reprice_replacement_purchase_order (00456) and
+--     revise_project_ffe_configuration (00413).
+--   * Exempt, from a catalog sweep of every public function that UPDATEs one
+--     of those columns: _place_product_in_project_v2_00438_impl is reached
+--     only through place_product_in_project_v2, which takes the lock first
+--     (00808); commit_project_ffe_import prices only lines it created in the
+--     same transaction through place_product_in_project_v2, which already
+--     holds the lock until commit; _apply_client_decision_authorized,
+--     reset_project_markups and _place_product_configuration_in_project_impl
+--     take it already. Raw service writes (no function) lock nothing, so an
+--     edit committed by one while a first approval is still open can go
+--     unlogged.
 -- Isolation: the trigger re-reads ffe_pricing_approvals under READ COMMITTED
 -- (PostgREST's level), after the writer's lock wait, so it sees an approval
 -- committed while the writer waited.
@@ -94,6 +108,9 @@
 -- Because the trigger fires AFTER, it sees the final values, including
 -- markup_percent as zzz_ffe_markup_truth_trg recomputed it. It logs nothing
 -- until the job has an approval. 00809's _ffe_pricing_audit stays as it is.
+-- Fields: unit_price_cents, quantity, line_total_cents, markup_percent,
+-- trade_price_cents, line_kind and currency (SQ-1194 for Astra SQ-1190 F3:
+-- a currency change alone flips differs, so it is logged too).
 --
 -- ── API ───────────────────────────────────────────────────────────────────
 --   get_project_pricing_approval(p_project_id uuid) -> jsonb | null
@@ -178,7 +195,7 @@ CREATE TABLE IF NOT EXISTS public.ffe_pricing_events (
   field text NOT NULL
     CONSTRAINT ffe_pricing_events_field_ck CHECK (field IN (
       'unit_price_cents', 'quantity', 'line_total_cents',
-      'markup_percent', 'trade_price_cents', 'line_kind'
+      'markup_percent', 'trade_price_cents', 'line_kind', 'currency'
     )),
   old_value text,
   new_value text
@@ -424,7 +441,9 @@ BEGIN
     (5, 'trade_price_cents', OLD.trade_price_cents::text, NEW.trade_price_cents::text,
       OLD.trade_price_cents IS DISTINCT FROM NEW.trade_price_cents),
     (6, 'line_kind', OLD.line_kind::text, NEW.line_kind::text,
-      OLD.line_kind IS DISTINCT FROM NEW.line_kind)
+      OLD.line_kind IS DISTINCT FROM NEW.line_kind),
+    (7, 'currency', OLD.currency::text, NEW.currency::text,
+      OLD.currency IS DISTINCT FROM NEW.currency)
   ) AS change(ord, field, old_value, new_value, changed)
   WHERE change.changed
   ORDER BY change.ord;
@@ -436,7 +455,8 @@ $$;
 COMMENT ON FUNCTION public.ffe_pricing_events_log() IS
   'AFTER UPDATE on project_ffe_items (00810): when the job has a pricing approval, writes one '
   'ffe_pricing_events row per changed unit_price_cents, quantity, line_total_cents, markup_percent, '
-  'trade_price_cents or line_kind, with auth.uid() as actor. Logs nothing before the first approval.';
+  'trade_price_cents, line_kind or currency, with auth.uid() as actor. Logs nothing before the first '
+  'approval.';
 
 REVOKE ALL ON FUNCTION public.ffe_pricing_events_log() FROM PUBLIC, anon, authenticated;
 
@@ -451,6 +471,7 @@ CREATE TRIGGER ffe_pricing_events_log_trg
     OR OLD.markup_percent IS DISTINCT FROM NEW.markup_percent
     OR OLD.trade_price_cents IS DISTINCT FROM NEW.trade_price_cents
     OR OLD.line_kind IS DISTINCT FROM NEW.line_kind
+    OR OLD.currency IS DISTINCT FROM NEW.currency
   )
   EXECUTE FUNCTION public.ffe_pricing_events_log();
 
@@ -1173,6 +1194,858 @@ BEGIN
     p_decision_id, 'decision_resolved'
   );
   RETURN v_decision;
+END;
+$$;
+
+-- ─── 7c. Every other FF&E pricing writer takes the job label lock first (F2) ─
+-- SQ-1194 (Astra SQ-1190 F2). Each writer below changes a pricing column on
+-- project_ffe_items. It now takes _ffe_lock_job_labels(project) before its
+-- line row lock, so an edit through it lands wholly before or wholly after a
+-- first approval and is logged when it lands after (R182, R188). Each body
+-- is its latest body, verbatim, plus that one statement. CREATE OR REPLACE
+-- keeps grants and comments.
+--   resolve_ack_line and reprice_replacement_purchase_order lock their
+--   acknowledgment line and purchase order first, then the job, then the
+--   line. No holder of the job lock locks a purchase order or an
+--   acknowledgment line, so those rows may come first (R182).
+--   revise_project_ffe_configuration takes it after its projects FOR SHARE
+--   (compatible with the helper's KEY SHARE) and before its line, spec and
+--   configuration locks.
+
+-- set_project_ffe_line_commercials: re-grafted from the latest body (00692:31-126).
+-- The only change: the job label lock before its line lock.
+
+CREATE OR REPLACE FUNCTION public.set_project_ffe_line_commercials(
+  p_item_id uuid, p_request jsonb
+)
+RETURNS public.project_ffe_items
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_temp' AS $$
+DECLARE
+  v_item public.project_ffe_items%ROWTYPE;
+  v_has_vendor boolean;
+  v_has_trade boolean;
+  v_vendor_id uuid;
+  v_vendor_name text;
+  v_trade integer;
+  v_unit integer;
+  v_markup numeric(5,2);
+BEGIN
+  IF p_request IS NULL OR jsonb_typeof(p_request) <> 'object' THEN
+    RAISE EXCEPTION 'set_project_ffe_line_commercials: request must be a JSON object'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM jsonb_object_keys(p_request) AS k
+    WHERE k NOT IN ('vendorId', 'tradePriceCents')
+  ) THEN
+    RAISE EXCEPTION 'set_project_ffe_line_commercials: only vendorId and tradePriceCents can be set here'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  v_has_vendor := p_request ? 'vendorId';
+  v_has_trade := p_request ? 'tradePriceCents';
+  IF NOT v_has_vendor AND NOT v_has_trade THEN
+    RAISE EXCEPTION 'set_project_ffe_line_commercials: nothing to set'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM public._ffe_lock_job_labels(item.project_id)
+  FROM public.project_ffe_items AS item WHERE item.id = p_item_id;
+  SELECT * INTO v_item FROM public.project_ffe_items WHERE id = p_item_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  PERFORM public._ffe_require_studio_project(v_item.project_id);
+  IF v_item.removed_at IS NOT NULL THEN
+    RAISE EXCEPTION 'set_project_ffe_line_commercials: line was removed'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_item.purchase_order_id IS NOT NULL THEN
+    RAISE EXCEPTION 'set_project_ffe_line_commercials: line is on a purchase order; change it through the purchase order'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  v_vendor_id := v_item.vendor_id;
+  v_vendor_name := v_item.vendor_name;
+  IF v_has_vendor THEN
+    IF jsonb_typeof(p_request->'vendorId') <> 'string'
+       OR (p_request->>'vendorId') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    THEN
+      RAISE EXCEPTION 'set_project_ffe_line_commercials: vendorId must be a vendor id'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    SELECT id, name INTO v_vendor_id, v_vendor_name
+    FROM public.vendors WHERE id = (p_request->>'vendorId')::uuid;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'set_project_ffe_line_commercials: vendor % does not exist', p_request->>'vendorId'
+        USING ERRCODE = 'foreign_key_violation';
+    END IF;
+  END IF;
+
+  v_trade := v_item.trade_price_cents;
+  v_markup := v_item.markup_percent;
+  IF v_has_trade THEN
+    IF jsonb_typeof(p_request->'tradePriceCents') <> 'number'
+       OR (p_request->>'tradePriceCents') !~ '^(0|[1-9][0-9]{0,9})$'
+       OR (p_request->>'tradePriceCents')::bigint > 2147483647
+    THEN
+      RAISE EXCEPTION 'set_project_ffe_line_commercials: tradePriceCents must be a whole number of cents, 0 or more'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    v_trade := (p_request->>'tradePriceCents')::integer;
+    v_unit := COALESCE(v_item.unit_price_cents, 0);
+    IF v_trade > 0 AND v_unit > v_trade THEN
+      v_markup := LEAST(round(((v_unit::numeric / v_trade::numeric) - 1) * 100, 2), 999.99);
+    ELSE
+      v_markup := 0;
+    END IF;
+  END IF;
+
+  PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+  UPDATE public.project_ffe_items SET
+    vendor_id = v_vendor_id,
+    vendor_name = v_vendor_name,
+    trade_price_cents = v_trade,
+    markup_percent = v_markup,
+    updated_at = now()
+  WHERE id = p_item_id
+  RETURNING * INTO v_item;
+  RETURN v_item;
+END;
+$$;
+
+-- resolve_ack_line: re-grafted from the latest body (00718:430-613).
+-- The only change: the job label lock before its line lock.
+
+CREATE OR REPLACE FUNCTION public.resolve_ack_line(
+  p_line_id uuid,
+  p_verdict text,
+  p_note text DEFAULT NULL
+)
+RETURNS public.po_ack_lines
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+DECLARE
+  v_uid       uuid := auth.uid();
+  v_line      public.po_ack_lines%ROWTYPE;
+  v_ack       public.po_acknowledgments%ROWTYPE;
+  v_po        public.purchase_orders%ROWTYPE;
+  v_item      public.project_ffe_items%ROWTYPE;
+  v_verdict   text := btrim(COALESCE(p_verdict, ''));
+  v_note      text := NULLIF(btrim(COALESCE(p_note, '')), '');
+  v_state     text;
+  v_cents     integer;
+  v_unit      integer;
+  v_freight   uuid;
+  v_other     bigint;
+  v_estimate  bigint;
+  v_open      integer;
+  v_disputed  integer;
+  v_path      text;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'resolve_ack_line: not authenticated' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO v_line FROM public.po_ack_lines WHERE id = p_line_id FOR UPDATE;
+  IF FOUND THEN
+    SELECT * INTO v_ack FROM public.po_acknowledgments WHERE id = v_line.ack_id;
+    SELECT * INTO v_po FROM public.purchase_orders WHERE id = v_ack.purchase_order_id FOR UPDATE;
+  END IF;
+  IF v_po.id IS NULL OR NOT public.can_send_purchase_order(v_po.id) THEN
+    RAISE EXCEPTION 'resolve_ack_line: acknowledgment line % not found or access denied', p_line_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_verdict NOT IN ('accepted', 'disputed', 'vendor_corrected') THEN
+    RAISE EXCEPTION 'resolve_ack_line: verdict must be accepted, disputed or vendor_corrected'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF char_length(v_note) > 1000 THEN
+    RAISE EXCEPTION 'resolve_ack_line: note is longer than 1000 characters' USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_po.status = 'cancelled' THEN
+    RAISE EXCEPTION 'resolve_ack_line: purchase order % is cancelled', v_po.id USING ERRCODE = 'check_violation';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.po_acknowledgments WHERE supersedes_ack_id = v_ack.id) THEN
+    RAISE EXCEPTION 'resolve_ack_line: a newer acknowledgment supersedes this one; resolve its lines'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_line.verdict NOT IN ('mismatch', 'disputed') OR v_line.verdict = v_verdict THEN
+    RAISE EXCEPTION 'resolve_ack_line: line % is already %', p_line_id, v_line.verdict
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF v_verdict = 'accepted' THEN
+    IF v_line.field IN ('unit_price', 'qty', 'sku', 'finish', 'fabric') THEN
+      PERFORM public._ffe_lock_job_labels(item.project_id)
+      FROM public.project_ffe_items AS item WHERE item.id = v_line.ffe_item_id;
+      SELECT * INTO v_item FROM public.project_ffe_items
+      WHERE id = v_line.ffe_item_id AND purchase_order_id = v_po.id FOR UPDATE;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'resolve_ack_line: the line is no longer on purchase order %', v_po.id
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+
+    IF v_line.field = 'qty' THEN
+      RAISE EXCEPTION 'change_order_required: a quantity change goes through a purchase order change order'
+        USING ERRCODE = 'check_violation';
+    ELSIF v_line.field = 'unit_price' THEN
+      -- R8: editable until it is on a sent authorization.
+      v_state := public.ffe_line_authorization_state(v_item.id);
+      IF v_state IS NOT NULL THEN
+        RAISE EXCEPTION 'change_order_required: the line sits on a % authorization; %', v_state,
+          CASE WHEN v_state = 'sent' THEN 'void the authorization to edit it'
+               ELSE 'a price change is a change order the client re-approves' END
+          USING ERRCODE = 'check_violation';
+      END IF;
+      IF v_po.is_patina_catalog THEN
+        RAISE EXCEPTION 'resolve_ack_line: purchase order % is on the Patina catalog lane; its price follows Stripe', v_po.id
+          USING ERRCODE = 'check_violation';
+      END IF;
+      -- 00718 (M2): a payment to the vendor; a rider paid to a carrier or a
+      -- receiver, and a refund or credit, are not.
+      IF EXISTS (SELECT 1 FROM public.vendor_payments
+                 WHERE purchase_order_id = v_po.id AND voided_at IS NULL
+                   AND kind = 'payment' AND payee = 'vendor') THEN
+        RAISE EXCEPTION 'change_order_required: a payment is already recorded on purchase order %; a price change goes through a change order', v_po.id
+          USING ERRCODE = 'check_violation';
+      END IF;
+      v_cents := v_line.ack_value::integer;
+      v_unit := COALESCE(v_item.unit_price_cents, 0);
+      PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+      UPDATE public.project_ffe_items SET
+        trade_price_cents = v_cents,
+        -- 00692's markup formula.
+        markup_percent = CASE WHEN v_cents > 0 AND v_unit > v_cents
+          THEN LEAST(round(((v_unit::numeric / v_cents::numeric) - 1) * 100, 2), 999.99) ELSE 0 END,
+        updated_at = now()
+      WHERE id = v_item.id;
+      -- The PO total is the line-derived trade total po-send checks.
+      UPDATE public.purchase_orders SET total_cents = (
+        SELECT COALESCE(sum(COALESCE(i.trade_price_cents, i.unit_price_cents, 0)::bigint * COALESCE(i.quantity, 1)), 0)
+        FROM public.project_ffe_items AS i WHERE i.purchase_order_id = v_po.id
+      )::integer
+      WHERE id = v_po.id;
+    ELSIF v_line.field IN ('sku', 'finish', 'fabric') THEN
+      -- 00718 (R8-1): a signed spec is client-facing; changing it is a
+      -- change order the client re-approves.
+      v_state := public.ffe_line_authorization_state(v_item.id);
+      IF v_state IN ('client_signed', 'executed') THEN
+        RAISE EXCEPTION 'change_order_required: the line sits on a % authorization; a spec change is a change order the client re-approves', v_state
+          USING ERRCODE = 'check_violation';
+      END IF;
+      -- A locked configuration refuses here (guard_project_configuration_snapshot).
+      UPDATE public.project_ffe_specs SET
+        sku = CASE WHEN v_line.field = 'sku' THEN v_line.ack_value ELSE sku END,
+        finish = CASE WHEN v_line.field = 'finish' THEN v_line.ack_value ELSE finish END,
+        color_fabric = CASE WHEN v_line.field = 'fabric' THEN v_line.ack_value ELSE color_fabric END,
+        updated_by = v_uid,
+        updated_at = now()
+      WHERE ffe_item_id = v_item.id;
+      IF NOT FOUND THEN
+        INSERT INTO public.project_ffe_specs (ffe_item_id, sku, finish, color_fabric, updated_by)
+        VALUES (v_item.id,
+                CASE WHEN v_line.field = 'sku' THEN v_line.ack_value END,
+                CASE WHEN v_line.field = 'finish' THEN v_line.ack_value END,
+                CASE WHEN v_line.field = 'fabric' THEN v_line.ack_value END,
+                v_uid);
+      END IF;
+    ELSIF v_line.field = 'freight' THEN
+      SELECT id INTO v_freight FROM public.po_cost_lines
+      WHERE purchase_order_id = v_po.id AND kind = 'freight' AND invoice_line_id IS NULL
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1;
+      -- 00718 (M5): the vendor's figure is the PO's freight total, which the
+      -- comparison sums over every freight line; this line carries the rest.
+      SELECT COALESCE(sum(estimate_cents), 0) INTO v_other
+      FROM public.po_cost_lines
+      WHERE purchase_order_id = v_po.id AND kind = 'freight' AND id IS DISTINCT FROM v_freight;
+      v_estimate := GREATEST(v_line.ack_value::bigint - v_other, 0);
+      IF v_freight IS NOT NULL OR v_estimate > 0 THEN
+        PERFORM public.upsert_po_cost_line(v_po.id, CASE
+          WHEN v_freight IS NULL THEN jsonb_build_object(
+            'kind', 'freight', 'estimateCents', v_estimate,
+            'payeeVendorId', v_po.vendor_id::text, 'note', 'From the vendor acknowledgment')
+          ELSE jsonb_build_object('id', v_freight::text, 'estimateCents', v_estimate)
+        END);
+      END IF;
+    END IF;
+    -- ship_date, dimensions, other: the acknowledgment is the record.
+  END IF;
+
+  UPDATE public.po_ack_lines SET
+    verdict = v_verdict,
+    resolved_by = v_uid,
+    resolved_at = now(),
+    note = COALESCE(v_note, note)
+  WHERE id = p_line_id
+  RETURNING * INTO v_line;
+
+  -- The PO's ack_discrepancy exception follows the latest ack's open lines.
+  SELECT count(*) FILTER (WHERE verdict = 'mismatch'),
+         count(*) FILTER (WHERE verdict = 'disputed'),
+         CASE WHEN bool_and(verdict IN ('match', 'accepted')) THEN 'accept'
+              WHEN bool_and(verdict IN ('match', 'vendor_corrected')) THEN 'vendor_corrected'
+              ELSE 'reconciled' END
+    INTO v_open, v_disputed, v_path
+  FROM public.po_ack_lines WHERE ack_id = v_ack.id;
+
+  UPDATE public.procurement_exceptions SET
+    status = CASE WHEN v_open + v_disputed = 0 THEN 'resolved'
+                  WHEN v_open = 0 THEN 'awaiting_vendor' ELSE 'open' END,
+    resolved_at = CASE WHEN v_open + v_disputed = 0 THEN now() END,
+    resolved_by = CASE WHEN v_open + v_disputed = 0 THEN v_uid END,
+    resolution_path = CASE WHEN v_open + v_disputed = 0 THEN v_path END
+  WHERE purchase_order_id = v_po.id AND type = 'ack_discrepancy' AND status <> 'resolved';
+
+  RETURN v_line;
+END;
+$$;
+
+-- set_labor_line_price: re-grafted from the latest body (00755:149-211).
+-- The only change: the job label lock before its line lock.
+
+CREATE OR REPLACE FUNCTION public.set_labor_line_price(
+  p_ffe_item_id uuid,
+  p_unit_price_cents integer
+)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_temp' AS $$
+DECLARE
+  v_item public.project_ffe_items%ROWTYPE;
+BEGIN
+  PERFORM public._ffe_lock_job_labels(item.project_id)
+  FROM public.project_ffe_items AS item WHERE item.id = p_ffe_item_id;
+  SELECT * INTO v_item FROM public.project_ffe_items
+   WHERE id = p_ffe_item_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  PERFORM public._ffe_require_studio_project(v_item.project_id);
+
+  IF p_unit_price_cents IS NULL OR p_unit_price_cents < 0 THEN
+    RAISE EXCEPTION 'set_labor_line_price: the price is whole cents, 0 or more'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_item.line_kind IS DISTINCT FROM 'labor' THEN
+    RAISE EXCEPTION 'Only a labor line takes a price here.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_item.removed_at IS NOT NULL THEN
+    RAISE EXCEPTION 'This line was removed.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- Released: on a sent, signed or executed authorization (the
+  -- ffe_line_authorization check, 00736 → 00705:79), or on a PO.
+  IF v_item.purchase_order_id IS NOT NULL
+     OR public.ffe_line_authorization_state(v_item.id) IS NOT NULL THEN
+    RAISE EXCEPTION 'Released labor changes through Record a change.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- 00755 (F-B1): a drafted line is frozen on its draft until sent or voided.
+  IF EXISTS (
+    SELECT 1 FROM public.furnishing_authorization_items a
+    JOIN public.project_commercial_documents d ON d.id = a.commercial_document_id
+    JOIN public.proposals p ON p.id = d.proposal_id
+    WHERE a.source_ffe_item_id = v_item.id
+      AND COALESCE(p.commercial_state, 'draft') = 'draft'
+  ) THEN
+    RAISE EXCEPTION 'This line is on a drafted release. Send it or void the draft first.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+  UPDATE public.project_ffe_items
+     SET unit_price_cents = p_unit_price_cents,
+         line_total_cents = quantity * p_unit_price_cents,
+         updated_at = now()
+   WHERE id = v_item.id
+  RETURNING * INTO v_item;
+
+  RETURN jsonb_build_object(
+    'selectionId', v_item.id,
+    'unitPriceCents', v_item.unit_price_cents,
+    'lineTotalCents', v_item.line_total_cents
+  );
+END;
+$$;
+
+-- set_project_ffe_line_build_fields: re-grafted from the latest body (00758:195-356).
+-- The only change: the job label lock before its line lock.
+
+CREATE OR REPLACE FUNCTION public.set_project_ffe_line_build_fields(
+  p_item_id uuid, p_request jsonb
+)
+RETURNS public.project_ffe_items
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+DECLARE
+  v_item public.project_ffe_items%ROWTYPE;
+  v_name text;
+  v_need_label text;
+  v_quantity integer;
+  v_unit text;
+  v_rough integer;
+  v_changes_count boolean;
+  v_placed bigint;
+BEGIN
+  IF p_request IS NULL OR jsonb_typeof(p_request) <> 'object' THEN
+    RAISE EXCEPTION 'set_project_ffe_line_build_fields: request must be a JSON object'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM jsonb_object_keys(p_request) AS k
+    WHERE k NOT IN ('name', 'needLabel', 'quantity', 'unit', 'roughCents')
+  ) THEN
+    RAISE EXCEPTION 'set_project_ffe_line_build_fields: only name, needLabel, quantity, unit and roughCents can be set here'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF p_request = '{}'::jsonb THEN
+    RAISE EXCEPTION 'set_project_ffe_line_build_fields: nothing to set'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM public._ffe_lock_job_labels(item.project_id)
+  FROM public.project_ffe_items AS item WHERE item.id = p_item_id;
+  SELECT * INTO v_item FROM public.project_ffe_items WHERE id = p_item_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  PERFORM public._ffe_require_studio_project(v_item.project_id);
+  IF v_item.removed_at IS NOT NULL THEN
+    RAISE EXCEPTION 'set_project_ffe_line_build_fields: line was removed'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  v_name := v_item.name;
+  IF p_request ? 'name' THEN
+    v_name := CASE WHEN jsonb_typeof(p_request->'name') = 'string'
+      THEN NULLIF(btrim(p_request->>'name'), '') END;
+    IF v_name IS NULL THEN
+      RAISE EXCEPTION 'name cannot be blank' USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF p_request ? 'needLabel' THEN
+    v_need_label := CASE WHEN jsonb_typeof(p_request->'needLabel') = 'string'
+      THEN NULLIF(btrim(p_request->>'needLabel'), '') END;
+    IF v_need_label IS NULL THEN
+      RAISE EXCEPTION 'needLabel cannot be blank' USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  v_quantity := v_item.quantity;
+  IF p_request ? 'quantity' THEN
+    IF jsonb_typeof(p_request->'quantity') <> 'number'
+       OR (p_request->>'quantity') !~ '^[1-9][0-9]{0,9}$'
+       OR (p_request->>'quantity')::bigint > 2147483647 THEN
+      RAISE EXCEPTION 'quantity must be a positive whole number'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    v_quantity := (p_request->>'quantity')::integer;
+  END IF;
+
+  v_unit := v_item.unit;
+  IF p_request ? 'unit' THEN
+    v_unit := CASE WHEN jsonb_typeof(p_request->'unit') = 'string' THEN p_request->>'unit' END;
+    IF v_unit IS NULL
+       OR v_unit NOT IN ('each', 'sq_ft', 'lin_ft', 'roll', 'yard', 'box', 'hour', 'lot') THEN
+      RAISE EXCEPTION 'unit must be one of each, sq_ft, lin_ft, roll, yard, box, hour, lot'
+        USING ERRCODE = 'check_violation', CONSTRAINT = 'project_ffe_items_unit_check';
+    END IF;
+  END IF;
+
+  v_rough := v_item.rough_cents;
+  IF p_request ? 'roughCents' THEN
+    IF jsonb_typeof(p_request->'roughCents') = 'null' THEN
+      v_rough := NULL;
+    ELSIF jsonb_typeof(p_request->'roughCents') <> 'number'
+       OR (p_request->>'roughCents') !~ '^(0|[1-9][0-9]{0,9})$'
+       OR (p_request->>'roughCents')::bigint > 2147483647 THEN
+      RAISE EXCEPTION 'roughCents must be a whole number of cents, 0 or more'
+        USING ERRCODE = 'check_violation', CONSTRAINT = 'project_ffe_items_rough_cents_check';
+    ELSE
+      v_rough := (p_request->>'roughCents')::integer;
+    END IF;
+  END IF;
+
+  -- A released line keeps its count: on a PO, or on a sent, signed or
+  -- executed authorization (00705:79).
+  v_changes_count := v_quantity IS DISTINCT FROM v_item.quantity
+    OR v_unit IS DISTINCT FROM v_item.unit;
+  IF v_changes_count AND (
+    v_item.purchase_order_id IS NOT NULL
+    OR public.ffe_line_authorization_state(v_item.id) IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'This line is released. Quantity and unit change through Record a change.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- 00758 (F3/F17): a line on any open draft keeps its count until the draft
+  -- is sent or voided.
+  IF v_changes_count THEN
+    IF EXISTS (
+      SELECT 1 FROM public.furnishing_authorization_items a
+      JOIN public.project_commercial_documents d ON d.id = a.commercial_document_id
+      JOIN public.proposals p ON p.id = d.proposal_id
+      WHERE a.source_ffe_item_id = v_item.id
+        AND COALESCE(p.commercial_state, 'draft') = 'draft'
+    ) THEN
+      RAISE EXCEPTION 'This line is on a drafted release. Send it or void the draft first.'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  -- 00737 (F5): the line never holds less than its rooms add up to (00734).
+  IF v_quantity IS DISTINCT FROM v_item.quantity THEN
+    SELECT COALESCE(sum(placement.quantity), 0) INTO v_placed
+    FROM public.project_ffe_placements placement
+    WHERE placement.ffe_item_id = v_item.id;
+    IF v_quantity < v_placed THEN
+      RAISE EXCEPTION 'Quantity is below the rooms'' total (%).', v_placed
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF p_request ?| ARRAY['name', 'quantity', 'unit', 'roughCents'] THEN
+    PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+    UPDATE public.project_ffe_items SET
+      name = v_name,
+      quantity = v_quantity,
+      unit = v_unit,
+      rough_cents = v_rough,
+      line_total_cents = CASE
+        -- 00737 (F1): a priced labor line always totals quantity × its price.
+        WHEN line_kind = 'labor' AND unit_price_cents > 0
+          THEN v_quantity * unit_price_cents
+        WHEN v_quantity IS DISTINCT FROM v_item.quantity AND unit_price_cents IS NOT NULL
+          THEN v_quantity * unit_price_cents
+        ELSE line_total_cents END,
+      updated_at = now()
+    WHERE id = p_item_id
+    RETURNING * INTO v_item;
+  END IF;
+
+  IF v_need_label IS NOT NULL THEN
+    UPDATE public.project_ffe_selection_threads
+    SET need_label = v_need_label
+    WHERE id = v_item.selection_thread_id;
+  END IF;
+
+  RETURN v_item;
+END;
+$$;
+
+-- reprice_replacement_purchase_order: re-grafted from the latest body (00456:25-172).
+-- The only change: the job label lock before its line lock.
+
+CREATE OR REPLACE FUNCTION public.reprice_replacement_purchase_order(
+  p_purchase_order_id uuid,
+  p_lines jsonb,
+  p_custom_payments jsonb DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+DECLARE
+  v_po public.purchase_orders%ROWTYPE;
+  v_line record;
+  v_line_count integer;
+  v_total bigint := 0;
+  v_client_total bigint := 0;
+  v_deposit integer;
+  v_due_date date;
+BEGIN
+  SELECT * INTO v_po FROM public.purchase_orders
+  WHERE id = p_purchase_order_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'purchase order not found' USING ERRCODE = 'no_data_found';
+  END IF;
+  PERFORM public._ffe_require_studio_project(v_po.project_id);
+  IF NOT v_po.needs_repricing OR v_po.status <> 'draft'
+     OR v_po.sent_at IS NOT NULL OR v_po.acknowledged_at IS NOT NULL THEN
+    RAISE EXCEPTION 'purchase order is not an unreleased replacement awaiting repricing'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF jsonb_typeof(p_lines) <> 'array' OR jsonb_array_length(p_lines) = 0 THEN
+    RAISE EXCEPTION 'replacement pricing requires every purchase order line'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT count(*) INTO v_line_count FROM public.project_ffe_items
+  WHERE purchase_order_id = p_purchase_order_id;
+  IF v_line_count <> jsonb_array_length(p_lines)
+     OR EXISTS (
+       SELECT 1 FROM jsonb_array_elements(p_lines) entry
+       GROUP BY entry->>'selectionId' HAVING count(*) <> 1
+     )
+     OR EXISTS (
+       SELECT 1 FROM jsonb_array_elements(p_lines) entry
+       WHERE entry->>'selectionId' !~* '^[0-9a-f-]{36}$'
+         OR NOT EXISTS (
+           SELECT 1 FROM public.project_ffe_items item
+           WHERE item.id = (entry->>'selectionId')::uuid
+             AND item.purchase_order_id = p_purchase_order_id
+             AND item.project_id = v_po.project_id
+             AND item.vendor_id = v_po.vendor_id
+             AND item.removed_at IS NULL
+             AND item.design_disposition = 'selected'
+         )
+     )
+  THEN
+    RAISE EXCEPTION 'replacement pricing must contain each active PO line exactly once'
+      USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+
+  PERFORM public._ffe_lock_job_labels(v_po.project_id);
+  FOR v_line IN
+    SELECT item.id, item.quantity, entry->>'unitPriceCents' AS unit_text,
+      entry->>'tradePriceCents' AS trade_text
+    FROM jsonb_array_elements(p_lines) entry
+    JOIN public.project_ffe_items item ON item.id = (entry->>'selectionId')::uuid
+    ORDER BY item.id FOR UPDATE OF item
+  LOOP
+    IF v_line.quantity IS NULL OR v_line.quantity <= 0
+       OR v_line.unit_text !~ '^[1-9][0-9]{0,9}$'
+       OR v_line.trade_text !~ '^[1-9][0-9]{0,9}$'
+       OR v_line.unit_text::bigint > 2147483647
+       OR v_line.trade_text::bigint > 2147483647
+       OR v_line.unit_text::bigint < v_line.trade_text::bigint
+       OR v_line.quantity::bigint * v_line.unit_text::bigint > 2147483647
+       OR v_line.quantity::bigint * v_line.trade_text::bigint > 2147483647
+    THEN
+      RAISE EXCEPTION 'replacement line pricing is incomplete or outside supported bounds'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    v_total := v_total + v_line.quantity::bigint * v_line.trade_text::bigint;
+    v_client_total := v_client_total + v_line.quantity::bigint * v_line.unit_text::bigint;
+    IF v_total > 2147483647 OR v_client_total > 2147483647 THEN
+      RAISE EXCEPTION 'replacement purchase order totals exceed supported bounds'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+    UPDATE public.project_ffe_items SET
+      unit_price_cents = v_line.unit_text::integer,
+      trade_price_cents = v_line.trade_text::integer,
+      markup_percent = round(((v_line.unit_text::numeric / v_line.trade_text::numeric) - 1) * 100, 2),
+      line_total_cents = v_line.quantity * v_line.unit_text::integer,
+      updated_at = now()
+    WHERE id = v_line.id;
+  END LOOP;
+
+  SELECT min(due_date) INTO v_due_date FROM public.po_payments
+  WHERE purchase_order_id = p_purchase_order_id;
+  DELETE FROM public.po_payments WHERE purchase_order_id = p_purchase_order_id;
+  IF v_po.payment_pattern = 'fifty_fifty' THEN
+    v_deposit := v_total::integer / 2;
+    INSERT INTO public.po_payments(purchase_order_id,kind,amount_cents,due_date,state,sort_order)
+    VALUES (v_po.id,'deposit',v_deposit,v_due_date,'pending',0),
+      (v_po.id,'balance',v_total::integer-v_deposit,NULL,'pending',1);
+  ELSIF v_po.payment_pattern = 'thirty_seventy' THEN
+    v_deposit := floor(v_total * 0.3)::integer;
+    INSERT INTO public.po_payments(purchase_order_id,kind,amount_cents,due_date,state,sort_order)
+    VALUES (v_po.id,'deposit',v_deposit,v_due_date,'pending',0),
+      (v_po.id,'balance',v_total::integer-v_deposit,NULL,'pending',1);
+  ELSIF v_po.payment_pattern = 'full_upfront' THEN
+    INSERT INTO public.po_payments(purchase_order_id,kind,amount_cents,due_date,state,sort_order)
+    VALUES (v_po.id,'deposit',v_total::integer,v_due_date,'pending',0);
+  ELSIF v_po.payment_pattern = 'net_30' THEN
+    INSERT INTO public.po_payments(purchase_order_id,kind,amount_cents,due_date,state,sort_order)
+    VALUES (v_po.id,'balance',v_total::integer,NULL,'pending',0);
+  ELSE
+    IF jsonb_typeof(p_custom_payments) <> 'array'
+       OR jsonb_array_length(p_custom_payments) = 0
+       OR EXISTS (
+         SELECT 1 FROM jsonb_array_elements(p_custom_payments) payment
+         WHERE payment->>'amountCents' !~ '^[1-9][0-9]{0,9}$'
+           OR (payment->>'amountCents')::bigint > 2147483647
+       )
+       OR (SELECT sum((payment->>'amountCents')::bigint)
+           FROM jsonb_array_elements(p_custom_payments) payment) <> v_total
+    THEN
+      RAISE EXCEPTION 'custom replacement payments must be positive and equal the trade total'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    INSERT INTO public.po_payments(
+      purchase_order_id,kind,amount_cents,due_date,state,label,sort_order
+    ) SELECT v_po.id,'milestone',(payment->>'amountCents')::integer,
+      CASE WHEN payment->>'dueDate' ~ '^\d{4}-\d{2}-\d{2}$'
+        THEN (payment->>'dueDate')::date END,
+      'pending',NULLIF(btrim(payment->>'label'),''),ordinality-1
+    FROM jsonb_array_elements(p_custom_payments) WITH ORDINALITY AS rows(payment,ordinality);
+  END IF;
+
+  PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+  UPDATE public.purchase_orders SET total_cents = v_total::integer,
+    needs_repricing = false, updated_at = now()
+  WHERE id = v_po.id;
+  RETURN jsonb_build_object(
+    'purchaseOrderId',v_po.id,'needsRepricing',false,
+    'tradeTotalCents',v_total,'clientTotalCents',v_client_total,
+    'lineCount',v_line_count
+  );
+END;
+$$;
+
+-- revise_project_ffe_configuration: re-grafted from the latest body (00413:1630-1779).
+-- The only change: the job label lock before its line lock.
+
+CREATE OR REPLACE FUNCTION public.revise_project_ffe_configuration(
+  p_project_id uuid,
+  p_ffe_item_id uuid,
+  p_expected_configuration_id uuid,
+  p_expected_configuration_version integer,
+  p_expected_snapshot_hash text,
+  p_new_configuration_id uuid,
+  p_expected_new_version integer
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_project public.projects;
+  v_item public.project_ffe_items;
+  v_spec public.project_ffe_specs;
+  v_current public.product_configurations;
+  v_new public.product_configurations;
+  v_new_mode text;
+  v_expected_unit integer;
+  v_expected_trade integer;
+  v_history jsonb;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'authentication required' USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO v_project FROM public.projects WHERE id = p_project_id FOR SHARE;
+  IF NOT FOUND OR NOT public.is_design_studio_comember(v_project.designer_id) THEN
+    RAISE EXCEPTION 'project not found or not accessible' USING errcode = 'insufficient_privilege';
+  END IF;
+  PERFORM public._ffe_lock_job_labels(p_project_id);
+  SELECT * INTO v_item FROM public.project_ffe_items
+  WHERE id = p_ffe_item_id AND project_id = p_project_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'FF&E line not found in project' USING errcode = 'no_data_found';
+  END IF;
+  IF v_item.purchase_order_id IS NOT NULL
+     OR v_item.status IN ('ordered','production','shipped','delivered','installed') THEN
+    RAISE EXCEPTION 'ordered or fulfilled lines require a new FF&E line, not an in-place revision'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  SELECT * INTO v_spec FROM public.project_ffe_specs
+  WHERE ffe_item_id = p_ffe_item_id FOR UPDATE;
+  IF NOT FOUND OR v_spec.configuration_id IS DISTINCT FROM p_expected_configuration_id
+     OR v_spec.configuration_snapshot_hash IS DISTINCT FROM p_expected_snapshot_hash THEN
+    RAISE EXCEPTION 'project specification changed in another session'
+      USING errcode = 'serialization_failure';
+  END IF;
+  IF NOT public._can_access_product_configuration(p_expected_configuration_id)
+     OR NOT public._can_access_product_configuration(p_new_configuration_id) THEN
+    RAISE EXCEPTION 'configuration not found or not accessible' USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO STRICT v_current FROM public.product_configurations
+  WHERE id = p_expected_configuration_id FOR SHARE;
+  SELECT * INTO STRICT v_new FROM public.product_configurations
+  WHERE id = p_new_configuration_id FOR UPDATE;
+  SELECT configuration_mode INTO STRICT v_new_mode
+  FROM public.products WHERE id = v_new.product_id;
+  IF v_new_mode = 'custom' THEN
+    RAISE EXCEPTION 'custom commission changes require their approval/issuance lifecycle and a new project line'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF v_current.version <> p_expected_configuration_version
+     OR v_new.version <> p_expected_new_version THEN
+    RAISE EXCEPTION 'configuration version changed in another session'
+      USING errcode = 'serialization_failure';
+  END IF;
+  IF v_spec.configuration_snapshot IS DISTINCT FROM v_current.snapshot
+     OR v_current.snapshot_hash IS DISTINCT FROM p_expected_snapshot_hash
+     OR v_current.snapshot_hash IS DISTINCT FROM public._configuration_snapshot_hash(v_current.snapshot) THEN
+    RAISE EXCEPTION 'current project snapshot does not match its configuration source'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF v_new.id = v_current.id OR v_new.status <> 'saved'
+     OR v_new.is_library_template
+     OR v_new.project_id IS DISTINCT FROM p_project_id
+     OR v_new.product_id IS DISTINCT FROM v_item.product_id
+     OR (v_new.ffe_item_id IS NOT NULL AND v_new.ffe_item_id <> v_item.id)
+     OR NOT v_new.is_valid OR NOT v_new.is_complete
+     OR v_new.snapshot_hash IS DISTINCT FROM public._configuration_snapshot_hash(v_new.snapshot) THEN
+    RAISE EXCEPTION 'replacement must be a valid, complete saved configuration instantiated for this project and product'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+
+  v_expected_unit := COALESCE(v_new.retail_price_cents, v_new.trade_price_cents);
+  v_expected_trade := COALESCE(v_new.trade_price_cents, v_new.retail_price_cents);
+  v_history := COALESCE(v_spec.routing_source->'configurationHistory', '[]'::jsonb)
+    || jsonb_build_array(jsonb_build_object(
+      'fromConfigurationId', v_current.id,
+      'fromVersion', v_current.version,
+      'fromSnapshotHash', v_current.snapshot_hash,
+      'toConfigurationId', v_new.id,
+      'toVersion', v_new.version,
+      'toSnapshotHash', v_new.snapshot_hash,
+      'revisedBy', auth.uid(),
+      'revisedAt', now()
+    ));
+  UPDATE public.product_configurations
+  SET ffe_item_id = COALESCE(ffe_item_id, v_item.id), updated_at = now()
+  WHERE id = v_new.id;
+
+  PERFORM set_config('patina.configuration_spec_workflow', '00403', true);
+  UPDATE public.project_ffe_specs
+  SET configuration_id = v_new.id,
+      configuration_snapshot = v_new.snapshot,
+      configuration_snapshot_hash = v_new.snapshot_hash,
+      configuration_locked_at = NULL,
+      selected_dimensions = v_new.resolved_dimensions,
+      sku = COALESCE(NULLIF(v_new.snapshot#>>'{variant,vendorSku}', ''),
+        NULLIF(v_new.snapshot#>>'{variant,sku}', ''), sku),
+      material = COALESCE((
+        SELECT string_agg(selection->>'valueLabel', ', ' ORDER BY ordinality)
+        FROM jsonb_array_elements(COALESCE(v_new.snapshot->'selections', '[]'::jsonb))
+             WITH ORDINALITY AS chosen(selection, ordinality)
+        WHERE lower(selection->>'groupCode') = 'material'
+      ), material),
+      finish = COALESCE((
+        SELECT string_agg(selection->>'valueLabel', ', ' ORDER BY ordinality)
+        FROM jsonb_array_elements(COALESCE(v_new.snapshot->'selections', '[]'::jsonb))
+             WITH ORDINALITY AS chosen(selection, ordinality)
+        WHERE lower(selection->>'groupCode') = 'finish'
+      ), finish),
+      color_fabric = COALESCE(NULLIF(public._configuration_com_color_fabric(
+        COALESCE(v_new.com_details, v_new.snapshot->'comDetails')), ''), color_fabric),
+      routing_source = routing_source || jsonb_build_object('configurationHistory', v_history),
+      updated_by = auth.uid(), updated_at = now()
+  WHERE id = v_spec.id;
+  PERFORM set_config('patina.configuration_spec_workflow', '', true);
+  UPDATE public.project_ffe_items
+  SET status = 'specified',
+      unit_price_cents = v_expected_unit,
+      trade_price_cents = v_expected_trade,
+      line_total_cents = CASE WHEN v_expected_unit IS NULL THEN NULL
+        ELSE quantity * v_expected_unit END,
+      updated_at = now()
+  WHERE id = v_item.id;
+
+  RETURN jsonb_build_object(
+    'projectId', p_project_id,
+    'ffeItemId', v_item.id,
+    'specId', v_spec.id,
+    'configurationId', v_new.id,
+    'configurationVersion', v_new.version,
+    'configurationSnapshotHash', v_new.snapshot_hash,
+    'status', 'specified',
+    'requiresApproval', true
+  );
 END;
 $$;
 
