@@ -160,6 +160,33 @@ export class OfflineRefusal extends Error {
 }
 
 /**
+ * The fresh read a send or money act makes before it commits, held to the act's
+ * offline rule: offline at the press refuses with no read made, and losing the
+ * connection while the read is out refuses then — an offline read pauses until
+ * reconnect, and the act it guards must not resume into a send minutes later.
+ */
+export function readWhileOnline<T>(read: () => Promise<T>): Promise<T> {
+  if (!onlineManager.isOnline()) return Promise.reject(new OfflineRefusal());
+  return new Promise<T>((resolve, reject) => {
+    const unsubscribe = onlineManager.subscribe((online) => {
+      if (online) return;
+      unsubscribe();
+      reject(new OfflineRefusal());
+    });
+    read().then(
+      (value) => {
+        unsubscribe();
+        resolve(value);
+      },
+      (error) => {
+        unsubscribe();
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
  * US-34 N12b (PQ11) — the (document) route group answers every failed
  * mutation inline, so no mutation fired there raises the global red toast.
  *

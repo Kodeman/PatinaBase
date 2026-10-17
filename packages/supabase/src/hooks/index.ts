@@ -287,7 +287,9 @@ export type {
 export {
   useClients,
   useClient,
+  designerClientQuery,
   useDesignerClientForClientUser,
+  designerClientForClientUserQuery,
   useClientStats,
   useUpdateClientStatus,
   useUpdateClientNotes,
@@ -1962,6 +1964,7 @@ export {
   useDeleteLineItem,
   useIssueInvoice,
   useSendInvoice,
+  InvoiceSendError,
   useChaseInvoice,
   useRecordPayment,
   useStartCheckout,
