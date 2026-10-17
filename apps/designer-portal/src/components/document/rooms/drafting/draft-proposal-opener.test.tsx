@@ -20,6 +20,8 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: jest.fn(),
+  // ClientPicker (portal/client-picker.tsx) reads the viewer's session.
+  useSession: () => ({ session: { user: { id: mockCurrentDesignerId } } }),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({

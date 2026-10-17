@@ -55,6 +55,7 @@ import { MoneyOutCell } from './line-unfold/money-out-cell';
 import { ReceivingCell } from './line-unfold/receiving-cell';
 import { InstallAct } from './line-unfold/install-act';
 import { ClaimActs } from './line-unfold/claim-acts';
+import { ItemPictures } from './line-unfold/item-pictures';
 import { LineExceptions } from './buying/exception-overlay';
 import {
   canInspect,
@@ -487,6 +488,10 @@ export function LineUnfold({
           {softLock && <span className={LABEL_CLS}>{softLock}</span>}
         </div>
       )}
+
+      {/* US-37 #2: the line's own pictures — upload, pick from the library
+          piece, primary, order, unlink. */}
+      <ItemPictures item={item} projectId={projectId} canEdit={canEditSelection} />
 
       {/* R24: cut sheets and spec PDFs clip to the line. */}
       <FolioStrip

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type { FFEStageKey } from '@patina/types';
 
 import { PLAN_PHONE_CONTENT_PX } from '../plan-key';
-import type { ClientSelection } from '@/lib/commercial-documents';
+import { adaptClientSelections, type ClientSelection } from '@/lib/commercial-documents';
 import type { RoomBandModel, ThresholdMark } from '@/lib/threshold/derive';
 
 import { RoomBand } from '../room-band';
@@ -327,6 +327,71 @@ describe('RoomBand', () => {
     fireEvent.click(lift);
     expect(lift).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId('room-band-record')).not.toBeInTheDocument();
+  });
+
+  describe("the line's own pictures (00807)", () => {
+    /** The threshold reader's row, read the way useClientSelections reads it. */
+    function pictured(imageUrls: string[], primaryImageUrl: string | null) {
+      const [read] = adaptClientSelections({
+        selections: [
+          {
+            id: 'sel-sconces',
+            name: 'Brass library sconces',
+            imageUrl: 'https://img.test/library-live.jpg',
+            primaryImageUrl,
+            imageUrls,
+          },
+        ],
+      }).selections;
+      return selection({
+        imageUrl: read.imageUrl,
+        primaryImageUrl: read.primaryImageUrl,
+        imageUrls: read.imageUrls,
+      });
+    }
+
+    it("draws the line's primary as the piece's picture, not the payload's legacy image", () => {
+      const piece = pictured(
+        ['https://img.test/a.jpg', 'https://img.test/b.jpg', 'https://img.test/c.jpg'],
+        'https://img.test/b.jpg',
+      );
+      render(<RoomBand band={band({ pieces: [piece] })} projectId="proj-1" />);
+
+      expect(screen.getByTestId('tracking-row-thumb')).toHaveAttribute(
+        'src',
+        'https://img.test/b.jpg',
+      );
+    });
+
+    it("lays every picture out in the piece's record, in the studio's order", () => {
+      const piece = pictured(
+        ['https://img.test/a.jpg', 'https://img.test/b.jpg', 'https://img.test/c.jpg'],
+        'https://img.test/b.jpg',
+      );
+      render(<RoomBand band={band({ pieces: [piece] })} projectId="proj-1" />);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Brass library sconces — open its record' }),
+      );
+
+      const gallery = within(screen.getByTestId('room-band-record')).getByRole('list', {
+        name: 'Pictures of Brass library sconces',
+      });
+      expect(
+        within(gallery)
+          .getAllByRole('img')
+          .map((img) => img.getAttribute('src')),
+      ).toEqual(['https://img.test/a.jpg', 'https://img.test/b.jpg', 'https://img.test/c.jpg']);
+    });
+
+    it('prints no gallery for a single picture the row already shows', () => {
+      const piece = pictured(['https://img.test/a.jpg'], 'https://img.test/a.jpg');
+      render(<RoomBand band={band({ pieces: [piece] })} projectId="proj-1" />);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Brass library sconces — open its record' }),
+      );
+
+      expect(screen.queryByTestId('room-band-record-pictures')).not.toBeInTheDocument();
+    });
   });
 
   it('keeps the lift control free of flow content, with a name of its own', () => {

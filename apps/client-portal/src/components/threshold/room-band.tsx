@@ -487,11 +487,34 @@ export function ThresholdJourney({ stopIndex }: { stopIndex: number }) {
 
 function PieceRecord({ piece }: { piece: ClientSelection }) {
   const detail = stampDetail(piece);
+  // 00807: every picture the studio keeps on the line, in its order. The row
+  // above already shows the primary, so one picture needs no gallery.
+  const pictures = piece.imageUrls ?? [];
   return (
     <div
       data-testid="room-band-record"
       className="border-b border-[var(--border-subtle)] pb-4 pt-3 text-[15px] leading-relaxed text-[var(--text-body)]"
     >
+      {pictures.length > 1 && (
+        <ul
+          data-testid="room-band-record-pictures"
+          aria-label={`Pictures of ${piece.name}`}
+          className="mb-3 flex list-none flex-wrap gap-2"
+        >
+          {pictures.map((url, index) => (
+            <li key={url}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt={`${piece.name}, picture ${index + 1} of ${pictures.length}`}
+                loading="lazy"
+                decoding="async"
+                className="h-24 w-24 rounded-[3px] border border-[var(--hairline)] object-cover"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
       <p>
         {piece.name}
         {piece.clientLineTotalCents > 0
