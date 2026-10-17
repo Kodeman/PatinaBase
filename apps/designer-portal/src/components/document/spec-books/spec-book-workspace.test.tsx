@@ -16,11 +16,13 @@ import {
 } from "./spec-book-workspace";
 
 const mutateAsync = jest.fn();
+const prepareIssueMutateAsync = jest.fn();
 const readinessChanged = jest.fn();
 const artifactRetry = jest.fn();
 const opened = jest.fn();
 const renderArtifactMutateAsync = jest.fn();
 let mockWorkbenchHookResult: unknown;
+let mockProjectData: { name: string; studio_id: string | null } = { name: "Oak project", studio_id: "studio-1" };
 let mockReadinessData: Array<{
   selectionId: string;
   ready: boolean;
@@ -33,7 +35,7 @@ jest.mock("@patina/supabase", () => ({
     isPending: false,
   }),
   usePrepareSpecBookIssue: () => ({
-    mutateAsync: jest.fn(),
+    mutateAsync: prepareIssueMutateAsync,
     isPending: false,
   }),
   useProjectFfeReadiness: () => ({
@@ -41,7 +43,7 @@ jest.mock("@patina/supabase", () => ({
     isLoading: false,
     isError: false,
   }),
-  useProjectV2: () => ({ data: { name: "Oak project" } }),
+  useProjectV2: () => ({ data: mockProjectData }),
   useRenderSpecBookArtifact: () => ({
     mutateAsync: renderArtifactMutateAsync,
     isPending: false,
@@ -168,14 +170,18 @@ function buildItem(
 }
 
 beforeEach(() => {
+  Object.defineProperty(globalThis.crypto, "randomUUID", { configurable: true, value: () => "issue-key" });
   mutateAsync.mockReset();
   mutateAsync.mockResolvedValue({});
+  prepareIssueMutateAsync.mockReset();
+  prepareIssueMutateAsync.mockResolvedValue({ revision: { id: "revision-new" }, artifacts: [] });
   renderArtifactMutateAsync.mockReset();
   renderArtifactMutateAsync.mockResolvedValue({ finalized: true });
   readinessChanged.mockClear();
   artifactRetry.mockClear();
   opened.mockClear();
   mockSearchParams = new URLSearchParams();
+  mockProjectData = { name: "Oak project", studio_id: "studio-1" };
   mockCanSeeMargin = false;
   mockReadinessData = [];
   mockWorkbenchHookResult = {
@@ -856,7 +862,7 @@ describe("SQ-857 — the spec book walk fixes", () => {
   }
 
   it("never prints a schema key in the state cell or the opened piece", async () => {
-    withLines(buildItem({}, { id: "bench", name: "Built-in bench" }));
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench", item_type: "allowance", document_code: "F-01", project_room_id: null, room: null, image_url: null }));
     mockReadinessData = [
       { selectionId: "bench", ready: false, missingFields: EVERY_KEY },
     ];
@@ -877,7 +883,7 @@ describe("SQ-857 — the spec book walk fixes", () => {
   });
 
   it("leaves an unknown key unnamed rather than print it", () => {
-    withLines(buildItem({}, { id: "bench", name: "Built-in bench" }));
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench", item_type: "allowance", document_code: "F-01", project_room_id: null, room: null, image_url: null }));
     mockReadinessData = [
       { selectionId: "bench", ready: false, missingFields: ["someFutureRule"] },
     ];
@@ -931,8 +937,55 @@ describe("SQ-857 — the spec book walk fixes", () => {
     const sku = within(fold).getByText("SKU", { selector: "dt" });
     const value = sku.nextElementSibling as HTMLElement;
     expect(value).toHaveTextContent(/^Not specified$/);
-    // a set fact still says where it comes from
     const finish = within(fold).getByText("Finish", { selector: "dt" });
     expect(finish.nextElementSibling).toHaveTextContent("Set for this job");
+  });
+
+  it("sends canonical warning acknowledgement ids when issuing", async () => {
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench", item_type: "allowance", document_code: "F-01", project_room_id: null, room: null, image_url: null }));
+    const user = userEvent.setup();
+    render(<SpecBookWorkspace projectId="project-1" />);
+    await user.click(screen.getByRole("button", { name: "Run issue checks" }));
+    await user.type(screen.getByLabelText("Issue-with-warnings reason"), "Reviewed with the client");
+    await user.click(screen.getByRole("button", { name: /Issue 2 editions/ }));
+    expect(prepareIssueMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+      warningAcknowledgements: [
+        { id: "stale-source:bench", reason: "Reviewed with the client" },
+        { id: "missing-client-note:bench", reason: "Reviewed with the client" },
+      ],
+    }));
+  });
+
+  it("shows server warnings and acknowledges only their ids on the next issue", async () => {
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench", item_type: "allowance", document_code: "F-01", project_room_id: null, room: null, image_url: null }));
+    prepareIssueMutateAsync.mockRejectedValueOnce({
+      message: "spec_book_warnings_unacknowledged",
+      code: "23514",
+      details: JSON.stringify({ warnings: [
+        { id: "stale-source:bench", code: "stale_source_verification", ffeItemId: "bench" },
+      ] }),
+    });
+    const user = userEvent.setup();
+    render(<SpecBookWorkspace projectId="project-1" />);
+    await user.click(screen.getByRole("button", { name: "Run issue checks" }));
+    await user.type(screen.getByLabelText("Issue-with-warnings reason"), "Reviewed with the client");
+    await user.click(screen.getByRole("button", { name: /Issue 2 editions/ }));
+    expect(await screen.findByText("The server found warnings to acknowledge. Review them, then issue again.")).toBeInTheDocument();
+    expect(screen.getByText(/Source verification is more than 180 days old/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Issue readiness/ }));
+    await user.click(screen.getByRole("button", { name: /Issue 2 editions/ }));
+    expect(prepareIssueMutateAsync).toHaveBeenLastCalledWith(expect.objectContaining({
+      warningAcknowledgements: [{ id: "stale-source:bench", reason: "Reviewed with the client" }],
+    }));
+  });
+
+  it("holds Issue when the project has no studio", async () => {
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench", item_type: "allowance", document_code: "F-01", project_room_id: null, room: null, image_url: null }));
+    mockProjectData = { name: "Oak project", studio_id: null };
+    const user = userEvent.setup();
+    render(<SpecBookWorkspace projectId="project-1" />);
+    await user.click(screen.getByRole("button", { name: "Run issue checks" }));
+    expect(screen.getByText("This job isn't in a studio yet. Name its studio, then issue.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Issue 2 editions/ })).toBeDisabled();
   });
 });

@@ -26,9 +26,10 @@ function makeBuilder(result: BuilderResult) {
 
 let builder = makeBuilder({ data: null, error: null });
 const fromSpy = vi.fn(() => builder);
+const rpcSpy = vi.fn();
 
 vi.mock("@supabase/ssr", () => ({
-  createBrowserClient: () => ({ from: fromSpy }),
+  createBrowserClient: () => ({ from: fromSpy, rpc: rpcSpy }),
 }));
 
 const invalidateQueries = vi.fn();
@@ -38,7 +39,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries }),
 }));
 
-import { useUpdateProjectFfeSpec } from "../use-spec-books";
+import { usePrepareSpecBookIssue, useUpdateProjectFfeSpec } from "../use-spec-books";
 
 beforeEach(() => {
   builder = makeBuilder({
@@ -46,6 +47,7 @@ beforeEach(() => {
     error: null,
   });
   fromSpy.mockClear();
+  rpcSpy.mockReset().mockResolvedValue({ data: { revision: {}, artifacts: [] }, error: null });
   invalidateQueries.mockReset();
 });
 
@@ -94,28 +96,41 @@ describe("useUpdateProjectFfeSpec", () => {
     expect(updated.row_version).toBe(8);
   });
 
-  it("surfaces a stale write without retrying it", async () => {
-    builder = makeBuilder({ data: null, error: null });
-    const mutation = useUpdateProjectFfeSpec() as unknown as {
-      retry: boolean;
+  it("forwards canonical warning ids in the issue RPC payload", async () => {
+    const mutation = usePrepareSpecBookIssue() as unknown as {
       mutationFn: (input: {
-        projectId: string;
-        specId: string;
-        expectedRowVersion: number;
-        changes: { finish: string };
+        specBookId: string;
+        audiences: string[];
+        issueType: string;
+        reason: string | null;
+        baseRevisionId: string | null;
+        idempotencyKey: string;
+        warningAcknowledgements: Array<{ id: string; reason: string }>;
       }) => Promise<unknown>;
     };
+    const acknowledgements = [
+      { id: "missing-client-note:item-1", reason: "Reviewed" },
+      { id: "stale-source:item-1", reason: "Reviewed" },
+    ];
 
-    await expect(
-      mutation.mutationFn({
-        projectId: "project-1",
-        specId: "spec-1",
-        expectedRowVersion: 7,
-        changes: { finish: "Smoked oak" },
-      }),
-    ).rejects.toThrow(
-      "This selection changed in another session. Refresh before saving.",
-    );
-    expect(mutation.retry).toBe(false);
+    await mutation.mutationFn({
+      specBookId: "book-1",
+      audiences: ["client"],
+      issueType: "full",
+      reason: null,
+      baseRevisionId: null,
+      idempotencyKey: "issue-key",
+      warningAcknowledgements: acknowledgements,
+    });
+
+    expect(rpcSpy).toHaveBeenCalledWith("prepare_spec_book_issue", {
+      p_spec_book_id: "book-1",
+      p_audiences: ["client"],
+      p_issue_type: "full",
+      p_reason: null,
+      p_base_revision_id: null,
+      p_idempotency_key: "issue-key",
+      p_warning_acknowledgements: acknowledgements,
+    });
   });
 });
