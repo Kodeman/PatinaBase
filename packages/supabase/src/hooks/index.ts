@@ -2634,6 +2634,9 @@ export * from "./use-add-to-the-job";
 // US-21 W2: the pieces primitives — room placements, batch needs, build fields, restore, labor lines.
 export * from "./use-pieces";
 
+// US-37 #1+#2: a project item's own pictures — snapshot, uploads, primary, order, unlink.
+export * from "./use-ffe-item-images";
+
 // US-34 N2: optimistic ink for internal records, and the never-optimistic list.
 export {
   useOptimisticMutation,

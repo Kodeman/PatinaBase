@@ -1019,6 +1019,35 @@ describe('adaptClientSelections', () => {
     expect(result.selections[0].tradeJourney).toBeNull();
     expect(result.selections[0].instrument).toMatchObject({ documentId: 'pcd-2', proposalId: null });
   });
+
+  it('reads the line\'s own pictures (00807): the primary leads imageUrl, every picture in order', () => {
+    const result = adaptClientSelections({
+      origin: 'commercial',
+      selections: [{
+        id: 'sel-3',
+        name: 'Chair',
+        imageUrl: 'https://img.test/legacy.jpg',
+        primaryImageUrl: 'https://img.test/b.jpg',
+        imageUrls: ['https://img.test/a.jpg', 'https://img.test/b.jpg', '', 7, 'https://img.test/c.jpg'],
+      }],
+    });
+    expect(result.selections[0]).toMatchObject({
+      imageUrl: 'https://img.test/b.jpg',
+      primaryImageUrl: 'https://img.test/b.jpg',
+      imageUrls: ['https://img.test/a.jpg', 'https://img.test/b.jpg', 'https://img.test/c.jpg'],
+    });
+  });
+
+  it('keeps a pre-00807 payload\'s imageUrl and reads no pictures of its own', () => {
+    const result = adaptClientSelections({
+      selections: [{ id: 'sel-4', name: 'Lamp', imageUrl: 'https://img.test/legacy.jpg' }],
+    });
+    expect(result.selections[0]).toMatchObject({
+      imageUrl: 'https://img.test/legacy.jpg',
+      primaryImageUrl: null,
+      imageUrls: [],
+    });
+  });
 });
 
 describe('adaptClientPlan', () => {

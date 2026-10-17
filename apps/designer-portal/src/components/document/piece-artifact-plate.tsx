@@ -11,6 +11,8 @@ type PieceArtifactItem = {
   name: string;
   quantity?: number | null;
   vendor_name?: unknown;
+  /** The item's own primary picture (00807). */
+  primary_image_url?: unknown;
   product?: unknown;
   spec?: unknown;
 };
@@ -41,12 +43,23 @@ function configurationSelections(
   });
 }
 
+/** The item's own primary picture (00807); the live product's first image
+ *  only when the item has no pictures of its own. */
+function plateImageUrl(
+  item: PieceArtifactItem,
+  product: Record<string, unknown> | null,
+): string | null {
+  const own = text(item.primary_image_url);
+  if (own) return own;
+  const productImages: unknown[] = Array.isArray(product?.images) ? product.images : [];
+  return productImages.map(text).find(Boolean) ?? null;
+}
+
 export function PieceArtifactPlate({ item }: { item: PieceArtifactItem }) {
   const product = isRecord(item.product) ? item.product : null;
   const brand = text(product?.brand);
   const source = text(item.vendor_name);
-  const productImages = Array.isArray(product?.images) ? product.images : [];
-  const imageUrl = productImages.map(text).find(Boolean) ?? null;
+  const imageUrl = plateImageUrl(item, product);
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const showImage = imageUrl !== null && failedImageUrl !== imageUrl;
   const selections = configurationSelections(item);

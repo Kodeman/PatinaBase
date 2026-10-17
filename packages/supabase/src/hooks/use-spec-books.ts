@@ -172,6 +172,15 @@ export const specBookKeys = {
     ["spec-books", "revision", revisionId] as const,
 };
 
+/** 00807: the item's own primary picture; the live product's first image
+ *  only when the item has no pictures of its own. */
+function workItemImageUrl(primary: unknown, productImages: unknown): string | null {
+  if (typeof primary === "string" && primary) return primary;
+  return Array.isArray(productImages) && typeof productImages[0] === "string"
+    ? productImages[0]
+    : null;
+}
+
 function asArray<T>(value: T[] | null | undefined): T[] {
   return value ?? [];
 }
@@ -208,7 +217,7 @@ export function useSpecBookWorkbench(projectId: string) {
       const itemsResult = await supabase
         .from("project_ffe_items")
         .select(
-          "*, room:project_rooms!project_room_id(id, name), product:products!product_id(*)",
+          "*, primary_image_url, room:project_rooms!project_room_id(id, name), product:products!product_id(*)",
         )
         .eq("project_id", projectId)
         .order("sort_order", { ascending: true })
@@ -275,15 +284,11 @@ export function useSpecBookWorkbench(projectId: string) {
               ? item.custom_fields
               : {};
           const product = item.product as Record<string, unknown> | null;
-          const images = product?.images;
           return {
             ...item,
             document_code: item.doc_code ?? null,
             slot_id: (customFields.slot_id as string | undefined) ?? null,
-            image_url:
-              Array.isArray(images) && typeof images[0] === "string"
-                ? images[0]
-                : null,
+            image_url: workItemImageUrl(item.primary_image_url, product?.images),
             sku: item.sku ?? null,
             finish: item.finish ?? null,
             material: item.material ?? null,

@@ -419,6 +419,22 @@ function nullableText(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/** 00807: the line's own pictures; imageUrl is its primary, else the legacy key. */
+function selectionImages(row: UnknownRecord): Pick<ClientSelection, 'imageUrl' | 'primaryImageUrl' | 'imageUrls'> {
+  const primaryImageUrl = nullableText(first(row, 'primaryImageUrl', 'primary_image_url'));
+  return {
+    imageUrl: primaryImageUrl ?? nullableText(first(row, 'imageUrl', 'image_url')),
+    primaryImageUrl,
+    imageUrls: textList(first(row, 'imageUrls', 'image_urls')),
+  };
+}
+
+function textList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+    : [];
+}
+
 function number(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
@@ -1171,7 +1187,12 @@ export interface ClientSelection {
   allowance: ClientSelectionAllowance | null;
   instrument: ClientSelectionInstrument | null;
   productId: string | null;
+  /** The line's primary picture: its own (00807), else the payload's legacy imageUrl. */
   imageUrl: string | null;
+  /** The line's own primary picture (00807); null when it has none. */
+  primaryImageUrl?: string | null;
+  /** Every picture on the line, in the studio's order (00807); empty when silent. */
+  imageUrls?: string[];
   docCode: string | null;
   /**
    * When this line last moved, as an ISO timestamp. Optional because the RPC
@@ -1242,7 +1263,7 @@ export function adaptClientSelections(value: unknown): ClientProjectSelections {
           allowance: adaptClientSelectionAllowance(first(row, 'allowance')),
           instrument: adaptClientSelectionInstrument(first(row, 'instrument')),
           productId: nullableText(first(row, 'productId', 'product_id')),
-          imageUrl: nullableText(first(row, 'imageUrl', 'image_url')),
+          ...selectionImages(row),
           docCode: nullableText(first(row, 'docCode', 'doc_code')),
           updatedAt: nullableText(first(row, 'updatedAt', 'updated_at')),
         };
