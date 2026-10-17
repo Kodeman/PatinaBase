@@ -83,6 +83,7 @@ jest.mock('../../accounts/invoice-overlays', () => ({
   openInvoiceComposer: jest.fn(),
 }));
 jest.mock('../../folio-strip', () => ({ FolioStrip: () => null }));
+jest.mock('../item-pictures', () => ({ ItemPictures: () => null }));
 jest.mock('@/hooks/use-document-rooms', () => ({
   useDocumentRooms: () => ({ data: [] }),
   useAssignLineRoom: () => ({ mutate: jest.fn() }),
