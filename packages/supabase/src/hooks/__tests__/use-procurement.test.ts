@@ -2029,6 +2029,8 @@ describe('invalidateFfeCaches', () => {
       ['projects', 'proj-9'],
       ['procurement-items'],
       ['project-ffe-readiness'],
+      ['project-pricing-approval', 'proj-9'],
+      ['ffe-pricing-events', 'proj-9'],
       ['project-workflow', 'proj-9'],
     ]);
   });
