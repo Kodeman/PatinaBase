@@ -50,6 +50,7 @@ import {
   useProjectPricing,
   useProjectPricingApproval,
   useProjectRoomPlacements,
+  useRemovedProjectLines,
   useResetFfeLineMarkup,
   useResetProjectMarkups,
   useResolveFfeCostChange,
@@ -69,6 +70,7 @@ import type {
 import { cn } from "@/lib/utils";
 import {
   clientFromMarkup,
+  lineTotal,
   retailWarning,
   summarizeJob,
   type PricingLine,
@@ -127,7 +129,11 @@ import {
   summarySentence,
   type AddedLineKind,
 } from "./price-summary";
-import { approvedFiguresFor, PricingChangeLog } from "./price-approval";
+import {
+  approvedFiguresFor,
+  PricingChangeLog,
+  RemovedSinceApproval,
+} from "./price-approval";
 import { UndoToast } from "./undo-toast";
 import {
   FOCUS_FFE_LINE_EVENT,
@@ -277,6 +283,8 @@ interface PriceLine extends OverviewLine {
   pending_cost_changed_at?: string | null;
   pending_markup_held_percent?: number | null;
   updated_at?: string | null;
+  /** ISO 4217 code of the line's prices (00661, USD by default). */
+  currency?: string | null;
 }
 
 type Tool =
@@ -506,6 +514,41 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     () => new Map(lines.map((l) => [l.id, lineName(l)])),
     [lines],
   );
+  // The current lines' client total in each currency, partitioned as the
+  // approved totals are: a total is never compared across currencies (R188).
+  const currentTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const line of lines) {
+      const { unitClientCents, quantity } = pricingLineOf(line);
+      if (unitClientCents === null) continue;
+      const currency = line.currency ?? "USD";
+      totals.set(
+        currency,
+        (totals.get(currency) ?? 0) + lineTotal(unitClientCents, quantity),
+      );
+    }
+    return totals;
+  }, [lines]);
+  // Approved lines no longer on the job; their names are read from the
+  // removed lines only while there are some.
+  const approvedGone = useMemo(
+    () => (approval?.lines ?? []).filter((l) => !byId.has(l.itemId)),
+    [approval, byId],
+  );
+  const { data: removedRows } = useRemovedProjectLines(
+    approvedGone.length > 0 ? projectId : "",
+  );
+  const removedApproved = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const row of [...(lineData ?? []), ...(removedRows ?? [])])
+      names.set(row.id, lineName(row as unknown as PriceLine));
+    return approvedGone.map((l) => ({
+      itemId: l.itemId,
+      name: names.get(l.itemId) ?? "A removed line",
+      lineTotalCents: l.approvedLineTotalCents,
+      currency: l.currency,
+    }));
+  }, [approvedGone, lineData, removedRows]);
   const placements = useMemo(
     () => (placementData ?? []) as FfeRoomPlacement[],
     [placementData],
@@ -1051,6 +1094,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
           approval
             ? {
                 totals: approval.approvedTotals ?? [],
+                currentTotals,
                 onChangeLog: () => setChangeLog({ itemId: null, name: null }),
               }
             : null
@@ -1140,6 +1184,15 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
           );
         })}
       </div>
+
+      {approval ? (
+        <RemovedSinceApproval
+          lines={removedApproved}
+          onChangeLog={(line) =>
+            setChangeLog({ itemId: line.itemId, name: line.name })
+          }
+        />
+      ) : null}
 
       {shownNotice ? (
         <p

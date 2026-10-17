@@ -20,6 +20,8 @@ type Row = Record<string, unknown> & { id: string };
 const mockItems: { data: Row[] } = { data: [] };
 const mockApproval: { data: ProjectPricingApproval | null } = { data: null };
 const mockEvents: { data: FfePricingEvent[] } = { data: [] };
+const mockRemoved: { data: Row[] } = { data: [] };
+const mockUseRemoved = jest.fn((_projectId: string) => ({ data: mockRemoved.data }));
 const mockLinePricing = jest.fn();
 const mockUseEvents = jest.fn((_projectId: string, itemId?: string | null) => ({
   data: mockEvents.data.filter((e) => !itemId || e.itemId === itemId),
@@ -58,6 +60,7 @@ jest.mock("@patina/supabase", () => ({
   useProjectPricingApproval: () => ({ data: mockApproval.data }),
   useFfePricingEvents: (projectId: string, itemId?: string | null) =>
     mockUseEvents(projectId, itemId),
+  useRemovedProjectLines: (projectId: string) => mockUseRemoved(projectId),
 }));
 jest.mock("@/hooks/use-document-rooms", () => ({
   useDocumentRooms: () => ({ data: [{ id: "living", name: "Living Room" }] }),
@@ -195,6 +198,7 @@ beforeEach(() => {
   mockItems.data = fixture();
   mockApproval.data = approvalOf(mockItems.data);
   mockEvents.data = [];
+  mockRemoved.data = [];
 });
 
 describe("Price lens after approval (US-37 #4, acceptance 7)", () => {
@@ -284,6 +288,63 @@ describe("Price lens after approval (US-37 #4, acceptance 7)", () => {
     expect(
       within(screen.getByRole("dialog")).getByText("No pricing changes since the client approved."),
     ).toBeInTheDocument();
+  });
+
+  it("an approved line removed since lists under the table with its approved figure and its change log", () => {
+    const lamp = fixture().find((row) => row.id === "s5") as Row;
+    mockItems.data = fixture().filter((row) => row.id !== "s5");
+    mockRemoved.data = [{ ...lamp, removed_at: "2026-10-17T15:00:00Z" }];
+    renderLens();
+
+    // Not a row of the editable table: the line no longer exists.
+    expect(screen.queryByText("Lamp", { selector: "tr span" })).toBeNull();
+    const group = document.querySelector("[data-removed-since-approval]") as HTMLElement;
+    expect(group).not.toBeNull();
+    expect(within(group).getByText("Removed since the client approved it.")).toBeInTheDocument();
+    const entry = group.querySelector('[data-removed-approved-line="s5"]') as HTMLElement;
+    expect(entry).toHaveTextContent("Lamp");
+    expect(entry).toHaveTextContent("Approved $270");
+    expect(mockUseRemoved).toHaveBeenLastCalledWith("proj");
+
+    fireEvent.click(within(entry).getByRole("button", { name: "Change log, Lamp" }));
+    expect(mockUseEvents).toHaveBeenLastCalledWith("proj", "s5");
+    expect(approvedTotalRow()).toHaveTextContent("Current $8,608.95 (−$270)");
+  });
+
+  it("nothing removed: no removed group, and the removed lines are not read", () => {
+    renderLens();
+    expect(document.querySelector("[data-removed-since-approval]")).toBeNull();
+    expect(mockUseRemoved).toHaveBeenLastCalledWith("");
+  });
+
+  it("approved USD and EUR lines: each total is compared with current lines in its own currency", () => {
+    const pendant: Row = {
+      ...base,
+      id: "s6",
+      name: "Murano pendant",
+      currency: "EUR",
+      trade_price_cents: 250000,
+      unit_price_cents: 300000,
+    };
+    const approval = approvalOf([...fixture(), pendant]);
+    approval.lines = approval.lines.map((l) =>
+      l.itemId === "s6" ? { ...l, currency: "EUR" } : l,
+    );
+    approval.approvedTotals = [
+      { currency: "EUR", cents: 300000 },
+      { currency: "USD", cents: 887895 },
+    ];
+    mockApproval.data = approval;
+    mockItems.data = [
+      ...fixture().map((row) => (row.id === "s1" ? { ...row, unit_price_cents: 150000 } : row)),
+      { ...pendant, unit_price_cents: 320000 },
+    ];
+    renderLens();
+
+    // The dollar figure reads only dollar lines: $9,028.95, not $12,228.95.
+    expect(approvedTotalRow()).toHaveTextContent(
+      "Approved total $8,878.95 · Current $9,028.95 (+$150) · Approved total €3,000 · Current €3,200 (+€200)",
+    );
   });
 
   it("no approval: no flag, no approved value, no approved total, no change log", () => {

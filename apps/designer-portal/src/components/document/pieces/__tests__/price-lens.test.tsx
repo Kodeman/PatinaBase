@@ -62,6 +62,7 @@ jest.mock("@patina/supabase", () => ({
   useCreateNamedProjectNeed: () => mutation(jest.fn()),
   useProjectPricing: () => ({ data: undefined }),
   useProjectPricingApproval: () => ({ data: null }),
+  useRemovedProjectLines: () => ({ data: [] }),
   useSetProjectPricing: () => mutation(jest.fn()),
   usePricingSettings: () => ({ data: undefined }),
 }));

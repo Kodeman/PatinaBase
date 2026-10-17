@@ -47,6 +47,8 @@ export interface PriceSummaryProps {
    */
   approval?: {
     totals: ProjectPricingApprovalTotal[];
+    /** The current lines' client total before tax, per currency code. */
+    currentTotals: ReadonlyMap<string, number>;
     onChangeLog: () => void;
   } | null;
 }
@@ -184,7 +186,7 @@ export function PriceSummary({
       {approval ? (
         <ApprovedTotalRow
           totals={approval.totals}
-          currentCents={summary.totalClientCents}
+          currentTotals={approval.currentTotals}
           onChangeLog={approval.onChangeLog}
         />
       ) : null}

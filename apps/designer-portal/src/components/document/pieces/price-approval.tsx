@@ -120,36 +120,42 @@ export function ChangedSinceApproval({
 
 /**
  * The summary's approval row: `Approved total $X · Current $Y (+$Z)`. Totals
- * are never summed across currencies (R188); the current total is the job's
- * client total before tax, in dollars, so only a dollar approval is compared.
+ * are never summed across currencies (R188): each approved total is compared
+ * with the current lines' client total in that same currency, dollars first.
  */
 export function ApprovedTotalRow({
   totals,
-  currentCents,
+  currentTotals,
   onChangeLog,
 }: {
   totals: ProjectPricingApprovalTotal[];
-  currentCents: number;
+  /** The current lines' client total before tax, per currency code. */
+  currentTotals: ReadonlyMap<string, number>;
   onChangeLog: () => void;
 }) {
-  const usd = totals.find((t) => t.currency === "USD");
-  const others = totals.filter((t) => t.currency !== "USD");
+  const ordered = [
+    ...totals.filter((t) => t.currency === "USD"),
+    ...totals.filter((t) => t.currency !== "USD"),
+  ];
   const parts: string[] = [];
-  if (usd) {
-    const delta = currentCents - usd.cents;
+  for (const t of ordered) {
+    const current = currentTotals.get(t.currency) ?? 0;
+    const delta = current - t.cents;
     const moved =
       delta === 0
         ? "no change"
-        : `${delta < 0 ? MINUS : "+"}${money(Math.abs(delta))}`;
+        : `${delta < 0 ? MINUS : "+"}${approvedMoney(Math.abs(delta), t.currency)}`;
     parts.push(
-      `Approved total ${money(usd.cents)}`,
-      `Current ${money(currentCents)} (${moved})`,
+      `Approved total ${approvedMoney(t.cents, t.currency)}`,
+      `Current ${approvedMoney(current, t.currency)} (${moved})`,
     );
   }
-  for (const t of others) parts.push(`Approved total ${approvedMoney(t.cents, t.currency)}`);
   // A budget approval records the event with no lines (R188).
   if (parts.length === 0)
-    parts.push("Approved without line prices", `Current ${money(currentCents)}`);
+    parts.push(
+      "Approved without line prices",
+      `Current ${money(currentTotals.get("USD") ?? 0)}`,
+    );
   return (
     <p
       data-approved-total=""
@@ -168,6 +174,57 @@ export function ApprovedTotalRow({
         Change log
       </button>
     </p>
+  );
+}
+
+/** An approved line that has since left the job, as the client approved it. */
+export interface RemovedApprovedLine {
+  itemId: string;
+  name: string;
+  lineTotalCents: number;
+  currency: string;
+}
+
+/**
+ * Under the table: approved lines that are no longer on the job (removed,
+ * archived or replaced). They cannot be rows of the editable table, so each
+ * prints its name, the figure she approved and its change log, under the same
+ * hairline as a line that moved.
+ */
+export function RemovedSinceApproval({
+  lines,
+  onChangeLog,
+}: {
+  lines: RemovedApprovedLine[];
+  onChangeLog: (line: RemovedApprovedLine) => void;
+}) {
+  if (lines.length === 0) return null;
+  return (
+    <section data-removed-since-approval="" className="mb-6 mt-4">
+      <p className="t-body-sm text-[var(--sheet-ink-muted)]">
+        Removed since the client approved it.
+      </p>
+      <ul className="mt-1 flex flex-col">
+        {lines.map((line) => (
+          <li
+            key={line.itemId}
+            data-removed-approved-line={line.itemId}
+            className="flex flex-wrap items-center gap-x-3 border-b border-l border-[var(--sheet-rule)] border-l-[var(--sheet-ink)] py-2 pl-2 font-sans text-[14px] leading-[1.4] text-[var(--sheet-ink)]"
+          >
+            <span>{line.name}</span>
+            <ApprovedValue text={approvedMoney(line.lineTotalCents, line.currency)} />
+            <button
+              type="button"
+              onClick={() => onChangeLog(line)}
+              aria-label={`Change log, ${line.name}`}
+              className={QUIET_ACT}
+            >
+              Change log
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
