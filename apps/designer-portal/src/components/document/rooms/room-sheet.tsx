@@ -103,6 +103,7 @@ export function RoomSheet({
         aria-modal={isTopModal ? true : undefined}
         aria-label={title}
         tabIndex={-1}
+        data-spotlight-frame
         className="absolute inset-x-0 bottom-0 max-h-[82vh] overflow-y-auto rounded-t-[16px] border-t border-[var(--doc-ink-border)] bg-[var(--doc-paper)] outline-none motion-safe:animate-[doc-sheet-up_300ms_var(--ease-editorial)]"
       >
         <div

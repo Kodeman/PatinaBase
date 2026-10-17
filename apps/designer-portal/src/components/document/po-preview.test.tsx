@@ -304,6 +304,43 @@ describe('PoPreview · Send and Mark as sent gated on ship-to (F2, F1)', () => {
     expect(onSent).not.toHaveBeenCalled();
   });
 
+  it('opens the spotlight on the lifted paper when a held act is pressed (SQ-1211)', async () => {
+    mockOrders.list = [unsent];
+    // A sheet frame hosts the preview, as order-paper's DocSheet does, and
+    // the preview's root is laid out fixed as Tailwind's `fixed` does at
+    // runtime (jsdom computes no utility classes).
+    render(
+      <div data-spotlight-frame data-testid="host">
+        <PoPreview
+          open
+          onOpenChange={jest.fn()}
+          purchaseOrderId="po-1"
+          vendorName="Acme"
+          vendorEmailHint="orders@acme.test"
+        />
+      </div>,
+    );
+    await waitForPdf();
+    screen.getByRole('dialog', { name: 'Purchase order preview' }).style.position = 'fixed';
+
+    const mark = screen.getByRole('button', { name: /mark as sent/i });
+    await act(async () => {
+      fireEvent.click(mark);
+    });
+
+    const layer = document.querySelector('[data-hold-spotlight]');
+    expect(layer).not.toBeNull();
+    const paper = layer!.closest('[data-spotlight-frame]')!;
+    expect(paper).not.toBe(screen.getByTestId('host'));
+    expect(paper.contains(screen.getByRole('button', { name: 'Send to vendor', hidden: true }))).toBe(true);
+    expect(
+      Array.from(document.querySelectorAll('[data-hold-spotlight-window]')).map((el) =>
+        el.getAttribute('data-hold-spotlight-window'),
+      ),
+    ).toHaveLength(1);
+    expect(sendMutateAsync.mock.calls.filter(([a]) => a.mode !== 'preview')).toHaveLength(0);
+  });
+
   it('holds Resend on a sent PO with no ship-to', async () => {
     mockOrders.list = [{ ...unsent, sent_at: '2026-10-01T00:00:00Z' }];
     renderPreview({ mode: 'resend', sentAt: '2026-10-01T00:00:00Z' });

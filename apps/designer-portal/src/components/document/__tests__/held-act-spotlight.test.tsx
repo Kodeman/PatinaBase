@@ -4,12 +4,15 @@ import userEvent from '@testing-library/user-event';
 import { DocumentAction } from '../document-action';
 import { DocSheet } from '../overlays/doc-sheet';
 import { PaperFolioSheet } from '../overlays/paper-folio-sheet';
+import { RoomShell } from '../rooms/room-shell';
+import { RoomSheet } from '../rooms/room-sheet';
 import type { SpotlightHold } from '@/lib/document/spotlight/use-hold-spotlight';
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 
 const REASON = 'Link a client with an email address.';
 
@@ -104,7 +107,8 @@ describe('a held act with nothing of its own to say (US-36 K4)', () => {
     expect(document.activeElement).toBe(within(bar()).getByRole('button', { name: 'Close' }));
   });
 
-  it('keeps today’s behaviour when no frame holds the act', () => {
+  it('moves focus to its reason when no frame holds the act, never silent (SQ-1211)', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const onClick = jest.fn();
     render(<Held framed={false} onClick={onClick} />);
     const action = sendAct();
@@ -115,10 +119,46 @@ describe('a held act with nothing of its own to say (US-36 K4)', () => {
     expect(layer()).toBeNull();
     expect(screen.queryByRole('status')).toBeNull();
     expect(document.querySelector('[inert]')).toBeNull();
-    expect(action).toHaveFocus();
+    const reason = document.getElementById('why')!;
+    expect(reason).toHaveFocus();
+    expect(reason).toHaveAttribute('tabindex', '-1');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"Send the agreement"'));
+    warn.mockRestore();
   });
 
-  it('keeps today’s behaviour for an act in a fixed layer inside the frame', () => {
+  it('leaves focus on an unframed act that names no reason', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <DocumentAction actionKey="earlier" held disabled>
+        Earlier
+      </DocumentAction>,
+    );
+    const action = screen.getByRole('button', { name: 'Earlier', hidden: true });
+    action.focus();
+    fireEvent.click(action);
+
+    expect(layer()).toBeNull();
+    expect(action).toHaveFocus();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"Earlier"'));
+    warn.mockRestore();
+  });
+
+  it('leaves an unframed onHeldActivate site to answer alone', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const onHeldActivate = jest.fn();
+    render(<Held framed={false} onHeldActivate={onHeldActivate} />);
+    const action = sendAct();
+    action.focus();
+    fireEvent.click(action);
+
+    expect(onHeldActivate).toHaveBeenCalledTimes(1);
+    expect(action).toHaveFocus();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('moves focus to its reason for an act in a fixed layer inside the frame', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     render(
       <div data-spotlight-frame>
         <div style={{ position: 'fixed' }}>
@@ -131,6 +171,8 @@ describe('a held act with nothing of its own to say (US-36 K4)', () => {
     );
     fireEvent.click(sendAct());
     expect(layer()).toBeNull();
+    expect(document.getElementById('why')).toHaveFocus();
+    warn.mockRestore();
   });
 
   it('opens on a held link the same way', () => {
@@ -504,6 +546,40 @@ describe('the frames a held act opens in', () => {
     fireEvent.click(sendAct());
 
     const panel = document.querySelector('.paper-folio-panel')!;
+    expect(panel).toHaveAttribute('data-spotlight-frame');
+    expect(panel.contains(layer())).toBe(true);
+    expect(windows()).toEqual(['why']);
+  });
+
+  it('opens inside a Room’s paper column, not over its header line (SQ-1211)', () => {
+    render(
+      <RoomShell title="People">
+        <Reason />
+        <DocumentAction actionKey="send" held disabled aria-describedby="why">
+          Send the agreement
+        </DocumentAction>
+      </RoomShell>,
+    );
+    fireEvent.click(sendAct());
+
+    const paper = document.querySelector<HTMLElement>('[data-spotlight-frame]')!;
+    expect(paper.contains(layer())).toBe(true);
+    expect(paper.querySelector('[data-room-header-line]')).toBeNull();
+    expect(windows()).toEqual(['why']);
+  });
+
+  it('opens inside a RoomSheet panel (SQ-1211)', () => {
+    render(
+      <RoomSheet open onClose={() => {}} title="Add a person">
+        <Reason />
+        <DocumentAction actionKey="send" held disabled aria-describedby="why">
+          Send the agreement
+        </DocumentAction>
+      </RoomSheet>,
+    );
+    fireEvent.click(sendAct());
+
+    const panel = screen.getByRole('dialog', { name: 'Add a person', hidden: true });
     expect(panel).toHaveAttribute('data-spotlight-frame');
     expect(panel.contains(layer())).toBe(true);
     expect(windows()).toEqual(['why']);
