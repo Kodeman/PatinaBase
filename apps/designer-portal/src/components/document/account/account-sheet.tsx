@@ -92,6 +92,7 @@ export function AccountSheet() {
   const [page, setPage] = useState<AccountPage>('profile');
   const [rateFor, setRateFor] = useState<string | null>(null);
   const [aboveFolio, setAboveFolio] = useState(false);
+  const [fallbackFocusRef, setFallbackFocusRef] = useState<React.RefObject<HTMLElement | null> | undefined>();
 
   // Flag hook stays above every early return / conditional branch below
   // (hook-order stability) even though this component has no early return
@@ -115,7 +116,7 @@ export function AccountSheet() {
     const onOpen = (e: Event) => {
       const detail = (
         e as CustomEvent<
-          | { page?: AccountPage; rateFor?: string; aboveFolio?: boolean }
+          | { page?: AccountPage; rateFor?: string; aboveFolio?: boolean; fallbackFocusRef?: React.RefObject<HTMLElement | null> }
           | undefined
         >
       ).detail;
@@ -125,6 +126,7 @@ export function AccountSheet() {
       );
       setRateFor(detail?.rateFor ?? null);
       setAboveFolio(detail?.aboveFolio === true);
+      setFallbackFocusRef(detail?.fallbackFocusRef);
       setOpen(true);
     };
     window.addEventListener('document:open-account', onOpen);
@@ -175,6 +177,7 @@ export function AccountSheet() {
       onClose={() => setOpen(false)}
       title="Account settings"
       aboveFolio={aboveFolio}
+      fallbackFocusRef={fallbackFocusRef}
     >
       <div className="mx-auto max-w-xl">
         {/* Identity front-matter — the literal answer to "what account is this". */}

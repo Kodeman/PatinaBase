@@ -13,7 +13,11 @@ import type { AccountPage } from './account-sheet';
  *  page the sheet renders. */
 export function openAccountPage(
   page: AccountPage,
-  options: { rateFor?: string; aboveFolio?: boolean } = {},
+  options: {
+    rateFor?: string;
+    aboveFolio?: boolean;
+    fallbackFocusRef?: React.RefObject<HTMLElement | null>;
+  } = {},
 ) {
   window.dispatchEvent(
     new CustomEvent('document:open-account', {
@@ -21,6 +25,7 @@ export function openAccountPage(
         page,
         rateFor: options.rateFor,
         aboveFolio: options.aboveFolio,
+        fallbackFocusRef: options.fallbackFocusRef,
       },
     }),
   );
