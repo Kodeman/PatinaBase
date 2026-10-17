@@ -736,5 +736,5 @@ SELECT is(pg_temp.visible_rows(format(
   0, 'R189 replay (d): once studio A is gone, studio B''s peer reads no line of any job-less proposal');
 RESET ROLE;
 
-SELECT * FROM finish();
+SELECT * FROM finish(true);
 ROLLBACK;
