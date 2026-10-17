@@ -205,7 +205,8 @@ export function PromoteToStudioModal({
     paymentTerms !== '' &&
     category.trim().length > 0 &&
     usageNotes.trim().length > 0 &&
-    Number.parseInt(leadTimeWeeks, 10) > 0 &&
+    // Lead time is optional (US-37 #5): blank saves as no lead time.
+    (leadTimeWeeks.trim() === '' || Number.parseInt(leadTimeWeeks, 10) > 0) &&
     !promote.isPending;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -226,7 +227,8 @@ export function PromoteToStudioModal({
         category: category.trim(),
         subcategory: subcategory.trim() || undefined,
         usageNotes: usageNotes.trim(),
-        leadTimeWeeks: Number.parseInt(leadTimeWeeks, 10),
+        leadTimeWeeks:
+          leadTimeWeeks.trim() === '' ? null : Number.parseInt(leadTimeWeeks, 10),
       });
       onSuccess?.(productId);
       onClose();
@@ -384,8 +386,7 @@ export function PromoteToStudioModal({
             </div>
 
             <Field
-              label="Lead time (weeks)"
-              required
+              label="Lead time (weeks, optional)"
               prefilled={prefillTrace.lead_time_weeks}
               prefillSource="from product"
             >
@@ -396,7 +397,6 @@ export function PromoteToStudioModal({
                 max={104}
                 value={leadTimeWeeks}
                 onChange={(e) => setLeadTimeWeeks(e.target.value)}
-                required
               />
             </Field>
 

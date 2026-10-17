@@ -129,7 +129,8 @@ export function BulkPromoteToStudioModal({
     paymentTerms !== '' &&
     category.trim().length > 0 &&
     usageNotes.trim().length > 0 &&
-    Number.parseInt(leadTimeWeeks, 10) > 0 &&
+    // Lead time is optional (US-37 #5): blank saves as no lead time.
+    (leadTimeWeeks.trim() === '' || Number.parseInt(leadTimeWeeks, 10) > 0) &&
     !promote.isPending;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -143,7 +144,8 @@ export function BulkPromoteToStudioModal({
       paymentTerms: paymentTerms as PaymentPattern,
       category: category.trim(),
       usageNotes: usageNotes.trim(),
-      leadTimeWeeks: Number.parseInt(leadTimeWeeks, 10),
+      leadTimeWeeks:
+        leadTimeWeeks.trim() === '' ? null : Number.parseInt(leadTimeWeeks, 10),
     }));
 
     try {
@@ -248,14 +250,13 @@ export function BulkPromoteToStudioModal({
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <FieldLabel>Lead time (wks)</FieldLabel>
+                    <FieldLabel>Lead time (wks, optional)</FieldLabel>
                     <Input
                       type="number"
                       min={1}
                       max={104}
                       value={leadTimeWeeks}
                       onChange={(e) => setLeadTimeWeeks(e.target.value)}
-                      required
                       className="h-10"
                     />
                   </div>

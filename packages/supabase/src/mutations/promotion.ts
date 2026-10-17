@@ -29,7 +29,8 @@ export interface PromoteToStudioInput {
   category: string;
   subcategory?: string;
   usageNotes: string;
-  leadTimeWeeks: number;
+  /** Optional (US-37 #5, migration 00806): null saves the piece with no lead time. */
+  leadTimeWeeks: number | null;
 }
 
 /** Returns the promoted product id (same as input — IDs are stable across layer transitions). */
@@ -44,7 +45,7 @@ export async function promoteToStudio(
     p_payment_terms: input.paymentTerms,
     p_category: input.category,
     p_usage_notes: input.usageNotes,
-    p_lead_time_weeks: input.leadTimeWeeks,
+    ...(input.leadTimeWeeks != null ? { p_lead_time_weeks: input.leadTimeWeeks } : {}),
     ...(input.subcategory ? { p_subcategory: input.subcategory } : {}),
   });
 
