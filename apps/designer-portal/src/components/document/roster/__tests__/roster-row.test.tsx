@@ -1809,3 +1809,58 @@ it.each(["failed", "deferred", "queued", "sent"])("roster respects the %s send r
     await waitFor(() => expect(screen.queryByRole("textbox", { name: /Send a text to/ })).not.toBeInTheDocument());
   }
 });
+
+/**
+ * US-36 R3 / R186 — a held act opens a spotlight in its sheet. None of the
+ * row's three refusals has a fixer on the row, so the window is the note the
+ * press prints; the note holds no control, so focus lands on the bar.
+ */
+describe('RosterRow — pressing a held act', () => {
+  const windows = () =>
+    Array.from(document.querySelectorAll('[data-hold-spotlight-window]')).map((el) =>
+      el.getAttribute('data-hold-spotlight-window'),
+    );
+  const framed = (row: CallSheetRow, band: 'this_week' | 'done' = 'this_week') =>
+    render(
+      <div data-spotlight-frame>
+        <ul>
+          <RosterRow row={row} band={band} expanded onToggle={jest.fn()} />
+        </ul>
+      </div>,
+    );
+  const expectNoteWindow = (act: HTMLElement, sentence: RegExp | string) => {
+    expect(windows()).toEqual([act.getAttribute('aria-describedby')]);
+    const note = document.querySelector<HTMLElement>('[data-roster-row-note]')!;
+    expect(note).toHaveTextContent(sentence);
+    expect(note.closest('[inert]')).toBeNull();
+    expect(act.closest('[inert]')).not.toBeNull();
+    expect(document.activeElement).toBe(
+      document.querySelector('[data-hold-spotlight-bar] button'),
+    );
+  };
+
+  it('windows the note for Text while the seat has not said yes', () => {
+    framed(seatRow({ consent: 'not_asked' }));
+    const act = screen.getByRole('button', { name: /^Text$/ });
+    fireEvent.click(act);
+    expectNoteWindow(act, 'Texting opens once they have said yes on the record');
+    expect(screen.queryByRole('textbox', { name: /Send a text to/, hidden: true })).toBeNull();
+  });
+
+  it('windows the note for Close this seat once the seat has left the job', () => {
+    framed(seatRow({ stage: 'off_job', offJobAt: '2026-09-10' }), 'done');
+    const act = screen.getByRole('button', { name: /Close this seat/ });
+    fireEvent.click(act);
+    expectNoteWindow(act, 'This seat left the job on 10 Sep 2026.');
+    expect(screen.queryByLabelText('Why it closed')).toBeNull();
+  });
+
+  it('windows the note for Added by mistake while the seat carries a record', () => {
+    framed(seatRow());
+    fireEvent.click(screen.getByRole('button', { name: /Close this seat/ }));
+    const act = screen.getByRole('button', { name: /Added by mistake/ });
+    fireEvent.click(act);
+    expectNoteWindow(act, /texting record behind it/);
+    expect(removeMutate).not.toHaveBeenCalled();
+  });
+});
