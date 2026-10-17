@@ -89,6 +89,7 @@ export function PaperFolioSheet({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
+        data-spotlight-frame
         className={`paper-folio-panel relative w-full ${
           wide ? 'max-w-[720px]' : 'max-w-[640px]'
         } rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none motion-safe:animate-[doc-fade_200ms_ease-out] sm:px-9`}

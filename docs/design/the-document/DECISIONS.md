@@ -11524,4 +11524,18 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 
 **Ruled B (Astra SQ-1123 F4), built in SQ-1124.** A configured placement keeps the configuration's retail as the line's client price and records it as a client-approved price (`price_basis = 'client'`), as it would a typed price. The studio's default markup never reprices it. `markup_percent` stays true over the configuration's trade price: $3,000 on a $2,000 trade reads 50, never the 35 default. Since 00809 every line's `markup_percent` is the true markup of its stored cents, (client − cost) / cost × 100. It is NULL without a positive cost, and it is studio-only, never on a client payload. Migration 00809 (`_place_product_configuration_in_project_impl`); measured by `supabase/tests/library/product_configuration_test.sql` and `supabase/tests/ffe/us37_trade_pricing_test.sql`.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · last id = R184*
+### R185 · Every held act opens the spotlight — by default one window on its own reason — US-36 K4 — Kody 2026-10-16 (filed as R171 by SQ-1048; renumbered at merge, R171 is K5)
+
+**Ruling (Kody).** Every held act in the designer portal answers a press with the spotlight of R168–R170.
+
+**How (SQ-1048).** `DocumentAction` and the portal `Button` (`ui/controls`) carry it for every site. A site that passes `holds` gets one window per hold. A site that passes neither `holds` nor `onHeldActivate` gets one window on the act's own `aria-describedby` reason. When that reason holds a focusable fixer, the fixer is the window's fix and takes focus; when it holds none, the bar says the reason alone. A site with `onHeldActivate` and no `holds` keeps its own answer until its shard adopts. With both, `onHeldActivate` runs and the listed holds open.
+
+**Frames.** The spotlight opens in the act's nearest `[data-spotlight-frame]`: the DocSheet panel, the PaperFolioSheet panel and the Document paper column (`main[data-document-paper]`). The press is swallowed as before when the act has no frame, when its reason is not inside the frame, or when the act sits in a fixed layer inside the frame. Under R169 each such act is evidence for reopening the frame ruling, not a place to draw a second scrim.
+
+### R186 · The fix is reachable inside the spotlight window — US-36 K15 VoiceOver pass — Kody 2026-10-17
+
+**Ruling (Kody).** Kody ran the K15 VoiceOver pass on the default one-window spotlight (R185) and found it OK to ship. When a held act's reason holds no fixer, the designer must be able to fix it *from inside the window*, not close the spotlight first. On Record a change, for example, the choices must be reachable while the spotlight is up.
+
+**How.** This is a follow-up ticket on top of R185: a held act can name the region that fixes it, and the window covers that region, live and focused, along with the reason. The R3 shard adoptions name each site's fix region.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · last id = R186*

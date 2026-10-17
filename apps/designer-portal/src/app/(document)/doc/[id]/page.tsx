@@ -3488,6 +3488,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       <main
         ref={mainRef}
         data-document-paper
+        data-spotlight-frame
         data-shelf-open={openShelf ? 'true' : undefined}
         className="w-full min-w-0 max-w-[1040px] justify-self-center px-7 pb-32 pt-8 min-[1180px]:px-10 min-[1440px]:px-12"
       >

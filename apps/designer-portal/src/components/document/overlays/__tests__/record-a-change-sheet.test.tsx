@@ -270,6 +270,8 @@ describe('Record a change — the router (D5)', () => {
     expect(heard).not.toHaveBeenCalled();
     expect(screen.queryByTestId('amendment-sheet')).not.toBeInTheDocument();
 
+    // US-36 K4 — the press lit the reason in the sheet; put it back to choose.
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
     expect(continueAct()).not.toHaveAttribute('aria-disabled');
     expect(screen.queryByText('Choose one to continue.')).not.toBeInTheDocument();
