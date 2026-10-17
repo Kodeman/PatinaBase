@@ -79,7 +79,8 @@ BEGIN
   ASSERT v_item.product_id='d1540000-0000-4000-8000-000000000001', 'product pin line must keep the product';
   ASSERT v_item.vendor_id='d1530000-0000-4000-8000-000000000001', 'product pin line must carry vendor_id';
   ASSERT v_item.vendor_name='Promote Vendor', 'product pin line must carry the vendor name, got '||COALESCE(v_item.vendor_name,'<null>');
-  ASSERT v_item.unit_price_cents=250000 AND v_item.trade_price_cents=180000,
+  -- US-37 R3: unit 250000 (retail) → 243000 (round(180000 trade × 1.35)); retail kept as retail_unit_cents
+  ASSERT v_item.unit_price_cents=243000 AND v_item.trade_price_cents=180000 AND v_item.retail_unit_cents=250000,
     'product pin line must carry the product price, got '||v_item.unit_price_cents||'/'||COALESCE(v_item.trade_price_cents::text,'<null>');
 
   -- (c) disposition='selected' is honoured.

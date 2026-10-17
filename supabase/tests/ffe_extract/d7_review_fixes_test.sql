@@ -286,7 +286,9 @@ BEGIN
     'assignmentScope', 'unassigned', 'idempotencyKey', 'd8-fill'));
   ASSERT v_placed->>'outcome' = 'filled', v_placed::text;
   SELECT * INTO v_item FROM public.project_ffe_items WHERE id = v_placeholder;
-  ASSERT v_item.currency = 'USD' AND v_item.unit_price_cents = 100000 AND v_item.trade_price_cents = 60000,
+  -- US-37 R3: unit 100000 (retail) → 81000 (round(60000 trade × 1.35)); retail kept as retail_unit_cents
+  ASSERT v_item.currency = 'USD' AND v_item.unit_price_cents = 81000 AND v_item.trade_price_cents = 60000
+     AND v_item.retail_unit_cents = 100000,
     'F4: a filled placeholder carries catalog USD prices under ' || v_item.currency;
 END;
 $$;

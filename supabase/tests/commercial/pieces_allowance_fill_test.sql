@@ -361,8 +361,10 @@ BEGIN
   IF v_result->>'outcome' IS DISTINCT FROM 'filled' THEN
     RAISE EXCEPTION 'N: the unreleased allowance did not fill: %', v_result;
   END IF;
+  -- US-37 R3: line_total 100000 (2 × retail $500) → 94500 (2 × round($350 trade × 1.35)); retail kept as retail_unit_cents
   IF (SELECT product_id IS DISTINCT FROM '75200000-0000-4000-8000-000000000023'
-             OR budget_max_cents IS DISTINCT FROM 120000 OR line_total_cents IS DISTINCT FROM 100000
+             OR budget_max_cents IS DISTINCT FROM 120000 OR line_total_cents IS DISTINCT FROM 94500
+             OR retail_unit_cents IS DISTINCT FROM 50000
         FROM public.project_ffe_items WHERE id = '75200000-0000-4000-8000-000000000206') THEN
     RAISE EXCEPTION 'N: the unreleased allowance did not fill as before';
   END IF;

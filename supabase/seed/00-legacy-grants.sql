@@ -22830,6 +22830,192 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.designer_pricing_settings FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.designer_pricing_settings TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.designer_pricing_settings TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_pricing_settings FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_pricing_settings TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.project_pricing_settings TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ffe_line_default_markup(public.project_ffe_items) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_pricing_lock_reason(public.project_ffe_items) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_true_markup(bigint, bigint) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_pricing_line_json(public.project_ffe_items) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_pricing_audit(text, public.project_ffe_items, public.project_ffe_items) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ffe_pricing_maintain() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ffe_markup_truth() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._place_product_in_project_v2_00441_wrapper(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._place_product_configuration_in_project_impl(uuid, uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_ffe_line_pricing(uuid, text, numeric) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_ffe_line_pricing(uuid, text, numeric) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_ffe_line_kind(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_ffe_line_kind(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_ffe_cost_change(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_ffe_cost_change(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reset_ffe_line_markup(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reset_ffe_line_markup(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reset_project_markups(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reset_project_markups(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_pricing(uuid, numeric, numeric) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_project_pricing(uuid, numeric, numeric) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_my_pricing_settings() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_my_pricing_settings() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_my_pricing_settings(numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00809_us37_trade_pricing_core.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_my_pricing_settings(numeric, numeric, numeric, numeric) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00812_us37_presentation_identity.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.get_client_presentation_identity(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;

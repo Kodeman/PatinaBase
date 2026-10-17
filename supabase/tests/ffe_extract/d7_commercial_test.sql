@@ -274,8 +274,10 @@ BEGIN
   JOIN public.project_ffe_import_rows row ON row.committed_ffe_item_id = item.id
   WHERE row.batch_id = v_batch AND row.row_ordinal = 1;
   ASSERT v_item.currency = 'EUR', 'a confirmed currency persists: ' || v_item.currency;
-  ASSERT v_item.trade_price_cents = 184000 AND v_item.unit_price_cents = 0,
-    'a trade-basis price lands in trade_price_cents only';
+  -- US-37 R5: unit 0 → 248400 (round(184000 trade × 1.35)), line 2 × 248400, priced at the default markup
+  ASSERT v_item.trade_price_cents = 184000 AND v_item.unit_price_cents = 248400
+     AND v_item.line_total_cents = 496800 AND v_item.price_basis = 'markup',
+    'a trade-basis price lands in trade_price_cents and takes the default markup';
   ASSERT v_item.vendor_name = 'Vaughan';
   ASSERT (SELECT sku = 'TM0064' FROM public.project_ffe_specs WHERE ffe_item_id = v_item.id);
 

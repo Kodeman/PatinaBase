@@ -238,13 +238,14 @@ BEGIN
   ASSERT r.markup_percent = 0,
     'FAIL 2g: allowance item should get tier-c markup 0, got ' || COALESCE(r.markup_percent::text, 'NULL');
 
-  -- t_b: tier b took the catalog trade price; markup stays NULL (unknown).
+  -- t_b: tier b took the catalog trade price. US-37 SQ-1124: markup_percent is
+  -- always the true markup of the cents (00809), so $1,000 on $800 reads 25.
   SELECT unit_price_cents, trade_price_cents, markup_percent INTO r
     FROM project_ffe_items WHERE id = 'dddd0000-0000-4000-8000-000000000053';
   ASSERT r.trade_price_cents = 80000,
     'FAIL 2h: tier-b trade_price_cents should be products.price_trade 80000, got ' || COALESCE(r.trade_price_cents::text, 'NULL');
-  ASSERT r.markup_percent IS NULL,
-    'FAIL 2i: tier-b markup_percent should stay NULL, got ' || COALESCE(r.markup_percent::text, 'NULL');
+  ASSERT r.markup_percent = 25,
+    'FAIL 2i: tier-b markup_percent should be the true 25, got ' || COALESCE(r.markup_percent::text, 'NULL');
   ASSERT r.unit_price_cents = 100000,
     'FAIL 2j: tier-b unit_price_cents must be untouched (100000), got ' || COALESCE(r.unit_price_cents::text, 'NULL');
 
@@ -373,9 +374,11 @@ $$;
 -- A proposal item with markup_percent = -10.00 (and unit_sell_price < unit_price,
 -- consistent with a negative-markup discount) must activate successfully — the
 -- GREATEST(COALESCE(...,0),0) clamp prevents a check_violation on the new >= 0
--- CHECKs. The resulting FF&E row must have markup_percent = 0 and
--- trade_price_cents = 0 (GREATEST(negative,0)), while unit_price_cents carries
--- the raw unit_sell_price unclamped (no CHECK on that pre-existing column).
+-- CHECKs. The negative-trade row gets trade_price_cents = 0
+-- (GREATEST(negative,0)), while unit_price_cents carries the raw
+-- unit_sell_price unclamped (no CHECK on that pre-existing column). Since
+-- 00809 (US-37 SQ-1124) markup_percent is the true markup of the stored
+-- cents: -10 on the discounted row, NULL on the zero-cost row.
 
 INSERT INTO proposals (id, designer_id, client_id, designer_client_id, title, status, total_amount)
 VALUES ('dddd0000-0000-4000-8000-000000000091', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'dddd0000-0000-4000-8000-000000000001', 'Negative Markup Proposal', 'draft', 45000);
@@ -409,8 +412,9 @@ BEGIN
    WHERE source_proposal_item_id = 'dddd0000-0000-4000-8000-000000000092';
   ASSERT FOUND,
     'FAIL 4a: activation with negative markup should succeed and create the FF&E row';
-  ASSERT r.markup_percent = 0,
-    'FAIL 4b: negative markup_percent must be clamped to 0, got ' || COALESCE(r.markup_percent::text, 'NULL');
+  -- US-37 SQ-1124: the true markup of $450 on $500 (00809), no longer clamped.
+  ASSERT r.markup_percent = -10,
+    'FAIL 4b: markup_percent should be the true -10, got ' || COALESCE(r.markup_percent::text, 'NULL');
   ASSERT r.trade_price_cents = 50000,
     'FAIL 4c: trade_price_cents should be the raw (positive) unit_price 50000, got ' || COALESCE(r.trade_price_cents::text, 'NULL');
   ASSERT r.unit_price_cents = 45000,
@@ -424,8 +428,9 @@ BEGIN
     'FAIL 4e: activation with negative unit_price should succeed and create the FF&E row';
   ASSERT r.trade_price_cents = 0,
     'FAIL 4f: negative unit_price must be clamped to trade_price_cents = 0 (GREATEST actually fires), got ' || COALESCE(r.trade_price_cents::text, 'NULL');
-  ASSERT r.markup_percent = 0,
-    'FAIL 4g: negative markup_percent must be clamped to 0, got ' || COALESCE(r.markup_percent::text, 'NULL');
+  -- US-37 SQ-1124: a zero cost has no markup (00809).
+  ASSERT r.markup_percent IS NULL,
+    'FAIL 4g: a zero-cost line has no markup, got ' || COALESCE(r.markup_percent::text, 'NULL');
 
   RAISE NOTICE 'Case 4 passed: negative markup/trade clamped on activation; client price unclamped; GREATEST clamp fires on negative unit_price.';
 END

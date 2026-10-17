@@ -5976,6 +5976,33 @@ export type Database = {
         }
         Relationships: []
       }
+      designer_pricing_settings: {
+        Row: {
+          default_markup_percent: number
+          delivery_markup_percent: number
+          freight_markup_percent: number
+          install_markup_percent: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          default_markup_percent?: number
+          delivery_markup_percent?: number
+          freight_markup_percent?: number
+          install_markup_percent?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          default_markup_percent?: number
+          delivery_markup_percent?: number
+          freight_markup_percent?: number
+          install_markup_percent?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       designer_prospects: {
         Row: {
           application_id: string | null
@@ -18567,7 +18594,11 @@ export type Database = {
           name: string
           notes: string | null
           parent_ffe_item_id: string | null
+          pending_cost_changed_at: string | null
+          pending_cost_prev_cents: number | null
+          pending_markup_held_percent: number | null
           po_number: string | null
+          price_basis: string | null
           product_id: string | null
           project_id: string
           project_room_id: string | null
@@ -18578,6 +18609,7 @@ export type Database = {
           removed_at: string | null
           removed_by: string | null
           removed_disposition: string | null
+          retail_unit_cents: number | null
           role_identity: string
           rough_cents: number | null
           selection_thread_id: string
@@ -18623,7 +18655,11 @@ export type Database = {
           name: string
           notes?: string | null
           parent_ffe_item_id?: string | null
+          pending_cost_changed_at?: string | null
+          pending_cost_prev_cents?: number | null
+          pending_markup_held_percent?: number | null
           po_number?: string | null
+          price_basis?: string | null
           product_id?: string | null
           project_id: string
           project_room_id?: string | null
@@ -18634,6 +18670,7 @@ export type Database = {
           removed_at?: string | null
           removed_by?: string | null
           removed_disposition?: string | null
+          retail_unit_cents?: number | null
           role_identity?: string
           rough_cents?: number | null
           selection_thread_id: string
@@ -18679,7 +18716,11 @@ export type Database = {
           name?: string
           notes?: string | null
           parent_ffe_item_id?: string | null
+          pending_cost_changed_at?: string | null
+          pending_cost_prev_cents?: number | null
+          pending_markup_held_percent?: number | null
           po_number?: string | null
+          price_basis?: string | null
           product_id?: string | null
           project_id?: string
           project_room_id?: string | null
@@ -18690,6 +18731,7 @@ export type Database = {
           removed_at?: string | null
           removed_by?: string | null
           removed_disposition?: string | null
+          retail_unit_cents?: number | null
           role_identity?: string
           rough_cents?: number | null
           selection_thread_id?: string
@@ -20214,6 +20256,45 @@ export type Database = {
             columns: ["source_proposal_phase_id"]
             isOneToOne: false
             referencedRelation: "proposal_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_pricing_settings: {
+        Row: {
+          markup_target_percent: number | null
+          project_id: string
+          sales_tax_rate: number | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          markup_target_percent?: number | null
+          project_id: string
+          sales_tax_rate?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          markup_target_percent?: number | null
+          project_id?: string
+          sales_tax_rate?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_pricing_settings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_pricing_settings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -37068,7 +37149,11 @@ export type Database = {
           name: string
           notes: string | null
           parent_ffe_item_id: string | null
+          pending_cost_changed_at: string | null
+          pending_cost_prev_cents: number | null
+          pending_markup_held_percent: number | null
           po_number: string | null
+          price_basis: string | null
           product_id: string | null
           project_id: string
           project_room_id: string | null
@@ -37079,6 +37164,7 @@ export type Database = {
           removed_at: string | null
           removed_by: string | null
           removed_disposition: string | null
+          retail_unit_cents: number | null
           role_identity: string
           rough_cents: number | null
           selection_thread_id: string
@@ -37115,6 +37201,26 @@ export type Database = {
       }
       _ffe_next_item_label: {
         Args: { p_project_id: string; p_room_id: string }
+        Returns: string
+      }
+      _ffe_pricing_audit: {
+        Args: {
+          p_action: string
+          p_new: Database["public"]["Tables"]["project_ffe_items"]["Row"]
+          p_old: Database["public"]["Tables"]["project_ffe_items"]["Row"]
+        }
+        Returns: undefined
+      }
+      _ffe_pricing_line_json: {
+        Args: {
+          p_item: Database["public"]["Tables"]["project_ffe_items"]["Row"]
+        }
+        Returns: Json
+      }
+      _ffe_pricing_lock_reason: {
+        Args: {
+          p_item: Database["public"]["Tables"]["project_ffe_items"]["Row"]
+        }
         Returns: string
       }
       _ffe_require_studio_project: {
@@ -37182,6 +37288,10 @@ export type Database = {
         }[]
       }
       _ffe_strict_client_fields: { Args: { p_fields: Json }; Returns: Json }
+      _ffe_true_markup: {
+        Args: { p_client_cents: number; p_cost_cents: number }
+        Returns: number
+      }
       _finalize_spec_book_issue_00403: {
         Args: { p_revision_id: string }
         Returns: {
@@ -41325,6 +41435,12 @@ export type Database = {
         Args: { p_item_id: string }
         Returns: string
       }
+      ffe_line_default_markup: {
+        Args: {
+          p_item: Database["public"]["Tables"]["project_ffe_items"]["Row"]
+        }
+        Returns: number
+      }
       ffe_line_stage: {
         Args: { p: Database["public"]["Tables"]["project_ffe_items"]["Row"] }
         Returns: string
@@ -41850,6 +41966,7 @@ export type Database = {
           value: number
         }[]
       }
+      get_my_pricing_settings: { Args: never; Returns: Json }
       get_or_create_conversation: {
         Args: { p_context?: Json; p_screen?: string; p_user_id: string }
         Returns: string
@@ -42472,7 +42589,11 @@ export type Database = {
           name: string
           notes: string | null
           parent_ffe_item_id: string | null
+          pending_cost_changed_at: string | null
+          pending_cost_prev_cents: number | null
+          pending_markup_held_percent: number | null
           po_number: string | null
+          price_basis: string | null
           product_id: string | null
           project_id: string
           project_room_id: string | null
@@ -42483,6 +42604,7 @@ export type Database = {
           removed_at: string | null
           removed_by: string | null
           removed_disposition: string | null
+          retail_unit_cents: number | null
           role_identity: string
           rough_cents: number | null
           selection_thread_id: string
@@ -42782,7 +42904,11 @@ export type Database = {
           name: string
           notes: string | null
           parent_ffe_item_id: string | null
+          pending_cost_changed_at: string | null
+          pending_cost_prev_cents: number | null
+          pending_markup_held_percent: number | null
           po_number: string | null
+          price_basis: string | null
           product_id: string | null
           project_id: string
           project_room_id: string | null
@@ -42793,6 +42919,7 @@ export type Database = {
           removed_at: string | null
           removed_by: string | null
           removed_disposition: string | null
+          retail_unit_cents: number | null
           role_identity: string
           rough_cents: number | null
           selection_thread_id: string
@@ -44173,7 +44300,11 @@ export type Database = {
           name: string
           notes: string | null
           parent_ffe_item_id: string | null
+          pending_cost_changed_at: string | null
+          pending_cost_prev_cents: number | null
+          pending_markup_held_percent: number | null
           po_number: string | null
+          price_basis: string | null
           product_id: string | null
           project_id: string
           project_room_id: string | null
@@ -44184,6 +44315,7 @@ export type Database = {
           removed_at: string | null
           removed_by: string | null
           removed_disposition: string | null
+          retail_unit_cents: number | null
           role_identity: string
           rough_cents: number | null
           selection_thread_id: string
@@ -45011,6 +45143,8 @@ export type Database = {
         Args: { p_evidence: Json; p_party_id: string }
         Returns: Json
       }
+      reset_ffe_line_markup: { Args: { p_item_id: string }; Returns: Json }
+      reset_project_markups: { Args: { p_project_id: string }; Returns: Json }
       resolve_ack_line: {
         Args: { p_line_id: string; p_note?: string; p_verdict: string }
         Returns: {
@@ -45121,6 +45255,10 @@ export type Database = {
           studio_name: string
           visibility: Json
         }[]
+      }
+      resolve_ffe_cost_change: {
+        Args: { p_item_id: string; p_resolution: string }
+        Returns: Json
       }
       resolve_field_link: { Args: { p_token: string }; Returns: Json }
       resolve_install_punch_item: {
@@ -45919,6 +46057,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_ffe_line_kind: {
+        Args: { p_item_id: string; p_line_kind: string }
+        Returns: Json
+      }
+      set_ffe_line_pricing: {
+        Args: { p_field: string; p_item_id: string; p_value: number }
+        Returns: Json
+      }
       set_household_threshold: {
         Args: { p_household_id: string; p_threshold_cents: number }
         Returns: {
@@ -45963,6 +46109,15 @@ export type Database = {
       set_my_member_title: {
         Args: { p_job_title: string; p_organization_id: string }
         Returns: undefined
+      }
+      set_my_pricing_settings: {
+        Args: {
+          p_default_markup_percent?: number
+          p_delivery_markup_percent?: number
+          p_freight_markup_percent?: number
+          p_install_markup_percent?: number
+        }
+        Returns: Json
       }
       set_need_state: {
         Args: {
@@ -46027,7 +46182,11 @@ export type Database = {
           name: string
           notes: string | null
           parent_ffe_item_id: string | null
+          pending_cost_changed_at: string | null
+          pending_cost_prev_cents: number | null
+          pending_markup_held_percent: number | null
           po_number: string | null
+          price_basis: string | null
           product_id: string | null
           project_id: string
           project_room_id: string | null
@@ -46038,6 +46197,7 @@ export type Database = {
           removed_at: string | null
           removed_by: string | null
           removed_disposition: string | null
+          retail_unit_cents: number | null
           role_identity: string
           rough_cents: number | null
           selection_thread_id: string
@@ -46092,7 +46252,11 @@ export type Database = {
           name: string
           notes: string | null
           parent_ffe_item_id: string | null
+          pending_cost_changed_at: string | null
+          pending_cost_prev_cents: number | null
+          pending_markup_held_percent: number | null
           po_number: string | null
+          price_basis: string | null
           product_id: string | null
           project_id: string
           project_room_id: string | null
@@ -46103,6 +46267,7 @@ export type Database = {
           removed_at: string | null
           removed_by: string | null
           removed_disposition: string | null
+          retail_unit_cents: number | null
           role_identity: string
           rough_cents: number | null
           selection_thread_id: string
@@ -46157,7 +46322,11 @@ export type Database = {
           name: string
           notes: string | null
           parent_ffe_item_id: string | null
+          pending_cost_changed_at: string | null
+          pending_cost_prev_cents: number | null
+          pending_markup_held_percent: number | null
           po_number: string | null
+          price_basis: string | null
           product_id: string | null
           project_id: string
           project_room_id: string | null
@@ -46168,6 +46337,7 @@ export type Database = {
           removed_at: string | null
           removed_by: string | null
           removed_disposition: string | null
+          retail_unit_cents: number | null
           role_identity: string
           rough_cents: number | null
           selection_thread_id: string
@@ -46245,6 +46415,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_project_pricing: {
+        Args: {
+          p_markup_target_percent: number
+          p_project_id: string
+          p_sales_tax_rate: number
+        }
+        Returns: Json
       }
       set_purchase_order_eta: {
         Args: {
