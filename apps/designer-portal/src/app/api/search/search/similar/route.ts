@@ -39,6 +39,10 @@ export async function GET(request: NextRequest) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generated types not yet updated for new columns
     const supabase: any = await createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
     const { searchParams } = new URL(request.url);
 
     const productId = searchParams.get('productId');
