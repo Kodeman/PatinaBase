@@ -8,6 +8,8 @@ import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 import { adaptClientSelections, type ClientSelection } from '@/lib/commercial-documents';
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
 
+const mockPresentation = jest.fn();
+
 /* ── The wiring ─────────────────────────────────────────────────────────────
    Everything below the surface is a query, so the boundary is the hook
    modules `threshold.tsx` actually imports — not the adapters under them. The
@@ -74,6 +76,10 @@ jest.mock('@patina/supabase', () => ({
   useProjectParties: jest.fn(),
   useProjectTeamMembers: jest.fn(),
   useStudioIdentity: jest.fn(),
+  // US-37 #6 — who presents the house (00812). Arrow-wrapped so resetMocks
+  // leaves an empty read rather than an undefined query.
+  usePresentationIdentity: (...args: unknown[]) =>
+    mockPresentation(...args) ?? { data: undefined },
   // The letter's own address (00574) — the letterbox reads it; this suite is
   // not about the link, so it answers with none.
   useInvoiceLink: () => ({ data: null }),
@@ -1349,6 +1355,41 @@ describe('Threshold — the acts the house owes', () => {
   it('closes with the colophon when the studio has a name', () => {
     renderThreshold();
 
+    expect(
+      screen.getByText('Prepared by Quist Interiors · Sent through Patina'),
+    ).toBeInTheDocument();
+  });
+
+  it('closes with who presents the house — the studio mark and the lead (US-37 #6)', () => {
+    mockPresentation.mockReturnValue({
+      data: {
+        firmName: 'Quist Interiors',
+        logoUrl: 'https://cdn.test/quist.png',
+        designerName: 'Mara Quist',
+        email: 'mara@quist.test',
+        phone: '+1 555 0142',
+      },
+    });
+    renderThreshold();
+
+    expect(mockPresentation).toHaveBeenCalledWith({ projectId: PROJECT_ID });
+    const presented = screen.getByTestId('presented-by');
+    expect(presented).toHaveTextContent('Quist Interiors');
+    expect(screen.getByTestId('presented-by-contact')).toHaveTextContent(
+      'Mara Quist · mara@quist.test · +1 555 0142',
+    );
+    // Page furniture over the colophon, not a banner at the top of the house.
+    const colophon = screen.getByText('Prepared by Quist Interiors · Sent through Patina');
+    expect(
+      presented.compareDocumentPosition(colophon) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('draws no presenter when the studio filled nothing', () => {
+    mockPresentation.mockReturnValue({ data: {} });
+    renderThreshold();
+
+    expect(screen.queryByTestId('presented-by')).not.toBeInTheDocument();
     expect(
       screen.getByText('Prepared by Quist Interiors · Sent through Patina'),
     ).toBeInTheDocument();

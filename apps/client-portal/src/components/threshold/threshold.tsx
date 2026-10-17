@@ -20,11 +20,13 @@ import {
   useProjectTeamMembers,
   useScopeChangeRequests,
   useStudioIdentity,
+  usePresentationIdentity,
 } from "@patina/supabase";
 import type { ProjectApprovalReview, ProjectNote } from "@patina/supabase";
 import { getFieldTradeLabel } from "@patina/types";
 
 import { Colophon } from '@/components/threshold/instruments/colophon';
+import { PresentedBy, hasPresentation } from '@/components/presented-by';
 import { openChapterOf } from '@/components/threshold/instruments/making-spine';
 import { monthAndYear } from '@/components/threshold/instruments/standing-sentence';
 import { clientEvents } from '@/lib/analytics/events';
@@ -305,6 +307,8 @@ export function Threshold({
   const planQuery = useClientPlan(projectId);
   const notesQuery = useProjectNotes(projectId);
   const identityQuery = useStudioIdentity({ projectId });
+  // US-37 #6 — who presents this house to her: the studio mark and the lead.
+  const presentationQuery = usePresentationIdentity({ projectId });
   const teamQuery = useProjectTeamMembers(projectId);
   const partiesQuery = useProjectParties(projectId);
   const ordersQuery = useDirectOrders();
@@ -1066,10 +1070,14 @@ export function Threshold({
           the colophon is gated on the same condition Colophon itself checks,
           so a resolved-but-empty studio name never leaves a bare hairline
           standing over nothing. */}
-      {studioName?.trim() && (
+      {(studioName?.trim() || hasPresentation(presentationQuery.data)) && (
         <>
           <hr className="border-[var(--border-subtle)]" />
-          <div className="mt-6 pb-12">
+          <div className="mt-6 space-y-4 pb-12">
+            {/* US-37 #6 — the studio mark and the lead's contact, as quiet
+                page furniture over the colophon. Absence is silence here too:
+                PresentedBy draws only the fields the studio filled. */}
+            <PresentedBy identity={presentationQuery.data} />
             <Colophon studioName={studioName} />
           </div>
         </>
