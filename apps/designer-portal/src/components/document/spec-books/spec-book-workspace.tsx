@@ -7,6 +7,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -1069,6 +1070,9 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   const [warningReason, setWarningReason] = useState("");
   const [serverIssueWarnings, setServerIssueWarnings] = useState<ServerIssueWarning[] | null>(null);
   const [issueFeedback, setIssueFeedback] = useState<string | null>(null);
+  // L-b: a job with no studio is held, and the held Issue names why.
+  const studioHoldId = useId();
+  const noStudio = project.data != null && project.data.studio_id == null;
   const [shareResult, setShareResult] = useState<{
     artifactId: string;
     url: string;
@@ -1837,14 +1841,16 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
             <div>
               <div className="sb-issue-head">
                 <span
-                  className={preflight.ready ? "word" : "word word--od"}
+                  className={preflight.ready && !noStudio ? "word" : "word word--od"}
                 >
-                  {preflight.ready ? "Ready" : "Blocked"}
+                  {!preflight.ready ? "Blocked" : noStudio ? "Held" : "Ready"}
                 </span>
                 <h2 className="t-d2">
-                  {preflight.ready
-                    ? "Ready to issue"
-                    : `${preflight.blockers.length} blockers remain`}
+                  {!preflight.ready
+                    ? `${preflight.blockers.length} blockers remain`
+                    : noStudio
+                      ? "Held until the job has a studio"
+                      : "Ready to issue"}
                 </h2>
                 <p className="t-body-sm sb-help">
                   {issueWarnings.length} warnings · {data.items.length}{" "}
@@ -1980,8 +1986,8 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                   {issueFeedback}
                 </p>
               )}
-              {project.data && project.data.studio_id == null && (
-                <p className="t-body-sm sb-help" role="status">
+              {noStudio && (
+                <p id={studioHoldId} className="t-body-sm sb-help" role="status">
                   This job isn't in a studio yet. Name its studio, then issue.
                 </p>
               )}
@@ -1990,7 +1996,8 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                   actionKey="spec-book-issue"
                   variant="terminal"
                   loading={issueBusy}
-                  disabled={!preflight.ready || audiences.length === 0 || (project.data != null && project.data.studio_id == null)}
+                  disabled={!preflight.ready || audiences.length === 0 || noStudio}
+                  aria-describedby={noStudio ? studioHoldId : undefined}
                   onClick={() => void issue()}
                 >
                   Issue {audiences.length} edition

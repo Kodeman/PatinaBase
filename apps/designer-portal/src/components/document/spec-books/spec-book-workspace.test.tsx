@@ -1007,4 +1007,26 @@ describe("SQ-857 — the spec book walk fixes", () => {
     expect(screen.getByText("This job isn't in a studio yet. Name its studio, then issue.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Issue 2 editions/ })).toBeDisabled();
   });
+
+  it("L-b: a held job's headline says held, and the held Issue is described by the hold sentence", async () => {
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench", item_type: "allowance", document_code: "F-01", project_room_id: null, room: null, image_url: null }));
+    mockProjectData = { name: "Oak project", studio_id: null };
+    const user = userEvent.setup();
+    render(<SpecBookWorkspace projectId="project-1" />);
+    await user.click(screen.getByRole("button", { name: "Run issue checks" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Held until the job has a studio" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Ready to issue" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Issue 2 editions/ })).toHaveAccessibleDescription(
+      "This job isn't in a studio yet. Name its studio, then issue.",
+    );
+  });
+
+  it("L-b: a job in a studio still reads Ready to issue, with nothing describing Issue", async () => {
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench", item_type: "allowance", document_code: "F-01", project_room_id: null, room: null, image_url: null }));
+    const user = userEvent.setup();
+    render(<SpecBookWorkspace projectId="project-1" />);
+    await user.click(screen.getByRole("button", { name: "Run issue checks" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Ready to issue" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Issue 2 editions/ })).not.toHaveAttribute("aria-describedby");
+  });
 });

@@ -23,6 +23,7 @@ import {
 } from "@patina/supabase";
 import { DocSheet } from "@/components/document/overlays/doc-sheet";
 import { formatPct } from "@/lib/document/trade-pricing";
+import { ItemLabelPrefix } from "./item-label";
 import { money } from "./placement-chips";
 
 const MINUS = "−";
@@ -127,11 +128,17 @@ export function ApprovedTotalRow({
   totals,
   currentTotals,
   onChangeLog,
+  jobName,
+  changeLogOpen = false,
 }: {
   totals: ProjectPricingApprovalTotal[];
   /** The current lines' client total before tax, per currency code. */
   currentTotals: ReadonlyMap<string, number>;
   onChangeLog: () => void;
+  /** The job's name, so the log's button names its scope. */
+  jobName?: string | null;
+  /** Whether the job's change log is open. */
+  changeLogOpen?: boolean;
 }) {
   const ordered = [
     ...totals.filter((t) => t.currency === "USD"),
@@ -170,7 +177,13 @@ export function ApprovedTotalRow({
           </Fragment>
         ))}
       </span>
-      <button type="button" onClick={onChangeLog} className={QUIET_ACT}>
+      <button
+        type="button"
+        onClick={onChangeLog}
+        aria-label={`Change log for ${jobName?.trim() || "this job"}`}
+        aria-expanded={changeLogOpen}
+        className={QUIET_ACT}
+      >
         Change log
       </button>
     </p>
@@ -181,6 +194,8 @@ export function ApprovedTotalRow({
 export interface RemovedApprovedLine {
   itemId: string;
   name: string;
+  /** Its item label (doc_code), printed as the live rows print theirs. */
+  label?: string | null;
   lineTotalCents: number;
   currency: string;
 }
@@ -211,7 +226,10 @@ export function RemovedSinceApproval({
             data-removed-approved-line={line.itemId}
             className="flex flex-wrap items-center gap-x-3 border-b border-l border-[var(--sheet-rule)] border-l-[var(--sheet-ink)] py-2 pl-2 font-sans text-[14px] leading-[1.4] text-[var(--sheet-ink)]"
           >
-            <span>{line.name}</span>
+            <span className="flex flex-wrap items-center gap-2">
+              <ItemLabelPrefix label={line.label} />
+              <span>{line.name}</span>
+            </span>
             <ApprovedValue text={approvedMoney(line.lineTotalCents, line.currency)} />
             <button
               type="button"
