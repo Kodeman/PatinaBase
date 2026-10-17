@@ -37,6 +37,12 @@ VALUES
   ('80600000-0000-4000-8000-000000000012', 'P806 Personal chair', now(), 'personal', '80600000-0000-4000-8000-0000000000a1', 'draft'),
   ('80600000-0000-4000-8000-000000000013', 'P806 Personal sofa',  now(), 'personal', '80600000-0000-4000-8000-0000000000a1', 'draft');
 
+-- A studio piece that already carries a lead time (valid before and after 00806).
+INSERT INTO public.products (id, name, captured_at, layer, studio_id,
+                             vendor_contact, lead_time_weeks, payment_terms, category, usage_notes)
+VALUES ('80600000-0000-4000-8000-000000000023', 'P806 Studio desk', now(), 'studio',
+        '80600000-0000-4000-8000-0000000000f1', '{}'::jsonb, 6, 'net_30', 'desks', 'test');
+
 -- ── the table: a studio piece without a lead time ──────────────────────────
 SELECT lives_ok(
   $$INSERT INTO public.products (id, name, captured_at, layer, studio_id,
@@ -46,10 +52,9 @@ SELECT lives_ok(
   'a studio-layer library item inserts with no lead time'
 );
 
-UPDATE public.products SET lead_time_weeks = 6 WHERE id = '80600000-0000-4000-8000-000000000021';
 SELECT lives_ok(
   $$UPDATE public.products SET lead_time_weeks = NULL
-     WHERE id = '80600000-0000-4000-8000-000000000021'$$,
+     WHERE id = '80600000-0000-4000-8000-000000000023'$$,
   'clearing the lead time on a studio library item saves'
 );
 
