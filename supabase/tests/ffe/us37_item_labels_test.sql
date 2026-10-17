@@ -459,17 +459,17 @@ BEGIN
       INSERT INTO public.designer_clients (id, designer_id, client_id, status) VALUES
         ('b8089100-0000-4000-8000-000000000001', 'b8089000-0000-4000-8000-000000000001',
          'b8089000-0000-4000-8000-000000000002', 'proposal');
-      INSERT INTO public.projects (id, name, designer_id, created_by, status) VALUES
+      INSERT INTO public.projects (id, name, designer_id, client_id, created_by, status) VALUES
         ('b8089200-0000-4000-8000-000000000001', 'Interleave job', 'b8089000-0000-4000-8000-000000000001',
-         'b8089000-0000-4000-8000-000000000001', 'active');
+         'b8089000-0000-4000-8000-000000000002', 'b8089000-0000-4000-8000-000000000001', 'active');
       INSERT INTO public.client_decisions (id, designer_client_id, designer_id, project_id, title, sent_at) VALUES
         ('b8089300-0000-4000-8000-000000000001', 'b8089100-0000-4000-8000-000000000001',
          'b8089000-0000-4000-8000-000000000001', 'b8089200-0000-4000-8000-000000000001', 'Interleave sofa', now());
     $f$);
 
     PERFORM extensions.dblink_exec('us37_a', 'BEGIN');
-    PERFORM extensions.dblink_exec('us37_a',
-      $q$SELECT public._ffe_lock_job_labels('b8089200-0000-4000-8000-000000000001')$q$);
+    PERFORM * FROM extensions.dblink('us37_a',
+      $q$SELECT public._ffe_lock_job_labels('b8089200-0000-4000-8000-000000000001')::text$q$) AS r(x text);
     SELECT pid INTO v_b_pid FROM extensions.dblink('us37_b', 'SELECT pg_backend_pid()') AS r(pid integer);
     PERFORM extensions.dblink_send_query('us37_b', $q$SELECT public._apply_client_decision_authorized(
       'b8089300-0000-4000-8000-000000000001', 'b8089999-0000-4000-8000-000000000003',
@@ -486,8 +486,8 @@ BEGIN
       v_result := 'B never waited for the job label lock';
     ELSE
       BEGIN
-        PERFORM extensions.dblink_exec('us37_a', $q$SELECT 1 FROM public.client_decisions
-          WHERE id = 'b8089300-0000-4000-8000-000000000001' FOR UPDATE NOWAIT$q$);
+        PERFORM * FROM extensions.dblink('us37_a', $q$SELECT 1 FROM public.client_decisions
+          WHERE id = 'b8089300-0000-4000-8000-000000000001' FOR UPDATE NOWAIT$q$) AS r(x integer);
         v_result := 'decision free';
       EXCEPTION WHEN OTHERS THEN
         v_result := 'decision held by B: ' || SQLERRM;
@@ -500,14 +500,16 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     v_result := COALESCE(v_result, 'interleave error: ' || SQLERRM);
   END;
+  -- A and B close first, so nothing they still hold can block the cleanup.
+  FOREACH v_conn IN ARRAY COALESCE(extensions.dblink_get_connections(), ARRAY[]::text[]) LOOP
+    IF v_conn IN ('us37_a', 'us37_b') THEN PERFORM extensions.dblink_disconnect(v_conn); END IF;
+  END LOOP;
   BEGIN
     PERFORM extensions.dblink_exec('us37_setup', v_cleanup);
   EXCEPTION WHEN OTHERS THEN
     v_result := COALESCE(v_result, '') || ' / cleanup error: ' || SQLERRM;
   END;
-  FOREACH v_conn IN ARRAY COALESCE(extensions.dblink_get_connections(), ARRAY[]::text[]) LOOP
-    IF v_conn LIKE 'us37_%' THEN PERFORM extensions.dblink_disconnect(v_conn); END IF;
-  END LOOP;
+  PERFORM extensions.dblink_disconnect('us37_setup');
   INSERT INTO us37_interleave VALUES (v_result);
 END
 $us37_interleave$;
