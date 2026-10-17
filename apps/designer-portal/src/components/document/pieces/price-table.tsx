@@ -1,18 +1,24 @@
 "use client";
 
 /**
- * US-21 T-40 — one room's Price table (SPEC a7; S4, D12, Q7, Q16; CONTRACT
- * §1.2 client-price note, §3.6).
+ * US-21 T-40, US-37 #4 — one room's Price table (SPEC a7; S4, D12, Q7, Q16;
+ * contract D4).
  *
- * Props-driven: the Price lens wires the hooks. `LINE · QTY · UNIT · TRADE
- * COST · MARKUP · CLIENT PRICE · ROUGH ~ ·` at the a7 widths, labor indented
- * `↳` under its piece, and the room's subtotal under a strong rule. Trade cost
- * is typed here. Markup and client price only print: no writer of a placed
- * line's client price exists in this release (D19 is not built). The one
- * exception is a labor line, whose own client price is typed while it is
- * unreleased (00737, ruling F1). The `⋯` menu carries `Add labor`, `Make it an
- * allowance`, `Move to room…` and `Remove`; a gated act is `aria-disabled`
- * with its reason printed and linked, never `disabled`.
+ * Props-driven: the Price lens wires the hooks. Every figure is per unit:
+ * `LINE · QTY · UNIT · UNIT COST · MARKUP · MARGIN · UNIT CLIENT · LINE TOTAL ·
+ * RETAIL · ROUGH ~ ·`. Pricing is two-way: the markup or the unit client price
+ * can be typed, and the other one follows from the cost; the cost never moves
+ * for either. Margin and line total only print. Each cell commits on blur or
+ * Enter, Esc puts it back, and focus selects the whole figure so a round price
+ * is typed straight over it ($ and commas accepted).
+ *
+ * Labor keeps its own writers (labor price, trade cost through 00692). A
+ * released line prints its figures. A line whose cost moved under its price
+ * carries a row of its own with the two ways to settle it. Labor is indented
+ * `↳` under its piece, the room's subtotal sits under a strong rule. The `⋯`
+ * menu carries `Add labor`, `Make it an allowance`, `Reset to default markup`,
+ * `Move to room…` and `Remove`; a gated act is `aria-disabled` with its reason
+ * printed and linked, never `disabled`.
  *
  * At 390 the same table stacks as one card per line (a13): each cell prints
  * its column's word above its figure, so the phone reads the same columns.
@@ -26,6 +32,8 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import type { FfeCostChangeResolution, FfeLinePricingField } from "@patina/types";
+import { Input } from "@/components/ui/controls";
 import { cn } from "@/lib/utils";
 import { menuKeyIndex, parseRough } from "@/lib/document/pieces/rough-in-keys";
 import { LABOR_STAMP_LABEL } from "@/lib/document/stamp-derivation";
@@ -33,10 +41,16 @@ import {
   QUIET_FOCUS,
   ROOM_HEADING_ATTR,
 } from "@/lib/document/pieces/sheet-focus";
+import {
+  clientFromMarkup,
+  formatPct,
+  marginFromClient,
+  markupFromClient,
+} from "@/lib/document/trade-pricing";
 import { MoveToRoomMenu, type MoveRoom } from "./move-to-room-menu";
 import { money, unitWordFor } from "./placement-chips";
 
-export type PriceRowAct = "labor" | "allowance" | "move" | "remove";
+export type PriceRowAct = "labor" | "allowance" | "reset" | "move" | "remove";
 
 export interface PriceRow {
   id: string;
@@ -49,6 +63,8 @@ export interface PriceRow {
   tradeCents: number | null;
   /** Per unit, cents; 0 or null prints as no price. */
   clientCents: number | null;
+  /** Retail / MSRP per unit, cents; null when the line carries none. */
+  retailCents?: number | null;
   /**
    * An allowance's ceiling: the line total (00744). When set, the line prints
    * `Up to` from it, never from `clientCents`, and carries no markup.
@@ -64,8 +80,19 @@ export interface PriceRow {
   alsoIn?: ReactNode;
   /** Trade cost can be typed (the line is not on an order or a Trade Scope). */
   tradeEditable: boolean;
-  /** Client price can be typed: an unreleased labor line only. */
+  /** Client price can be typed: an unreleased line outside a Trade Scope. */
   clientEditable: boolean;
+  /**
+   * The line's markup, quantity and retail can be typed (set_ffe_line_pricing):
+   * not labor, not released, not in a Trade Scope.
+   */
+  pricingEditable?: boolean;
+  /** A cost change waiting to be settled (00809 R6). */
+  costChange?: { prevCents: number; heldMarkupPct: number | null } | null;
+  /** The client price is above the line's retail (US-37: any amount over). */
+  aboveRetail?: boolean;
+  /** The server's sentence for the line's last refused write, verbatim. */
+  note?: string | null;
   /** Acts this line cannot take, each with the sentence that says why. */
   gates?: Partial<Record<PriceRowAct, string>>;
 }
@@ -77,23 +104,32 @@ export interface PriceTableProps {
   rows: PriceRow[];
   /** `Bedroom · $2,835 priced · ~$6,100 roughed`. */
   subtotal: string;
-  onTradeCost: (row: PriceRow, cents: number) => void;
-  onClientPrice: (row: PriceRow, cents: number) => void;
+  /** One typed figure; null clears retail. */
+  onPricing: (
+    row: PriceRow,
+    field: FfeLinePricingField,
+    value: number | null,
+  ) => void;
+  onResolveCost: (row: PriceRow, resolution: FfeCostChangeResolution) => void;
   onAddLabor: (row: PriceRow) => void;
   onAllowance: (row: PriceRow) => void;
+  onResetMarkup: (row: PriceRow) => void;
   onMove: (row: PriceRow, roomId: string) => void;
   onRemove: (row: PriceRow) => void;
 }
 
-/** Columns and widths, SPEC a7: 400 · 64 · 80 · 120 · 80 · 130 · 110 · 48. */
+/** Columns and widths: the a7 grid widened for two-way pricing. */
 const COLUMNS: Array<{ label: string; width: number; numeric?: boolean }> = [
-  { label: "Line", width: 400 },
+  { label: "Line", width: 248 },
   { label: "Qty", width: 64, numeric: true },
-  { label: "Unit", width: 80 },
-  { label: "Trade cost", width: 120, numeric: true },
-  { label: "Markup", width: 80, numeric: true },
-  { label: "Client price", width: 130, numeric: true },
-  { label: "Rough ~", width: 110, numeric: true },
+  { label: "Unit", width: 64 },
+  { label: "Unit cost", width: 112, numeric: true },
+  { label: "Markup", width: 88, numeric: true },
+  { label: "Margin", width: 80, numeric: true },
+  { label: "Unit client", width: 120, numeric: true },
+  { label: "Line total", width: 120, numeric: true },
+  { label: "Retail", width: 104, numeric: true },
+  { label: "Rough ~", width: 96, numeric: true },
   { label: "", width: 48 },
 ];
 
@@ -101,30 +137,67 @@ const DASH = "—";
 
 /** The column word each cell prints above its figure on the phone. */
 const CARD_CELL =
-  "max-md:flex max-md:flex-col max-md:items-start max-md:px-0 max-md:py-1 max-md:before:font-mono max-md:before:text-[11px] max-md:before:uppercase max-md:before:tracking-[0.06em] max-md:before:text-[var(--sheet-ink-faint)] max-md:before:content-[attr(data-label)]";
+  "max-md:flex max-md:flex-col max-md:items-start max-md:px-0 max-md:py-1 max-md:before:font-mono max-md:before:text-[12px] max-md:before:uppercase max-md:before:tracking-[0.08em] max-md:before:text-[var(--sheet-ink-faint)] max-md:before:content-[attr(data-label)]";
 const CELL = "px-2 font-sans text-[14px] leading-[1.4] text-[var(--sheet-ink)]";
-const NUM_CELL = cn(CELL, "text-right tabular-nums max-md:text-left");
+const NUM_CELL = cn(
+  CELL,
+  "t-money text-[14px] text-right max-md:text-left",
+);
 const CELL_INPUT =
-  "h-[40px] w-full min-w-0 bg-transparent px-2 text-right font-sans text-[14px] leading-[1.4] tabular-nums text-[var(--sheet-ink)] outline-none placeholder:text-[var(--sheet-ink-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay-ink)] max-md:min-h-[44px] max-md:px-0 max-md:text-left";
+  "t-money h-[40px] w-full min-w-0 rounded-none border-0 bg-transparent px-2 text-right text-[14px] leading-[1.4] text-[var(--sheet-ink)] placeholder:text-[var(--sheet-ink-faint)] focus:ring-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay-ink)] max-md:min-h-[44px] max-md:px-0 max-md:text-left";
 const ROW =
   "border-b border-[var(--sheet-rule)] hover:bg-[var(--sheet-row-hover)] md:h-[40px] max-md:mb-3 max-md:grid max-md:grid-cols-2 max-md:gap-x-4 max-md:border max-md:border-[var(--sheet-rule-strong)] max-md:p-3";
+const ACT =
+  "inline-flex min-h-11 items-center font-mono text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--sheet-ink)] underline decoration-[var(--sheet-ink)] decoration-1 underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]";
 
-/** `25%`, `33.33%`; `—` when the client price is not above the trade cost. */
-export function markupText(
+/** A cost of 0 is no cost. A client price of 0 is a price: a −100% markup. */
+const positive = (cents: number | null | undefined): cents is number =>
+  cents != null && cents > 0;
+
+/** `35.0%`, `−100.0%`: a negative figure carries the typeset minus. */
+function pct(value: number | null): string {
+  return formatPct(value).replace("-", "−");
+}
+
+/** The true markup of the line's cents, or null without a cost and a price. */
+export function lineMarkup(
   tradeCents: number | null,
   clientCents: number | null,
-): string {
-  if (!tradeCents || !clientCents || clientCents <= tradeCents) return DASH;
-  const percent = Math.round((clientCents / tradeCents - 1) * 10000) / 100;
-  return `${percent}%`;
+): number | null {
+  if (!positive(tradeCents) || clientCents == null) return null;
+  return markupFromClient(tradeCents, clientCents);
+}
+
+/** `35.0% markup on $1,000 = $1,350 · 25.9% margin`, per unit; null when either is missing. */
+export function pricingHelp(
+  tradeCents: number | null,
+  clientCents: number | null,
+): string | null {
+  if (!positive(tradeCents) || clientCents == null) return null;
+  return `${pct(markupFromClient(tradeCents, clientCents))} markup on ${money(tradeCents)} = ${money(clientCents)} · ${pct(marginFromClient(tradeCents, clientCents))} margin`;
 }
 
 function priceText(cents: number | null | undefined): string {
-  return cents && cents > 0 ? money(cents) : DASH;
+  return cents == null ? DASH : money(cents);
 }
 
 function roughText(cents: number | null): string {
   return cents == null ? DASH : `~${money(cents)}`;
+}
+
+/** `35`, `12.5`, `-10%` → a markup; `undefined` when it is not a number. */
+function parsePercent(text: string): number | null | undefined {
+  const cleaned = text.replace(/[%\s,]/g, "").replace(/[−–]/g, "-");
+  if (cleaned === "") return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function parseWhole(text: string): number | null | undefined {
+  const cleaned = text.replace(/[\s,]/g, "");
+  if (cleaned === "") return null;
+  const n = Number(cleaned);
+  return Number.isInteger(n) && n >= 1 ? n : undefined;
 }
 
 export function PriceTable({
@@ -132,10 +205,11 @@ export function PriceTable({
   rooms,
   rows,
   subtotal,
-  onTradeCost,
-  onClientPrice,
+  onPricing,
+  onResolveCost,
   onAddLabor,
   onAllowance,
+  onResetMarkup,
   onMove,
   onRemove,
 }: PriceTableProps) {
@@ -165,7 +239,7 @@ export function PriceTable({
 
       <table
         aria-labelledby={headingId}
-        className="w-[1032px] max-w-full table-fixed border-collapse max-md:block max-md:w-full"
+        className="w-[1144px] max-w-full table-fixed border-collapse max-md:block max-md:w-full"
       >
         <colgroup>
           {COLUMNS.map((col, i) => (
@@ -179,7 +253,7 @@ export function PriceTable({
                 key={i}
                 scope="col"
                 className={cn(
-                  "h-[40px] px-2 font-mono text-[12px] font-medium uppercase leading-none tracking-[0.06em] text-[var(--sheet-ink)]",
+                  "t-head h-[40px] px-2 leading-none text-[var(--sheet-ink)]",
                   col.numeric ? "text-right" : "text-left",
                 )}
               >
@@ -190,15 +264,16 @@ export function PriceTable({
         </thead>
         <tbody className="max-md:block">
           {rows.map((row) => (
-            <LineRow
+            <LineRows
               key={row.id}
               row={row}
               room={room}
               rooms={rooms}
-              onTradeCost={onTradeCost}
-              onClientPrice={onClientPrice}
+              onPricing={onPricing}
+              onResolveCost={onResolveCost}
               onAddLabor={onAddLabor}
               onAllowance={onAllowance}
+              onResetMarkup={onResetMarkup}
               // The lens says the move once the server answers (T-60a F4).
               onMove={onMove}
               onRemove={onRemove}
@@ -229,139 +304,311 @@ interface LineRowProps {
   row: PriceRow;
   room: MoveRoom;
   rooms: MoveRoom[];
-  onTradeCost: (row: PriceRow, cents: number) => void;
-  onClientPrice: (row: PriceRow, cents: number) => void;
+  onPricing: PriceTableProps["onPricing"];
+  onResolveCost: PriceTableProps["onResolveCost"];
   onAddLabor: (row: PriceRow) => void;
   onAllowance: (row: PriceRow) => void;
+  onResetMarkup: (row: PriceRow) => void;
   onMove: (row: PriceRow, roomId: string) => void;
   onRemove: (row: PriceRow) => void;
   onGated: (reason: string) => void;
 }
 
-function LineRow({
+function LineRows({
   row,
   room,
   rooms,
-  onTradeCost,
-  onClientPrice,
+  onPricing,
+  onResolveCost,
   onAddLabor,
   onAllowance,
+  onResetMarkup,
   onMove,
   onRemove,
   onGated,
 }: LineRowProps) {
-  const ceiling =
-    row.allowanceCents && row.allowanceCents > 0 ? row.allowanceCents : null;
-  const notPriced = !(row.clientCents && row.clientCents > 0);
+  const ceiling = positive(row.allowanceCents) ? row.allowanceCents : null;
+  const notPriced = row.clientCents == null;
+  const markup = ceiling ? null : lineMarkup(row.tradeCents, row.clientCents);
+  const margin =
+    ceiling || !positive(row.tradeCents) || row.clientCents == null
+      ? null
+      : marginFromClient(row.tradeCents, row.clientCents);
+  const help = ceiling ? null : pricingHelp(row.tradeCents, row.clientCents);
+  const lineTotal =
+    ceiling ?? (row.clientCents != null ? row.clientCents * row.quantity : null);
+  const markupEditable =
+    !!row.pricingEditable && !ceiling && positive(row.tradeCents);
+  const noteId = `${useId()}-note`;
+
   return (
-    <tr data-line-id={row.id} className={ROW}>
-      <td
-        data-label="Line"
-        className={cn(CELL, "max-md:col-span-2", CARD_CELL)}
-      >
-        <div className={cn("flex flex-col py-1", row.labor && "pl-6")}>
-          <span className="flex flex-wrap items-center gap-2">
-            {row.labor ? (
+    <>
+      <tr data-line-id={row.id} className={ROW}>
+        <td
+          data-label="Line"
+          className={cn(CELL, "max-md:col-span-2", CARD_CELL)}
+        >
+          <div className={cn("flex flex-col py-1", row.labor && "pl-6")}>
+            <span className="flex flex-wrap items-center gap-2">
+              {row.labor ? (
+                <span
+                  aria-hidden="true"
+                  className="text-[var(--sheet-ink-faint)]"
+                >
+                  ↳
+                </span>
+              ) : null}
+              {/* Focus lands here once ADD LABOR adds this line (T-60a F6). */}
               <span
-                aria-hidden="true"
-                className="text-[var(--sheet-ink-faint)]"
+                data-line-name=""
+                tabIndex={-1}
+                className={cn("font-medium", QUIET_FOCUS)}
               >
-                ↳
+                {row.name}
               </span>
-            ) : null}
-            {/* Focus lands here once ADD LABOR adds this line (T-60a F6). */}
-            <span
-              data-line-name=""
-              tabIndex={-1}
-              className={cn("font-medium", QUIET_FOCUS)}
-            >
-              {row.name}
+              {row.labor ? (
+                <span className="stamp stamp--labor shrink-0">
+                  {LABOR_STAMP_LABEL}
+                </span>
+              ) : null}
+              {row.stamp?.label ? (
+                <span className={`stamp stamp--${row.stamp.kind} shrink-0`}>
+                  {row.stamp.label}
+                </span>
+              ) : null}
             </span>
-            {row.labor ? (
-              <span className="stamp stamp--labor shrink-0">
-                {LABOR_STAMP_LABEL}
+            {row.productName ? (
+              <span className="text-[13px] text-[var(--sheet-ink-muted)]">
+                {row.productName}
               </span>
             ) : null}
-            {row.stamp?.label ? (
-              <span className={`stamp stamp--${row.stamp.kind} shrink-0`}>
-                {row.stamp.label}
+            {help ? (
+              <span
+                data-pricing-help=""
+                className="text-[13px] leading-[1.4] text-[var(--sheet-ink-muted)]"
+              >
+                {help}
               </span>
             ) : null}
-          </span>
-          {row.productName ? (
-            <span className="text-[13px] text-[var(--sheet-ink-muted)]">
-              {row.productName}
+            {row.aboveRetail && positive(row.retailCents) ? (
+              <span
+                data-retail-note=""
+                className="text-[13px] leading-[1.4] text-[var(--sheet-ink)]"
+              >
+                {`Above retail (${money(row.retailCents)})`}
+              </span>
+            ) : null}
+            {row.note ? (
+              <span
+                id={noteId}
+                role="alert"
+                className="text-[13px] leading-[1.4] text-[var(--sheet-ink)]"
+              >
+                {row.note}
+              </span>
+            ) : null}
+            {row.alsoIn}
+          </div>
+        </td>
+        <td data-label="Qty" className={cn("p-0", CARD_CELL)}>
+          {row.pricingEditable ? (
+            <FigureInput
+              label={`Quantity, ${row.name}`}
+              value={row.quantity}
+              print={(n) => String(n)}
+              parse={parseWhole}
+              onCommit={(n) => n != null && onPricing(row, "quantity", n)}
+            />
+          ) : (
+            <span className={cn(NUM_CELL, "block")}>{row.quantity}</span>
+          )}
+        </td>
+        <td data-label="Unit" className={cn(CELL, CARD_CELL)}>
+          {unitWordFor(row.unit, row.quantity)}
+        </td>
+        <td data-label="Unit cost" className={cn("p-0", CARD_CELL)}>
+          {row.tradeEditable ? (
+            <FigureInput
+              label={`Unit cost, ${row.name}`}
+              value={positive(row.tradeCents) ? row.tradeCents : null}
+              print={money}
+              parse={parseRough}
+              dataAttr="data-cost-input"
+              onCommit={(cents) =>
+                cents != null && onPricing(row, "unit_cost_cents", cents)
+              }
+            />
+          ) : (
+            <span className={cn(NUM_CELL, "block")}>
+              {priceText(positive(row.tradeCents) ? row.tradeCents : null)}
+            </span>
+          )}
+        </td>
+        <td data-label="Markup" className={cn("p-0", CARD_CELL)}>
+          {markupEditable ? (
+            <FigureInput
+              label={`Markup, ${row.name}`}
+              value={markup}
+              print={pct}
+              parse={parsePercent}
+              onCommit={(typed) =>
+                typed != null && onPricing(row, "markup_percent", typed)
+              }
+            />
+          ) : (
+            // An allowance carries no markup until it is filled.
+            <span className={cn(NUM_CELL, "block")}>{pct(markup)}</span>
+          )}
+        </td>
+        <td data-label="Margin" className={cn(NUM_CELL, CARD_CELL)}>
+          {pct(margin)}
+        </td>
+        <td data-label="Unit client" className={cn("p-0", CARD_CELL)}>
+          {row.clientEditable && !ceiling ? (
+            <FigureInput
+              label={`Unit client price, ${row.name}`}
+              value={row.clientCents ?? null}
+              print={money}
+              parse={parseRough}
+              onCommit={(cents) =>
+                cents != null &&
+                onPricing(row, "unit_client_price_cents", cents)
+              }
+            />
+          ) : (
+            <span
+              data-allowance-cell=""
+              tabIndex={-1}
+              className={cn(NUM_CELL, "block", QUIET_FOCUS)}
+            >
+              {ceiling ? (
+                <AllowancePrice ceiling={ceiling} quantity={row.quantity} />
+              ) : notPriced ? (
+                <>
+                  <span aria-hidden="true">{DASH}</span>
+                  <span className="sr-only">Not priced</span>
+                </>
+              ) : (
+                money(row.clientCents as number)
+              )}
+            </span>
+          )}
+        </td>
+        <td
+          data-label="Line total"
+          data-line-total=""
+          className={cn(NUM_CELL, CARD_CELL)}
+        >
+          {priceText(lineTotal)}
+        </td>
+        <td data-label="Retail" className={cn("p-0", CARD_CELL)}>
+          {row.pricingEditable ? (
+            <FigureInput
+              label={`Retail, ${row.name}`}
+              value={row.retailCents ?? null}
+              print={money}
+              parse={parseRough}
+              allowBlank
+              onCommit={(cents) => onPricing(row, "retail_unit_cents", cents)}
+            />
+          ) : (
+            <span className={cn(NUM_CELL, "block")}>
+              {row.retailCents == null ? DASH : money(row.retailCents)}
+            </span>
+          )}
+        </td>
+        <td
+          data-label="Rough ~"
+          className={cn(NUM_CELL, "text-[var(--sheet-ink-faint)]", CARD_CELL)}
+        >
+          {roughText(row.roughCents)}
+        </td>
+        <td className="text-right max-md:col-span-2 max-md:text-left">
+          <RowMenu
+            row={row}
+            room={room}
+            rooms={rooms}
+            onAddLabor={onAddLabor}
+            onAllowance={onAllowance}
+            onResetMarkup={onResetMarkup}
+            onMove={onMove}
+            onRemove={onRemove}
+            onGated={onGated}
+          />
+        </td>
+      </tr>
+      {row.costChange ? (
+        <CostChangeRow
+          row={row}
+          change={row.costChange}
+          onResolve={(resolution) => onResolveCost(row, resolution)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * A cost that moved under the line's price (00809 R6): old → new, and the two
+ * ways to settle it. It stays until one is chosen.
+ */
+function CostChangeRow({
+  row,
+  change,
+  onResolve,
+}: {
+  row: PriceRow;
+  change: { prevCents: number; heldMarkupPct: number | null };
+  onResolve: (resolution: FfeCostChangeResolution) => void;
+}) {
+  const cost = positive(row.tradeCents) ? row.tradeCents : null;
+  const client = row.clientCents ?? null;
+  const keepClientMarkup =
+    cost && client != null ? markupFromClient(cost, client) : null;
+  const keepMarkupClient =
+    cost && change.heldMarkupPct != null
+      ? clientFromMarkup(cost, change.heldMarkupPct)
+      : null;
+  return (
+    <tr
+      data-cost-change-for={row.id}
+      className="border-b border-[var(--sheet-rule)] max-md:mb-3 max-md:block max-md:border max-md:border-[var(--sheet-rule-strong)] max-md:p-3"
+    >
+      <td colSpan={COLUMNS.length} className="px-2 py-2 max-md:block max-md:px-0">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <p className="t-body-sm text-[var(--sheet-ink)]">
+            <strong className="font-medium">{row.name}</strong>
+            {": cost changed from "}
+            <span className="t-money text-[14px]">{money(change.prevCents)}</span>
+            {" to "}
+            <span className="t-money text-[14px]">{cost ? money(cost) : DASH}</span>
+            .
+          </p>
+          <button
+            type="button"
+            onClick={() => onResolve("keep_client")}
+            className={ACT}
+          >
+            Keep client price
+          </button>
+          {client != null ? (
+            <span className="t-body-sm text-[var(--sheet-ink-muted)]">
+              {`${money(client)}, ${pct(keepClientMarkup)} markup`}
             </span>
           ) : null}
-          {row.alsoIn}
-        </div>
-      </td>
-      <td data-label="Qty" className={cn(NUM_CELL, CARD_CELL)}>
-        {row.quantity}
-      </td>
-      <td data-label="Unit" className={cn(CELL, CARD_CELL)}>
-        {unitWordFor(row.unit, row.quantity)}
-      </td>
-      <td data-label="Trade cost" className={cn("p-0", CARD_CELL)}>
-        {row.tradeEditable ? (
-          <MoneyInput
-            label={`Trade cost, ${row.name}`}
-            cents={row.tradeCents}
-            onCommit={(cents) => onTradeCost(row, cents)}
-          />
-        ) : (
-          <span className={cn(NUM_CELL, "block")}>
-            {priceText(row.tradeCents)}
-          </span>
-        )}
-      </td>
-      <td data-label="Markup" className={cn(NUM_CELL, CARD_CELL)}>
-        {/* An allowance carries no markup until it is filled. */}
-        {ceiling ? DASH : markupText(row.tradeCents, row.clientCents)}
-      </td>
-      <td data-label="Client price" className={cn("p-0", CARD_CELL)}>
-        {row.clientEditable ? (
-          <MoneyInput
-            label={`Client price, ${row.name}`}
-            cents={row.clientCents}
-            onCommit={(cents) => onClientPrice(row, cents)}
-          />
-        ) : (
-          <span
-            data-allowance-cell=""
-            tabIndex={-1}
-            className={cn(NUM_CELL, "block", QUIET_FOCUS)}
+          <button
+            type="button"
+            onClick={() => onResolve("keep_markup")}
+            className={ACT}
           >
-            {ceiling ? (
-              <AllowancePrice ceiling={ceiling} quantity={row.quantity} />
-            ) : notPriced ? (
-              <>
-                <span aria-hidden="true">{DASH}</span>
-                <span className="sr-only">Not priced</span>
-              </>
-            ) : (
-              money(row.clientCents as number)
-            )}
-          </span>
-        )}
-      </td>
-      <td
-        data-label="Rough ~"
-        className={cn(NUM_CELL, "text-[var(--sheet-ink-faint)]", CARD_CELL)}
-      >
-        {roughText(row.roughCents)}
-      </td>
-      <td className="text-right max-md:col-span-2 max-md:text-left">
-        <RowMenu
-          row={row}
-          room={room}
-          rooms={rooms}
-          onAddLabor={onAddLabor}
-          onAllowance={onAllowance}
-          onMove={onMove}
-          onRemove={onRemove}
-          onGated={onGated}
-        />
+            Keep markup
+          </button>
+          {keepMarkupClient != null ? (
+            <span className="t-body-sm text-[var(--sheet-ink-muted)]">
+              {`${pct(change.heldMarkupPct)}, ${money(keepMarkupClient)}`}
+            </span>
+          ) : null}
+        </div>
       </td>
     </tr>
   );
@@ -391,48 +638,76 @@ function AllowancePrice({
   );
 }
 
-/** A figure typed in dollars; printed as money while the cell is not being typed in. */
-function MoneyInput({
+/**
+ * One typed figure. It prints as the sheet prints it; focus selects all of it
+ * so a new figure is typed straight over. Blur or Enter commits a changed,
+ * readable figure (Enter keeps focus, selected again); Esc puts it back. A
+ * figure that does not read is put back too: it never reaches the server.
+ */
+function FigureInput({
   label,
-  cents,
+  value,
+  print,
+  parse,
   onCommit,
+  allowBlank = false,
+  dataAttr,
 }: {
   label: string;
-  cents: number | null;
-  onCommit: (cents: number) => void;
+  value: number | null;
+  print: (value: number) => string;
+  parse: (text: string) => number | null | undefined;
+  onCommit: (value: number | null) => void;
+  /** A blank figure commits as null (retail); otherwise blank puts it back. */
+  allowBlank?: boolean;
+  dataAttr?: string;
 }) {
-  /** The raw figure while the cell has focus. */
+  /** What was typed since focus; null while nothing was. */
   const [draft, setDraft] = useState<string | null>(null);
+  const ref = useRef<HTMLInputElement>(null);
+  const reselect = useRef(false);
+
+  useEffect(() => {
+    if (!reselect.current) return;
+    reselect.current = false;
+    ref.current?.select();
+  });
 
   function commit() {
     if (draft === null) return;
-    const next = parseRough(draft);
-    if (next != null && next !== (cents ?? null)) onCommit(next);
+    const next = parse(draft);
     setDraft(null);
+    if (next === undefined || (next === null && !allowBlank)) return;
+    if (next !== value) onCommit(next);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
       event.preventDefault();
-      event.currentTarget.blur();
+      commit();
+      reselect.current = true;
     } else if (event.key === "Escape" && draft !== null) {
       event.preventDefault();
       event.stopPropagation();
       setDraft(null);
+      reselect.current = true;
     }
   }
 
   return (
-    <input
+    <Input
+      ref={ref}
       aria-label={label}
       inputMode="decimal"
       placeholder={DASH}
-      value={draft ?? (cents && cents > 0 ? money(cents) : "")}
-      onFocus={() => setDraft(cents && cents > 0 ? String(cents / 100) : "")}
+      value={draft ?? (value == null ? "" : print(value))}
+      onFocus={(e) => e.currentTarget.select()}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={onKeyDown}
       className={CELL_INPUT}
+      style={{ fontFamily: "var(--font-meta)" }}
+      {...(dataAttr ? { [dataAttr]: "" } : {})}
     />
   );
 }
@@ -440,6 +715,7 @@ function MoneyInput({
 const MENU_ITEMS: Array<{ act: PriceRowAct; label: string }> = [
   { act: "labor", label: "Add labor" },
   { act: "allowance", label: "Make it an allowance" },
+  { act: "reset", label: "Reset to default markup" },
   { act: "move", label: "Move to room…" },
   { act: "remove", label: "Remove" },
 ];
@@ -451,6 +727,7 @@ function RowMenu({
   rooms,
   onAddLabor,
   onAllowance,
+  onResetMarkup,
   onMove,
   onRemove,
   onGated,
@@ -460,6 +737,7 @@ function RowMenu({
   rooms: MoveRoom[];
   onAddLabor: (row: PriceRow) => void;
   onAllowance: (row: PriceRow) => void;
+  onResetMarkup: (row: PriceRow) => void;
   onMove: (row: PriceRow, roomId: string) => void;
   onRemove: (row: PriceRow) => void;
   onGated: (reason: string) => void;
@@ -499,6 +777,7 @@ function RowMenu({
     close(act !== "remove");
     if (act === "labor") onAddLabor(row);
     else if (act === "allowance") onAllowance(row);
+    else if (act === "reset") onResetMarkup(row);
     else onRemove(row);
   }
 

@@ -15,6 +15,8 @@ jest.mock('@patina/supabase', () => ({
   useUpdatePassword: () => ({ mutate: jest.fn(), isPending: false, error: null }),
   useTimeAutostartPreference: () => ({ optedOut: false, isSettled: true }),
   useSetTimeAutostartOptOut: () => ({ mutate: jest.fn(), isPending: false }),
+  usePricingSettings: () => ({ data: undefined }),
+  useSetPricingSettings: () => ({ mutate: jest.fn(), isPending: false, error: null }),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
