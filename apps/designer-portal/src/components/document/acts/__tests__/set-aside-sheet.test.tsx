@@ -73,6 +73,7 @@ describe('SetAsideSheet (U-Q5)', () => {
     await waitFor(() => expect(windows()).toHaveLength(2));
 
     fill('Back on', '2026-10-16');
+    await user.click(screen.getByLabelText('Waiting on'));
     await waitFor(() => expect(windows()).toHaveLength(1));
     expect(onSave).not.toHaveBeenCalled();
   });

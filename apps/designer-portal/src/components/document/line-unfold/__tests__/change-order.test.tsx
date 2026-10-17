@@ -5,6 +5,7 @@
  */
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const startMutateAsync = jest.fn();
 
@@ -208,6 +209,54 @@ describe('ChangeOrderAct — the sheet', () => {
         'authorization № 8',
       ),
     );
+  });
+
+  it('spotlights the kind choices when nothing is chosen, live and focused (R186)', async () => {
+    renderAct();
+    const sheet = openSheet();
+    await userEvent.setup().click(within(sheet).getByRole('button', { name: 'Record the change' }));
+
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-hold-spotlight-window]')).toHaveLength(1),
+    );
+    expect(document.querySelector('[data-hold-spotlight-window]')).toHaveAttribute(
+      'data-hold-spotlight-window',
+      'po-change-kind',
+    );
+    expect(document.querySelector('[data-hold-spotlight-bar]')).toHaveTextContent('Choose what changed.');
+    const radios = within(sheet).getAllByRole('radio');
+    for (const radio of radios) expect(radio.closest('[inert]')).toBeNull();
+    await waitFor(() => expect(radios[0]).toHaveFocus());
+  });
+
+  it('a price-bearing pick from the kind window opens the price hold as its own window, the choices still live (F4)', async () => {
+    const user = userEvent.setup();
+    renderAct(sent, authorized);
+    const sheet = openSheet();
+    await user.click(within(sheet).getByRole('button', { name: 'Record the change' }));
+    await waitFor(() =>
+      expect(document.querySelector('[data-hold-spotlight-window]')).toHaveAttribute(
+        'data-hold-spotlight-window',
+        'po-change-kind',
+      ),
+    );
+
+    const credit = within(sheet).getByRole('radio', { name: /Credit/ });
+    await user.click(credit);
+
+    const held = within(sheet).getByTestId('po-change-held');
+    const windowIds = () =>
+      Array.from(document.querySelectorAll('[data-hold-spotlight-window]'), (el) =>
+        el.getAttribute('data-hold-spotlight-window'),
+      );
+    await waitFor(() => expect(windowIds()).toContain(held.id));
+    expect(document.querySelector('[data-hold-spotlight-bar]')).toHaveTextContent(
+      "This needs the client's yes.",
+    );
+    expect(held.closest('[inert]')).toBeNull();
+    expect(credit).toBeChecked();
+    expect(credit.closest('[inert]')).toBeNull();
+    expect(credit).toHaveFocus();
   });
 
   it('records a claim with the line, the kind and the reason', async () => {

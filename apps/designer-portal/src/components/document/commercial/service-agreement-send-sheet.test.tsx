@@ -282,6 +282,13 @@ describe("ServiceAgreementSendSheet · synthesis §5", () => {
     expect(
       window.document.querySelector("[data-hold-spotlight-bar]"),
     ).toHaveTextContent("This agreement names no fee.");
+    await waitFor(() =>
+      expect(
+        window.document.querySelector(
+          '[data-hold-spotlight-root] [role="status"]',
+        ),
+      ).toHaveTextContent("1 thing needs attention: This agreement names no fee."),
+    );
     expect(blockerList).toHaveTextContent("This agreement names no fee.");
   });
 

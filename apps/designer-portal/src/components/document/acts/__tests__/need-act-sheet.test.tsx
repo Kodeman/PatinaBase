@@ -612,6 +612,14 @@ describe('Remind this invoice', () => {
     expect(mockChase).toHaveBeenCalledTimes(0);
   });
 
+  it('a read-only empty note names no reason and points at none', () => {
+    mockLeadUserId = 'lead-1';
+    openSheet(INVOICE_NEED);
+    fireEvent.change(textbox('A note with the reminder'), { target: { value: '' } });
+    expect(textbox('A note with the reminder')).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByText('Write the message to continue.')).toBeNull();
+  });
+
   it('reads the lead again just before the reminder goes; a reassignment sends nothing (SQ-751 F2)', async () => {
     openSheet(INVOICE_NEED);
     mockRefetchLeads.mockImplementation(async () => {

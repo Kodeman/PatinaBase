@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * US-25 slice 5 — the body every scoped act sheet shares: who it goes to, the
@@ -14,16 +14,16 @@
  * change 7, `draftedForWords`).
  */
 
-import { useRef, useState, type ReactNode } from "react";
-import { onlineManager } from "@tanstack/react-query";
-import { useSetNeedState } from "@patina/supabase";
-import { Input, Textarea } from "@/components/ui/controls";
-import { ActStillLine } from "@/components/feedback/act-still-line";
-import { useActFeedback } from "@/components/feedback/use-act-feedback";
-import { OFFLINE_NOT_SENT, OfflineRefusal } from "@/lib/react-query";
-import type { DeskNeed } from "@/lib/document/desk-need-list";
-import { DocumentAction, DocumentActionGroup } from "../document-action";
-import type { ActViewer } from "./act-viewer";
+import { useRef, useState, type ReactNode } from 'react';
+import { onlineManager } from '@tanstack/react-query';
+import { useSetNeedState } from '@patina/supabase';
+import { Input, Textarea } from '@/components/ui/controls';
+import { ActStillLine } from '@/components/feedback/act-still-line';
+import { useActFeedback } from '@/components/feedback/use-act-feedback';
+import { OFFLINE_NOT_SENT, OfflineRefusal } from '@/lib/react-query';
+import type { DeskNeed } from '@/lib/document/desk-need-list';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
+import type { ActViewer } from './act-viewer';
 
 export interface ActDraftText {
   subject: string;
@@ -31,36 +31,28 @@ export interface ActDraftText {
 }
 
 const LABEL_CLS =
-  "mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]";
+  'mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]';
 
-const capitalised = (words: string) =>
-  words.charAt(0).toUpperCase() + words.slice(1);
+const capitalised = (words: string) => words.charAt(0).toUpperCase() + words.slice(1);
 
 /** SQ-778 N1 — a failed act says what happened and what to do, in one plain
  *  line; the transport's own words stay in the console. SQ-777 F1 — the line
  *  says how far the act got, so a partial success never invites a second
  *  send: before the outward call, during it, or after it answered. */
-export const SEND_FAILED =
-  "Couldn’t send — nothing went out. Try again, or check your connection.";
-export const SEND_UNCONFIRMED =
-  "We couldn’t confirm it went out. Check the thread before sending again.";
-export const SENT_UNRECORDED =
-  "Sent. It didn’t record here — try marking it again.";
-export const RELEASED_UNRECORDED =
-  "Release approved. It didn’t record here — try marking it again.";
-export const SAVE_FAILED =
-  "Couldn’t save the draft — nothing was saved. Try again, or check your connection.";
-export const SAVE_UNCONFIRMED =
-  "We couldn’t confirm the draft saved. Check the drafts before trying again.";
-export const SAVED_UNRECORDED =
-  "Draft saved. It didn’t record here — try marking it again.";
+export const SEND_FAILED = 'Couldn’t send — nothing went out. Try again, or check your connection.';
+export const SEND_UNCONFIRMED = 'We couldn’t confirm it went out. Check the thread before sending again.';
+export const SENT_UNRECORDED = 'Sent. It didn’t record here — try marking it again.';
+export const RELEASED_UNRECORDED = 'Release approved. It didn’t record here — try marking it again.';
+export const SAVE_FAILED = 'Couldn’t save the draft — nothing was saved. Try again, or check your connection.';
+export const SAVE_UNCONFIRMED = 'We couldn’t confirm the draft saved. Check the drafts before trying again.';
+export const SAVED_UNRECORDED = 'Draft saved. It didn’t record here — try marking it again.';
 export const NOT_SENT_SUPPRESSED =
-  "Not sent — email to this client is paused right now. Nothing went out.";
+  'Not sent — email to this client is paused right now. Nothing went out.';
 
 /** The send boundary answered no: nothing went (SQ-751 F2 · SQ-774 R3). */
 class SendWithdrawn extends Error {
   constructor(readonly draftHeld: boolean) {
-    super("Who leads this project changed, so nothing was sent.");
+    super('Who leads this project changed, so nothing was sent.');
   }
 }
 
@@ -77,11 +69,9 @@ export class NotSent extends Error {}
  * refusal says no draft was written; any other failure may follow an insert
  * whose answer was lost, and the RPC does not de-duplicate.
  */
-const REFUSED_BEFORE_WRITE = new Set(["42501", "23514"]);
+const REFUSED_BEFORE_WRITE = new Set(['42501', '23514']);
 const refusedBeforeWrite = (e: unknown): boolean =>
-  typeof e === "object" &&
-  e !== null &&
-  REFUSED_BEFORE_WRITE.has(String((e as { code?: unknown }).code));
+  typeof e === 'object' && e !== null && REFUSED_BEFORE_WRITE.has(String((e as { code?: unknown }).code));
 
 /**
  * Reads the job's lead again and throws `SendWithdrawn` if she may no longer
@@ -106,7 +96,7 @@ export function ActDraft({
   record,
   quote = null,
   initial,
-  bodyLabel = "Note",
+  bodyLabel = 'Note',
   sendLabel,
   onSend,
   onSaveForLead,
@@ -130,22 +120,19 @@ export function ActDraft({
   /** The existing send path. Called only by the named control; it awaits
    *  `confirmSend` immediately before its outward send (SQ-774 R3), so a
    *  failure before that sent nothing and one after it may have. */
-  onSend: (
-    text: ActDraftText,
-    confirmSend: ConfirmSend,
-  ) => Promise<RecordAct | void>;
+  onSend: (text: ActDraftText, confirmSend: ConfirmSend) => Promise<RecordAct | void>;
   /** Q11 — saves the draft for the lead. Absent: a non-lead reads only. It
    *  resolves once the draft is inserted; what follows only records it. */
   onSaveForLead?: (text: ActDraftText) => Promise<RecordAct | void>;
   onDone: () => void;
 }) {
-  const [subject, setSubject] = useState(initial?.subject ?? "");
-  const [body, setBody] = useState(initial?.body ?? "");
+  const [subject, setSubject] = useState(initial?.subject ?? '');
+  const [body, setBody] = useState(initial?.body ?? '');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // SQ-751 F2 — the lead changed between open and send; nothing went. 'held':
   // the change came after her draft was held, so it waits for the lead.
-  const [revoked, setRevoked] = useState<"unsent" | "held" | null>(null);
+  const [revoked, setRevoked] = useState<'unsent' | 'held' | null>(null);
   // SQ-777 F1 — the outward call failed or never answered: it may have gone,
   // so the sheet offers no second send. SQ-781 R3 — likewise a draft whose
   // insert never answered. Holds the line that says which.
@@ -155,56 +142,38 @@ export function ActDraft({
   const [unrecorded, setUnrecorded] = useState<string | null>(null);
   // The recording steps still to run, in order; a done step leaves the list.
   const recordings = useRef<RecordAct[]>([]);
-  const setNeedState = useSetNeedState({ errorSurface: "inline" });
+  const setNeedState = useSetNeedState({ errorSurface: 'inline' });
   // US-34 N12a — the verb shows from the press; at 8 s the act adds its line.
-  const { phase } = useActFeedback({ status: pending ? "pending" : "idle" });
+  const { phase } = useActFeedback({ status: pending ? 'pending' : 'idle' });
 
-  const mode: "reading" | "send" | "save" | "read-only" = !viewer.ready
-    ? "reading"
+  const mode: 'reading' | 'send' | 'save' | 'read-only' = !viewer.ready
+    ? 'reading'
     : viewer.canSend && !revoked
-      ? "send"
+      ? 'send'
       : onSaveForLead
-        ? "save"
-        : "read-only";
-  const readOnly = mode === "read-only";
-  const lead = viewer.leadFirstName ?? "the lead";
-  const missingSubject =
-    initial !== null && initial.subject !== null && subject.trim().length === 0;
+        ? 'save'
+        : 'read-only';
+  const readOnly = mode === 'read-only';
+  const lead = viewer.leadFirstName ?? 'the lead';
+  const missingSubject = initial !== null && initial.subject !== null && subject.trim().length === 0;
   const missingBody = initial !== null && body.trim().length === 0;
   const complete = !missingSubject && !missingBody;
-  const draftSubjectReason = "Add a subject to continue.";
-  const draftBodyReason = "Write the message to continue.";
+  const draftSubjectReason = 'Add a subject to continue.';
+  const draftBodyReason = 'Write the message to continue.';
+  const reasonsShown = mode === 'send' || mode === 'save';
   const holds = [
     ...(missingSubject
-      ? [
-          {
-            id: `${regionKey}-subject`,
-            target: () => document.getElementById(`${regionKey}-subject`),
-            label: "Subject",
-            reason: draftSubjectReason,
-          },
-        ]
+      ? [{ id: `${regionKey}-subject`, target: () => document.getElementById(`${regionKey}-subject`), label: 'Subject', reason: draftSubjectReason }]
       : []),
     ...(missingBody
-      ? [
-          {
-            id: `${regionKey}-body`,
-            target: () => document.getElementById(`${regionKey}-body`),
-            label: bodyLabel,
-            reason: draftBodyReason,
-          },
-        ]
+      ? [{ id: `${regionKey}-body`, target: () => document.getElementById(`${regionKey}-body`), label: bodyLabel, reason: draftBodyReason }]
       : []),
   ];
-  const draftReasonIds =
-    [
-      ...(missingSubject ? [`${regionKey}-subject-reason`] : []),
-      ...(missingBody ? [`${regionKey}-body-reason`] : []),
-    ].join(" ") || undefined;
-  const text = (): ActDraftText => ({
-    subject: subject.trim(),
-    body: body.trim(),
-  });
+  const draftReasonIds = [
+    ...(missingSubject ? [`${regionKey}-subject-reason`] : []),
+    ...(missingBody ? [`${regionKey}-body-reason`] : []),
+  ].join(' ') || undefined;
+  const text = (): ActDraftText => ({ subject: subject.trim(), body: body.trim() });
 
   // SQ-751 F2 · SQ-774 R3 — the send boundary reads the job's lead again,
   // immediately before the outward send: neither a sheet opened before a
@@ -225,7 +194,7 @@ export function ActDraft({
         recordings.current.shift();
       }
     } catch (e) {
-      console.error("[act-sheet] recording failed", e);
+      console.error('[act-sheet] recording failed', e);
       setUnrecorded(failed);
       setPending(false);
       return;
@@ -235,10 +204,7 @@ export function ActDraft({
   };
 
   const run = async (
-    act: (
-      text: ActDraftText,
-      confirm: ConfirmSend,
-    ) => Promise<RecordAct | void>,
+    act: (text: ActDraftText, confirm: ConfirmSend) => Promise<RecordAct | void>,
     acted: boolean,
   ) => {
     setError(null);
@@ -261,7 +227,7 @@ export function ActDraft({
     } catch (e) {
       setPending(false);
       if (e instanceof SendWithdrawn) {
-        setRevoked(e.draftHeld ? "held" : "unsent");
+        setRevoked(e.draftHeld ? 'held' : 'unsent');
         return;
       }
       // OfflineRefusal: the MutationCache refused a send or money write
@@ -270,10 +236,9 @@ export function ActDraft({
         setError(e.message);
         return;
       }
-      console.error("[act-sheet] act failed", e);
+      console.error('[act-sheet] act failed', e);
       if (acted && progress.outward) setUnconfirmed(SEND_UNCONFIRMED);
-      else if (!acted && !refusedBeforeWrite(e))
-        setUnconfirmed(SAVE_UNCONFIRMED);
+      else if (!acted && !refusedBeforeWrite(e)) setUnconfirmed(SAVE_UNCONFIRMED);
       else setError(acted ? SEND_FAILED : SAVE_FAILED);
       return;
     }
@@ -286,27 +251,19 @@ export function ActDraft({
       await setNeedState.mutateAsync({
         needKey: need.key,
         engagementId: need.projectId,
-        action: "acted",
+        action: 'acted',
         ...(waitingOn ? { waitingOn } : {}),
       });
     };
     recordings.current = [...(recordAct ? [recordAct] : []), markActed];
     await runRecordings(
-      !acted
-        ? SAVED_UNRECORDED
-        : regionKey === "act-release-order"
-          ? RELEASED_UNRECORDED
-          : SENT_UNRECORDED,
+      !acted ? SAVED_UNRECORDED : regionKey === 'act-release-order' ? RELEASED_UNRECORDED : SENT_UNRECORDED,
     );
   };
 
   if (unconfirmed) {
     return (
-      <p
-        role="alert"
-        data-act-unconfirmed
-        className="mx-auto w-full max-w-[34rem] border-l-2 border-[var(--color-terracotta)] pl-3 text-[14px] text-[var(--color-charcoal)]"
-      >
+      <p role="alert" data-act-unconfirmed className="mx-auto w-full max-w-[34rem] border-l-2 border-[var(--color-terracotta)] pl-3 text-[14px] text-[var(--color-charcoal)]">
         {unconfirmed}
       </p>
     );
@@ -318,11 +275,7 @@ export function ActDraft({
         <p role="status" className="text-[14px] text-[var(--color-charcoal)]">
           {unrecorded}
         </p>
-        <DocumentActionGroup
-          surfaceKey="open-document"
-          regionKey={regionKey}
-          aria-label="Mark it again"
-        >
+        <DocumentActionGroup surfaceKey="open-document" regionKey={regionKey} aria-label="Mark it again">
           <DocumentAction
             actionKey={`${regionKey}-mark-again`}
             variant="primary"
@@ -337,97 +290,79 @@ export function ActDraft({
     );
   }
 
-  if (revoked === "held") {
+  if (revoked === 'held') {
     return (
-      <p
-        role="status"
-        data-act-revoked="held"
-        className="mx-auto w-full max-w-[34rem] text-[14px] text-[var(--color-charcoal)]"
-      >
+      <p role="status" data-act-revoked="held" className="mx-auto w-full max-w-[34rem] text-[14px] text-[var(--color-charcoal)]">
         {`Who leads this project changed, so nothing was sent. The draft is held for ${lead}.`}
       </p>
     );
   }
 
   return (
-    <div
-      data-act-draft={mode}
-      className="mx-auto w-full max-w-[34rem] space-y-5"
-    >
+    <div data-act-draft={mode} className="mx-auto w-full max-w-[34rem] space-y-5">
       <p className="text-[14px] text-[var(--color-charcoal)]">
         <span className="mr-2 font-mono text-[12px] uppercase tracking-[0.1em]">
-          {regionKey === "act-release-order" ? "Vendor:" : "To"}
+          {regionKey === 'act-release-order' ? 'Vendor:' : 'To'}
         </span>
-        {counterpart ?? "No one is recorded for this."}
+        {counterpart ?? 'No one is recorded for this.'}
       </p>
       <p data-act-record className="text-[14px] text-[var(--color-charcoal)]">
-        <span className="mr-2 font-mono text-[12px] uppercase tracking-[0.1em]">
-          About
-        </span>
+        <span className="mr-2 font-mono text-[12px] uppercase tracking-[0.1em]">About</span>
         {record}
       </p>
       {quote && (
-        <p
-          data-act-quote
-          className="border-l-2 border-[var(--color-charcoal)] pl-3 text-[14px] text-[var(--color-charcoal)]"
-        >
+        <p data-act-quote className="border-l-2 border-[var(--color-charcoal)] pl-3 text-[14px] text-[var(--color-charcoal)]">
           {quote}
         </p>
       )}
       {viewer.handoff && (
         <p data-act-handoff className="text-[13px] text-[var(--color-mocha)]">
           {/* SQ-777 F5 — a hand-off with no name on record is still hers. */}
-          {`From ${viewer.handoff.from ?? "the previous lead"}: `}
+          {`From ${viewer.handoff.from ?? 'the previous lead'}: `}
           {viewer.handoff.note}
         </p>
       )}
-      <div id={`${regionKey}-draft-fields`}>
-        {initial && initial.subject !== null && (
-          <div>
-            <label htmlFor={`${regionKey}-subject`} className={LABEL_CLS}>
-              Subject
-            </label>
-            <Input
-              id={`${regionKey}-subject`}
-              value={subject}
-              aria-describedby={
-                missingSubject ? `${regionKey}-subject-reason` : undefined
-              }
-              maxLength={300}
-              readOnly={readOnly}
-              onChange={(event) => setSubject(event.target.value)}
-            />
-            {missingSubject && (mode === "send" || mode === "save") && (
-              <p id={`${regionKey}-subject-reason`} className="t-body-sm">
-                {draftSubjectReason}
-              </p>
-            )}
-          </div>
-        )}
-        {initial && (
-          <div>
-            <label htmlFor={`${regionKey}-body`} className={LABEL_CLS}>
-              {bodyLabel}
-            </label>
-            <Textarea
-              id={`${regionKey}-body`}
-              rows={8}
-              value={body}
-              aria-describedby={
-                missingBody ? `${regionKey}-body-reason` : undefined
-              }
-              maxLength={4000}
-              readOnly={readOnly}
-              onChange={(event) => setBody(event.target.value)}
-            />
-            {missingBody && (mode === "send" || mode === "save") && (
-              <p id={`${regionKey}-body-reason`} className="t-body-sm">
-                {draftBodyReason}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+      {initial && initial.subject !== null && (
+        <div>
+          <label htmlFor={`${regionKey}-subject`} className={LABEL_CLS}>
+            Subject
+          </label>
+          <Input
+            id={`${regionKey}-subject`}
+            value={subject}
+            aria-describedby={missingSubject && reasonsShown ? `${regionKey}-subject-reason` : undefined}
+            maxLength={300}
+            readOnly={readOnly}
+            onChange={(event) => setSubject(event.target.value)}
+          />
+          {missingSubject && reasonsShown && (
+            <p id={`${regionKey}-subject-reason`} className="t-body-sm">
+              {draftSubjectReason}
+            </p>
+          )}
+        </div>
+      )}
+      {initial && (
+        <div>
+          <label htmlFor={`${regionKey}-body`} className={LABEL_CLS}>
+            {bodyLabel}
+          </label>
+          <Textarea
+            id={`${regionKey}-body`}
+            rows={8}
+            value={body}
+            aria-describedby={missingBody && reasonsShown ? `${regionKey}-body-reason` : undefined}
+            maxLength={4000}
+            readOnly={readOnly}
+            onChange={(event) => setBody(event.target.value)}
+          />
+          {missingBody && reasonsShown && (
+            <p id={`${regionKey}-body-reason`} className="t-body-sm">
+              {draftBodyReason}
+            </p>
+          )}
+        </div>
+      )}
       {error && (
         <p
           role="alert"
@@ -437,34 +372,21 @@ export function ActDraft({
         </p>
       )}
       {revoked && (
-        <p
-          role="status"
-          data-act-revoked
-          className="text-[14px] text-[var(--color-charcoal)]"
-        >
+        <p role="status" data-act-revoked className="text-[14px] text-[var(--color-charcoal)]">
           Who leads this project changed since this opened, so nothing was sent.
         </p>
       )}
-      {(mode === "save" || mode === "read-only") && (
-        <p
-          data-act-lead-first
-          className="text-[13px] text-[var(--color-mocha)]"
-        >
+      {(mode === 'save' || mode === 'read-only') && (
+        <p data-act-lead-first className="text-[13px] text-[var(--color-mocha)]">
           {`${capitalised(lead)} sees this first.`}
         </p>
       )}
-      {mode === "reading" && (
-        <p className="text-[13px] text-[var(--text-muted)]">
-          Loading who leads this project…
-        </p>
+      {mode === 'reading' && (
+        <p className="text-[13px] text-[var(--text-muted)]">Loading who leads this project…</p>
       )}
-      {(mode === "send" || mode === "save") && (
-        <DocumentActionGroup
-          surfaceKey="open-document"
-          regionKey={regionKey}
-          aria-label={sendLabel}
-        >
-          {mode === "send" ? (
+      {(mode === 'send' || mode === 'save') && (
+        <DocumentActionGroup surfaceKey="open-document" regionKey={regionKey} aria-label={sendLabel}>
+          {mode === 'send' ? (
             <DocumentAction
               actionKey={`${regionKey}-send`}
               variant="primary"
@@ -473,9 +395,7 @@ export function ActDraft({
               holds={holds}
               aria-describedby={draftReasonIds}
               loading={pending}
-              loadingLabel={
-                regionKey === "act-release-order" ? "Approving…" : "Sending…"
-              }
+              loadingLabel={regionKey === 'act-release-order' ? 'Approving…' : 'Sending…'}
               onClick={() => void run(onSend, true)}
             >
               {sendLabel}
@@ -497,17 +417,13 @@ export function ActDraft({
           )}
         </DocumentActionGroup>
       )}
-      {(mode === "send" || mode === "save") && (
+      {(mode === 'send' || mode === 'save') && (
         // PQ16 — a send says "Still sending." (never "Nothing is sent twice.":
         // these sends are not proven idempotent, SQ-965 O4); a release or a
         // save is a write.
         <ActStillLine
           phase={phase}
-          act={
-            mode === "send" && regionKey !== "act-release-order"
-              ? "send"
-              : "write"
-          }
+          act={mode === 'send' && regionKey !== 'act-release-order' ? 'send' : 'write'}
         />
       )}
     </div>

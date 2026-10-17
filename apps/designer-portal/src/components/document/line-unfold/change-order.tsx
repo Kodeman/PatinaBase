@@ -1,24 +1,19 @@
-"use client";
+'use client';
 
-import { useId, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { PencilLine } from "lucide-react";
+import { useId, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { PencilLine } from 'lucide-react';
 import {
   useStartPurchaseOrderChange,
   type PurchaseOrderChangeKind,
   type StartPurchaseOrderChangeResult,
   type VendorMatch,
-} from "@patina/supabase";
-import type { LineAuthorization } from "@/lib/document/authorization-derivation";
-import { DocumentAction, DocumentActionGroup } from "../document-action";
-import { DocSheet } from "../overlays/doc-sheet";
-import { FIELD_CLS, LABEL_CLS } from "./cell";
-import {
-  MakerMatchLine,
-  MakerSearch,
-  useAddMaker,
-  type MakerOption,
-} from "./the-buy-cell";
+} from '@patina/supabase';
+import type { LineAuthorization } from '@/lib/document/authorization-derivation';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { DocSheet } from '../overlays/doc-sheet';
+import { FIELD_CLS, LABEL_CLS } from './cell';
+import { MakerMatchLine, MakerSearch, useAddMaker, type MakerOption } from './the-buy-cell';
 
 type FFERow = any;
 
@@ -26,30 +21,18 @@ type FFERow = any;
  * C-21 (D1-10): the kinds the Order cell offers. `new_scope` stays out — the
  * RPC takes it, but adding scope is the amendment's job.
  */
-export type OfferedChangeKind = Exclude<PurchaseOrderChangeKind, "new_scope">;
+export type OfferedChangeKind = Exclude<PurchaseOrderChangeKind, 'new_scope'>;
 
 export const CHANGE_KINDS: ReadonlyArray<{
   kind: OfferedChangeKind;
   label: string;
   hint: string;
 }> = [
-  { kind: "cancellation", label: "Cancel", hint: "Stop the order." },
-  {
-    kind: "credit",
-    label: "Credit",
-    hint: "The maker owes the studio money back.",
-  },
-  { kind: "claim", label: "Claim", hint: "It arrived wrong or damaged." },
-  {
-    kind: "vendor_change",
-    label: "Change the maker",
-    hint: "Order it from a different maker.",
-  },
-  {
-    kind: "remedy",
-    label: "Remedy",
-    hint: "The maker puts it right — a replacement or a repair.",
-  },
+  { kind: 'cancellation', label: 'Cancel', hint: 'Stop the order.' },
+  { kind: 'credit', label: 'Credit', hint: 'The maker owes the studio money back.' },
+  { kind: 'claim', label: 'Claim', hint: 'It arrived wrong or damaged.' },
+  { kind: 'vendor_change', label: 'Change the maker', hint: 'Order it from a different maker.' },
+  { kind: 'remedy', label: 'Remedy', hint: 'The maker puts it right — a replacement or a repair.' },
 ];
 
 /** The server's own rule (00449): fewer than 5 characters is refused. */
@@ -61,8 +44,8 @@ export const MIN_REASON = 5;
  * remedy ship first (direction §7 C-21).
  */
 export const PRICE_BEARING: ReadonlySet<OfferedChangeKind> = new Set([
-  "credit",
-  "vendor_change",
+  'credit',
+  'vendor_change',
 ]);
 
 /**
@@ -73,28 +56,26 @@ export const PRICE_BEARING: ReadonlySet<OfferedChangeKind> = new Set([
  */
 export function poRebuildable(po: FFERow): boolean {
   return (
-    po?.status === "draft" &&
+    po?.status === 'draft' &&
     !po.sent_at &&
     !po.acknowledged_at &&
-    !(po.payments ?? []).some((p: { state?: string }) => p.state === "paid")
+    !(po.payments ?? []).some((p: { state?: string }) => p.state === 'paid')
   );
 }
 
 function lockedClause(po: FFERow): string {
-  if (po?.sent_at) return "This PO was sent";
-  if (po?.acknowledged_at) return "This PO was acknowledged";
-  if (
-    (po?.payments ?? []).some((p: { state?: string }) => p.state === "paid")
-  ) {
-    return "This PO has a payment recorded";
+  if (po?.sent_at) return 'This PO was sent';
+  if (po?.acknowledged_at) return 'This PO was acknowledged';
+  if ((po?.payments ?? []).some((p: { state?: string }) => p.state === 'paid')) {
+    return 'This PO has a payment recorded';
   }
-  return "This PO is past draft";
+  return 'This PO is past draft';
 }
 
-const RECORD_NOUN: Record<"credit" | "claim" | "remedy", string> = {
-  credit: "credit",
-  claim: "claim",
-  remedy: "remedy",
+const RECORD_NOUN: Record<'credit' | 'claim' | 'remedy', string> = {
+  credit: 'credit',
+  claim: 'claim',
+  remedy: 'remedy',
 };
 
 /** The one consequence sentence the sheet states before the change is made. */
@@ -103,16 +84,16 @@ export function changeConsequence(
   po: FFERow,
   vendorName: string,
 ): string {
-  if (kind === "cancellation" || kind === "vendor_change") {
+  if (kind === 'cancellation' || kind === 'vendor_change') {
     if (poRebuildable(po)) {
-      return kind === "cancellation"
-        ? "The PO is unsent and unpaid, so it will be cancelled and its lines go back to ready to order."
-        : "The PO is unsent and unpaid, so it will be rebuilt for the new maker and priced again before it goes out.";
+      return kind === 'cancellation'
+        ? 'The PO is unsent and unpaid, so it will be cancelled and its lines go back to ready to order.'
+        : 'The PO is unsent and unpaid, so it will be rebuilt for the new maker and priced again before it goes out.';
     }
     return `${lockedClause(po)}, so it stands as it is. The change is kept on its record — tell ${vendorName} in writing.`;
   }
   return `The PO stays as it is. The ${RECORD_NOUN[kind]} is kept on its record${
-    po?.sent_at ? ` — tell ${vendorName} in writing.` : "."
+    po?.sent_at ? ` — tell ${vendorName} in writing.` : '.'
   }`;
 }
 
@@ -124,18 +105,15 @@ export type ChangeGate = { held: false } | { held: true; reason: string };
  * the client re-approves. The client decision rail cannot carry a PO change
  * yet (P2-11), so a held change says why and stops there.
  */
-export function changeGate(
-  kind: OfferedChangeKind,
-  auth: LineAuthorization,
-): ChangeGate {
+export function changeGate(kind: OfferedChangeKind, auth: LineAuthorization): ChangeGate {
   if (!PRICE_BEARING.has(kind)) return { held: false };
-  if (auth.track === "authorized") {
+  if (auth.track === 'authorized') {
     return {
       held: true,
       reason: `This needs the client's yes. They signed for this line on authorization № ${auth.number}, so a price change is a change order they approve first.`,
     };
   }
-  if (auth.track === "awaiting") {
+  if (auth.track === 'awaiting') {
     return {
       held: true,
       reason: `This line is on authorization № ${auth.number}, which is with the client. Void & supersede it to change the price.`,
@@ -147,16 +125,16 @@ export function changeGate(
 /** The quiet confirmation (R51), read off the RPC's own answer. */
 export function changeConfirmation(
   kind: OfferedChangeKind,
-  result: Pick<StartPurchaseOrderChangeResult, "rebuildable">,
+  result: Pick<StartPurchaseOrderChangeResult, 'rebuildable'>,
   makerName?: string | null,
 ): string {
-  if (result.rebuildable && kind === "cancellation") {
-    return "Cancelled. Its lines are back to ready to order.";
+  if (result.rebuildable && kind === 'cancellation') {
+    return 'Cancelled. Its lines are back to ready to order.';
   }
-  if (result.rebuildable && kind === "vendor_change") {
-    return `Rebuilt for ${makerName ?? "the new maker"}. Price the new PO before it goes out.`;
+  if (result.rebuildable && kind === 'vendor_change') {
+    return `Rebuilt for ${makerName ?? 'the new maker'}. Price the new PO before it goes out.`;
   }
-  return "Kept on the PO’s change history.";
+  return 'Kept on the PO’s change history.';
 }
 
 /** Exported for the Record a change router's `On a piece` destination (D5),
@@ -181,11 +159,11 @@ export function ChangeOrderSheet({
   poLabel: string;
 }) {
   const qc = useQueryClient();
-  const startChange = useStartPurchaseOrderChange({ errorSurface: "inline" });
+  const startChange = useStartPurchaseOrderChange({ errorSurface: 'inline' });
   const addMaker = useAddMaker();
   // D9/F6-4: the sheet opens with nothing chosen.
   const [kind, setKind] = useState<OfferedChangeKind | null>(null);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [maker, setMaker] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<string | null>(null);
@@ -196,19 +174,15 @@ export function ChangeOrderSheet({
 
   // F6-4: held with its own reason until a kind is chosen.
   const gate: ChangeGate =
-    kind === null
-      ? { held: true, reason: "Choose what changed." }
-      : changeGate(kind, auth);
+    kind === null ? { held: true, reason: 'Choose what changed.' } : changeGate(kind, auth);
   const pending = startChange.isPending || addMaker.isPending;
   const missing =
-    kind === null ||
-    reason.trim().length < MIN_REASON ||
-    (kind === "vendor_change" && !maker);
+    kind === null || reason.trim().length < MIN_REASON || (kind === 'vendor_change' && !maker);
 
   const chooseMaker = (option: MakerOption | VendorMatch) => {
     setError(null);
     let resolve: Promise<VendorMatch | null>;
-    if ("id" in option) {
+    if ('id' in option) {
       addMaker.clearMatch();
       resolve = Promise.resolve({ id: option.id, name: option.name });
     } else {
@@ -219,16 +193,12 @@ export function ChangeOrderSheet({
         // A match waits on "Use it".
         if (!vendor) return;
         if (vendor.id === po.vendor_id) {
-          setError(
-            `${vendor.name} already makes this order — pick a different maker.`,
-          );
+          setError(`${vendor.name} already makes this order — pick a different maker.`);
           return;
         }
         setMaker(vendor);
       })
-      .catch((e: Error) =>
-        setError(e.message || "The maker could not be found."),
-      );
+      .catch((e: Error) => setError(e.message || 'The maker could not be found.'));
   };
 
   const submit = async () => {
@@ -241,14 +211,14 @@ export function ChangeOrderSheet({
         changeKind: kind,
         reason,
         selectionId: item.id,
-        replacementVendorId: kind === "vendor_change" ? maker?.id : null,
+        replacementVendorId: kind === 'vendor_change' ? maker?.id : null,
       });
       // One act, many surfaces (§5): line, Orders book, Desk.
-      void qc.invalidateQueries({ queryKey: ["document-state"] });
+      void qc.invalidateQueries({ queryKey: ['document-state'] });
       setConfirmed(changeConfirmation(kind, result, maker?.name));
-      setReason("");
+      setReason('');
     } catch (e) {
-      setError((e as Error).message || "The change could not be recorded.");
+      setError((e as Error).message || 'The change could not be recorded.');
     }
   };
 
@@ -266,16 +236,9 @@ export function ChangeOrderSheet({
           <legend className={LABEL_CLS}>What changed</legend>
           <div className="mt-1.5 space-y-1">
             {CHANGE_KINDS.map((k, i) => (
-              <label
-                key={k.kind}
-                className="flex items-baseline gap-2 text-[12px]"
-              >
+              <label key={k.kind} className="flex items-baseline gap-2 text-[12px]">
                 <input
-                  ref={
-                    (kind === null ? i === 0 : kind === k.kind)
-                      ? checkedKindRef
-                      : undefined
-                  }
+                  ref={(kind === null ? i === 0 : kind === k.kind) ? checkedKindRef : undefined}
                   type="radio"
                   name={kindName}
                   value={k.kind}
@@ -288,15 +251,13 @@ export function ChangeOrderSheet({
                   }}
                 />
                 <span className="text-[var(--color-charcoal)]">{k.label}</span>
-                <span className="text-[11px] text-[var(--text-muted)]">
-                  {k.hint}
-                </span>
+                <span className="text-[11px] text-[var(--text-muted)]">{k.hint}</span>
               </label>
             ))}
           </div>
         </fieldset>
 
-        {kind === "vendor_change" && (
+        {kind === 'vendor_change' && (
           <div>
             <p className={LABEL_CLS}>New maker</p>
             {maker ? (
@@ -312,17 +273,9 @@ export function ChangeOrderSheet({
               </p>
             ) : (
               <div className="mt-1 border-b border-[var(--color-pearl)] py-1">
-                <MakerSearch
-                  disabled={pending}
-                  autoFocus
-                  onChoose={chooseMaker}
-                />
+                <MakerSearch disabled={pending} autoFocus onChoose={chooseMaker} />
                 {addMaker.match && (
-                  <MakerMatchLine
-                    match={addMaker.match}
-                    disabled={pending}
-                    onUse={chooseMaker}
-                  />
+                  <MakerMatchLine match={addMaker.match} disabled={pending} onUse={chooseMaker} />
                 )}
               </div>
             )}
@@ -342,10 +295,7 @@ export function ChangeOrderSheet({
         </label>
 
         {kind !== null && (
-          <p
-            data-testid="po-change-consequence"
-            className="text-[12px] text-[var(--color-charcoal)]"
-          >
+          <p data-testid="po-change-consequence" className="text-[12px] text-[var(--color-charcoal)]">
             {changeConsequence(kind, po, vendorName)}
           </p>
         )}
@@ -368,20 +318,13 @@ export function ChangeOrderSheet({
         )}
         {error && (
           // R83: inline at the act.
-          <p
-            role="alert"
-            className="text-[11px] text-[var(--color-terracotta-ink)]"
-          >
+          <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
             {error}
           </p>
         )}
 
         <DocumentActionGroup surfaceKey="project" regionKey="po-change">
-          <DocumentAction
-            actionKey="put-back-po-change"
-            variant="tertiary"
-            onClick={onClose}
-          >
+          <DocumentAction actionKey="put-back-po-change" variant="tertiary" onClick={onClose}>
             Put back
           </DocumentAction>
           <DocumentAction
@@ -391,14 +334,19 @@ export function ChangeOrderSheet({
             held={gate.held}
             holds={
               gate.held
-                ? [
-                    {
-                      id: heldId,
-                      target: () => document.getElementById(heldId),
-                      label: "Change order",
-                      reason: gate.reason,
-                    },
-                  ]
+                ? [kind === null
+                    ? {
+                        id: 'po-change-kind',
+                        target: () => document.getElementById('po-change-kind-fix'),
+                        label: 'What changed',
+                        reason: gate.reason,
+                      }
+                    : {
+                        id: heldId,
+                        target: () => document.getElementById(heldId),
+                        label: 'Change order',
+                        reason: gate.reason,
+                      }]
                 : undefined
             }
             aria-describedby={gate.held ? heldId : undefined}
