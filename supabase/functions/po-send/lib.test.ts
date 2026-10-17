@@ -8,7 +8,16 @@
 
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import { comArrivingSeparately, poLineRoomLabel } from "./lib.ts";
-import { poQuantityLabel } from "../_shared/po-pdf.ts";
+import { poLineItemLabel, poQuantityLabel } from "../_shared/po-pdf.ts";
+
+Deno.test("PO line labels lead the item name when present", () => {
+  assertEquals(poLineItemLabel("Linen sofa", "LR-01"), "LR-01 · Linen sofa");
+});
+
+Deno.test("PO lines without a label preserve the existing item name", () => {
+  assertEquals(poLineItemLabel("Linen sofa"), "Linen sofa");
+  assertEquals(poLineItemLabel("Linen sofa", "  "), "Linen sofa");
+});
 
 const WALLPAPER = { id: "line-wallpaper", spec: {} };
 const INSTALLER_PO = { id: "po-2001", po_number: "PO-2001", vendor: { name: "Hang Right" } };

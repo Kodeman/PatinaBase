@@ -4,8 +4,9 @@
  * hands it the name (an object reached generateSidemark's `.split` and crashed).
  */
 
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+const mockSetLabel = jest.fn();
 const mockOrderPaper = jest.fn();
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -16,6 +17,8 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 jest.mock('@patina/supabase', () => ({
+  useSetFfeItemLabel: () => ({ mutateAsync: mockSetLabel, isPending: false }),
+  itemLabelRefusal: (message: string) => message.includes('already uses') ? message : null,
   useVendorQuotes: () => ({ data: [] }),
   useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUpdatePurchaseOrderETA: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -68,6 +71,7 @@ import { LineUnfold } from '../line-unfold';
 
 const item = {
   id: 'line-1',
+  doc_code: 'LR-01',
   name: 'Roman shades, six windows',
   quantity: 6,
   status: 'specified',
@@ -98,7 +102,88 @@ const renderUnfold = (room: unknown) =>
     />,
   );
 
-beforeEach(() => mockOrderPaper.mockReset());
+beforeEach(() => {
+  mockOrderPaper.mockReset();
+  mockSetLabel.mockReset();
+});
+
+it('reverts Escape without committing the abandoned draft', async () => {
+  renderUnfold({ id: 'room-living', name: 'Living Room' });
+  const input = screen.getByRole('textbox', { name: 'Item label' });
+  input.focus();
+  fireEvent.change(input, { target: { value: 'LR-99' } });
+  fireEvent.keyDown(input, { key: 'Escape' });
+  fireEvent.blur(input);
+  expect(input).toHaveValue('LR-01');
+  expect(mockSetLabel).not.toHaveBeenCalled();
+});
+
+it('commits a changed label on blur', async () => {
+  mockSetLabel.mockResolvedValue({ doc_code: 'LR-03' });
+  renderUnfold({ id: 'room-living', name: 'Living Room' });
+  const input = screen.getByRole('textbox', { name: 'Item label' });
+  fireEvent.change(input, { target: { value: 'LR-03' } });
+  fireEvent.blur(input);
+  await waitFor(() => expect(mockSetLabel).toHaveBeenCalledWith({
+    projectId: 'project-1', itemId: 'line-1', label: 'LR-03',
+  }));
+});
+
+it('keeps focus after Enter commits the label', async () => {
+  mockSetLabel.mockResolvedValue({ doc_code: 'LR-03' });
+  renderUnfold({ id: 'room-living', name: 'Living Room' });
+  const input = screen.getByRole('textbox', { name: 'Item label' });
+  fireEvent.change(input, { target: { value: 'LR-03' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(mockSetLabel).toHaveBeenCalled());
+  await waitFor(() => expect(input).toHaveFocus());
+});
+
+it('keeps the label status region mounted before a refusal', () => {
+  renderUnfold({ id: 'room-living', name: 'Living Room' });
+  expect(screen.getByRole('status')).toBeEmptyDOMElement();
+});
+
+it('keeps focus and exposes an accessible refusal after Enter', async () => {
+  mockSetLabel.mockRejectedValue(new Error('Another item in this job already uses LR-02.'));
+  renderUnfold({ id: 'room-living', name: 'Living Room' });
+  const input = screen.getByRole('textbox', { name: 'Item label' });
+  fireEvent.change(input, { target: { value: 'LR-02' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  const status = await screen.findByRole('status');
+  await waitFor(() => expect(input).toHaveFocus());
+  expect(input).toHaveAttribute('aria-invalid', 'true');
+  expect(input).toHaveAttribute('aria-describedby', status.id);
+});
+
+it.each([null, '   '])('omits an empty document label (%s) from detail', (doc_code) => {
+  render(<LineUnfold item={{ ...item, doc_code }} projectId="project-1" projectName="Ellsworth" onAddNote={jest.fn()} onFold={jest.fn()} />);
+  expect(screen.getByRole('textbox', { name: 'Item label' })).toHaveValue(doc_code ?? '');
+  expect(screen.queryByText(/^LR-01$/)).not.toBeInTheDocument();
+});
+
+it('shows the per-job label and commits edits through the FFE label writer', async () => {
+  mockSetLabel.mockResolvedValue({ doc_code: 'LR-03' });
+  renderUnfold({ id: 'room-living', name: 'Living Room' });
+  const input = screen.getByRole('textbox', { name: 'Item label' });
+  expect(input).toHaveValue('LR-01');
+  fireEvent.change(input, { target: { value: 'LR-03' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(mockSetLabel).toHaveBeenCalledWith({
+    projectId: 'project-1', itemId: 'line-1', label: 'LR-03',
+  }));
+});
+
+it('shows the duplicate-label refusal on the detail status line', async () => {
+  mockSetLabel.mockRejectedValue(new Error('Another item in this job already uses LR-02.'));
+  renderUnfold({ id: 'room-living', name: 'Living Room' });
+  const input = screen.getByRole('textbox', { name: 'Item label' });
+  fireEvent.change(input, { target: { value: 'LR-02' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Another item in this job already uses LR-02.',
+  );
+});
 
 describe('LineUnfold · the order paper’s room (T-60j F19)', () => {
   it('hands the paper the room name, not the {id, name} join', () => {

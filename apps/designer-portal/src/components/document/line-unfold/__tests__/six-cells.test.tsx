@@ -9,6 +9,8 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useSetFfeItemLabel: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  itemLabelRefusal: () => null,
   useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUpdatePurchaseOrderETA: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUpdatePurchaseOrderStatus: () => ({ mutateAsync: jest.fn(), isPending: false }),

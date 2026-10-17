@@ -613,10 +613,10 @@ function FFELine({
             }}
           />
         )}
-        <div>
-          <p className="row-wash-score text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
-            {item.name}
-            {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
+        <div className="min-w-0 flex-1">
+          <p className="row-wash-score flex flex-wrap items-baseline gap-x-2 text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
+            {item.doc_code?.trim() && <span className="t-meta break-words font-normal text-[var(--color-clay-ink)]">{item.doc_code}</span>}
+            <span className="break-words">{item.name}{item.quantity > 1 ? ` · ×${item.quantity}` : ''}</span>
           </p>
           {line && (
             <p className="mt-px text-[11px] text-[var(--text-muted)]">{line}</p>

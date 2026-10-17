@@ -150,6 +150,7 @@ interface PoRow {
 interface FfeItemRow {
   id: string;
   name: string;
+  doc_code: string | null;
   quantity: number | null;
   /** What the quantity counts (00729): each, sq_ft, lin_ft, roll, yard, box, hour, lot. */
   unit: string | null;
@@ -305,7 +306,7 @@ Deno.serve(async (req: Request) => {
     .from('project_ffe_items')
     .select(
       `
-      id, name, quantity, unit, trade_price_cents, unit_price_cents, notes,
+      id, name, doc_code, quantity, unit, trade_price_cents, unit_price_cents, notes,
       ffe_category, line_kind, link_kind,
       room:project_rooms!project_room_id(id, name),
       placements:project_ffe_placements!ffe_item_id(
@@ -492,6 +493,7 @@ Deno.serve(async (req: Request) => {
     ];
     return {
       name: item.name,
+      docCode: item.doc_code,
       room: poLineRoomLabel(item.room?.name ?? null, item.placements, item.unit),
       quantity,
       unit: item.unit,
