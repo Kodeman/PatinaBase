@@ -254,6 +254,11 @@ export interface HouseholdSheetProps {
   /** US-35 — opened from the invoice composer's Link a client act, so the
    *  sheet (and its picker's popover) must lay above the composer folio. */
   aboveFolio?: boolean;
+  /** US-36 K10 — opened by the invoice folio's held Send ("Add their email"):
+   *  straight into EDIT, with focus on the email field. */
+  landOnEmail?: boolean;
+  /** Where focus returns on close when the opener has unmounted meanwhile. */
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 }
 
 /** set_document_client (00387) only lets the engagement's lead designer link
@@ -281,25 +286,28 @@ export function HouseholdSheet({
   startEditing = false,
   landOnRepair = false,
   aboveFolio = false,
+  landOnEmail = false,
+  fallbackFocusRef,
 }: HouseholdSheetProps) {
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const contentRef = useRef<HTMLDivElement>(null);
   const inviteRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  // FR4 Fix 7 — the repair lands on its control. The control can arrive a
-  // render or two after the sheet (the household and the letter state are
-  // reads), so watch the sheet until it does; DocSheet's own focus frame,
-  // queued first, has already run by then.
+  // FR4 Fix 7 — the repair lands on its control (K10: the email field). The
+  // control can arrive a render or two after the sheet (the household and the
+  // letter state are reads), so watch the sheet until it does; DocSheet's own
+  // focus frame, queued first, has already run by then.
   useEffect(() => {
     const root = contentRef.current;
-    if (!open || !oneVoice || !landOnRepair || !root) return;
+    if (!open || !((oneVoice && landOnRepair) || landOnEmail) || !root) return;
     let landed = false;
     const tryLand = () => {
       if (landed) return;
-      const target =
-        inviteRef.current?.querySelector<HTMLElement>('button') ??
-        pickerRef.current?.querySelector<HTMLElement>('button, input') ??
-        null;
+      const target = landOnEmail
+        ? root.querySelector<HTMLElement>('#household-email')
+        : (inviteRef.current?.querySelector<HTMLElement>('button') ??
+          pickerRef.current?.querySelector<HTMLElement>('button, input') ??
+          null);
       if (!target) return;
       landed = true;
       observer.disconnect();
@@ -312,7 +320,7 @@ export function HouseholdSheet({
       landed = true;
       observer.disconnect();
     };
-  }, [open, oneVoice, landOnRepair]);
+  }, [open, oneVoice, landOnRepair, landOnEmail]);
   const { data: rel } = useDesignerClientForClientUser(
     clientProfileId ?? undefined,
   );
@@ -322,6 +330,7 @@ export function HouseholdSheet({
   const updateContact = useUpdateClientContact();
 
   const hasProfile = !!client?.client_id || !!client?.client;
+  const profileHasEmail = !!client?.client?.email;
   const name = client?.client?.full_name ?? client?.client_name ?? clientName;
   const email = client?.client?.email ?? client?.client_email ?? null;
   const phone = client?.client?.phone ?? client?.client_phone ?? null;
@@ -346,7 +355,7 @@ export function HouseholdSheet({
     proposalStatus !== 'draft';
   const canChange = !!attachTarget && !proposalLocked;
 
-  const [editing, setEditing] = useState(startEditing);
+  const [editing, setEditing] = useState(startEditing || landOnEmail);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -383,7 +392,11 @@ export function HouseholdSheet({
   const saveDetails = () => {
     if (!client) return;
     const updates = hasProfile
-      ? { notes: form.notes || null }
+      ? {
+          notes: form.notes || null,
+          // K10 — invoice-send falls back to this address when the account has none.
+          ...(profileHasEmail ? {} : { client_email: form.email.trim() || null }),
+        }
       : {
           client_name: form.name.trim() || null,
           client_email: form.email.trim() || null,
@@ -396,8 +409,33 @@ export function HouseholdSheet({
     );
   };
 
+  const emailField = (
+        <div className="flex flex-col gap-1.5">
+          <label className={labelCls} htmlFor="household-email">
+            Email on file
+          </label>
+          <input
+            id="household-email"
+            type="email"
+            autoComplete="off"
+            value={form.email}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, email: e.target.value }))
+            }
+            placeholder="client@email.com"
+            className={fieldCls}
+          />
+        </div>
+  );
+
   return (
-    <DocSheet open={open} onClose={onClose} title="The household" aboveFolio={aboveFolio}>
+    <DocSheet
+      open={open}
+      onClose={onClose}
+      title="The household"
+      aboveFolio={aboveFolio}
+      fallbackFocusRef={fallbackFocusRef}
+    >
       <div ref={contentRef} className="mx-auto max-w-xl">
         <p className={labelCls}>The household</p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
@@ -506,10 +544,14 @@ export function HouseholdSheet({
             ) : (
               <div className="space-y-4">
                 {hasProfile ? (
-                  <p className="text-[11.5px] italic leading-relaxed text-[var(--color-aged-oak)]">
-                    {name}&rsquo;s name, email, and phone are managed in their
-                    Patina account. You can keep your own notes here.
-                  </p>
+                  <>
+                    <p className="text-[11.5px] italic leading-relaxed text-[var(--color-aged-oak)]">
+                      {profileHasEmail
+                        ? <>{name}&rsquo;s name, email, and phone are managed in their Patina account. You can keep your own notes here.</>
+                        : <>{name}&rsquo;s Patina account carries no email. Add one here to send them invoices; their name and phone stay with the account.</>}
+                    </p>
+                    {!profileHasEmail && emailField}
+                  </>
                 ) : (
                   <>
                     <div className="flex flex-col gap-1.5">
@@ -526,22 +568,7 @@ export function HouseholdSheet({
                         className={fieldCls}
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className={labelCls} htmlFor="household-email">
-                        Email on file
-                      </label>
-                      <input
-                        id="household-email"
-                        type="email"
-                        autoComplete="off"
-                        value={form.email}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, email: e.target.value }))
-                        }
-                        placeholder="client@email.com"
-                        className={fieldCls}
-                      />
-                    </div>
+                    {emailField}
                     <div className="flex flex-col gap-1.5">
                       <label className={labelCls} htmlFor="household-phone">
                         Phone on file
