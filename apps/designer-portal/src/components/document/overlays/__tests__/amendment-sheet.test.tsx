@@ -27,7 +27,7 @@ jest.mock('@/hooks/use-amendments', () => ({
 
 jest.mock('../doc-sheet', () => ({
   DocSheet: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
-    open ? <div data-testid="doc-sheet">{children}</div> : null,
+    open ? <div data-testid="doc-sheet" data-spotlight-frame="true">{children}</div> : null,
 }));
 
 jest.mock('../household-sheet', () => ({
@@ -79,6 +79,16 @@ describe('AmendmentSheet — F5 (US-19 FR1)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Link a client' }));
     expect(screen.getByTestId('household-sheet')).toBeInTheDocument();
+  });
+
+  it('windows the in-frame Link a client repair when held Send is pressed', async () => {
+    renderSheet();
+    fillCompose();
+    const send = screen.getByRole('button', { name: 'Send to the client' });
+    const fix = screen.getByRole('button', { name: 'Link a client' });
+    fireEvent.click(send);
+    await screen.findByRole('status');
+    expect(document.querySelector(`[data-hold-spotlight-window="${fix.id}"]`)).toBeInTheDocument();
   });
 
   it('offers Send plainly once a client is linked through the canonical relationship', () => {

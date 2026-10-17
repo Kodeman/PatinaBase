@@ -230,11 +230,9 @@ export function OutboundDraftReview({
               variant="primary"
               held={!recipient || !canSend}
               aria-describedby={
-                !ready || !canSend
-                  ? `${fieldId}-lead`
-                  : recipient
-                    ? undefined
-                    : `${fieldId}-no-address`
+                !canSend || !recipient
+                  ? `${fieldId}-send-hold-reason`
+                  : undefined
               }
               disabled={pending || !ready || !canSend || !recipient || blank}
               loading={sending || (!ink && update.isPending)}
@@ -273,18 +271,15 @@ export function OutboundDraftReview({
               Discard draft
             </DocumentAction>
           </div>
-          {!ready ? (
-            <p id={`${fieldId}-lead`} className="text-[11px] text-[var(--text-muted)]">
-              Loading who leads this project…
-            </p>
-          ) : !canSend ? (
-            <p id={`${fieldId}-lead`} className="text-[11px] text-[var(--text-muted)]">
-              {`${lead} sees this first.`}
-            </p>
-          ) : null}
-          {!recipient && (
-            <p id={`${fieldId}-no-address`} className="text-[11px] text-[var(--text-muted)]">
-              No address on file.
+          {(!ready || !canSend || !recipient) && (
+            <p id={`${fieldId}-send-hold-reason`} className="text-[11px] text-[var(--text-muted)]">
+              {!ready
+                ? 'Loading who leads this project…'
+                : !recipient && !canSend
+                  ? `No address on file. ${lead} sees this first.`
+                  : !recipient
+                    ? 'No address on file.'
+                    : `${lead} sees this first.`}
             </p>
           )}
           {saved && (

@@ -702,15 +702,17 @@ export function LetterheadInstruments({
                   <span className="px-[6px] text-[11.5px] leading-tight text-[var(--text-muted)]">
                     “<span ref={askNoteRef}>{askNote}</span>”
                   </span>
-                  <CopyAct
-                    text={askNote}
-                    selectRef={askNoteRef}
-                    actionKey="copy-link-client-note"
-                    surfaceKey="open-document"
-                    regionKey="letterhead-actions"
-                  >
-                    Copy a note
-                  </CopyAct>
+                  <span id={`${messageReasonId}-fix`}>
+                    <CopyAct
+                      text={askNote}
+                      selectRef={askNoteRef}
+                      actionKey="copy-link-client-note"
+                      surfaceKey="open-document"
+                      regionKey="letterhead-actions"
+                    >
+                      Copy a note
+                    </CopyAct>
+                  </span>
                 </span>
               ) : null
             }
@@ -732,6 +734,7 @@ export function LetterheadInstruments({
               }
               disabled={messageHeld}
               held={messageHeld}
+              holdFix={messageHeld && (withheld.repair || askLead) ? `${messageReasonId}-fix` : undefined}
               aria-describedby={messageHeld ? messageReasonId : undefined}
               onClick={toggleComposer}
             >
@@ -948,7 +951,7 @@ function MessageCluster({
         </span>
       </span>
       {repair && (
-        <DocumentAction actionKey="link-client" variant="secondary" onClick={onRepair}>
+        <DocumentAction id={`${reasonId}-fix`} actionKey="link-client" variant="secondary" onClick={onRepair}>
           {repair}
         </DocumentAction>
       )}
