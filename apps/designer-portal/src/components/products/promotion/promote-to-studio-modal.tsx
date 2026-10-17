@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { Button, IconButton, Textarea } from '@/components/ui/controls';
 import {
@@ -488,10 +488,16 @@ function Field({
   prefillSource?: string;
   children: React.ReactNode;
 }) {
+  const id = useId();
+  const control = isValidElement<{ id?: string }>(children)
+    ? cloneElement(children, { id })
+    : children;
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
         <label
+          htmlFor={id}
           className="type-meta-small"
           style={{
             color: 'var(--text-muted)',
@@ -511,7 +517,7 @@ function Field({
         </label>
         {prefilled && prefillSource && <PrefilledChip source={prefillSource} />}
       </div>
-      {children}
+      {control}
       {hint && (
         <p className="type-meta-small" style={{ color: 'var(--text-muted)' }}>
           {hint}
