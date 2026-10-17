@@ -24,6 +24,7 @@ import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { ActFailLine } from '@/components/feedback/act-fail-line';
 import { StrataMark } from '../strata-mark';
 import { monogramOf } from '@/lib/document/account-identity';
+import { AccountPricingSection } from './account-pricing-section';
 
 const FIELD =
   'w-full max-w-md border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[14px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
@@ -202,6 +203,13 @@ export function AccountProfilePage() {
           retryKey="retry-save-profile"
         />
       </div>
+
+      <div className="my-6">
+        <StrataMark size="sm" />
+      </div>
+
+      {/* US-37 #4 — her default markups, by line kind. */}
+      <AccountPricingSection />
 
       <div className="my-6">
         <StrataMark size="sm" />
