@@ -11477,7 +11477,7 @@ F5: the count is the number of hours whose `rate_source` this call moved off 'no
 
 **Open, inherited and outside US-36 (F4).** P-4 is not whole for priced hours. Suppose a rate is later backdated over a priced hour's `started_at`. The hour's next watched edit then re-prices it, and a duration correction is enough. SQ-1079 measured a K8 price of 15000 becoming 7000 this way. The cause is 00618's delta 5, which keeps a snapshot only when the chain answers 'none' or the row is pre-00600 legacy. It applies to every hour priced at a studio member rate, not only K8's. 00797 does not change it. The K8 test claims only that an edit keeps the K8 price while `started_at` still answers 'none'. Owed: a ruling on whether a backdated rate may ever reach an hour that is already priced.
 
-### R179 · The job label lock is taken at the outermost entry, before any row a holder can also lock — SQ-1137 2026-10-17
+### R182 · The job label lock is taken at the outermost entry, before any row a holder can also lock — SQ-1137 2026-10-17
 
 **Rule (US-37 #3, 00808, repairing review SQ-1135).** Item labels are assigned under one lock per job, `_ffe_lock_job_labels(project_id)`: the job's projects row FOR KEY SHARE, then `pg_advisory_xact_lock(hashtext('ffe_label:' || project_id))`. A transaction that writes an item in a way that reaches the label trigger takes that lock FIRST in the whole transaction, not first inside the inner path. The trigger writes are an insert, a restore, an un-supersede, a move to another job, and a relabel. So the lock goes at the outermost public entry. A caller that locks a row and only then calls a path that takes the job lock first still runs row → job lock, against a holder that runs job lock → that row, and one of the two aborts with 40P01.
 
@@ -11487,4 +11487,4 @@ F5: the count is the number of hours whose `rate_source` this call moved off 'no
 
 **Applied in 00808.** Section 8 (SQ-1121) covers restore, supersede, add labor, place v2, triage, the label writer and the decision core. Section 9 (SQ-1137) covers the outer callers `place_product_configuration_in_project`, `promote_board_reference_to_selection`, `apply_client_effect` (once, before the batch row and its decision loop; a batch is one job), `apply_client_decision`, `apply_decision`, `apply_decision_override` and `_resolve_coordination_item_authorized`. A later migration that redefines any of these grafts from 00808. A new path that locks a row and then writes an item follows this rule.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R179 · last id = R179 (R178 is SQ-1122's)*
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · last id = R182*
