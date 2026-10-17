@@ -111,6 +111,7 @@ import { ActFailLine } from "@/components/feedback/act-fail-line";
 import { openAccountPage } from "../account/open-account-page";
 import { CopyAct } from "../copy-act";
 import { AppError } from "@/lib/error-handler";
+import { OfflineRefusal } from "@/lib/react-query";
 import {
   EMPTY_ADHOC,
   STUDIO_TARGET,
@@ -331,6 +332,11 @@ export function InvoiceComposer({
       if (!parkingRef.current) unparkInvoiceComposer(parkedFor);
     };
   }, [context.projectId, parked]);
+  // F2 — a Draft press is one act; closing the composer retires it. Retired
+  // before the draft is written, nothing is written; after, its own steps
+  // still finish or clean up, but it never opens the folio.
+  const draftAct = useRef<AbortController | null>(null);
+  useEffect(() => () => draftAct.current?.abort(), []);
   // `retryable` is decided where the failure is caught: only a transient
   // failure before anything was written may be tried again (act-fail-line.tsx
   // §money writes). `gap` marks a billing-gap refusal, which clears itself once
@@ -1047,6 +1053,14 @@ export function InvoiceComposer({
   };
 
   const draft = async () => {
+    // F4 — every way in (Draft, Try again) answers to the same readiness.
+    if (!canDraft) {
+      if (blocker) setHeldBlocker(blocker);
+      return;
+    }
+    const act = new AbortController();
+    draftAct.current = act;
+    const live = () => !act.signal.aborted;
     setError(null);
     setRefusedLines(new Map());
 
@@ -1062,11 +1076,15 @@ export function InvoiceComposer({
             parseInt(termsDays, 10) >= 0 ? parseInt(termsDays, 10) : 15,
           memo: memo.trim() || undefined,
           lines,
+          signal: act.signal,
         });
-        onDrafted(studioInvoiceId, null);
+        if (live()) onDrafted(studioInvoiceId, null);
       } catch (e) {
+        if (!live()) return;
         setError(
-          draftInvoiceRefusal((e as { message?: unknown } | null)?.message),
+          e instanceof OfflineRefusal
+            ? { message: e.message, retryable: true }
+            : draftInvoiceRefusal((e as { message?: unknown } | null)?.message),
         );
       }
       return;
@@ -1083,13 +1101,17 @@ export function InvoiceComposer({
           parseInt(termsDays, 10) >= 0 ? parseInt(termsDays, 10) : 15,
         memo: memo.trim() || undefined,
         lines,
+        signal: act.signal,
       });
     } catch (e) {
+      if (!live()) return;
       // create_draft_invoice refuses in its own words; say it in the composer's.
       const failure: ReturnType<typeof preWriteFailure> =
         e instanceof InvoiceBillingGapError
           ? preWriteFailure(e)
-          : draftInvoiceRefusal((e as { message?: unknown } | null)?.message);
+          : e instanceof OfflineRefusal
+            ? { message: e.message, retryable: true }
+            : draftInvoiceRefusal((e as { message?: unknown } | null)?.message);
       if (failure.gap) {
         setBillingGapOverride({
           projectId,
@@ -1190,7 +1212,7 @@ export function InvoiceComposer({
       }
     }
 
-    onDrafted(invoice.id as string, projectId);
+    if (live()) onDrafted(invoice.id as string, projectId);
   };
 
   const skippedFfe = useMemo(() => {

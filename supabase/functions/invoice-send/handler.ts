@@ -238,11 +238,17 @@ export function createInvoiceSendHandler(deps: InvoiceSendDeps) {
     let recipientName: string | null = invoice.client?.full_name ?? null;
 
     if (!recipientEmail && clientUserId && clientUserId !== invoice.client_id) {
-      const { data: profile } = await admin
+      const { data: profile, error: profileError } = await admin
         .from('profiles')
         .select('full_name, email')
         .eq('id', clientUserId)
         .maybeSingle();
+      // A failed read is an unknown preferred address, not an absent one: it
+      // never falls back to an older one, and nothing issues.
+      if (profileError) {
+        console.error('invoice-send: recipient lookup failed', invoiceId, profileError.message);
+        return json({ error: 'lookup_failed' }, 500);
+      }
       recipientEmail = (profile as any)?.email ?? null;
       recipientName = (profile as any)?.full_name ?? recipientName;
     }

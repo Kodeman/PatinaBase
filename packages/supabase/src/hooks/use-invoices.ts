@@ -272,6 +272,8 @@ export interface CreateDraftInvoiceInput {
   memo?: string;
   internalNotes?: string;
   lines: DraftLineInput[];
+  /** The act's lifetime: aborted before create_draft_invoice runs, nothing is written. */
+  signal?: AbortSignal;
 }
 
 export interface CreateDraftStudioInvoiceInput {
@@ -286,6 +288,13 @@ export interface CreateDraftStudioInvoiceInput {
   memo?: string;
   /** Ad-hoc lines only (ruling S6); the RPC refuses every other kind. */
   lines: DraftLineInput[];
+  /** The act's lifetime: aborted before create_draft_studio_invoice runs, nothing is written. */
+  signal?: AbortSignal;
+}
+
+/** A draft act retired (its composer closed) while its reads were out. */
+function refuseRetiredDraft(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new Error('This draft was abandoned before it was written.');
 }
 
 export interface UpdateDraftInvoiceInput {
@@ -759,7 +768,10 @@ export class InvoiceBillingGapError extends Error {
 export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    // A money write: refused offline at the press, never paused into a draft
+    // on reconnect, and never retried by itself.
+    meta: { act: 'money', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
+    retry: false,
     mutationFn: async (input: CreateDraftInvoiceInput): Promise<Invoice> => {
       const supabase = getSupabase() as any;
 
@@ -798,6 +810,7 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
           sort_order: row.sort_order,
         };
       });
+      refuseRetiredDraft(input.signal);
       const { data: invoice, error: invErr } = await supabase.rpc(
         'create_draft_invoice',
         {
@@ -842,7 +855,9 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
 export function useCreateDraftStudioInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    // A money write, as useCreateDraftInvoice.
+    meta: { act: 'money', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
+    retry: false,
     mutationFn: async (input: CreateDraftStudioInvoiceInput): Promise<string> => {
       const supabase = getSupabase() as any;
 
@@ -862,6 +877,7 @@ export function useCreateDraftStudioInvoice(options?: { errorSurface?: 'inline' 
         };
       });
 
+      refuseRetiredDraft(input.signal);
       const { data: invoiceId, error } = await supabase.rpc(
         'create_draft_studio_invoice',
         {
@@ -1121,14 +1137,23 @@ export function useRecordPayment(options?: { errorSurface?: 'inline' }) {
  * A refused invoice-send, in the function's own words. `issued` is true when
  * a send-on-draft (`issue: true`) issued the draft before the letter failed,
  * and `invoiceNumber` is the number it took — the invoice is no longer a draft.
+ * `issueUnknown` is true when a send-on-draft got no answer in the function's
+ * own words (a lost request, a timeout, a 5xx that is not its JSON): the draft
+ * may have issued or not.
  */
 export class InvoiceSendError extends Error {
   readonly issued: boolean;
+  readonly issueUnknown: boolean;
   readonly invoiceNumber: string | null;
 
-  constructor(message: string, refusal?: { issued?: unknown; invoiceNumber?: unknown } | null) {
+  constructor(
+    message: string,
+    refusal?: { issued?: unknown; invoiceNumber?: unknown } | null,
+    issueUnknown = false,
+  ) {
     super(message);
     this.issued = refusal?.issued === true;
+    this.issueUnknown = !this.issued && issueUnknown;
     this.invoiceNumber = typeof refusal?.invoiceNumber === 'string' ? refusal.invoiceNumber : null;
   }
 }
@@ -1201,7 +1226,14 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
         } catch {
           /* fall through to the generic message */
         }
-        throw new InvoiceSendError(detail ?? error.message ?? 'Failed to send invoice', body);
+        // invoice-send refuses in JSON naming an `error`, saying `issued` once
+        // it has issued; any other answer says nothing about an issue.
+        const answered = typeof body?.error === 'string';
+        throw new InvoiceSendError(
+          detail ?? error.message ?? 'Failed to send invoice',
+          body,
+          !!issue && !answered,
+        );
       }
       if (data?.error) throw new InvoiceSendError(data.detail ?? data.error, data);
       return data;
@@ -1211,9 +1243,10 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
       queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
     // A send-on-draft that issued before the letter failed moved the invoice
-    // and its milestones as surely as a successful one.
+    // and its milestones as surely as a successful one; one whose answer was
+    // lost may have, so the folio re-reads to find out.
     onError: (error, { projectId, invoiceId }) => {
-      if (error instanceof InvoiceSendError && error.issued) {
+      if (error instanceof InvoiceSendError && (error.issued || error.issueUnknown)) {
         invalidateInvoiceEffects(queryClient, projectId, invoiceId);
         queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
       }

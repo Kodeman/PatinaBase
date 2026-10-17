@@ -509,6 +509,15 @@ export function InvoiceFolio({
         setAct(null);
         return;
       }
+      // F3 — no answer in the function's own words: it may have issued. The
+      // hook re-reads the invoice; the folio never says it did not.
+      if (e instanceof InvoiceSendError && e.issueUnknown) {
+        setNote(
+          'Could not tell whether this invoice issued — no answer came back. Check the folio before you send it again.',
+        );
+        setAct(null);
+        return;
+      }
       setNote(`Could not issue — ${e instanceof OfflineRefusal ? e.message : billingRefusal('send', e).sentence}`);
     }
   };

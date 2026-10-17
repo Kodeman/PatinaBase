@@ -51,6 +51,7 @@ import {
   type DraftLineInput,
   type FfeInvoiceCoverageMap,
   InvoiceCheckoutError,
+  InvoiceSendError,
 } from '../use-invoices';
 
 beforeEach(() => {
@@ -1218,5 +1219,121 @@ describe('useRegenerateInvoiceLink', () => {
     expect(config.onSuccess).toBeUndefined();
     expect(setQueryData).not.toHaveBeenCalled();
     expect(invalidatedKeys()).not.toContainEqual(['invoice-link', 'inv-1']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SQ-1262 — the draft writers as money acts; the send-on-draft whose answer is lost
+// ─────────────────────────────────────────────────────────────────────────────
+describe('SQ-1262 F1/F2: the draft writers', () => {
+  type ActConfig = {
+    meta?: { act?: string; errorSurface?: string };
+    retry?: unknown;
+    mutationFn: (input: any) => Promise<unknown>;
+  };
+
+  it.each([
+    ['useCreateDraftInvoice', useCreateDraftInvoice],
+    ['useCreateDraftStudioInvoice', useCreateDraftStudioInvoice],
+  ] as const)('%s is a money act the app refuses offline, and never retries itself', (_name, hook) => {
+    const legacy = hook() as unknown as ActConfig;
+    expect(legacy.meta?.act).toBe('money');
+    expect(legacy.retry).toBe(false);
+    const inline = hook({ errorSurface: 'inline' }) as unknown as ActConfig;
+    expect(inline.meta).toEqual({ act: 'money', errorSurface: 'inline' });
+    expect(inline.retry).toBe(false);
+  });
+
+  it('a project draft whose act was retired during its project read writes nothing', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'designer-a' } } });
+    const retired = new AbortController();
+    const single = vi.fn(async () => {
+      retired.abort();
+      return {
+        data: { id: 'project-a', designer_id: 'designer-a', client_id: 'client-a', studio_id: 'studio-a' },
+        error: null,
+      };
+    });
+    supabaseClient.from.mockReturnValue({ select: () => ({ eq: () => ({ single }) }) });
+
+    const config = useCreateDraftInvoice() as unknown as ActConfig;
+    await expect(
+      config.mutationFn({ projectId: 'project-a', lines: [], signal: retired.signal }),
+    ).rejects.toThrow('This draft was abandoned before it was written.');
+    expect(single).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it('a studio draft whose act was retired before its write writes nothing', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'member-a' } } });
+    const retired = new AbortController();
+    retired.abort();
+
+    const config = useCreateDraftStudioInvoice() as unknown as ActConfig;
+    await expect(
+      config.mutationFn({ clientId: 'household-a', studioId: 'studio-a', title: 'T', lines: [], signal: retired.signal }),
+    ).rejects.toThrow('This draft was abandoned before it was written.');
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('SQ-1262 F3: a send-on-draft whose answer is lost', () => {
+  type SendConfig = {
+    mutationFn: (vars: { invoiceId: string; projectId?: string; issue?: boolean }) => Promise<unknown>;
+    onError: (error: unknown, vars: { invoiceId: string; projectId?: string }) => void;
+  };
+  const vars = { invoiceId: 'inv-1', projectId: 'proj-1' };
+  const fetchError = {
+    name: 'FunctionsFetchError',
+    message: 'Failed to send a request to the Edge Function',
+    context: new TypeError('Failed to fetch'),
+  };
+  const nonJson5xx = {
+    name: 'FunctionsHttpError',
+    message: 'Edge Function returned a non-2xx status code',
+    context: { json: async () => { throw new SyntaxError('Unexpected token <'); } },
+  };
+  const ownRefusal = (body: Record<string, unknown>) => ({
+    name: 'FunctionsHttpError',
+    message: 'Edge Function returned a non-2xx status code',
+    context: { json: async () => body },
+  });
+
+  async function refusal(error: unknown, issue: boolean): Promise<InvoiceSendError> {
+    supabaseClient.functions.invoke.mockResolvedValue({ data: null, error });
+    const config = useSendInvoice() as unknown as SendConfig;
+    const thrown = await config.mutationFn({ ...vars, issue }).catch((e: unknown) => e);
+    expect(thrown).toBeInstanceOf(InvoiceSendError);
+    return thrown as InvoiceSendError;
+  }
+
+  it.each([
+    ['a lost request', fetchError],
+    ['a 5xx that is not JSON', nonJson5xx],
+    ['JSON that names no error', ownRefusal({ code: 'WORKER_LIMIT', message: 'out of compute' })],
+  ])('%s: the outcome is unknown, and the invoice and its money re-read', async (_label, error) => {
+    const thrown = await refusal(error, true);
+    expect(thrown.issueUnknown).toBe(true);
+    expect(thrown.issued).toBe(false);
+
+    const config = useSendInvoice() as unknown as SendConfig;
+    config.onError(thrown, vars);
+    expect(invalidatedKeys()).toContainEqual(['invoices']);
+    expect(invalidatedKeys()).toContainEqual(['project-financials', 'proj-1']);
+    expect(invalidatedKeys()).toContainEqual(['project-payment-milestones', 'proj-1']);
+  });
+
+  it('control: invoice-send’s own pre-issue refusal is definite, and nothing re-reads', async () => {
+    const thrown = await refusal(ownRefusal({ error: 'no_recipient' }), true);
+    expect(thrown.issueUnknown).toBe(false);
+    expect(thrown.issued).toBe(false);
+
+    (useSendInvoice() as unknown as SendConfig).onError(thrown, vars);
+    expect(invalidatedKeys()).not.toContainEqual(['invoices']);
+  });
+
+  it('control: a lost resend (no issue asked) says nothing about an issue', async () => {
+    const thrown = await refusal(fetchError, false);
+    expect(thrown.issueUnknown).toBe(false);
   });
 });

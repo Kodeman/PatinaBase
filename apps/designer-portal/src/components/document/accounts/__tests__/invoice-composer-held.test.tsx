@@ -855,6 +855,8 @@ describe("InvoiceComposer · studio mode", () => {
           sortOrder: 0,
         },
       ],
+      // SQ-1262 F2 — the act's lifetime rides with the write.
+      signal: expect.any(AbortSignal),
     });
     expect(mockCreateDraft).not.toHaveBeenCalled();
     await waitFor(() =>

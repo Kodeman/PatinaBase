@@ -320,3 +320,71 @@ describe('SQ-1249 F2: the issue rides invoice-send', () => {
     expect(alert).not.toHaveTextContent(/issued as/);
   });
 });
+
+describe('SQ-1262 F3: a Send whose answer is lost may have issued', () => {
+  const unknown =
+    'Could not tell whether this invoice issued — no answer came back. Check the folio before you send it again.';
+  /** The invoice and money reads the folio would re-read, as cached before the press. */
+  const cached = [['invoices', 'invoice-1'], ['project-financials', 'project-1'], ['project-payment-milestones', 'project-1']];
+  const seedReads = () => cached.forEach((key) => qc.setQueryData(key, { cached: true }));
+  const invalidated = () => cached.filter((key) => qc.getQueryState(key)?.isInvalidated).length;
+
+  const lost: Array<[string, () => unknown]> = [
+    [
+      'the request never came back (FunctionsFetchError)',
+      () => ({
+        data: null,
+        error: { name: 'FunctionsFetchError', message: 'Failed to send a request to the Edge Function', context: new TypeError('Failed to fetch') },
+      }),
+    ],
+    [
+      'a 5xx that is not invoice-send’s JSON (a gateway timeout page)',
+      () => ({
+        data: null,
+        error: {
+          name: 'FunctionsHttpError',
+          message: 'Edge Function returned a non-2xx status code',
+          context: {
+            json: async () => {
+              throw new SyntaxError('Unexpected token < in JSON at position 0');
+            },
+          },
+        },
+      }),
+    ],
+    [
+      'a 5xx whose JSON is not invoice-send’s own (no error named)',
+      () => refused({ code: 'WORKER_LIMIT', message: 'Function failed due to not having enough compute resources' }),
+    ],
+  ];
+
+  for (const [label, response] of lost) {
+    it(`${label}: the folio re-reads the invoice and says the outcome is unknown, never "Could not issue"`, async () => {
+      mockInvoke.mockResolvedValue(response());
+      renderFolio();
+      await openSendPanel();
+      seedReads();
+
+      fireEvent.click(confirmAct());
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(unknown);
+      expect(alert).not.toHaveTextContent(/Could not issue/);
+      expect(invalidated()).toBe(cached.length);
+    });
+  }
+
+  it('control: invoice-send’s own pre-issue refusal is definite — "Could not issue", and nothing is re-read', async () => {
+    mockInvoke.mockResolvedValue(refused({ error: 'lookup_failed' }));
+    renderFolio();
+    await openSendPanel();
+    seedReads();
+
+    fireEvent.click(confirmAct());
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Could not issue — The invoice couldn't be loaded. Reload the folio and try again.");
+    expect(alert).not.toHaveTextContent(unknown);
+    expect(invalidated()).toBe(0);
+  });
+});

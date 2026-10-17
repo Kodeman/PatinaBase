@@ -11,6 +11,8 @@ interface World {
   capabilityError: string | null;
   issueError: string | null;
   profile: { full_name: string | null; email: string | null } | null;
+  /** The preferred-profile read fails with this message. */
+  profileError: string | null;
   designerClients: Array<Record<string, string | null>>;
   sendFails: boolean;
   /** Every outward call, in order: `caller:<rpc>` runs as the caller's JWT, `admin:<rpc>` as the service role. */
@@ -48,6 +50,7 @@ function draftWorld(overrides: Partial<World> = {}): World {
     capabilityError: null,
     issueError: null,
     profile: null,
+    profileError: null,
     designerClients: [],
     sendFails: false,
     calls: [],
@@ -71,7 +74,7 @@ const withRecipient = [
 
 const noEmail = [{ ...withRecipient[0], client_email: null }];
 
-function chain(rows: Array<Record<string, string | null>>) {
+function chain(rows: Array<Record<string, string | null>>, error: string | null = null) {
   let found = [...rows];
   const query: any = {
     select: () => query,
@@ -81,7 +84,8 @@ function chain(rows: Array<Record<string, string | null>>) {
     },
     order: () => query,
     limit: () => query,
-    maybeSingle: () => Promise.resolve({ data: found[0] ?? null, error: null }),
+    maybeSingle: () =>
+      Promise.resolve(error ? { data: null, error: { message: error } } : { data: found[0] ?? null, error: null }),
   };
   return query;
 }
@@ -117,7 +121,7 @@ function handlerFor(world: World) {
         };
       }
       if (table === "profiles") {
-        return chain(world.profile ? [world.profile as Record<string, string | null>] : []);
+        return chain(world.profile ? [world.profile as Record<string, string | null>] : [], world.profileError);
       }
       if (table === "designer_clients") return chain(world.designerClients);
       throw new Error(`unexpected table ${table}`);
@@ -314,3 +318,41 @@ for (const issue of [true, false]) {
     assertEquals(world.invoice.status, "draft");
   });
 }
+
+// SQ-1262 F5 — the preferred address is the signed-up client's profile. A
+// failed read of it is an unknown address, not an absent one: it never falls
+// back to the household row (an older address may still stand there), and
+// nothing issues or sends.
+Deno.test("issue-first: a failed preferred-profile read is 500 lookup_failed, never issued, never sent to the fallback", async () => {
+  const world = draftWorld({ designerClients: withRecipient, profileError: "connection reset" });
+  const { status, body } = await post(world, { invoiceId: "inv-1", issue: true });
+
+  assertEquals(status, 500);
+  assertEquals(body.error, "lookup_failed");
+  assertEquals("issued" in body, false);
+  assertEquals(world.invoice.status, "draft");
+  assertEquals(world.calls.filter((call) => call.endsWith(":issue_invoice")), []);
+  assertEquals(world.sentTo, []);
+});
+
+Deno.test("send: a failed preferred-profile read is 500 lookup_failed and mails nothing to the fallback", async () => {
+  const world = draftWorld({ designerClients: withRecipient, profileError: "connection reset" });
+  Object.assign(world.invoice, { status: "sent", invoice_number: "INV-1070", sent_at: "2026-10-01T00:00:00Z" });
+  const { status, body } = await post(world, { invoiceId: "inv-1" });
+
+  assertEquals(status, 500);
+  assertEquals(body.error, "lookup_failed");
+  assertEquals(world.sentTo, []);
+});
+
+Deno.test("issue-first: a profile read that answers with no address still falls back to the household's", async () => {
+  const world = draftWorld({
+    designerClients: withRecipient,
+    profile: { id: "client-1", full_name: "Elena Reyes", email: null } as World["profile"],
+  });
+  const { status, body } = await post(world, { invoiceId: "inv-1", issue: true });
+
+  assertEquals(status, 200);
+  assertEquals(body.issued, true);
+  assertEquals(world.sentTo, ["elena@example.com"]);
+});
