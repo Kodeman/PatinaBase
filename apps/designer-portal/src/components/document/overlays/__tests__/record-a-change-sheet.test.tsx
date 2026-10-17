@@ -254,7 +254,7 @@ describe('Record a change — the router (D5)', () => {
     expect(agreement).toHaveAccessibleDescription('The scope, the fee or the terms.');
   });
 
-  it('holds Continue, focusable, with its reason until a choice is made', () => {
+  it('holds Continue, focusable, with its reason until a choice is made', async () => {
     const heard = jest.fn();
     window.addEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
     renderRouter();
@@ -270,11 +270,26 @@ describe('Record a change — the router (D5)', () => {
     expect(heard).not.toHaveBeenCalled();
     expect(screen.queryByTestId('amendment-sheet')).not.toBeInTheDocument();
 
-    // US-36 K4 — the press lit the reason in the sheet; put it back to choose.
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
+    // R186 — the press windows the choices, live, so she chooses with the
+    // spotlight up; choosing lifts it and hands focus back to Continue.
+    const choices = screen.getByRole('group', { name: 'What changed?' });
+    const windowed = Array.from(
+      document.querySelectorAll('[data-hold-spotlight-window]'),
+      (el) => el.getAttribute('data-hold-spotlight-window'),
+    );
+    expect(windowed).toEqual([choices.id]);
+    const piece = screen.getByRole('radio', { name: /On a piece/ });
+    expect(piece.closest('[inert]')).toBeNull();
+    expect(piece).toHaveFocus();
+    fireEvent.click(piece);
+    await waitFor(() =>
+      expect(document.querySelector('[data-hold-spotlight]')).toBeNull(),
+    );
+    expect(continueAct()).toHaveFocus();
     expect(continueAct()).not.toHaveAttribute('aria-disabled');
     expect(screen.queryByText('Choose one to continue.')).not.toBeInTheDocument();
+    fireEvent.click(continueAct());
+    expect(heard).toHaveBeenCalledTimes(1);
     window.removeEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
   });
 

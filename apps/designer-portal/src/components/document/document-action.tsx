@@ -117,6 +117,12 @@ interface DocumentActionBaseProps {
    * `aria-describedby` reason. Read only while `held`.
    */
   holds?: SpotlightHold[];
+  /**
+   * R186 — the element id of the region that fixes the act's reason. When it
+   * is in the act's frame, the default spotlight windows that region instead
+   * of the reason, live and focused. Read only while `held`, without `holds`.
+   */
+  holdFix?: string;
   loadingLabel?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
@@ -184,6 +190,7 @@ export const DocumentAction = forwardRef<
     held = false,
     onHeldActivate,
     holds,
+    holdFix,
     loadingLabel,
     leading,
     trailing,
@@ -205,7 +212,7 @@ export const DocumentAction = forwardRef<
   const isHeld = held && unavailable;
   const shown = useRef(new Set<string>());
   const shownKey = `${actionKey}:${presentation}`;
-  const heldAct = useHeldAct(holds, onHeldActivate);
+  const heldAct = useHeldAct(holds, onHeldActivate, holdFix);
 
   useEffect(() => {
     if (shown.current.has(shownKey)) return;

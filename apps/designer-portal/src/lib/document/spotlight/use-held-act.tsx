@@ -26,15 +26,24 @@ function frameOf(act: HTMLElement): HTMLElement | null {
   return frame;
 }
 
-/** One window on the act's own reason: its first `aria-describedby` element in the frame. */
-function reasonHold(act: HTMLElement, frame: HTMLElement): SpotlightHold | null {
+/**
+ * One window for the act's own reason, its first `aria-describedby` element
+ * in the frame. A named fix region in the frame takes the window instead
+ * (R186), so it stays live and takes focus; the bar still says the reason.
+ */
+function reasonHold(
+  act: HTMLElement,
+  frame: HTMLElement,
+  fixId: string | undefined,
+): SpotlightHold | null {
   const reason = (act.getAttribute('aria-describedby') ?? '')
     .split(/\s+/)
     .filter(Boolean)
     .map((id) => document.getElementById(id))
     .find((el): el is HTMLElement => el !== null && el !== frame && frame.contains(el));
   if (!reason) return null;
-  const { id } = reason;
+  const fix = fixId ? document.getElementById(fixId) : null;
+  const { id } = fix && fix !== frame && frame.contains(fix) ? fix : reason;
   // A fixer inside the reason stays live in the window and takes focus, so
   // the bar says the reason without repeating the fixer's label.
   const bare = reason.cloneNode(true) as HTMLElement;
@@ -56,10 +65,12 @@ function reasonHold(act: HTMLElement, frame: HTMLElement): SpotlightHold | null 
  * per hold; with neither, one window on the act's `aria-describedby` reason.
  * A site with `onHeldActivate` and no `holds` answers the press itself. With
  * no frame, or no reason inside it, the press is swallowed as before.
+ * `holdFix` is the element id of the region that fixes that reason.
  */
 export function useHeldAct(
   holds: SpotlightHold[] | undefined,
   onHeldActivate: (() => void) | undefined,
+  holdFix?: string,
 ): { activate: (act: HTMLElement) => void; spotlight: ReactNode } {
   const frame = useRef<HTMLElement | null>(null);
   const [own, setOwn] = useState<SpotlightHold[] | null>(null);
@@ -72,14 +83,14 @@ export function useHeldAct(
       const listed = Boolean(holds?.length);
       if (onHeldActivate && !listed) return;
       const host = frameOf(act);
-      const hold = host && !listed ? reasonHold(act, host) : null;
+      const hold = host && !listed ? reasonHold(act, host, holdFix) : null;
       if (!host || (!listed && !hold)) return;
       frame.current = host;
       setOwn(hold ? [hold] : null);
       setMounted(true);
       open(act);
     },
-    [holds, onHeldActivate, open],
+    [holds, onHeldActivate, holdFix, open],
   );
 
   return {

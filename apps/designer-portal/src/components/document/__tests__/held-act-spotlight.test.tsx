@@ -179,6 +179,95 @@ describe('a held act with nothing of its own to say (US-36 K4)', () => {
   });
 });
 
+describe('a held act that names its fix region (R186)', () => {
+  const CHOOSE = 'Choose one to continue.';
+  const continueAct = () => screen.getByRole('button', { name: 'Continue', hidden: true });
+
+  function Chooser({ named = true, outside = false }: { named?: boolean; outside?: boolean }) {
+    const [choice, setChoice] = useState<string | null>(null);
+    const choices = (
+      <fieldset id="choices">
+        <legend>What changed?</legend>
+        {['On a piece', 'On the agreement'].map((label) => (
+          <label key={label}>
+            <input
+              type="radio"
+              name="change"
+              checked={choice === label}
+              onChange={() => setChoice(label)}
+            />
+            {label}
+          </label>
+        ))}
+      </fieldset>
+    );
+    return (
+      <>
+        {outside && choices}
+        <div data-testid="frame" data-spotlight-frame>
+          <h3>Record a change</h3>
+          {!outside && choices}
+          {/* The reason stays put: the act's own release lifts the hold. */}
+          <p id="why">{CHOOSE}</p>
+          <DocumentAction
+            actionKey="continue"
+            held={!choice}
+            disabled={!choice}
+            aria-describedby="why"
+            holdFix={named ? 'choices' : undefined}
+          >
+            Continue
+          </DocumentAction>
+        </div>
+      </>
+    );
+  }
+
+  const radio = (name: RegExp) => screen.getByRole('radio', { name, hidden: true });
+
+  it('windows the fix region, live, with focus on its first control and the reason said once', () => {
+    render(<Chooser />);
+    fireEvent.click(continueAct());
+
+    expect(windows()).toEqual(['choices']);
+    expect(document.getElementById('choices')!.closest('[inert]')).toBeNull();
+    expect(radio(/On the agreement/).closest('[inert]')).toBeNull();
+    expect(document.activeElement).toBe(radio(/On a piece/));
+    expect(screen.getByRole('heading', { name: 'Record a change', hidden: true }).closest('[inert]')).not.toBeNull();
+    expect(bar().querySelector('.hold-spotlight__reason')!.textContent).toBe(CHOOSE);
+    expect(screen.getByRole('status').textContent).toBe(`1 thing needs attention: ${CHOOSE}`);
+  });
+
+  it('lifts on its own once fixed and hands focus back to the act', async () => {
+    render(<Chooser />);
+    fireEvent.click(continueAct());
+    fireEvent.click(radio(/On the agreement/));
+
+    await waitFor(() => expect(layer()).toBeNull());
+    expect(screen.getByRole('status')).toHaveTextContent('All set.');
+    expect(continueAct()).toHaveFocus();
+    expect(document.querySelector('[inert]')).toBeNull();
+  });
+
+  it('keeps the reason window and Close when the site names no fix region', () => {
+    render(<Chooser named={false} />);
+    fireEvent.click(continueAct());
+
+    expect(windows()).toEqual(['why']);
+    expect(document.getElementById('choices')!.closest('[inert]')).not.toBeNull();
+    expect(document.activeElement).toBe(within(bar()).getByRole('button', { name: 'Close' }));
+  });
+
+  it('falls back to the reason window when the named region is outside the frame', () => {
+    render(<Chooser outside />);
+    fireEvent.click(continueAct());
+
+    expect(windows()).toEqual(['why']);
+    expect(screen.getByTestId('frame').contains(layer())).toBe(true);
+    expect(document.activeElement).toBe(within(bar()).getByRole('button', { name: 'Close' }));
+  });
+});
+
 describe('a held act with its own holds or its own answer', () => {
   it('opens one window per hold when the site passes holds', () => {
     render(<Held holds={listed(['client', 'price', 'studio'])} />);

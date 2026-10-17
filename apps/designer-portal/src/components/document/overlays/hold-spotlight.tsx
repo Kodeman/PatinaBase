@@ -336,7 +336,8 @@ export function HoldSpotlight({
       childList: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ["class", "style", "hidden"],
+      // aria-disabled: an act that stops being held lifts its own hold.
+      attributeFilter: ["class", "style", "hidden", "aria-disabled"],
     });
     // The frame can unmount while the spotlight's owner (and `open`) survive;
     // nothing inside the frame observes its own removal.
