@@ -79,9 +79,34 @@ export function ItemPictures({
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadControlRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
+  const pendingFocusRef = useRef<{
+    intent: 'unlink' | 'primary';
+    imageId: string;
+    fallback: string | null;
+  } | null>(null);
 
   useEffect(() => {
     setPendingOrder(null);
+  }, [images]);
+
+  useEffect(() => {
+    const pending = pendingFocusRef.current;
+    if (!pending || !images) return;
+    const target = images.find((image) => image.id === pending.imageId);
+    const reflected = pending.intent === 'unlink' ? !target : Boolean(target?.is_primary);
+    if (!reflected) return;
+
+    const row = target
+      ? listRef.current?.querySelector<HTMLElement>(`[data-picture-id="${pending.imageId}"]`)
+      : null;
+    const enabledAct = row?.querySelector<HTMLElement>('[data-picture-act]:not([aria-disabled="true"])');
+    const fallbackRow = pending.fallback
+      ? listRef.current?.querySelector<HTMLElement>(`[data-picture-id="${pending.fallback}"]`)
+      : null;
+    const fallbackAct = fallbackRow?.querySelector<HTMLElement>('[data-picture-act]:not([aria-disabled="true"])');
+    const focusTarget = enabledAct ?? fallbackAct ?? uploadControlRef.current?.querySelector<HTMLElement>('button');
+    focusTarget?.focus();
+    pendingFocusRef.current = null;
   }, [images]);
 
   const ordered = useMemo(() => {
@@ -171,25 +196,28 @@ export function ItemPictures({
     else if (added > 0) setNotice(`${added} ${added === 1 ? 'picture' : 'pictures'} added.`);
   };
 
-  const focusPictureAct = (index: number) => {
-    window.requestAnimationFrame(() => {
-      const row = index >= 0 ? listRef.current?.querySelectorAll('li')[index] : null;
-      row?.querySelector<HTMLElement>('button:not([aria-disabled="true"])')?.focus();
-      if (!row) uploadControlRef.current?.querySelector<HTMLElement>('button')?.focus();
-    });
-  };
-
-  const makePrimary = (image: FfeItemImage, index: number) => {
+  const makePrimary = (image: FfeItemImage) => {
+    pendingFocusRef.current = { intent: 'primary', imageId: image.id, fallback: null };
     void run(async () => {
-      await setPrimary.mutateAsync({ projectId, itemId, imageId: image.id });
-      focusPictureAct(index);
+      try {
+        await setPrimary.mutateAsync({ projectId, itemId, imageId: image.id });
+      } catch (error) {
+        pendingFocusRef.current = null;
+        throw error;
+      }
     });
   };
 
   const removePicture = (index: number, image: FfeItemImage) => {
+    const fallback = ordered[index + 1]?.id ?? ordered[index - 1]?.id ?? null;
+    pendingFocusRef.current = { intent: 'unlink', imageId: image.id, fallback };
     void run(async () => {
-      await unlink.mutateAsync({ projectId, itemId, imageId: image.id });
-      focusPictureAct(index < total - 1 ? index : index - 1);
+      try {
+        await unlink.mutateAsync({ projectId, itemId, imageId: image.id });
+      } catch (error) {
+        pendingFocusRef.current = null;
+        throw error;
+      }
     });
   };
 
@@ -228,6 +256,7 @@ export function ItemPictures({
               <li
                 key={image.id}
                 data-testid="line-picture"
+                data-picture-id={image.id}
                 data-primary={image.is_primary ? 'true' : undefined}
                 className="flex min-w-0 gap-3 bg-[var(--doc-paper)] p-2"
               >
@@ -257,8 +286,9 @@ export function ItemPictures({
                         actionKey="make-ffe-picture-primary"
                         regionKey={REGION}
                         variant="secondary"
+                        data-picture-act={`primary-${image.id}`}
                         disabled={busy}
-                        onClick={() => makePrimary(image, index)}
+                        onClick={() => makePrimary(image)}
                       >
                         Make primary
                       </DocumentAction>
@@ -296,6 +326,7 @@ export function ItemPictures({
                       regionKey={REGION}
                       variant="tertiary"
                       disabled={busy}
+                      data-picture-act={`unlink-${image.id}`}
                       onClick={() => removePicture(index, image)}
                     >
                       {UNLINK_COPY}
@@ -393,7 +424,11 @@ export function ItemPictures({
         </div>
       )}
 
-      <p role="status" aria-live="polite" className="t-body-sm mt-2 text-[var(--color-terracotta-ink)]">
+      <p
+        role="status"
+        aria-live="polite"
+        className={`t-body-sm mt-2 empty:mt-0 ${notice && !notice.endsWith(' added.') ? 'text-[var(--color-terracotta-ink)]' : 'text-[var(--color-charcoal)]'}`}
+      >
         {uploadProgress ?? notice ?? ''}
       </p>
     </section>

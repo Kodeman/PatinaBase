@@ -204,28 +204,52 @@ describe('ItemPictures', () => {
     await waitFor(() => expect(status).toHaveTextContent('3 pictures added.'));
   });
 
-  it('returns focus to the next picture after Unlink', async () => {
+  it.each([
+    ['middle', [picture('a', 0, true), picture('c', 1)], 'b', 'c'],
+    ['last', [picture('a', 0, true), picture('b', 1)], 'c', 'b'],
+  ])('restores focus after the refetch removes the %s picture', async (_label, nextImages, removedId, targetId) => {
     const view = renderPictures();
-    mockUnlink.mockImplementationOnce(async () => {
-      mockImages.current = [picture('a', 0, true), picture('c', 1)];
+    let resolveMutation!: () => void;
+    mockUnlink.mockImplementationOnce(() => new Promise<void>((resolve) => { resolveMutation = resolve; }));
+    fireEvent.click(within(group(removedId === 'b' ? 2 : 3, 3)).getByRole('button', { name: UNLINK_COPY }));
+    await act(async () => { resolveMutation(); });
+    // mutateAsync resolves before invalidation/refetch; the old rows still exist here.
+    expect(screen.getAllByTestId('line-picture')).toHaveLength(3);
+    act(() => {
+      mockImages.current = nextImages;
       view.rerender(<ItemPictures item={LIBRARY_LINE} projectId="project-1" canEdit />);
     });
-    fireEvent.click(within(group(2, 3)).getByRole('button', { name: UNLINK_COPY }));
-    await act(async () => {});
-    flushFrames();
-    expect(within(group(2, 2)).getByRole('button', { name: 'Make primary' })).toHaveFocus();
+    const targetPosition = nextImages.findIndex((image) => image.id === targetId) + 1;
+    expect(within(group(targetPosition, nextImages.length)).getByRole('button', { name: 'Make primary' })).toHaveFocus();
   });
 
-  it('moves focus to the next act after Make primary', async () => {
+  it('restores focus to Upload when unlinking the only picture after refetch', async () => {
+    mockImages.current = [picture('only', 0, true)];
     const view = renderPictures();
-    mockSetPrimary.mockImplementationOnce(async () => {
-      mockImages.current = [picture('a', 0, true), picture('b', 1), picture('c', 2, true)];
+    let resolveMutation!: () => void;
+    mockUnlink.mockImplementationOnce(() => new Promise<void>((resolve) => { resolveMutation = resolve; }));
+    fireEvent.click(screen.getByRole('button', { name: UNLINK_COPY }));
+    await act(async () => { resolveMutation(); });
+    act(() => {
+      mockImages.current = [];
       view.rerender(<ItemPictures item={LIBRARY_LINE} projectId="project-1" canEdit />);
     });
+    expect(screen.getByRole('button', { name: 'Upload pictures' })).toHaveFocus();
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('restores focus to an available act after Make primary refetch', async () => {
+    const view = renderPictures();
+    let resolveMutation!: () => void;
+    mockSetPrimary.mockImplementationOnce(() => new Promise<void>((resolve) => { resolveMutation = resolve; }));
     fireEvent.click(within(group(3, 3)).getByRole('button', { name: 'Make primary' }));
-    await act(async () => {});
-    flushFrames();
+    await act(async () => { resolveMutation(); });
+    act(() => {
+      mockImages.current = [picture('a', 0), picture('b', 1), picture('c', 2, true)];
+      view.rerender(<ItemPictures item={LIBRARY_LINE} projectId="project-1" canEdit />);
+    });
     expect(within(group(3, 3, true)).getByRole('button', { name: 'Earlier' })).toHaveFocus();
+    expect(document.activeElement).not.toBe(document.body);
   });
 
   it('a line with no library piece still takes uploads but offers nothing from the library', () => {
