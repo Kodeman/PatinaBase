@@ -1,17 +1,20 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00810 — What the client approved and the post-approval change log
--- (pgTAP, US-37 #4, SQ-1106; repaired by SQ-1169 for Astra SQ-1168 and by
--- SQ-1194 for Astra SQ-1190)
+-- (pgTAP, US-37 #4, SQ-1106; repaired by SQ-1169 for Astra SQ-1168, by
+-- SQ-1194 for Astra SQ-1190 and by SQ-1239 for Astra SQ-1234)
 --
 -- Studio A: owner D (designer, the job's lead) and client C (the frozen
--- decision lead) on Project P. Studio B: owner X (the outsider). Last, a
+-- decision lead) on Project P. Studio B: owner X (the outsider). Then a
 -- studio-less job P9 of D's, with household client H and Studio A teammate T.
+-- Last, Studio A's job PB, with D also in Studio B and Studio A admin W.
 --
 -- Cases, in order:
 --   grants            team-read tables with RLS; snapshot + trigger internal;
 --                     readers authenticated-only; both approval paths record
 --                     and stay private; the job label lock comes first in
---                     the approval path and in every pricing writer (F2)
+--                     the approval path and in every pricing writer (F2);
+--                     merge_studio_product takes it before its products
+--                     lock and keeps its ACL (SQ-1234 F1)
 --   before approval   an edit logs nothing; the reader returns NULL
 --   plan_issue        a client approval of drawings records nothing
 --   budget_version    records the approval event with no lines (F1)
@@ -29,16 +32,22 @@
 --   tie-break         equal approved_at falls back to the id
 --   interleave        a line edit and a labor price edit each wait on the
 --                     job label lock held by an open approval, then are
---                     logged (F2, dblink)
+--                     logged (F2, dblink); so does a product merge that
+--                     reprices a legacy line, and a line that reaches the
+--                     duplicate mid-merge refuses it with 40001 (SQ-1234 F1)
 --   outsider/client   42501 on both readers and no rows from the tables
 --   studio-less job   a client who shares an unrelated organization with the
 --                     lead reads nothing and is refused; the lead and her
 --                     design-studio teammate still read (SQ-1190 F1)
+--   revision          a designer of another studio who shares a studio with
+--                     the lead is refused a configuration revision of the
+--                     job's line and its prices stay; the job's studio admin
+--                     and its lead revise (SQ-1234 F2)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
 
-SELECT plan(54);
+SELECT plan(64);
 
 -- ── fixture ────────────────────────────────────────────────────────────────
 
@@ -358,6 +367,28 @@ SELECT ok(
 )
 FROM (SELECT pg_get_functiondef(
   'public.revise_project_ffe_configuration(uuid,uuid,uuid,integer,text,uuid,integer)'::regprocedure) AS def) AS fn;
+
+-- SQ-1239 (Astra SQ-1234 F1): merge_studio_product re-points lines, and a
+-- product_id change can reprice a legacy line (00809 default markup). It takes
+-- the job label lock before its products lock and its line update, and keeps
+-- its definer context, search_path and grants.
+SELECT ok(
+  strpos(def, 'PERFORM public._ffe_lock_job_labels(') > 0
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(')
+      < regexp_instr(def, 'FOR (UPDATE|SHARE|KEY SHARE|NO KEY UPDATE)')
+  AND strpos(def, 'PERFORM public._ffe_lock_job_labels(')
+      < strpos(def, 'UPDATE public.project_ffe_items'),
+  'F1 (SQ-1234): merge_studio_product takes the job label lock before its products lock and its line update'
+)
+FROM (SELECT pg_get_functiondef('public.merge_studio_product(uuid,uuid)'::regprocedure) AS def) AS fn;
+
+SELECT ok(
+  (SELECT prosecdef AND proconfig = ARRAY['search_path=public, pg_temp']
+   FROM pg_proc WHERE oid = 'public.merge_studio_product(uuid,uuid)'::regprocedure)
+  AND has_function_privilege('authenticated', 'public.merge_studio_product(uuid,uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.merge_studio_product(uuid,uuid)', 'EXECUTE'),
+  'F1 (SQ-1234): merge_studio_product stays SECURITY DEFINER, search_path public, pg_temp, authenticated-only'
+);
 
 -- ── before approval (D) ────────────────────────────────────────────────────
 
@@ -1031,6 +1062,195 @@ SELECT is(
   'F2 (SQ-1190): a labor price edit waits on the job label lock an open first approval holds, then is logged (dblink interleave)'
 );
 
+-- ── F1 (SQ-1234): a product merge waits on an open approval too ────────────
+-- merge_studio_product re-points a legacy line (cost known, no client price,
+-- no price_basis) from the duplicate to the kept product, and 00809's default
+-- markup prices it on that product_id change. Phase 1: session A holds the
+-- job label lock of J1 and records its first approval, still open. Session B
+-- merges the duplicate. B must wait on that lock, then log the repricing once
+-- A commits; without the lock B reprices at once and logs nothing. Phase 2:
+-- A places a second line on the duplicate in job J2, still open; B merges
+-- again. B does not hold J2's lock, so once A commits it refuses with 40001
+-- instead of re-pointing that line. The fixture is committed through a third
+-- session and removed after; B rolls back both times.
+CREATE TEMP TABLE p810_merge (phase integer, result text) ON COMMIT DROP;
+DO $p810_merge$
+DECLARE
+  v_dsn text := format(
+    'host=%s port=54322 dbname=%s user=postgres password=postgres connect_timeout=5',
+    host(network(set_masklen(inet_server_addr(), 16)) + 1), current_database());
+  v_cleanup text := $c$
+    SET statement_timeout = '20s';
+    SET lock_timeout = '10s';
+    SET app.ffe_mutation_rpc = 'on';
+    DELETE FROM public.ffe_pricing_approvals
+      WHERE project_id IN ('81093000-0000-4000-8000-000000000001', '81093000-0000-4000-8000-000000000002');
+    DELETE FROM public.projects
+      WHERE id IN ('81093000-0000-4000-8000-000000000001', '81093000-0000-4000-8000-000000000002');
+    DELETE FROM public.products
+      WHERE id IN ('81093000-0000-4000-8000-000000000021', '81093000-0000-4000-8000-000000000022');
+    -- Only service_role may delete a studio's last owner seat (00484 guard).
+    SET ROLE service_role;
+    DELETE FROM public.organization_members WHERE id = '81093000-0000-4000-8000-0000000000e1';
+    RESET ROLE;
+    DELETE FROM public.organizations WHERE id = '81093000-0000-4000-8000-0000000000f1';
+    DELETE FROM public.profiles WHERE id = '81093000-0000-4000-8000-0000000000d1';
+    DELETE FROM auth.users WHERE id = '81093000-0000-4000-8000-0000000000d1';
+  $c$;
+  v_merge text := $q$DO $m$ BEGIN
+      PERFORM public.merge_studio_product('81093000-0000-4000-8000-000000000021',
+                                          '81093000-0000-4000-8000-000000000022');
+      PERFORM set_config('p810m.result', 'merged', false);
+    EXCEPTION WHEN OTHERS THEN
+      PERFORM set_config('p810m.result', SQLSTATE, false);
+    END $m$$q$;
+  v_b_pid integer;
+  v_wait text;
+  v_logged integer;
+  v_outcome text;
+  v_phase integer := 0;
+  v_result1 text;
+  v_result2 text;
+  v_conn text;
+BEGIN
+  PERFORM extensions.dblink_connect('p810m_setup', v_dsn);
+  PERFORM extensions.dblink_connect('p810m_a', v_dsn);
+  PERFORM extensions.dblink_connect('p810m_b', v_dsn);
+  BEGIN
+    PERFORM extensions.dblink_exec('p810m_setup', v_cleanup);
+    PERFORM extensions.dblink_exec('p810m_setup', $f$
+      INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+      VALUES ('81093000-0000-4000-8000-0000000000d1', 'p810-merge@test.invalid', '', now(), now(), now(),
+              '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+      INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
+      VALUES ('81093000-0000-4000-8000-0000000000d1', 'p810-merge@test.invalid', 'P810 Merge', now(), now())
+      ON CONFLICT (id) DO NOTHING;
+      INSERT INTO public.organizations (id, type, name, slug, status)
+      VALUES ('81093000-0000-4000-8000-0000000000f1', 'design_studio', 'P810 Merge Studio', 'p810-merge-studio-test', 'active');
+      INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+      VALUES ('81093000-0000-4000-8000-0000000000e1', '81093000-0000-4000-8000-0000000000d1',
+              '81093000-0000-4000-8000-0000000000f1', 'owner', 'active', now());
+      INSERT INTO public.projects (id, name, designer_id, created_by, studio_id, status)
+      VALUES ('81093000-0000-4000-8000-000000000001', 'P810 Merge job', '81093000-0000-4000-8000-0000000000d1',
+              '81093000-0000-4000-8000-0000000000d1', '81093000-0000-4000-8000-0000000000f1', 'active'),
+             ('81093000-0000-4000-8000-000000000002', 'P810 Merge second job', '81093000-0000-4000-8000-0000000000d1',
+              '81093000-0000-4000-8000-0000000000d1', '81093000-0000-4000-8000-0000000000f1', 'active');
+      INSERT INTO public.products (
+        id, name, captured_at, layer, studio_id,
+        vendor_contact, lead_time_weeks, payment_terms, category, usage_notes
+      ) VALUES
+        ('81093000-0000-4000-8000-000000000021', 'P810 Merge lamp (dup)', now(), 'studio',
+         '81093000-0000-4000-8000-0000000000f1', '{}'::jsonb, 6, 'net_30', 'seating', 'test'),
+        ('81093000-0000-4000-8000-000000000022', 'P810 Merge lamp', now(), 'studio',
+         '81093000-0000-4000-8000-0000000000f1', '{}'::jsonb, 6, 'net_30', 'seating', 'test');
+      -- A legacy line: cost known, no client price, no price_basis. The
+      -- pricing writer flag keeps the 00809 default off at insert.
+      SET app.ffe_pricing_writer = 'on';
+      INSERT INTO public.project_ffe_items (id, project_id, product_id, name, status, item_type, quantity,
+        trade_price_cents, unit_price_cents, line_total_cents, design_disposition)
+      VALUES ('81093000-0000-4000-8000-0000000000b1', '81093000-0000-4000-8000-000000000001',
+              '81093000-0000-4000-8000-000000000021', 'Merge lamp', 'specified', 'fixed', 1,
+              10000, NULL, NULL, 'selected');
+      RESET app.ffe_pricing_writer;
+    $f$);
+    PERFORM extensions.dblink_exec('p810m_a', $q$SET lock_timeout = '20s'$q$);
+    PERFORM extensions.dblink_exec('p810m_b', $q$SET lock_timeout = '20s'$q$);
+    PERFORM * FROM extensions.dblink('p810m_b', $q$SELECT set_config('request.jwt.claims',
+      '{"sub":"81093000-0000-4000-8000-0000000000d1","role":"authenticated"}', false),
+      set_config('request.jwt.claim.sub', '81093000-0000-4000-8000-0000000000d1', false)$q$)
+      AS r(claims text, sub text);
+    SELECT pid INTO v_b_pid FROM extensions.dblink('p810m_b', 'SELECT pg_backend_pid()') AS r(pid integer);
+
+    -- Phase 1: the merge waits on J1's open first approval, then is logged.
+    v_phase := 1;
+    PERFORM extensions.dblink_exec('p810m_a', 'BEGIN');
+    PERFORM * FROM extensions.dblink('p810m_a',
+      $q$SELECT public._ffe_lock_job_labels('81093000-0000-4000-8000-000000000001')::text$q$) AS r(x text);
+    PERFORM extensions.dblink_exec('p810m_a', $q$INSERT INTO public.ffe_pricing_approvals
+      (project_id, approval_source, approval_ref)
+      VALUES ('81093000-0000-4000-8000-000000000001', 'project_approval', '81093000-0000-4000-8000-0000000000a1')$q$);
+    PERFORM extensions.dblink_exec('p810m_b', 'BEGIN');
+    PERFORM extensions.dblink_send_query('p810m_b', v_merge);
+    v_wait := NULL;
+    FOR i IN 1..50 LOOP
+      SELECT wait INTO v_wait FROM extensions.dblink('p810m_setup', format(
+        $q$SELECT wait_event FROM pg_stat_activity WHERE pid = %s AND wait_event_type = 'Lock'$q$, v_b_pid))
+        AS r(wait text);
+      EXIT WHEN v_wait IS NOT NULL;
+      PERFORM pg_sleep(0.1);
+    END LOOP;
+    PERFORM extensions.dblink_exec('p810m_a', 'COMMIT');
+    PERFORM * FROM extensions.dblink_get_result('p810m_b', false) AS r(x text);
+    PERFORM * FROM extensions.dblink_get_result('p810m_b', false) AS r(x text);
+    SELECT outcome, n INTO v_outcome, v_logged FROM extensions.dblink('p810m_b', $q$SELECT
+      current_setting('p810m.result', true), count(*)::integer
+      FROM public.ffe_pricing_events WHERE item_id = '81093000-0000-4000-8000-0000000000b1'$q$)
+      AS r(outcome text, n integer);
+    PERFORM extensions.dblink_exec('p810m_b', 'ROLLBACK');
+    v_result1 := CASE WHEN v_wait IS NULL THEN 'the merge never waited' ELSE 'waits on ' || v_wait END
+      || '; ' || COALESCE(v_outcome, 'no outcome')
+      || CASE WHEN v_logged > 0 THEN '; logged' ELSE '; unlogged' END;
+
+    -- Phase 2: a line reaches the duplicate in J2 while the merge runs.
+    v_phase := 2;
+    PERFORM extensions.dblink_exec('p810m_a', 'BEGIN');
+    PERFORM extensions.dblink_exec('p810m_a', $q$INSERT INTO public.project_ffe_items (id, project_id, product_id,
+        name, status, item_type, quantity, trade_price_cents, unit_price_cents, line_total_cents, design_disposition)
+      VALUES ('81093000-0000-4000-8000-0000000000b2', '81093000-0000-4000-8000-000000000002',
+              '81093000-0000-4000-8000-000000000021', 'Merge lamp, second job', 'specified', 'fixed', 1,
+              10000, 15000, 15000, 'selected')$q$);
+    PERFORM extensions.dblink_exec('p810m_b', 'BEGIN');
+    PERFORM extensions.dblink_exec('p810m_b', $q$SET p810m.result = ''$q$);
+    PERFORM extensions.dblink_send_query('p810m_b', v_merge);
+    v_wait := NULL;
+    FOR i IN 1..50 LOOP
+      SELECT wait INTO v_wait FROM extensions.dblink('p810m_setup', format(
+        $q$SELECT wait_event FROM pg_stat_activity WHERE pid = %s AND wait_event_type = 'Lock'$q$, v_b_pid))
+        AS r(wait text);
+      EXIT WHEN v_wait IS NOT NULL;
+      PERFORM pg_sleep(0.1);
+    END LOOP;
+    PERFORM extensions.dblink_exec('p810m_a', 'COMMIT');
+    PERFORM * FROM extensions.dblink_get_result('p810m_b', false) AS r(x text);
+    PERFORM * FROM extensions.dblink_get_result('p810m_b', false) AS r(x text);
+    SELECT outcome INTO v_outcome FROM extensions.dblink('p810m_b',
+      $q$SELECT current_setting('p810m.result', true)$q$) AS r(outcome text);
+    PERFORM extensions.dblink_exec('p810m_b', 'ROLLBACK');
+    v_result2 := CASE WHEN v_wait IS NULL THEN 'the merge never waited' ELSE 'waits' END
+      || '; ' || COALESCE(NULLIF(v_outcome, ''), 'no outcome');
+  EXCEPTION WHEN OTHERS THEN
+    IF v_phase = 2 THEN
+      v_result2 := 'interleave error: ' || SQLERRM;
+    ELSE
+      v_result1 := 'interleave error: ' || SQLERRM;
+    END IF;
+  END;
+  INSERT INTO p810_merge VALUES (1, v_result1), (2, v_result2);
+  -- A and B close first, so nothing they still hold can block the cleanup.
+  FOREACH v_conn IN ARRAY COALESCE(extensions.dblink_get_connections(), ARRAY[]::text[]) LOOP
+    IF v_conn IN ('p810m_a', 'p810m_b') THEN PERFORM extensions.dblink_disconnect(v_conn); END IF;
+  END LOOP;
+  BEGIN
+    PERFORM extensions.dblink_exec('p810m_setup', v_cleanup);
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO p810_merge VALUES (9, 'cleanup error: ' || SQLERRM);
+  END;
+  PERFORM extensions.dblink_disconnect('p810m_setup');
+END
+$p810_merge$;
+
+SELECT is(
+  (SELECT string_agg(result, ' | ' ORDER BY phase) FROM p810_merge WHERE phase IN (1, 9)),
+  'waits on advisory; merged; logged',
+  'F1 (SQ-1234): a product merge waits on the job label lock an open first approval holds, then logs the repricing it caused (dblink interleave)'
+);
+
+SELECT is(
+  (SELECT string_agg(result, ' | ' ORDER BY phase) FROM p810_merge WHERE phase IN (2, 9)),
+  'waits; 40001',
+  'F1 (SQ-1234): a line that reaches the duplicate in an unlocked job during the merge refuses it with 40001 (dblink interleave)'
+);
+
 -- ── the outsider (X) ───────────────────────────────────────────────────────
 
 SET LOCAL ROLE authenticated;
@@ -1183,6 +1403,163 @@ SELECT is(
 );
 
 RESET ROLE;
+
+-- ── F2 (SQ-1234): a configuration revision is the job's studio's ───────────
+-- Job PB is explicitly Studio A's (studio_id A) and D leads it. D is also a
+-- member of Studio B, where X is the owner, so X is D's design-studio
+-- co-member: the 00413 gate (is_design_studio_comember(designer_id)) and
+-- _can_access_product_configuration (its project path) both let X in, and X
+-- could reprice A's line. 00810 gates on can_buy_for_project: X is refused
+-- and the line keeps its prices. Studio A's admin W and the lead D revise.
+
+INSERT INTO auth.users (
+  id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+  instance_id, aud, role
+) VALUES
+  ('81000000-0000-4000-8000-0000000000a6', 'p810-studio-admin@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO public.profiles (id, email, full_name, is_designer)
+VALUES ('81000000-0000-4000-8000-0000000000a6', 'p810-studio-admin@test.invalid', 'P810 Studio Admin', true)
+ON CONFLICT (id) DO UPDATE
+SET email = EXCLUDED.email, full_name = EXCLUDED.full_name, is_designer = EXCLUDED.is_designer;
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('81000000-0000-4000-8000-0000000000e7', '81000000-0000-4000-8000-0000000000a1', '81000000-0000-4000-8000-0000000000f2', 'member', 'active', now()),
+  ('81000000-0000-4000-8000-0000000000e8', '81000000-0000-4000-8000-0000000000a6', '81000000-0000-4000-8000-0000000000f1', 'admin', 'active', now());
+
+INSERT INTO public.projects (id, name, designer_id, created_by, studio_id, status, current_phase)
+VALUES ('81000000-0000-4000-8000-000000000b01', 'P810 Configured den',
+        '81000000-0000-4000-8000-0000000000a1', '81000000-0000-4000-8000-0000000000a1',
+        '81000000-0000-4000-8000-0000000000f1', 'active', 'design');
+
+INSERT INTO public.products (
+  id, name, captured_at, layer, studio_id,
+  vendor_contact, lead_time_weeks, payment_terms, category, usage_notes
+) VALUES ('81000000-0000-4000-8000-000000000b02', 'P810 Configured chair', now(), 'studio',
+          '81000000-0000-4000-8000-0000000000f1', '{}'::jsonb, 6, 'net_30', 'seating', 'test');
+
+-- Three saved configurations of the chair for job PB, each a different price.
+INSERT INTO public.product_configurations (
+  id, product_id, project_id, ffe_item_id, owner_user_id, studio_id, version, schema_revision,
+  status, evaluation, snapshot, snapshot_hash, is_complete, is_valid,
+  retail_price_cents, trade_price_cents
+)
+SELECT config.id, '81000000-0000-4000-8000-000000000b02', '81000000-0000-4000-8000-000000000b01',
+       NULL, '81000000-0000-4000-8000-0000000000a1', '81000000-0000-4000-8000-0000000000f1', 1, 1,
+       'saved', '{}'::jsonb, config.snapshot, public._configuration_snapshot_hash(config.snapshot), true, true,
+       config.retail, config.trade
+FROM (VALUES
+  ('81000000-0000-4000-8000-000000000b11'::uuid, 80000, 50000),
+  ('81000000-0000-4000-8000-000000000b12'::uuid, 90000, 60000),
+  ('81000000-0000-4000-8000-000000000b13'::uuid, 95000, 62000)
+) AS priced(id, retail, trade)
+CROSS JOIN LATERAL (
+  SELECT priced.id, priced.retail, priced.trade,
+         jsonb_build_object('retailPriceCents', priced.retail, 'tradePriceCents', priced.trade) AS snapshot
+) AS config;
+
+SELECT set_config('app.ffe_mutation_rpc', 'on', true);
+INSERT INTO public.project_ffe_items (
+  id, project_id, product_id, name, status, item_type, quantity, trade_price_cents,
+  unit_price_cents, line_total_cents, currency, design_disposition
+) VALUES ('81000000-0000-4000-8000-000000000b21', '81000000-0000-4000-8000-000000000b01',
+          '81000000-0000-4000-8000-000000000b02', 'P810 Den chair', 'specified', 'fixed', 2,
+          50000, 80000, 160000, 'USD', 'selected');
+SELECT set_config('app.ffe_mutation_rpc', '', true);
+
+-- The line's spec carries the first configuration (as the 00403 workflow sets it).
+SELECT set_config('patina.configuration_spec_workflow', '00403', true);
+UPDATE public.project_ffe_specs AS spec
+SET configuration_id = config.id,
+    configuration_snapshot = config.snapshot,
+    configuration_snapshot_hash = config.snapshot_hash
+FROM public.product_configurations AS config
+WHERE spec.ffe_item_id = '81000000-0000-4000-8000-000000000b21'
+  AND config.id = '81000000-0000-4000-8000-000000000b11';
+SELECT set_config('patina.configuration_spec_workflow', '', true);
+DO $$ BEGIN
+  ASSERT (SELECT configuration_id = '81000000-0000-4000-8000-000000000b11'
+          FROM public.project_ffe_specs WHERE ffe_item_id = '81000000-0000-4000-8000-000000000b21'),
+    'the F2 line must carry the first configuration';
+END $$;
+
+-- The callers pass the hash they read; the configurations stay unread by the role.
+CREATE TEMP TABLE p810_config_hash (id uuid PRIMARY KEY, snapshot_hash text NOT NULL) ON COMMIT DROP;
+INSERT INTO p810_config_hash (id, snapshot_hash)
+SELECT id, snapshot_hash FROM public.product_configurations
+WHERE id IN ('81000000-0000-4000-8000-000000000b11', '81000000-0000-4000-8000-000000000b12');
+GRANT SELECT ON p810_config_hash TO authenticated;
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81000000-0000-4000-8000-0000000000a5","role":"authenticated"}';
+
+SELECT throws_ok(
+  $$SELECT public.revise_project_ffe_configuration(
+      '81000000-0000-4000-8000-000000000b01', '81000000-0000-4000-8000-000000000b21',
+      '81000000-0000-4000-8000-000000000b11', 1,
+      (SELECT snapshot_hash FROM p810_config_hash WHERE id = '81000000-0000-4000-8000-000000000b11'),
+      '81000000-0000-4000-8000-000000000b12', 1)$$,
+  '42501', 'project not found or not accessible',
+  'F2 (SQ-1234): a designer of another studio who shares a studio with the lead is refused a configuration revision (42501)'
+);
+
+RESET ROLE;
+
+SELECT is(
+  (SELECT concat_ws('|', item.unit_price_cents, item.trade_price_cents, item.line_total_cents, spec.configuration_id)
+   FROM public.project_ffe_items AS item
+   JOIN public.project_ffe_specs AS spec ON spec.ffe_item_id = item.id
+   WHERE item.id = '81000000-0000-4000-8000-000000000b21'),
+  '80000|50000|160000|81000000-0000-4000-8000-000000000b11',
+  'F2 (SQ-1234): that refused revision leaves the line''s prices and configuration as they were'
+);
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81000000-0000-4000-8000-0000000000a6","role":"authenticated"}';
+
+SELECT lives_ok(
+  $$SELECT public.revise_project_ffe_configuration(
+      '81000000-0000-4000-8000-000000000b01', '81000000-0000-4000-8000-000000000b21',
+      '81000000-0000-4000-8000-000000000b11', 1,
+      (SELECT snapshot_hash FROM p810_config_hash WHERE id = '81000000-0000-4000-8000-000000000b11'),
+      '81000000-0000-4000-8000-000000000b12', 1)$$,
+  'F2 (SQ-1234): the job''s studio admin revises its configuration'
+);
+
+RESET ROLE;
+
+SELECT is(
+  (SELECT concat_ws('|', item.unit_price_cents, item.trade_price_cents, item.line_total_cents, spec.configuration_id)
+   FROM public.project_ffe_items AS item
+   JOIN public.project_ffe_specs AS spec ON spec.ffe_item_id = item.id
+   WHERE item.id = '81000000-0000-4000-8000-000000000b21'),
+  '90000|60000|180000|81000000-0000-4000-8000-000000000b12',
+  'F2 (SQ-1234): the studio admin''s revision prices the line from the new configuration'
+);
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+
+SELECT lives_ok(
+  $$SELECT public.revise_project_ffe_configuration(
+      '81000000-0000-4000-8000-000000000b01', '81000000-0000-4000-8000-000000000b21',
+      '81000000-0000-4000-8000-000000000b12', 1,
+      (SELECT snapshot_hash FROM p810_config_hash WHERE id = '81000000-0000-4000-8000-000000000b12'),
+      '81000000-0000-4000-8000-000000000b13', 1)$$,
+  'F2 (SQ-1234): the job''s lead revises its configuration'
+);
+
+RESET ROLE;
+
+SELECT is(
+  (SELECT concat_ws('|', item.unit_price_cents, item.trade_price_cents, item.line_total_cents, spec.configuration_id)
+   FROM public.project_ffe_items AS item
+   JOIN public.project_ffe_specs AS spec ON spec.ffe_item_id = item.id
+   WHERE item.id = '81000000-0000-4000-8000-000000000b21'),
+  '95000|62000|190000|81000000-0000-4000-8000-000000000b13',
+  'F2 (SQ-1234): the lead''s revision prices the line from the new configuration'
+);
 
 SELECT * FROM finish();
 ROLLBACK;

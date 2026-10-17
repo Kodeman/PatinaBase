@@ -1,7 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00810 · US-37 #4 server: what the client approved, and the post-approval
---         change log (SQ-1106, repaired by SQ-1169 for Astra SQ-1168 and by
---         SQ-1194 for Astra SQ-1190)
+--         change log (SQ-1106, repaired by SQ-1169 for Astra SQ-1168, by
+--         SQ-1194 for Astra SQ-1190 and by SQ-1239 for Astra SQ-1234)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- When a client approves FF&E pricing, the lines and prices she approved are
@@ -80,6 +80,15 @@
 --     set_project_ffe_line_build_fields (00758),
 --     reprice_replacement_purchase_order (00456) and
 --     revise_project_ffe_configuration (00413).
+--   * merge_studio_product (00753) writes no price column, but re-points
+--     lines' product_id, and a product_id change runs 00809's default markup
+--     (aa_ffe_pricing_maintain_trg) on a legacy cost-known unpriced line. It
+--     now takes the job lock of every job with a line on the duplicate, in
+--     project id order, before its products lock (§7c, SQ-1239 for Astra
+--     SQ-1234 F1). product_id is the only non-price column that reaches that
+--     trigger's pricing. The other functions that UPDATE it,
+--     _apply_client_decision_authorized and the placement path below, hold
+--     the job lock already.
 --   * Exempt, from a catalog sweep of every public function that UPDATEs one
 --     of those columns: _place_product_in_project_v2_00438_impl is reached
 --     only through place_product_in_project_v2, which takes the lock first
@@ -89,7 +98,11 @@
 --     reset_project_markups and _place_product_configuration_in_project_impl
 --     take it already. Raw service writes (no function) lock nothing, so an
 --     edit committed by one while a first approval is still open can go
---     unlogged.
+--     unlogged. So does a raw hard DELETE of a product that a line still
+--     names: project_ffe_items.product_id ON DELETE SET NULL (00066) is a
+--     product_id change. Since 00753 a studio product on a line cannot be
+--     deleted (merge instead); a personal product (its owner) and a catalog
+--     product (a super admin) still can.
 -- Isolation: the trigger re-reads ffe_pricing_approvals under READ COMMITTED
 -- (PostgREST's level), after the writer's lock wait, so it sees an approval
 -- committed while the writer waited.
@@ -1211,6 +1224,9 @@ $$;
 --   revise_project_ffe_configuration takes it after its projects FOR SHARE
 --   (compatible with the helper's KEY SHARE) and before its line, spec and
 --   configuration locks.
+--   merge_studio_product (SQ-1239) takes it for each job with a line on the
+--   duplicate before its products lock: job-lock holders take KEY SHARE on a
+--   product they place, so the products may not come first.
 
 -- set_project_ffe_line_commercials: re-grafted from the latest body (00692:31-126).
 -- The only change: the job label lock before its line lock.
@@ -1895,7 +1911,15 @@ END;
 $$;
 
 -- revise_project_ffe_configuration: re-grafted from the latest body (00413:1630-1779).
--- The only change: the job label lock before its line lock.
+-- Two changes: the job label lock before its line lock, and (SQ-1239 for
+-- Astra SQ-1234 F2) the job's own team as the authority. 00413 asked
+-- is_design_studio_comember(designer_id), which admits anyone who shares any
+-- design studio with the lead, so a teammate from another of her studios
+-- could rewrite this job's client price and cost. It now asks
+-- can_buy_for_project (00813), the gate of the 00809 pricing writers
+-- (_ffe_require_studio_project): the lead, or a member of the job's studio.
+-- _can_access_product_configuration stays as a further check on both
+-- configurations; it is not the authority.
 
 CREATE OR REPLACE FUNCTION public.revise_project_ffe_configuration(
   p_project_id uuid,
@@ -1926,7 +1950,7 @@ BEGIN
     RAISE EXCEPTION 'authentication required' USING errcode = 'insufficient_privilege';
   END IF;
   SELECT * INTO v_project FROM public.projects WHERE id = p_project_id FOR SHARE;
-  IF NOT FOUND OR NOT public.is_design_studio_comember(v_project.designer_id) THEN
+  IF NOT FOUND OR NOT public.can_buy_for_project(v_project.id) THEN
     RAISE EXCEPTION 'project not found or not accessible' USING errcode = 'insufficient_privilege';
   END IF;
   PERFORM public._ffe_lock_job_labels(p_project_id);
@@ -2045,6 +2069,187 @@ BEGIN
     'configurationSnapshotHash', v_new.snapshot_hash,
     'status', 'specified',
     'requiresApproval', true
+  );
+END;
+$$;
+
+-- merge_studio_product: re-grafted from the latest body (00753:93-232).
+-- SQ-1239 for Astra SQ-1234 F1. The merge writes no price itself, but it
+-- re-points lines from p_from to p_into, and a product_id change runs 00809's
+-- default markup (aa_ffe_pricing_maintain_trg): a legacy line with a cost, no
+-- client price and no price_basis takes its default price there. So it is a
+-- pricing writer, and it takes the job label lock of every job with a line on
+-- p_from, in project id order, before it re-points them. Two changes:
+--   * The job locks come first, before the products FOR UPDATE. A job-lock
+--     holder that places or fills a line takes KEY SHARE on that product,
+--     which FOR UPDATE blocks, so job locks taken after the products would
+--     invert R182. The jobs are read without a lock, and only jobs the caller
+--     may buy for are locked; the existing gate refuses the rest.
+--   * A line that reached p_from after that read sits in a job this merge
+--     does not hold. Once the products are locked no line can reach p_from,
+--     so the merge checks once and refuses with 40001 (try again) rather than
+--     take that job's lock after the products.
+-- CREATE OR REPLACE keeps its ACL (authenticated only) and comment.
+
+CREATE OR REPLACE FUNCTION public.merge_studio_product(p_from uuid, p_into uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+DECLARE
+  v_from public.products%ROWTYPE;
+  v_into public.products%ROWTYPE;
+  v_project_id uuid;
+  v_jobs uuid[];
+  v_lines integer := 0;
+  v_board_items integer := 0;
+  v_project_products integer := 0;
+  v_merged_records integer := 0;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'authentication required'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_from IS NULL OR p_into IS NULL THEN
+    RAISE EXCEPTION 'Name the duplicate and the product to keep.'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF p_from = p_into THEN
+    RAISE EXCEPTION 'A product cannot merge into itself.'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  -- 00810 (SQ-1239): the job label lock of each job with a line on the
+  -- duplicate, in project id order, before the products lock (R182).
+  SELECT COALESCE(array_agg(DISTINCT item.project_id ORDER BY item.project_id), ARRAY[]::uuid[])
+  INTO v_jobs
+  FROM public.project_ffe_items item
+  WHERE item.product_id = p_from
+    AND public.can_buy_for_project(item.project_id);
+  FOREACH v_project_id IN ARRAY v_jobs LOOP
+    PERFORM public._ffe_lock_job_labels(v_project_id);
+  END LOOP;
+
+  -- Lock both rows in id order, so two crossed merges cannot deadlock.
+  PERFORM 1 FROM public.products
+  WHERE id IN (p_from, p_into)
+  ORDER BY id
+  FOR UPDATE;
+
+  SELECT * INTO v_from FROM public.products WHERE id = p_from;
+  SELECT * INTO v_into FROM public.products WHERE id = p_into;
+
+  -- The products_studio_update USING (00152:363), for both rows.
+  IF v_from.id IS NULL OR v_into.id IS NULL
+     OR v_from.layer IS DISTINCT FROM 'studio'
+     OR v_into.layer IS DISTINCT FROM 'studio'
+     OR NOT EXISTS (
+       SELECT 1 FROM public.organization_members om
+       WHERE om.user_id = auth.uid()
+         AND om.organization_id = v_from.studio_id
+         AND om.status = 'active'
+         AND om.role IN ('owner', 'admin', 'member')
+     )
+  THEN
+    RAISE EXCEPTION 'product not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_into.studio_id IS DISTINCT FROM v_from.studio_id THEN
+    RAISE EXCEPTION 'product not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_from.merged_into_id IS NOT NULL OR v_from.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'This product was already merged or removed.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_into.merged_into_id IS NOT NULL OR v_into.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'The product to keep was merged or removed.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Every project with a line on the duplicate must be one the caller may buy
+  -- for; the merge writes those lines.
+  FOR v_project_id IN
+    SELECT DISTINCT item.project_id
+    FROM public.project_ffe_items item
+    WHERE item.product_id = p_from
+    ORDER BY item.project_id
+  LOOP
+    PERFORM public._ffe_require_studio_project(v_project_id);
+  END LOOP;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.project_ffe_items item
+    JOIN public.project_ffe_specs spec ON spec.ffe_item_id = item.id
+    WHERE item.product_id = p_from
+      AND spec.configuration_id IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'A line uses a configuration of this product, so it cannot merge.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- 00810 (SQ-1239): every line on the duplicate sits in a job locked above.
+  IF EXISTS (
+    SELECT 1 FROM public.project_ffe_items item
+    WHERE item.product_id = p_from
+      AND item.project_id <> ALL (v_jobs)
+  ) THEN
+    RAISE EXCEPTION 'A line was added to this product while it merged. Try the merge again.'
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+
+  -- Lines: re-pointed, never un-filled.
+  PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+  UPDATE public.project_ffe_items
+  SET product_id = p_into
+  WHERE product_id = p_from;
+  GET DIAGNOSTICS v_lines = ROW_COUNT;
+  PERFORM set_config('app.ffe_mutation_rpc', '', true);
+
+  -- Board items, after the lines, so guard_board_selection_ownership sees the
+  -- linked line already on p_into. Issued proposal copy is left as it was.
+  UPDATE public.proposal_board_items board_item
+  SET product_id = p_into
+  WHERE board_item.product_id = p_from
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.proposal_boards board
+      JOIN public.proposals proposal ON proposal.id = board.proposal_id
+      WHERE board.id = board_item.board_id
+        AND proposal.status <> 'draft'
+    );
+  GET DIAGNOSTICS v_board_items = ROW_COUNT;
+
+  UPDATE public.project_products listed
+  SET product_id = p_into
+  WHERE listed.product_id = p_from
+    AND NOT EXISTS (
+      SELECT 1 FROM public.project_products kept
+      WHERE kept.project_id = listed.project_id
+        AND kept.product_id = p_into
+    );
+  GET DIAGNOSTICS v_project_products = ROW_COUNT;
+
+  UPDATE public.products
+  SET merged_into_id = p_into
+  WHERE merged_into_id = p_from;
+  GET DIAGNOSTICS v_merged_records = ROW_COUNT;
+
+  UPDATE public.products
+  SET merged_into_id = p_into,
+      deleted_at = now()
+  WHERE id = p_from;
+
+  RETURN jsonb_build_object(
+    'fromId', p_from,
+    'intoId', p_into,
+    'lines', v_lines,
+    'boardItems', v_board_items,
+    'projectProducts', v_project_products,
+    'earlierMerges', v_merged_records
   );
 END;
 $$;

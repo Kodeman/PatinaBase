@@ -11560,4 +11560,14 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 
 **Currency (SQ-1194, Astra SQ-1190 F3).** The change log records a currency change like any other pricing field, with the old and the new code, because a currency change alone flips `differs`.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · last id = R188*
+### R190 · A studio's prices are written only by that studio's people; a product merge is a pricing writer — US-37 D5, R188 amended — SQ-1239 2026-10-17
+
+**Ruling (Kody).** A studio's prices are written only by that studio's people.
+
+**Configuration revisions (Astra SQ-1234 F2).** `revise_project_ffe_configuration` rewrites a line's client price and cost from the new configuration. Since 00413 it let in any design-studio co-member of the job's lead (`is_design_studio_comember(designer_id)`), so a designer of another studio who shares any studio with the lead could reprice a job that names its own studio. 00810 gates it on `can_buy_for_project`, the gate every 00809 writer uses: the lead, or an active non-guest member of `projects.studio_id`, and on a studio-less job the lead's design-studio co-members who are not its client. `_can_access_product_configuration` stays as a further check, not the authority.
+
+**Product merge (Astra SQ-1234 F1).** `merge_studio_product` writes no price column, but it re-points lines to the kept product, and that `product_id` change runs the 00809 default markup on a legacy line that has a cost and no client price. So it is a pricing writer under R188. It takes the job label lock of each job with a line on the duplicate, in project id order, before its products lock: a job-lock holder that places or fills a line takes KEY SHARE on that product, so the products may not come first (R182). A line that reaches the duplicate in another job during the merge refuses the merge with 40001 (try again) rather than take that job's lock late.
+
+**Not covered.** A raw hard delete of a product a line names (the FK sets `product_id` to NULL), and the 00422 configuration guard's status→approved price rewrite, which `po_status_cascade_to_items` and `void_studio_purchase` can reach without the job lock, still lock nothing. Measured by `supabase/tests/ffe/us37_pricing_approval_test.sql`.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R190 · last id = R190*
