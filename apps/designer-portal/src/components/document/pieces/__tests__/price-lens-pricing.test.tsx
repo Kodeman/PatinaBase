@@ -334,6 +334,63 @@ describe("Price lens: the summary's tax, target and uncosted lines", () => {
   });
 });
 
+function summaryClient(): string {
+  const summary = screen.getByRole("region", { name: "Job summary" });
+  return within(summary).getByText("Client").nextElementSibling?.textContent ?? "";
+}
+
+describe("Price lens: the boundaries (SQ-1164)", () => {
+  it("counts an allowance at its ceiling exactly: $1.00 over 3 units is $1.00 in the Client total and the tax", () => {
+    mockItems.data = [
+      {
+        ...base,
+        id: "a1",
+        name: "Hardware",
+        item_type: "allowance",
+        quantity: 3,
+        budget_max_cents: 100,
+        trade_price_cents: null,
+        unit_price_cents: null,
+      },
+    ];
+    // 9.5% of 100¢ is 9.5¢ → 10¢; of a drifted 99¢ it would be 9.405¢ → 9¢.
+    mockProjectPricing.data = { markupTargetPercent: null, salesTaxRate: 0.095 };
+    renderLens();
+    expect(cell("Hardware", "Line total")).toHaveTextContent("$1");
+    expect(summaryClient()).toBe("$1");
+    expect(figure("tax")).toBe("$0.10");
+    expect(figure("total-with-tax")).toBe("$1.10");
+  });
+
+  it("shows a saved −100% markup as a price: −100.0%, $0 each and $0 for the line, counted at $0", () => {
+    // set_ffe_line_pricing marks the line priced (price_basis); a bare 0 is the column default.
+    mockItems.data = fixture({ s5: { unit_price_cents: 0, price_basis: "markup" } });
+    renderLens();
+    expect(screen.getByLabelText("Markup, Lamp")).toHaveValue("−100.0%");
+    expect(screen.getByLabelText("Unit client price, Lamp")).toHaveValue("$0");
+    expect(cell("Lamp", "Line total")).toHaveTextContent(/^\$0$/);
+    expect(
+      within(rowOf("Lamp")).getByText("−100.0% markup on $200 = $0 · — margin"),
+    ).toBeInTheDocument();
+    // The lamp's $270 is gone from the client total; its $200 cost stays in the blend.
+    expect(summaryClient()).toBe("$8,608.95");
+    // (860,895 − 657,700) / 657,700 = 30.9%.
+    expect(figure("blended-markup")).toBe("30.9%");
+  });
+
+  it("shows a typed −100% markup as a price at once, before the server answers", () => {
+    renderLens();
+    typeAndEnter("Markup, Rug", "-100");
+    expect(mockLinePricing).toHaveBeenCalledWith(
+      { projectId: "proj", itemId: "s2", field: "markup_percent", value: -100 },
+      expect.anything(),
+    );
+    expect(screen.getByLabelText("Markup, Rug")).toHaveValue("−100.0%");
+    expect(screen.getByLabelText("Unit client price, Rug")).toHaveValue("$0");
+    expect(cell("Rug", "Line total")).toHaveTextContent(/^\$0$/);
+  });
+});
+
 describe("Price lens: retail, refusals and resets", () => {
   it("notes a client price above retail, softly; none without a retail or under it", () => {
     mockItems.data = fixture({

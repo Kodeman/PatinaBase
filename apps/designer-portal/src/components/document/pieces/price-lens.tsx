@@ -169,16 +169,31 @@ function withPending(line: PriceLine, pending: PendingFigure | undefined): Price
   if (field === "quantity") return { ...line, quantity: value ?? line.quantity };
   if (field === "retail_unit_cents") return { ...line, retail_unit_cents: value };
   if (field === "unit_cost_cents") return { ...line, trade_price_cents: value };
-  if (field === "unit_client_price_cents") return { ...line, unit_price_cents: value };
+  if (field === "unit_client_price_cents")
+    return { ...line, unit_price_cents: value, price_basis: "client" };
   // markup_percent: the client price follows from the cost; the cost never moves.
   const cost = line.trade_price_cents ?? 0;
   return cost > 0 && value != null
-    ? { ...line, unit_price_cents: clientFromMarkup(cost, value) }
+    ? {
+        ...line,
+        unit_price_cents: clientFromMarkup(cost, value),
+        price_basis: "markup",
+      }
     : line;
 }
 
 const positive = (cents: number | null | undefined): cents is number =>
   cents != null && cents > 0;
+
+/**
+ * The line's unit client price, or null when it has none. A 0 is the
+ * column's default, so it is a price only once one was set (`price_basis`,
+ * 00809): a −100% markup is priced at $0, a new line is not priced.
+ */
+function clientPriceOf(line: PriceLine): number | null {
+  const cents = line.unit_price_cents ?? null;
+  return cents != null && (cents > 0 || line.price_basis != null) ? cents : null;
+}
 
 function allowanceCeiling(line: PriceLine): number | null {
   return line.item_type === "allowance" && positive(line.budget_max_cents)
@@ -186,24 +201,35 @@ function allowanceCeiling(line: PriceLine): number | null {
     : null;
 }
 
-/** One line as `summarizeJob` reads it: per unit, 0 read as none. */
+/**
+ * One line as `summarizeJob` reads it, per unit. A cost of 0 reads as none; a
+ * client price of 0 is a price once one was set (`clientPriceOf`). An
+ * allowance counts at its ceiling exactly, so it goes in as one unit carrying
+ * the line's totals: a ceiling split per unit and multiplied back would drift
+ * by the rounding.
+ */
 export function pricingLineOf(line: PriceLine): PricingLine {
   const quantity = line.quantity ?? 0;
   const ceiling = allowanceCeiling(line);
-  const client =
-    ceiling != null
-      ? Math.round(ceiling / Math.max(1, quantity))
-      : positive(line.unit_price_cents)
-        ? line.unit_price_cents
-        : null;
+  const cost = positive(line.trade_price_cents) ? line.trade_price_cents : null;
+  const kind =
+    line.line_kind === "goods" || !line.line_kind
+      ? "product"
+      : (line.line_kind as PricingLine["kind"]);
+  if (ceiling != null) {
+    return {
+      kind,
+      quantity: 1,
+      unitCostCents: cost == null ? null : cost * quantity,
+      unitClientCents: ceiling,
+      retailUnitCents: null,
+    };
+  }
   return {
-    kind:
-      line.line_kind === "goods" || !line.line_kind
-        ? "product"
-        : (line.line_kind as PricingLine["kind"]),
+    kind,
     quantity,
-    unitCostCents: positive(line.trade_price_cents) ? line.trade_price_cents : null,
-    unitClientCents: client,
+    unitCostCents: cost,
+    unitClientCents: clientPriceOf(line),
     retailUnitCents: line.retail_unit_cents ?? null,
   };
 }
@@ -233,6 +259,8 @@ interface PriceLine extends OverviewLine {
   product?: { name?: string | null } | null;
   /** 00809, studio-only. */
   retail_unit_cents?: number | null;
+  /** The field edited last; null on a line never priced. */
+  price_basis?: string | null;
   pending_cost_prev_cents?: number | null;
   pending_cost_changed_at?: string | null;
   pending_markup_held_percent?: number | null;
@@ -509,12 +537,12 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       line.purchase_order_id != null;
     const onOrder =
       line.purchase_order_id != null || ORDERED_ON.has(line.status ?? "");
-    const clientCents = line.unit_price_cents ?? null;
+    const clientCents = clientPriceOf(line);
     const allowanceCents =
       line.item_type === "allowance" && (line.budget_max_cents ?? 0) > 0
         ? (line.budget_max_cents ?? null)
         : null;
-    const priced = (clientCents ?? 0) > 0 || allowanceCents != null;
+    const priced = clientCents != null || allowanceCents != null;
 
     const gates: PriceRow["gates"] = {};
     if (tradeScope) {

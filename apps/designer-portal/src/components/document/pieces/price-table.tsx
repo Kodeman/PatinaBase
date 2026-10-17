@@ -150,15 +150,21 @@ const ROW =
 const ACT =
   "inline-flex min-h-11 items-center font-mono text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--sheet-ink)] underline decoration-[var(--sheet-ink)] decoration-1 underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]";
 
+/** A cost of 0 is no cost. A client price of 0 is a price: a −100% markup. */
 const positive = (cents: number | null | undefined): cents is number =>
   cents != null && cents > 0;
+
+/** `35.0%`, `−100.0%`: a negative figure carries the typeset minus. */
+function pct(value: number | null): string {
+  return formatPct(value).replace("-", "−");
+}
 
 /** The true markup of the line's cents, or null without a cost and a price. */
 export function lineMarkup(
   tradeCents: number | null,
   clientCents: number | null,
 ): number | null {
-  if (!positive(tradeCents) || !positive(clientCents)) return null;
+  if (!positive(tradeCents) || clientCents == null) return null;
   return markupFromClient(tradeCents, clientCents);
 }
 
@@ -167,12 +173,12 @@ export function pricingHelp(
   tradeCents: number | null,
   clientCents: number | null,
 ): string | null {
-  if (!positive(tradeCents) || !positive(clientCents)) return null;
-  return `${formatPct(markupFromClient(tradeCents, clientCents))} markup on ${money(tradeCents)} = ${money(clientCents)} · ${formatPct(marginFromClient(tradeCents, clientCents))} margin`;
+  if (!positive(tradeCents) || clientCents == null) return null;
+  return `${pct(markupFromClient(tradeCents, clientCents))} markup on ${money(tradeCents)} = ${money(clientCents)} · ${pct(marginFromClient(tradeCents, clientCents))} margin`;
 }
 
 function priceText(cents: number | null | undefined): string {
-  return positive(cents) ? money(cents) : DASH;
+  return cents == null ? DASH : money(cents);
 }
 
 function roughText(cents: number | null): string {
@@ -322,15 +328,15 @@ function LineRows({
   onGated,
 }: LineRowProps) {
   const ceiling = positive(row.allowanceCents) ? row.allowanceCents : null;
-  const notPriced = !positive(row.clientCents);
+  const notPriced = row.clientCents == null;
   const markup = ceiling ? null : lineMarkup(row.tradeCents, row.clientCents);
   const margin =
-    ceiling || !positive(row.tradeCents) || !positive(row.clientCents)
+    ceiling || !positive(row.tradeCents) || row.clientCents == null
       ? null
       : marginFromClient(row.tradeCents, row.clientCents);
   const help = ceiling ? null : pricingHelp(row.tradeCents, row.clientCents);
   const lineTotal =
-    ceiling ?? (positive(row.clientCents) ? row.clientCents * row.quantity : null);
+    ceiling ?? (row.clientCents != null ? row.clientCents * row.quantity : null);
   const markupEditable =
     !!row.pricingEditable && !ceiling && positive(row.tradeCents);
   const noteId = `${useId()}-note`;
@@ -434,7 +440,7 @@ function LineRows({
             />
           ) : (
             <span className={cn(NUM_CELL, "block")}>
-              {priceText(row.tradeCents)}
+              {priceText(positive(row.tradeCents) ? row.tradeCents : null)}
             </span>
           )}
         </td>
@@ -443,25 +449,25 @@ function LineRows({
             <FigureInput
               label={`Markup, ${row.name}`}
               value={markup}
-              print={(pct) => formatPct(pct)}
+              print={pct}
               parse={parsePercent}
-              onCommit={(pct) =>
-                pct != null && onPricing(row, "markup_percent", pct)
+              onCommit={(typed) =>
+                typed != null && onPricing(row, "markup_percent", typed)
               }
             />
           ) : (
             // An allowance carries no markup until it is filled.
-            <span className={cn(NUM_CELL, "block")}>{formatPct(markup)}</span>
+            <span className={cn(NUM_CELL, "block")}>{pct(markup)}</span>
           )}
         </td>
         <td data-label="Margin" className={cn(NUM_CELL, CARD_CELL)}>
-          {formatPct(margin)}
+          {pct(margin)}
         </td>
         <td data-label="Unit client" className={cn("p-0", CARD_CELL)}>
           {row.clientEditable && !ceiling ? (
             <FigureInput
               label={`Unit client price, ${row.name}`}
-              value={positive(row.clientCents) ? row.clientCents : null}
+              value={row.clientCents ?? null}
               print={money}
               parse={parseRough}
               onCommit={(cents) =>
@@ -556,8 +562,9 @@ function CostChangeRow({
   onResolve: (resolution: FfeCostChangeResolution) => void;
 }) {
   const cost = positive(row.tradeCents) ? row.tradeCents : null;
-  const client = positive(row.clientCents) ? row.clientCents : null;
-  const keepClientMarkup = cost && client ? markupFromClient(cost, client) : null;
+  const client = row.clientCents ?? null;
+  const keepClientMarkup =
+    cost && client != null ? markupFromClient(cost, client) : null;
   const keepMarkupClient =
     cost && change.heldMarkupPct != null
       ? clientFromMarkup(cost, change.heldMarkupPct)
@@ -584,9 +591,9 @@ function CostChangeRow({
           >
             Keep client price
           </button>
-          {client ? (
+          {client != null ? (
             <span className="t-body-sm text-[var(--sheet-ink-muted)]">
-              {`${money(client)}, ${formatPct(keepClientMarkup)} markup`}
+              {`${money(client)}, ${pct(keepClientMarkup)} markup`}
             </span>
           ) : null}
           <button
@@ -598,7 +605,7 @@ function CostChangeRow({
           </button>
           {keepMarkupClient != null ? (
             <span className="t-body-sm text-[var(--sheet-ink-muted)]">
-              {`${formatPct(change.heldMarkupPct)}, ${money(keepMarkupClient)}`}
+              {`${pct(change.heldMarkupPct)}, ${money(keepMarkupClient)}`}
             </span>
           ) : null}
         </div>
