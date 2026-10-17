@@ -195,6 +195,48 @@ describe('AskMakerSheet', () => {
     expect(labels).toEqual(['Hold for review', 'Discard']);
   });
 
+  it('shows each missing field reason beside its input and describes the input', () => {
+    renderWithQuery(
+      <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />,
+    );
+    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: '' } });
+
+    const subject = screen.getByLabelText('Subject');
+    const note = screen.getByLabelText('Note');
+    const subjectReasonId = subject.getAttribute('aria-describedby');
+    const noteReasonId = note.getAttribute('aria-describedby');
+    expect(subjectReasonId).toBeTruthy();
+    expect(noteReasonId).toBeTruthy();
+    expect(document.getElementById(subjectReasonId!)).toHaveTextContent('Add a subject to continue.');
+    expect(document.getElementById(noteReasonId!)).toHaveTextContent('Add a note to continue.');
+  });
+
+  it('opens a window per missing note field and lifts each as it is filled', async () => {
+    renderWithQuery(
+      <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />,
+    );
+    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Hold for review' }));
+
+    await waitFor(() =>
+      expect(
+        Array.from(document.querySelectorAll('[data-hold-spotlight-window]')).map((el) =>
+          el.getAttribute('data-hold-spotlight-window'),
+        ),
+      ).toEqual(['ask-maker-subject', 'ask-maker-body']),
+    );
+    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Arrival date' } });
+    await waitFor(() =>
+      expect(
+        Array.from(document.querySelectorAll('[data-hold-spotlight-window]')).map((el) =>
+          el.getAttribute('data-hold-spotlight-window'),
+        ),
+      ).toEqual(['ask-maker-body']),
+    );
+  });
+
   it('Hold for review POSTs only the line and the note; the maker is read server-side', async () => {
     const onHeld = jest.fn();
     renderWithQuery(

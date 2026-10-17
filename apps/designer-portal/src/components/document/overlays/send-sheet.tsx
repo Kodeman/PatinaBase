@@ -504,6 +504,19 @@ export function SendSheet({
                     : 'Confirm sending with parts still missing first.';
   // In flight keeps its own native-disabled "Sending…" form; held is the refusal.
   const sendHeld = sendHeldReason !== null && !sendProposal.isPending;
+  const ccSendHold = sendHeld && sendHeldReason === 'Correct the CC address first.';
+  const incompleteAckHold =
+    sendHeld &&
+    sendHeldReason === 'Confirm sending with parts still missing first.' &&
+    Boolean(readiness?.requiresIncompleteAcknowledgement && !acknowledgedIncomplete);
+  const sendSpotlightHolds = [
+    ...(ccSendHold
+      ? [{ id: 'send-sheet-cc-hold', target: () => document.getElementById('send-sheet-cc'), label: 'CC address', reason: 'Correct the CC address first.' }]
+      : []),
+    ...(incompleteAckHold
+      ? [{ id: 'send-sheet-ack-hold', target: () => document.getElementById('send-sheet-incomplete-acknowledgement'), label: 'Incomplete acknowledgement', reason: 'Confirm sending with parts still missing first.' }]
+      : []),
+  ];
 
   const handleSend = async () => {
     if (!canSend || sendAttemptInFlight.current) return;
@@ -849,7 +862,7 @@ export function SendSheet({
                   maxLength={254}
                   aria-invalid={ccEmailError ? true : undefined}
                   aria-describedby={
-                    ccEmailError ? 'send-sheet-cc-error' : undefined
+                    ccEmailError ? 'send-sheet-cc-error' : ccSendHold ? 'send-sheet-cc-hold-reason' : undefined
                   }
                   className={fieldCls}
                 />
@@ -862,6 +875,7 @@ export function SendSheet({
                     {ccEmailError}
                   </p>
                 )}
+                {ccSendHold && <p id="send-sheet-cc-hold-reason" className="text-[11px] text-[var(--text-muted)]">Correct the CC address first.</p>}
               </div>
 
               {/* Expiry */}
@@ -962,6 +976,7 @@ export function SendSheet({
                     ))}
                     <label className="mt-2 flex items-start gap-2">
                       <input
+                        id="send-sheet-incomplete-acknowledgement"
                         type="checkbox"
                         checked={acknowledgedIncomplete}
                         onChange={(event) =>
@@ -971,6 +986,7 @@ export function SendSheet({
                       />
                       <span>I reviewed the missing parts and still want to send this version.</span>
                     </label>
+                    {incompleteAckHold && <p id="send-sheet-ack-hold-reason" className="mt-1 text-[11px] text-[var(--text-muted)]">Confirm sending with parts still missing first.</p>}
                   </div>
                 )}
 
@@ -1098,7 +1114,16 @@ export function SendSheet({
                     onClick={handleSend}
                     disabled={!canSend}
                     held={sendHeld}
-                    aria-describedby={sendHeld ? sendReasonId : undefined}
+                    holds={sendSpotlightHolds}
+                    aria-describedby={
+                      sendHeld
+                        ? ccSendHold
+                          ? 'send-sheet-cc-hold-reason'
+                          : incompleteAckHold
+                            ? 'send-sheet-ack-hold-reason'
+                            : sendReasonId
+                        : undefined
+                    }
                     loading={sendProposal.isPending}
                     loadingLabel="Sending…"
                     trailing="→"
@@ -1112,7 +1137,7 @@ export function SendSheet({
                   >
                     Send later
                   </DocumentAction>
-                  {sendHeld && (
+                  {sendHeld && sendSpotlightHolds.length === 0 && (
                     <p
                       id={sendReasonId}
                       className="basis-full text-[11.5px] text-[var(--text-muted)]"

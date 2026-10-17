@@ -19,6 +19,9 @@ import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { overdueMarginDecisionTitles, waitingOnNamed } from '@/lib/document/nudge-named';
 import { LetterheadInstruments } from '../letterhead-instruments';
 
+const mockLinkHold = { value: null as string | null };
+const mockViewerId = { value: null as string | null };
+const mockProject = { value: {} as Record<string, unknown> };
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({
@@ -32,9 +35,9 @@ jest.mock('@patina/supabase', () => ({
     storage: { from: () => ({ createSignedUrls: () => Promise.resolve({ data: [], error: null }) }) },
     auth: { getUser: () => Promise.resolve({ data: { user: null } }) },
   }),
-  useProjectV2: () => ({ data: {} }),
-  useSessionUserId: () => null,
-  useDocumentClientLinkHold: () => ({ data: null }),
+  useProjectV2: () => ({ data: mockProject.value }),
+  useSessionUserId: () => mockViewerId.value,
+  useDocumentClientLinkHold: () => ({ data: mockLinkHold.value }),
   useProjectRoster: () => ({ data: [] }),
   resolveCoverPhoto: () => null,
   publicUrlToPath: () => null,
@@ -84,9 +87,53 @@ const note = () => screen.getByPlaceholderText('A quick note to Nora…');
 
 beforeEach(() => {
   mockOneVoice = true;
+  mockLinkHold.value = null;
+  mockViewerId.value = null;
+  mockProject.value = {};
 });
 
 describe('Nudge {first} lands on the Message composer (F3-2)', () => {
+  it('windows the in-frame Invite repair for a linked household with no login', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <div data-spotlight-frame="true">
+          <LetterheadInstruments
+            projectId="proj-1"
+            clientProfileId={null}
+            clientName="Nora Chen"
+            designerClientId="dc-1"
+          />
+        </div>
+      </QueryClientProvider>,
+    );
+    const invite = screen.getByRole('button', { name: 'Invite Nora' });
+    fireEvent.click(screen.getByRole('button', { name: 'Message Nora' }));
+    await waitFor(() =>
+      expect(document.querySelector(`[data-hold-spotlight-window="${invite.id}"]`)).toBeInTheDocument(),
+    );
+  });
+
+  it('windows Copy a note for a project whose lead must link its client', async () => {
+    mockProject.value = { name: 'Chen Residence', designer_id: 'lead-1' };
+    mockViewerId.value = 'viewer-1';
+    mockLinkHold.value = 'not_permitted';
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <div data-spotlight-frame="true">
+          <LetterheadInstruments projectId="proj-1" clientProfileId={null} clientName="Nora Chen" />
+        </div>
+      </QueryClientProvider>,
+    );
+    const message = screen.getByRole('button', { name: 'Message the client' });
+    const reasonId = message.getAttribute('aria-describedby')!;
+    const fixId = `${reasonId}-fix`;
+    fireEvent.click(message);
+    await waitFor(() =>
+      expect(document.querySelector(`[data-hold-spotlight-window="${fixId}"]`)).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Copy a note' })).toBeInTheDocument();
+  });
+
   it('opens the composer with focus in its note, the overdue decisions named', async () => {
     renderFor();
     expect(screen.queryByPlaceholderText('A quick note to Nora…')).toBeNull();

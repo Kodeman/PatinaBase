@@ -193,6 +193,11 @@ export function AskMakerSheet({
     [piece, followUp],
   );
   const hasMaker = draft.to !== null;
+  const instanceId = useId();
+  const subjectFixId = `${instanceId}-ask-maker-subject-fix`;
+  const bodyFixId = `${instanceId}-ask-maker-body-fix`;
+  const subjectReasonId = `${instanceId}-ask-maker-subject-reason`;
+  const bodyReasonId = `${instanceId}-ask-maker-body-reason`;
   const title = followUp ? NEED_ACT_LABELS.po_unacknowledged : 'Ask the maker for a date';
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
@@ -258,7 +263,7 @@ export function AskMakerSheet({
               <span className="mr-2 font-mono text-[12px] uppercase tracking-[0.1em]">To</span>
               {draft.to ?? NO_MAKER}
             </p>
-            <div>
+            <div id={subjectFixId}>
               <label
                 htmlFor="ask-maker-subject"
                 className="mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
@@ -270,10 +275,12 @@ export function AskMakerSheet({
                 ref={subjectRef}
                 value={subject}
                 maxLength={200}
+                aria-describedby={!subject.trim() ? subjectReasonId : undefined}
                 onChange={(event) => setSubject(event.target.value)}
               />
+              {!subject.trim() && <p id={subjectReasonId} className="text-[11px] text-[var(--text-muted)]">Add a subject to continue.</p>}
             </div>
-            <div>
+            <div id={bodyFixId}>
               <label
                 htmlFor="ask-maker-body"
                 className="mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
@@ -286,8 +293,10 @@ export function AskMakerSheet({
                 rows={10}
                 value={body}
                 maxLength={4000}
+                aria-describedby={!body.trim() ? bodyReasonId : undefined}
                 onChange={(event) => setBody(event.target.value)}
               />
+              {!body.trim() && <p id={bodyReasonId} className="text-[11px] text-[var(--text-muted)]">Add a note to continue.</p>}
             </div>
             {hold.isError && (
               <div className="flex flex-col items-start gap-1">
@@ -323,6 +332,24 @@ export function AskMakerSheet({
                 variant="primary"
                 disabled={!canHold}
                 held={!canHold}
+                holds={[
+                  ...(subject.trim()
+                    ? []
+                    : [{
+                        id: 'ask-maker-subject',
+                        target: () => document.getElementById(subjectFixId) as HTMLElement | null,
+                        label: 'Subject',
+                        reason: 'Add a subject to continue.',
+                      }]),
+                  ...(body.trim()
+                    ? []
+                    : [{
+                        id: 'ask-maker-body',
+                        target: () => document.getElementById(bodyFixId) as HTMLElement | null,
+                        label: 'Note',
+                        reason: 'Add a note to continue.',
+                      }]),
+                ]}
                 aria-describedby={canHold ? undefined : 'ask-maker-hold-reason'}
                 loading={hold.isPending}
                 loadingLabel="Holding…"
@@ -399,6 +426,7 @@ function InstallReadingLive({
   // the sheet settles the review there instead of flipping it back to a compose.
   const [sheet, setSheet] = useState<{ held: ProcurementDraftRow | null } | null>(null);
   const actRef = useRef<HTMLButtonElement | null>(null);
+  const makerFixId = useId();
   const reasonId = useId();
   // US-19 F2-12 (one-voice, V9) — a named act is scored, never the flooded ink.
   const oneVoice = useFeatureFlag('one-voice').value === true;
@@ -542,6 +570,7 @@ function InstallReadingLive({
             </DocumentAction>
             {heldReason === NO_MAKER && (
               <DocumentAction
+                id={makerFixId}
                 ref={addMakerRef}
                 actionKey="install-reading-add-maker"
                 surfaceKey="project"
