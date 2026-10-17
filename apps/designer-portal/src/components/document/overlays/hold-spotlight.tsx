@@ -87,18 +87,24 @@ const footChrome = (host: HTMLElement) => {
   return 0;
 };
 
+// The bar's clearance from the active window, past the window's label.
+const BAR_CLEAR = LABEL_ROOM + 8;
+
 /**
  * The bar's top, in viewport coordinates: at the foot of the frame's visible
  * part (a phone: of the viewport, unless the frame clips it), and never off
- * the screen, so a sheet taller than the viewport still shows it.
+ * the screen, so a sheet taller than the viewport still shows it. Where that
+ * foot would cover the active window, the bar goes above the window when it
+ * fits in the frame's visible part, else below it.
  */
-function spotlightBarTop({
+export function spotlightBarTop({
   frameTop,
   frameBottom,
   floor,
   barHeight,
   narrow,
   clips,
+  active,
 }: {
   frameTop: number;
   frameBottom: number;
@@ -108,11 +114,28 @@ function spotlightBarTop({
   narrow: boolean;
   /** The frame clips its own content (a sheet panel that scrolls). */
   clips: boolean;
+  /** The active window, in viewport coordinates. */
+  active?: { top: number; bottom: number };
 }) {
   const foot = narrow && !clips ? floor : Math.min(floor, frameBottom);
   const top = Math.max(foot - (narrow ? 0 : 16) - barHeight, frameTop);
-  return Math.max(0, Math.min(top, floor - barHeight));
+  const docked = Math.max(0, Math.min(top, floor - barHeight));
+  if (!active || docked >= active.bottom || docked + barHeight <= active.top)
+    return docked;
+  const above = active.top - BAR_CLEAR - barHeight;
+  if (above >= Math.max(frameTop, 0)) return above;
+  const below = active.bottom + BAR_CLEAR;
+  return below + barHeight <= floor ? below : docked;
 }
+
+// The nearest ancestor that scrolls the frame along with its content.
+const scrollParent = (el: HTMLElement) => {
+  for (let up = el.parentElement; up; up = up.parentElement)
+    if (/auto|scroll/.test(window.getComputedStyle(up).overflowY)) return up;
+  return document.scrollingElement instanceof HTMLElement
+    ? document.scrollingElement
+    : null;
+};
 
 type SpotWindow = { id: string; x: number; y: number; w: number; h: number };
 type Geometry = {
@@ -216,6 +239,12 @@ export function HoldSpotlight({
     // typing that clears a hold on its first key keeps going. Its window goes
     // at once, so a filled field never reads as still wanted.
     let linger: { id: string; el: HTMLElement } | null = null;
+    let reserved: { el: HTMLElement; prior: string; height: number } | null =
+      null;
+    const unreserve = () => {
+      if (reserved) reserved.el.style.paddingBottom = reserved.prior;
+      reserved = null;
+    };
     const staticHost = window.getComputedStyle(host).position === "static";
     const priorPosition = host.style.position;
     if (staticHost) host.style.position = "relative";
@@ -408,10 +437,24 @@ export function HoldSpotlight({
       const barHeight = bar?.offsetHeight ?? 0;
       // A scrolling frame gets room past its content for the docked bar, so
       // the last window can scroll clear of it.
-      const reserve = /auto|scroll/.test(hostStyle.overflowY)
-        ? barHeight + (narrow ? 0 : 32)
-        : 0;
+      const scrolls = /auto|scroll/.test(hostStyle.overflowY);
+      const reserve = scrolls ? barHeight + (narrow ? 0 : 32) : 0;
       const height = Math.max(host.clientHeight, bottom + reserve);
+      // A phone docks the bar over the viewport's foot, past a frame that
+      // scrolls with its container: that container gets the bar's height as
+      // room, so a window at the frame's foot can scroll clear of it.
+      const scroller = narrow && !scrolls ? scrollParent(host) : null;
+      if (reserved && (reserved.el !== scroller || reserved.height !== barHeight))
+        unreserve();
+      if (scroller && barHeight && !reserved) {
+        const prior = scroller.style.paddingBottom;
+        const base =
+          Number.parseFloat(window.getComputedStyle(scroller).paddingBottom) ||
+          0;
+        scroller.style.paddingBottom = `${base + barHeight}px`;
+        reserved = { el: scroller, prior, height: barHeight };
+      }
+      const activeWindow = windows.find((win) => win.id === active?.hold.id);
       // Placed on every sync (scroll, resize, a new active window), above the
       // fixed chrome at the viewport's foot.
       const barTop =
@@ -422,6 +465,10 @@ export function HoldSpotlight({
           barHeight,
           narrow,
           clips: /auto|scroll|hidden|clip/.test(hostStyle.overflowY),
+          active: activeWindow && {
+            top: activeWindow.y + oy,
+            bottom: activeWindow.y + activeWindow.h + oy,
+          },
         }) - oy;
       const ids = found.map((entry) => entry.hold.id);
       const key = JSON.stringify([ids, windows, width, height, barTop]);
@@ -580,6 +627,7 @@ export function HoldSpotlight({
       mutations.disconnect();
       resizer.disconnect();
       marked.forEach((el) => el.removeAttribute("inert"));
+      unreserve();
       if (staticHost) host.style.position = priorPosition;
       advanceRef.current = null;
       dismissRef.current = null;
