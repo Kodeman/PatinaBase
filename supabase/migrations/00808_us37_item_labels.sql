@@ -40,6 +40,18 @@
 --     the job would fail. Taking the projects row first keeps a path that
 --     locks the job row FOR UPDATE before it inserts items (apply_scope_change,
 --     _execute_furnishings_authorization_*) ahead of the label lock too.
+--   * Outermost (SQ-1137). "First" means first in the whole transaction, so
+--     the lock goes at the outermost entry: a caller that locks a row and
+--     then reaches a path that takes the job label lock inverts the order
+--     even when the inner path takes the lock first. The job label lock comes
+--     before every row lock that a holder of the job label lock can also
+--     take: items, selection threads, decisions and their options, decision
+--     batches (an option write re-versions open batches, 00651),
+--     configurations (a spec's key-share), board placements. A row no holder
+--     takes may come first: the SMS prompt or message being answered, an
+--     import batch and its own rows, the proposal or trade scope being
+--     activated or engaged. Activation inserts into a job it created in the
+--     same transaction, which no one else can lock.
 --
 -- New: _ffe_lock_job_labels, _ffe_item_label_prefix, _ffe_next_item_label, ffe_assign_item_label
 -- (BEFORE INSERT/UPDATE trigger zz_ffe_assign_item_label_trg), the unique index
@@ -59,8 +71,13 @@
 -- only the job label lock added: restore_project_selection (00737),
 -- supersede_project_selection (00758), add_labor_line (00737),
 -- place_product_in_project_v2 (00752), triage_project_ffe_items (00759),
--- _apply_client_decision_authorized (00763). A later migration that redefines
--- any of them grafts from here. Reconciles: none.
+-- _apply_client_decision_authorized (00763). Section 9 (SQ-1137) redefines
+-- the outer callers the same way: place_product_configuration_in_project
+-- (00462), promote_board_reference_to_selection (00435), apply_client_effect
+-- (00652), apply_client_decision (00464), apply_decision (00399),
+-- apply_decision_override (00399), _resolve_coordination_item_authorized
+-- (00399). A later migration that redefines any of them grafts from here.
+-- Reconciles: none.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ─── 0. The job label lock ──────────────────────────────────────────────────
@@ -1044,14 +1061,17 @@ DECLARE
   v_trade_price integer;
   v_markup numeric(5,2);
 BEGIN
+  -- 00808 (SQ-1137): the job label lock comes before the decision row lock,
+  -- through an unlocked read of the decision's job. It is unconditional: whether
+  -- this answer writes an item (status, blocking, the chosen option) is only
+  -- settled under the decision row lock.
+  PERFORM public._ffe_lock_job_labels(decision.project_id)
+  FROM public.client_decisions AS decision WHERE decision.id = p_decision_id;
+
   SELECT * INTO v_decision
   FROM public.client_decisions
   WHERE id = p_decision_id
   FOR UPDATE;
-
-  -- 00808 (SQ-1121): the job label lock comes before any item row lock
-  -- (after the decision row, as _resolve_coordination_item_authorized has it).
-  PERFORM public._ffe_lock_job_labels(v_decision.project_id);
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'decision % not found', p_decision_id
@@ -1325,5 +1345,976 @@ BEGIN
     p_decision_id, 'decision_resolved'
   );
   RETURN v_decision;
+END;
+$$;
+
+-- ─── 9. Lock order at the outermost entry (SQ-1137) ────────────────────────
+-- Astra SQ-1135 F1/F3/F4. Section 8 put the job label lock first inside each
+-- path, but a caller that locks a row before reaching one of them still runs
+-- row → job label lock against a holder that runs job label lock → that row.
+-- Each body below is its latest definition, grafted whole; the only change is
+-- the job label lock before its first row lock that a holder can also take.
+-- CREATE OR REPLACE keeps each one's grants.
+
+-- place_product_configuration_in_project — base 00462_workflow_privacy_authority.sql:2074. F1. The impl (00722) takes the configuration row before it places, and placing takes the job label lock, while a placement holding the job label lock writes project_ffe_specs.configuration_id (a key-share on that configuration). The job label lock now comes first, at this public entry.
+CREATE OR REPLACE FUNCTION public.place_product_configuration_in_project(
+  p_project_id uuid,
+  p_configuration_id uuid,
+  p_room_id uuid DEFAULT NULL,
+  p_slot_id uuid DEFAULT NULL,
+  p_category text DEFAULT NULL,
+  p_source jsonb DEFAULT '{}'::jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_previous text := current_setting('app.configuration_child_capability', true);
+  v_result jsonb;
+BEGIN
+  -- 00808 (SQ-1137): the job label lock comes before the impl's configuration
+  -- row lock and every row lock after it.
+  PERFORM public._ffe_lock_job_labels(p_project_id);
+  PERFORM set_config('app.configuration_child_capability',
+    format('configuration_children:%s', pg_catalog.txid_current()), true);
+  v_result := public._place_product_configuration_in_project_impl(
+    p_project_id, p_configuration_id, p_room_id, p_slot_id, p_category, p_source
+  );
+  PERFORM set_config('app.configuration_child_capability', COALESCE(v_previous, ''), true);
+  RETURN v_result;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('app.configuration_child_capability', COALESCE(v_previous, ''), true);
+  RAISE;
+END;
+$$;
+
+-- promote_board_reference_to_selection — base 00435_ffe_ga_rpc_boundaries.sql:460. F4. It locked the board placement row and then placed (job label lock), while supersede holds the job label lock and then repoints those placements. Authority is now checked first from an unlocked read, then the job label lock, then the original body.
+CREATE OR REPLACE FUNCTION public.promote_board_reference_to_selection(
+  p_board_item_id uuid,
+  p_request jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+DECLARE v_board_id uuid; v_project_id uuid; v_product_id uuid; v_result jsonb;
+BEGIN
+  -- 00808 (SQ-1137): authority first from an unlocked read, then the job
+  -- label lock, then the board row lock below.
+  SELECT board.project_id INTO v_project_id
+  FROM public.proposal_board_items item
+  JOIN public.proposal_boards board ON board.id=item.board_id
+  WHERE item.id=p_board_item_id AND board.project_id IS NOT NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'project board reference not found' USING ERRCODE='no_data_found'; END IF;
+  PERFORM public._ffe_require_studio_project(v_project_id);
+  PERFORM public._ffe_lock_job_labels(v_project_id);
+  SELECT item.board_id, board.project_id, item.product_id
+  INTO v_board_id,v_project_id,v_product_id
+  FROM public.proposal_board_items item
+  JOIN public.proposal_boards board ON board.id=item.board_id
+  WHERE item.id=p_board_item_id AND board.project_id IS NOT NULL FOR UPDATE OF item;
+  IF NOT FOUND THEN RAISE EXCEPTION 'project board reference not found' USING ERRCODE='no_data_found'; END IF;
+  PERFORM public._ffe_require_studio_project(v_project_id);
+  v_result := public.place_product_in_project_v2(
+    (p_request - 'boardId') || jsonb_strip_nulls(jsonb_build_object(
+      'projectId',v_project_id,'productId',COALESCE(NULLIF(p_request->>'productId','')::uuid,v_product_id),
+      'duplicateMode',COALESCE(p_request->>'duplicateMode','reuse'),
+      'idempotencyKey',COALESCE(NULLIF(p_request->>'idempotencyKey',''),'promote:'||p_board_item_id::text)
+    ))
+  );
+  PERFORM set_config('app.board_state_rpc','on',true);
+  UPDATE public.proposal_board_items SET
+    project_ffe_item_id=(v_result->>'selectionId')::uuid,
+    product_id=COALESCE(product_id,(v_result->>'productId')::uuid)
+  WHERE id=p_board_item_id;
+  RETURN v_result || jsonb_build_object('placementId',p_board_item_id);
+END;
+$$;
+
+-- apply_client_effect — base 00652_field_line_client_templates.sql:136. F3. A selection batch locked the batch and then each decision, taking the job label lock inside the first one, so it ran D1 → job → D2 against a lone answer D2 → job. Answering a decision also writes its options, and that write re-versions every open batch naming it (00651 client_decision_option_bumps_batch), so the batch row itself is reached under the job label lock. The job label lock is now taken once, before the batch row lock and the loop. A batch is one job, the prompt's (checked at the batch and per decision). The prompt row stays first: no job label lock holder writes sms_prompts.
+CREATE OR REPLACE FUNCTION public.apply_client_effect(
+  p_prompt_id  uuid,
+  p_effect     text,
+  p_payload    jsonb,
+  p_source_sid text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_sid        text := NULLIF(btrim(COALESCE(p_source_sid, '')), '');
+  v_effect     text := NULLIF(btrim(COALESCE(p_effect, '')), '');
+  v_payload    jsonb := COALESCE(p_payload, '{}'::jsonb);
+  p            public.sms_prompts;
+  v_link       public.client_links;
+  v_invitation public.client_invitations;
+  v_batch      public.client_decision_batches;
+  v_decision   public.client_decisions;
+  v_decision_id uuid;
+  v_option_id  uuid;
+  v_option_count integer;
+  v_applied    jsonb := '[]'::jsonb;
+  v_availability public.delivery_availability;
+  v_subject_kind text;
+  v_option     text;
+  v_window     text;
+  v_version    integer;
+  v_result     jsonb;
+  v_receipt    jsonb;
+BEGIN
+  -- 0. A reply with no provider id cannot be made idempotent, so it is not
+  -- allowed to be applied at all.
+  IF v_sid IS NULL THEN
+    RAISE EXCEPTION 'apply_client_effect: a source SID is required'
+      USING ERRCODE = '23514';
+  END IF;
+
+  -- 1. The prompt is the authority. Locked before anything is read off it, so
+  -- two deliveries of the same inbound serialize here rather than race.
+  SELECT * INTO p FROM public.sms_prompts WHERE id = p_prompt_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'apply_client_effect: unknown prompt'
+      USING ERRCODE = '23514';
+  END IF;
+
+  -- 2. Replay. Read BEFORE the open-prompt checks, exactly as 00646:165 does,
+  -- so an answer that already committed still returns its own receipt rather
+  -- than the 'closed' its own success created.
+  IF p.consumed_sid = v_sid THEN
+    RETURN jsonb_build_object('status', 'replayed', 'result', p.consumption_result);
+  END IF;
+
+  -- 3. Two effects exist, and each answers exactly one kind of ask. A reply
+  -- that names the other one is a retarget, not an answer.
+  IF v_effect IS NULL OR v_effect NOT IN ('approve_selection', 'select_window') THEN
+    RAISE EXCEPTION 'apply_client_effect: unknown client effect %',
+      COALESCE(v_effect, '<null>')
+      USING ERRCODE = '22023';
+  END IF;
+  IF (v_effect = 'approve_selection' AND p.kind <> 'selection_batch')
+     OR (v_effect = 'select_window'  AND p.kind <> 'window_pick') THEN
+    RAISE EXCEPTION 'apply_client_effect: % does not answer a % prompt',
+      v_effect, p.kind
+      USING ERRCODE = '23514';
+  END IF;
+
+  -- 4. Open. Answered and voided are both 'closed' — the honest word the rail
+  -- already answers a closed ref with; time running out is its own word.
+  IF p.answered_at IS NOT NULL OR p.voided_at IS NOT NULL THEN
+    RETURN jsonb_build_object('status', 'closed');
+  END IF;
+  IF p.expires_at <= clock_timestamp() THEN
+    RETURN jsonb_build_object('status', 'expired');
+  END IF;
+
+  -- 5. The capability. Three separate refusals, because the caller here is
+  -- service_role (the rail) and never the token holder — resolve_client_link's
+  -- deliberate no-oracle silence (00650:327) protects the HOLDER, and there is
+  -- no holder on this side of the wire to protect it from.
+  --
+  -- 00652 (LOW-6): the FK column and the scope copy of project_id are BOTH
+  -- read, in every one of the four predicates below. 00650 writes them from one
+  -- value at mint and nothing updates either, so they agree on every row that
+  -- exists — but authority that reads only one of two stored copies is
+  -- authority that a diverged row decides, and the SQL suite's case 7o asserts
+  -- on the column while the function asked the scope. A row whose copies
+  -- disagree now matches nothing and fails closed.
+  SELECT * INTO v_link
+    FROM public.client_links cl
+   WHERE cl.party_id = p.party_id
+     AND cl.status = 'active'
+     AND cl.expires_at > clock_timestamp()
+     AND cl.project_id = p.project_id                                 -- 00652: LOW-6
+     AND NULLIF(cl.scope->>'project_id', '')::uuid = p.project_id
+     AND cl.scope->'actions' ? v_effect
+   -- Newest first. `id` breaks the tie because created_at defaults to now(),
+   -- which is the TRANSACTION timestamp: two mints in one transaction share it.
+   -- Any row matching this predicate authorizes the act equally; the order only
+   -- fixes which capability the audit row names.
+   ORDER BY cl.created_at DESC, cl.id DESC
+   LIMIT 1;
+  IF NOT FOUND THEN
+    IF EXISTS (
+      SELECT 1 FROM public.client_links cl
+       WHERE cl.party_id = p.party_id
+         AND cl.status = 'active'
+         AND cl.expires_at > clock_timestamp()
+         AND cl.scope->'actions' ? v_effect
+         AND NULLIF(cl.scope->>'project_id', '') IS NOT NULL
+         AND (NULLIF(cl.scope->>'project_id', '')::uuid IS DISTINCT FROM p.project_id
+              OR cl.project_id IS DISTINCT FROM p.project_id)         -- 00652: LOW-6
+    ) THEN
+      RAISE EXCEPTION 'apply_client_effect: capability_wrong_project — this '
+        'capability speaks for another house, not project %', p.project_id
+        USING ERRCODE = '42501';
+    ELSIF EXISTS (
+      SELECT 1 FROM public.client_links cl
+       WHERE cl.party_id = p.party_id
+         AND cl.scope->'actions' ? v_effect
+         AND cl.project_id = p.project_id                             -- 00652: LOW-6
+         AND NULLIF(cl.scope->>'project_id', '')::uuid = p.project_id
+         AND (cl.status <> 'active' OR cl.expires_at <= clock_timestamp())
+    ) THEN
+      RAISE EXCEPTION 'apply_client_effect: capability_expired_or_revoked — '
+        'the capability for % on project % no longer opens anything',
+        p.party_id, p.project_id
+        USING ERRCODE = '42501';
+    ELSE
+      RAISE EXCEPTION 'apply_client_effect: no_capability — nothing authorizes '
+        '% for % on project %', v_effect, p.party_id, p.project_id
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
+
+  -- 6. The letter behind the capability. resolve_client_link validates the
+  -- TOKEN, not the invitation (SQ-108 INFO-2), so a letter the studio revoked
+  -- or replaced would otherwise keep deciding through a link nobody revoked.
+  SELECT * INTO v_invitation
+    FROM public.client_invitations ci WHERE ci.id = v_link.invitation_id;
+  IF NOT FOUND
+     OR v_invitation.revoked_at IS NOT NULL
+     OR v_invitation.superseded_by IS NOT NULL THEN
+    RAISE EXCEPTION 'apply_client_effect: letter_revoked — the invitation '
+      'behind this capability has been revoked or superseded'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- One audit row for the use, in the ledger 00650 built for exactly this.
+  -- Written HERE, once the capability and the letter have both stood up, so a
+  -- refusal above leaves no row (00650:196) — but a reply refused BELOW for a
+  -- stale version keeps its row, because the capability really was exercised;
+  -- what had moved was the list.
+  INSERT INTO public.client_link_uses (link_id, action, source)
+  VALUES (v_link.id, 'apply_client_effect:' || v_effect, 'sms:' || v_sid);
+
+  -- ── 7/8. Apply ───────────────────────────────────────────────────────────
+  IF v_effect = 'approve_selection' THEN
+    -- 00808 (SQ-1137): the job label lock once, before the batch row and the
+    -- decision loop. A batch is one job, the prompt's (checked below).
+    PERFORM public._ffe_lock_job_labels(p.project_id);
+    SELECT * INTO v_batch
+      FROM public.client_decision_batches b
+     WHERE b.id = p.subject_id
+     FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'apply_client_effect: this prompt names no selection batch'
+        USING ERRCODE = '23514';
+    END IF;
+    -- 00282's cross-project forgery guard, re-asserted on the subject: the
+    -- batch belongs to the prompt's own party on the prompt's own project.
+    IF v_batch.project_id IS DISTINCT FROM p.project_id
+       OR v_batch.party_id IS DISTINCT FROM p.party_id THEN
+      RAISE EXCEPTION 'apply_client_effect: batch_not_addressed — batch % is '
+        'not this party''s ask on this project', v_batch.id
+        USING ERRCODE = '42501';
+    END IF;
+    IF v_batch.closed_at IS NOT NULL THEN
+      RETURN jsonb_build_object('status', 'closed');
+    END IF;
+
+    -- The pinned version. A payload without one is not a pinned reply at all.
+    IF jsonb_typeof(v_payload->'version') IS DISTINCT FROM 'number' THEN
+      RAISE EXCEPTION 'apply_client_effect: approve_selection requires '
+        'payload.version, the batch version the reply was written against'
+        USING ERRCODE = '22023';
+    END IF;
+    v_version := (v_payload->>'version')::integer;
+    IF v_version <> v_batch.version THEN
+      -- Nothing is applied and the prompt stays OPEN: the list moved under
+      -- her, so the rail's business is to re-present it, not to close the ask.
+      RETURN jsonb_build_object(
+        'status', 'stale_version',
+        'result', jsonb_build_object(
+          'batch_id', v_batch.id,
+          'replied_version', v_version,
+          'current_version', v_batch.version)
+      );
+    END IF;
+
+    -- Closed BEFORE the decisions are applied, so the option writes those
+    -- applications perform do not re-version the very batch they answer.
+    UPDATE public.client_decision_batches
+       SET closed_at = now()
+     WHERE id = v_batch.id;
+
+    FOREACH v_decision_id IN ARRAY v_batch.decision_ids
+    LOOP
+      SELECT * INTO v_decision
+        FROM public.client_decisions d WHERE d.id = v_decision_id FOR UPDATE;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'apply_client_effect: batch % names decision %, which '
+          'does not exist', v_batch.id, v_decision_id
+          USING ERRCODE = '23514';
+      END IF;
+      IF v_decision.project_id IS DISTINCT FROM v_batch.project_id THEN
+        RAISE EXCEPTION 'apply_client_effect: decision_other_project — '
+          'decision % is not on project %', v_decision_id, v_batch.project_id
+          USING ERRCODE = '42501';
+      END IF;
+      -- 00652 (LOW-3): AND THE HOUSEHOLD, not merely the house. project_id was
+      -- the only binding between the party answering and the decision being
+      -- answered, so on a project carrying two client records — a couple filed
+      -- separately, an owner and a tenant, a builder and a buyer — one
+      -- household's capability applied the other's selection (probe A4). The
+      -- letter behind the capability names the household, so it is the letter
+      -- that is asked.
+      --
+      -- IS DISTINCT FROM, not `<>`: it refuses an exact mismatch AND the
+      -- half-set case (a decision filed against a client record answered by a
+      -- letter that names none, or the reverse), while leaving the wholly
+      -- unset case — no household on either side, which is every project with
+      -- one client and no designer_clients row — behaving as it did. Two
+      -- households on one project are two non-NULL ids, so the probe's case is
+      -- caught either way.
+      IF v_decision.designer_client_id
+         IS DISTINCT FROM v_invitation.designer_client_id THEN
+        RAISE EXCEPTION 'apply_client_effect: decision_other_household — '
+          'decision % belongs to client record %, and this letter speaks for %',
+          v_decision_id, v_decision.designer_client_id,
+          v_invitation.designer_client_id
+          USING ERRCODE = '42501';
+      END IF;
+      -- apply_decision's own client arm admits exactly this shape and nothing
+      -- else (00399:4203). A homeowner with no session gets no wider authority
+      -- than one with a session: client-court selections, full stop.
+      IF v_decision.coordination_kind IS DISTINCT FROM 'selection'
+         OR v_decision.court IS DISTINCT FROM 'client' THEN
+        RAISE EXCEPTION 'apply_client_effect: not_a_client_selection — only '
+          'client-court selection decisions may be answered by text (decision '
+          '% is %/%)', v_decision_id, v_decision.coordination_kind,
+          v_decision.court
+          USING ERRCODE = '42501';
+      END IF;
+      -- An approval-contract decision is a GATE with a receipt and a consent
+      -- method (00463/00464). Assent by text is a US-3 non-goal, so it is
+      -- refused here rather than routed into that core's Stage-2 arm.
+      IF v_decision.approval_contract IS NOT NULL THEN
+        RAISE EXCEPTION 'apply_client_effect: approval_contract_not_textable — '
+          'decision % carries approval contract %, which no text may assent to',
+          v_decision_id, v_decision.approval_contract
+          USING ERRCODE = '42501';
+      END IF;
+
+      -- What she was shown IS the recommended option. Exactly one, or the ask
+      -- was ambiguous and nothing is applied.
+      SELECT count(*), (array_agg(o.id ORDER BY o.sort_order, o.id))[1]
+        INTO v_option_count, v_option_id
+        FROM public.client_decision_options o
+       WHERE o.decision_id = v_decision_id
+         AND o.is_recommended IS TRUE;
+      IF v_option_count <> 1 THEN
+        RAISE EXCEPTION 'apply_client_effect: no_single_presented_option — '
+          'decision % presents % recommended options, so a batch approval '
+          'names none of them', v_decision_id, v_option_count
+          USING ERRCODE = '23514';
+      END IF;
+
+      -- The shipped core, reached the way apply_decision's client arm reaches
+      -- it. p_actor NULL: client_decisions.selected_by is a foreign key to
+      -- auth.users and a party seat is not one, and nothing here will forge a
+      -- user to fill it. p_client_consent_method NULL: a text is neither an
+      -- electronic signature nor a click-through.
+      PERFORM public._apply_client_decision_authorized(
+        v_decision_id, v_option_id, NULL, NULL, NULL, NULL, NULL
+      );
+
+      -- The actor, named. changed_by stays NULL because there was no
+      -- auth.uid(); actor_party_id carries the seat that actually answered.
+      INSERT INTO public.decision_events (
+        decision_id, old_status, new_status, changed_by, actor_party_id, reason
+      ) VALUES (
+        v_decision_id, v_decision.status, 'responded', NULL, p.party_id,
+        format(
+          'apply_client_effect approve_selection: party %s answered by text on '
+          'capability %s (prompt %s, batch %s v%s, option %s, sid %s)',
+          p.party_id, v_link.id, p.id, v_batch.id, v_batch.version,
+          v_option_id, v_sid)
+      );
+
+      v_applied := v_applied || jsonb_build_object(
+        'decision_id', v_decision_id,
+        'option_id',   v_option_id);
+    END LOOP;
+
+    v_result := jsonb_build_object(
+      'effect',        'approve_selection',
+      'batch_id',      v_batch.id,
+      'version',       v_batch.version,
+      'project_id',    p.project_id,
+      'party_id',      p.party_id,
+      'capability_id', v_link.id,
+      'decisions',     v_applied,
+      'decision_count', jsonb_array_length(v_applied));
+
+  ELSE
+    -- select_window. AVAILABILITY ONLY, and the subject comes from the
+    -- IMMUTABLE prompt, never from the payload — a payload that could name its
+    -- own subject would be a retarget with extra steps.
+    v_option := NULLIF(btrim(COALESCE(v_payload->>'option', '')), '');
+    IF v_option IS NULL THEN
+      RAISE EXCEPTION 'apply_client_effect: select_window requires '
+        'payload.option, the choice the card offered'
+        USING ERRCODE = '22023';
+    END IF;
+    v_window := NULLIF(btrim(COALESCE(v_payload->>'window_label', '')), '');
+    v_subject_kind := COALESCE(
+      NULLIF(btrim(COALESCE(v_payload->>'subject_kind', '')), ''), 'delivery');
+
+    IF EXISTS (SELECT 1 FROM public.delivery_availability da
+                WHERE da.source_sid = v_sid) THEN
+      RAISE EXCEPTION 'apply_client_effect: sid_already_recorded — inbound % '
+        'is already on the record against another answer', v_sid
+        USING ERRCODE = '42501';
+    END IF;
+
+    INSERT INTO public.delivery_availability (
+      project_id, party_id, subject_kind, subject_id, option, window_label,
+      source_sid, recorded_by_party_id
+    ) VALUES (
+      p.project_id, p.party_id, v_subject_kind, p.subject_id, v_option,
+      v_window, v_sid, p.party_id
+    )
+    RETURNING * INTO v_availability;
+
+    v_result := jsonb_build_object(
+      'effect',          'select_window',
+      'availability_id', v_availability.id,
+      'project_id',      p.project_id,
+      'party_id',        p.party_id,
+      'capability_id',   v_link.id,
+      'subject_kind',    v_availability.subject_kind,
+      'subject_id',      v_availability.subject_id,
+      'option',          v_availability.option,
+      'window_label',    v_availability.window_label,
+      'availability_only', true);
+  END IF;
+
+  -- The receipt, minted exactly as sms_apply_prompt mints its own (00643:217):
+  -- one write-once row carrying the effect result, committed with it.
+  v_receipt := jsonb_build_object('kind', 'effect', 'result', v_result);
+  UPDATE public.sms_prompts
+     SET consumed_sid       = v_sid,
+         consumption_result = v_receipt,
+         answered_at        = clock_timestamp()
+   WHERE id = p.id;
+
+  RETURN jsonb_build_object('status', 'applied', 'result', v_receipt);
+END;
+$$;
+
+-- apply_client_decision — base 00464_project_approval_lifecycle.sql:1507. F3. The single client answer locked the decision before _apply_client_decision_authorized took the job label lock.
+CREATE OR REPLACE FUNCTION public.apply_client_decision(
+  p_decision_id uuid,
+  p_selected_option_id uuid,
+  p_client_consent_method text DEFAULT NULL,
+  p_client_signature text DEFAULT NULL,
+  p_client_note text DEFAULT NULL,
+  p_quantity integer DEFAULT NULL
+)
+RETURNS public.client_decisions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_client_id uuid;
+  v_coordination_kind text;
+  v_court text;
+  v_approval_contract text;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'apply_client_decision requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- 00808 (SQ-1137): the job label lock comes before the decision row lock.
+  PERFORM public._ffe_lock_job_labels(decision.project_id)
+  FROM public.client_decisions AS decision WHERE decision.id = p_decision_id;
+
+  SELECT relationship.client_id, decision.coordination_kind, decision.court,
+         decision.approval_contract
+  INTO v_client_id, v_coordination_kind, v_court, v_approval_contract
+  FROM public.client_decisions AS decision
+  JOIN public.designer_clients AS relationship
+    ON relationship.id = decision.designer_client_id
+  WHERE decision.id = p_decision_id
+  FOR UPDATE OF decision
+  FOR SHARE OF relationship;
+
+  IF v_client_id IS DISTINCT FROM v_actor THEN
+    RAISE EXCEPTION 'only the addressed client may apply this decision'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_approval_contract = 'project_artifact_v1' THEN
+    IF v_court IS DISTINCT FROM 'client' THEN
+      RAISE EXCEPTION
+        'only client-court decisions may be applied by the addressed client'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
+    RETURN public._apply_client_decision_authorized(
+      p_decision_id, p_selected_option_id, v_actor,
+      p_client_consent_method, p_client_signature, p_client_note, p_quantity
+    );
+  END IF;
+
+  IF v_coordination_kind IS DISTINCT FROM 'selection'
+     OR v_court IS DISTINCT FROM 'client'
+  THEN
+    RAISE EXCEPTION
+      'only client-court selection decisions may be applied by the addressed client'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  RETURN public._apply_client_decision_authorized(
+    p_decision_id, p_selected_option_id, v_actor,
+    p_client_consent_method, p_client_signature, p_client_note, p_quantity
+  );
+END;
+$$;
+
+-- apply_decision — base 00399_journey_authority_integrity.sql:4165. F3. Locked the decision before _apply_client_decision_authorized took the job label lock.
+CREATE OR REPLACE FUNCTION public.apply_decision(
+  p_decision_id uuid,
+  p_selected_option_id uuid,
+  p_selected_by uuid DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_client_id uuid;
+  v_designer_id uuid;
+  v_coordination_kind text;
+  v_court text;
+  v_client_consent_method text;
+  v_client_signature text;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'apply_decision requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- 00808 (SQ-1137): the job label lock comes before the decision row lock.
+  PERFORM public._ffe_lock_job_labels(decision.project_id)
+  FROM public.client_decisions AS decision WHERE decision.id = p_decision_id;
+
+  SELECT relationship.client_id, decision.designer_id,
+         decision.coordination_kind, decision.court,
+         decision.client_consent_method, decision.client_signature
+  INTO v_client_id, v_designer_id, v_coordination_kind, v_court,
+       v_client_consent_method, v_client_signature
+  FROM public.client_decisions AS decision
+  JOIN public.designer_clients AS relationship
+    ON relationship.id = decision.designer_client_id
+  WHERE decision.id = p_decision_id
+  FOR UPDATE OF decision
+  FOR SHARE OF relationship;
+
+  IF v_client_id IS NOT DISTINCT FROM v_actor THEN
+    IF v_coordination_kind IS DISTINCT FROM 'selection'
+       OR v_court IS DISTINCT FROM 'client'
+    THEN
+      RAISE EXCEPTION
+        'only client-court selection decisions may be applied by the addressed client'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_selected_by IS NOT NULL AND p_selected_by IS DISTINCT FROM v_actor THEN
+      RAISE EXCEPTION 'p_selected_by must match the authenticated client'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
+    PERFORM public._apply_client_decision_authorized(
+      p_decision_id, p_selected_option_id, v_actor,
+      v_client_consent_method, v_client_signature, NULL, NULL
+    );
+    RETURN;
+  END IF;
+
+  IF public._can_author_proposal(v_designer_id)
+     AND (
+       v_coordination_kind IS DISTINCT FROM 'selection'
+       OR v_court IS DISTINCT FROM 'client'
+     )
+  THEN
+    RAISE EXCEPTION
+      'only client-court selection decisions may be overridden through an option'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF public._can_author_proposal(v_designer_id)
+     AND p_selected_by IS NOT DISTINCT FROM COALESCE(v_client_id, v_actor)
+     AND EXISTS (
+       SELECT 1
+       FROM public.decision_overrides AS override
+       WHERE override.decision_id = p_decision_id
+         AND override.option_id = p_selected_option_id
+         AND override.acted_by = v_actor
+         AND override.consent_method IN (
+           'verbal', 'written', 'text_excerpt', 'email_excerpt'
+         )
+         AND btrim(override.consent_evidence) <> ''
+     )
+  THEN
+    PERFORM public._apply_client_decision_authorized(
+      p_decision_id, p_selected_option_id, v_actor,
+      NULL, NULL, NULL, NULL
+    );
+    RETURN;
+  END IF;
+
+  RAISE EXCEPTION
+    'apply_decision requires the addressed client or an audited studio override'
+    USING ERRCODE = 'insufficient_privilege';
+
+END;
+$$;
+
+-- apply_decision_override — base 00399_journey_authority_integrity.sql:4324. F3. Locked the decision before _apply_client_decision_authorized took the job label lock.
+CREATE OR REPLACE FUNCTION public.apply_decision_override(
+  p_decision_id uuid,
+  p_selected_option_id uuid,
+  p_consent_method text,
+  p_consent_evidence text
+)
+RETURNS public.client_decisions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_decision public.client_decisions%ROWTYPE;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'apply_decision_override requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_consent_method NOT IN ('verbal', 'written', 'text_excerpt', 'email_excerpt')
+     OR btrim(COALESCE(p_consent_evidence, '')) = ''
+  THEN
+    RAISE EXCEPTION 'valid override consent evidence is required'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- 00808 (SQ-1137): the job label lock comes before the decision row lock.
+  PERFORM public._ffe_lock_job_labels(decision.project_id)
+  FROM public.client_decisions AS decision WHERE decision.id = p_decision_id;
+
+  SELECT * INTO v_decision
+  FROM public.client_decisions
+  WHERE id = p_decision_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_author_proposal(v_decision.designer_id) THEN
+    RAISE EXCEPTION 'decision % not found or access denied', p_decision_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_decision.coordination_kind IS DISTINCT FROM 'selection'
+     OR v_decision.court IS DISTINCT FROM 'client'
+  THEN
+    RAISE EXCEPTION
+      'only client-court selection decisions may be overridden through an option'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- A retry of the already-winning override is a read-only receipt. Do not add
+  -- duplicate evidence rows; a different winner is rejected by the locked core.
+  IF v_decision.status = 'responded' THEN
+    RETURN public._apply_client_decision_authorized(
+      p_decision_id, p_selected_option_id, v_actor, NULL, NULL, NULL, NULL
+    );
+  END IF;
+  IF v_decision.status <> 'pending' THEN
+    RAISE EXCEPTION 'decision % cannot be overridden from status %',
+      p_decision_id, v_decision.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  INSERT INTO public.decision_overrides (
+    decision_id, option_id, acted_by, consent_method, consent_evidence
+  ) VALUES (
+    p_decision_id, p_selected_option_id, v_actor,
+    p_consent_method, btrim(p_consent_evidence)
+  );
+
+  RETURN public._apply_client_decision_authorized(
+    p_decision_id, p_selected_option_id, v_actor, NULL, NULL, NULL, NULL
+  );
+END;
+$$;
+
+-- _resolve_coordination_item_authorized — base 00399_journey_authority_integrity.sql:4537. F3. A selection item locked the decision before _apply_client_decision_authorized took the job label lock. Unconditional: the kind is only settled under the decision row lock.
+CREATE OR REPLACE FUNCTION public._resolve_coordination_item_authorized(
+  p_item_id uuid,
+  p_selected_option_id uuid DEFAULT NULL,
+  p_answer text DEFAULT NULL,
+  p_revision_id uuid DEFAULT NULL,
+  p_next_court text DEFAULT NULL,
+  p_actor uuid DEFAULT NULL
+)
+RETURNS public.client_decisions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_item public.client_decisions%ROWTYPE;
+  v_actor uuid := p_actor;
+  v_next text;
+  v_owner uuid;
+  v_client uuid;
+  v_authorized_author boolean := false;
+  v_retry_authorized boolean := false;
+  v_selected_option_id uuid;
+  v_approved_revision_id uuid;
+  v_revision_status text;
+BEGIN
+  -- 00808 (SQ-1137): the job label lock comes before the decision row lock.
+  PERFORM public._ffe_lock_job_labels(decision.project_id)
+  FROM public.client_decisions AS decision WHERE decision.id = p_item_id;
+
+  SELECT * INTO v_item
+  FROM public.client_decisions
+  WHERE id = p_item_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'coordination item % not found', p_item_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'coordination resolution requires an actor'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT COALESCE(v_item.designer_id, relationship.designer_id),
+         relationship.client_id
+  INTO v_owner, v_client
+  FROM public.designer_clients AS relationship
+  WHERE relationship.id = v_item.designer_client_id;
+
+  v_authorized_author := v_actor = v_owner OR EXISTS (
+    SELECT 1
+    FROM public.organization_members AS actor_membership
+    JOIN public.organization_members AS owner_membership
+      ON owner_membership.organization_id = actor_membership.organization_id
+    JOIN public.organizations AS organization
+      ON organization.id = actor_membership.organization_id
+    WHERE actor_membership.user_id = v_actor
+      AND actor_membership.status = 'active'
+      AND actor_membership.role <> 'guest'
+      AND owner_membership.user_id = v_owner
+      AND owner_membership.status = 'active'
+      AND owner_membership.role <> 'guest'
+      AND organization.type = 'design_studio'
+      AND organization.status = 'active'
+  );
+
+  -- Authorization precedes the idempotent receipt. Otherwise anyone who knew
+  -- the UUID of an already-resolved row could use this DEFINER core as a read
+  -- bypass after the court had moved.
+  v_retry_authorized := v_authorized_author OR v_actor = v_client;
+
+  IF NOT v_retry_authorized THEN
+    RAISE EXCEPTION 'not authorized to access coordination item %', p_item_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF p_next_court IS NOT NULL AND NOT v_authorized_author THEN
+    RAISE EXCEPTION 'only an authorized studio author may override next court'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_item.status = 'responded' THEN
+    IF v_item.coordination_kind = 'selection' THEN
+      SELECT option.id INTO v_selected_option_id
+      FROM public.client_decision_options AS option
+      WHERE option.decision_id = p_item_id AND option.selected = true
+      ORDER BY option.id
+      LIMIT 1;
+      IF p_selected_option_id IS NULL
+         OR p_selected_option_id IS DISTINCT FROM v_selected_option_id
+         OR p_answer IS NOT NULL
+         OR p_revision_id IS NOT NULL
+      THEN
+        RAISE EXCEPTION 'coordination item % was resolved with another selection',
+          p_item_id USING ERRCODE = 'serialization_failure';
+      END IF;
+    ELSIF v_item.coordination_kind = 'rfi' THEN
+      IF btrim(COALESCE(p_answer, '')) = ''
+         OR btrim(p_answer) IS DISTINCT FROM btrim(COALESCE(v_item.answer, ''))
+         OR p_selected_option_id IS NOT NULL
+         OR p_revision_id IS NOT NULL
+      THEN
+        RAISE EXCEPTION 'coordination item % was resolved with another answer',
+          p_item_id USING ERRCODE = 'serialization_failure';
+      END IF;
+    ELSIF v_item.coordination_kind = 'submittal' THEN
+      SELECT revision.id INTO v_approved_revision_id
+      FROM public.coordination_item_revisions AS revision
+      WHERE revision.decision_id = p_item_id
+        AND revision.status = 'approved'
+      ORDER BY revision.reviewed_at DESC NULLS LAST, revision.rev_number DESC
+      LIMIT 1;
+      IF p_revision_id IS NULL
+         OR p_revision_id IS DISTINCT FROM v_approved_revision_id
+         OR btrim(p_answer) IS DISTINCT FROM btrim(v_item.answer)
+         OR p_selected_option_id IS NOT NULL
+      THEN
+        RAISE EXCEPTION 'coordination item % was resolved with another revision',
+          p_item_id USING ERRCODE = 'serialization_failure';
+      END IF;
+    ELSIF btrim(p_answer) IS DISTINCT FROM btrim(v_item.answer)
+          OR p_selected_option_id IS NOT NULL
+          OR p_revision_id IS NOT NULL
+    THEN
+      RAISE EXCEPTION 'coordination item % was resolved with another answer',
+        p_item_id USING ERRCODE = 'serialization_failure';
+    END IF;
+    IF p_next_court IS NOT NULL
+       AND p_next_court IS DISTINCT FROM v_item.court
+    THEN
+      RAISE EXCEPTION 'coordination item % already moved to another court',
+        p_item_id USING ERRCODE = 'serialization_failure';
+    END IF;
+    PERFORM public._enqueue_decision_notification(
+      p_item_id, 'decision_resolved'
+    );
+    RETURN v_item;
+  END IF;
+  IF v_item.status <> 'pending' THEN
+    RAISE EXCEPTION 'coordination item % cannot resolve from status %',
+      p_item_id, v_item.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NOT (
+    v_authorized_author
+    OR (
+      v_actor = v_client
+      AND v_item.court = 'client'
+      AND v_item.coordination_kind IN ('selection', 'signoff')
+    )
+  ) THEN
+    RAISE EXCEPTION 'not authorized to resolve coordination item %', p_item_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_item.coordination_kind = 'selection' THEN
+    IF p_selected_option_id IS NULL THEN
+      RAISE EXCEPTION 'a selection item requires p_selected_option_id'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    v_item := public._apply_client_decision_authorized(
+      p_item_id, p_selected_option_id, v_actor, NULL, NULL, NULL, NULL
+    );
+  ELSE
+    PERFORM set_config('app.client_decision_write_id', p_item_id::text, true);
+
+    IF v_item.coordination_kind = 'rfi' THEN
+      IF btrim(COALESCE(p_answer, v_item.answer, '')) = '' THEN
+        RAISE EXCEPTION 'an RFI requires a nonblank answer'
+          USING ERRCODE = 'check_violation';
+      END IF;
+      UPDATE public.client_decisions
+      SET answer = btrim(COALESCE(p_answer, answer)),
+          answered_at = now(),
+          answered_by = v_actor,
+          status = 'responded',
+          responded_at = now(),
+          selected_by = v_actor,
+          updated_at = now()
+      WHERE id = p_item_id;
+    ELSIF v_item.coordination_kind = 'submittal' THEN
+      IF p_revision_id IS NULL THEN
+        RAISE EXCEPTION 'a submittal requires an eligible revision'
+          USING ERRCODE = 'check_violation';
+      END IF;
+      SELECT revision.status INTO v_revision_status
+      FROM public.coordination_item_revisions AS revision
+      WHERE revision.id = p_revision_id
+        AND revision.decision_id = p_item_id
+      FOR UPDATE;
+      IF NOT FOUND OR v_revision_status NOT IN ('submitted', 'revise_resubmit') THEN
+        RAISE EXCEPTION 'revision % is not eligible for submittal %',
+          p_revision_id, p_item_id
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+      UPDATE public.coordination_item_revisions
+      SET status = 'approved', reviewed_by = v_actor, reviewed_at = now()
+      WHERE id = p_revision_id;
+
+      UPDATE public.client_decisions
+      SET answer = COALESCE(p_answer, answer),
+          answered_at = now(),
+          answered_by = v_actor,
+          status = 'responded',
+          responded_at = now(),
+          selected_by = v_actor,
+          updated_at = now()
+      WHERE id = p_item_id;
+    ELSE
+      UPDATE public.client_decisions
+      SET answer = COALESCE(p_answer, answer),
+          answered_at = CASE WHEN p_answer IS NOT NULL THEN now() ELSE answered_at END,
+          answered_by = CASE WHEN p_answer IS NOT NULL THEN v_actor ELSE answered_by END,
+          status = 'responded',
+          responded_at = now(),
+          selected_by = v_actor,
+          updated_at = now()
+      WHERE id = p_item_id;
+    END IF;
+
+    PERFORM set_config('app.client_decision_write_id', '', true);
+  END IF;
+
+  UPDATE public.project_ffe_items
+  SET blocked = false,
+      blocked_reason = NULL,
+      blocked_by_decision_id = NULL,
+      last_status_change_at = now(),
+      updated_at = now()
+  WHERE blocked_by_decision_id = p_item_id
+    AND project_id = v_item.project_id;
+
+  UPDATE public.project_tasks AS task
+  SET status = 'todo', blocked_by_item_id = NULL, updated_at = now()
+  WHERE task.blocked_by_item_id = p_item_id
+    AND task.status = 'blocked'
+    AND (
+      task.seq_after_task_id IS NULL
+      OR EXISTS (
+        SELECT 1 FROM public.project_tasks AS predecessor
+        WHERE predecessor.id = task.seq_after_task_id
+          AND predecessor.status = 'done'
+      )
+    );
+
+  v_next := COALESCE(p_next_court, public.next_court_for(v_item));
+  PERFORM set_config('app.client_decision_write_id', p_item_id::text, true);
+  UPDATE public.client_decisions
+  SET court = v_next, updated_at = now()
+  WHERE id = p_item_id
+  RETURNING * INTO v_item;
+  PERFORM set_config('app.client_decision_write_id', '', true);
+
+  PERFORM public._enqueue_decision_notification(
+    p_item_id, 'decision_resolved'
+  );
+
+  RETURN v_item;
 END;
 $$;

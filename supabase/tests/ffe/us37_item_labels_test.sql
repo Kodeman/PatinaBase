@@ -15,6 +15,11 @@
 --   moves       moving rooms never relabels
 --   restore     a restored item whose label was taken gets the next one
 --   supersede   the replacement carries its predecessor's label
+--   lock order  the job label lock first in each item path (SQ-1121) and at
+--               the outermost caller (SQ-1137): configuration placement, board
+--               promotion, an SMS selection batch, every decision answer; a
+--               missing decision raises no_data_found; a dblink interleave
+--               shows a lone answer waits on the job lock, not the decision
 --   backfill    sort_order, created_at order; existing codes untouched, but
 --               a later twin of a shared label gets the next one, so the
 --               index builds; removed items untouched; a second run changes
@@ -26,7 +31,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(55);
+SELECT plan(58);
 
 -- ── objects ────────────────────────────────────────────────────────────────
 SELECT ok(
@@ -356,7 +361,7 @@ SELECT is(
       ('place_product_in_project_v2', 'FOR UPDATE'),
       ('triage_project_ffe_items', 'FOR UPDATE'),
       ('set_project_ffe_item_label', 'FOR UPDATE'),
-      ('_apply_client_decision_authorized', 'UPDATE public.project_ffe_items')
+      ('_apply_client_decision_authorized', 'FOR UPDATE')
     ) AS f(name, first_row_lock)
     LEFT JOIN pg_proc AS p ON p.proname = f.name AND p.pronamespace = 'public'::regnamespace
     WHERE p.oid IS NULL
@@ -373,6 +378,143 @@ SELECT ok(
    FROM pg_proc AS p
    WHERE p.oid = 'public.ffe_assign_item_label()'::regprocedure),
   'the label trigger takes the same job label lock'
+);
+-- Outermost (SQ-1137): a caller that locks a row and then reaches one of the
+-- paths above takes the job label lock itself, before that row. The first
+-- row lock is the first FOR UPDATE/SHARE, except: configuration placement
+-- locks the configuration inside its impl; a client SMS reply locks its own
+-- prompt first (no job label lock holder writes prompts), then the batch.
+SELECT is(
+  ARRAY(
+    SELECT f.name
+    FROM (VALUES
+      ('place_product_configuration_in_project', '_place_product_configuration_in_project_impl\('),
+      ('promote_board_reference_to_selection', '\mFOR\s+(NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\M'),
+      ('apply_client_effect', 'FROM public\.client_decision_batches'),
+      ('apply_client_decision', '\mFOR\s+(NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\M'),
+      ('apply_decision', '\mFOR\s+(NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\M'),
+      ('apply_decision_override', '\mFOR\s+(NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\M'),
+      ('_resolve_coordination_item_authorized', '\mFOR\s+(NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\M'),
+      ('_apply_client_decision_authorized', '\mFOR\s+(NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\M')
+    ) AS f(name, first_row_lock)
+    LEFT JOIN pg_proc AS p ON p.proname = f.name AND p.pronamespace = 'public'::regnamespace
+    WHERE p.oid IS NULL
+       OR strpos(p.prosrc, 'public._ffe_lock_job_labels(') = 0
+       OR regexp_instr(p.prosrc, f.first_row_lock) = 0
+       OR strpos(p.prosrc, 'public._ffe_lock_job_labels(') > regexp_instr(p.prosrc, f.first_row_lock)
+    ORDER BY f.name
+  ),
+  ARRAY[]::text[],
+  'configuration placement, board promotion, a client SMS batch, and every decision answer take the job label lock before their first row lock'
+);
+-- F2 (SQ-1137): the FOUND check reads the decision's own locked read.
+SELECT throws_ok(
+  $$SELECT public._apply_client_decision_authorized(
+      'b8089999-0000-4000-8000-000000000001', 'b8089999-0000-4000-8000-000000000002',
+      'b8080000-0000-4000-8000-000000000001')$$,
+  'P0002',
+  'decision b8089999-0000-4000-8000-000000000001 not found',
+  'a decision that does not exist still raises no_data_found, not an option error'
+);
+
+-- F3 two-session interleave (SQ-1137, dblink). Session A holds the job label
+-- lock, as a selection batch now does before its loop. Session B answers one
+-- decision of that job alone. B must wait for the job label lock before it
+-- locks the decision, so A can still lock the decision without waiting.
+-- The fixture is committed through a third session and removed after.
+CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA extensions;
+CREATE TEMP TABLE us37_interleave (result text);
+DO $us37_interleave$
+DECLARE
+  v_dsn text := format(
+    'host=%s port=54322 dbname=%s user=postgres password=postgres connect_timeout=5',
+    host(network(set_masklen(inet_server_addr(), 16)) + 1), current_database());
+  v_cleanup text := $c$
+    DELETE FROM public.client_decisions WHERE id = 'b8089300-0000-4000-8000-000000000001';
+    DELETE FROM public.projects WHERE id = 'b8089200-0000-4000-8000-000000000001';
+    DELETE FROM public.designer_clients WHERE id = 'b8089100-0000-4000-8000-000000000001';
+    DELETE FROM public.profiles WHERE id IN ('b8089000-0000-4000-8000-000000000001', 'b8089000-0000-4000-8000-000000000002');
+    DELETE FROM auth.users WHERE id IN ('b8089000-0000-4000-8000-000000000001', 'b8089000-0000-4000-8000-000000000002');
+  $c$;
+  v_b_pid integer;
+  v_waiting boolean := false;
+  v_result text;
+  v_conn text;
+BEGIN
+  PERFORM extensions.dblink_connect('us37_setup', v_dsn);
+  PERFORM extensions.dblink_connect('us37_a', v_dsn);
+  PERFORM extensions.dblink_connect('us37_b', v_dsn);
+  BEGIN
+    PERFORM extensions.dblink_exec('us37_setup', v_cleanup);
+    PERFORM extensions.dblink_exec('us37_setup', $f$
+      INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role) VALUES
+        ('b8089000-0000-4000-8000-000000000001', 'labels-interleave-designer@test.invalid', '', now(), now(), now(),
+         '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+        ('b8089000-0000-4000-8000-000000000002', 'labels-interleave-client@test.invalid', '', now(), now(), now(),
+         '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+      INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at) VALUES
+        ('b8089000-0000-4000-8000-000000000001', 'labels-interleave-designer@test.invalid', 'Interleave Designer', true, now(), now()),
+        ('b8089000-0000-4000-8000-000000000002', 'labels-interleave-client@test.invalid', 'Interleave Client', false, now(), now())
+      ON CONFLICT (id) DO NOTHING;
+      INSERT INTO public.designer_clients (id, designer_id, client_id, status) VALUES
+        ('b8089100-0000-4000-8000-000000000001', 'b8089000-0000-4000-8000-000000000001',
+         'b8089000-0000-4000-8000-000000000002', 'proposal');
+      INSERT INTO public.projects (id, name, designer_id, created_by, status) VALUES
+        ('b8089200-0000-4000-8000-000000000001', 'Interleave job', 'b8089000-0000-4000-8000-000000000001',
+         'b8089000-0000-4000-8000-000000000001', 'active');
+      INSERT INTO public.client_decisions (id, designer_client_id, designer_id, project_id, title, sent_at) VALUES
+        ('b8089300-0000-4000-8000-000000000001', 'b8089100-0000-4000-8000-000000000001',
+         'b8089000-0000-4000-8000-000000000001', 'b8089200-0000-4000-8000-000000000001', 'Interleave sofa', now());
+    $f$);
+
+    PERFORM extensions.dblink_exec('us37_a', 'BEGIN');
+    PERFORM extensions.dblink_exec('us37_a',
+      $q$SELECT public._ffe_lock_job_labels('b8089200-0000-4000-8000-000000000001')$q$);
+    SELECT pid INTO v_b_pid FROM extensions.dblink('us37_b', 'SELECT pg_backend_pid()') AS r(pid integer);
+    PERFORM extensions.dblink_send_query('us37_b', $q$SELECT public._apply_client_decision_authorized(
+      'b8089300-0000-4000-8000-000000000001', 'b8089999-0000-4000-8000-000000000003',
+      'b8089000-0000-4000-8000-000000000002')::text$q$);
+    FOR i IN 1..50 LOOP
+      SELECT waiting INTO v_waiting FROM extensions.dblink('us37_setup', format(
+        $q$SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = %s AND wait_event_type = 'Lock')$q$, v_b_pid))
+        AS r(waiting boolean);
+      EXIT WHEN v_waiting;
+      PERFORM pg_sleep(0.1);
+    END LOOP;
+
+    IF NOT v_waiting THEN
+      v_result := 'B never waited for the job label lock';
+    ELSE
+      BEGIN
+        PERFORM extensions.dblink_exec('us37_a', $q$SELECT 1 FROM public.client_decisions
+          WHERE id = 'b8089300-0000-4000-8000-000000000001' FOR UPDATE NOWAIT$q$);
+        v_result := 'decision free';
+      EXCEPTION WHEN OTHERS THEN
+        v_result := 'decision held by B: ' || SQLERRM;
+      END;
+    END IF;
+    PERFORM extensions.dblink_exec('us37_a', 'ROLLBACK');
+    -- B goes on and refuses (the option is not the decision's); nothing commits.
+    PERFORM * FROM extensions.dblink_get_result('us37_b', false) AS r(x text);
+    PERFORM * FROM extensions.dblink_get_result('us37_b', false) AS r(x text);
+  EXCEPTION WHEN OTHERS THEN
+    v_result := COALESCE(v_result, 'interleave error: ' || SQLERRM);
+  END;
+  BEGIN
+    PERFORM extensions.dblink_exec('us37_setup', v_cleanup);
+  EXCEPTION WHEN OTHERS THEN
+    v_result := COALESCE(v_result, '') || ' / cleanup error: ' || SQLERRM;
+  END;
+  FOREACH v_conn IN ARRAY COALESCE(extensions.dblink_get_connections(), ARRAY[]::text[]) LOOP
+    IF v_conn LIKE 'us37_%' THEN PERFORM extensions.dblink_disconnect(v_conn); END IF;
+  END LOOP;
+  INSERT INTO us37_interleave VALUES (v_result);
+END
+$us37_interleave$;
+SELECT is(
+  (SELECT result FROM us37_interleave),
+  'decision free',
+  'a lone decision answer waits for the job label lock before it locks the decision (dblink interleave)'
 );
 
 -- P4: a job no item has entered yet, so this transaction holds no label lock on it.
