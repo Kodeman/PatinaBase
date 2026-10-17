@@ -133,7 +133,7 @@ jest.mock('../doc-sheet', () => ({
   }: {
     open: boolean;
     children: React.ReactNode;
-  }) => (open ? <div>{children}</div> : null),
+  }) => (open ? <div data-spotlight-frame="true">{children}</div> : null),
 }));
 
 // The real DocumentAction: Send's held form (0a-8) is its contract, so a stub
@@ -436,12 +436,13 @@ describe('SendSheet canonical client-copy validation', () => {
     ).toBeInTheDocument();
     await waitFor(() => expect(send).toHaveAttribute('aria-describedby', 'send-sheet-ack-hold-reason'));
     expect(screen.getByText('Confirm sending with parts still missing first.')).toBeInTheDocument();
-
-    fireEvent.click(
-      await screen.findByRole('checkbox', {
-        name: /I reviewed the missing parts/i,
-      }),
+    const acknowledgement = screen.getByRole('checkbox', { name: /I reviewed the missing parts/i });
+    fireEvent.click(send);
+    await waitFor(() =>
+      expect(document.querySelector('[data-hold-spotlight-window="send-sheet-ack-hold"]')).toBeInTheDocument(),
     );
+
+    fireEvent.click(acknowledgement);
     await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
 
     fireEvent.click(send);
@@ -910,8 +911,12 @@ describe('SendSheet canonical client-copy validation', () => {
         target: { value: 'not-an-email' },
       });
       expectHeldWithReason(send, 'Correct the CC address first.');
-      fireEvent.click(send);
       expect(screen.getByText('Correct the CC address first.')).toBeInTheDocument();
+      const cc = screen.getByRole('textbox', { name: 'CC (optional)' });
+      fireEvent.click(send);
+      await waitFor(() =>
+        expect(document.querySelector('[data-hold-spotlight-window="send-sheet-cc-hold"]')).toBeInTheDocument(),
+      );
     });
   });
 

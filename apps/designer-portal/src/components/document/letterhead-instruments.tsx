@@ -734,7 +734,7 @@ export function LetterheadInstruments({
               }
               disabled={messageHeld}
               held={messageHeld}
-              holdFix={messageHeld && withheld.repair ? `${messageReasonId}-fix` : undefined}
+              holdFix={messageHeld && (withheld.repair || askLead) ? `${messageReasonId}-fix` : undefined}
               aria-describedby={messageHeld ? messageReasonId : undefined}
               onClick={toggleComposer}
             >
