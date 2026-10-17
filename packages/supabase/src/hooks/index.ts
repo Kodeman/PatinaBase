@@ -2645,6 +2645,9 @@ export { itemLabelRefusal, useSetFfeItemLabel, type SetFfeItemLabelInput } from 
 // US-37 #1+#2: a project item's own pictures — snapshot, uploads, primary, order, unlink.
 export * from "./use-ffe-item-images";
 
+// US-37 #4: trade pricing — the one line pricing writer, cost changes, resets, job and designer markups (00809).
+export * from "./use-trade-pricing";
+
 // US-34 N2: optimistic ink for internal records, and the never-optimistic list.
 export {
   useOptimisticMutation,

@@ -365,8 +365,13 @@ BEGIN
   ASSERT v_line.verdict = 'accepted' AND v_line.resolved_by = '70419000-0000-4000-8000-0000000000a2' AND v_line.resolved_at IS NOT NULL,
     'FAIL D2: line resolved accepted';
   SELECT * INTO v_item FROM public.project_ffe_items WHERE id = '70419000-0000-4000-8000-000000000201';
-  ASSERT v_item.trade_price_cents = 16000 AND v_item.unit_price_cents = 20000 AND v_item.markup_percent = 25.00,
-    'FAIL D2: trade 16000, unit 20000, markup 25.00; got ' || v_item.trade_price_cents || '/' || v_item.unit_price_cents || '/' || COALESCE(v_item.markup_percent::text, 'NULL');
+  -- US-37 R6: the line is flagged (prior cost 15000); the client price never moves.
+  -- US-37 SQ-1124: markup_percent is the true 25 of $200 on $160; the 33.33 the
+  -- line was priced at ($200 on $150) is held in pending_markup_held_percent.
+  ASSERT v_item.trade_price_cents = 16000 AND v_item.unit_price_cents = 20000 AND v_item.markup_percent = 25
+     AND round(v_item.pending_markup_held_percent, 2) = 33.33
+     AND v_item.pending_cost_prev_cents = 15000 AND v_item.pending_cost_changed_at IS NOT NULL,
+    'FAIL D2: trade 16000, unit 20000, true markup 25, 33.33 held, flagged from 15000; got ' || v_item.trade_price_cents || '/' || v_item.unit_price_cents || '/' || COALESCE(v_item.markup_percent::text, 'NULL') || '/' || COALESCE(v_item.pending_cost_prev_cents::text, 'NULL');
   ASSERT (SELECT total_cents FROM public.purchase_orders WHERE id = '70419000-0000-4000-8000-000000000101') = 16000 * 2 + 45000,
     'FAIL D2: the PO total follows the line trade total';
   v_err := pg_temp.raised(format('SELECT public.resolve_ack_line(%L, %L)', v_id, 'disputed'));

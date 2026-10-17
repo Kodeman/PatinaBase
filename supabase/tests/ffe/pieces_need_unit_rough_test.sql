@@ -324,8 +324,9 @@ BEGIN
     format('FAIL 4: the line name takes the product name, got %L', v_item.name);
   ASSERT v_item.product_id = '73000000-0000-4000-8000-000000000031' AND v_item.selection_thread_id = v_thread,
     'FAIL 4: the line carries the product on the same thread';
-  ASSERT v_item.line_total_cents = 7600,
-    format('FAIL 4: 2 knobs at $38 is $76, got %s', v_item.line_total_cents);
+  -- US-37 R3: line_total 7600 (2 × retail $38) → 7020 (2 × round($26 trade × 1.35))
+  ASSERT v_item.line_total_cents = 7020,
+    format('FAIL 4: 2 knobs at $35.10 ($26 trade at 35%%) is $70.20, got %s', v_item.line_total_cents);
   ASSERT pg_temp.need_label(v_knobs) = 'Hardware, 2 knobs for custom cabinet',
     format('FAIL 4: the thread''s need label is unchanged by the fill, got %L', pg_temp.need_label(v_knobs));
 END $$;

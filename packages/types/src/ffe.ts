@@ -59,8 +59,93 @@ export type FfePlacementOutcome = 'created' | 'reused' | 'filled' | 'held';
 /** `project_ffe_items.unit` (00729 CHECK project_ffe_items_unit_check). */
 export type FfeLineUnit = 'each' | 'sq_ft' | 'lin_ft' | 'roll' | 'yard' | 'box' | 'hour' | 'lot';
 
-/** `project_ffe_items.line_kind` (00729). Labor is created only by add_labor_line. */
-export type FfeLineKind = 'goods' | 'labor';
+/**
+ * `project_ffe_items.line_kind` (00729; freight, delivery and install 00809).
+ * Labor is created only by add_labor_line. 'goods' is the product kind
+ * (lib/document/trade-pricing.ts calls it 'product').
+ */
+export type FfeLineKind = 'goods' | 'labor' | 'freight' | 'delivery' | 'install';
+
+/** The kinds set_ffe_line_kind accepts (00809); labor stays labor. */
+export type FfePricedLineKind = Exclude<FfeLineKind, 'labor'>;
+
+/** `project_ffe_items.price_basis` (00809): which price field was edited last. */
+export type FfePriceBasis = 'markup' | 'client';
+
+/** The field set_ffe_line_pricing writes (00809). Money is whole cents per unit. */
+export type FfeLinePricingField =
+  | 'unit_client_price_cents'
+  | 'markup_percent'
+  | 'unit_cost_cents'
+  | 'quantity'
+  | 'retail_unit_cents';
+
+/** resolve_ffe_cost_change (00809). */
+export type FfeCostChangeResolution = 'keep_client' | 'keep_markup';
+
+/**
+ * A line's pricing state, as every 00809 line pricing RPC returns it.
+ * Studio-only: never on a client payload.
+ */
+export interface FfeLinePricing {
+  selectionId: string;
+  projectId: string;
+  lineKind: FfeLineKind;
+  quantity: number;
+  unitClientPriceCents: number | null;
+  unitCostCents: number | null;
+  /**
+   * Always the true markup of the current cents: (client − cost) / cost × 100,
+   * full precision; -100 or more; null without a cost.
+   */
+  markupPercent: number | null;
+  lineTotalCents: number | null;
+  retailUnitCents: number | null;
+  priceBasis: FfePriceBasis | null;
+  /** The cost the line was priced on, while a cost change is pending. */
+  pendingCostPrevCents: number | null;
+  pendingCostChangedAt: string | null;
+  /**
+   * The markup the line was priced at when its cost changed, while the change
+   * is pending; keep_markup prices the new cost at it.
+   */
+  pendingMarkupHeldPercent: number | null;
+}
+
+/** reset_project_markups (00809). */
+export interface ResetProjectMarkupsResult {
+  projectId: string;
+  resetCount: number;
+  skippedCount: number;
+}
+
+/** A job's pricing (`project_pricing_settings`, 00809). Team-only. */
+export interface ProjectPricingSettings {
+  projectId: string;
+  /** Overrides the lead's goods default; the blended target. Never freight, delivery or install. */
+  markupTargetPercent: number | null;
+  /** A fraction (0.0825), applied on its own row, never marked up. */
+  salesTaxRate: number | null;
+  updatedAt: string | null;
+}
+
+/** The caller's default markups (get_my_pricing_settings, 00809); 35 each until set. */
+export interface DesignerPricingSettings {
+  defaultMarkupPercent: number;
+  freightMarkupPercent: number;
+  deliveryMarkupPercent: number;
+  installMarkupPercent: number;
+  isDefault: boolean;
+  updatedAt: string | null;
+}
+
+/** set_my_pricing_settings (00809): an omitted value keeps the current one. */
+export interface SetDesignerPricingSettingsRequest {
+  defaultMarkupPercent?: number;
+  freightMarkupPercent?: number;
+  deliveryMarkupPercent?: number;
+  installMarkupPercent?: number;
+}
 
 /** `project_ffe_items.link_kind` (00729): set exactly when parent_ffe_item_id is. */
 export type FfeLinkKind = 'com' | 'labor' | 'accessory';

@@ -423,14 +423,20 @@ BEGIN
   ASSERT v_item.vendor_id = '69000000-0000-4000-8000-000000000012' AND v_item.vendor_name = 'P0 Vendor Two',
     'FAIL 5b: vendor id/name not set';
   ASSERT v_item.trade_price_cents = 60000, 'FAIL 5b: trade not set';
-  ASSERT v_item.markup_percent = 66.67, 'FAIL 5b: markup should be 66.67, got ' || COALESCE(v_item.markup_percent::text, 'NULL');
+  -- US-37 SQ-1124: the true markup at full precision (00809); 66.67 to the cent.
+  ASSERT round(v_item.markup_percent, 2) = 66.67, 'FAIL 5b: markup should be 66.67, got ' || COALESCE(v_item.markup_percent::text, 'NULL');
   ASSERT v_item.unit_price_cents = 100000 AND v_item.line_total_cents = 200000,
     'FAIL 5b: client price must be unchanged';
 
   -- 5c: trade above the client price records markup 0, client price unchanged.
   v_item := set_project_ffe_line_commercials('69000000-0000-4000-8000-000000000206',
     '{"tradePriceCents": 120000}'::jsonb);
-  ASSERT v_item.trade_price_cents = 120000 AND v_item.markup_percent = 0
+  -- US-37 R6: the line is flagged (prior cost 60000); the client price never moves.
+  -- US-37 SQ-1124: markup_percent is the true -16.67 of $1,000 on $1,200; the
+  -- 66.67 the line was priced at is held in pending_markup_held_percent.
+  ASSERT v_item.trade_price_cents = 120000 AND round(v_item.markup_percent, 2) = -16.67
+     AND round(v_item.pending_markup_held_percent, 2) = 66.67
+     AND v_item.pending_cost_prev_cents = 60000 AND v_item.pending_cost_changed_at IS NOT NULL
      AND v_item.vendor_id = '69000000-0000-4000-8000-000000000012'
      AND v_item.unit_price_cents = 100000 AND v_item.line_total_cents = 200000,
     'FAIL 5c: trade-only update wrong';

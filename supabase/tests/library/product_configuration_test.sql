@@ -510,6 +510,12 @@ BEGIN
   ASSERT (SELECT unit_price_cents = 300000 AND trade_price_cents = 200000
           FROM public.project_ffe_items WHERE id = v_item_id),
     'approved quote prices must flow to procurement line money';
+  -- US-37 SQ-1124 (Astra SQ-1123 F4, ruled B): the configuration price is a
+  -- client-approved price, so the studio default never overrides it, and its
+  -- markup is the true 50 over the configuration trade price (00809).
+  ASSERT (SELECT price_basis = 'client' AND markup_percent = 50
+          FROM public.project_ffe_items WHERE id = v_item_id),
+    'a configured placement keeps its approved price as a client price with its true markup';
 
   -- Placement lands a candidate (00434 design_disposition; the N-1 placement
   -- passes 'candidate' since 00439), and a PO line must be an active selected
