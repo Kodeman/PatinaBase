@@ -884,7 +884,7 @@ export function refusedBillingLines<T extends { request: InvoiceBillingLineReque
   );
 }
 
-const DRAFT_GENERIC = "The invoice couldn't be drafted.";
+export const DRAFT_GENERIC = "The invoice couldn't be drafted.";
 
 /** Each refusal useCreateDraftInvoice or create_draft_invoice (00511, and the
  *  line triggers it fires: 00666, 00764) can give, the composer's sentence
@@ -949,20 +949,31 @@ const DRAFT_REFUSALS: Array<[RegExp, string, boolean]> = [
   ],
 ];
 
+export const DRAFT_UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
+
+const DRAFT_WRITE_SENT = /^Failed to create draft (?:studio )?invoice:\s*/;
+
 /**
- * A draft that never got written (useCreateDraftInvoice and
- * useCreateDraftStudioInvoice wrap the RPC's words as `Failed to create draft
- * [studio ]invoice: …`): a recognised refusal is said in the
- * composer's words and is the same refusal next time; anything else — a
- * dropped connection, a timeout, a message this table doesn't know — says only
- * that the invoice wasn't drafted, and may go through on a second try.
+ * A draft that failed (useCreateDraftInvoice and useCreateDraftStudioInvoice
+ * wrap the RPC's words as `Failed to create draft [studio ]invoice: …`): a
+ * recognised refusal is said in the composer's words and is the same refusal
+ * next time. Any other answer to the write — a dropped connection, a timeout,
+ * a message this table doesn't know — may hide a draft that landed, and neither
+ * RPC takes an idempotency key, so it is `unconfirmed` and never retried. A
+ * failure before the write says only that the invoice wasn't drafted, and may
+ * go through on a second try.
  */
-export function draftInvoiceRefusal(message: unknown): { message: string; retryable: boolean } {
+export function draftInvoiceRefusal(message: unknown): {
+  message: string;
+  retryable: boolean;
+  unconfirmed?: true;
+} {
   if (typeof message !== "string") return { message: DRAFT_GENERIC, retryable: true };
-  const reason = message.trim().replace(/^Failed to create draft (?:studio )?invoice:\s*/, "");
+  const reason = message.trim().replace(DRAFT_WRITE_SENT, "");
   const known = DRAFT_REFUSALS.find(([pattern]) => pattern.test(reason));
-  return known
-    ? { message: known[1], retryable: known[2] }
+  if (known) return { message: known[1], retryable: known[2] };
+  return DRAFT_WRITE_SENT.test(message.trim())
+    ? { message: DRAFT_UNCONFIRMED, retryable: false, unconfirmed: true }
     : { message: DRAFT_GENERIC, retryable: true };
 }
 
@@ -1003,6 +1014,17 @@ export interface InvoiceReadinessFacts {
   householdName?: string;
 }
 
+/** K10 — the folio's Send, held before anything issues: invoice-send would find no address. */
+export function sendNoRecipientHold(householdName?: string | null): InvoiceHold {
+  return {
+    kind: "send-no-recipient",
+    reason: `Add ${householdName || "the client"}'s email to send this.`,
+    repair: "Add their email",
+    fixer: "add-email",
+    focusKey: "add-email",
+  };
+}
+
 /** Readiness is derived without mutating composer state; holds follow repair order. */
 export function assessInvoiceReadiness(facts: InvoiceReadinessFacts): { ready: boolean; holds: InvoiceHold[] } {
   const holds: InvoiceHold[] = [];
@@ -1032,8 +1054,7 @@ export function assessInvoiceReadiness(facts: InvoiceReadinessFacts): { ready: b
     add("price-line", `Set a client price for ${facts.unpricedLineNames?.[id] || "this piece"}.`, "Price it", "price-line", `price-line:${id}`);
   if (!facts.selectedAnything)
     add("nothing-selected", "Add at least one line first.", "Select lines", "select-lines", "invoice-lines");
-  if (facts.sendNoRecipient)
-    add("send-no-recipient", `${facts.householdName || "This household"} has no email to send to.`, "Add their email", "add-email", "add-email");
+  if (facts.sendNoRecipient) holds.push(sendNoRecipientHold(facts.householdName));
 
   return { ready: holds.length === 0, holds };
 }
@@ -1061,6 +1082,12 @@ const SEND_REFUSALS: Array<[RegExp, string]> = [
   [/^invoice_not_found$/, "This invoice couldn't be found. Reload the accounts page and try again."],
   [/^lookup_failed$/, "The invoice couldn't be loaded. Reload the folio and try again."],
   [/^(?:invoice_not_issued|Issue the invoice before sending\.)$/, "Issue the invoice before sending it."],
+  // Send-on-draft issues in the same request (K10): a draft already issued elsewhere, or an issue refused.
+  [/^(?:invoice_not_draft|This invoice was already issued\.)$/, "This invoice was already issued. Reload the folio to resend it."],
+  [/^issue_failed$/, "The invoice couldn't be issued. Reload the folio and try again."],
+  // A failed issue read back: issued, with no letter from this send; or unreadable.
+  [/^issued_unsent$/, "No letter went out with this send."],
+  [/^issue_unknown$/, "Patina couldn't tell whether the invoice issued. Check the folio before you send it again."],
   [/^(?:invoice_void|A voided invoice cannot be sent\.)$/, "This invoice was voided and can't be sent."],
   [
     /^(?:invoice_not_open|Reminders can only be sent on open \(sent or partially paid\) invoices\.)$/,

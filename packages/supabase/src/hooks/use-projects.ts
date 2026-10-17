@@ -34,9 +34,13 @@ export function useProject(projectId: string) {
     queryKey: ['project', projectId],
     queryFn: async () => {
       const supabase = getSupabase();
+      // The owning designer's profile, as useProjects() joins it, so a reader
+      // of one project can name its lead (the milestone draft hold does).
       const { data, error } = await supabase
         .from('projects')
-        .select('*')
+        .select(
+          '*, designer:profiles!projects_designer_id_fkey(id, full_name, display_name, avatar_url)'
+        )
         .eq('id', projectId)
         .single();
 
