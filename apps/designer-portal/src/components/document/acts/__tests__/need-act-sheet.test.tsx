@@ -264,11 +264,15 @@ describe('Chase this PO', () => {
 
   it('opens one spotlight window per missing draft field, then removes the fixed field', async () => {
     openSheet(PO_NEED);
+    // The sheet takes focus on its first frame; a person presses after that.
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
     fireEvent.change(textbox('Subject'), { target: { value: '' } });
     fireEvent.change(textbox('Note'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
     const windows = () => document.querySelectorAll('[data-hold-spotlight-window]');
     await waitFor(() => expect(windows()).toHaveLength(2));
+    expect(textbox('Subject').closest('[inert]')).toBeNull();
+    expect(textbox('Subject')).toHaveFocus();
 
     fireEvent.change(textbox('Note'), { target: { value: 'A note for the maker.' } });
     await waitFor(() => expect(windows()).toHaveLength(1));

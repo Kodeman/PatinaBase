@@ -206,6 +206,8 @@ test("an open part's window is the whole part, entered at its first field, never
 test("a document reason stays listed beside the parts and outlives them: never All set while held", async () => {
   renderFramed([services(), flatFee()], noClient);
 
+  // K3: the reason stands visible before any press.
+  expect(screen.getByText("Write Services.")).toBeVisible();
   pressSend();
   await waitFor(() => expect(windows()).toEqual(["part:patina.services:0", "agreement"]));
 

@@ -112,6 +112,10 @@ describe("AgreementComposer · the drafting room's spotlight frame (SQ-1211)", (
     // live, and the spotlight says why in the blocker's words. The
     // never-silent fallback stands aside.
     const blocker = document.getElementById(send.getAttribute("aria-describedby")!)!;
+    // K3: the reason stands visible before any press.
+    expect(
+      screen.getByText("This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee."),
+    ).toBeVisible();
     fireEvent.click(send);
     await waitFor(() =>
       expect(
