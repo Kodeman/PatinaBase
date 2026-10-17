@@ -551,7 +551,19 @@ export function InvoiceComposer({
     const wantsPurchases = (context.initialPurchaseIds ?? []).length > 0;
     const wantsRiders = (context.initialCostLineIds ?? []).length > 0;
     // SQ-1289 F4 — a failed read settles with nothing; the seed waits for Try again.
-    if (wantsFfe && (!ffeSettled || !ffeItems || coverageFailed || stagesFailed))
+    // SQ-1295 R1 — so does a cached answer under a re-read that failed or is
+    // still out: it may not carry the asked-for piece.
+    if (
+      wantsFfe &&
+      (!ffeSettled ||
+        !ffeItems ||
+        ffeFailed ||
+        coverageFailed ||
+        stagesFailed ||
+        ffeFetching ||
+        coverageFetching ||
+        stagesFetching)
+    )
       return;
     if (wantsTime && (timeLoading || !unbilledTime)) return;
     if (wantsPurchases && (purchasesLoading || !purchases)) return;
@@ -605,8 +617,12 @@ export function InvoiceComposer({
     context.initialCostLineIds,
     ffeSettled,
     ffeItems,
+    ffeFailed,
     coverageFailed,
     stagesFailed,
+    ffeFetching,
+    coverageFetching,
+    stagesFetching,
     ffePartition,
     balanceOwed,
     timeLoading,
@@ -939,8 +955,15 @@ export function InvoiceComposer({
   // would drop off the draft.
   // SQ-1289 F5 — so do the purchases, riders and milestones a selection
   // (saved or parked) names: unread, they bill as nothing.
-  const purchasesNeeded = tickedPurchaseIds.size > 0;
-  const ridersNeeded = tickedRiderIds.size > 0;
+  // SQ-1295 R2 — and the ones an opener asked for, until they seed: unread,
+  // the seed waits, and only Try again can finish it.
+  const seedOutstanding = seededFor !== projectId;
+  const purchasesNeeded =
+    tickedPurchaseIds.size > 0 ||
+    (seedOutstanding && (context.initialPurchaseIds ?? []).length > 0);
+  const ridersNeeded =
+    tickedRiderIds.size > 0 ||
+    (seedOutstanding && (context.initialCostLineIds ?? []).length > 0);
   const milestonesNeeded = tickedMilestoneIds.size > 0;
   const selectionReadFailed =
     (purchasesNeeded && purchasesFailed) ||

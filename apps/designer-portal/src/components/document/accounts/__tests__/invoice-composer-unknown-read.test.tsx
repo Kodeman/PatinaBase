@@ -46,7 +46,9 @@ jest.mock("@patina/supabase", () => ({
   useFfeInvoiceStageCoverage: (projectId: string | null) =>
     jest.requireActual("@patina/supabase").useFfeInvoiceStageCoverage(projectId),
   useAddInvoiceBillingLines: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useProjectPoCostLines: () => ({ data: [], isLoading: false }),
+  // SQ-1295 R2 — the real read, so an asked-for rider meets a real failure.
+  useProjectPoCostLines: (projectId: string | null) =>
+    jest.requireActual("@patina/supabase").useProjectPoCostLines(projectId),
   useOrganizations: () => ({
     data: [{ id: "studio-1", name: "Middle West Studio", type: "design_studio", status: "active" }],
     isLoading: false,
@@ -88,9 +90,11 @@ let piecesMode: "answer" | "hang" | "fail" = "answer";
 let coverageMode: "answer" | "hang" | "fail" = "answer";
 let stagesMode: "answer" | "hang" | "fail" = "answer";
 let purchasesMode: "answer" | "hang" | "fail" = "answer";
-/** The pieces and purchases the reads return when they answer. */
+let ridersMode: "answer" | "hang" | "fail" = "answer";
+/** The pieces, purchases and riders the reads return when they answer. */
 let pieceRows: unknown[] = [];
 let purchaseRows: unknown[] = [];
+let riderRows: unknown[] = [];
 
 function respond(mode: "answer" | "hang" | "fail", rows: () => unknown[], what: string) {
   if (mode === "hang") return new Promise<never>(() => {});
@@ -119,7 +123,9 @@ function from(name: string) {
         ? respond(projectsMode, () => table.map((p) => ({ ...p })), "projects")
         : name === "studio_purchases"
           ? respond(purchasesMode, () => purchaseRows, "purchases")
-          : respond(timeMode, () => [], "hours"),
+          : name === "po_cost_lines"
+            ? respond(ridersMode, () => riderRows, "riders")
+            : respond(timeMode, () => [], "hours"),
   };
   return builder;
 }
@@ -194,8 +200,10 @@ beforeEach(() => {
   coverageMode = "answer";
   stagesMode = "answer";
   purchasesMode = "answer";
+  ridersMode = "answer";
   pieceRows = [];
   purchaseRows = [];
+  riderRows = [];
   unparkInvoiceComposer("project-1");
   browser.__supabaseBrowserClient = { from, rpc };
 });
@@ -344,6 +352,27 @@ describe("SQ-1289 F4: a failed pieces read keeps the asked-for pieces", () => {
     await waitFor(() => expect(checkboxOf("Side table")).toBeChecked());
     await waitFor(() => expect(draftAct()).not.toHaveAttribute("aria-disabled"));
   });
+
+  it("SQ-1295 R1: a cached answer without the piece, then a failed re-read, then Try again, ticks it", async () => {
+    const key = ["project-ffe-items", "project-1"];
+    // The cache predates the piece; the re-read on open fails.
+    qc.setQueryData(key, []);
+    pieceRows = [{ id: "ffe-1", name: "Side table", quantity: 1, unit_price_cents: 12000, room: null }];
+    piecesMode = "fail";
+    render(
+      <InvoiceComposer context={{ projectId: "project-1", initialFfeItemIds: ["ffe-1"] }} onDrafted={jest.fn()} />,
+      { wrapper: Frame },
+    );
+    await waitFor(() => expect(qc.getQueryState(key)?.status).toBe("error"));
+    expect(qc.getQueryData(key)).toEqual([]);
+    await waitFor(() => expect(draftAct()).toHaveAttribute("aria-disabled", "true"));
+
+    piecesMode = "answer";
+    fireEvent.click(tryAgain());
+    await waitFor(() => expect(qc.getQueryState(key)?.status).toBe("success"));
+    await waitFor(() => expect(checkboxOf("Side table")).toBeChecked());
+    await waitFor(() => expect(draftAct()).not.toHaveAttribute("aria-disabled"));
+  });
 });
 
 describe("SQ-1289 F5: a parked purchase holds Draft until the purchases read succeeds", () => {
@@ -405,5 +434,78 @@ describe("SQ-1289 F5: a parked purchase holds Draft until the purchases read suc
     await heldOn("Checking this project before drafting its invoice.");
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
     expect(screen.queryByText("This project couldn't be read. Reload the page to draft its invoice.")).not.toBeInTheDocument();
+  });
+});
+
+describe("SQ-1295 R2: an asked-for purchase or rider holds Draft on a failed read, with Try again", () => {
+  const unread = "This project couldn't be read. Reload the page to draft its invoice.";
+
+  it("a requested purchase whose read fails holds Draft on why, and Try again seeds it", async () => {
+    const key = ["buying-phase2", "purchases", "project:project-1"];
+    purchaseRows = [
+      {
+        id: "p1",
+        status: "recorded",
+        billable_to_client: true,
+        invoice_line_id: null,
+        payee_name: "CB2",
+        description: "Pair of table lamps",
+        purchased_on: "2026-10-03",
+        amount_cents: 120050,
+        tax_cents: 0,
+        buyer_premium_cents: 0,
+        shipping_cents: 0,
+      },
+    ];
+    purchasesMode = "fail";
+    render(
+      <InvoiceComposer context={{ projectId: "project-1", initialPurchaseIds: ["p1"] }} onDrafted={jest.fn()} />,
+      { wrapper: Frame },
+    );
+    addLine();
+    await waitFor(() => expect(qc.getQueryState(key)?.status).toBe("error"));
+
+    await heldOn(unread);
+    expect(screen.getByRole("alert")).toHaveTextContent(unread);
+    expect(tryAgain()).toBeInTheDocument();
+    await waitFor(() => expect(spotWindows()).toEqual(["project-unread"]));
+
+    purchasesMode = "answer";
+    fireEvent.click(tryAgain());
+    await waitFor(() => expect(screen.getByLabelText("Bill Pair of table lamps")).toBeChecked());
+    await waitFor(() => expect(draftAct()).not.toHaveAttribute("aria-disabled"));
+  });
+
+  it("a requested rider whose read fails holds Draft on why, and Try again seeds it", async () => {
+    const key = ["buying-phase2", "cost-lines", "project", "project-1"];
+    riderRows = [
+      {
+        id: "r1",
+        kind: "white_glove",
+        note: null,
+        billable_to_client: true,
+        invoice_line_id: null,
+        estimate_cents: 45_000,
+        actual_cents: 52_000,
+        purchase_order: { id: "po-1", po_number: "1042", project_id: "project-1" },
+      },
+    ];
+    ridersMode = "fail";
+    render(
+      <InvoiceComposer context={{ projectId: "project-1", initialCostLineIds: ["r1"] }} onDrafted={jest.fn()} />,
+      { wrapper: Frame },
+    );
+    addLine();
+    await waitFor(() => expect(qc.getQueryState(key)?.status).toBe("error"));
+
+    await heldOn(unread);
+    expect(screen.getByRole("alert")).toHaveTextContent(unread);
+    expect(tryAgain()).toBeInTheDocument();
+    await waitFor(() => expect(spotWindows()).toEqual(["project-unread"]));
+
+    ridersMode = "answer";
+    fireEvent.click(tryAgain());
+    await waitFor(() => expect(screen.getByLabelText("Bill White Glove")).toBeChecked());
+    await waitFor(() => expect(draftAct()).not.toHaveAttribute("aria-disabled"));
   });
 });
