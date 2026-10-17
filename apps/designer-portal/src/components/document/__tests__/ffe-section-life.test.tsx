@@ -173,6 +173,26 @@ jest.mock('@/hooks/use-section-work', () => {
   };
 });
 
+describe('FF&E row labels', () => {
+  it('renders LR-01 before the furnishing name', () => {
+    mockItems = [{ ...baseFurnishing, doc_code: 'LR-01' }];
+    renderSection();
+    const row = screen.getByText('Walnut bed, king').parentElement;
+    expect(row).toHaveTextContent(/^LR-01Walnut bed, king$/);
+  });
+
+  it('omits a blank or null doc_code', () => {
+    for (const doc_code of ['', null]) {
+      mockItems = [{ ...baseFurnishing, doc_code }];
+      const view = renderSection();
+      const row = screen.getByText('Walnut bed, king').parentElement;
+      expect(row).not.toHaveTextContent('LR-01');
+      expect(row).not.toHaveTextContent('null');
+      view.unmount();
+    }
+  });
+});
+
 describe('FF&E thumbnails', () => {
   it('renders a 48px product image when the joined product has one', () => {
     mockItems = [

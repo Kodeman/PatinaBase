@@ -329,6 +329,17 @@ describe('RoomBand', () => {
     expect(screen.queryByTestId('room-band-record')).not.toBeInTheDocument();
   });
 
+  it('prints the item label in its record as stored, at the 12px floor', () => {
+    render(<RoomBand band={band()} projectId="proj-1" />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Brass library sconces — open its record' }),
+    );
+
+    const label = within(screen.getByTestId('room-band-record')).getByText('FA-07');
+    expect(label).toHaveClass('text-[12px]');
+    expect(label).not.toHaveClass('uppercase');
+  });
+
   describe("the line's own pictures (00807)", () => {
     /** The threshold reader's row, read the way useClientSelections reads it. */
     function pictured(imageUrls: string[], primaryImageUrl: string | null) {

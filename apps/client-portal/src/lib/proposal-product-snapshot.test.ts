@@ -22,7 +22,8 @@ describe('proposal product snapshot rendering', () => {
       source_url: 'https://example.invalid/proposal',
       dimensions: { width: '30 in' },
       materials: ['oak'],
-      price_retail: 120_000,
+      // US-37 D6: retail never reaches a client, even when the copy carries it.
+      price_retail: null,
       has_teaching: true,
       record_completeness_hidden: false,
     });

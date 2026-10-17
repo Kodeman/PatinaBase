@@ -18,6 +18,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useArchiveProjectSelection,
+  itemLabelRefusal,
+  useSetFfeItemLabel,
   useVendor,
   type StudioPurchaseRow,
 } from '@patina/supabase';
@@ -56,6 +58,7 @@ import { ReceivingCell } from './line-unfold/receiving-cell';
 import { InstallAct } from './line-unfold/install-act';
 import { ClaimActs } from './line-unfold/claim-acts';
 import { ItemPictures } from './line-unfold/item-pictures';
+import { Input } from '@/components/ui/controls';
 import { LineExceptions } from './buying/exception-overlay';
 import {
   canInspect,
@@ -220,6 +223,43 @@ export function LineUnfold({
   const [paperOpen, setPaperOpen] = useState(false);
   const [inspectionOpen, setInspectionOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const setLabel = useSetFfeItemLabel();
+  const labelInputRef = useRef<HTMLInputElement>(null);
+  const skipLabelBlurCommit = useRef(false);
+  const [labelDraft, setLabelDraft] = useState(item.doc_code ?? '');
+  const labelBaseline = useRef(item.doc_code ?? '');
+  useEffect(() => {
+    labelBaseline.current = item.doc_code ?? '';
+    setLabelDraft(labelBaseline.current);
+  }, [item.doc_code]);
+  const [labelStatus, setLabelStatus] = useState<string | null>(null);
+  const labelRefusal = labelStatus !== null && labelStatus !== 'Label saved.';
+  // A ref, not render-time isPending: a second Enter or blur before the
+  // re-render would otherwise send the write twice.
+  const labelInFlight = useRef(false);
+  const labelRefused = useRef<string | null>(null);
+  const commitLabel = async (fromEnter: boolean) => {
+    const next = labelDraft.trim();
+    if (next === labelBaseline.current || next === labelRefused.current || labelInFlight.current) return;
+    labelInFlight.current = true;
+    setLabelStatus(null);
+    try {
+      const row = await setLabel.mutateAsync({ projectId, itemId: item.id, label: next || null });
+      labelRefused.current = null;
+      labelBaseline.current = row.doc_code ?? '';
+      setLabelDraft(labelBaseline.current);
+      setLabelStatus('Label saved.');
+    } catch (error) {
+      labelRefused.current = next;
+      setLabelStatus(itemLabelRefusal((error as Error).message, next) ?? (error as Error).message);
+    } finally {
+      labelInFlight.current = false;
+      // Only Enter keeps the designer in the field; a blur commit leaves focus
+      // wherever they went, and nothing takes it back from another control.
+      const active = document.activeElement;
+      if (fromEnter && (!active || active === document.body)) labelInputRef.current?.focus();
+    }
+  };
   // R1-F29: removing asks for a reason; a line on an instrument or a PO is
   // refused in place (a8), the same sentence the RPC's refusal maps to.
   const [removing, setRemoving] = useState<'asking' | 'refused' | null>(null);
@@ -312,6 +352,41 @@ export function LineUnfold({
 
   return (
     <div className="mb-2 mt-1 rounded-r-[5px] border-l-[3px] border-[var(--color-clay)] bg-[rgba(196,165,123,0.05)] px-4 py-3.5">
+      <label className="mb-3 block min-w-0">
+        <span className="t-head mb-1 block text-[var(--text-muted)]">Item label</span>
+        <Input
+          ref={labelInputRef}
+          aria-label="Item label"
+          aria-busy={setLabel.isPending}
+          aria-invalid={labelRefusal || undefined}
+          aria-describedby={labelRefusal ? 'ffe-item-label-status' : undefined}
+          value={labelDraft}
+          readOnly={setLabel.isPending || !canEditSelection}
+          onChange={(event) => setLabelDraft(event.target.value)}
+          onBlur={() => {
+            if (skipLabelBlurCommit.current) {
+              skipLabelBlurCommit.current = false;
+              return;
+            }
+            void commitLabel(false);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') { event.preventDefault(); void commitLabel(true); }
+            if (event.key === 'Escape') {
+              skipLabelBlurCommit.current = true;
+              setLabelDraft(labelBaseline.current);
+              setLabelStatus(null);
+              event.currentTarget.blur();
+            }
+          }}
+          variant="underline"
+          invalid={labelRefusal}
+          className="max-w-full font-mono text-[12px] text-[var(--color-charcoal)]"
+        />
+        <p id="ffe-item-label-status" role="status" className={`t-meta mt-1 min-h-[1.5em] ${labelRefusal ? 'text-[var(--color-terracotta-ink)]' : 'text-[var(--color-charcoal)]'}`}>
+          {labelStatus}
+        </p>
+      </label>
       {showArtifactPlate && !isTradeLine && <PieceArtifactPlate item={item} />}
 
       {next && (

@@ -548,11 +548,15 @@ INSERT INTO fingerprint_column_contract VALUES
    -- line, added alike to projects, leads and designer_clients. It is display
    -- metadata, not authored commercial payload, and 00590 left the
    -- fingerprint (last redefined in 00578) untouched, so it stays out.
+   -- 00813's `studio_id` says which studio's team reads a job-less proposal's
+   -- lines. The database stamps it, the client never sees or signs it, so it
+   -- is access state, not payload.
    ARRAY['project_id','status','sent_at','viewed_at','accepted_at','declined_at',
          'decline_reason','updated_at','client_feedback','signed_at','signed_by_name',
          'signed_ip','last_nudged_at','nudge_count','proposal_send_dispatch_id',
          'document_kind','commercial_state','superseded_at','superseded_reason',
-         'replacement_proposal_id','issued_on_paper','paper_issued_by','subject']),
+         'replacement_proposal_id','issued_on_paper','paper_issued_by','subject',
+         'studio_id']),
   ('proposal_sections', 'section',
    ARRAY['id','proposal_id','type','title','body','metadata','sort_order'],
    ARRAY['created_at','updated_at']),
@@ -690,9 +694,9 @@ BEGIN
     'proposal_items_design_studio_delete:DELETE',
     'proposal_items_design_studio_insert:INSERT',
     'proposal_items_design_studio_select:SELECT',
-    'proposal_items_design_studio_update:UPDATE',
-    'proposal_items_legacy_ios_client_select:SELECT'
+    'proposal_items_design_studio_update:UPDATE'
   ],
+    -- 00811 §2 (US-37 D6): no raw client read; lines carry trade cost and markup.
     'proposal_items policy catalog drifted';
 
   ASSERT (
@@ -1267,9 +1271,11 @@ BEGIN
   ASSERT (SELECT count(*) = 1 FROM public.proposals
           WHERE id = 'e8300000-0000-4000-8000-000000000001'),
     'installed iOS must retain scoped issued-proposal read compatibility';
-  ASSERT (SELECT count(*) = 1 FROM public.proposal_items
+  -- 00811 (US-37 D6): raw lines carry trade cost and markup; the client
+  -- reads them only through get_client_proposal_bundle.
+  ASSERT (SELECT count(*) = 0 FROM public.proposal_items
           WHERE proposal_id = 'e8300000-0000-4000-8000-000000000001'),
-    'installed iOS must retain scoped proposal-item read compatibility';
+    'client must not raw-read proposal lines (00811)';
   ASSERT (SELECT count(*) = 2 FROM public.proposal_sections
           WHERE proposal_id = 'e8300000-0000-4000-8000-000000000001'),
     'installed iOS must retain scoped proposal-section read compatibility';

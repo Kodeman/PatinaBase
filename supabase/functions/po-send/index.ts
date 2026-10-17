@@ -80,7 +80,7 @@ import {
   numberPurchaseOrder,
   persistSidemarkDefault,
   PO_OUT_OF_SYNC_DETAIL,
-  poLineRoomLabel,
+  poPdfLine,
   type PoLinePlacement,
   type SupplyingLine,
   type SupplyingPurchaseOrder,
@@ -91,10 +91,8 @@ import {
   readStudioOrdersEmail,
   resolveVendorRecipient,
   storePoDocument,
-  vendorConfigurationLines,
   type VendorConfigurationSpec,
   type VendorProductMaster,
-  vendorSafeSpecNotes,
 } from './lib.ts';
 import { revisionedPoNumber, snapshotPurchaseOrderSpec, snapshotsSpecOnSend } from './revision.ts';
 
@@ -150,6 +148,7 @@ interface PoRow {
 interface FfeItemRow {
   id: string;
   name: string;
+  doc_code: string | null;
   quantity: number | null;
   /** What the quantity counts (00729): each, sq_ft, lin_ft, roll, yard, box, hour, lot. */
   unit: string | null;
@@ -305,7 +304,7 @@ Deno.serve(async (req: Request) => {
     .from('project_ffe_items')
     .select(
       `
-      id, name, quantity, unit, trade_price_cents, unit_price_cents, notes,
+      id, name, doc_code, quantity, unit, trade_price_cents, unit_price_cents, notes,
       ffe_category, line_kind, link_kind,
       room:project_rooms!project_room_id(id, name),
       placements:project_ffe_placements!ffe_item_id(
@@ -477,31 +476,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Render the PDF ──────────────────────────────────────────────────────
-  const lines = items.map((item) => {
-    const quantity = item.quantity ?? 1;
-    // TRADE pricing — same COALESCE the 00186 total uses.
-    const unitTradeCents = item.trade_price_cents ?? item.unit_price_cents ?? 0;
-    // The configured spec block (P0-1): what the designer actually specified,
-    // vendor-safe (selections / components / dimensions / COM / config hash —
-    // never retail or markup). Empty array for an unconfigured line with no
-    // flat spec fields, which renders exactly as before.
-    // Unconfigured lines resolve each flat field spec → product master (C-06).
-    const configurationLines = [
-      ...vendorConfigurationLines(item.spec, item.product),
-      ...(comArriving.get(item.id) ?? []),
-    ];
-    return {
-      name: item.name,
-      room: poLineRoomLabel(item.room?.name ?? null, item.placements, item.unit),
-      quantity,
-      unit: item.unit,
-      unitTradeCents,
-      lineTotalCents: unitTradeCents * quantity,
-      specNotes: vendorSafeSpecNotes(item.notes),
-      category: item.ffe_category,
-      configurationLines: configurationLines.length > 0 ? configurationLines : undefined,
-    };
-  });
+  const lines = items.map((item) => poPdfLine(item, comArriving));
   const tradeTotalCents = lines.reduce((sum, l) => sum + l.lineTotalCents, 0);
   const patternLabel = paymentPatternLabel(po.payment_pattern);
   const paymentRows = payments.map((p) => ({

@@ -25,6 +25,7 @@ const mockItems: { data: Row[] } = { data: [] };
 const mockStatus: { value: string | null } = { value: "active" };
 const mockUseItems = jest.fn(() => ({ data: mockItems.data }));
 const mockCommercials = jest.fn();
+const mockLinePricing = jest.fn();
 const mockLaborPrice = jest.fn();
 const mockAllowance = jest.fn(async () => ({}));
 const mockAddLabor = jest.fn(async () => ({ selectionId: "new-labor" }));
@@ -53,6 +54,15 @@ jest.mock("@patina/supabase", () => ({
   useArchiveProjectSelection: () => mutation(mockArchive),
   useRestoreProjectSelection: () => mutation(mockRestore),
   useSetLinePlacements: () => mutation(jest.fn()),
+  useSetFfeLinePricing: () => mutation(mockLinePricing),
+  useSetFfeLineKind: () => mutation(jest.fn()),
+  useResolveFfeCostChange: () => mutation(jest.fn()),
+  useResetFfeLineMarkup: () => mutation(jest.fn()),
+  useResetProjectMarkups: () => mutation(jest.fn()),
+  useCreateNamedProjectNeed: () => mutation(jest.fn()),
+  useProjectPricing: () => ({ data: undefined }),
+  useSetProjectPricing: () => mutation(jest.fn()),
+  usePricingSettings: () => ({ data: undefined }),
 }));
 jest.mock("@/hooks/use-document-rooms", () => ({
   useDocumentRooms: () => ({
@@ -209,9 +219,12 @@ describe("PriceLens: front matter and the table (a7)", () => {
       "Line",
       "Qty",
       "Unit",
-      "Trade cost",
+      "Unit cost",
       "Markup",
-      "Client price",
+      "Margin",
+      "Unit client",
+      "Line total",
+      "Retail",
       "Rough ~",
       "Acts",
     ]);
@@ -231,10 +244,14 @@ describe("PriceLens: front matter and the table (a7)", () => {
       within(r1).getByText("Phillip Jeffries Manila Hemp, Chalk"),
     ).toBeInTheDocument();
     expect(
-      within(r1).getByLabelText("Trade cost, Wallpaper, grasscloth"),
+      within(r1).getByLabelText("Unit cost, Wallpaper, grasscloth"),
     ).toHaveValue("$184");
-    expect(within(r1).getByText("25%")).toBeInTheDocument();
-    expect(within(r1).getByText("$230")).toBeInTheDocument();
+    expect(
+      within(r1).getByLabelText("Markup, Wallpaper, grasscloth"),
+    ).toHaveValue("25.0%");
+    expect(
+      within(r1).getByLabelText("Unit client price, Wallpaper, grasscloth"),
+    ).toHaveValue("$230");
     // T-60a F8: nine rolls read plural.
     expect(within(r1).getByText("rolls")).toBeInTheDocument();
 
@@ -248,7 +265,9 @@ describe("PriceLens: front matter and the table (a7)", () => {
     const bed = rowOf("Bed, king, upholstered");
     expect(within(bed).getByText("Placeholder")).toBeInTheDocument();
     expect(within(bed).getByText("~$4,200")).toBeInTheDocument();
-    expect(within(bed).getByText("Not priced")).toBeInTheDocument();
+    expect(
+      within(bed).getByLabelText("Unit client price, Bed, king, upholstered"),
+    ).toHaveValue("");
     expect(within(rowOf("Nightstands")).getByText("~$950")).toBeInTheDocument();
 
     expect(
@@ -277,9 +296,12 @@ describe("PriceLens: front matter and the table (a7)", () => {
       "Line",
       "Qty",
       "Unit",
-      "Trade cost",
+      "Unit cost",
       "Markup",
-      "Client price",
+      "Margin",
+      "Unit client",
+      "Line total",
+      "Retail",
       "Rough ~",
     ]);
     expect(screen.getByRole("table", { name: "Bedroom" }).className).toContain(
@@ -289,51 +311,49 @@ describe("PriceLens: front matter and the table (a7)", () => {
 });
 
 describe("PriceLens: what can be typed", () => {
-  it("types trade cost through useSetFfeLineCommercials", () => {
+  it("types an open line's unit cost through set_ffe_line_pricing", () => {
     renderLens();
-    const input = screen.getByLabelText("Trade cost, Wallpaper, grasscloth");
+    const input = screen.getByLabelText("Unit cost, Wallpaper, grasscloth");
     fireEvent.focus(input);
-    expect(input).toHaveValue("184");
+    expect(input).toHaveValue("$184");
     fireEvent.change(input, { target: { value: "190" } });
     fireEvent.blur(input);
-    expect(mockCommercials).toHaveBeenCalledWith(
-      { projectId: "proj", itemId: "r1", tradePriceCents: 19000 },
+    expect(mockLinePricing).toHaveBeenCalledWith(
+      { projectId: "proj", itemId: "r1", field: "unit_cost_cents", value: 19000 },
       expect.anything(),
     );
+    expect(mockCommercials).not.toHaveBeenCalled();
   });
 
-  it("prints markup and a placed line's client price read-only", () => {
+  it("offers no markup to a line without a cost, and types its client price", () => {
     renderLens();
+    expect(screen.queryByLabelText("Markup, Bed, king, upholstered")).toBeNull();
     expect(
-      screen.queryByLabelText("Client price, Wallpaper, grasscloth"),
-    ).toBeNull();
-    expect(screen.queryByLabelText(/^Markup/)).toBeNull();
-    expect(
-      screen.queryAllByRole("textbox", { name: /Client price, Bed/ }),
-    ).toHaveLength(0);
+      screen.getByLabelText("Unit client price, Bed, king, upholstered"),
+    ).toHaveValue("");
   });
 
   it("says so on an active job, a7 word for word", () => {
     renderLens();
     expect(screen.getByText(ACTIVE_JOB_SENTENCE)).toBeInTheDocument();
     expect(ACTIVE_JOB_SENTENCE).toBe(
-      "This job is active. Markup and client price are read-only here; they change through Record a change. Trade cost can still be typed.",
+      "This job is active. Released lines change through Record a change; their trade cost can still be typed until they are ordered.",
     );
   });
 
-  it("prints no sentence on a job that is not active, and client price stays read-only", () => {
+  it("prints no sentence on a job that is not active", () => {
     mockStatus.value = "planning";
     renderLens();
     expect(screen.queryByText(ACTIVE_JOB_SENTENCE)).toBeNull();
     expect(
-      screen.queryByLabelText("Client price, Wallpaper, grasscloth"),
-    ).toBeNull();
+      screen.getByLabelText("Unit client price, Wallpaper, grasscloth"),
+    ).toBeInTheDocument();
   });
 
   it("types an unreleased labor line's client price through useSetLaborLinePrice", () => {
     renderLens();
     const input = screen.getByLabelText(
-      "Client price, Install, wallpaper hanger",
+      "Unit client price, Install, wallpaper hanger",
     );
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: "90" } });
@@ -351,17 +371,28 @@ describe("PriceLens: what can be typed", () => {
     });
     renderLens();
     expect(
-      screen.queryByLabelText("Client price, Install, wallpaper hanger"),
+      screen.queryByLabelText("Unit client price, Install, wallpaper hanger"),
     ).toBeNull();
+    expect(
+      screen.queryByLabelText("Unit client price, Wallpaper, grasscloth"),
+    ).toBeNull();
+    expect(screen.queryByLabelText("Markup, Wallpaper, grasscloth")).toBeNull();
     expect(
       within(rowOf("Install, wallpaper hanger")).getByText("$85"),
     ).toBeInTheDocument();
     expect(
       within(rowOf("Install, wallpaper hanger")).getByText("Released"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Trade cost, Wallpaper, grasscloth"),
-    ).toBeInTheDocument();
+    // A released line's trade cost still goes through 00692 until it is ordered.
+    const cost = screen.getByLabelText("Unit cost, Wallpaper, grasscloth");
+    fireEvent.focus(cost);
+    fireEvent.change(cost, { target: { value: "190" } });
+    fireEvent.blur(cost);
+    expect(mockCommercials).toHaveBeenCalledWith(
+      { projectId: "proj", itemId: "r1", tradePriceCents: 19000 },
+      expect.anything(),
+    );
+    expect(mockLinePricing).not.toHaveBeenCalled();
   });
 
   it("prints trade cost read-only once the line is on an order", () => {
@@ -370,7 +401,7 @@ describe("PriceLens: what can be typed", () => {
     });
     renderLens();
     expect(
-      screen.queryByLabelText("Trade cost, Wallpaper, grasscloth"),
+      screen.queryByLabelText("Unit cost, Wallpaper, grasscloth"),
     ).toBeNull();
     expect(
       within(rowOf("Wallpaper, grasscloth")).getByText("$184"),
@@ -386,7 +417,13 @@ describe("PriceLens: the row menu", () => {
       within(menu)
         .getAllByRole("menuitem")
         .map((item) => item.textContent),
-    ).toEqual(["Add labor", "Make it an allowance", "Move to room…", "Remove"]);
+    ).toEqual([
+      "Add labor",
+      "Make it an allowance",
+      "Reset to default markup",
+      "Move to room…",
+      "Remove",
+    ]);
   });
 
   it("makes a line an allowance: typed per unit, sent as the line total (per unit × quantity)", async () => {
@@ -446,7 +483,7 @@ describe("PriceLens: the row menu", () => {
     renderLens();
     const r1 = rowOf("Wallpaper, grasscloth");
     const client = r1.querySelector(
-      'td[data-label="Client price"]',
+      'td[data-label="Unit client"]',
     ) as HTMLElement;
     expect(within(client).getByText("Up to $250")).toBeInTheDocument();
     expect(
@@ -455,7 +492,8 @@ describe("PriceLens: the row menu", () => {
     expect(within(r1).queryByText("$230")).toBeNull();
     const markup = r1.querySelector('td[data-label="Markup"]') as HTMLElement;
     expect(markup).toHaveTextContent(/^—$/);
-    expect(within(r1).queryByText("25%")).toBeNull();
+    expect(within(r1).queryByText("25.0%")).toBeNull();
+    expect(within(r1).queryByLabelText(/^Markup/)).toBeNull();
     // The subtotal and the job count the ceiling once: $2,250 + $765 labor.
     expect(
       screen.getByText("Bedroom · $3,015 priced · ~$6,100 roughed"),
@@ -496,10 +534,13 @@ describe("PriceLens: the row menu", () => {
       within(menu).getByRole("menuitem", { name: "Remove" }),
     ).toHaveAttribute("aria-disabled", "true");
     expect(
+      within(menu).getByRole("menuitem", { name: "Reset to default markup" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(
       within(menu).getAllByText(
         "Released lines change through Record a change.",
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
   it("adds labor under its piece through useAddLaborLine, with its client price", async () => {

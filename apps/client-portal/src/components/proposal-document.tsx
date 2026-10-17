@@ -35,7 +35,7 @@ import { StrataMark } from '@/components/strata-mark';
 import { BoardsBlock } from '@/components/board-block';
 import { LineFeedback } from '@/components/proposal-line-feedback';
 import { proposalClientEvents } from '@/lib/analytics/events';
-import { productFromProposalSnapshot } from '@/lib/proposal-product-snapshot';
+import { clientProposalItems, type ClientProposalItem } from '@/lib/proposal-product-snapshot';
 
 interface ProposalDocumentProps {
   proposal: Proposal & { items?: ProposalItem[] };
@@ -219,18 +219,9 @@ export function ProposalDocument({
   const gate = blockVisibilityFromShare(share);
   // A product is shared catalog state; the proposal-owned snapshot is the
   // edition. Normalize it into the legacy product shape so every renderer in
-  // this document consumes the frozen copy, never a newer catalog join.
-  const items = (proposal.items ?? [])
-    .filter((it) => it.item_type !== 'tbd')
-    .map((item) => ({
-      ...item,
-      // A guest bundle has already reduced `product` to the fields permitted by
-      // that share's visibility. Keep that audited DTO intact; authenticated
-      // renders build the product exclusively from the immutable client copy.
-      product: visibility
-        ? item.product
-        : productFromProposalSnapshot(item.client_product_snapshot, item.id),
-    }));
+  // this document consumes the frozen copy, never a newer catalog join. The
+  // lines carry no trade cost or markup (US-37 D6).
+  const items = clientProposalItems(proposal.items ?? [], Boolean(visibility));
 
   // C3/C5 — the client's own verdicts on this proposal's lines (only when the
   // loop is offered; a guest render passes feedbackEnabled=false so this is inert).
@@ -648,7 +639,7 @@ function SelectionsList({
   feedbackEnabled = false,
   feedbackByItem,
 }: {
-  items: ProposalItem[];
+  items: ClientProposalItem[];
   showPrices?: boolean;
   // C1 fielded law — supplier identity is now independent of pricing (fixes the
   // vendor/brand bundling defect), and lead times gate on their own field.

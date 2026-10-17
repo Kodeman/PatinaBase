@@ -22,6 +22,8 @@ const mockArchive = jest.fn();
 const mockArchiveHook = jest.fn(() => ({ mutateAsync: mockArchive, isPending: false }));
 
 jest.mock('@patina/supabase', () => ({
+  useSetFfeItemLabel: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  itemLabelRefusal: () => null,
   useArchiveProjectSelection: () => mockArchiveHook(),
   useVendorQuotes: () => ({ data: [] }),
   useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -201,7 +203,7 @@ describe('LineUnfold · REMOVE THIS LINE', () => {
   ])('refuses in place for a line %s, naming the door', (_label, over) => {
     renderUnfold(over);
     fireEvent.click(removeAct());
-    expect(screen.getByRole('status')).toHaveTextContent(REFUSAL);
+    expect(screen.getAllByRole('status').find((status) => status.textContent?.includes(REFUSAL))).toHaveTextContent(REFUSAL);
     expect(screen.queryByTestId('line-remove-form')).toBeNull();
     expect(mockArchiveHook).not.toHaveBeenCalled();
   });
@@ -209,8 +211,8 @@ describe('LineUnfold · REMOVE THIS LINE', () => {
   it('refuses a line on an unsent draft authorization without calling it released', () => {
     renderUnfold({ auth: { track: 'draft', number: 4 } as LineAuthorization });
     fireEvent.click(removeAct());
-    expect(screen.getByRole('status')).toHaveTextContent(DRAFT_REFUSAL);
-    expect(screen.getByRole('status')).not.toHaveTextContent(REFUSAL);
+    expect(screen.getAllByRole('status').find((status) => status.textContent?.includes(DRAFT_REFUSAL))).toHaveTextContent(DRAFT_REFUSAL);
+    screen.getAllByRole('status').forEach((s) => expect(s).not.toHaveTextContent(REFUSAL));
     expect(screen.queryByTestId('line-remove-form')).toBeNull();
     expect(mockArchiveHook).not.toHaveBeenCalled();
   });
@@ -226,7 +228,7 @@ describe('LineUnfold · REMOVE THIS LINE', () => {
       target: { value: 'wrong room entirely' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-    expect(await screen.findByRole('status')).toHaveTextContent(REFUSAL);
+    expect(await screen.findByText(REFUSAL, { selector: '[role="status"]' })).toBeInTheDocument();
     expect(screen.queryByTestId('line-remove-form')).toBeNull();
   });
 

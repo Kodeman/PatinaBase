@@ -1,5 +1,11 @@
+import type { ReactNode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Button } from "./button";
+import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight";
+
+jest.mock("@/lib/analytics/document-events", () => ({
+  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
+}));
 
 /**
  * §A5 "held" — the same opt-in the document acts carry, on the portal button
@@ -62,5 +68,147 @@ describe("Button · held", () => {
     expect(button).not.toHaveAttribute("data-held");
     fireEvent.click(button);
     expect(act).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * US-36 K4 — pressing a held Button lights up what holds it, inside the
+ * nearest `data-spotlight-frame`. A site's own onHeldActivate still answers
+ * alone; with no frame, the press is swallowed as before.
+ */
+describe("Button · held spotlight", () => {
+  const REASON = "Link a client with an email address.";
+  const layer = () => document.querySelector("[data-hold-spotlight]");
+  const windows = () =>
+    Array.from(document.querySelectorAll("[data-hold-spotlight-window]")).map(
+      (el) => el.getAttribute("data-hold-spotlight-window"),
+    );
+  const send = () =>
+    screen.getByRole("button", { name: "Send the agreement", hidden: true });
+
+  function Sheet({
+    framed = true,
+    onHeldActivate,
+    holds,
+  }: {
+    framed?: boolean;
+    onHeldActivate?: () => void;
+    holds?: SpotlightHold[];
+  }) {
+    return (
+      <div data-spotlight-frame={framed ? "" : undefined}>
+        {holds?.map((hold) => (
+          <input key={hold.id} id={hold.id} aria-label={hold.label} />
+        ))}
+        <p id="why">
+          {REASON}
+          <button type="button">Link a client</button>
+        </p>
+        <Button
+          disabled
+          held
+          aria-describedby="why"
+          onHeldActivate={onHeldActivate}
+          holds={holds}
+        >
+          Send the agreement
+        </Button>
+      </div>
+    );
+  }
+
+  it("opens one window on the aria-describedby reason, its fixer focused", () => {
+    render(<Sheet />);
+    fireEvent.click(send());
+    expect(windows()).toEqual(["why"]);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Link a client" }),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      `1 thing needs attention: ${REASON}`,
+    );
+  });
+
+  it("keeps today's behaviour when no frame holds it", () => {
+    render(<Sheet framed={false} />);
+    fireEvent.click(send());
+    expect(layer()).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("opens one window per hold when given holds", () => {
+    const holds: SpotlightHold[] = ["client", "price"].map((id) => ({
+      id,
+      target: () => document.getElementById(id),
+      label: `No ${id}`,
+      reason: `Set the ${id}.`,
+    }));
+    render(<Sheet holds={holds} />);
+    fireEvent.click(send());
+    expect(windows()).toEqual(["client", "price"]);
+  });
+
+  it("leaves an onHeldActivate site exactly as it was", () => {
+    const reason = jest.fn();
+    render(<Sheet onHeldActivate={reason} />);
+    fireEvent.click(send());
+    expect(reason).toHaveBeenCalledTimes(1);
+    expect(layer()).toBeNull();
+  });
+
+  it("opens the same window for a held asChild link", () => {
+    render(
+      <div data-spotlight-frame>
+        <p id="why">{REASON}</p>
+        <Button asChild disabled held aria-describedby="why">
+          <a href="#paper">Open the paper</a>
+        </Button>
+      </div>,
+    );
+    fireEvent.click(screen.getByRole("link", { name: "Open the paper" }));
+    expect(windows()).toEqual(["why"]);
+  });
+
+  // R186 — a named fix region takes the window, live and focused.
+  const FixFrame = ({ children }: { children: ReactNode }) => (
+    <div data-spotlight-frame>
+      <div id="fix">
+        <input aria-label="Client email" />
+      </div>
+      <p id="why">{REASON}</p>
+      {children}
+    </div>
+  );
+
+  it("windows the named fix region and focuses its first control", () => {
+    render(
+      <FixFrame>
+        <Button disabled held aria-describedby="why" holdFix="fix">
+          Send the agreement
+        </Button>
+      </FixFrame>,
+    );
+    fireEvent.click(send());
+    expect(windows()).toEqual(["fix"]);
+    const email = screen.getByRole("textbox", { name: "Client email" });
+    expect(email.closest("[inert]")).toBeNull();
+    expect(document.activeElement).toBe(email);
+  });
+
+  it("windows the named fix region for a held asChild link", () => {
+    render(
+      <FixFrame>
+        <Button asChild disabled held aria-describedby="why" holdFix="fix">
+          <a href="#paper">Open the paper</a>
+        </Button>
+      </FixFrame>,
+    );
+    fireEvent.click(
+      screen.getByRole("link", { name: "Open the paper", hidden: true }),
+    );
+    expect(windows()).toEqual(["fix"]);
+    expect(document.activeElement).toBe(
+      screen.getByRole("textbox", { name: "Client email" }),
+    );
   });
 });

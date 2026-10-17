@@ -60,6 +60,10 @@ export async function GET(
     const { id } = await params;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase: any = await createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
 
     const { data, error } = await supabase
       .from('products')

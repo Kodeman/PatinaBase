@@ -9,12 +9,23 @@
  * none. The figures are the overview's (`overview-derivation`), so the room
  * subtotals and the job line never disagree with the Document's Pieces rows.
  *
- * Trade cost is typed through `set_project_ffe_line_commercials` (00692).
- * Markup and client price are read-only on every job: no writer of a placed
- * line's client price exists (D19 is not built), and an active job says so in
- * the a7 sentence. A labor line's own client price is the exception, typed
- * through `set_labor_line_price` (00737) until the line is released (ruling
- * F1). `Make it an allowance` goes through `make_ffe_line_allowance` (00743).
+ * US-37 #4 (contract D4, 00809): every open line is priced two ways through
+ * the one writer `set_ffe_line_pricing`: type the markup or the unit client
+ * price, and the other follows from the cost. Quantity, unit cost and retail
+ * go the same way. The job summary above the tables (docked at 390) is
+ * `summarizeJob` over every live line, with each committed figure applied at
+ * once, so the blend and the gap move on every commit. A cost that moved
+ * under a price is settled with `resolve_ffe_cost_change`; the resets are
+ * `reset_ffe_line_markup` and `reset_project_markups`. A freight, delivery or
+ * install line is a named line (`create_named_project_need`) given its kind
+ * (`set_ffe_line_kind`). A refused write prints the server's sentence on its
+ * line, verbatim.
+ *
+ * Labor keeps its writers: trade cost through `set_project_ffe_line_commercials`
+ * (00692), its own client price through `set_labor_line_price` (00737) until
+ * released (ruling F1). A released line's figures print; its trade cost is
+ * still typed through 00692 until it is ordered. `Make it an allowance` goes
+ * through `make_ffe_line_allowance` (00743).
  *
  * The lens is absent for a seat without money (R1, Q7).
  */
@@ -31,15 +42,35 @@ import {
 import {
   useAddLaborLine,
   useArchiveProjectSelection,
+  useCreateNamedProjectNeed,
   useMakeFfeLineAllowance,
+  usePricingSettings,
   useProjectFFEItems,
+  useProjectPricing,
   useProjectRoomPlacements,
+  useResetFfeLineMarkup,
+  useResetProjectMarkups,
+  useResolveFfeCostChange,
   useRestoreProjectSelection,
   useSetFfeLineCommercials,
+  useSetFfeLineKind,
+  useSetFfeLinePricing,
   useSetLaborLinePrice,
+  useSetProjectPricing,
 } from "@patina/supabase";
-import type { FfeLineUnit, FfeRoomPlacement } from "@patina/types";
+import type {
+  FfeCostChangeResolution,
+  FfeLinePricingField,
+  FfeLineUnit,
+  FfeRoomPlacement,
+} from "@patina/types";
 import { cn } from "@/lib/utils";
+import {
+  clientFromMarkup,
+  retailWarning,
+  summarizeJob,
+  type PricingLine,
+} from "@/lib/document/trade-pricing";
 import { fmtUsd } from "@/lib/document/format";
 import {
   useAssignLineRoom,
@@ -48,6 +79,7 @@ import {
 import { useDocumentEngagement } from "@/hooks/use-document-state";
 import {
   REMOVED_PLACE,
+  THROUGHOUT_PLACE,
   type BuildRoomPlace,
 } from "@/lib/document/pieces/build-room-url";
 import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
@@ -86,6 +118,13 @@ import {
 import { laborGate } from "./labor-act";
 import { AlsoInLine, money, unitWord } from "./placement-chips";
 import { PriceTable, type PriceRow } from "./price-table";
+import {
+  ADDED_KINDS,
+  PriceActs,
+  PriceSummary,
+  summarySentence,
+  type AddedLineKind,
+} from "./price-summary";
 import { UndoToast } from "./undo-toast";
 
 export interface PriceLensProps {
@@ -95,14 +134,106 @@ export interface PriceLensProps {
   canSeeMoney: boolean;
 }
 
-/** a7, word for word (R1-F26, D19, Q16). */
+/** a7 as D19 leaves it (US-37 #4): open lines are priced here; released ones are not. */
 export const ACTIVE_JOB_SENTENCE =
-  "This job is active. Markup and client price are read-only here; they change through Record a change. Trade cost can still be typed.";
+  "This job is active. Released lines change through Record a change; their trade cost can still be typed until they are ordered.";
 
 const TRADE_SCOPE_REASON = "Trade Scope lines change in their scope.";
 const LABOR_LABOR_REASON = "A labor line takes no labor of its own.";
 const LABOR_ALLOWANCE_REASON = "Labor can't be an allowance.";
+const LABOR_RESET_REASON = "Labor lines are priced with the labor price.";
+const NO_COST_RESET_REASON = "Add the cost before resetting the markup.";
 const REASON_REFUSAL = "archive reason must be at least 5 characters";
+
+/** A typed figure, shown at once and until the server's line answers it. */
+interface PendingFigure {
+  field: FfeLinePricingField;
+  value: number | null;
+  /** The line as it stood when the figure was typed. */
+  stamp: string;
+}
+
+function lineStamp(line: PriceLine): string {
+  return [
+    line.updated_at,
+    line.unit_price_cents,
+    line.trade_price_cents,
+    line.quantity,
+    line.retail_unit_cents,
+  ].join("|");
+}
+
+/** The line with its typed figure applied, as set_ffe_line_pricing will write it. */
+function withPending(line: PriceLine, pending: PendingFigure | undefined): PriceLine {
+  if (!pending) return line;
+  const { field, value } = pending;
+  if (field === "quantity") return { ...line, quantity: value ?? line.quantity };
+  if (field === "retail_unit_cents") return { ...line, retail_unit_cents: value };
+  if (field === "unit_cost_cents") return { ...line, trade_price_cents: value };
+  if (field === "unit_client_price_cents")
+    return { ...line, unit_price_cents: value, price_basis: "client" };
+  // markup_percent: the client price follows from the cost; the cost never moves.
+  const cost = line.trade_price_cents ?? 0;
+  return cost > 0 && value != null
+    ? {
+        ...line,
+        unit_price_cents: clientFromMarkup(cost, value),
+        price_basis: "markup",
+      }
+    : line;
+}
+
+const positive = (cents: number | null | undefined): cents is number =>
+  cents != null && cents > 0;
+
+/**
+ * The line's unit client price, or null when it has none. A 0 is the
+ * column's default, so it is a price only once one was set (`price_basis`,
+ * 00809): a −100% markup is priced at $0, a new line is not priced.
+ */
+function clientPriceOf(line: PriceLine): number | null {
+  const cents = line.unit_price_cents ?? null;
+  return cents != null && (cents > 0 || line.price_basis != null) ? cents : null;
+}
+
+function allowanceCeiling(line: PriceLine): number | null {
+  return line.item_type === "allowance" && positive(line.budget_max_cents)
+    ? line.budget_max_cents
+    : null;
+}
+
+/**
+ * One line as `summarizeJob` reads it, per unit. A cost of 0 reads as none; a
+ * client price of 0 is a price once one was set (`clientPriceOf`). An
+ * allowance counts at its ceiling exactly, so it goes in as one unit carrying
+ * the line's totals: a ceiling split per unit and multiplied back would drift
+ * by the rounding.
+ */
+export function pricingLineOf(line: PriceLine): PricingLine {
+  const quantity = line.quantity ?? 0;
+  const ceiling = allowanceCeiling(line);
+  const cost = positive(line.trade_price_cents) ? line.trade_price_cents : null;
+  const kind =
+    line.line_kind === "goods" || !line.line_kind
+      ? "product"
+      : (line.line_kind as PricingLine["kind"]);
+  if (ceiling != null) {
+    return {
+      kind,
+      quantity: 1,
+      unitCostCents: cost == null ? null : cost * quantity,
+      unitClientCents: ceiling,
+      retailUnitCents: null,
+    };
+  }
+  return {
+    kind,
+    quantity,
+    unitCostCents: cost,
+    unitClientCents: clientPriceOf(line),
+    retailUnitCents: line.retail_unit_cents ?? null,
+  };
+}
 
 /** From `ordered` on, a line is on its way to the maker. */
 const ORDERED_ON: ReadonlySet<string> = new Set([
@@ -127,6 +258,14 @@ interface PriceLine extends OverviewLine {
   trade_price_cents?: number | null;
   purchase_order_id?: string | null;
   product?: { name?: string | null } | null;
+  /** 00809, studio-only. */
+  retail_unit_cents?: number | null;
+  /** The field edited last; null on a line never priced. */
+  price_basis?: string | null;
+  pending_cost_prev_cents?: number | null;
+  pending_cost_changed_at?: string | null;
+  pending_markup_held_percent?: number | null;
+  updated_at?: string | null;
 }
 
 type Tool =
@@ -152,8 +291,8 @@ interface FocusRequest {
   lineId: string | null;
   /** The place the line should sit in; its heading holds focus meanwhile. */
   placeId: string | null;
-  /** The line's `⋯`, its allowance cell, or its name (a new labor line). */
-  target?: "act" | "allowance" | "name";
+  /** The line's `⋯`, its allowance cell, its name (a new labor line) or its cost (a new freight line). */
+  target?: "act" | "allowance" | "name" | "cost";
   /** Wait for a line the sheet does not hold yet (a new or restored line). */
   expect?: boolean;
   at: number;
@@ -166,6 +305,7 @@ const FOCUS_TARGET = {
   act: 'button[aria-haspopup="menu"]',
   allowance: "[data-allowance-cell]",
   name: "[data-line-name]",
+  cost: "[data-cost-input]",
 } as const;
 
 function priceSection(root: HTMLElement | null, placeId: string) {
@@ -231,16 +371,36 @@ export function PriceLens(props: PriceLensProps) {
 }
 
 function PriceSheet({ docId, projectId, room }: PriceLensProps) {
-  const { data: lineData } = useProjectFFEItems(projectId);
+  const { data: lineData, isFetching: linesFetching } =
+    useProjectFFEItems(projectId);
   const { data: placementData } = useProjectRoomPlacements(projectId);
   const { data: roomRows } = useDocumentRooms(projectId);
   const { data: resolution } = useDocumentEngagement(docId);
   const commercials = useSetFfeLineCommercials({ errorSurface: "inline" });
   const laborPrice = useSetLaborLinePrice();
+  const linePricing = useSetFfeLinePricing();
+  const lineKind = useSetFfeLineKind();
+  const resolveCost = useResolveFfeCostChange();
+  const resetLine = useResetFfeLineMarkup();
+  const resetAll = useResetProjectMarkups();
+  const createLine = useCreateNamedProjectNeed();
+  const { data: projectPricing, isFetching: pricingFetching } =
+    useProjectPricing(projectId);
+  const setProjectPricing = useSetProjectPricing();
+  const { data: myPricing } = usePricingSettings();
   const archive = useArchiveProjectSelection();
   const restore = useRestoreProjectSelection();
   const assign = useAssignLineRoom(projectId);
 
+  const [pending, setPending] = useState<ReadonlyMap<string, PendingFigure>>(
+    new Map(),
+  );
+  /** The server's sentence for each line's last refused write. */
+  const [lineNotes, setLineNotes] = useState<ReadonlyMap<string, string>>(
+    new Map(),
+  );
+  const [summaryNote, setSummaryNote] = useState<string | null>(null);
+  const [adding, setAdding] = useState<AddedLineKind | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   const [removal, setRemoval] = useState<Removal | null>(null);
   const [tool, setTool] = useState<Tool | null>(null);
@@ -259,14 +419,65 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     () => (roomRows ?? []).map((r) => ({ id: r.id, name: r.name })),
     [roomRows],
   );
-  const lines = useMemo(
+  const servedLines = useMemo(
     () =>
       liveBuildRoomLines(lineData as unknown as PriceLine[] | undefined).filter(
         (line) => !hidden.has(line.id),
       ),
     [lineData, hidden],
   );
-  const byId = useMemo(() => new Map(lines.map((l) => [l.id, l])), [lines]);
+  const lines = useMemo(
+    () => servedLines.map((line) => withPending(line, pending.get(line.id))),
+    [servedLines, pending],
+  );
+
+  // A typed figure gives way once the server's line has moved past it.
+  useEffect(() => {
+    if (!lineData || pending.size === 0) return;
+    const served = new Map(
+      (lineData as unknown as PriceLine[]).map((line) => [line.id, line]),
+    );
+    const settled = [...pending].filter(([id, figure]) => {
+      const line = served.get(id);
+      return !line || lineStamp(line) !== figure.stamp;
+    });
+    if (settled.length === 0) return;
+    setPending((map) => {
+      const next = new Map(map);
+      for (const [id] of settled) next.delete(id);
+      return next;
+    });
+  }, [lineData, pending]);
+
+  const jobTargets = useMemo(
+    () => ({
+      targetMarkupPct:
+        projectPricing?.markupTargetPercent ??
+        myPricing?.defaultMarkupPercent ??
+        35,
+      salesTaxRate: projectPricing?.salesTaxRate ?? null,
+    }),
+    [projectPricing, myPricing],
+  );
+  const summary = useMemo(
+    () => summarizeJob(lines.map(pricingLineOf), jobTargets),
+    [lines, jobTargets],
+  );
+  // Each successful write speaks the summary once, on the one status line
+  // (SQ-1171), after the figures it changed come back: its hook has already
+  // started that refetch, so the write waits until neither the lines nor the
+  // job's pricing is fetching (SQ-1183). It speaks only if the summary moved
+  // past what it read before the write; otherwise it lapses.
+  const [summaryDue, setSummaryDue] = useState<readonly string[]>([]);
+  const spokenSummary = summarySentence(summary, jobTargets.salesTaxRate);
+  const figuresFetching = linesFetching || pricingFetching;
+  useEffect(() => {
+    if (summaryDue.length === 0 || figuresFetching) return;
+    setSummaryDue([]);
+    if (summaryDue.some((before) => before !== spokenSummary))
+      setAnnouncement(spokenSummary);
+  }, [summaryDue, spokenSummary, figuresFetching]);
+  const byId =useMemo(() => new Map(lines.map((l) => [l.id, l])), [lines]);
   const placements = useMemo(
     () => (placementData ?? []) as FfeRoomPlacement[],
     [placementData],
@@ -350,12 +561,12 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       line.purchase_order_id != null;
     const onOrder =
       line.purchase_order_id != null || ORDERED_ON.has(line.status ?? "");
-    const clientCents = line.unit_price_cents ?? null;
+    const clientCents = clientPriceOf(line);
     const allowanceCents =
       line.item_type === "allowance" && (line.budget_max_cents ?? 0) > 0
         ? (line.budget_max_cents ?? null)
         : null;
-    const priced = (clientCents ?? 0) > 0 || allowanceCents != null;
+    const priced = clientCents != null || allowanceCents != null;
 
     const gates: PriceRow["gates"] = {};
     if (tradeScope) {
@@ -374,8 +585,16 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       if (released) gates.remove = RELEASED_DRAG_REASON;
     }
 
+    if (labor) gates.reset = LABOR_RESET_REASON;
+    else if (tradeScope) gates.reset = TRADE_SCOPE_REASON;
+    else if (released) gates.reset = RELEASED_DRAG_REASON;
+    else if (!positive(line.trade_price_cents))
+      gates.reset = NO_COST_RESET_REASON;
+
+    const pricingEditable = !labor && !tradeScope && !released;
     const linePlacements = placementsByLine.get(line.id) ?? [];
     const label = lineStampLabel(stamp);
+    const pricing = pricingLineOf(line);
     return {
       id: line.id,
       name: lineName(line),
@@ -384,8 +603,19 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       unit: line.unit,
       tradeCents: line.trade_price_cents ?? null,
       clientCents,
+      retailCents: line.retail_unit_cents ?? null,
       allowanceCents,
       roughCents: priced ? null : (line.rough_cents ?? null),
+      pricingEditable,
+      aboveRetail: allowanceCents == null && retailWarning(pricing),
+      costChange:
+        line.pending_cost_prev_cents != null
+          ? {
+              prevCents: line.pending_cost_prev_cents,
+              heldMarkupPct: line.pending_markup_held_percent ?? null,
+            }
+          : null,
+      note: lineNotes.get(line.id) ?? null,
       // A ready line needs nothing here; every other word says where it stands.
       stamp: stamp === "ready" || !label ? null : { kind: stamp, label },
       labor,
@@ -399,37 +629,184 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
           />
         ) : null,
       tradeEditable: !tradeScope && !onOrder,
-      clientEditable: labor && !tradeScope && !released,
+      clientEditable: !tradeScope && !released,
       gates,
     };
   }
 
-  function setTradeCost(row: PriceRow, cents: number) {
+  function noteLine(lineId: string, text: string | null) {
+    setLineNotes((map) => {
+      if (text === null && !map.has(lineId)) return map;
+      const next = new Map(map);
+      if (text === null) next.delete(lineId);
+      else next.set(lineId, text);
+      return next;
+    });
+  }
+
+  function dropPending(lineId: string) {
+    setPending((map) => {
+      if (!map.has(lineId)) return map;
+      const next = new Map(map);
+      next.delete(lineId);
+      return next;
+    });
+  }
+
+  /** A write's success hook: its summary is spoken once its refetch lands (SQ-1171). */
+  function speakSummaryOnSuccess() {
+    // Read from the server's figures alone. TanStack calls a writer's
+    // per-call onSuccess for its latest call only, so a figure typed just
+    // before on the same writer must still count as a move.
+    const before = summarySentence(
+      summarizeJob(servedLines.map(pricingLineOf), jobTargets),
+      jobTargets.salesTaxRate,
+    );
+    return () => setSummaryDue((due) => [...due, before]);
+  }
+
+  /** A refused write: its figure goes, and the server's sentence stays on the line. */
+  function refused(row: PriceRow, fallback: string) {
+    return (cause: unknown) => {
+      dropPending(row.id);
+      noteLine(row.id, errorText(cause) ?? fallback);
+    };
+  }
+
+  /**
+   * One typed figure. Labor keeps its own writers, and so does a released
+   * line's trade cost (00692, until ordered); every other figure goes through
+   * set_ffe_line_pricing, shown at once until the server's line answers.
+   */
+  function setPricing(
+    row: PriceRow,
+    field: FfeLinePricingField,
+    value: number | null,
+  ) {
     setNotice(null);
-    commercials.mutate(
-      { projectId, itemId: row.id, tradePriceCents: cents },
+    noteLine(row.id, null);
+    const onSuccess = speakSummaryOnSuccess();
+    const fallback = `The price on ${row.name} was not saved. Try again.`;
+    if (field === "unit_cost_cents" && !row.pricingEditable) {
+      commercials.mutate(
+        { projectId, itemId: row.id, tradePriceCents: value ?? 0 },
+        {
+          onSuccess,
+          onError: refused(row, `The trade cost on ${row.name} was not saved. Try again.`),
+        },
+      );
+      return;
+    }
+    if (field === "unit_client_price_cents" && row.labor) {
+      laborPrice.mutate(
+        { projectId, itemId: row.id, unitPriceCents: value ?? 0 },
+        {
+          onSuccess,
+          onError: refused(row, `The client price on ${row.name} was not saved. Try again.`),
+        },
+      );
+      return;
+    }
+    const served = (lineData as unknown as PriceLine[] | undefined)?.find(
+      (line) => line.id === row.id,
+    );
+    if (served) {
+      setPending((map) =>
+        new Map(map).set(row.id, { field, value, stamp: lineStamp(served) }),
+      );
+    }
+    linePricing.mutate(
+      { projectId, itemId: row.id, field, value },
+      { onSuccess, onError: refused(row, fallback) },
+    );
+  }
+
+  function settleCost(row: PriceRow, resolution: FfeCostChangeResolution) {
+    noteLine(row.id, null);
+    resolveCost.mutate(
+      { projectId, itemId: row.id, resolution },
+      { onError: refused(row, `The cost change on ${row.name} was not settled. Try again.`) },
+    );
+  }
+
+  function resetMarkup(row: PriceRow) {
+    noteLine(row.id, null);
+    setSummaryDue([]);
+    resetLine.mutate(
+      { projectId, itemId: row.id },
       {
+        onSuccess: () =>
+          setAnnouncement(`${row.name} is back on its default markup.`),
+        onError: refused(row, `The markup on ${row.name} was not reset. Try again.`),
+      },
+    );
+  }
+
+  function resetJob() {
+    setSummaryNote(null);
+    setSummaryDue([]);
+    resetAll.mutate(
+      { projectId },
+      {
+        onSuccess: (result) =>
+          setAnnouncement(
+            `${result.resetCount} ${result.resetCount === 1 ? "line is" : "lines are"} back on the default markup.${result.skippedCount > 0 ? ` ${result.skippedCount} left as they are.` : ""}`,
+          ),
         onError: (cause) =>
-          setNotice(
-            errorText(cause) ??
-              `The trade cost on ${row.name} was not saved. Try again.`,
+          setSummaryNote(
+            errorText(cause) ?? "The markups were not reset. Try again.",
           ),
       },
     );
   }
 
-  function setClientPrice(row: PriceRow, cents: number) {
-    setNotice(null);
-    laborPrice.mutate(
-      { projectId, itemId: row.id, unitPriceCents: cents },
+  function setJobPricing(
+    markupTargetPercent: number | null,
+    salesTaxRate: number | null,
+  ) {
+    setSummaryNote(null);
+    setProjectPricing.mutate(
+      { projectId, markupTargetPercent, salesTaxRate },
       {
+        onSuccess: speakSummaryOnSuccess(),
         onError: (cause) =>
-          setNotice(
-            errorText(cause) ??
-              `The client price on ${row.name} was not saved. Try again.`,
+          setSummaryNote(
+            errorText(cause) ?? "The job's pricing was not saved. Try again.",
           ),
       },
     );
+  }
+
+  /**
+   * `Add freight` and its kin: a named line in the rail's room (Throughout
+   * when the rail names none), given its kind, then its cost takes focus.
+   */
+  async function addKindLine(kind: AddedLineKind) {
+    setSummaryNote(null);
+    setAdding(kind);
+    const inRoom = room != null && rooms.some((r) => r.id === room);
+    const placeId = inRoom ? room : THROUGHOUT_PLACE;
+    const name = ADDED_KINDS.find((k) => k.kind === kind)?.label ?? kind;
+    try {
+      const placed = await createLine.mutateAsync({
+        projectId,
+        name,
+        quantity: 1,
+        assignmentScope: inRoom ? "room" : "throughout",
+        roomId: inRoom ? room : null,
+        idempotencyKey: newKey(kind),
+      });
+      const selectionId = placed.selectionId;
+      if (!selectionId) throw new Error(`The ${name.toLowerCase()} line was not added.`);
+      await lineKind.mutateAsync({ projectId, itemId: selectionId, lineKind: kind });
+      requestFocus({ lineId: selectionId, placeId, target: "cost", expect: true });
+    } catch (cause) {
+      setSummaryNote(
+        errorText(cause) ?? `The ${name.toLowerCase()} line was not added. Try again.`,
+      );
+    } finally {
+      setAdding(null);
+    }
   }
 
   /**
@@ -551,7 +928,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     notice ?? (assign.isError ? moveFailureText(assign.error) : null);
 
   return (
-    <div ref={sheetRef} data-price-lens="" className="py-6">
+    <div ref={sheetRef} data-price-lens="" className="flex flex-col py-6">
       <p className="mb-3 font-sans text-[16px] leading-[1.5] tabular-nums text-[var(--sheet-ink)]">
         {priceSummary("Job", job)}
       </p>
@@ -560,6 +937,26 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
           {ACTIVE_JOB_SENTENCE}
         </p>
       ) : null}
+
+      <PriceSummary
+        summary={summary}
+        targetOverridePct={projectPricing?.markupTargetPercent ?? null}
+        defaultPct={myPricing?.defaultMarkupPercent ?? 35}
+        salesTaxRate={projectPricing?.salesTaxRate ?? null}
+        onTarget={(pct) =>
+          setJobPricing(pct, projectPricing?.salesTaxRate ?? null)
+        }
+        onTaxRate={(rate) =>
+          setJobPricing(projectPricing?.markupTargetPercent ?? null, rate)
+        }
+        note={summaryNote}
+      />
+      <PriceActs
+        onAdd={(kind) => void addKindLine(kind)}
+        onResetAll={resetJob}
+        adding={adding}
+        resetting={resetAll.isPending}
+      />
 
       {lineData && shown.length === 0 ? (
         <p className="max-w-[56ch] font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
@@ -581,8 +978,9 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
                 rooms={rooms}
                 rows={placeLines.map((line) => rowFor(line, place.key))}
                 subtotal={priceSummary(place.name, place.tally)}
-                onTradeCost={setTradeCost}
-                onClientPrice={setClientPrice}
+                onPricing={setPricing}
+                onResolveCost={settleCost}
+                onResetMarkup={resetMarkup}
                 onAddLabor={(row) => {
                   const line = byId.get(row.id);
                   if (line)

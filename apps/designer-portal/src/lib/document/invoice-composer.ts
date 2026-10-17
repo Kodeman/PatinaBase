@@ -949,8 +949,74 @@ export function draftInvoiceRefusal(message: unknown): { message: string; retrya
 
 const CLAIM_GENERIC = "The hours couldn't be attached to the draft.";
 
+export type InvoiceHoldKind =
+  | "no-client"
+  | "no-studio"
+  | "rate-pending"
+  | "price-line"
+  | "nothing-selected"
+  | "send-no-recipient";
+
 export interface InvoiceHold {
+  kind: InvoiceHoldKind;
+  reason: string;
+  repair: string;
   fixer: "link-client" | "name-studio" | "set-rate" | "price-line" | "add-email" | "select-lines" | "ask";
+  focusKey: string;
+}
+
+export interface InvoiceReadinessFacts {
+  clientLinked: boolean;
+  canLinkClient: boolean;
+  clientLinkHold: "not_permitted" | "lead_not_in_studio" | null;
+  studioMode?: boolean;
+  projectExists?: boolean;
+  pricingStudioLinked: boolean;
+  canNameStudio: boolean;
+  soloOwnerUnstamped: boolean;
+  selectedRatePendingEntries: { userId: string; memberName?: string | null }[];
+  selectedUnpricedLineIds: string[];
+  selectedAnything: boolean;
+  sendNoRecipient?: boolean;
+  noClientReason?: string;
+  noStudioReason?: string;
+  unpricedLineNames?: Record<string, string | null | undefined>;
+  householdName?: string;
+}
+
+/** Readiness is derived without mutating composer state; holds follow repair order. */
+export function assessInvoiceReadiness(facts: InvoiceReadinessFacts): { ready: boolean; holds: InvoiceHold[] } {
+  const holds: InvoiceHold[] = [];
+  const add = (kind: InvoiceHoldKind, reason: string, repair: string, fixer: InvoiceHold["fixer"], focusKey: string) =>
+    holds.push({ kind, reason, repair, fixer, focusKey });
+
+  // A viewer who can't make the fix is pointed at the Ask or support line instead.
+  if (!facts.studioMode && !facts.clientLinked) {
+    const reason = facts.noClientReason ?? "Link a client before drafting this invoice.";
+    if (facts.canLinkClient) add("no-client", reason, "Link a client", "link-client", "link-client");
+    else if (facts.clientLinkHold === "lead_not_in_studio")
+      add("no-client", reason, "Copy the address", "ask", "support-link-client");
+    else add("no-client", reason, "Copy a note", "ask", "ask-link-client");
+  }
+  if (facts.projectExists !== false && !facts.pricingStudioLinked) {
+    const reason = facts.noStudioReason ?? "Name the studio before drafting this invoice.";
+    if (facts.canNameStudio) add("no-studio", reason, "Name the studio", "name-studio", "name-studio");
+    else if (facts.soloOwnerUnstamped) add("no-studio", reason, "Copy the address", "ask", "support-name-studio");
+    else add("no-studio", reason, "Ask who can name it", "ask", "ask-name-studio");
+  }
+  const pendingDesigners = new Map<string, string | null | undefined>();
+  for (const entry of facts.selectedRatePendingEntries)
+    if (!pendingDesigners.has(entry.userId)) pendingDesigners.set(entry.userId, entry.memberName);
+  for (const [userId, name] of pendingDesigners)
+    add("rate-pending", name ? `${name}'s hours are waiting for a rate.` : "These hours are waiting for a rate.", "Set the rate", "set-rate", `rate-pending:${userId}`);
+  for (const id of facts.selectedUnpricedLineIds)
+    add("price-line", `Set a client price for ${facts.unpricedLineNames?.[id] || "this piece"}.`, "Price it", "price-line", `price-line:${id}`);
+  if (!facts.selectedAnything)
+    add("nothing-selected", "Add at least one line first.", "Select lines", "select-lines", "invoice-lines");
+  if (facts.sendNoRecipient)
+    add("send-no-recipient", `${facts.householdName || "This household"} has no email to send to.`, "Add their email", "add-email", "add-email");
+
+  return { ready: holds.length === 0, holds };
 }
 
 const BILLING_GENERIC = "The invoice couldn't be completed. Check the invoice and try again.";

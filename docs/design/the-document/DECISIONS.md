@@ -11524,6 +11524,22 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 
 **Ruled B (Astra SQ-1123 F4), built in SQ-1124.** A configured placement keeps the configuration's retail as the line's client price and records it as a client-approved price (`price_basis = 'client'`), as it would a typed price. The studio's default markup never reprices it. `markup_percent` stays true over the configuration's trade price: $3,000 on a $2,000 trade reads 50, never the 35 default. Since 00809 every line's `markup_percent` is the true markup of its stored cents, (client − cost) / cost × 100. It is NULL without a positive cost, and it is studio-only, never on a client payload. Migration 00809 (`_place_product_configuration_in_project_impl`); measured by `supabase/tests/library/product_configuration_test.sql` and `supabase/tests/ffe/us37_trade_pricing_test.sql`.
 
+### R185 · Every held act opens the spotlight — by default one window on its own reason — US-36 K4 — Kody 2026-10-16 (filed as R171 by SQ-1048; renumbered at merge, R171 is K5)
+
+**Ruling (Kody).** Every held act in the designer portal answers a press with the spotlight of R168–R170.
+
+**How (SQ-1048).** `DocumentAction` and the portal `Button` (`ui/controls`) carry it for every site. A site that passes `holds` gets one window per hold. A site that passes neither `holds` nor `onHeldActivate` gets one window on the act's own `aria-describedby` reason. When that reason holds a focusable fixer, the fixer is the window's fix and takes focus; when it holds none, the bar says the reason alone. A site with `onHeldActivate` and no `holds` keeps its own answer until its shard adopts. With both, `onHeldActivate` runs and the listed holds open.
+
+**Frames.** The spotlight opens in the act's nearest `[data-spotlight-frame]`: the DocSheet panel, the PaperFolioSheet panel and the Document paper column (`main[data-document-paper]`). The press is swallowed as before when the act has no frame, when its reason is not inside the frame, or when the act sits in a fixed layer inside the frame. Under R169 each such act is evidence for reopening the frame ruling, not a place to draw a second scrim.
+
+### R186 · The fix is reachable inside the spotlight window — US-36 K15 VoiceOver pass — Kody 2026-10-17
+
+**Ruling (Kody).** Kody ran the K15 VoiceOver pass on the default one-window spotlight (R185) and found it OK to ship. When a held act's reason holds no fixer, the designer must be able to fix it *from inside the window*, not close the spotlight first. On Record a change, for example, the choices must be reachable while the spotlight is up.
+
+**How.** This is a follow-up ticket on top of R185: a held act can name the region that fixes it, and the window covers that region, live and focused, along with the reason. The R3 shard adoptions name each site's fix region.
+
+**How (prop).** `holdFix="<element id>"` on `DocumentAction` and `ui/controls` `Button`. When the id is inside the act's `[data-spotlight-frame]`, the default window is that region; otherwise R185 applies unchanged. Record a change names its choices fieldset.
+
 ### R185 · A pricing approval records what the client approved, never live FF&E — US-37 D5 amended — SQ-1169 2026-10-17
 
 **Amends US-37 D5 (Astra SQ-1168, repaired in SQ-1169, migration 00810).** D5 said a client approval snapshots the job's FF&E pricing. It now records only what the client approved, as she saw it. A spec book approval records the approved client edition's frozen lines from `spec_book_revisions.render_snapshot`, the model the client PDF was printed from: each line whose client price that PDF printed, at its frozen unit price, frozen quantity, implied total (unit × quantity, as D4 makes it) and frozen currency. Lines the edition did not list or did not price for the client are not approved. A budget approval records the approval event with no lines, because a budget approves ranges, not line prices. An addendum edition and an edition whose client profile hides prices also record no lines, since their printed prices cannot be recovered here. A non-blocking product-option consent through `apply_client_decision` records that decision's one line at the option's price and quantity, in USD (options carry no currency). Nothing ever falls back to live FF&E.
@@ -11532,4 +11548,4 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 
 **Locks (R182).** The approval path and the 00809 line pricing writers take the job label lock first, so a pricing edit lands wholly before or wholly after an approval and the change log never misses one. That amends 00809 (not yet on Strata) in its four single-line writers. Legacy line writers outside 00809 (`set_project_ffe_line_commercials`, `resolve_ack_line`) and raw service writes do not take it: an edit through them committed while a job's first approval is still open can go unlogged. The UI prices lines through the 00809 writers only. Measured by `supabase/tests/ffe/us37_pricing_approval_test.sql`, including a two-session interleave.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · last id = R185*
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · last id = R186*
