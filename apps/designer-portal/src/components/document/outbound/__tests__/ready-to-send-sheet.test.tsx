@@ -18,6 +18,7 @@ const mockUpdate = jest.fn();
 const mockDiscard = jest.fn();
 const mockRecheck = jest.fn();
 let mockCanSend = true;
+let mockReady = true;
 let mockStudioMembers: Array<{ user_id: string; role: string }> = [];
 const mockRefetchMembers = jest.fn();
 
@@ -69,7 +70,7 @@ jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'user-1' } 
 
 jest.mock('../../acts/act-viewer', () => ({
   useActViewer: () => ({
-    ready: true,
+    ready: mockReady,
     canSend: mockCanSend,
     leadFirstName: mockCanSend ? null : 'Leah',
     handoff: null,
@@ -80,6 +81,7 @@ jest.mock('../../acts/act-viewer', () => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockCanSend = true;
+  mockReady = true;
   mockStudioMembers = [];
   mockOutbound = OUTBOUND;
   mockRefetchMembers.mockResolvedValue({ data: [], isError: false });
@@ -93,6 +95,19 @@ const group = (key: string) =>
 const batchButton = () => screen.getByRole('button', { name: /^Send the \d+ checked$/ });
 
 describe('ReadyToSendSheet', () => {
+  it('shows the loading lead reason while the lead is unresolved', () => {
+    mockReady = false;
+    mockCanSend = false;
+    render(<ReadyToSendSheet projectId="p1" />);
+    const row = document.querySelector('[data-outbound-row="out-client"]')!;
+    fireEvent.click(within(row).getByRole('button', { name: /Invoice reminder/ }));
+    expect(within(row).getByText('Loading who leads this project…')).toBeInTheDocument();
+    const send = within(row).getByRole('button', { name: 'Send' });
+    expect(document.getElementById(send.getAttribute('aria-describedby')!)).toHaveTextContent(
+      'Loading who leads this project…',
+    );
+  });
+
   it('groups staged messages as Clients · Vendors · Trades, texts together', () => {
     render(<ReadyToSendSheet projectId="p1" />);
     const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
