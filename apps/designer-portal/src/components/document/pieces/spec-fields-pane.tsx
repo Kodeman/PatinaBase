@@ -64,6 +64,7 @@ import {
   type MakerOption,
 } from "../line-unfold/the-buy-cell";
 import { ComToggle } from "./com-toggle";
+import { ItemLabelField, ItemLabelPrefix } from "./item-label";
 import { LaborAct } from "./labor-act";
 import {
   LibraryInlineSearch,
@@ -93,6 +94,8 @@ export type SpecLensLine = PieceLineStageRow & {
   selection_thread_id?: string | null;
   /** The item's own primary picture (00807), shown before the product's. */
   primary_image_url?: string | null;
+  /** The item label (00808), printed before the name. */
+  doc_code?: string | null;
   product?: {
     id?: string;
     name?: string | null;
@@ -481,6 +484,11 @@ export function SpecFieldsPane({
           tabIndex={-1}
           className="font-heading text-[24px] font-normal leading-[1.2] text-[color:var(--sheet-ink,#1A1816)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--clay-ink)]"
         >
+          {line.doc_code?.trim() ? (
+            <>
+              <ItemLabelPrefix label={line.doc_code} />{" "}
+            </>
+          ) : null}
           {needLabel} · {shareText(quantity, line.unit)}
         </h2>
         {productName && productName !== needLabel && (
@@ -499,6 +507,13 @@ export function SpecFieldsPane({
       </header>
 
       <div className="grid grid-cols-1 gap-x-12 gap-y-6 md:grid-cols-2">
+        <ItemLabelField
+          projectId={projectId}
+          itemId={line.id}
+          docCode={line.doc_code}
+          className="flex min-w-0 flex-col gap-2"
+          captionClassName={LABEL_CLS}
+        />
         <Field label="Maker">
           {makerName ? (
             <span className={VALUE_CLS}>{makerName}</span>

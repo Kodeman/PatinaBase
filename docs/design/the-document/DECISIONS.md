@@ -11588,4 +11588,12 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 
 **Not covered.** A raw hard delete of a product a line names (the FK sets `product_id` to NULL), and the 00422 configuration guard's status→approved price rewrite, which `po_status_cascade_to_items` and `void_studio_purchase` can reach without the job lock, still lock nothing. Measured by `supabase/tests/ffe/us37_pricing_approval_test.sql`.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · last id = R190*
+### R192 · The item label is edited in the Spec lens's detail pane and printed before the name on Pieces — US-37 #3 — SQ-1275 2026-10-17 (SQ-1111 F1/F2/F5)
+
+**Implementation note.** The one label editor lived in the line unfold, which mounts only inside FFESection on `/doc/[id]`. That route now redirects to `/doc/[id]/pieces?lens=rough`, so no designer could reach it. The editor moves into `pieces/item-label.tsx` (`ItemLabelField`), and the Spec lens's right pane mounts it as its first field, ahead of Maker. That pane is the line's detail on Pieces and the nearest thing to the unfold. The unfold stays and mounts the same field. The edit and refusal behaviour is unchanged: commit on blur or Enter, Escape puts the label back, a blank asks for the next automatic label, and a label another live item in the same job holds is refused with the server's sentence ("Another item in this job already uses LR-02."). The same label in another job is allowed, because 00808's unique index is per job. The field is open on a released or ordered line, since `set_project_ffe_item_label` refuses only a removed item.
+
+**Where it prints.** `ItemLabelPrefix` prints the label in quiet DM Mono (11px, `--sheet-ink-muted`) before the name in three places: the Preliminary selections rows (the table and the 390 card), the Price lens LINE column, and the Spec pane's heading. A line with no label prints nothing. A long label wraps, and is never truncated. It reads `doc_code` from `useProjectFFEItems`, whose `*` select already carries it, so no hook or migration changed.
+
+**Cost-change buttons (F5).** "Keep client price" and "Keep markup" now name their line in the accessible name, label first ("Keep markup for LR-02 Rug"). Two flagged lines no longer read the same. The visible words are unchanged, and the accessible name starts with them.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R192 · last id = R192 (R191 reserved by SQ-1273)*

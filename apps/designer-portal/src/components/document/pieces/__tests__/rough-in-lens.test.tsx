@@ -730,6 +730,29 @@ describe("RoughInLens — the need survives a fill (F6, D2, a6)", () => {
   });
 });
 
+describe("RoughInLens — the item label (US-37 #3, SQ-1111 F2)", () => {
+  it("prints a line's label before its name, and nothing on a line without one", () => {
+    mockState.lines = [line("l1", "Custom cabinet", { doc_code: "LR-01" }), L3];
+    setup();
+    const label = within(livingTable()).getByText("LR-01");
+    expect(label).toHaveAttribute("data-item-label");
+    expect(label).toHaveClass("font-mono");
+    const name = within(livingTable()).getByRole("textbox", { name: "Line 1" });
+    expect(
+      label.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(livingTable().querySelectorAll("[data-item-label]")).toHaveLength(1);
+  });
+
+  it("prints the label on a 390 card too", () => {
+    mockMatches.phone = true;
+    mockState.lines = [line("l1", "Custom cabinet", { doc_code: "LR-01" })];
+    setup();
+    const card = within(livingTable()).getByRole("listitem");
+    expect(within(card).getByText("LR-01")).toHaveAttribute("data-item-label");
+  });
+});
+
 describe("RoughInLens — a filled allowance keeps its ceiling (F8, Q12)", () => {
   it("sends the line's own item type and budget", async () => {
     mockState.lines = [
