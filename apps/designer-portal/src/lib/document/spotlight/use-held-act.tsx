@@ -50,9 +50,11 @@ function reasonHold(
   bare.querySelectorAll(CONTROL).forEach((control) => control.remove());
   return {
     id,
+    // A fix region that unmounts while the act is still held fixed nothing:
+    // the window falls back to the reason until the region returns.
     target: () =>
       act.isConnected && act.getAttribute('aria-disabled') === 'true'
-        ? document.getElementById(id)
+        ? (document.getElementById(id) ?? document.getElementById(reason.id))
         : null,
     label: words(act.getAttribute('aria-label') ?? act.textContent),
     reason: words(bare.textContent) || words(reason.textContent),

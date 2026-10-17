@@ -183,7 +183,15 @@ describe('a held act that names its fix region (R186)', () => {
   const CHOOSE = 'Choose one to continue.';
   const continueAct = () => screen.getByRole('button', { name: 'Continue', hidden: true });
 
-  function Chooser({ named = true, outside = false }: { named?: boolean; outside?: boolean }) {
+  function Chooser({
+    named = true,
+    outside = false,
+    shown = true,
+  }: {
+    named?: boolean;
+    outside?: boolean;
+    shown?: boolean;
+  }) {
     const [choice, setChoice] = useState<string | null>(null);
     const choices = (
       <fieldset id="choices">
@@ -206,7 +214,7 @@ describe('a held act that names its fix region (R186)', () => {
         {outside && choices}
         <div data-testid="frame" data-spotlight-frame>
           <h3>Record a change</h3>
-          {!outside && choices}
+          {!outside && shown && choices}
           {/* The reason stays put: the act's own release lifts the hold. */}
           <p id="why">{CHOOSE}</p>
           <DocumentAction
@@ -247,6 +255,24 @@ describe('a held act that names its fix region (R186)', () => {
     expect(screen.getByRole('status')).toHaveTextContent('All set.');
     expect(continueAct()).toHaveFocus();
     expect(document.querySelector('[inert]')).toBeNull();
+  });
+
+  it('keeps the spotlight on the reason while the fix region is away, and windows it again on its return', async () => {
+    const { rerender } = render(<Chooser />);
+    fireEvent.click(continueAct());
+    expect(windows()).toEqual(['choices']);
+
+    rerender(<Chooser shown={false} />);
+    await waitFor(() => expect(document.getElementById('why')!.closest('[inert]')).toBeNull());
+    expect(layer()).not.toBeNull();
+    expect(screen.getByRole('status')).not.toHaveTextContent('All set.');
+    expect(continueAct()).not.toHaveFocus();
+
+    rerender(<Chooser />);
+    await waitFor(() => expect(radio(/On the agreement/).closest('[inert]')).toBeNull());
+    fireEvent.click(radio(/On the agreement/));
+    await waitFor(() => expect(layer()).toBeNull());
+    expect(screen.getByRole('status')).toHaveTextContent('All set.');
   });
 
   it('keeps the reason window and Close when the site names no fix region', () => {
