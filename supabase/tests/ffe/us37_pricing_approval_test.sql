@@ -136,8 +136,10 @@ INSERT INTO public.project_budget_checkpoints (
 -- prints client prices; "masked" (revision 2) is printed under a client
 -- profile that hides them.
 -- Book lines: 101 sofa (frozen at 100000, below its live price), 102 lamps,
--- 105 an EUR table under allowances (frozen currency in lower case), 107
--- vendor-only and 108 unpriced (neither printed with a client price).
+-- 105 an EUR table (frozen currency in lower case), 107 vendor-only and 108
+-- unpriced (neither printed with a client price). 105 is an item sheet: the
+-- Allowances schedule prints no price, so 00819 never records its lines
+-- (us37_pricing_approval_printed_lines_test.sql).
 INSERT INTO public.spec_book_templates (
   id, template_key, version, studio_id, name, page_grammar,
   audience_profiles, required_field_rules, visibility_rules, created_by
@@ -177,16 +179,15 @@ INSERT INTO public.spec_book_revisions (
                           'pricing', jsonb_build_object('clientPriceCents', 100000, 'currency', 'USD')),
        jsonb_build_object('ffeItemId', '81000000-0000-4000-8000-000000000102', 'quantity', 2,
                           'pricing', jsonb_build_object('clientPriceCents', 30000, 'currency', 'USD')),
+       jsonb_build_object('ffeItemId', '81000000-0000-4000-8000-000000000105', 'quantity', 1,
+                          'pricing', jsonb_build_object('clientPriceCents', 40000, 'currency', 'eur')),
        jsonb_build_object('ffeItemId', '81000000-0000-4000-8000-000000000107', 'quantity', 1,
                           'audiences', jsonb_build_array('vendor'),
                           'pricing', jsonb_build_object('clientPriceCents', 5000)),
        jsonb_build_object('ffeItemId', '81000000-0000-4000-8000-000000000108', 'quantity', 1,
                           'pricing', jsonb_build_object('tradePriceCents', 5000))
      ),
-     'allowances', jsonb_build_array(
-       jsonb_build_object('ffeItemId', '81000000-0000-4000-8000-000000000105', 'quantity', 1,
-                          'pricing', jsonb_build_object('clientPriceCents', 40000, 'currency', 'eur'))
-     ),
+     'allowances', jsonb_build_array(),
      'tbd', jsonb_build_array()
    ),
    repeat('e', 64), '81000000-0000-4000-8000-0000000000a1', now()),
