@@ -21,7 +21,7 @@
  * Zero shadows (D4); typography-first; the Room beneath never unmounts (D1).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   usePerson,
   usePersonSeat,
@@ -540,6 +540,7 @@ export function PartyProfileSheet({
   // create-time path). Self-clears whenever a different party opens, same
   // as the promote band's justPromotedPartyId above.
   const [inviteConsent, setInviteConsent] = useState(false);
+  const inviteConsentBoxId = useId();
   const [inviteSource, setInviteSource] = useState<
     '' | 'verbal' | 'written' | 'web_form' | 'other'
   >('');
@@ -1119,7 +1120,10 @@ export function PartyProfileSheet({
               Invite {displayName ?? 'them'} to texts — they get a
               confirmation to reply YES before anything sends.
             </p>
-            <label className="flex cursor-pointer items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
+            <label
+              id={inviteConsentBoxId}
+              className="flex cursor-pointer items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]"
+            >
               <input
                 type="checkbox"
                 checked={inviteConsent}
@@ -1213,6 +1217,7 @@ export function PartyProfileSheet({
                 held={!inviteConsent}
                 disabled={!inviteConsent}
                 aria-describedby="field-invite-reason"
+                holdFix={inviteConsentBoxId}
                 loading={recordConsent.isPending}
                 loadingLabel="Inviting…"
               >
