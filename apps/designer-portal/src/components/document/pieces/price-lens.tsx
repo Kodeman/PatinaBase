@@ -542,11 +542,15 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
   );
   const removedApproved = useMemo(() => {
     const names = new Map<string, string>();
-    for (const row of [...(lineData ?? []), ...(removedRows ?? [])])
+    const labels = new Map<string, string | null>();
+    for (const row of [...(lineData ?? []), ...(removedRows ?? [])]) {
       names.set(row.id, lineName(row as unknown as PriceLine));
+      labels.set(row.id, (row as unknown as PriceLine).doc_code ?? null);
+    }
     return approvedGone.map((l) => ({
       itemId: l.itemId,
       name: names.get(l.itemId) ?? "A removed line",
+      label: labels.get(l.itemId) ?? null,
       lineTotalCents: l.approvedLineTotalCents,
       currency: l.currency,
     }));
@@ -1053,7 +1057,13 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     notice ?? (assign.isError ? moveFailureText(assign.error) : null);
 
   return (
-    <div ref={sheetRef} data-price-lens="" className="flex flex-col py-6">
+    <div
+      ref={sheetRef}
+      data-price-lens=""
+      // F10: at 390 a control scrolled into view stops above the docked
+      // summary (--price-dock-h, measured by PriceSummary).
+      className="flex flex-col py-6 max-md:[&_button]:scroll-mb-[var(--price-dock-h,0px)] max-md:[&_input]:scroll-mb-[var(--price-dock-h,0px)]"
+    >
       {composerParked ? (
         <p className="mb-3">
           <button
@@ -1099,6 +1109,9 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
                 totals: approval.approvedTotals ?? [],
                 currentTotals,
                 onChangeLog: () => setChangeLog({ itemId: null, name: null }),
+                jobName:
+                  resolution?.kind === "engagement" ? resolution.row.title : null,
+                changeLogOpen: changeLog?.itemId === null,
               }
             : null
         }

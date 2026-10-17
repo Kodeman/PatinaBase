@@ -68,7 +68,7 @@ jest.mock("@/hooks/use-document-rooms", () => ({
 }));
 jest.mock("@/hooks/use-document-state", () => ({
   useDocumentEngagement: () => ({
-    data: { kind: "engagement", row: { project_id: "proj", project_status: "planning" } },
+    data: { kind: "engagement", row: { project_id: "proj", project_status: "planning", title: "Oak house" } },
   }),
 }));
 
@@ -272,7 +272,7 @@ describe("Price lens after approval (US-37 #4, acceptance 7)", () => {
   it("the job's change log lists every line's edits, each naming its line", () => {
     mockEvents.data = [SOFA_EVENT, RUG_EVENT];
     renderLens();
-    fireEvent.click(within(approvedTotalRow() as HTMLElement).getByRole("button", { name: "Change log" }));
+    fireEvent.click(within(approvedTotalRow() as HTMLElement).getByRole("button", { name: "Change log for Oak house" }));
 
     expect(mockUseEvents).toHaveBeenLastCalledWith("proj", null);
     const entries = within(screen.getByRole("dialog")).getAllByRole("listitem");
@@ -284,7 +284,7 @@ describe("Price lens after approval (US-37 #4, acceptance 7)", () => {
 
   it("an approval with no logged edits says so", () => {
     renderLens();
-    fireEvent.click(within(approvedTotalRow() as HTMLElement).getByRole("button", { name: "Change log" }));
+    fireEvent.click(within(approvedTotalRow() as HTMLElement).getByRole("button", { name: "Change log for Oak house" }));
     expect(
       within(screen.getByRole("dialog")).getByText("No pricing changes since the client approved."),
     ).toBeInTheDocument();
@@ -356,5 +356,84 @@ describe("Price lens after approval (US-37 #4, acceptance 7)", () => {
     expect(approvedTotalRow()).toBeNull();
     expect(screen.queryByRole("button", { name: /Change log/ })).toBeNull();
     expect(mockUseEvents).not.toHaveBeenCalled();
+  });
+});
+
+describe("Price lens walk C fixes (SQ-1294)", () => {
+  it("F10: the docked summary rests as one line, and its disclosure opens the full summary", () => {
+    renderLens();
+    const summary = screen.getByRole("region", { name: "Job summary" });
+    const compact = summary.querySelector("[data-dock-compact]") as HTMLElement;
+    expect(compact).toHaveTextContent("Markup 35.0% · Margin 25.9% · Gap");
+    const toggle = within(compact).getByRole("button", { name: "Full summary" });
+    const body = document.getElementById(toggle.getAttribute("aria-controls") as string) as HTMLElement;
+    expect(body).toBe(summary.querySelector("[data-dock-body]"));
+    // Compact by default: the full summary is hidden at phone width.
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(body).toHaveClass("max-md:hidden");
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(body).not.toHaveClass("max-md:hidden");
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(body).toHaveClass("max-md:hidden");
+  });
+
+  it("F10: lens controls scroll clear of the dock, and the dock's own controls opt out", () => {
+    renderLens();
+    const lens = document.querySelector("[data-price-lens]") as HTMLElement;
+    expect(lens.className).toContain("max-md:[&_input]:scroll-mb-[var(--price-dock-h,0px)]");
+    expect(lens.className).toContain("max-md:[&_button]:scroll-mb-[var(--price-dock-h,0px)]");
+    const summary = screen.getByRole("region", { name: "Job summary" });
+    expect(summary.className).toContain("max-md:[&_button]:!scroll-mb-0");
+  });
+
+  it("L-c: the summary's change log button names the job and says whether the log is open", () => {
+    renderLens();
+    const button = within(approvedTotalRow() as HTMLElement).getByRole("button", {
+      name: "Change log for Oak house",
+    });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(button);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Put back · Esc" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(button).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("L-c: a line's change log open leaves the job's button collapsed", () => {
+    mockItems.data = fixture().map((row) =>
+      row.id === "s1" ? { ...row, unit_price_cents: 150000 } : row,
+    );
+    renderLens();
+    fireEvent.click(screen.getByRole("button", { name: "Change log, Sofa" }));
+    expect(
+      within(approvedTotalRow() as HTMLElement).getByRole("button", { name: "Change log for Oak house" }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("F8: a removed approved line prints its label as the live rows do", () => {
+    const lamp = { ...(fixture().find((row) => row.id === "s5") as Row), doc_code: "LR-05" };
+    mockItems.data = fixture().filter((row) => row.id !== "s5");
+    mockRemoved.data = [{ ...lamp, removed_at: "2026-10-17T15:00:00Z" }];
+    renderLens();
+    const entry = document.querySelector('[data-removed-approved-line="s5"]') as HTMLElement;
+    const label = entry.querySelector("[data-item-label]") as HTMLElement;
+    expect(label).toHaveTextContent("LR-05");
+    expect(entry).toHaveTextContent("LR-05Lamp");
+    expect(within(entry).getByRole("button", { name: "Change log, Lamp" })).toBeInTheDocument();
+  });
+
+  it("L-a: a label never breaks inside itself", () => {
+    const lamp = { ...(fixture().find((row) => row.id === "s5") as Row), doc_code: "LR-05" };
+    mockItems.data = fixture().filter((row) => row.id !== "s5");
+    mockRemoved.data = [{ ...lamp, removed_at: "2026-10-17T15:00:00Z" }];
+    renderLens();
+    const label = document.querySelector("[data-item-label]") as HTMLElement;
+    expect(label).toHaveClass("whitespace-nowrap");
+    expect(label.className).not.toContain("overflow-wrap:anywhere");
   });
 });

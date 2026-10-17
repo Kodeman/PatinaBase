@@ -20,7 +20,7 @@ export function ItemLabelPrefix({ label }: { label?: string | null }) {
   return (
     <span
       data-item-label=""
-      className="font-mono text-[11px] font-medium tracking-[0.06em] text-[var(--sheet-ink-muted)] [overflow-wrap:anywhere]"
+      className="font-mono text-[11px] font-medium tracking-[0.06em] text-[var(--sheet-ink-muted)] whitespace-nowrap"
     >
       {text}
     </span>

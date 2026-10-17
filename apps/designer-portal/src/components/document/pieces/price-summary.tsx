@@ -3,7 +3,8 @@
 /**
  * US-37 #4 — the Price lens's job summary (contract D4). Always in view: it
  * sticks to the top of the sheet, and at 390 it docks to the foot of the
- * screen. Every figure is an extended total (`summarizeJob`): cost, client,
+ * screen as one line (markup, margin, gap) whose `Full summary` disclosure
+ * opens the rest. Every figure is an extended total (`summarizeJob`): cost, client,
  * the blended markup and margin, the gap to the target, then sales tax on its
  * own row, outside the blend. The target and the tax rate are typed here, in
  * the summary (`set_project_pricing`); blank puts the target back on the
@@ -12,7 +13,7 @@
  * Under it, in the sheet's flow: `Add freight`, `Add delivery`, `Add install`
  * and `Reset all to default markup`, which asks once, inline.
  */
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { FfePricedLineKind } from "@patina/types";
 import { Input } from "@/components/ui/controls";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,10 @@ export interface PriceSummaryProps {
     /** The current lines' client total before tax, per currency code. */
     currentTotals: ReadonlyMap<string, number>;
     onChangeLog: () => void;
+    /** The job's name, for the change log button's name. */
+    jobName?: string | null;
+    /** Whether the job's change log is open. */
+    changeLogOpen?: boolean;
   } | null;
 }
 
@@ -120,84 +125,147 @@ export function PriceSummary({
   approval,
 }: PriceSummaryProps) {
   const targetPct = targetOverridePct ?? defaultPct;
+  // F10: docked at the foot of a phone, the summary rests as one line; the
+  // disclosure opens the full summary in place.
+  const [open, setOpen] = useState(false);
+  const bodyId = useId();
+  const sectionRef = useRef<HTMLElement>(null);
+  // The dock's height, on the lens, so a focused control scrolls clear of it
+  // (the dock's own controls opt out: they never sit under it).
+  useEffect(() => {
+    const section = sectionRef.current;
+    const lens = section?.parentElement;
+    if (!section || !lens) return;
+    const clear = () => lens.style.removeProperty("--price-dock-h");
+    const publish = () => {
+      const height = section.getBoundingClientRect().height;
+      if (height > 0) lens.style.setProperty("--price-dock-h", `${Math.round(height)}px`);
+      else clear();
+    };
+    publish();
+    if (typeof ResizeObserver === "undefined") return clear;
+    const observer = new ResizeObserver(publish);
+    observer.observe(section);
+    return () => {
+      observer.disconnect();
+      clear();
+    };
+  }, []);
   return (
     <section
+      ref={sectionRef}
       aria-label="Job summary"
       data-price-summary=""
-      className="sticky top-0 z-10 mb-6 border-b border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-3 max-md:bottom-0 max-md:top-auto max-md:order-last max-md:mb-0 max-md:border-b-0 max-md:border-t max-md:px-1 max-md:py-2"
+      className="sticky top-0 z-10 mb-6 border-b border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-3 max-md:bottom-0 max-md:top-auto max-md:order-last max-md:mb-0 max-md:border-b-0 max-md:border-t max-md:px-1 max-md:py-1 max-md:[&_button]:!scroll-mb-0 max-md:[&_input]:!scroll-mb-0"
     >
-      <dl className="flex flex-wrap items-end gap-x-8 gap-y-2 max-md:grid max-md:grid-cols-3 max-md:gap-x-3">
-        <Figure term="Cost" value={money(summary.totalCostCents)} />
-        <Figure term="Client" value={money(summary.totalClientCents)} />
-        <Figure
-          term="Markup"
-          value={formatPct(summary.blendedMarkupPct)}
-          testId="blended-markup"
-        />
-        <Figure
-          term="Margin"
-          value={formatPct(summary.blendedMarginPct)}
-          testId="blended-margin"
-        />
-        <div className="flex flex-col">
-          <dt className={TERM}>
-            <label htmlFor="price-summary-target">Target</label>
-          </dt>
-          <dd>
-            <PercentField
-              id="price-summary-target"
-              value={targetOverridePct}
-              placeholder={formatPct(defaultPct)}
-              onCommit={onTarget}
-            />
-          </dd>
-        </div>
-        <div className="flex flex-col" data-gap="">
-          <dt className={TERM}>Gap</dt>
-          <dd className={FIGURE}>
-            {summary.gapPct === null
-              ? "—"
-              : `${signedPct(summary.gapPct)} · ${signedMoney(summary.gapCents)}`}
-          </dd>
-        </div>
-        <div className="flex flex-col">
-          <dt className={TERM}>
-            <label htmlFor="price-summary-tax">Sales tax %</label>
-          </dt>
-          <dd>
-            <PercentField
-              id="price-summary-tax"
-              value={salesTaxRate === null ? null : Number(ratePercentText(salesTaxRate))}
-              placeholder="None"
-              max={100}
-              // A tax rate prints as set (8.25%), never rounded to one place.
-              print={(pct) => `${pct}%`}
-              onCommit={(pct) => onTaxRate(pct === null ? null : pct / 100)}
-            />
-          </dd>
-        </div>
-        <Figure term="Tax" value={money(summary.taxCents)} testId="tax" />
-        <Figure
-          term="With tax"
-          value={money(summary.totalWithTaxCents)}
-          testId="total-with-tax"
-        />
-      </dl>
-      {approval ? (
-        <ApprovedTotalRow
-          totals={approval.totals}
-          currentTotals={approval.currentTotals}
-          onChangeLog={approval.onChangeLog}
-        />
-      ) : null}
-      <p className="t-body-sm mt-2 text-[var(--sheet-ink-muted)]">
-        {`Target ${formatPct(targetPct)}${targetOverridePct === null ? " (your default)" : " for this job"}. Tax is on the client price and stays out of the markup.`}
-        {summary.unpricedCount > 0 ? (
-          <span data-unpriced="" className="ml-1 text-[var(--sheet-ink)]">
-            {`${summary.unpricedCount} ${summary.unpricedCount === 1 ? "line has" : "lines have"} no cost.`}
-          </span>
+      <div
+        data-dock-compact=""
+        className="flex flex-wrap items-center gap-x-3 md:hidden"
+      >
+        <p className="t-money text-[14px] leading-[1.4] text-[var(--sheet-ink)]">
+          {[
+            `Markup ${formatPct(summary.blendedMarkupPct)}`,
+            `Margin ${formatPct(summary.blendedMarginPct)}`,
+            summary.gapPct === null
+              ? "Gap —"
+              : `Gap ${signedPct(summary.gapPct)} · ${signedMoney(summary.gapCents)}`,
+          ].map((part, i) => (
+            <span key={part}>
+              {i > 0 ? " · " : null}
+              <span className="whitespace-nowrap">{part}</span>
+            </span>
+          ))}
+        </p>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => setOpen((was) => !was)}
+          className={ACT}
+        >
+          Full summary
+        </button>
+      </div>
+      <div
+        id={bodyId}
+        data-dock-body=""
+        className={cn(!open && "max-md:hidden")}
+      >
+        <dl className="flex flex-wrap items-end gap-x-8 gap-y-2 max-md:grid max-md:grid-cols-3 max-md:gap-x-3">
+          <Figure term="Cost" value={money(summary.totalCostCents)} />
+          <Figure term="Client" value={money(summary.totalClientCents)} />
+          <Figure
+            term="Markup"
+            value={formatPct(summary.blendedMarkupPct)}
+            testId="blended-markup"
+          />
+          <Figure
+            term="Margin"
+            value={formatPct(summary.blendedMarginPct)}
+            testId="blended-margin"
+          />
+          <div className="flex flex-col">
+            <dt className={TERM}>
+              <label htmlFor="price-summary-target">Target</label>
+            </dt>
+            <dd>
+              <PercentField
+                id="price-summary-target"
+                value={targetOverridePct}
+                placeholder={formatPct(defaultPct)}
+                onCommit={onTarget}
+              />
+            </dd>
+          </div>
+          <div className="flex flex-col" data-gap="">
+            <dt className={TERM}>Gap</dt>
+            <dd className={FIGURE}>
+              {summary.gapPct === null
+                ? "—"
+                : `${signedPct(summary.gapPct)} · ${signedMoney(summary.gapCents)}`}
+            </dd>
+          </div>
+          <div className="flex flex-col">
+            <dt className={TERM}>
+              <label htmlFor="price-summary-tax">Sales tax %</label>
+            </dt>
+            <dd>
+              <PercentField
+                id="price-summary-tax"
+                value={salesTaxRate === null ? null : Number(ratePercentText(salesTaxRate))}
+                placeholder="None"
+                max={100}
+                // A tax rate prints as set (8.25%), never rounded to one place.
+                print={(pct) => `${pct}%`}
+                onCommit={(pct) => onTaxRate(pct === null ? null : pct / 100)}
+              />
+            </dd>
+          </div>
+          <Figure term="Tax" value={money(summary.taxCents)} testId="tax" />
+          <Figure
+            term="With tax"
+            value={money(summary.totalWithTaxCents)}
+            testId="total-with-tax"
+          />
+        </dl>
+        {approval ? (
+          <ApprovedTotalRow
+            totals={approval.totals}
+            currentTotals={approval.currentTotals}
+            onChangeLog={approval.onChangeLog}
+            jobName={approval.jobName}
+            changeLogOpen={approval.changeLogOpen}
+          />
         ) : null}
-      </p>
+        <p className="t-body-sm mt-2 text-[var(--sheet-ink-muted)]">
+          {`Target ${formatPct(targetPct)}${targetOverridePct === null ? " (your default)" : " for this job"}. Tax is on the client price and stays out of the markup.`}
+          {summary.unpricedCount > 0 ? (
+            <span data-unpriced="" className="ml-1 text-[var(--sheet-ink)]">
+              {`${summary.unpricedCount} ${summary.unpricedCount === 1 ? "line has" : "lines have"} no cost.`}
+            </span>
+          ) : null}
+        </p>
+      </div>
       {note ? (
         <p role="alert" className="t-body-sm mt-1 text-[var(--sheet-ink)]">
           {note}
