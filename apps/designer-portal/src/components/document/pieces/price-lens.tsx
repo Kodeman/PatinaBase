@@ -48,7 +48,9 @@ import {
   usePricingSettings,
   useProjectFFEItems,
   useProjectPricing,
+  useProjectPricingApproval,
   useProjectRoomPlacements,
+  useRemovedProjectLines,
   useResetFfeLineMarkup,
   useResetProjectMarkups,
   useResolveFfeCostChange,
@@ -68,6 +70,7 @@ import type {
 import { cn } from "@/lib/utils";
 import {
   clientFromMarkup,
+  lineTotal,
   retailWarning,
   summarizeJob,
   type PricingLine,
@@ -126,6 +129,11 @@ import {
   summarySentence,
   type AddedLineKind,
 } from "./price-summary";
+import {
+  approvedFiguresFor,
+  PricingChangeLog,
+  RemovedSinceApproval,
+} from "./price-approval";
 import { UndoToast } from "./undo-toast";
 import {
   FOCUS_FFE_LINE_EVENT,
@@ -275,6 +283,8 @@ interface PriceLine extends OverviewLine {
   pending_cost_changed_at?: string | null;
   pending_markup_held_percent?: number | null;
   updated_at?: string | null;
+  /** ISO 4217 code of the line's prices (00661, USD by default). */
+  currency?: string | null;
 }
 
 type Tool =
@@ -400,6 +410,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     useProjectPricing(projectId);
   const setProjectPricing = useSetProjectPricing();
   const { data: myPricing } = usePricingSettings();
+  const { data: approval } = useProjectPricingApproval(projectId);
   const archive = useArchiveProjectSelection();
   const restore = useRestoreProjectSelection();
   const assign = useAssignLineRoom(projectId);
@@ -418,6 +429,11 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
   const [tool, setTool] = useState<Tool | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  /** The change log in view: one line's, or the job's (itemId null). */
+  const [changeLog, setChangeLog] = useState<{
+    itemId: string | null;
+    name: string | null;
+  } | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const requestFocus = (request: Omit<FocusRequest, "at">) =>
@@ -490,6 +506,49 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       setAnnouncement(spokenSummary);
   }, [summaryDue, spokenSummary, figuresFetching]);
   const byId =useMemo(() => new Map(lines.map((l) => [l.id, l])), [lines]);
+  const approvedById = useMemo(
+    () => new Map((approval?.lines ?? []).map((l) => [l.itemId, l])),
+    [approval],
+  );
+  const lineNames = useMemo(
+    () => new Map(lines.map((l) => [l.id, lineName(l)])),
+    [lines],
+  );
+  // The current lines' client total in each currency, partitioned as the
+  // approved totals are: a total is never compared across currencies (R188).
+  const currentTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const line of lines) {
+      const { unitClientCents, quantity } = pricingLineOf(line);
+      if (unitClientCents === null) continue;
+      const currency = line.currency ?? "USD";
+      totals.set(
+        currency,
+        (totals.get(currency) ?? 0) + lineTotal(unitClientCents, quantity),
+      );
+    }
+    return totals;
+  }, [lines]);
+  // Approved lines no longer on the job; their names are read from the
+  // removed lines only while there are some.
+  const approvedGone = useMemo(
+    () => (approval?.lines ?? []).filter((l) => !byId.has(l.itemId)),
+    [approval, byId],
+  );
+  const { data: removedRows } = useRemovedProjectLines(
+    approvedGone.length > 0 ? projectId : "",
+  );
+  const removedApproved = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const row of [...(lineData ?? []), ...(removedRows ?? [])])
+      names.set(row.id, lineName(row as unknown as PriceLine));
+    return approvedGone.map((l) => ({
+      itemId: l.itemId,
+      name: names.get(l.itemId) ?? "A removed line",
+      lineTotalCents: l.approvedLineTotalCents,
+      currency: l.currency,
+    }));
+  }, [approvedGone, lineData, removedRows]);
   const placements = useMemo(
     () => (placementData ?? []) as FfeRoomPlacement[],
     [placementData],
@@ -650,11 +709,18 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     const linePlacements = placementsByLine.get(line.id) ?? [];
     const label = lineStampLabel(stamp);
     const pricing = pricingLineOf(line);
+    const quantity = line.quantity ?? 0;
+    const approved = approvedFiguresFor(approvedById.get(line.id), {
+      unitClientCents: clientCents,
+      quantity,
+      lineTotalCents:
+        allowanceCents ?? (clientCents != null ? clientCents * quantity : null),
+    });
     return {
       id: line.id,
       name: lineName(line),
       productName: line.product?.name ?? null,
-      quantity: line.quantity ?? 0,
+      quantity,
       unit: line.unit,
       tradeCents: line.trade_price_cents ?? null,
       clientCents,
@@ -686,6 +752,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       tradeEditable: !tradeScope && !onOrder,
       clientEditable: !tradeScope && !released,
       gates,
+      approved,
     };
   }
 
@@ -1023,6 +1090,15 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
           setJobPricing(projectPricing?.markupTargetPercent ?? null, rate)
         }
         note={summaryNote}
+        approval={
+          approval
+            ? {
+                totals: approval.approvedTotals ?? [],
+                currentTotals,
+                onChangeLog: () => setChangeLog({ itemId: null, name: null }),
+              }
+            : null
+        }
       />
       <PriceActs
         onAdd={(kind) => void addKindLine(kind)}
@@ -1066,6 +1142,9 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
                 }}
                 onMove={(row, roomId) => moveLine(row, roomId, place.key)}
                 onRemove={(row) => removeLine(row, place.name, place.key)}
+                onChangeLog={(row) =>
+                  setChangeLog({ itemId: row.id, name: row.name })
+                }
               />
               {tool && tool.placeId === place.key ? (
                 tool.kind === "labor" ? (
@@ -1106,6 +1185,15 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
         })}
       </div>
 
+      {approval ? (
+        <RemovedSinceApproval
+          lines={removedApproved}
+          onChangeLog={(line) =>
+            setChangeLog({ itemId: line.itemId, name: line.name })
+          }
+        />
+      ) : null}
+
       {shownNotice ? (
         <p
           role="alert"
@@ -1122,6 +1210,15 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
           roomName={removal.placeName}
           onUndo={() => void undoRemoval(removal)}
           onExpire={() => expireRemoval(removal)}
+        />
+      ) : null}
+      {changeLog ? (
+        <PricingChangeLog
+          projectId={projectId}
+          itemId={changeLog.itemId}
+          lineName={changeLog.name}
+          lineNames={lineNames}
+          onClose={() => setChangeLog(null)}
         />
       ) : null}
       <p
