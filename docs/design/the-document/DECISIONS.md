@@ -11540,4 +11540,14 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 
 **How (prop).** `holdFix="<element id>"` on `DocumentAction` and `ui/controls` `Button`. When the id is inside the act's `[data-spotlight-frame]`, the default window is that region; otherwise R185 applies unchanged. Record a change names its choices fieldset.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · last id = R186*
+### R187 · A selected unpriced piece holds the draft; labor is priced in its row, any other line in the Price lens, and the composer parks — US-36 K7, K13 — Kody 2026-10-16
+
+**Ruling (Kody).** A ticked piece with no client price holds Draft the invoice; it never bills at $0. A labor line takes its client price in the composer's own row. Any other line is priced in the Price lens and comes back through *Back to the invoice*, with the composer's work kept (parking).
+
+**How (SQ-1046).**
+- The composer lists each unpriced piece by name with its fix. It can be ticked only once priced. One that arrives ticked (an asked-for line, or a ticked line whose price went away) holds the draft, and its reason and fix share one row keyed `price-line:<id>` (R186).
+- Labor: the row's client-price field writes through `set_labor_line_price` (00755), typed as the Price lens takes it. Blur or Enter saves; Esc puts the typing back.
+- Any other line: *Price it* parks the composer, puts it away, and walks to `/doc/<id>/pieces?lens=price`. `FocusFfeLineRequest.cell` gains `price`, and only the Price lens answers it: on the typeable client price, or on the printed one where none can be typed.
+- Parking keeps the ticks, hours, notes and billing mode per project, in memory only (`lib/document/registry.tsx`, never storage). Reopening the composer on that project restores it. Drafting or discarding that composer clears it. While a job's composer is parked, its Price lens shows *Back to the invoice*.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · last id = R187*

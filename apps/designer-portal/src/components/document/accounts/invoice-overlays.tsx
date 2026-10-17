@@ -128,6 +128,7 @@ export function InvoiceOverlays() {
             // The handoff: the fresh draft opens as the folio — issue & send
             // live there (review-then-send, R74).
             onDrafted={(invoiceId) => setOverlay({ kind: "folio", invoiceId })}
+            onClose={close}
           />
         )}
       </PaperFolioSheet>

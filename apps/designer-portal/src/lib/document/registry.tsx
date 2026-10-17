@@ -20,6 +20,7 @@
  */
 
 import type { LucideIcon } from 'lucide-react';
+import type { ParkedInvoiceComposer } from './invoice-composer';
 import {
   BookMarked,
   BookOpen,
@@ -753,8 +754,10 @@ export interface FocusFfeLineRequest {
   /** `draft` (FR5 F5-2): the held maker note's DraftReview in the line's
    *  Movement cell, where the band's `Open the held draft` lands.
    *  `order-draft` (FR8 F8-2): the PO's held reply on the Order cell's
-   *  DraftReview, where `Answer the maker` lands. */
-  cell: 'order' | 'maker' | 'draft' | 'order-draft';
+   *  DraftReview, where `Answer the maker` lands.
+   *  `price` (K7): the line's client price in the Price lens, which answers
+   *  it; the Document's Pieces region does not. */
+  cell: 'order' | 'maker' | 'draft' | 'order-draft' | 'price';
 }
 
 /**
@@ -766,6 +769,42 @@ export interface FocusFfeLineRequest {
 export const focusFfeLinePending: { request: FocusFfeLineRequest | null } = {
   request: null,
 };
+
+// ── The parked invoice composer (US-36 K7, K13) ─────────────────────────────
+
+/**
+ * A composer that left for a fix it cannot make in place (Price it) keeps its
+ * work here, per project, in memory only: never storage, so a reload or
+ * another tab starts clean. Reopening the composer on the project takes it
+ * back, so drafting or discarding that composer leaves nothing parked.
+ */
+const parkedComposers = new Map<string, ParkedInvoiceComposer>();
+const parkedListeners = new Set<() => void>();
+
+function parkedChanged(): void {
+  for (const listener of parkedListeners) listener();
+}
+
+export function parkInvoiceComposer(projectId: string, parked: ParkedInvoiceComposer): void {
+  parkedComposers.set(projectId, parked);
+  parkedChanged();
+}
+
+export function parkedInvoiceComposer(projectId: string): ParkedInvoiceComposer | null {
+  return parkedComposers.get(projectId) ?? null;
+}
+
+export function unparkInvoiceComposer(projectId: string): void {
+  if (parkedComposers.delete(projectId)) parkedChanged();
+}
+
+/** For `useSyncExternalStore`: the Price lens's `Back to the invoice`. */
+export function subscribeParkedInvoiceComposers(listener: () => void): () => void {
+  parkedListeners.add(listener);
+  return () => {
+    parkedListeners.delete(listener);
+  };
+}
 
 // ── Record the payment lands (US-19 F2-3, P-1) ──────────────────────────────
 
