@@ -121,7 +121,6 @@ import {
   balanceOwedItems,
   buildBillingLines,
   depositCents,
-  DRAFT_GENERIC,
   DRAFT_UNCONFIRMED,
   lineClientPriceCents,
   assessInvoiceReadiness,
@@ -222,8 +221,7 @@ export function InvoiceComposer({
   const { data: organizations, isLoading: organizationsLoading } =
     useOrganizations();
   const { data: milestones } = useProjectPaymentMilestones(projectId);
-  const { data: projectInvoices, refetch: refetchProjectInvoices } =
-    useProjectInvoices(projectId || null);
+  const { data: projectInvoices } = useProjectInvoices(projectId || null);
   const {
     data: unbilledTime,
     isLoading: timeLoading,
@@ -361,7 +359,8 @@ export function InvoiceComposer({
   // the gap does.
   // `unconfirmed` marks a draft write whose answer was lost: it may have
   // landed, so the act routes to the invoices instead of retrying, and Draft
-  // holds until a read of them answers (SQ-1282 F1).
+  // holds until the composer closes: create_draft_invoice takes no idempotency
+  // key, so no read of the invoices can prove what the write did (SQ-1284).
   const [error, setError] = useState<{
     message: string;
     retryable: boolean;
@@ -609,7 +608,7 @@ export function InvoiceComposer({
     setTickedRiderIds(new Set());
     setOverrides(new Map());
     setSeededFor(null);
-    // An unconfirmed draft still holds: only its reconcile read clears it.
+    // An unconfirmed draft still holds: only closing the composer clears it.
     setError((prev) => (prev?.unconfirmed ? prev : null));
     setRefusedLines(new Map());
   };
@@ -1152,11 +1151,6 @@ export function InvoiceComposer({
     }
 
     const timeLine = lines.find((l) => l.kind === "time");
-    // SQ-1282 F1 — the project's invoices as the write went out, so a draft
-    // it landed is told from the rest.
-    const knownInvoiceIds = projectInvoices
-      ? new Set((projectInvoices as AnyRecord[]).map((i) => i.id as string))
-      : null;
     let invoice: AnyRecord;
     try {
       invoice = await createDraft.mutateAsync({
@@ -1186,18 +1180,6 @@ export function InvoiceComposer({
         });
       }
       setError(failure);
-      if (!failure.unconfirmed || !knownInvoiceIds) return;
-      // The reconcile read: Draft stays held until the project's invoices,
-      // read after the lost answer, show the draft landed (it opens as the
-      // folio, as a confirmed one would) or show none did. A failed read
-      // leaves it held, with Check the invoices.
-      const read = await refetchProjectInvoices();
-      if (!live() || read.isError || !read.data) return;
-      const landed = (read.data as AnyRecord[]).find(
-        (i) => i.status === "draft" && !knownInvoiceIds.has(i.id as string),
-      );
-      if (landed) onDrafted(landed.id as string, projectId);
-      else setError({ message: DRAFT_GENERIC, retryable: true });
       return;
     }
 
