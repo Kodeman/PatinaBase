@@ -559,6 +559,33 @@ describe("the right pane", () => {
     );
   });
 
+  it("clears a refused label when the draft returns to its saved value", async () => {
+    mockItems.data = [{ ...L1, doc_code: "LR-01" }, L2, L3, F1, R1, R1A];
+    mockSetLabel.mockRejectedValue(
+      new Error("Another item in this job already uses LR-02."),
+    );
+    renderLens();
+    const section = await pane();
+    const input = within(section).getByRole("textbox", { name: "Item label" });
+
+    fireEvent.change(input, { target: { value: "LR-02" } });
+    fireEvent.blur(input);
+    await waitFor(() =>
+      expect(within(section).getByRole("status")).toHaveTextContent(
+        "Another item in this job already uses LR-02.",
+      ),
+    );
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(mockSetLabel).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(input, { target: { value: "LR-01" } });
+    expect(within(section).queryByText(/Another item in this job/)).toBeNull();
+    expect(input).not.toHaveAttribute("aria-invalid", "true");
+    fireEvent.blur(input);
+    await waitFor(() => expect(input).toHaveValue("LR-01"));
+    expect(mockSetLabel).toHaveBeenCalledTimes(1);
+  });
+
   it("prints the rough figure dim, pointing to Price", async () => {
     renderLens();
     await pane();

@@ -98,7 +98,14 @@ export function ItemLabelField({
         aria-describedby={labelRefusal ? statusId : undefined}
         value={labelDraft}
         readOnly={setLabel.isPending || !canEdit}
-        onChange={(event) => setLabelDraft(event.target.value)}
+        onChange={(event) => {
+          const next = event.target.value;
+          setLabelDraft(next);
+          if (next.trim() !== labelRefused.current) {
+            labelStatus !== null && setLabelStatus(null);
+            labelRefused.current = null;
+          }
+        }}
         onBlur={() => {
           if (skipLabelBlurCommit.current) {
             skipLabelBlurCommit.current = false;
