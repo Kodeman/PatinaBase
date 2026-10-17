@@ -155,7 +155,6 @@ export function DraftReview({
 
   return (
     <section
-      id={`${fieldId}-recipient-fix`}
       aria-label={`${label}, drafted`}
       data-testid="draft-review"
       className="mt-2 flex flex-col gap-1.5 border-t border-[var(--color-pearl)] pt-2"
@@ -210,6 +209,7 @@ export function DraftReview({
             </DocumentAction>
             {!recipient && onAddAddress && (
               <DocumentAction
+                id={`${fieldId}-recipient-fix`}
                 actionKey="add-maker-address"
                 surfaceKey={surfaceKey}
                 regionKey={regionKey}

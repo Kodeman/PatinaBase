@@ -16,7 +16,7 @@
  * carrying the optional note to the vendor into the email body.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   usePurchaseOrderChanges,
@@ -113,9 +113,11 @@ export function LogAckInline({
  * nothing while the PO loads or once a ship-to is on file.
  */
 function ShipToNotSetBand({
+  id,
   po,
   onSaved,
 }: {
+  id: string;
   po: PurchaseOrder | undefined;
   onSaved: () => void;
 }) {
@@ -139,7 +141,7 @@ function ShipToNotSetBand({
   };
 
   return (
-    <div id="po-ship-to-fix" className="border-t border-[var(--color-pearl)] px-5 py-2.5">
+    <div id={id} className="border-t border-[var(--color-pearl)] px-5 py-2.5">
       <p className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
         Ship-to not set
       </p>
@@ -278,6 +280,7 @@ export function PoPreview({
   const shipToMissing = po ? !po.ship_to?.trim() : orders === undefined;
   const shipToHeld = !!po && shipToMissing;
   const shipToReasonId = `po-ship-to-held-${purchaseOrderId}`;
+  const shipToFixId = useId();
   // C-12: po-send mails the studio's own orders inbox for this vendor first
   // (the project's studio, resolved as po-send resolves it), then the
   // vendor's shared address. Name the address that actually receives it.
@@ -439,7 +442,7 @@ export function PoPreview({
 
         <PoChangeHistory purchaseOrderId={purchaseOrderId} />
 
-        <ShipToNotSetBand po={po} onSaved={renderPreview} />
+        <ShipToNotSetBand id={shipToFixId} po={po} onSaved={renderPreview} />
 
         {/* C-09: the note travels with the emailed PO; marking sent sends nothing. */}
         <label className="block border-t border-[var(--color-pearl)] px-5 py-2.5">
@@ -481,7 +484,7 @@ export function PoPreview({
               variant="secondary"
               disabled={sending || marking || shipToMissing}
               held={shipToHeld}
-              holdFix={shipToHeld ? "po-ship-to-fix" : undefined}
+              holdFix={shipToHeld ? shipToFixId : undefined}
               aria-describedby={shipToHeld ? shipToReasonId : undefined}
               loading={marking}
               loadingLabel="Marking…"
@@ -505,7 +508,7 @@ export function PoPreview({
               !signedUrl || !recipient || sending || marking || shipToMissing
             }
             held={shipToHeld}
-            holdFix={shipToHeld ? "po-ship-to-fix" : undefined}
+            holdFix={shipToHeld ? shipToFixId : undefined}
             aria-describedby={shipToHeld ? shipToReasonId : undefined}
             loading={sending}
             loadingLabel="Sending…"

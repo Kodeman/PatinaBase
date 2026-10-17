@@ -21,7 +21,7 @@
  * header write at once and the terminal act only sends.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -418,6 +418,7 @@ function PaperSheet({
   const [record, setRecord] = useState<PaperRecord | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
+  const shipToFixId = useId();
   const [shipToInvalid, setShipToInvalid] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   // Maker lane: payment not started, or deferred inside a queue.
@@ -805,7 +806,7 @@ function PaperSheet({
   const shipToHolds = terminalHeld
     ? [{
         id: 'ship-to',
-        target: () => window.document.getElementById('order-paper-ship-to-fix'),
+        target: () => window.document.getElementById(shipToFixId),
         label: 'Ship-to location',
         reason: SHIP_TO_REQUIRED_MESSAGE,
       }]
@@ -902,7 +903,7 @@ function PaperSheet({
             />
           </label>
           {!isPatinaMaker && (
-            <div id="order-paper-ship-to-fix" className="sm:col-span-2">
+            <div id={shipToFixId} className="sm:col-span-2">
               <ShipToChoice
                 {...shipToAddresses}
                 locations={com.orderLocations(shipToAddresses.locations)}

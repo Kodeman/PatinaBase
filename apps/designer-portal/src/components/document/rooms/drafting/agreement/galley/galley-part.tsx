@@ -26,6 +26,19 @@ export interface GalleyPartIds {
   foldPanel: string;
 }
 
+/** The caret's landing in an open fold: the part's own first field — the
+ *  clause body, the first money row — not the rename input the fold happens
+ *  to open with (SPEC §4's keyboard model). */
+export function firstFoldField(fold: HTMLElement | null): HTMLElement | null {
+  return (
+    fold?.querySelector<HTMLElement>(
+      "textarea:not([data-fold-rename]), input:not([data-fold-rename]), select",
+    ) ??
+    fold?.querySelector<HTMLElement>("textarea, input, select") ??
+    null
+  );
+}
+
 export function GalleyPart({
   part,
   ids,
@@ -68,15 +81,7 @@ export function GalleyPart({
   // reading position (FS-19) and a focus scroll would fight it.
   useEffect(() => {
     if (!open) return;
-    // The caret lands in the part's own first field — the clause body, the
-    // first money row — and not in the rename input the fold happens to open
-    // with (SPEC §4's keyboard model).
-    const node = fold.current;
-    const first =
-      node?.querySelector<HTMLElement>(
-        "textarea:not([data-fold-rename]), input:not([data-fold-rename]), select",
-      ) ?? node?.querySelector<HTMLElement>("textarea, input, select");
-    first?.focus({ preventScroll: true });
+    firstFoldField(fold.current)?.focus({ preventScroll: true });
   }, [open]);
 
   const hidden = part.clientVisible === false;
