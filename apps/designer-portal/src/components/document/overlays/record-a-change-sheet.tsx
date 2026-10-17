@@ -118,6 +118,7 @@ function RecordAChangeRouter({
   const groupName = useId();
   const reasonId = useId();
   const helperId = useId();
+  const choicesId = useId();
 
   useEffect(() => {
     const onOpen = (event: Event) => {
@@ -165,7 +166,7 @@ function RecordAChangeRouter({
         kind="record-a-change"
       >
         <div data-overlay-record-a-change className="mx-auto max-w-xl">
-          <fieldset onKeyDown={onKeyDown}>
+          <fieldset id={choicesId} onKeyDown={onKeyDown}>
             <legend className="font-heading text-xl text-[var(--color-charcoal)]">
               What changed?
             </legend>
@@ -210,6 +211,7 @@ function RecordAChangeRouter({
               disabled={!choice}
               held={!choice}
               aria-describedby={choice ? undefined : reasonId}
+              holdFix={choicesId}
               onClick={proceed}
             >
               Continue

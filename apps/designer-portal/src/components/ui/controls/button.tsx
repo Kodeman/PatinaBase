@@ -95,6 +95,12 @@ export interface ButtonProps
    * `aria-describedby` reason. Read only while `held`.
    */
   holds?: SpotlightHold[];
+  /**
+   * R186 — the element id of the region that fixes the act's reason. When it
+   * is in the act's frame, the default spotlight windows that region instead
+   * of the reason, live and focused. Read only while `held`, without `holds`.
+   */
+  holdFix?: string;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -108,6 +114,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       held = false,
       onHeldActivate,
       holds,
+      holdFix,
       children,
       disabled,
       type,
@@ -117,7 +124,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     const unavailable = disabled || loading;
     const isHeld = held && unavailable;
-    const heldAct = useHeldAct(holds, onHeldActivate);
+    const heldAct = useHeldAct(holds, onHeldActivate, holdFix);
     const classes = cn(
       buttonVariants({ variant, size }),
       // Appended here rather than in the variant base string so an act that

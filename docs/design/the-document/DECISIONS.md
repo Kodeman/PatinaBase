@@ -11538,4 +11538,6 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 
 **How.** This is a follow-up ticket on top of R185: a held act can name the region that fixes it, and the window covers that region, live and focused, along with the reason. The R3 shard adoptions name each site's fix region.
 
+**How (prop).** `holdFix="<element id>"` on `DocumentAction` and `ui/controls` `Button`. When the id is inside the act's `[data-spotlight-frame]`, the default window is that region; otherwise R185 applies unchanged. Record a change names its choices fieldset.
+
 *Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · last id = R186*

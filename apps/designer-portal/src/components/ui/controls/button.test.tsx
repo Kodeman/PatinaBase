@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Button } from "./button";
 import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight";
@@ -166,5 +167,48 @@ describe("Button · held spotlight", () => {
     );
     fireEvent.click(screen.getByRole("link", { name: "Open the paper" }));
     expect(windows()).toEqual(["why"]);
+  });
+
+  // R186 — a named fix region takes the window, live and focused.
+  const FixFrame = ({ children }: { children: ReactNode }) => (
+    <div data-spotlight-frame>
+      <div id="fix">
+        <input aria-label="Client email" />
+      </div>
+      <p id="why">{REASON}</p>
+      {children}
+    </div>
+  );
+
+  it("windows the named fix region and focuses its first control", () => {
+    render(
+      <FixFrame>
+        <Button disabled held aria-describedby="why" holdFix="fix">
+          Send the agreement
+        </Button>
+      </FixFrame>,
+    );
+    fireEvent.click(send());
+    expect(windows()).toEqual(["fix"]);
+    const email = screen.getByRole("textbox", { name: "Client email" });
+    expect(email.closest("[inert]")).toBeNull();
+    expect(document.activeElement).toBe(email);
+  });
+
+  it("windows the named fix region for a held asChild link", () => {
+    render(
+      <FixFrame>
+        <Button asChild disabled held aria-describedby="why" holdFix="fix">
+          <a href="#paper">Open the paper</a>
+        </Button>
+      </FixFrame>,
+    );
+    fireEvent.click(
+      screen.getByRole("link", { name: "Open the paper", hidden: true }),
+    );
+    expect(windows()).toEqual(["fix"]);
+    expect(document.activeElement).toBe(
+      screen.getByRole("textbox", { name: "Client email" }),
+    );
   });
 });
