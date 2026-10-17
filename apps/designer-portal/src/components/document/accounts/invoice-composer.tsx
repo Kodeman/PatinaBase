@@ -46,7 +46,7 @@
  * composer's own: ad-hoc lines, tax, terms, memo, totals, one Draft act.
  */
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Fragment,
   useEffect,
@@ -78,6 +78,7 @@ import {
   useProjectPaymentMilestones,
   useProjects,
   useClaimTimeEntries,
+  useSetLaborLinePrice,
   useStudioPurchases,
   useUnbilledTime,
 } from "@patina/supabase";
@@ -90,7 +91,18 @@ import {
 } from "@/hooks/use-viewer-studio";
 import { ClientPicker } from "@/components/portal/client-picker";
 import { documentEvents } from "@/lib/analytics/document-events";
-import { OPEN_HOUSEHOLD_SHEET_EVENT } from "@/lib/document/registry";
+import {
+  FOCUS_FFE_LINE_EVENT,
+  OPEN_HOUSEHOLD_SHEET_EVENT,
+  focusFfeLinePending,
+  parkInvoiceComposer,
+  parkedInvoiceComposer,
+  unparkInvoiceComposer,
+  type FocusFfeLineRequest,
+} from "@/lib/document/registry";
+import { buildRoomHref } from "@/lib/document/pieces/build-room-url";
+import { parseRough } from "@/lib/document/pieces/rough-in-keys";
+import { isLaborLine } from "@/lib/document/stamp-derivation";
 import { MESSAGE_WITHHELD } from "@/lib/document/act-names";
 import { topActiveModalDialog } from "../overlays/active-dialog";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
@@ -137,6 +149,7 @@ import {
   type ComposerStageSlot,
   type ComposerStudio,
   type InvoiceBillingGap,
+  type ParkedInvoiceComposer,
   type StudioInvoiceBlocker,
 } from "@/lib/document/invoice-composer";
 import { fmtDay } from "@/lib/document/format";
@@ -169,8 +182,11 @@ const STUDIO_CHOICE_EVENT = {
 export function InvoiceComposer({
   context,
   onDrafted,
+  onClose,
 }: {
   context: InvoiceComposerContext;
+  /** Puts the composer away; Price it parks it first (K7). */
+  onClose?: () => void;
   /** The handoff: the draft opens as the folio (issue + send live there).
    *  `projectId` is null for a studio invoice — there is no house to return. */
   onDrafted: (invoiceId: string, projectId: string | null) => void;
@@ -244,39 +260,67 @@ export function InvoiceComposer({
   const addBilling = useAddInvoiceBillingLines({ errorSurface: "inline" });
 
   // ── Selections ────────────────────────────────────────────────────────────
+  // K13 — reopened on a project it parked from (Price it), the composer comes
+  // back as it left. An opener that asks for lines of its own starts fresh.
+  const [parked] = useState<ParkedInvoiceComposer | null>(() =>
+    context.projectId && !asksForLines(context)
+      ? parkedInvoiceComposer(context.projectId)
+      : null,
+  );
   const [tickedMilestoneIds, setTickedMilestoneIds] = useState<Set<string>>(
-    () => new Set(),
+    () => new Set(parked?.milestoneIds),
   );
   const [tickedTimeIds, setTickedTimeIds] = useState<Set<string>>(
-    () => new Set(),
+    () => new Set(parked?.timeEntryIds),
   );
   const [tickedFfeIds, setTickedFfeIds] = useState<Set<string>>(
-    () => new Set(),
+    () => new Set(parked?.ffeItemIds),
   );
   // C-31 — the ticked FF&E group bills in full, or as a deposit of X%.
-  const [ffeStage, setFfeStage] = useState<"full" | "deposit">("full");
-  const [depositPctText, setDepositPctText] = useState("50");
+  const [ffeStage, setFfeStage] = useState<"full" | "deposit">(
+    parked?.ffeStage ?? "full",
+  );
+  const [depositPctText, setDepositPctText] = useState(
+    parked?.depositPctText ?? "50",
+  );
   const [tickedBalanceIds, setTickedBalanceIds] = useState<Set<string>>(
-    () => new Set(),
+    () => new Set(parked?.balanceItemIds),
   );
   const [tickedPurchaseIds, setTickedPurchaseIds] = useState<Set<string>>(
-    () => new Set(),
+    () => new Set(parked?.purchaseIds),
   );
   const [tickedRiderIds, setTickedRiderIds] = useState<Set<string>>(
-    () => new Set(),
+    () => new Set(parked?.riderIds),
   );
   // R-PB7 overrides, by purchase / rider id; absent = bill at cost.
   const [overrides, setOverrides] = useState<Map<string, string>>(
-    () => new Map(),
+    () => new Map(parked?.overrides),
   );
-  const [adhoc, setAdhoc] = useState<ComposerAdhocRow[]>([{ ...EMPTY_ADHOC }]);
+  const [adhoc, setAdhoc] = useState<ComposerAdhocRow[]>(
+    () => parked?.adhoc ?? [{ ...EMPTY_ADHOC }],
+  );
   // Studio mode's own three fields (S4 · S12 · S8).
   const [studioClientId, setStudioClientId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [chosenStudioId, setChosenStudioId] = useState("");
-  const [taxRatePercent, setTaxRatePercent] = useState("0");
-  const [termsDays, setTermsDays] = useState("15");
-  const [memo, setMemo] = useState("");
+  const [taxRatePercent, setTaxRatePercent] = useState(
+    parked?.taxRatePercent ?? "0",
+  );
+  const [termsDays, setTermsDays] = useState(parked?.termsDays ?? "15");
+  const [memo, setMemo] = useState(parked?.memo ?? "");
+  // Set by Price it, so leaving keeps the parked work; any other way out
+  // (drafting, discarding) clears it.
+  const parkingRef = useRef(false);
+  useEffect(() => {
+    const parkedFor = context.projectId;
+    if (!parkedFor) return;
+    // Re-asserted for a remount that reran the cleanup below.
+    if (parked) parkInvoiceComposer(parkedFor, parked);
+    else unparkInvoiceComposer(parkedFor);
+    return () => {
+      if (!parkingRef.current) unparkInvoiceComposer(parkedFor);
+    };
+  }, [context.projectId, parked]);
   // `retryable` is decided where the failure is caught: only a transient
   // failure before anything was written may be tried again (act-fail-line.tsx
   // §money writes). `gap` marks a billing-gap refusal, which clears itself once
@@ -453,7 +497,10 @@ export function InvoiceComposer({
     if (wantsRiders && (ridersLoading || !riders)) return;
 
     if (wantsFfe) {
-      const billableIds = new Set(ffePartition.billable.map((i) => i.id));
+      // K7 — an asked-for unpriced piece arrives ticked and holds the draft.
+      const billableIds = new Set(
+        [...ffePartition.billable, ...ffePartition.unpriced].map((i) => i.id),
+      );
       const owedIds = new Set(balanceOwed.map((i) => i.id));
       setTickedFfeIds(
         new Set(
@@ -836,8 +883,13 @@ export function InvoiceComposer({
     selectedRatePendingEntries: ratePendingEntries
       .filter((entry) => tickedTimeIds.has(entry.id))
       .map((entry) => ({ userId: entry.user_id, memberName: entry.member_name })),
-    // A ticked piece that turns unpriced drops out of the lines until SQ-1046 wires this hold.
-    selectedUnpricedLineIds: [],
+    // K7 — a ticked unpriced piece holds the draft; it never bills at $0.
+    selectedUnpricedLineIds: ffePartition.unpriced
+      .filter((item) => tickedFfeIds.has(item.id))
+      .map((item) => item.id),
+    unpricedLineNames: Object.fromEntries(
+      ffePartition.unpriced.map((item) => [item.id, item.name]),
+    ),
     noClientReason: blockerReason("no-client", {
       projectName: selectedProject?.name ?? "This project", canLinkClient, leadLeftStudio, leadName,
       canNameStudio, soloOwnerUnstamped, hasStudioOwner, studioLoading: organizationsLoading,
@@ -1107,12 +1159,75 @@ export function InvoiceComposer({
 
   const skippedFfe = useMemo(() => {
     const wanted = new Set(context.initialFfeItemIds ?? []);
-    if (wanted.size === 0) return { covered: 0, unpriced: 0 };
+    if (wanted.size === 0) return { covered: 0 };
     return {
       covered: ffePartition.covered.filter((i) => wanted.has(i.id)).length,
-      unpriced: ffePartition.unpriced.filter((i) => wanted.has(i.id)).length,
     };
   }, [context.initialFfeItemIds, ffePartition]);
+
+  // ── K7 — pricing an unpriced piece ────────────────────────────────────────
+  // A labor line takes its client price here, through the Price lens's own
+  // writer; any other line is priced in the Price lens, so the composer parks.
+  const laborPrice = useSetLaborLinePrice();
+  const [laborPriceNotes, setLaborPriceNotes] = useState<
+    ReadonlyMap<string, string>
+  >(() => new Map());
+  const setLaborPriceNote = (itemId: string, note: string | null) =>
+    setLaborPriceNotes((prev) => {
+      if (note === null && !prev.has(itemId)) return prev;
+      const next = new Map(prev);
+      if (note === null) next.delete(itemId);
+      else next.set(itemId, note);
+      return next;
+    });
+  const priceLaborLine = (item: ComposerFfeItem, cents: number) => {
+    setLaborPriceNote(item.id, null);
+    laborPrice.mutate(
+      { projectId, itemId: item.id, unitPriceCents: cents },
+      {
+        onError: (cause: unknown) =>
+          setLaborPriceNote(
+            item.id,
+            (cause instanceof Error && cause.message) ||
+              `The client price on ${item.name} was not saved. Try again.`,
+          ),
+      },
+    );
+  };
+  const router = useRouter();
+  const priceLensHref = projectId
+    ? buildRoomHref(projectId, { lens: "price", room: null })
+    : "";
+  const priceInPriceLens = (item: ComposerFfeItem) => {
+    parkInvoiceComposer(projectId, {
+      milestoneIds: [...tickedMilestoneIds],
+      timeEntryIds: [...tickedTimeIds],
+      ffeItemIds: [...tickedFfeIds],
+      ffeStage,
+      depositPctText,
+      balanceItemIds: [...tickedBalanceIds],
+      purchaseIds: [...tickedPurchaseIds],
+      riderIds: [...tickedRiderIds],
+      overrides: [...overrides],
+      adhoc,
+      taxRatePercent,
+      termsDays,
+      memo,
+    });
+    parkingRef.current = true;
+    const request: FocusFfeLineRequest = { itemId: item.id, cell: "price" };
+    focusFfeLinePending.request = request;
+    onClose?.();
+    // A Price lens already open answers at once; one not yet mounted takes
+    // the pending request when it mounts. The Document's own Pieces region
+    // must never hear it, so the event fires only inside the Build room.
+    if (pathname === `/doc/${projectId}/pieces`) {
+      window.dispatchEvent(
+        new CustomEvent(FOCUS_FFE_LINE_EVENT, { detail: request }),
+      );
+    }
+    router.push(priceLensHref);
+  };
 
   // ── The sheet ─────────────────────────────────────────────────────────────
   return (
@@ -1575,6 +1690,92 @@ export function InvoiceComposer({
                       </span>
                     </label>
                   ))}
+                {/* K7 — an unpriced piece is named with its fix: a labor line
+                    takes its client price here, any other is priced in the
+                    Price lens. It ticks only once priced; one already ticked
+                    holds the draft, its reason and fix in one row (R186). */}
+                {ffeSettled &&
+                  ffePartition.unpriced.map((it) => {
+                    const ticked = tickedFfeIds.has(it.id);
+                    const focusKey = `price-line:${it.id}`;
+                    const hold = holds.find((h) => h.focusKey === focusKey);
+                    return (
+                      <div
+                        key={it.id}
+                        data-testid="composer-unpriced-line"
+                        data-focus-key={focusKey}
+                        tabIndex={-1}
+                        className="outline-none"
+                      >
+                        <label
+                          className={`${ROW} ${ticked ? "" : "cursor-default"}`}
+                        >
+                          <input
+                            type="checkbox"
+                            className={CHECK}
+                            checked={ticked}
+                            disabled={!ticked}
+                            onChange={(e) =>
+                              setTickedFfeIds((prev) =>
+                                toggled(prev, it.id, e.target.checked),
+                              )
+                            }
+                          />
+                          <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+                            {it.name}
+                            {it.room?.name && (
+                              <span className="ml-1.5 text-[var(--text-muted)]">
+                                {it.room.name}
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                            ×{it.quantity ?? 1}
+                          </span>
+                          <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                            not priced
+                          </span>
+                        </label>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-6">
+                          {hold && (
+                            <p
+                              className="text-[11.5px]"
+                              style={{ color: TERRACOTTA_INK }}
+                            >
+                              {hold.reason}
+                            </p>
+                          )}
+                          {isLaborLine(it) ? (
+                            <LaborPriceField
+                              name={it.name}
+                              saving={laborPrice.isPending}
+                              onCommit={(cents) => priceLaborLine(it, cents)}
+                            />
+                          ) : (
+                            <DocumentAction
+                              href={priceLensHref}
+                              actionKey="price-invoice-line"
+                              surfaceKey="accounts"
+                              regionKey="invoice-composer"
+                              variant="tertiary"
+                              aria-label={`Price it: ${it.name}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                priceInPriceLens(it);
+                              }}
+                            >
+                              Price it
+                            </DocumentAction>
+                          )}
+                        </div>
+                        <RefusedLineNote
+                          note={
+                            laborPriceNotes.get(it.id) ?? refusedLines.get(it.id)
+                          }
+                        />
+                      </div>
+                    );
+                  })}
                 {/* C-31 — balances owed: a live deposit, no balance yet. */}
                 {balanceOwed.length > 0 && (
                   <div className="mt-2" data-testid="composer-balances">
@@ -1642,20 +1843,9 @@ export function InvoiceComposer({
                     ))}
                   </details>
                 )}
-                {(skippedFfe.covered > 0 ||
-                  skippedFfe.unpriced > 0 ||
-                  ffePartition.unpriced.length > 0) && (
+                {skippedFfe.covered > 0 && (
                   <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                    {[
-                      skippedFfe.covered > 0
-                        ? `${skippedFfe.covered} asked-for item${skippedFfe.covered === 1 ? "" : "s"} already invoiced · skipped`
-                        : null,
-                      ffePartition.unpriced.length > 0
-                        ? `${ffePartition.unpriced.length} unpriced line${ffePartition.unpriced.length === 1 ? "" : "s"} — set a client price to bill`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+                    {`${skippedFfe.covered} asked-for item${skippedFfe.covered === 1 ? "" : "s"} already invoiced · skipped`}
                   </p>
                 )}
               </div>
@@ -2302,6 +2492,68 @@ function AtCostRow({
       </div>
       <RefusedLineNote note={refusal} />
     </>
+  );
+}
+
+/** An opener that names lines to tick wants them, not the parked work. */
+function asksForLines(context: InvoiceComposerContext): boolean {
+  return [
+    context.initialFfeItemIds,
+    context.initialTimeEntryIds,
+    context.initialPurchaseIds,
+    context.initialCostLineIds,
+  ].some((ids) => (ids ?? []).length > 0);
+}
+
+/**
+ * K7 — a labor line's client price, typed as the Price lens takes it: blur or
+ * Enter saves a readable figure above $0, Esc puts the typing back (and keeps
+ * the sheet open). Saved, the line turns priced and its hold clears.
+ */
+function LaborPriceField({
+  name,
+  saving,
+  onCommit,
+}: {
+  name: string;
+  saving: boolean;
+  onCommit: (cents: number) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  // Enter saves; leaving the field saves only what Enter has not.
+  const sent = useRef<string | null>(null);
+  const commit = (again: boolean) => {
+    const cents = parseRough(draft);
+    if (cents == null || cents <= 0) return;
+    if (!again && sent.current === draft) return;
+    sent.current = draft;
+    onCommit(cents);
+  };
+  return (
+    <label className="flex items-center gap-1.5">
+      <span className={LABEL}>client price</span>
+      <input
+        aria-label={`Client price, ${name}`}
+        inputMode="decimal"
+        placeholder="$"
+        value={draft}
+        readOnly={saving}
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => commit(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit(true);
+          } else if (e.key === "Escape" && draft !== "") {
+            e.preventDefault();
+            e.stopPropagation();
+            setDraft("");
+          }
+        }}
+        className={`${INPUT} w-24 font-mono`}
+      />
+    </label>
   );
 }
 

@@ -35,6 +35,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
@@ -126,6 +127,14 @@ import {
   type AddedLineKind,
 } from "./price-summary";
 import { UndoToast } from "./undo-toast";
+import {
+  FOCUS_FFE_LINE_EVENT,
+  focusFfeLinePending,
+  parkedInvoiceComposer,
+  subscribeParkedInvoiceComposers,
+  type FocusFfeLineRequest,
+} from "@/lib/document/registry";
+import { openInvoiceComposer } from "../accounts/invoice-overlays";
 
 export interface PriceLensProps {
   docId: string;
@@ -291,8 +300,9 @@ interface FocusRequest {
   lineId: string | null;
   /** The place the line should sit in; its heading holds focus meanwhile. */
   placeId: string | null;
-  /** The line's `⋯`, its allowance cell, its name (a new labor line) or its cost (a new freight line). */
-  target?: "act" | "allowance" | "name" | "cost";
+  /** The line's `⋯`, its allowance cell, its name (a new labor line), its
+   *  cost (a new freight line) or its client price (the composer's Price it). */
+  target?: "act" | "allowance" | "name" | "cost" | "price";
   /** Wait for a line the sheet does not hold yet (a new or restored line). */
   expect?: boolean;
   at: number;
@@ -306,6 +316,8 @@ const FOCUS_TARGET = {
   allowance: "[data-allowance-cell]",
   name: "[data-line-name]",
   cost: "[data-cost-input]",
+  // The typeable client price, or the printed one where none can be typed.
+  price: 'input[aria-label^="Unit client price"], [data-allowance-cell]',
 } as const;
 
 function priceSection(root: HTMLElement | null, placeId: string) {
@@ -533,6 +545,49 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       Date.now() - at < FOCUS_WAIT_MS;
     if (!waiting) setFocusRequest(null);
   }, [focusRequest, lines, byId]);
+
+  // K7 — the invoice composer's Price it lands on the line's client price.
+  // A request made before this lens mounted waits in `focusFfeLinePending`.
+  useEffect(() => {
+    const land = (request: Partial<FocusFfeLineRequest> | null | undefined) => {
+      if (request?.cell !== "price" || !request.itemId) return false;
+      if (focusFfeLinePending.request?.cell === "price")
+        focusFfeLinePending.request = null;
+      setFocusRequest({
+        lineId: request.itemId,
+        placeId: null,
+        target: "price",
+        expect: true,
+        at: Date.now(),
+      });
+      return true;
+    };
+    const onFocusLine = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<FocusFfeLineRequest>>)
+        .detail;
+      if (land(detail)) event.preventDefault();
+    };
+    window.addEventListener(FOCUS_FFE_LINE_EVENT, onFocusLine);
+    land(focusFfeLinePending.request);
+    return () => window.removeEventListener(FOCUS_FFE_LINE_EVENT, onFocusLine);
+  }, []);
+
+  // `Back to the invoice` stands while this job's composer is parked. A
+  // composer put away from it un-parks, and the act goes; focus it held
+  // falls to the room's heading, never to the page.
+  const composerParked = useSyncExternalStore(
+    subscribeParkedInvoiceComposers,
+    () => parkedInvoiceComposer(projectId) !== null,
+    () => false,
+  );
+  const backHeldFocus = useRef(false);
+  useEffect(() => {
+    if (composerParked) return;
+    const dropped =
+      !document.activeElement || document.activeElement === document.body;
+    if (backHeldFocus.current && dropped) focusPlace(sheetRef.current, null);
+    backHeldFocus.current = false;
+  }, [composerParked]);
 
   if (room === REMOVED_PLACE) {
     return (
@@ -929,6 +984,24 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
 
   return (
     <div ref={sheetRef} data-price-lens="" className="flex flex-col py-6">
+      {composerParked ? (
+        <p className="mb-3">
+          <button
+            type="button"
+            className={ACT}
+            onFocus={() => {
+              backHeldFocus.current = true;
+            }}
+            onBlur={(e) => {
+              // Removal blurs with no next target; that focus is the one lost.
+              if (e.relatedTarget) backHeldFocus.current = false;
+            }}
+            onClick={() => openInvoiceComposer({ projectId })}
+          >
+            Back to the invoice
+          </button>
+        </p>
+      ) : null}
       <p className="mb-3 font-sans text-[16px] leading-[1.5] tabular-nums text-[var(--sheet-ink)]">
         {priceSummary("Job", job)}
       </p>
