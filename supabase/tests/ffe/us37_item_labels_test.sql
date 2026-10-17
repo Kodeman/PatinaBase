@@ -26,7 +26,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(43);
+SELECT plan(55);
 
 -- ── objects ────────────────────────────────────────────────────────────────
 SELECT ok(
@@ -335,6 +335,117 @@ SELECT is(
   (SELECT doc_code FROM public.project_ffe_items WHERE id = 'b8083000-0000-4000-8000-000000000012'),
   'LR-04',
   'the superseded predecessor keeps its label too'
+);
+
+-- ── lock order: the job label lock first (SQ-1121) ─────────────────────────
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'public._ffe_lock_job_labels(uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public._ffe_lock_job_labels(uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'public._ffe_lock_job_labels(uuid)', 'EXECUTE'),
+  'authenticated, anon and PUBLIC cannot call the job label lock'
+);
+-- Each path that row-locks an item or a selection thread and then writes an
+-- item takes the job label lock before its first item or thread row lock.
+SELECT is(
+  ARRAY(
+    SELECT f.name
+    FROM (VALUES
+      ('restore_project_selection', 'FOR UPDATE'),
+      ('supersede_project_selection', 'FOR UPDATE'),
+      ('add_labor_line', 'FOR UPDATE'),
+      ('place_product_in_project_v2', 'FOR UPDATE'),
+      ('triage_project_ffe_items', 'FOR UPDATE'),
+      ('set_project_ffe_item_label', 'FOR UPDATE'),
+      ('_apply_client_decision_authorized', 'UPDATE public.project_ffe_items')
+    ) AS f(name, first_row_lock)
+    LEFT JOIN pg_proc AS p ON p.proname = f.name AND p.pronamespace = 'public'::regnamespace
+    WHERE p.oid IS NULL
+       OR strpos(p.prosrc, 'public._ffe_lock_job_labels(') = 0
+       OR strpos(p.prosrc, 'public._ffe_lock_job_labels(') > strpos(p.prosrc, f.first_row_lock)
+    ORDER BY f.name
+  ),
+  ARRAY[]::text[],
+  'restore, supersede, add labor, place, triage, the label writer and a client decision take the job label lock before any item or thread row lock'
+);
+SELECT ok(
+  (SELECT strpos(p.prosrc, 'public._ffe_lock_job_labels(NEW.project_id)') > 0
+          AND strpos(p.prosrc, 'pg_advisory_xact_lock') = 0
+   FROM pg_proc AS p
+   WHERE p.oid = 'public.ffe_assign_item_label()'::regprocedure),
+  'the label trigger takes the same job label lock'
+);
+
+-- P4: a job no item has entered yet, so this transaction holds no label lock on it.
+INSERT INTO public.projects (id, name, designer_id, created_by, status) VALUES
+  ('b8081000-0000-4000-8000-000000000004', 'Lock job', 'b8080000-0000-4000-8000-000000000001',
+   'b8080000-0000-4000-8000-000000000001', 'active');
+CREATE TEMP VIEW us37_p4_label_lock AS
+SELECT EXISTS (
+  SELECT 1 FROM pg_locks AS l
+  WHERE l.locktype = 'advisory' AND l.pid = pg_backend_pid() AND l.granted AND l.objsubid = 1
+    AND l.classid::bigint = ((hashtext('ffe_label:b8081000-0000-4000-8000-000000000004')::bigint >> 32) & 4294967295)
+    AND l.objid::bigint = (hashtext('ffe_label:b8081000-0000-4000-8000-000000000004')::bigint & 4294967295)
+) AS held;
+SELECT ok(NOT (SELECT held FROM us37_p4_label_lock), 'no label lock is held on a job nothing has entered');
+SELECT public._ffe_lock_job_labels('b8081000-0000-4000-8000-000000000004');
+SELECT ok(
+  (SELECT held FROM us37_p4_label_lock),
+  'the job label lock is the advisory lock on hashtext(''ffe_label:'' || job)'
+);
+
+INSERT INTO public.project_ffe_items (id, project_id, name, sort_order, doc_code) VALUES
+  ('b8083000-0000-4000-8000-0000000000a1', 'b8081000-0000-4000-8000-000000000004', 'Sofa', 1, 'Sofa A');
+INSERT INTO public.project_ffe_items (id, project_id, name, sort_order, doc_code) VALUES
+  ('b8083000-0000-4000-8000-0000000000a2', 'b8081000-0000-4000-8000-000000000004', 'Bench', 2, E'Bench\r\nB');
+INSERT INTO public.project_ffe_items (id, project_id, name, sort_order, doc_code) VALUES
+  ('b8083000-0000-4000-8000-0000000000a3', 'b8081000-0000-4000-8000-000000000004', 'Sofa twin', 3, E'sofa\u2029a');
+INSERT INTO public.project_ffe_items (id, project_id, name, sort_order) VALUES
+  ('b8083000-0000-4000-8000-0000000000a4', 'b8081000-0000-4000-8000-000000000004', 'Rug', 4);
+UPDATE public.project_ffe_items
+SET removed_at = now(), removed_by = 'b8080000-0000-4000-8000-000000000001', removal_reason = 'not needed'
+WHERE id = 'b8083000-0000-4000-8000-0000000000a4';
+
+-- ── line breaks inside a label (SQ-1121) ───────────────────────────────────
+SELECT is(
+  (SELECT doc_code FROM public.project_ffe_items WHERE id = 'b8083000-0000-4000-8000-0000000000a2'),
+  'Bench B',
+  'an item entering with a line break in its label keeps it on one line'
+);
+SELECT is(
+  (SELECT doc_code FROM public.project_ffe_items WHERE id = 'b8083000-0000-4000-8000-0000000000a3'),
+  '001',
+  'an entering label that is a taken one across a line break gets the next label'
+);
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"b8080000-0000-4000-8000-000000000001","role":"authenticated"}';
+SELECT throws_ok(
+  $$ SELECT public.set_project_ffe_item_label('b8083000-0000-4000-8000-0000000000a2', E'Sofa\nA') $$,
+  '23505',
+  'Another item in this job already uses Sofa A.',
+  'an edit to a taken label across a line break is refused'
+);
+SELECT is(
+  (public.set_project_ffe_item_label('b8083000-0000-4000-8000-0000000000a2', E'Bench\u2028\r\nC\n')).doc_code,
+  'Bench C',
+  'the writer makes a run of line breaks one space and trims'
+);
+SELECT is(
+  (public.set_project_ffe_item_label('b8083000-0000-4000-8000-0000000000a2', E'\r\n\u2028')).doc_code,
+  '003',
+  'a label of line breaks alone is blank, so it gets the next automatic label (the removed 002 still counts)'
+);
+
+SELECT lives_ok(
+  $$ SELECT public.restore_project_selection('b8083000-0000-4000-8000-0000000000a4') $$,
+  'restore_project_selection restores under the job label lock'
+);
+RESET ROLE;
+SELECT is(
+  (SELECT doc_code FROM public.project_ffe_items
+   WHERE id = 'b8083000-0000-4000-8000-0000000000a4' AND removed_at IS NULL),
+  '002',
+  'the restored item keeps its label'
 );
 
 -- ── backfill ───────────────────────────────────────────────────────────────

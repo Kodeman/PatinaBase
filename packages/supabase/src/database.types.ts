@@ -36953,6 +36953,10 @@ export type Database = {
         Returns: boolean
       }
       _ffe_item_label_prefix: { Args: { p_room_name: string }; Returns: string }
+      _ffe_lock_job_labels: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
       _ffe_next_item_label: {
         Args: { p_project_id: string; p_room_id: string }
         Returns: string

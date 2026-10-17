@@ -47,6 +47,15 @@ describe('itemLabelRefusal', () => {
     );
   });
 
+  it('passes the server sentence through when the other item’s label holds a line break', () => {
+    expect(itemLabelRefusal('Another item in this job already uses Sofa\nA.', 'Sofa A')).toBe(
+      'Another item in this job already uses Sofa\nA.',
+    );
+    expect(itemLabelRefusal('Another item in this job already uses Sofa\r\n\u2028A.')).toBe(
+      'Another item in this job already uses Sofa\r\n\u2028A.',
+    );
+  });
+
   it('names the typed label for a raw unique-index violation', () => {
     const raw = 'duplicate key value violates unique constraint "project_ffe_items_label_unique"';
     expect(itemLabelRefusal(raw, ' LR-03 ')).toBe('Another item in this job already uses LR-03.');

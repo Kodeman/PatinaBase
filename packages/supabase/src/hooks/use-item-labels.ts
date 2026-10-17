@@ -15,7 +15,8 @@ const getSupabase = () => createBrowserClient();
 
 type ProjectFfeItemRow = Database['public']['Tables']['project_ffe_items']['Row'];
 
-const TAKEN_SENTENCE = /^Another item in this job already uses (.+)\.$/;
+// [\s\S]: a label stored before 00808 may still hold a line break.
+const TAKEN_SENTENCE = /^Another item in this job already uses ([\s\S]+)\.$/;
 /** The unique index (00808) that backs the trigger's check. */
 const LABEL_INDEX = 'project_ffe_items_label_unique';
 

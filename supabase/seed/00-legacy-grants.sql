@@ -22608,6 +22608,24 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00806_us37_lead_time_optional.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.promote_to_studio(UUID, UUID, JSONB, TEXT, TEXT, TEXT, INTEGER, TEXT) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00806_us37_lead_time_optional.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.promote_to_studio(UUID, UUID, JSONB, TEXT, TEXT, TEXT, INTEGER, TEXT) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00808_us37_item_labels.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_lock_job_labels(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00808_us37_item_labels.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._ffe_item_label_prefix(text) FROM PUBLIC, anon, authenticated;
