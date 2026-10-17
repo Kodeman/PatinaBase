@@ -87,6 +87,21 @@ describe("ArchiveCardDoor", () => {
     ).toBeInTheDocument();
   });
 
+  it("opens the standing reason in a spotlight when the act is held", async () => {
+    render(
+      <div data-spotlight-frame>
+        <ArchiveCardDoor {...props} canArchive={false} />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Put this card away" }));
+    const reason = document.querySelector(
+      '[data-hold-spotlight-bar] .hold-spotlight__reason',
+    );
+    expect(await screen.findByRole("group", { name: "What needs attention" })).toBeInTheDocument();
+    expect(reason).toHaveTextContent(/owner or an admin/);
+    expect(reason?.closest("[inert]")).toBeNull();
+  });
+
   it("writes nothing when a held act is pressed", () => {
     render(<ArchiveCardDoor {...props} canArchive={false} />);
     fireEvent.click(screen.getByRole("button", { name: "Put this card away" }));

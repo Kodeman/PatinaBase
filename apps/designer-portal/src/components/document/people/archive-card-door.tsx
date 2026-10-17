@@ -97,9 +97,6 @@ export function ArchiveCardDoor({
           disabled={!canArchive}
           held={!canArchive}
           aria-describedby={!canArchive ? reasonId : undefined}
-          onHeldActivate={() =>
-            setError(STUDIO_CONTACT_ARCHIVE_STANDING_SENTENCE)
-          }
           onClick={() => void run(isArchived ? "restore" : "archive")}
           loading={archive.isPending || restore.isPending}
           loadingLabel={isArchived ? "Bringing back…" : "Putting away…"}
