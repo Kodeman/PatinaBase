@@ -633,16 +633,29 @@ describe("draftInvoiceRefusal", () => {
     });
   });
 
+  // SQ-1272 F4 — an answer to the write that the table doesn't know may hide a
+  // draft that landed, and neither RPC takes an idempotency key.
   it.each([
     ["an unrecognised RPC refusal", `${RPC}duplicate key value violates unique constraint "invoices_pkey" (12000 cents)`],
     ["a dropped connection", `${RPC}TypeError: Failed to fetch`],
+    ["a dropped studio connection", `${STUDIO_RPC}TypeError: Failed to fetch`],
     ["an unrecognised studio refusal", `${STUDIO_RPC}null value in column "studio_id" (4d1e0000-0000-4000-8000-000000000001)`],
     ["a recognised reason inside other words", `${RPC}lines for invoice project not found or access denied`],
+  ])("says %s is unconfirmed, with no retry", (_label, message) => {
+    const said = draftInvoiceRefusal(message);
+    expect(said).toEqual({
+      message: "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.",
+      retryable: false,
+      unconfirmed: true,
+    });
+    expect(said.message).not.toMatch(/create_draft_invoice|Failed to create|invoices_pkey|cents|studio_id/);
+  });
+
+  it.each([
+    ["an unrecognised failure before the write", "Session lookup failed"],
     ["no message at all", undefined],
   ])("falls back to one plain, retryable sentence for %s", (_label, message) => {
-    const said = draftInvoiceRefusal(message);
-    expect(said).toEqual({ message: "The invoice couldn't be drafted.", retryable: true });
-    expect(said.message).not.toMatch(/create_draft_invoice|Failed to create|invoices_pkey|cents|studio_id/);
+    expect(draftInvoiceRefusal(message)).toEqual({ message: "The invoice couldn't be drafted.", retryable: true });
   });
 });
 
@@ -694,6 +707,8 @@ describe("billingRefusal", () => {
     noRecipient: "This invoice has no client email yet. Add their email, then send it.",
     notIssued: "Issue the invoice before sending it.",
     void: "This invoice was voided and can't be sent.",
+    // SQ-1289 F2: status-neutral; a paid or void invoice has no Resend to promise.
+    notDraft: "This invoice was already issued. Reload the folio to see where it stands.",
     notOpen: "Only an open invoice can receive a reminder.",
     checkFailed: "The invoice's payment status couldn't be checked. Try sending it again.",
     inFlight: "The client is paying this invoice now. Send the note after the payment finishes.",
@@ -730,6 +745,7 @@ describe("billingRefusal", () => {
     ["send", "no_recipient", SENT.noRecipient],
     ["send", "invoice_not_issued", SENT.notIssued],
     ["send", "invoice_void", SENT.void],
+    ["send", "invoice_not_draft", SENT.notDraft],
     ["send", "invoice_not_open", SENT.notOpen],
     ["send", "checkout_attempt_check_failed", SENT.checkFailed],
     ["send", "checkout_in_flight", SENT.inFlight],
@@ -744,6 +760,7 @@ describe("billingRefusal", () => {
     // ... and the details it throws in their place.
     ["send", "Issue the invoice before sending.", SENT.notIssued],
     ["send", "A voided invoice cannot be sent.", SENT.void],
+    ["send", "This invoice was already issued.", SENT.notDraft],
     ["send", "Reminders can only be sent on open (sent or partially paid) invoices.", SENT.notOpen],
     ["send", "Patina could not check whether this invoice is being paid right now. Try again.", SENT.checkFailed],
     [
@@ -770,7 +787,8 @@ describe("billingRefusal", () => {
 
   it("maps every code and every literal detail invoice-send returns", () => {
     const source = readFileSync(
-      join(__dirname, "../../../../../../supabase/functions/invoice-send/index.ts"),
+      // F2 (SQ-1249): the flow moved to handler.ts, which also issues a draft.
+      join(__dirname, "../../../../../../supabase/functions/invoice-send/handler.ts"),
       "utf8",
     );
     const codes = Array.from(source.matchAll(/error:\s*'([a-zA-Z_]+)'/g), (m) => m[1]);
@@ -785,6 +803,10 @@ describe("billingRefusal", () => {
         "invoice_not_found",
         "lookup_failed",
         "invoice_not_issued",
+        "invoice_not_draft",
+        "issue_failed",
+        "issue_unknown",
+        "issued_unsent",
         "invoice_void",
         "invoice_not_open",
         "checkout_attempt_check_failed",
@@ -793,7 +815,8 @@ describe("billingRefusal", () => {
         "send_failed",
       ]),
     );
-    expect(details).toHaveLength(5);
+    // SQ-1287: the issue read-back repeats invoice_void's and invoice_not_draft's details.
+    expect(new Set(details).size).toBe(6);
     for (const said of [...codes, ...details]) {
       expect(billingRefusal("send", said).sentence).not.toBe(GENERIC);
     }
@@ -903,8 +926,8 @@ describe("assessInvoiceReadiness", () => {
     expect(assessInvoiceReadiness({ ...common, selectedUnpricedLineIds: ["l1"], unpricedLineNames: { l1: "Sofa" } }).holds[0]).toMatchObject({
       reason: "Set a client price for Sofa.", repair: "Price it", fixer: "price-line", focusKey: "price-line:l1",
     });
-    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true, householdName: "The Lees" }).holds[0]).toMatchObject({
-      reason: "The Lees has no email to send to.", repair: "Add their email", fixer: "add-email", focusKey: "add-email",
+    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true, householdName: "Elena" }).holds[0]).toMatchObject({
+      reason: "Add Elena's email to send this.", repair: "Add their email", fixer: "add-email", focusKey: "add-email",
     });
   });
 
@@ -949,6 +972,6 @@ describe("assessInvoiceReadiness", () => {
     expect(assessInvoiceReadiness({ ...common, selectedRatePendingEntries: [{ userId: "9f2e-user" }] }).holds[0]?.reason).toBe(
       "These hours are waiting for a rate.",
     );
-    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true }).holds[0]?.reason).toBe("This household has no email to send to.");
+    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true }).holds[0]?.reason).toBe("Add the client's email to send this.");
   });
 });
