@@ -19,6 +19,19 @@
 --   readers     get_client_project_selections and get_client_project_threshold
 --               return the primary and the ordered list to the client; the
 --               designer's computed field returns the primary
+-- SQ-1128 (Astra SQ-1127 repair):
+--   reader gate F1  a stranger on a job with no client gets 42501 from both
+--               readers (00755's gate let NOT(NULL OR false) through)
+--   reader gate F2  a caller who shares only studio A with a lead whose job is
+--               in studio B gets 42501 from both; the job's own studio
+--               teammate, the job's client and the lead of a studio-less
+--               legacy job still read
+--   lock order F3   the picture gate locks the job before the item
+--   spec book F4    an upload-only line's snapshot (what an issue freezes)
+--               carries its upload; after the primary changes it leads with
+--               the new primary, not the live piece's first image
+--   rpc-only F5     a team member's direct INSERT, UPDATE and DELETE get
+--               42501; her SELECT still reads
 --
 -- Run: cd supabase && supabase test db tests/ffe/us37_item_images_test.sql
 --  or: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
@@ -27,22 +40,30 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(36);
+SELECT plan(54);
 
 -- ─── fixtures (as postgres) ────────────────────────────────────────────────
--- O owner of studio A (job P) · C the client · X owner of studio B (job Q)
+-- O owner of studio A (job P) · C the client · X owner of studio B (job Q,
+-- no client) · L a lead seated in A and B (job R in B, client C) · Z a
+-- stranger with no seat · D a lead with no seat (job S, no studio, no client)
 
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
   ('80700000-0000-4000-8000-0000000000a1', 'us37-owner@test.invalid',    '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('80700000-0000-4000-8000-0000000000a2', 'us37-client@test.invalid',   '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('80700000-0000-4000-8000-0000000000a5', 'us37-outsider@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('80700000-0000-4000-8000-0000000000a5', 'us37-outsider@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('80700000-0000-4000-8000-0000000000a6', 'us37-two-studios@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('80700000-0000-4000-8000-0000000000a7', 'us37-stranger@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('80700000-0000-4000-8000-0000000000a8', 'us37-solo-lead@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
 VALUES
   ('80700000-0000-4000-8000-0000000000a1', 'us37-owner@test.invalid',    'US37 Owner',    true,  now(), now()),
   ('80700000-0000-4000-8000-0000000000a2', 'us37-client@test.invalid',   'US37 Client',   false, now(), now()),
-  ('80700000-0000-4000-8000-0000000000a5', 'us37-outsider@test.invalid', 'US37 Outsider', true,  now(), now())
+  ('80700000-0000-4000-8000-0000000000a5', 'us37-outsider@test.invalid', 'US37 Outsider', true,  now(), now()),
+  ('80700000-0000-4000-8000-0000000000a6', 'us37-two-studios@test.invalid', 'US37 Two Studios', true, now(), now()),
+  ('80700000-0000-4000-8000-0000000000a7', 'us37-stranger@test.invalid', 'US37 Stranger', false, now(), now()),
+  ('80700000-0000-4000-8000-0000000000a8', 'us37-solo-lead@test.invalid', 'US37 Solo Lead', true, now(), now())
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email, full_name = EXCLUDED.full_name, is_designer = EXCLUDED.is_designer;
 
@@ -54,7 +75,9 @@ VALUES
 INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES
   ('80700000-0000-4000-8000-0000000000e1', '80700000-0000-4000-8000-0000000000a1', '80700000-0000-4000-8000-0000000000f1', 'owner', 'active', now()),
-  ('80700000-0000-4000-8000-0000000000e5', '80700000-0000-4000-8000-0000000000a5', '80700000-0000-4000-8000-0000000000f2', 'owner', 'active', now());
+  ('80700000-0000-4000-8000-0000000000e5', '80700000-0000-4000-8000-0000000000a5', '80700000-0000-4000-8000-0000000000f2', 'owner', 'active', now()),
+  ('80700000-0000-4000-8000-0000000000e6', '80700000-0000-4000-8000-0000000000a6', '80700000-0000-4000-8000-0000000000f1', 'member', 'active', now()),
+  ('80700000-0000-4000-8000-0000000000e7', '80700000-0000-4000-8000-0000000000a6', '80700000-0000-4000-8000-0000000000f2', 'member', 'active', now());
 
 INSERT INTO public.projects (id, name, designer_id, client_id, created_by, studio_id, status)
 VALUES
@@ -63,7 +86,13 @@ VALUES
    '80700000-0000-4000-8000-0000000000a1', '80700000-0000-4000-8000-0000000000f1', 'active'),
   ('80700000-0000-4000-8000-000000000002', 'US37 Other Job',
    '80700000-0000-4000-8000-0000000000a5', NULL,
-   '80700000-0000-4000-8000-0000000000a5', '80700000-0000-4000-8000-0000000000f2', 'active');
+   '80700000-0000-4000-8000-0000000000a5', '80700000-0000-4000-8000-0000000000f2', 'active'),
+  ('80700000-0000-4000-8000-000000000003', 'US37 Studio B Job',
+   '80700000-0000-4000-8000-0000000000a6', '80700000-0000-4000-8000-0000000000a2',
+   '80700000-0000-4000-8000-0000000000a6', '80700000-0000-4000-8000-0000000000f2', 'active'),
+  ('80700000-0000-4000-8000-000000000004', 'US37 Legacy Job',
+   '80700000-0000-4000-8000-0000000000a8', NULL,
+   '80700000-0000-4000-8000-0000000000a8', NULL, 'active');
 
 -- Three pictures and a blank entry; two pictures.
 INSERT INTO public.products (id, name, captured_at, layer, owner_user_id, status, images) VALUES
@@ -115,6 +144,88 @@ SELECT ok(
   has_function_privilege('authenticated', 'public.unlink_ffe_item_image(uuid)', 'EXECUTE'),
   'grants: authenticated can call unlink_ffe_item_image'
 );
+
+-- ─── lock order (SQ-1128 F3) ───────────────────────────────────────────────
+-- Every picture act passes this gate; it must take the job's projects row
+-- before the item row, as 00808's job label lock does.
+SELECT ok(
+  (SELECT strpos(prosrc, 'FROM public.projects WHERE id = v_project_id FOR KEY SHARE') > 0
+      AND strpos(prosrc, 'FROM public.projects WHERE id = v_project_id FOR KEY SHARE')
+          < strpos(prosrc, 'FOR NO KEY UPDATE')
+   FROM pg_proc WHERE oid = 'public._ffe_item_images_require_team(uuid)'::regprocedure),
+  'lock order: the picture gate locks the job (FOR KEY SHARE) before the item'
+);
+
+-- ─── reader gate (SQ-1128 F1: null-safe) ───────────────────────────────────
+-- Q has no client. 00755's gate read NOT(NULL = Z OR false), which is NULL, and
+-- let the stranger through.
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"80700000-0000-4000-8000-0000000000a7","role":"authenticated"}';
+SELECT throws_ok(
+  $$SELECT public.get_client_project_selections('80700000-0000-4000-8000-000000000002')$$,
+  '42501', 'project not found or not accessible',
+  'reader gate: a stranger on a job with no client is refused by get_client_project_selections'
+);
+SELECT throws_ok(
+  $$SELECT public.get_client_project_threshold('80700000-0000-4000-8000-000000000002')$$,
+  '42501', 'project not found or not accessible',
+  'reader gate: a stranger on a job with no client is refused by get_client_project_threshold'
+);
+
+-- ─── reader gate (SQ-1128 F2: the job's own studio) ────────────────────────
+-- R's lead L sits in studios A and B; R is B's. O sits only in A: she shares
+-- a studio with the lead (00755's is_studio_comember) but not with the job.
+
+SET LOCAL request.jwt.claims = '{"sub":"80700000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+SELECT throws_ok(
+  $$SELECT public.get_client_project_selections('80700000-0000-4000-8000-000000000003')$$,
+  '42501', 'project not found or not accessible',
+  'reader gate: a teammate of the lead in another studio is refused by get_client_project_selections'
+);
+SELECT throws_ok(
+  $$SELECT public.get_client_project_threshold('80700000-0000-4000-8000-000000000003')$$,
+  '42501', 'project not found or not accessible',
+  'reader gate: a teammate of the lead in another studio is refused by get_client_project_threshold'
+);
+
+SET LOCAL request.jwt.claims = '{"sub":"80700000-0000-4000-8000-0000000000a5","role":"authenticated"}';
+SELECT lives_ok(
+  $$SELECT public.get_client_project_selections('80700000-0000-4000-8000-000000000003')$$,
+  'reader gate: the job''s own studio teammate reads get_client_project_selections'
+);
+SELECT lives_ok(
+  $$SELECT public.get_client_project_threshold('80700000-0000-4000-8000-000000000003')$$,
+  'reader gate: the job''s own studio teammate reads get_client_project_threshold'
+);
+
+SET LOCAL request.jwt.claims = '{"sub":"80700000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT lives_ok(
+  $$SELECT public.get_client_project_selections('80700000-0000-4000-8000-000000000003')$$,
+  'reader gate: the job''s client reads get_client_project_selections'
+);
+SELECT lives_ok(
+  $$SELECT public.get_client_project_threshold('80700000-0000-4000-8000-000000000003')$$,
+  'reader gate: the job''s client reads get_client_project_threshold'
+);
+RESET ROLE;
+
+SELECT is(
+  (SELECT studio_id FROM public.projects WHERE id = '80700000-0000-4000-8000-000000000004'),
+  NULL::uuid,
+  'reader gate: the legacy job has no studio'
+);
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"80700000-0000-4000-8000-0000000000a8","role":"authenticated"}';
+SELECT lives_ok(
+  $$SELECT public.get_client_project_selections('80700000-0000-4000-8000-000000000004')$$,
+  'reader gate: the lead of a studio-less legacy job reads get_client_project_selections'
+);
+SELECT lives_ok(
+  $$SELECT public.get_client_project_threshold('80700000-0000-4000-8000-000000000004')$$,
+  'reader gate: the lead of a studio-less legacy job reads get_client_project_threshold'
+);
+RESET ROLE;
 
 -- ─── snapshot ──────────────────────────────────────────────────────────────
 
@@ -401,6 +512,89 @@ SELECT is(
    WHERE selection->>'id' = '80700000-0000-4000-8000-000000000101'),
   '["https://img.test/a.jpg", "https://img.test/b.jpg", "https://img.test/c.jpg"]'::jsonb,
   'readers: get_client_project_threshold returns the pictures in order'
+);
+RESET ROLE;
+
+-- ─── spec book (SQ-1128 F4) ────────────────────────────────────────────────
+-- prepare_spec_book_issue freezes _spec_book_current_item_snapshots'
+-- item_snapshot into spec_book_revision_items, so this is the published
+-- picture. I4 is a line with no piece and one upload.
+
+INSERT INTO public.spec_books (id, project_id, title, template_id, created_by)
+VALUES ('80700000-0000-4000-8000-000000000501', '80700000-0000-4000-8000-000000000001',
+        'US37 Whole Home — Spec Book', '8f6e2600-6f25-4f20-a63d-d68d49c35a01',
+        '80700000-0000-4000-8000-0000000000a1');
+INSERT INTO public.spec_book_item_settings (spec_book_id, ffe_item_id, chapter_id, position)
+VALUES ('80700000-0000-4000-8000-000000000501', '80700000-0000-4000-8000-000000000101', NULL, 0)
+ON CONFLICT (spec_book_id, ffe_item_id) DO NOTHING;
+SELECT set_config('app.ffe_mutation_rpc', 'on', true);
+INSERT INTO public.project_ffe_items (
+  id, project_id, name, status, item_type, product_id, quantity,
+  unit_price_cents, line_total_cents, design_disposition, assignment_scope, sort_order
+) VALUES
+  ('80700000-0000-4000-8000-000000000104', '80700000-0000-4000-8000-000000000001', 'Found mirror',
+   'specified', 'tbd', NULL, 1, 0, 0, 'selected', 'unassigned', 3);
+SELECT set_config('app.ffe_mutation_rpc', '', true);
+INSERT INTO public.spec_book_item_settings (spec_book_id, ffe_item_id, chapter_id, position)
+VALUES ('80700000-0000-4000-8000-000000000501', '80700000-0000-4000-8000-000000000104', NULL, 1)
+ON CONFLICT (spec_book_id, ffe_item_id) DO NOTHING;
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"80700000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+SELECT public.add_ffe_item_image(
+  '80700000-0000-4000-8000-000000000104',
+  'https://storage.test/project-item-images/mirror.jpg',
+  '80700000-0000-4000-8000-000000000001/80700000-0000-4000-8000-000000000104/mirror.jpg',
+  'upload', NULL);
+SELECT public.set_ffe_item_primary_image(
+  (SELECT id FROM public.project_ffe_item_images WHERE url = 'https://img.test/c.jpg'));
+RESET ROLE;
+
+SELECT is(
+  (SELECT item_snapshot->'selectedMedia'->>0
+   FROM public._spec_book_current_item_snapshots('80700000-0000-4000-8000-000000000501')
+   WHERE ffe_item_id = '80700000-0000-4000-8000-000000000104'),
+  'https://storage.test/project-item-images/mirror.jpg',
+  'spec book: an upload-only line publishes its uploaded picture'
+);
+SELECT is(
+  (SELECT item_snapshot->'selectedMedia'->>0
+   FROM public._spec_book_current_item_snapshots('80700000-0000-4000-8000-000000000501')
+   WHERE ffe_item_id = '80700000-0000-4000-8000-000000000101'),
+  'https://img.test/c.jpg',
+  'spec book: after the primary changes, the published picture is the new primary, not the piece''s first image'
+);
+
+-- ─── rpc-only writes (SQ-1128 F5) ──────────────────────────────────────────
+-- O is on the job's studio leg; she may read pictures but write only through
+-- the four RPCs.
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"80700000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+SELECT throws_ok(
+  $$INSERT INTO public.project_ffe_item_images (item_id, project_id, url, source, position)
+    VALUES ('80700000-0000-4000-8000-000000000101', '80700000-0000-4000-8000-000000000001',
+            'https://img.test/direct.jpg', 'upload', 50)$$,
+  '42501', NULL,
+  'rpc-only: a team member''s direct INSERT is refused'
+);
+SELECT throws_ok(
+  $$UPDATE public.project_ffe_item_images SET is_primary = false
+    WHERE item_id = '80700000-0000-4000-8000-000000000101'$$,
+  '42501', NULL,
+  'rpc-only: a team member''s direct UPDATE is refused'
+);
+SELECT throws_ok(
+  $$DELETE FROM public.project_ffe_item_images
+    WHERE item_id = '80700000-0000-4000-8000-000000000101'$$,
+  '42501', NULL,
+  'rpc-only: a team member''s direct DELETE is refused'
+);
+SELECT is(
+  (SELECT count(*)::integer FROM public.project_ffe_item_images
+   WHERE item_id = '80700000-0000-4000-8000-000000000101' AND is_primary),
+  1,
+  'rpc-only: a team member still reads the pictures, one primary'
 );
 RESET ROLE;
 

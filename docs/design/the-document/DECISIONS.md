@@ -11477,4 +11477,21 @@ F5: the count is the number of hours whose `rate_source` this call moved off 'no
 
 **Open, inherited and outside US-36 (F4).** P-4 is not whole for priced hours. Suppose a rate is later backdated over a priced hour's `started_at`. The hour's next watched edit then re-prices it, and a duration correction is enough. SQ-1079 measured a K8 price of 15000 becoming 7000 this way. The cause is 00618's delta 5, which keeps a snapshot only when the chain answers 'none' or the row is pre-00600 legacy. It applies to every hour priced at a studio member rate, not only K8's. 00797 does not change it. The K8 test claims only that an edit keeps the K8 price while `started_at` still answers 'none'. Owed: a ruling on whether a backdated rate may ever reach an hour that is already priced.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · last id = R177*
+### R179 · US-37 #2 — an upload never linked to a piece can stay in the bucket; no cleanup yet — accepted debt, oracle ruling on SQ-1127, 2026-10-17
+
+**Accepted as debt (SQ-1127 F7, LOW).** `useUploadFfeItemImage` stores the file in `project-item-images` first and then calls `add_ffe_item_image`. If that call fails, or the item is deleted while the upload is in flight, the stored object is never linked. A retry stores a new file under a new UUID. Nothing deletes the first one: the bucket has no delete policy, and unlink never removes a file (00807). So an unlinked object can stay in the public bucket for good. No cleanup job and no retry identity exist yet. A later cleanup must never delete a file after an ambiguous RPC transport failure, because the link may have landed.
+
+### R180 · US-37 #1/#2 — `project-item-images` is a PUBLIC bucket, for furnishing imagery only — oracle ruling on SQ-1127, 2026-10-17, for Kody
+
+**Accepted (SQ-1127 public-bucket note).** Like `product-images` (00057) and `proposal-assets` (00099), `project-item-images` is read by URL with no membership check, so client pages can render the stored URL directly. UUID paths make a URL hard to guess, but anyone holding a URL keeps access after the picture is unlinked, the item is removed, or a seat is revoked. Entitlement-based access to the bytes is not promised. The bucket is for furnishing imagery: library and maker photos of a piece. It is not for room or site photos. Those stay in private buckets such as `room-renders` (00580), which signs every read. Listing, upload and replace are still limited to the job's studio leg (`can_buy_for_project`) on `${project_id}/…`.
+
+### R181 · The client readers' access gate leaked to outsiders and other studios — inherited from 00755, live on Strata until 00807 ships — SQ-1128, 2026-10-17, for Kody's awareness
+
+**Repaired in 00807 (SQ-1127 F1/F2, HIGH).** `get_client_project_selections` (iOS) and `get_client_project_threshold` (the web Client Page) gated access with `NOT (client_id = caller OR is_studio_comember(designer_id))`, a test 00755 carried forward. It had two holes, and both are live on Strata today.
+
+- F1: on a job with no client, `client_id = caller` is NULL, so the test was NULL and the RAISE never ran. Any signed-in account could read that job's selections and executed lines.
+- F2: `is_studio_comember` admits anyone who shares any active studio with the lead. A lead seated in studios A and B exposed B's jobs to members of A.
+
+Neither reader returns cost, markup or retail. They do return names, rooms, quantities, client prices on executed lines and, from 00807, the item's picture URLs. 00807 replaces the test with `NOT COALESCE(client_id = caller OR can_buy_for_project(project), false)`. The readers are otherwise unchanged. `can_buy_for_project` (00702) admits the lead, an active non-guest member of the job's own studio, and, on a legacy job with no studio, the lead and her co-members. `supabase/tests/ffe/us37_item_images_test.sql` covers it: a stranger on a client-less job and an A-only caller on a B job are refused, while the job's studio teammate, its client and a legacy lead still read. No access log was searched for past reads.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R179 · R180 · R181 · last id = R181 (R178 is SQ-1122's)*

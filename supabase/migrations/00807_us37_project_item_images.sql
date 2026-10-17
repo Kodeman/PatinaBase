@@ -16,9 +16,13 @@
 --    unique index allows one primary per item; the RPCs keep exactly one
 --    whenever the item has pictures. project_id is DERIVED from the item by a
 --    BEFORE trigger, so a row can never claim another job's item.
---    RLS: the FF&E studio leg's predicate, can_buy_for_project(project_id)
---    (00721 project_ffe_items_studio_rw; it includes the owner). No client
---    policy: clients read pictures only through the curated readers below.
+--    READ: RLS on the FF&E studio leg's predicate, can_buy_for_project(
+--    project_id) (00721 project_ffe_items_studio_rw; it includes the owner).
+--    No client policy: clients read pictures only through the curated
+--    readers below. WRITE: the four RPCs only (SQ-1128 F5). authenticated
+--    holds SELECT alone, and there is no write policy, so a direct INSERT,
+--    UPDATE or DELETE gets 42501 and cannot break the one-primary and
+--    position invariants the RPCs keep.
 -- 2. Snapshot on add. An AFTER INSERT OR UPDATE OF product_id trigger on
 --    project_ffe_items copies products.images in array order (blank entries
 --    skipped; position from 0; the first is primary; source 'library') when
@@ -43,8 +47,11 @@
 --      unlink_ffe_item_image(image) — deletes the link row and NEVER the
 --        stored file; when it was the primary, the first remaining picture
 --        (by position) becomes primary.
---    Each locks the item row (FOR NO KEY UPDATE), so parallel uploads cannot
---    both become primary or share a position.
+--    Each locks the job's projects row FOR KEY SHARE and THEN the item row
+--    FOR NO KEY UPDATE (SQ-1128 F3; see section 6), so parallel uploads
+--    cannot both become primary or share a position. set primary and unlink
+--    re-read the picture under those locks and refuse one that vanished or
+--    changed item or job while they waited (F6).
 -- 5. Storage. 00433's project-ffe-working bucket does not fit: it is private
 --    (a stored url would need signing on every read), its policies still ask
 --    is_studio_comember(owner) rather than can_buy_for_project, and it holds
@@ -64,10 +71,25 @@
 --        read by useClientSelections; base 00755:474). Its imageUrl was the
 --        LIVE products.images[1]; it is now the item's primary picture.
 --    No raw table access is widened.
+--    Both readers' access gate is repaired too (SQ-1128 F1/F2). 00755's gate
+--    was NOT(client_id = actor OR is_studio_comember(designer_id)). A NULL
+--    client_id made it NULL, so an outsider passed. is_studio_comember
+--    admits anyone who shares ANY active studio with the lead, not only the
+--    job's studio. The gate is now NOT COALESCE(client_id = actor OR
+--    can_buy_for_project(project), false). can_buy_for_project keeps the
+--    lead, the job's own studio, and a legacy studio-less job's lead.
+-- 7. The spec book publishes the item's own pictures (SQ-1128 F4).
+--    _spec_book_current_item_snapshots's selectedMedia falls back to the
+--    item's picture rows (primary first, then by position) before
+--    products.images, which it uses only when the item has no rows. An
+--    explicit project_ffe_specs.selected_media still wins. This is the
+--    workbench preview's order (use-spec-books.ts, spec-book-workspace.tsx).
+--    Issued revisions keep their frozen snapshots; nothing here rewrites them.
 --
 -- CREATE OR REPLACE bases, each the newest body, full copy plus the change:
 --   get_client_project_selections  00441 → 00745:127 → 00755:432
 --   get_client_project_threshold   00441 → 00745:168 → 00755:474
+--   _spec_book_current_item_snapshots 00380 → … → 00751:277 → 00767:661
 --
 -- Not changed here: _furnishing_authorization_item_snapshot (00744:60) still
 -- freezes productImageUrl, which no client reader returns; review editions
@@ -120,8 +142,8 @@ CREATE INDEX IF NOT EXISTS idx_project_ffe_item_images_project
 COMMENT ON TABLE public.project_ffe_item_images IS
   'A project item''s own pictures (00807, US-37 D1/D2): a snapshot of products.images taken when the '
   'piece is added, plus uploads. One primary per item (partial unique index). project_id is derived '
-  'from the item. Read/write: can_buy_for_project. Clients read through the curated readers only. '
-  'Deleting a row never deletes a stored file.';
+  'from the item. Read: can_buy_for_project. Write: the 00807 RPCs only (authenticated holds SELECT '
+  'alone). Clients read through the curated readers only. Deleting a row never deletes a stored file.';
 
 -- project_id always comes from the item.
 CREATE OR REPLACE FUNCTION public.project_ffe_item_images_derive_project()
@@ -150,14 +172,16 @@ CREATE TRIGGER trg_project_ffe_item_images_derive_project
 
 ALTER TABLE public.project_ffe_item_images ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS project_ffe_item_images_studio_rw ON public.project_ffe_item_images;
-CREATE POLICY project_ffe_item_images_studio_rw ON public.project_ffe_item_images
-  FOR ALL TO authenticated
-  USING (public.can_buy_for_project(project_ffe_item_images.project_id))
-  WITH CHECK (public.can_buy_for_project(project_ffe_item_images.project_id));
+-- Read only. Every write goes through the RPCs in section 6 (SECURITY
+-- DEFINER), which keep one primary and distinct positions; there is no write
+-- policy and no write grant for an API role.
+DROP POLICY IF EXISTS project_ffe_item_images_studio_select ON public.project_ffe_item_images;
+CREATE POLICY project_ffe_item_images_studio_select ON public.project_ffe_item_images
+  FOR SELECT TO authenticated
+  USING (public.can_buy_for_project(project_ffe_item_images.project_id));
 
 REVOKE ALL ON TABLE public.project_ffe_item_images FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.project_ffe_item_images TO authenticated;
+GRANT SELECT ON TABLE public.project_ffe_item_images TO authenticated;
 GRANT ALL ON TABLE public.project_ffe_item_images TO service_role;
 
 -- ─── 3. The designer's computed fields ──────────────────────────────────────
@@ -317,6 +341,15 @@ SELECT public._backfill_ffe_item_library_images();
 -- ─── 6. The picture acts ────────────────────────────────────────────────────
 
 -- The gate: the item row, locked, when the caller is on the job's studio leg.
+--
+-- LOCK ORDER (SQ-1128 F3). Every picture act locks the job's projects row FOR
+-- KEY SHARE first and the item row second. That is the order and strength of
+-- 00808's job label lock (_ffe_lock_job_labels), so every FF&E writer agrees:
+-- job, then item. Furnishings execution (00578
+-- _execute_furnishings_authorization_*) takes the projects row FOR UPDATE and
+-- then updates the item. If a picture act locked the item first, its INSERT's
+-- foreign-key KEY SHARE on the projects row would wait on execution, which
+-- would be waiting on the item: a deadlock (40P01).
 CREATE OR REPLACE FUNCTION public._ffe_item_images_require_team(p_item_id uuid)
 RETURNS public.project_ffe_items
 LANGUAGE plpgsql
@@ -324,20 +357,63 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $$
 DECLARE
+  v_project_id uuid;
   v_item public.project_ffe_items%ROWTYPE;
 BEGIN
-  SELECT * INTO v_item FROM public.project_ffe_items WHERE id = p_item_id;
-  IF NOT FOUND OR auth.uid() IS NULL OR NOT public.can_buy_for_project(v_item.project_id) THEN
+  SELECT item.project_id INTO v_project_id
+  FROM public.project_ffe_items AS item WHERE item.id = p_item_id;
+  IF NOT FOUND OR auth.uid() IS NULL OR NOT public.can_buy_for_project(v_project_id) THEN
     RAISE EXCEPTION 'Only the studio on this job can change this piece''s pictures.'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
+  PERFORM 1 FROM public.projects WHERE id = v_project_id FOR KEY SHARE;
   -- Serialize picture acts on one item: one primary, no shared position.
-  PERFORM 1 FROM public.project_ffe_items WHERE id = p_item_id FOR NO KEY UPDATE;
+  SELECT * INTO v_item FROM public.project_ffe_items WHERE id = p_item_id FOR NO KEY UPDATE;
+  -- The item was removed, or moved to another job, while this waited.
+  IF NOT FOUND OR v_item.project_id IS DISTINCT FROM v_project_id THEN
+    RAISE EXCEPTION 'Only the studio on this job can change this piece''s pictures.'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
   RETURN v_item;
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public._ffe_item_images_require_team(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- A picture act on one picture (set primary, unlink): the gate on the
+-- picture's item, then the picture re-read under those locks (SQ-1128 F6).
+-- A picture that vanished, or whose item or job changed while the act waited,
+-- is refused rather than changed under another job's authority.
+CREATE OR REPLACE FUNCTION public._ffe_item_images_require_image(p_image_id uuid)
+RETURNS public.project_ffe_item_images
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+DECLARE
+  v_seen public.project_ffe_item_images%ROWTYPE;
+  v_image public.project_ffe_item_images%ROWTYPE;
+BEGIN
+  SELECT * INTO v_seen FROM public.project_ffe_item_images WHERE id = p_image_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'That picture is no longer on this piece.'
+      USING ERRCODE = 'no_data_found';
+  END IF;
+  PERFORM public._ffe_item_images_require_team(v_seen.item_id);
+
+  SELECT * INTO v_image FROM public.project_ffe_item_images WHERE id = p_image_id;
+  IF NOT FOUND
+     OR v_image.item_id IS DISTINCT FROM v_seen.item_id
+     OR v_image.project_id IS DISTINCT FROM v_seen.project_id THEN
+    RAISE EXCEPTION 'That picture is no longer on this piece.'
+      USING ERRCODE = 'no_data_found';
+  END IF;
+  RETURN v_image;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._ffe_item_images_require_image(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION public.add_ffe_item_image(
@@ -397,12 +473,7 @@ AS $$
 DECLARE
   v_image public.project_ffe_item_images%ROWTYPE;
 BEGIN
-  SELECT * INTO v_image FROM public.project_ffe_item_images WHERE id = p_image_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'That picture is no longer on this piece.'
-      USING ERRCODE = 'no_data_found';
-  END IF;
-  PERFORM public._ffe_item_images_require_team(v_image.item_id);
+  v_image := public._ffe_item_images_require_image(p_image_id);
 
   -- Two statements: the one-primary index is checked row by row.
   UPDATE public.project_ffe_item_images
@@ -453,7 +524,7 @@ BEGIN
   UPDATE public.project_ffe_item_images AS image
   SET position = (listed.ordinality - 1)::integer
   FROM unnest(p_image_ids) WITH ORDINALITY AS listed(id, ordinality)
-  WHERE image.id = listed.id;
+  WHERE image.id = listed.id AND image.item_id = v_item.id;
 
   RETURN QUERY
   SELECT image.* FROM public.project_ffe_item_images AS image
@@ -478,12 +549,7 @@ AS $$
 DECLARE
   v_image public.project_ffe_item_images%ROWTYPE;
 BEGIN
-  SELECT * INTO v_image FROM public.project_ffe_item_images WHERE id = p_image_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'That picture is no longer on this piece.'
-      USING ERRCODE = 'no_data_found';
-  END IF;
-  PERFORM public._ffe_item_images_require_team(v_image.item_id);
+  v_image := public._ffe_item_images_require_image(p_image_id);
 
   -- The link row only. The stored file stays where it is.
   DELETE FROM public.project_ffe_item_images WHERE id = p_image_id
@@ -564,7 +630,11 @@ DECLARE v_actor uuid:=auth.uid(); v_project public.projects%ROWTYPE;
 BEGIN
   IF v_actor IS NULL THEN RAISE EXCEPTION 'authentication required' USING ERRCODE='insufficient_privilege'; END IF;
   SELECT * INTO v_project FROM public.projects WHERE id=p_project_id;
-  IF NOT FOUND OR NOT(v_project.client_id=v_actor OR public.is_studio_comember(v_project.designer_id)) THEN
+  -- SQ-1128 F1/F2: null-safe (a NULL client_id never passes) and bound to the
+  -- job's own studio. 00755 asked is_studio_comember(designer_id).
+  IF NOT FOUND OR NOT COALESCE(
+    v_project.client_id=v_actor OR public.can_buy_for_project(v_project.id), false
+  ) THEN
     RAISE EXCEPTION 'project not found or not accessible' USING ERRCODE='insufficient_privilege';
   END IF;
   RETURN jsonb_build_object('projectId',v_project.id,'projectName',v_project.name,'selections',COALESCE((
@@ -614,14 +684,17 @@ DECLARE
   v_actor uuid := auth.uid();
   v_project public.projects%ROWTYPE;
 BEGIN
-  -- 00441's preamble, verbatim.
+  -- 00441's preamble, with the access test repaired (SQ-1128 F1/F2): null-safe
+  -- (a NULL client_id never passes) and bound to the job's own studio. 00755
+  -- asked is_studio_comember(designer_id).
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'authentication required' USING ERRCODE = 'insufficient_privilege';
   END IF;
   SELECT * INTO v_project FROM public.projects WHERE id = p_project_id;
-  IF NOT FOUND OR NOT (
+  IF NOT FOUND OR NOT COALESCE(
     v_project.client_id = v_actor
-    OR public.is_studio_comember(v_project.designer_id)
+    OR public.can_buy_for_project(v_project.id),
+    false
   ) THEN
     RAISE EXCEPTION 'project not found or not accessible'
       USING ERRCODE = 'insufficient_privilege';
@@ -809,4 +882,187 @@ GRANT EXECUTE ON FUNCTION public.get_client_project_threshold(uuid)
   TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.get_client_project_threshold(uuid) IS
-  'The Client Page''s reader: what a client authorized on a project — furnishings snapshot lines (kind furnishings, money from the signed furnishing_authorization_items snapshot) and trade scope presence lines (kind trade, with tradeJourney). Trade cost, vendor cost, markup, purchase-order fields and bids never appear, and no live unsigned project_ffe_items money on any path. 00580 adds four room facts to each line — conceptRenderUrl, conceptRenderCaption, conceptRenderUploadedAt, conceptRenderUploadedBy — off the project_rooms join both branches already make; conceptRenderUrl is an object path inside the PRIVATE room-renders bucket, not a URL. 00745 adds unit and rooms [{name, quantity, unit}] to each line (furnishings from the frozen snapshot''s placements, trade from the live line); roomName stays the primary room. rough_cents, need_label, line_kind, link_kind and parent_ffe_item_id never appear. Carries 00423''s client-facing payload over 00441''s authorization preamble, key names and ordering. 00807: imageUrl is the item''s own primary picture (project_ffe_item_images), no longer products.images[1]; primaryImageUrl and imageUrls (position order) are added. Storage paths never appear.';
+  'The Client Page''s reader: what a client authorized on a project — furnishings snapshot lines (kind furnishings, money from the signed furnishing_authorization_items snapshot) and trade scope presence lines (kind trade, with tradeJourney). Trade cost, vendor cost, markup, purchase-order fields and bids never appear, and no live unsigned project_ffe_items money on any path. 00580 adds four room facts to each line — conceptRenderUrl, conceptRenderCaption, conceptRenderUploadedAt, conceptRenderUploadedBy — off the project_rooms join both branches already make; conceptRenderUrl is an object path inside the PRIVATE room-renders bucket, not a URL. 00745 adds unit and rooms [{name, quantity, unit}] to each line (furnishings from the frozen snapshot''s placements, trade from the live line); roomName stays the primary room. rough_cents, need_label, line_kind, link_kind and parent_ffe_item_id never appear. Carries 00423''s client-facing payload over 00441''s authorization preamble, key names and ordering. 00807: imageUrl is the item''s own primary picture (project_ffe_item_images), no longer products.images[1]; primaryImageUrl and imageUrls (position order) are added. Storage paths never appear. 00807 (SQ-1128) also repairs the access test: the project''s client, or can_buy_for_project (the lead or the job''s own studio), null-safe.';
+
+-- ─── 10. _spec_book_current_item_snapshots (base 00767:661) ──────────────────
+-- SQ-1128 F4. 00767's body verbatim apart from one edit: selectedMedia falls
+-- back to the item's own pictures (primary first, then by position) before
+-- products.images. An explicit project_ffe_specs.selected_media still wins.
+-- prepare_spec_book_issue copies item_snapshot from here into
+-- spec_book_revision_items, so issued revisions keep the snapshot they froze.
+-- Grants restated unchanged (00767:822-824): service_role only.
+CREATE OR REPLACE FUNCTION public._spec_book_current_item_snapshots(p_spec_book_id uuid)
+RETURNS TABLE (
+  ffe_item_id uuid,
+  item_type text,
+  document_code text,
+  chapter_position integer,
+  item_position integer,
+  item_snapshot jsonb,
+  content_hash text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+  WITH source AS (
+    SELECT
+      i.id AS ffe_item_id,
+      i.item_type,
+      i.doc_code,
+      COALESCE(c.position, 2147483647) AS chapter_position,
+      s.position AS item_position,
+      jsonb_strip_nulls(jsonb_build_object(
+        'ffeItemId', i.id,
+        'itemType', i.item_type,
+        'documentCode', i.doc_code,
+        'name', i.name,
+        'needLabel', CASE WHEN t.primary_ffe_item_id = i.id THEN NULLIF(t.need_label, i.name) END,
+        'projectId', i.project_id,
+        'chapterId', c.id,
+        'room', CASE WHEN r.id IS NULL THEN NULL ELSE jsonb_build_object(
+          'id', r.id, 'name', r.name
+        ) END,
+        'lineGroup', CASE WHEN lg.id IS NULL THEN NULL ELSE jsonb_build_object(
+          'id', lg.id, 'name', lg.name
+        ) END,
+        'placements', pl.placements,
+        'quantity', i.quantity,
+        'unit', NULLIF(i.unit, 'each'),
+        'lineKind', NULLIF(i.line_kind, 'goods'),
+        'parentFfeItemId', CASE WHEN i.line_kind = 'labor' THEN i.parent_ffe_item_id END,
+        'category', i.ffe_category,
+        'selectedMedia', CASE
+          WHEN jsonb_array_length(sp.selected_media) > 0 THEN sp.selected_media
+          -- 00807 (SQ-1128 F4): the item's own pictures, the primary first;
+          -- the live product's images only when the item has none.
+          WHEN own_images.urls IS NOT NULL THEN to_jsonb(own_images.urls)
+          ELSE COALESCE(to_jsonb(p.images), '[]'::jsonb)
+        END,
+        'selection', jsonb_build_object(
+          'sku', public._spec_book_resolve_field(
+            to_jsonb(sp.sku), i.custom_fields->'sku', to_jsonb(p.sku),
+            p.capture_provenance#>'{studioCustom,sku}', sp.na_declarations->'sku',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'sku', '')::timestamptz,
+            sp.field_provenance->>'sku'
+          ),
+          'finish', public._spec_book_resolve_field(
+            to_jsonb(sp.finish), i.custom_fields->'finish', to_jsonb(p.finish),
+            p.capture_provenance#>'{studioCustom,finish}', sp.na_declarations->'finish',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'finish', '')::timestamptz,
+            sp.field_provenance->>'finish'
+          ),
+          'material', public._spec_book_resolve_field(
+            to_jsonb(sp.material), i.custom_fields->'material', to_jsonb(p.materials),
+            p.capture_provenance#>'{studioCustom,material}', sp.na_declarations->'material',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'material', '')::timestamptz,
+            sp.field_provenance->>'material'
+          ),
+          'colorFabric', public._spec_book_resolve_field(
+            to_jsonb(sp.color_fabric), i.custom_fields->'colorFabric', to_jsonb(p.colors),
+            p.capture_provenance#>'{studioCustom,colorFabric}', sp.na_declarations->'colorFabric',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'colorFabric', '')::timestamptz,
+            sp.field_provenance->>'colorFabric'
+          ),
+          'dimensions', public._spec_book_resolve_field(
+            sp.selected_dimensions, i.custom_fields->'dimensions', p.dimensions,
+            p.capture_provenance#>'{studioCustom,dimensions}', sp.na_declarations->'dimensions',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'dimensions', '')::timestamptz,
+            sp.field_provenance->>'dimensions'
+          ),
+          'exactLocation', public._spec_book_resolve_field(
+            to_jsonb(sp.exact_location), i.custom_fields->'exactLocation', NULL,
+            p.capture_provenance#>'{studioCustom,exactLocation}', sp.na_declarations->'exactLocation',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'exactLocation', '')::timestamptz,
+            sp.field_provenance->>'exactLocation'
+          )
+        ),
+        'notes', jsonb_build_object(
+          'client', sp.client_notes,
+          'trade', sp.trade_notes,
+          'install', sp.install_notes,
+          'private', i.notes,
+          'care', sp.care_notes,
+          'warranty', sp.warranty_notes
+        ),
+        'pricing', jsonb_build_object(
+          'clientPriceCents', i.unit_price_cents,
+          'tradePriceCents', i.trade_price_cents,
+          'markupPercent', i.markup_percent,
+          'currency', i.currency
+        ),
+        'vendor', jsonb_build_object(
+          'id', i.vendor_id,
+          'name', i.vendor_name,
+          'internalContact', p.vendor_contact
+        ),
+        'configuration', CASE WHEN sp.configuration_id IS NULL THEN NULL ELSE jsonb_build_object(
+          'id', sp.configuration_id,
+          'snapshot', sp.configuration_snapshot,
+          'snapshotHash', sp.configuration_snapshot_hash,
+          'lockedAt', sp.configuration_locked_at
+        ) END,
+        'provenance', sp.field_provenance,
+        'sourceVerification', sp.source_verifications,
+        'naDeclarations', sp.na_declarations,
+        'readinessStatus', sp.readiness_status,
+        'rowVersion', sp.row_version
+      )) AS snapshot
+    FROM public.spec_book_item_settings s
+    JOIN public.spec_books b ON b.id = s.spec_book_id
+    JOIN public.project_ffe_items i ON i.id = s.ffe_item_id
+    JOIN public.project_ffe_specs sp ON sp.ffe_item_id = i.id
+    LEFT JOIN public.spec_book_chapters c ON c.id = s.chapter_id
+    LEFT JOIN public.project_rooms r ON r.id = i.project_room_id
+    LEFT JOIN public.products p ON p.id = i.product_id
+    LEFT JOIN public.project_ffe_selection_threads t ON t.id = i.selection_thread_id
+    LEFT JOIN public.project_line_groups lg ON lg.id = i.line_group_id
+    LEFT JOIN LATERAL (
+      SELECT CASE WHEN count(*) > 1 THEN jsonb_agg(jsonb_build_object(
+          'roomName', pr.name,
+          'quantity', fp.quantity,
+          'areaNote', fp.area_note
+        ) ORDER BY fp.sort_order, fp.created_at, fp.id)
+      END AS placements
+      FROM public.project_ffe_placements fp
+      JOIN public.project_rooms pr ON pr.id = fp.project_room_id
+      WHERE fp.ffe_item_id = i.id
+    ) pl ON true
+    -- 00807: primary_image_url's order, so the first entry is the primary.
+    -- NULL when the item has no picture rows.
+    LEFT JOIN LATERAL (
+      SELECT array_agg(image.url ORDER BY image.is_primary DESC, image.position,
+                       image.created_at, image.id) AS urls
+      FROM public.project_ffe_item_images image
+      WHERE image.item_id = i.id
+    ) own_images ON true
+    WHERE s.spec_book_id = p_spec_book_id
+      AND s.included
+      AND (c.id IS NULL OR c.included)
+      AND i.removed_at IS NULL
+  )
+  SELECT
+    source.ffe_item_id,
+    source.item_type,
+    source.doc_code,
+    source.chapter_position,
+    source.item_position,
+    source.snapshot,
+    encode(
+      extensions.digest(public._spec_book_canonical_json(source.snapshot - 'chapterId'), 'sha256'),
+      'hex'
+    )
+  FROM source
+  ORDER BY source.chapter_position, source.item_position, source.ffe_item_id;
+$$;
+
+REVOKE ALL ON FUNCTION public._spec_book_current_item_snapshots(uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public._spec_book_current_item_snapshots(uuid) TO service_role;
