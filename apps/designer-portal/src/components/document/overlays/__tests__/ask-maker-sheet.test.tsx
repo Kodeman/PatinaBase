@@ -212,12 +212,36 @@ describe('AskMakerSheet', () => {
     expect(document.getElementById(noteReasonId!)).toHaveTextContent('Add a note to continue.');
   });
 
+  it('gives a stacked second sheet its own field and reason ids', () => {
+    renderWithQuery(
+      <>
+        <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />
+        <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} followUp />
+      </>,
+    );
+    const ids = (els: HTMLElement[]) => new Set(els.map((el) => el.id));
+    expect(ids(screen.getAllByLabelText('Subject')).size).toBe(2);
+    expect(ids(screen.getAllByLabelText('Note')).size).toBe(2);
+    for (const subject of screen.getAllByLabelText('Subject')) {
+      fireEvent.change(subject, { target: { value: '' } });
+    }
+    const reasons = screen
+      .getAllByRole('button', { name: 'Hold for review', hidden: true })
+      .map((act) => act.getAttribute('aria-describedby'));
+    expect(new Set(reasons).size).toBe(2);
+    for (const id of reasons) {
+      expect(document.getElementById(id!)).toHaveTextContent('The note needs a subject and a body.');
+    }
+  });
+
   it('opens a window per missing note field and lifts each as it is filled', async () => {
     renderWithQuery(
       <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />,
     );
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: '' } });
     fireEvent.change(screen.getByLabelText('Note'), { target: { value: '' } });
+    // The sheet lands focus on the note in a frame; settle it before the press.
+    await waitFor(() => expect(screen.getByLabelText('Note')).toHaveFocus());
     fireEvent.click(screen.getByRole('button', { name: 'Hold for review' }));
 
     await waitFor(() =>
@@ -227,7 +251,14 @@ describe('AskMakerSheet', () => {
         ),
       ).toEqual(['ask-maker-subject', 'ask-maker-body']),
     );
+    const subject = screen.getByLabelText('Subject');
+    expect(subject.closest('[inert]')).toBeNull();
+    expect(screen.getByText('Subject').closest('[inert]')).toBeNull();
+    expect(document.getElementById(subject.getAttribute('aria-describedby')!)!.closest('[inert]')).toBeNull();
+    await waitFor(() => expect(subject).toHaveFocus());
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Arrival date' } });
+    // A filled field keeps its window while it holds focus; moving on lifts it.
+    act(() => screen.getByLabelText('Note').focus());
     await waitFor(() =>
       expect(
         Array.from(document.querySelectorAll('[data-hold-spotlight-window]')).map((el) =>

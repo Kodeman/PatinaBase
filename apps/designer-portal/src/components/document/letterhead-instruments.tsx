@@ -698,21 +698,19 @@ export function LetterheadInstruments({
             onRepair={() => setLinking(true)}
             ask={
               askLead && linkHold !== 'lead_not_in_studio' ? (
-                <span className="inline-flex flex-col items-start">
+                <span id={`${messageReasonId}-fix`} className="inline-flex flex-col items-start">
                   <span className="px-[6px] text-[11.5px] leading-tight text-[var(--text-muted)]">
                     “<span ref={askNoteRef}>{askNote}</span>”
                   </span>
-                  <span id={`${messageReasonId}-fix`}>
-                    <CopyAct
-                      text={askNote}
-                      selectRef={askNoteRef}
-                      actionKey="copy-link-client-note"
-                      surfaceKey="open-document"
-                      regionKey="letterhead-actions"
-                    >
-                      Copy a note
-                    </CopyAct>
-                  </span>
+                  <CopyAct
+                    text={askNote}
+                    selectRef={askNoteRef}
+                    actionKey="copy-link-client-note"
+                    surfaceKey="open-document"
+                    regionKey="letterhead-actions"
+                  >
+                    Copy a note
+                  </CopyAct>
                 </span>
               ) : null
             }

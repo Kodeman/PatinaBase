@@ -98,10 +98,11 @@ describe('Nudge {first} lands on the Message composer (F3-2)', () => {
       <QueryClientProvider client={new QueryClient()}>
         <div data-spotlight-frame="true">
           <LetterheadInstruments
-            projectId="proj-1"
+            proposalId="prop-1"
+            designerClientId="dc-1"
+            proposalStatus="draft"
             clientProfileId={null}
             clientName="Nora Chen"
-            designerClientId="dc-1"
           />
         </div>
       </QueryClientProvider>,
@@ -111,6 +112,8 @@ describe('Nudge {first} lands on the Message composer (F3-2)', () => {
     await waitFor(() =>
       expect(document.querySelector(`[data-hold-spotlight-window="${invite.id}"]`)).toBeInTheDocument(),
     );
+    expect(invite.closest('[inert]')).toBeNull();
+    await waitFor(() => expect(invite).toHaveFocus());
   });
 
   it('windows Copy a note for a project whose lead must link its client', async () => {
@@ -131,7 +134,11 @@ describe('Nudge {first} lands on the Message composer (F3-2)', () => {
     await waitFor(() =>
       expect(document.querySelector(`[data-hold-spotlight-window="${fixId}"]`)).toBeInTheDocument(),
     );
-    expect(screen.getByRole('button', { name: 'Copy a note' })).toBeInTheDocument();
+    const copy = screen.getByRole('button', { name: 'Copy a note' });
+    const quoted = screen.getByText("Could you link a client to Chen Residence? I'd like to message them.");
+    expect(copy.closest('[inert]')).toBeNull();
+    expect(quoted.closest('[inert]')).toBeNull();
+    await waitFor(() => expect(copy).toHaveFocus());
   });
 
   it('opens the composer with focus in its note, the overdue decisions named', async () => {

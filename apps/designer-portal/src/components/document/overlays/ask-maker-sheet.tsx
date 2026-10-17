@@ -198,6 +198,9 @@ export function AskMakerSheet({
   const bodyFixId = `${instanceId}-ask-maker-body-fix`;
   const subjectReasonId = `${instanceId}-ask-maker-subject-reason`;
   const bodyReasonId = `${instanceId}-ask-maker-body-reason`;
+  const subjectId = `${instanceId}-ask-maker-subject`;
+  const bodyId = `${instanceId}-ask-maker-body`;
+  const holdReasonId = `${instanceId}-ask-maker-hold-reason`;
   const title = followUp ? NEED_ACT_LABELS.po_unacknowledged : 'Ask the maker for a date';
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
@@ -265,13 +268,13 @@ export function AskMakerSheet({
             </p>
             <div id={subjectFixId}>
               <label
-                htmlFor="ask-maker-subject"
+                htmlFor={subjectId}
                 className="mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
               >
                 Subject
               </label>
               <Input
-                id="ask-maker-subject"
+                id={subjectId}
                 ref={subjectRef}
                 value={subject}
                 maxLength={200}
@@ -282,13 +285,13 @@ export function AskMakerSheet({
             </div>
             <div id={bodyFixId}>
               <label
-                htmlFor="ask-maker-body"
+                htmlFor={bodyId}
                 className="mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
               >
                 Note
               </label>
               <Textarea
-                id="ask-maker-body"
+                id={bodyId}
                 ref={bodyRef}
                 rows={10}
                 value={body}
@@ -350,7 +353,7 @@ export function AskMakerSheet({
                         reason: 'Add a note to continue.',
                       }]),
                 ]}
-                aria-describedby={canHold ? undefined : 'ask-maker-hold-reason'}
+                aria-describedby={canHold ? undefined : holdReasonId}
                 loading={hold.isPending}
                 loadingLabel="Holding…"
                 onClick={() =>
@@ -376,7 +379,7 @@ export function AskMakerSheet({
               </DocumentAction>
             </DocumentActionGroup>
             {!canHold && (
-              <p id="ask-maker-hold-reason" className="text-[13px] text-[var(--text-muted)]">
+              <p id={holdReasonId} className="text-[13px] text-[var(--text-muted)]">
                 The note needs a subject and a body.
               </p>
             )}
@@ -426,7 +429,6 @@ function InstallReadingLive({
   // the sheet settles the review there instead of flipping it back to a compose.
   const [sheet, setSheet] = useState<{ held: ProcurementDraftRow | null } | null>(null);
   const actRef = useRef<HTMLButtonElement | null>(null);
-  const makerFixId = useId();
   const reasonId = useId();
   // US-19 F2-12 (one-voice, V9) — a named act is scored, never the flooded ink.
   const oneVoice = useFeatureFlag('one-voice').value === true;
@@ -570,7 +572,6 @@ function InstallReadingLive({
             </DocumentAction>
             {heldReason === NO_MAKER && (
               <DocumentAction
-                id={makerFixId}
                 ref={addMakerRef}
                 actionKey="install-reading-add-maker"
                 surfaceKey="project"

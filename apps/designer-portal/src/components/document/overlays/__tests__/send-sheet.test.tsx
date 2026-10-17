@@ -910,9 +910,8 @@ describe('SendSheet canonical client-copy validation', () => {
       fireEvent.change(screen.getByRole('textbox', { name: 'CC (optional)' }), {
         target: { value: 'not-an-email' },
       });
-      expectHeldWithReason(send, 'Correct the CC address first.');
-      expect(screen.getByText('Correct the CC address first.')).toBeInTheDocument();
-      const cc = screen.getByRole('textbox', { name: 'CC (optional)' });
+      expectHeldWithReason(send, 'Enter a valid CC email address before sending.');
+      expect(screen.queryByText('Correct the CC address first.')).toBeNull();
       fireEvent.click(send);
       await waitFor(() =>
         expect(document.querySelector('[data-hold-spotlight-window="send-sheet-cc-hold"]')).toBeInTheDocument(),
