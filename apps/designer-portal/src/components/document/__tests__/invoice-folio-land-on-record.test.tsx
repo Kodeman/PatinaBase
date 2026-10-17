@@ -49,7 +49,9 @@ jest.mock(
   { virtual: true },
 );
 
+// F3 (SQ-1249): the folio's Send reads the app's onlineManager before its fresh read.
 jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 

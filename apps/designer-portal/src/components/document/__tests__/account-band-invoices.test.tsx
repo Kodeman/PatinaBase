@@ -43,9 +43,10 @@ const mockAccountData = () => ({
 // this project has its client and studio, so Generate is not held.
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
-  useProjects: () => {
-    const data = [{ id: 'project-1', name: 'Lake House', client_id: 'client-1', studio_id: 'studio-1', designer_id: 'designer-1' }];
-    // SQ-1223 R4: Generate re-reads the projects before it drafts.
+  // F5 (SQ-1249): the draft hold reads the project's own entity, not the collection.
+  useProject: () => {
+    const data = { id: 'project-1', name: 'Lake House', client_id: 'client-1', studio_id: 'studio-1', designer_id: 'designer-1' };
+    // SQ-1223 R4: Generate re-reads the project before it drafts.
     return { data, refetch: async () => ({ data, isError: false }) };
   },
   useSessionUserId: () => null,

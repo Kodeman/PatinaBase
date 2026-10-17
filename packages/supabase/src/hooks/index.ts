@@ -1964,6 +1964,7 @@ export {
   useDeleteLineItem,
   useIssueInvoice,
   useSendInvoice,
+  InvoiceSendError,
   useChaseInvoice,
   useRecordPayment,
   useStartCheckout,

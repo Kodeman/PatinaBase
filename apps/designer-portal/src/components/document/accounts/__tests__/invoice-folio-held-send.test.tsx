@@ -140,7 +140,9 @@ jest.mock(
   { virtual: true },
 );
 
+// F3 (SQ-1249): the folio's Send reads the app's onlineManager before its fresh read.
 jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
@@ -242,6 +244,8 @@ it('K10: Add their email opens the household sheet above the folio on the email 
   await waitFor(() => expect(spotWindows()).toEqual([]));
   expect(sendAct()).not.toHaveAttribute('aria-disabled');
   expect(mockIssue).not.toHaveBeenCalled();
+  // F2 (SQ-1249): the issue rides invoice-send, so nothing sent is nothing issued.
+  expect(mockSend).not.toHaveBeenCalled();
 });
 
 it('K10 control: with an email on file, Send issues and sends', async () => {
@@ -256,8 +260,10 @@ it('K10 control: with an email on file, Send issues and sends', async () => {
   const confirm = await screen.findAllByRole('button', { name: 'Issue & send' });
   fireEvent.click(confirm[confirm.length - 1]);
 
-  await waitFor(() => expect(mockIssue).toHaveBeenCalledTimes(1));
+  // F2 (SQ-1249): one invoice-send request issues the draft and sends it.
   await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
+  expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ invoiceId: 'invoice-1', issue: true }));
+  expect(mockIssue).not.toHaveBeenCalled();
   expect(spotWindows()).toEqual([]);
 });
 
@@ -332,6 +338,8 @@ describe('SQ-1203 F3: a teammate-drawn draft reads the invoice designer’s book
     await waitFor(() => expect(spotWindows()).toEqual(['add-email']));
     expect(screen.getByRole('button', { name: 'Add their email' }).closest('[inert]')).toBeNull();
     expect(mockIssue).not.toHaveBeenCalled();
+    // F2 (SQ-1249): the issue rides invoice-send, so nothing sent is nothing issued.
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('a viewer whose studio RLS hides that row is held, told who can send it, with no fix', async () => {
@@ -374,6 +382,8 @@ it('SQ-1203 F6: once the saved email takes Add their email away, putting the she
   );
   await waitFor(() => expect(sendAct()).toHaveFocus());
   expect(mockIssue).not.toHaveBeenCalled();
+  // F2 (SQ-1249): the issue rides invoice-send, so nothing sent is nothing issued.
+  expect(mockSend).not.toHaveBeenCalled();
 });
 
 // SQ-1223 R1 reverses the old fail-open on purpose: unknown is held. An

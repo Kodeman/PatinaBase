@@ -1071,6 +1071,9 @@ const SEND_REFUSALS: Array<[RegExp, string]> = [
   [/^invoice_not_found$/, "This invoice couldn't be found. Reload the accounts page and try again."],
   [/^lookup_failed$/, "The invoice couldn't be loaded. Reload the folio and try again."],
   [/^(?:invoice_not_issued|Issue the invoice before sending\.)$/, "Issue the invoice before sending it."],
+  // Send-on-draft issues in the same request (K10): a draft already issued elsewhere, or an issue refused.
+  [/^(?:invoice_not_draft|This invoice was already issued\.)$/, "This invoice was already issued. Reload the folio to resend it."],
+  [/^issue_failed$/, "The invoice couldn't be issued. Reload the folio and try again."],
   [/^(?:invoice_void|A voided invoice cannot be sent\.)$/, "This invoice was voided and can't be sent."],
   [
     /^(?:invoice_not_open|Reminders can only be sent on open \(sent or partially paid\) invoices\.)$/,

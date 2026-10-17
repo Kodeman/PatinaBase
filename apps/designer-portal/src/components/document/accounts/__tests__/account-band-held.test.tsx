@@ -42,7 +42,8 @@ jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
   // The projects read re-renders when the project changes, the way the
   // projects invalidation does after a client is linked.
-  useProjects: () => {
+  // F5 (SQ-1249): the draft hold reads the project's own entity, not the collection.
+  useProject: () => {
     const [, bump] = useReducer((n: number) => n + 1, 0);
     useEffect(() => {
       mockProjectListeners.add(bump);
@@ -50,9 +51,9 @@ jest.mock('@patina/supabase', () => ({
         mockProjectListeners.delete(bump);
       };
     }, []);
-    // SQ-1223 R4: Generate re-reads the projects before it drafts.
-    const refetch = async () => ({ data: [mockProject], isError: false });
-    return mockProjectsRead ? { ...mockProjectsRead, refetch } : { data: [mockProject], refetch };
+    // SQ-1223 R4: Generate re-reads the project before it drafts.
+    const refetch = async () => ({ data: mockProject, isError: false });
+    return mockProjectsRead ? { ...mockProjectsRead, refetch } : { data: mockProject, refetch };
   },
   useSessionUserId: () => mockViewer,
   useDocumentClientLinkHold: (projectId: string | null) => ({

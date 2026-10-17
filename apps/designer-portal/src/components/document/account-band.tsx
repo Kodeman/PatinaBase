@@ -16,9 +16,10 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   useDocumentClientLinkHold,
-  useProjects,
+  useProject,
   useSessionUserId,
 } from '@patina/supabase';
+import { OfflineRefusal, readWhileOnline } from '@/lib/react-query';
 import {
   exportAccountsQbo,
   useAccountPage,
@@ -76,20 +77,22 @@ const PROJECT_UNREAD = "This project couldn't be read. Reload the page to draft 
  *  project with no client (or no studio) holds Generate before anything is
  *  written. Same sentences and the same K5-gated fixes as the composer. */
 function useMilestoneDraftHold(projectId: string, wanted: boolean) {
+  // F5 — the project's own entity read, never a search of the collection,
+  // which can leave out a project that is plainly there.
   const {
-    data: projects,
-    isLoading: projectsLoading,
-    isFetching: projectsFetching,
-    isError: projectsFailed,
-    refetch: refetchProjects,
-  } = useProjects();
+    data: entity,
+    isLoading: projectLoading,
+    isFetching: projectFetching,
+    isError: projectFailed,
+    refetch: refetchProject,
+  } = useProject(wanted ? projectId : '');
   const viewerId = useSessionUserId();
-  const cachedProject = wanted ? (projects?.find((p) => p.id === projectId) ?? null) : null;
+  const cachedProject = wanted && entity?.id === projectId ? entity : null;
   // Readiness needs the project as it stands; without it the RPC would draft
   // unchecked. A re-read in flight, or a failed one, establishes nothing even
   // with an earlier answer cached (unknown = held).
-  const projectPending = !!(projectsLoading || projectsFetching);
-  const project = projectPending || projectsFailed ? null : cachedProject;
+  const projectPending = !!(projectLoading || projectFetching);
+  const project = projectPending || projectFailed ? null : cachedProject;
   const wait =
     wanted && !project
       ? projectPending
@@ -127,8 +130,14 @@ function useMilestoneDraftHold(projectId: string, wanted: boolean) {
   /** R4 — the one fresh read Generate makes before it drafts: the refusal
    *  sentence, or null when the client and studio are still there. */
   const confirmFresh = async (): Promise<string | null> => {
-    const fresh = await refetchProjects();
-    const current = fresh.isError ? undefined : fresh.data?.find((p) => p.id === projectId);
+    let fresh: Awaited<ReturnType<typeof refetchProject>>;
+    try {
+      // F3 — offline refuses before the read; a drop while it is out refuses then.
+      fresh = await readWhileOnline(() => refetchProject());
+    } catch (e) {
+      return e instanceof OfflineRefusal ? e.message : PROJECT_UNREAD;
+    }
+    const current = fresh.isError || fresh.data?.id !== projectId ? undefined : fresh.data;
     if (!current) return PROJECT_UNREAD;
     const name = current.name ?? 'This project';
     if (!current.client_id) return `${name} has no client yet.`;
@@ -277,6 +286,16 @@ function MilestoneRow({
   const updateTrigger = useUpdateMilestoneTrigger(projectId, { optimistic: ink });
   const generate = useGenerateMilestoneInvoice(projectId);
   const [invoiceNote, setInvoiceNote] = useState<string | null>(null);
+  // F4 — Generate's fresh read is under way: the press is committed and shows
+  // it. Unmounting the row retires the act before it can draft.
+  const [confirming, setConfirming] = useState(false);
+  const actToken = useRef(0);
+  useEffect(
+    () => () => {
+      actToken.current += 1;
+    },
+    [],
+  );
   const [triggerFailed, setTriggerFailed] = useState<MilestoneTriggerInput | null>(null);
   const setTrigger = (input: MilestoneTriggerInput) => {
     if (!ink) {
@@ -376,15 +395,19 @@ function MilestoneRow({
           surfaceKey="accounts"
           regionKey="payment-milestone"
           variant={headless ? 'secondary' : 'primary'}
-          disabled={generate.isPending || draftHolds.length > 0}
+          disabled={generate.isPending || confirming || draftHolds.length > 0}
           held={draftHolds.length > 0}
           holds={draftHolds}
           aria-describedby={draftHolds.length > 0 ? draftReasonIds : undefined}
-          loading={generate.isPending}
+          loading={generate.isPending || confirming}
           loadingLabel="Generating…"
           onClick={() => {
+            const token = ++actToken.current;
             setInvoiceNote(null);
+            setConfirming(true);
             void confirmDraft().then((refusal) => {
+              if (actToken.current !== token) return;
+              setConfirming(false);
               if (refusal) {
                 setInvoiceNote(refusal);
                 return;
@@ -392,7 +415,11 @@ function MilestoneRow({
               generate.mutate(m.id, {
                 onSuccess: (invoiceId) => openInvoiceFolio(invoiceId),
                 onError: (error) =>
-                  setInvoiceNote(billingRefusal('milestone', error).sentence),
+                  setInvoiceNote(
+                    error instanceof OfflineRefusal
+                      ? error.message
+                      : billingRefusal('milestone', error).sentence,
+                  ),
               });
             });
           }}

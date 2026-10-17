@@ -5,7 +5,7 @@
  * number and status stamp, the client and the project doorway, typed line
  * items (milestone / time / ffe / adhoc per 00178/00187), totals, payment
  * history, and the acts row — Issue & send · Record payment · Resend · Void ·
- * Print — reusing useInvoice / useIssueInvoice / useSendInvoice /
+ * Print — reusing useInvoice / useSendInvoice (which issues a draft, SQ-1249) /
  * useRecordPayment / useVoidInvoice 1:1 (the old Billing detail page's logic,
  * rebuilt in the charcoal/paper grammar: quiet inline confirmations, R83
  * terracotta inline errors, NO toasts, zero shadows).
@@ -28,10 +28,10 @@ import {
   useEmailDelivery,
   useInvoice,
   useInvoiceLink,
-  useIssueInvoice,
   useRecordPayment,
   useRegenerateInvoiceLink,
   useSendInvoice,
+  InvoiceSendError,
   useSessionUserId,
   useVoidInvoice,
   RegenerateInvoiceLinkError,
@@ -49,7 +49,8 @@ import {
   isInvoiceOverdue,
   timeLineHoursLabel,
 } from '@patina/shared';
-import { useQueryClient } from '@tanstack/react-query';
+import { onlineManager, useQueryClient } from '@tanstack/react-query';
+import { OFFLINE_NOT_SENT, OfflineRefusal, readWhileOnline } from '@/lib/react-query';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DeliveryWord } from '../delivery-word';
@@ -175,7 +176,6 @@ export function InvoiceFolio({
 }) {
   const qc = useQueryClient();
   const { data: invoice, isLoading, isError, refetch } = useInvoice(invoiceId);
-  const issue = useIssueInvoice({ errorSurface: 'inline' });
   const send = useSendInvoice({ errorSurface: 'inline' });
   const recordPayment = useRecordPayment({ errorSurface: 'inline' });
   const voidInvoice = useVoidInvoice({ errorSurface: 'inline' });
@@ -212,6 +212,16 @@ export function InvoiceFolio({
   const [householdOpen, setHouseholdOpen] = useState(false);
   // The fresh recipient read before issue is under way (doIssueAndSend).
   const [confirmingRecipient, setConfirmingRecipient] = useState(false);
+  // F4 — a Send press commits its act; closing the folio (or pointing it at
+  // another invoice) retires it, and the act checks after every await.
+  const actToken = useRef(0);
+  useEffect(
+    () => () => {
+      actToken.current += 1;
+      setConfirmingRecipient(false);
+    },
+    [invoiceId],
+  );
   const sendReasonId = useId();
   const sendHoldRef = useRef<HTMLDivElement | null>(null);
   const sendActRef = useRef<HTMLButtonElement | null>(null);
@@ -377,7 +387,6 @@ export function InvoiceFolio({
   const documentProjectId = invoice.project_id;
   const busy =
     confirmingRecipient ||
-    issue.isPending ||
     send.isPending ||
     recordPayment.isPending ||
     voidInvoice.isPending ||
@@ -392,12 +401,15 @@ export function InvoiceFolio({
     setAct((prev) => (prev === panel ? null : panel));
   };
 
-  // Issue & send: issue_invoice RPC first (number, totals, milestone flips),
-  // then the invoice-send edge fn. A send failure does NOT roll back the issue
-  // — the folio re-reads as issued and Resend carries the retry (old page 1:1).
+  // Issue & send: ONE invoice-send request with issue: true (F2) — the function
+  // resolves the recipient, issues the draft as the designer only once it has
+  // one (number, totals, milestone flips), and sends to that same address. A
+  // send failure does NOT roll back the issue — the folio re-reads as issued
+  // and Resend carries the retry (old page 1:1).
   // R2 — the one fresh, uncached read of the recipient immediately before
   // issue: the invoice (its profiles), then the newest relationship and its
-  // household. A read that fails, or answers no address, holds.
+  // household. A read that fails, or answers no address, holds. It is the
+  // folio's say-so only; the function's own resolution decides the issue.
   const readSendHoldFresh = async (): Promise<SendHold | null> => {
     const fresh = await refetch();
     const draft = fresh.isError ? undefined : fresh.data;
@@ -440,14 +452,28 @@ export function InvoiceFolio({
       setNote(`Could not issue — ${sendHold.reason}`);
       return;
     }
+    // F3 — offline, the press refuses before any read: an offline read pauses,
+    // and would resume into an irreversible issue on reconnect.
+    if (!onlineManager.isOnline()) {
+      setNote(`Could not issue — ${OFFLINE_NOT_SENT}`);
+      return;
+    }
+    const token = ++actToken.current;
+    const live = () => actToken.current === token;
     setNote(null);
     setConfirmingRecipient(true);
     let freshHold: SendHold | null;
     try {
-      freshHold = await readSendHoldFresh();
-    } finally {
-      setConfirmingRecipient(false);
+      freshHold = await readWhileOnline(readSendHoldFresh);
+    } catch (e) {
+      // The connection dropped while the read was out: the act expires.
+      freshHold =
+        e instanceof OfflineRefusal
+          ? { reason: e.message, repair: null, focusKey: 'send-recipient' }
+          : recipientUncheckedHold(recipientFirstName(invoice, household?.client_name));
     }
+    if (!live()) return;
+    setConfirmingRecipient(false);
     if (freshHold) {
       setNote(`Could not issue — ${freshHold.reason}`);
       return;
@@ -455,38 +481,35 @@ export function InvoiceFolio({
     setShowClientFallback(false);
     setToolbarCopyStatus('idle');
     setBandCopyStatus('idle');
-    let issued: Invoice;
-    try {
-      issued = await issue.mutateAsync({
-        invoiceId,
-        projectId: invoice.project_id ?? undefined,
-      });
-    } catch (e) {
-      setNote(`Could not issue — ${billingRefusal('issue', e).sentence}`);
-      return;
-    }
     try {
       const result = await send.mutateAsync({
         invoiceId,
         projectId: invoice.project_id ?? undefined,
         message: message.trim() || undefined,
+        issue: true,
       });
+      if (!live()) return;
       setNote(
         result.emailSent
-          ? `Invoice ${issued.invoice_number ?? ''} issued · emailed ${result.recipient}`.trim()
-          : `Invoice ${issued.invoice_number ?? ''} issued · email skipped`.trim(),
+          ? `Invoice ${result.invoiceNumber ?? ''} issued · emailed ${result.recipient}`.trim()
+          : `Invoice ${result.invoiceNumber ?? ''} issued · email skipped`.trim(),
       );
       setShowClientFallback(!result.emailSent);
       setAct(null);
       setMessage('');
     } catch (e) {
-      setNote(
-        `Could not send — issued as ${issued.invoice_number ?? 'this invoice'}. ${
-          billingRefusal('send', e).sentence
-        } Resend to retry.`,
-      );
-      setShowClientFallback(true);
-      setAct(null);
+      if (!live()) return;
+      if (e instanceof InvoiceSendError && e.issued) {
+        setNote(
+          `Could not send — issued as ${e.invoiceNumber ?? 'this invoice'}. ${
+            billingRefusal('send', e).sentence
+          } Resend to retry.`,
+        );
+        setShowClientFallback(true);
+        setAct(null);
+        return;
+      }
+      setNote(`Could not issue — ${e instanceof OfflineRefusal ? e.message : billingRefusal('send', e).sentence}`);
     }
   };
 
@@ -1127,6 +1150,9 @@ export function InvoiceFolio({
               <DocumentAction
                 actionKey="cancel-invoice-send"
                 variant="tertiary"
+                // F4 — a pressed Send is committed; it shows its pending state
+                // until it lands, and cannot be dismissed out from under it.
+                disabled={busy}
                 onClick={() => setAct(null)}
               >
                 never mind

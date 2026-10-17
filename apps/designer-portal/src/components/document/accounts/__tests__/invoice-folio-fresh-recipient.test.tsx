@@ -256,6 +256,8 @@ describe('SQ-1223 R2: a re-read establishes nothing, even with its answer cached
     fireEvent.click(sendAct());
     await waitFor(() => expect(spotWindows()).toEqual(['send-recipient']));
     expect(mockIssue).not.toHaveBeenCalled();
+    // F2 (SQ-1249): the issue rides invoice-send, so nothing sent is nothing issued.
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('holds Send on why after the household re-read fails, the cached address still in hand', async () => {
@@ -276,6 +278,8 @@ describe('SQ-1223 R2: a re-read establishes nothing, even with its answer cached
     expect(qc.getQueryState(householdKey('dc-1'))?.status).toBe('error');
     expect(qc.getQueryData<Row>(householdKey('dc-1'))?.client_email).toBe('elena@example.com');
     expect(mockIssue).not.toHaveBeenCalled();
+    // F2 (SQ-1249): the issue rides invoice-send, so nothing sent is nothing issued.
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('holds Send after the newest-relationship re-read fails, its cached row still in hand', async () => {
@@ -296,6 +300,8 @@ describe('SQ-1223 R2: a re-read establishes nothing, even with its answer cached
       'dc-1',
     );
     expect(mockIssue).not.toHaveBeenCalled();
+    // F2 (SQ-1249): the issue rides invoice-send, so nothing sent is nothing issued.
+    expect(mockSend).not.toHaveBeenCalled();
   });
 });
 
@@ -333,6 +339,8 @@ describe('SQ-1223 R2: issue reads the recipient fresh, uncached, first', () => {
       ),
     ).toBeInTheDocument();
     expect(mockIssue).not.toHaveBeenCalled();
+    // F2 (SQ-1249): the issue rides invoice-send, so nothing sent is nothing issued.
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('control: with the address still on file, the fresh read answers and Send issues once', async () => {
@@ -344,8 +352,10 @@ describe('SQ-1223 R2: issue reads the recipient fresh, uncached, first', () => {
     const before = reads;
     fireEvent.click(confirmAct());
 
-    await waitFor(() => expect(mockIssue).toHaveBeenCalledTimes(1));
+    // F2 (SQ-1249): one invoice-send request issues the draft and sends it.
     await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
+    expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ invoiceId: 'invoice-1', issue: true }));
+    expect(mockIssue).not.toHaveBeenCalled();
     expect(reads - before).toBe(2);
   });
 });
@@ -372,5 +382,7 @@ describe('SQ-1223 R3: a history edit that makes an older row the newest re-reads
     await waitFor(() => expect(sendAct()).toHaveAttribute('aria-disabled', 'true'));
     expect(reasonOf(sendAct())).toHaveTextContent("Add Elena's email to send this.");
     expect(mockIssue).not.toHaveBeenCalled();
+    // F2 (SQ-1249): the issue rides invoice-send, so nothing sent is nothing issued.
+    expect(mockSend).not.toHaveBeenCalled();
   });
 });

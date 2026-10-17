@@ -770,7 +770,8 @@ describe("billingRefusal", () => {
 
   it("maps every code and every literal detail invoice-send returns", () => {
     const source = readFileSync(
-      join(__dirname, "../../../../../../supabase/functions/invoice-send/index.ts"),
+      // F2 (SQ-1249): the flow moved to handler.ts, which also issues a draft.
+      join(__dirname, "../../../../../../supabase/functions/invoice-send/handler.ts"),
       "utf8",
     );
     const codes = Array.from(source.matchAll(/error:\s*'([a-zA-Z_]+)'/g), (m) => m[1]);
@@ -785,6 +786,8 @@ describe("billingRefusal", () => {
         "invoice_not_found",
         "lookup_failed",
         "invoice_not_issued",
+        "invoice_not_draft",
+        "issue_failed",
         "invoice_void",
         "invoice_not_open",
         "checkout_attempt_check_failed",
@@ -793,7 +796,7 @@ describe("billingRefusal", () => {
         "send_failed",
       ]),
     );
-    expect(details).toHaveLength(5);
+    expect(details).toHaveLength(6);
     for (const said of [...codes, ...details]) {
       expect(billingRefusal("send", said).sentence).not.toBe(GENERIC);
     }

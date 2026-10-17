@@ -150,6 +150,7 @@ import {
   type ComposerStageSlot,
   type ComposerStudio,
   type InvoiceBillingGap,
+  type InvoiceHold,
   type ParkedInvoiceComposer,
   type StudioInvoiceBlocker,
 } from "@/lib/document/invoice-composer";
@@ -207,15 +208,23 @@ export function InvoiceComposer({
     studioInvoiceOn && !flagLoading && !context.projectId;
   const studioMode = studioChoiceAvailable && target === STUDIO_TARGET;
 
-  const { data: projects, dataUpdatedAt: projectsUpdatedAt = 0 } =
-    useProjects();
+  const {
+    data: projects,
+    dataUpdatedAt: projectsUpdatedAt = 0,
+    isLoading: projectsLoading,
+    isFetching: projectsFetching,
+    isError: projectsFailed,
+  } = useProjects();
   const { data: organizations, isLoading: organizationsLoading } =
     useOrganizations();
   const { data: milestones } = useProjectPaymentMilestones(projectId);
   const { data: projectInvoices } = useProjectInvoices(projectId || null);
-  const { data: unbilledTime, isLoading: timeLoading } = useUnbilledTime(
-    projectId || null,
-  );
+  const {
+    data: unbilledTime,
+    isLoading: timeLoading,
+    isFetching: timeFetching,
+    isError: timeFailed,
+  } = useUnbilledTime(projectId || null);
   // HT-21 (W5) — names the composer's time rows: project_unbilled_time
   // deliberately carries no author name (00596's dropped profiles join), so
   // the roster (already-read, project-scoped, RLS-clean) supplies it.
@@ -863,8 +872,25 @@ export function InvoiceComposer({
     seatedMembers[0].user_id === viewerId;
   useEffect(() => setConfirmingName(false), [projectId]);
 
+  // F1 — readiness reads the project and its hours as they stand. A read still
+  // out (a first load, or a refetch over cached data) or a failed one
+  // establishes nothing, so no client is taken as linked from it: unknown = held.
+  const readBlocker: ComposerBlocker | null =
+    studioMode || !projectId
+      ? null
+      : projectsFailed
+        ? "project-unread"
+        : projectsLoading || projectsFetching
+          ? "project-pending"
+          : !selectedProject
+            ? "project-unread"
+            : timeFailed
+              ? "time-unread"
+              : timeLoading || timeFetching
+                ? "time-pending"
+                : null;
   // §A5 — the first unmet requirement; the held act names it and lands on it.
-  const { holds } = assessInvoiceReadiness({
+  const holds: InvoiceHold[] = readBlocker ? [] : assessInvoiceReadiness({
     clientLinked: !projectId || billingGap !== "no-client",
     canLinkClient,
     clientLinkHold: linkHold ?? null,
@@ -891,10 +917,10 @@ export function InvoiceComposer({
       projectName: selectedProject?.name ?? "This project", canLinkClient, leadLeftStudio, leadName,
       canNameStudio, soloOwnerUnstamped, hasStudioOwner, studioLoading: organizationsLoading,
     }),
-  });
+  }).holds;
   const readinessBlocker: ComposerBlocker | null =
     holds[0]?.kind === "nothing-selected" ? "lines" : holds[0]?.kind ?? null;
-  const blocker: ComposerBlocker | null = readinessBlocker ?? (studioMode
+  const blocker: ComposerBlocker | null = readBlocker ?? readinessBlocker ?? (studioMode
     ? studioInvoiceBlocker({ clientId: studioClientId, title, studioId, lines })
     : !projectId
       ? "no-project"
@@ -984,7 +1010,8 @@ export function InvoiceComposer({
       "Choose a project",
       () => forSelectRef.current?.parentElement,
     );
-  } else {
+  } else if (!readBlocker) {
+    // An unread project or its hours have no fix here, as a loading prefill.
     if (depositBlocked)
       ownHold("deposit", "Deposit", () =>
         depositPctRef.current?.closest('[role="radiogroup"]'),
@@ -2337,6 +2364,10 @@ type ComposerBlocker =
   | "billing-figures"
   | "deposit"
   | "prefill"
+  | "project-pending"
+  | "project-unread"
+  | "time-pending"
+  | "time-unread"
   | "rate-pending"
   | "price-line"
   | "send-no-recipient";
@@ -2379,6 +2410,14 @@ function blockerReason(
       return "Adjust the deposit before drafting.";
     case "prefill":
       return "Wait for the invoice details to finish loading.";
+    case "project-pending":
+      return "Checking this project before drafting its invoice.";
+    case "project-unread":
+      return "This project couldn't be read. Reload the page to draft its invoice.";
+    case "time-pending":
+      return "Checking this project's hours before drafting its invoice.";
+    case "time-unread":
+      return "This project's hours couldn't be read. Reload the page to draft its invoice.";
     case "household":
       return "Choose the household this invoice is for first.";
     case "regarding":

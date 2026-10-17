@@ -2,6 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Invoice } from '@patina/supabase';
 import { InvoiceFolio } from '../invoice-folio';
 
+// F2 (SQ-1249): Send on a draft is one invoice-send request with issue: true;
+// a send that fails after the server issued throws InvoiceSendError(issued).
+const { InvoiceSendError } = jest.requireActual('@patina/supabase');
+
 const mockIssue = jest.fn();
 const mockSend = jest.fn();
 const mockRecordPayment = jest.fn();
@@ -124,6 +128,7 @@ jest.mock('@patina/supabase', () => ({
   }),
   useIssueInvoice: () => ({ mutateAsync: mockIssue, isPending: false }),
   useSendInvoice: () => ({ mutateAsync: mockSend, isPending: false }),
+  InvoiceSendError: jest.requireActual('@patina/supabase').InvoiceSendError,
   useRecordPayment: () => ({
     mutateAsync: mockRecordPayment,
     isPending: false,
@@ -170,7 +175,9 @@ jest.mock(
   { virtual: true },
 );
 
+// F3 (SQ-1249): the folio's Send reads the app's onlineManager before its fresh read.
 jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
@@ -371,12 +378,12 @@ describe('InvoiceFolio delivery recovery', () => {
       project: undefined,
       title: 'Design consultation, September',
     };
-    mockIssue.mockResolvedValue({
-      ...mockInvoice,
-      status: 'sent',
-      invoice_number: 'INV-0031',
+    mockSend.mockResolvedValue({
+      emailSent: true,
+      recipient: 'client@example.com',
+      issued: true,
+      invoiceNumber: 'INV-0031',
     });
-    mockSend.mockResolvedValue({ emailSent: true, recipient: 'client@example.com' });
 
     const onOpenDocument = jest.fn();
     render(<InvoiceFolio invoiceId="invoice-1" onOpenDocument={onOpenDocument} />);
@@ -392,15 +399,13 @@ describe('InvoiceFolio delivery recovery', () => {
     const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
     fireEvent.click(confirmations[confirmations.length - 1]);
 
+    // F2: the issue rides the send — one request, the server issues.
     await waitFor(() =>
-      expect(mockIssue).toHaveBeenCalledWith({
-        invoiceId: 'invoice-1',
-        projectId: undefined,
-      }),
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({ invoiceId: 'invoice-1', projectId: undefined, issue: true }),
+      ),
     );
-    expect(mockSend).toHaveBeenCalledWith(
-      expect.objectContaining({ invoiceId: 'invoice-1', projectId: undefined }),
-    );
+    expect(mockIssue).not.toHaveBeenCalled();
     expect(onOpenDocument).not.toHaveBeenCalled();
   });
 
@@ -583,11 +588,11 @@ describe('InvoiceFolio delivery recovery', () => {
   it('offers Regenerate on a freshly issued invoice the database answers no token for', async () => {
     // The real read: 00636 nulls the column, so a load after issue parses to
     // null however the send went.
-    mockIssue.mockImplementation(async () => {
+    // F2: invoice-send issues the draft and sends it in one request.
+    mockSend.mockImplementation(async () => {
       mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1060' };
-      return mockInvoice;
+      return { emailSent: true, recipient: 'client@example.com', issued: true, invoiceNumber: 'INV-1060' };
     });
-    mockSend.mockResolvedValue({ emailSent: true, recipient: 'client@example.com' });
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
     expect(screen.queryByRole('button', { name: 'Regenerate link' })).not.toBeInTheDocument();
@@ -623,11 +628,11 @@ describe('InvoiceFolio delivery recovery', () => {
   });
 
   it('points the recovery band at Regenerate, never at a resend that cannot mint', async () => {
-    mockIssue.mockImplementation(async () => {
+    // F2: invoice-send issued the draft, then its letter failed.
+    mockSend.mockImplementation(async () => {
       mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1061' };
-      return mockInvoice;
+      throw new InvoiceSendError('provider unavailable', { issued: true, invoiceNumber: 'INV-1061' });
     });
-    mockSend.mockRejectedValue(new Error('provider unavailable'));
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
@@ -666,12 +671,10 @@ describe('InvoiceFolio delivery recovery', () => {
      address can be read back. */
 
   const mountBandOnFailedSend = async () => {
-    mockIssue.mockImplementation(async () => ({
-      ...invoice,
-      status: 'sent',
-      invoice_number: 'INV-1063',
-    }));
-    mockSend.mockRejectedValue(new Error('provider unavailable'));
+    // F2: invoice-send issued the draft, then its letter failed.
+    mockSend.mockRejectedValue(
+      new InvoiceSendError('provider unavailable', { issued: true, invoiceNumber: 'INV-1063' }),
+    );
     render(<InvoiceFolio invoiceId="invoice-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
     const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
@@ -892,13 +895,9 @@ describe('InvoiceFolio · a refused send, in the folio’s words (US-36 R1)', ()
   });
 
   it('says what to do when the issued invoice has no client email to send to', async () => {
-    mockIssue.mockImplementation(async () => ({
-      ...invoice,
-      status: 'sent',
-      invoice_number: 'INV-1071',
-    }));
-    // invoice-send's 422 body carries the code alone; useSendInvoice throws it.
-    mockSend.mockRejectedValue(new Error('no_recipient'));
+    // F2: invoice-send finds no address BEFORE it issues — 422 no_recipient,
+    // the draft untouched. Its body carries the code alone; useSendInvoice throws it.
+    mockSend.mockRejectedValue(new InvoiceSendError('no_recipient', { error: 'no_recipient' }));
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
@@ -907,9 +906,11 @@ describe('InvoiceFolio · a refused send, in the folio’s words (US-36 R1)', ()
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(
-      'Could not send — issued as INV-1071. This invoice has no client email yet. Add their email, then send it. Resend to retry.',
+      'Could not issue — This invoice has no client email yet. Add their email, then send it.',
     );
-    expect(alert).not.toHaveTextContent(/no_recipient/);
+    expect(alert).not.toHaveTextContent(/no_recipient|issued as/);
+    expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ issue: true }));
+    expect(mockIssue).not.toHaveBeenCalled();
   });
 
   it('says a held letter plainly when the client is mid-payment', async () => {

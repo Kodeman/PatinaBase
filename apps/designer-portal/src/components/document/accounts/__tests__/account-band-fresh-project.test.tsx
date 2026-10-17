@@ -5,12 +5,20 @@
  * still cached. Generate then runs one fresh, awaited projects read and drafts
  * only if the client and studio are still there.
  *
- * Runs the real useProjects against a real QueryClient and an in-memory
- * projects table, so the cached data is genuinely retained.
+ * Runs the real useProject against a real QueryClient and an in-memory
+ * projects table, so the cached data is genuinely retained. F5 (SQ-1249): the
+ * hold and its fresh read are the project's own entity read, ['project', id],
+ * not a search of the useProjects() collection.
+ *
+ * SQ-1249 F3/F4: under the app's own QueryClient defaults an offline read
+ * pauses and resumes on reconnect, so Generate refuses offline before its read,
+ * expires if the connection drops while the read is out, and a row unmounted
+ * mid-read drafts nothing.
  */
 import { type ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
+import { nextSubjectQueryClient } from '@/lib/react-query';
 import { AccountBand } from '../../account-band';
 
 const mockGenerate = jest.fn();
@@ -99,20 +107,50 @@ type Project = {
 /** The server's projects table, as it stands now. */
 let table: Project[] = [];
 /** How the next projects read answers: as the table stands, never, or with an error. */
-let readMode: 'answer' | 'hang' | 'fail' = 'answer';
+let readMode: 'answer' | 'hang' | 'fail' | 'deferred' = 'answer';
 let reads = 0;
+/** Reads held by readMode 'deferred', answered as the table stands when released. */
+let deferred: Array<() => void> = [];
+const releaseReads = () => {
+  const held = deferred;
+  deferred = [];
+  held.forEach((answer) => answer());
+};
+/** F5 — the collection's window leaves this project out (the 1000-row cap, say). */
+let outsideCollection = false;
 
 function projects() {
+  let id: unknown = null;
   const builder = {
     select: () => builder,
-    order: () => {
+    eq: (_column: string, value: unknown) => {
+      id = value;
+      return builder;
+    },
+    // useProject(id): the entity read.
+    single: () => {
       reads += 1;
       if (readMode === 'hang') return new Promise<never>(() => {});
       if (readMode === 'fail') {
-        return Promise.resolve({ data: null, error: { message: 'projects read failed' } });
+        return Promise.resolve({ data: null, error: { message: 'project read failed' } });
       }
-      return Promise.resolve({ data: table.map((p) => ({ ...p })), error: null });
+      const answer = () => {
+        const row = table.find((p) => p.id === id);
+        return row
+          ? { data: { ...row }, error: null }
+          : { data: null, error: { message: 'JSON object requested, multiple (or no) rows returned' } };
+      };
+      if (readMode === 'deferred') {
+        return new Promise((resolve) => deferred.push(() => resolve(answer())));
+      }
+      return Promise.resolve(answer());
     },
+    // useProjects(): the collection, which the band no longer searches.
+    order: () =>
+      Promise.resolve({
+        data: table.filter(() => !outsideCollection).map((p) => ({ ...p })),
+        error: null,
+      }),
   };
   return builder;
 }
@@ -139,7 +177,8 @@ const spotWindows = () =>
   Array.from(document.querySelectorAll<HTMLElement>('[data-hold-spotlight-window]')).map(
     (el) => el.dataset.holdSpotlightWindow,
   );
-const cachedProject = () => qc.getQueryData<Project[]>(['projects'])?.find((p) => p.id === 'project-1');
+const projectKey = ['project', 'project-1'];
+const cachedProject = () => qc.getQueryData<Project>(projectKey);
 
 /** The band has read the project and Generate stands ready. */
 async function readyToGenerate() {
@@ -161,9 +200,12 @@ beforeEach(() => {
   ];
   readMode = 'answer';
   reads = 0;
+  deferred = [];
+  outsideCollection = false;
   browser.__supabaseBrowserClient = { from: () => projects() };
 });
 afterEach(() => {
+  act(() => onlineManager.setOnline(true));
   qc.clear();
   delete browser.__supabaseBrowserClient;
 });
@@ -175,7 +217,7 @@ describe('SQ-1223 R4: a projects re-read establishes nothing, even with its answ
 
     readMode = 'hang';
     act(() => {
-      void qc.invalidateQueries({ queryKey: ['projects'] });
+      void qc.invalidateQueries({ queryKey: projectKey });
     });
 
     await waitFor(() => expect(generateAct()).toHaveAttribute('aria-disabled', 'true'));
@@ -194,7 +236,7 @@ describe('SQ-1223 R4: a projects re-read establishes nothing, even with its answ
 
     readMode = 'fail';
     act(() => {
-      void qc.invalidateQueries({ queryKey: ['projects'] });
+      void qc.invalidateQueries({ queryKey: projectKey });
     });
 
     await waitFor(() =>
@@ -203,7 +245,7 @@ describe('SQ-1223 R4: a projects re-read establishes nothing, even with its answ
       ),
     );
     expect(generateAct()).toHaveAttribute('aria-disabled', 'true');
-    expect(qc.getQueryState(['projects'])?.status).toBe('error');
+    expect(qc.getQueryState(projectKey)?.status).toBe('error');
     expect(cachedProject()?.studio_id).toBe('studio-1');
 
     fireEvent.click(generateAct());
@@ -266,6 +308,97 @@ describe('SQ-1223 R4: Generate reads the project fresh before it drafts', () => 
     await waitFor(() => expect(mockGenerate).toHaveBeenCalledWith('milestone-1', expect.anything()));
     expect(mockGenerate).toHaveBeenCalledTimes(1);
     expect(reads - before).toBe(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('SQ-1249 F5: the hold stands on the project itself, not on the collection', () => {
+  it('drafts a project the projects collection leaves out: readiness and the fresh read are its own', async () => {
+    outsideCollection = true;
+    renderBand();
+    await readyToGenerate();
+    const before = reads;
+
+    fireEvent.click(generateAct());
+
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalledWith('milestone-1', expect.anything()));
+    expect(reads - before).toBe(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe("SQ-1249 F3/F4: Generate's fresh read under the app's own network defaults", () => {
+  const offline = "Could not draft the invoice — You’re offline. Nothing was sent.";
+  /** Let a reconnect's paused reads resume and anything they would continue into run. */
+  const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
+  beforeEach(() => {
+    qc = nextSubjectQueryClient();
+  });
+
+  it('F3: offline at the press refuses before the read, and reconnecting drafts nothing', async () => {
+    renderBand();
+    await readyToGenerate();
+    const before = reads;
+
+    act(() => onlineManager.setOnline(false));
+    fireEvent.click(generateAct());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(offline);
+    expect(reads - before).toBe(0);
+
+    act(() => onlineManager.setOnline(true));
+    await settle();
+    await settle();
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+
+  it('F3: the connection dropping while the read is out expires the act; it never resumes into a draft', async () => {
+    renderBand();
+    await readyToGenerate();
+    readMode = 'deferred';
+
+    fireEvent.click(generateAct());
+    await waitFor(() => expect(deferred).toHaveLength(1));
+    act(() => onlineManager.setOnline(false));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(offline);
+
+    act(() => onlineManager.setOnline(true));
+    readMode = 'answer';
+    act(() => releaseReads());
+    await settle();
+    await settle();
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+
+  it('F4: the pressed Generate shows its pending read, and a row unmounted mid-read drafts nothing', async () => {
+    const { unmount } = render(<AccountBand projectId="project-1" />, { wrapper: Paper });
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
+    await readyToGenerate();
+    readMode = 'deferred';
+
+    fireEvent.click(generateAct());
+    await waitFor(() => expect(deferred).toHaveLength(1));
+    expect(screen.getByRole('button', { name: /Generating/ })).toHaveAttribute('aria-busy', 'true');
+
+    unmount();
+    act(() => releaseReads());
+    await settle();
+    await settle();
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+
+  it('control: online, with the read answered, Generate drafts once', async () => {
+    renderBand();
+    await readyToGenerate();
+    readMode = 'deferred';
+
+    fireEvent.click(generateAct());
+    await waitFor(() => expect(deferred).toHaveLength(1));
+    act(() => releaseReads());
+
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
