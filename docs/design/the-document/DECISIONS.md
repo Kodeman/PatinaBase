@@ -11588,4 +11588,22 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 
 **Not covered.** A raw hard delete of a product a line names (the FK sets `product_id` to NULL), and the 00422 configuration guard's status→approved price rewrite, which `po_status_cascade_to_items` and `void_studio_purchase` can reach without the job lock, still lock nothing. Measured by `supabase/tests/ffe/us37_pricing_approval_test.sql`.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · last id = R190*
+### R191 · Invoice authority is scoped to the invoice's studio — US-36 — SQ-1273 2026-10-17 (Astra SQ-1271 F3, inherited)
+
+**Finding.** `can_manage_invoice` (00397) admitted the invoice's designer or anyone sharing ANY active design studio with her (`_can_author_proposal`, 00387). It never compared the invoice's studio. Designer D sits in studios A and B and coworker C only in A. Knowing the id of an invoice on D's studio-B job, C passed the check, so `invoice-send` would send it and `regenerate_invoice_link` / `get_invoice_link` would mint and read its pay link.
+
+**Ruling.** The invoice's studio is `invoices.studio_id` (the 00318 issuing-studio snapshot), else its project's `studio_id`. `can_manage_invoice` admits:
+- the invoice's own designer;
+- the lead or team of a job in the invoice's studio, as `can_buy_for_project` (00813) defines them;
+- an active owner/admin of the invoice's studio (`is_org_admin_or_owner`, the K5 precedent);
+- an active non-guest member of that studio when it is an active design studio where the designer also holds an active non-guest seat.
+
+With no studio on the invoice or its project, only the designer is admitted. Nothing gates on `profiles.role`. A refusal is `false` whether or not the invoice exists.
+
+**The money writes ask the same question.** Called directly, `issue_invoice`, `record_invoice_payment`, `void_invoice` and `add_invoice_billing_lines` used to check `_can_manage_invoice_owner(designer_id)`, so a peer from another studio passed them. Each now asks `can_manage_invoice(p_invoice_id)` after locking the invoice row. `issue_invoice`'s guard sits in `_issue_invoice_pre_00412`, the 00397 wrapper that 00412 renamed. Each refusal keeps its text and code, `not found or access denied`, word for word the same for a missing invoice. Every signature, SECURITY DEFINER, `search_path` and ACL is unchanged.
+
+**Narrowing.** A peer of the designer from another studio can no longer send, link, issue, record a payment on, void or add lines to the invoice. On a studio-less invoice, D's co-members are refused. **Widening, by design.** After the designer's seat in the studio ends, the studio's owner/admin and the job's team keep `can_manage_invoice` (send, links) and `add_invoice_billing_lines`. Issue, record and void do not widen. Their inner 00318/00574 bodies still require `is_studio_comember(designer_id)`.
+
+**Not covered.** `generate_milestone_invoice` authorizes the milestone's project lead before an invoice exists, so it keeps `_can_manage_invoice_owner`. `app_private.issue_invoice_for_actor` (00578) already requires the actor's seat in the job's studio. Inherited and unchanged: `public.issue_invoice` (00412) checks linked time and the retainer before its guard, so its check_violation tells an outsider that an invoice has pending linked time or an unpaid retainer. **Where.** Migration 00817; `supabase/tests/00817_invoice_authority_scope.test.sql`.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R191 · last id = R191*

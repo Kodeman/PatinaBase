@@ -5098,7 +5098,8 @@ BEGIN
     RAISE EXCEPTION 'cross-studio co-member paid a foreign-studio invoice'
       USING ERRCODE = 'P4850';
   EXCEPTION WHEN SQLSTATE 'P0001' THEN
-    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+    -- 00817 (R191): the wrapper's invoice-scoped check refuses first.
+    ASSERT SQLERRM = 'record_invoice_payment: invoice d4857000-0000-4000-8000-000000000097 not found or access denied';
   END;
   ASSERT NOT EXISTS (
     SELECT 1
