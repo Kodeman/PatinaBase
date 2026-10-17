@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
-import { fireEvent, render as renderBare, screen, waitFor, within } from "@testing-library/react";
+import { act as reactAct, fireEvent, render as renderBare, screen, waitFor, within } from "@testing-library/react";
 import { InvoiceComposer } from "../invoice-composer";
 import { DocSheet } from "../../overlays/doc-sheet";
 import { PaperFolioSheet } from "../../overlays/paper-folio-sheet";
@@ -46,6 +46,7 @@ let mockProjectClientId: string | null = "client-9";
 let mockProjectStudioId: string | null = "studio-1";
 let mockProjectDesignerId: string | null = "designer-1";
 let mockProjectsUpdatedAt = 1;
+let mockProjectsFetching = false;
 let mockViewerId: string | null = "designer-1";
 let mockStudioMembers: Array<Record<string, unknown>> = [];
 let mockPathname = "/";
@@ -128,6 +129,7 @@ jest.mock("@patina/supabase", () => ({
       ...mockExtraProjects,
     ],
     dataUpdatedAt: mockProjectsUpdatedAt,
+    isFetching: mockProjectsFetching,
   }),
   useClaimTimeEntries: () => ({ mutateAsync: mockClaimTime, isPending: false }),
   useSetLaborLinePrice: () => ({ mutate: jest.fn(), isPending: false }),
@@ -167,6 +169,7 @@ beforeEach(() => {
   mockProjectStudioId = "studio-1";
   mockProjectDesignerId = "designer-1";
   mockProjectsUpdatedAt = 1;
+  mockProjectsFetching = false;
   mockViewerId = "designer-1";
   mockStudioMembers = [];
   mockPathname = "/";
@@ -1466,6 +1469,70 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     await new Promise((resolve) => window.requestAnimationFrame(resolve));
     expect(act()).not.toHaveFocus();
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it("SQ-1311 F2: linking the client from its window keeps the spotlight open through the projects re-read, on the line hold left", async () => {
+    mockProjectClientId = null;
+    mockPathname = "/doc/project-1";
+    function Stack() {
+      const [householdOpen, setHouseholdOpen] = useState(false);
+      useEffect(() => {
+        const open = () => setHouseholdOpen(true);
+        window.addEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, open);
+        return () => window.removeEventListener(OPEN_HOUSEHOLD_SHEET_EVENT, open);
+      }, []);
+      return (
+        <>
+          <PaperFolioSheet open onClose={jest.fn()} title="Draw an invoice" wide>
+            {composer()}
+          </PaperFolioSheet>
+          <DocSheet open={householdOpen} onClose={() => setHouseholdOpen(false)} title="The household" aboveFolio>
+            <button type="button">Link a household…</button>
+          </DocSheet>
+        </>
+      );
+    }
+    const household = () => screen.queryByRole("dialog", { name: "The household" });
+    const spotStatus = () =>
+      document.querySelector("[data-hold-spotlight-root] [role=status]");
+    const view = render(<Stack />);
+    fireEvent.click(act());
+    expect(spotWindows()).toEqual(["link-client", "invoice-lines"]);
+
+    fireEvent.click(screen.getByRole("link", { name: "Link a client" }));
+    await waitFor(() => expect(household()).toHaveFocus());
+    // Linked in the sheet: the projects read is refetching underneath.
+    mockProjectClientId = "client-9";
+    mockProjectsFetching = true;
+    mockProjectsUpdatedAt = 2;
+    view.rerender(<Stack />);
+    await waitFor(() => expect(spotWindows()).toEqual(["invoice-lines"]));
+    expect(document.querySelector("[data-hold-spotlight]")).not.toBeNull();
+    expect(spotStatus()).toHaveTextContent("1 thing needs attention: Add at least one line first.");
+
+    mockProjectsFetching = false;
+    view.rerender(<Stack />);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    expect(household()).toBeNull();
+    expect(document.querySelector("[data-hold-spotlight]")).not.toBeNull();
+    expect(spotWindows()).toEqual(["invoice-lines"]);
+    await waitFor(() => expect(screen.getByLabelText("Line description")).toHaveFocus());
+    expect(act()).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("SQ-1311 F5: in studio mode the regarding window goes with the keystroke that fills it, focus staying in the field", async () => {
+    mockFlag = { value: true, isLoading: false };
+    render(composer({}));
+    pickStudio();
+    fireEvent.click(act());
+    expect(spotWindows()).toEqual(["household", "regarding", "lines"]);
+    const regarding = screen.getByPlaceholderText("Design consultation · Sept 2026");
+    reactAct(() => regarding.focus());
+    fireEvent.change(regarding, { target: { value: "Studio retainer" } });
+    // In the same render: no frame passes before the window drops.
+    expect(spotWindows()).toEqual(["household", "lines"]);
+    expect(regarding).toHaveFocus();
+    expect(regarding.closest("[inert]")).toBeNull();
   });
 
   it("F6/K1: lights a held deposit's stage group, its percent live inside the window", async () => {

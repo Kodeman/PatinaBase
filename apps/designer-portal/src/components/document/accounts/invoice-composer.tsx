@@ -1048,6 +1048,17 @@ export function InvoiceComposer({
       canNameStudio, soloOwnerUnstamped, hasStudioOwner, studioLoading: organizationsLoading,
     }),
   }).holds;
+  // A re-read in flight (a fix elsewhere refreshing the project) assesses
+  // nothing. The spotlight keeps the holds last assessed on this project, so
+  // it never closes on the holds that remain.
+  const assessed = useRef<{ projectId: string | null; holds: InvoiceHold[] } | null>(null);
+  useEffect(() => {
+    if (!readBlocker) assessed.current = { projectId, holds };
+  });
+  const rereading =
+    (readBlocker === "project-pending" || readBlocker === "time-pending") &&
+    assessed.current?.projectId === projectId;
+  const spotlightReadiness = rereading ? assessed.current!.holds : holds;
   const readinessBlocker: ComposerBlocker | null =
     holds[0]?.kind === "nothing-selected" ? "lines" : holds[0]?.kind ?? null;
   // SQ-1282 F1 — a draft that may have landed holds Draft first: a second
@@ -1133,7 +1144,7 @@ export function InvoiceComposer({
       keptDraft.message,
     );
   spotlightHolds.push(
-    ...holds.map((hold) => ({
+    ...spotlightReadiness.map((hold) => ({
       id: hold.focusKey,
       label: hold.repair,
       reason: hold.reason,
@@ -1161,8 +1172,8 @@ export function InvoiceComposer({
     ownHold(readBlocker, TRY_AGAIN, () =>
       containerRef.current?.querySelector('[data-hold-region="read-failed"]'),
     );
-  } else if (!readBlocker) {
-    // A read still out has no fix here, as a loading prefill.
+  } else if (!readBlocker || rereading) {
+    // A first read still out has no fix here, as a loading prefill.
     if (depositBlocked)
       ownHold("deposit", "Deposit", () =>
         depositPctRef.current?.closest('[role="radiogroup"]'),

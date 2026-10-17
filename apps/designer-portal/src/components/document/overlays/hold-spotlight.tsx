@@ -13,7 +13,7 @@
  * (house sheet SPEC.md:370). Windows are --terracotta-ink hairlines.
  */
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
@@ -27,6 +27,16 @@ export type { SpotlightHold };
 const PAD = 6;
 const NARROW_QUERY = "(max-width: 640px)";
 const LABEL_ROOM = 22;
+// Placed by sync, not by the stylesheet's sticky foot: a sticky bar answers
+// to its scroll container, which for a folio sheet is the page-high overlay.
+const BAR_PLACED: CSSProperties = {
+  position: "absolute",
+  bottom: "auto",
+  left: 0,
+  right: 0,
+  marginLeft: "auto",
+  marginRight: "auto",
+};
 const GEOMETRY_MOTION: CSSProperties = {
   transition: ["x", "y", "width", "height"]
     .map((property) => `${property} 160ms var(--ease-editorial)`)
@@ -58,7 +68,8 @@ const firstFocusable = (el: HTMLElement) =>
 
 // How far fixed chrome beside the frame (the studio drawer) rises from the
 // viewport's foot. A fixed element holding the frame (the PO preview's
-// overlay) is the frame's own shell, not chrome.
+// overlay) is the frame's own shell, not chrome; nor is a fixed backdrop
+// that reaches the viewport's top (the folio sheet's, beside its panel).
 const footChrome = (host: HTMLElement) => {
   if (typeof document.elementFromPoint !== "function") return 0;
   let el = document.elementFromPoint(
@@ -66,13 +77,42 @@ const footChrome = (host: HTMLElement) => {
     window.innerHeight - 1,
   );
   for (; el && !host.contains(el); el = el.parentElement) {
-    if (window.getComputedStyle(el).position === "fixed")
-      return el.contains(host)
+    if (window.getComputedStyle(el).position === "fixed") {
+      const top = el.getBoundingClientRect().top;
+      return el.contains(host) || top <= 0
         ? 0
-        : Math.max(0, window.innerHeight - el.getBoundingClientRect().top);
+        : Math.max(0, window.innerHeight - top);
+    }
   }
   return 0;
 };
+
+/**
+ * The bar's top, in viewport coordinates: at the foot of the frame's visible
+ * part (a phone: of the viewport, unless the frame clips it), and never off
+ * the screen, so a sheet taller than the viewport still shows it.
+ */
+function spotlightBarTop({
+  frameTop,
+  frameBottom,
+  floor,
+  barHeight,
+  narrow,
+  clips,
+}: {
+  frameTop: number;
+  frameBottom: number;
+  /** The viewport's foot, above any fixed foot chrome. */
+  floor: number;
+  barHeight: number;
+  narrow: boolean;
+  /** The frame clips its own content (a sheet panel that scrolls). */
+  clips: boolean;
+}) {
+  const foot = narrow && !clips ? floor : Math.min(floor, frameBottom);
+  const top = Math.max(foot - (narrow ? 0 : 16) - barHeight, frameTop);
+  return Math.max(0, Math.min(top, floor - barHeight));
+}
 
 type SpotWindow = { id: string; x: number; y: number; w: number; h: number };
 type Geometry = {
@@ -80,7 +120,8 @@ type Geometry = {
   windows: SpotWindow[];
   width: number;
   height: number;
-  inset: number;
+  /** The bar's top in the layer's own coordinates. */
+  bar: number;
 };
 
 /**
@@ -110,8 +151,6 @@ export interface HoldSpotlightProps {
   teach?: SpotlightTeach;
 }
 
-const things = (n: number) => (n === 1 ? "1 thing" : `${n} things`);
-
 export function HoldSpotlight({
   frame,
   holds,
@@ -139,6 +178,7 @@ export function HoldSpotlight({
   const advanceRef = useRef<(() => void) | null>(null);
   const dismissRef = useRef<(() => void) | null>(null);
   const scheduleRef = useRef<(() => void) | null>(null);
+  const syncRef = useRef<(() => void) | null>(null);
 
   useLayoutEffect(() => {
     holdsRef.current = holds;
@@ -153,8 +193,10 @@ export function HoldSpotlight({
     setFrameEl(frame.current);
   }, [frame, open]);
 
-  useEffect(() => {
-    scheduleRef.current?.();
+  // In the commit that changed them: a hold fixed by typing loses its window
+  // with the keystroke, not a frame later.
+  useLayoutEffect(() => {
+    syncRef.current?.();
   }, [holds]);
 
   useLayoutEffect(() => {
@@ -170,8 +212,9 @@ export function HoldSpotlight({
     let geoKey = "";
     let last: { hold: SpotlightHold; el: HTMLElement }[] = [];
     let taught = -1;
-    // A cleared hold that still holds focus: live and windowed until focus
-    // leaves it, so typing that clears a hold on its first key keeps going.
+    // A cleared hold that still holds focus: live until focus leaves it, so
+    // typing that clears a hold on its first key keeps going. Its window goes
+    // at once, so a filled field never reads as still wanted.
     let linger: { id: string; el: HTMLElement } | null = null;
     const staticHost = window.getComputedStyle(host).position === "static";
     const priorPosition = host.style.position;
@@ -284,25 +327,44 @@ export function HoldSpotlight({
             )
           : undefined;
       if (cleared) linger = { id: cleared.hold.id, el: cleared.el };
-      last = found;
-      const activeIndex = Math.max(
-        0,
-        found.findIndex((entry) => entry.hold.id === activeRef.current),
+      let activeIndex = found.findIndex(
+        (entry) => entry.hold.id === activeRef.current,
       );
+      if (activeIndex < 0) {
+        // The active hold was fixed: the next one in hold order takes over.
+        const was = last.findIndex(
+          (entry) => entry.hold.id === activeRef.current,
+        );
+        activeIndex = Math.max(
+          0,
+          found.findIndex(
+            (entry) =>
+              last.findIndex((prior) => prior.hold.id === entry.hold.id) > was,
+          ),
+        );
+      }
+      last = found;
       const active = found[activeIndex] as (typeof found)[number] | undefined;
       activeRef.current = active?.hold.id ?? null;
       setActiveId(activeRef.current);
 
-      // On a phone only the active window is cut, so only it stays live.
+      // On a phone only the active window is cut, so only it stays live. A
+      // lingering field stays live too, but its window is gone.
       const narrow = window.matchMedia(NARROW_QUERY).matches;
       const shown = !active ? [] : narrow ? [active] : found;
-      const cut = [
-        ...shown.map(({ hold, el }) => ({ id: hold.id, el })),
-        ...(linger ? [linger] : []),
-      ];
-      settleInert([...cut.map((entry) => entry.el), root]);
+      const cut = shown.map(({ hold, el }) => ({ id: hold.id, el }));
+      settleInert([
+        ...cut.map((entry) => entry.el),
+        ...(linger ? [linger.el] : []),
+        root,
+      ]);
 
-      const watch = new Set<Element>([host, ...found.map((entry) => entry.el)]);
+      const bar = barRef.current;
+      const watch = new Set<Element>([
+        host,
+        ...found.map((entry) => entry.el),
+        ...(bar ? [bar] : []),
+      ]);
       observed.forEach((el) => {
         if (watch.has(el)) return;
         resizer.unobserve(el);
@@ -342,27 +404,30 @@ export function HoldSpotlight({
         bottom = Math.max(bottom, r.bottom - oy + margin);
       }
       const hostStyle = window.getComputedStyle(host);
-      // A sticky bar stops at the frame's padding edge; the inset lets it dock
-      // to the frame's own foot instead.
-      const inset = Number.parseFloat(hostStyle.paddingBottom) || 0;
-      bottom += inset;
+      bottom += Number.parseFloat(hostStyle.paddingBottom) || 0;
+      const barHeight = bar?.offsetHeight ?? 0;
       // A scrolling frame gets room past its content for the docked bar, so
       // the last window can scroll clear of it.
       const reserve = /auto|scroll/.test(hostStyle.overflowY)
-        ? (barRef.current?.offsetHeight ?? 0) + (narrow ? 0 : 32)
+        ? barHeight + (narrow ? 0 : 32)
         : 0;
       const height = Math.max(host.clientHeight, bottom + reserve);
-      // A frame that scrolls with the page docks its bar to the viewport's
-      // foot, above the fixed chrome there: its padding (the paper's landing
-      // reserve) is no edge the bar sticks to.
-      const dock = /auto|scroll/.test(hostStyle.overflowY)
-        ? inset
-        : -footChrome(host);
+      // Placed on every sync (scroll, resize, a new active window), above the
+      // fixed chrome at the viewport's foot.
+      const barTop =
+        spotlightBarTop({
+          frameTop: box.top,
+          frameBottom: box.bottom,
+          floor: window.innerHeight - footChrome(host),
+          barHeight,
+          narrow,
+          clips: /auto|scroll|hidden|clip/.test(hostStyle.overflowY),
+        }) - oy;
       const ids = found.map((entry) => entry.hold.id);
-      const key = JSON.stringify([ids, windows, width, height, dock]);
+      const key = JSON.stringify([ids, windows, width, height, barTop]);
       if (key !== geoKey) {
         geoKey = key;
-        setGeo({ ids, windows, width, height, inset: dock });
+        setGeo({ ids, windows, width, height, bar: barTop });
       }
 
       if (lesson) {
@@ -388,7 +453,11 @@ export function HoldSpotlight({
             : `${n} things need attention. First: ${reason}`,
         );
       } else if (n < count) {
-        setMessage(`${things(n)} left. ${activeIndex + 1} of ${n}: ${reason}`);
+        setMessage(
+          n === 1
+            ? `1 thing needs attention: ${reason}`
+            : `${n} things need attention. ${activeIndex + 1} of ${n}: ${reason}`,
+        );
       }
       count = n;
       if (first || focusLost()) {
@@ -419,13 +488,23 @@ export function HoldSpotlight({
       onCloseRef.current();
     };
     scheduleRef.current = schedule;
+    syncRef.current = sync;
 
     const onFocusIn = (event: FocusEvent) => {
       if (done || !(event.target instanceof Node)) return;
       const target = event.target;
       const found = resolve();
+      // The active window keeps focus inside it, even where another hold's
+      // window sits within it: Next steps by hold, never by what holds focus.
+      if (
+        found.some(
+          (entry) =>
+            entry.hold.id === activeRef.current && entry.el.contains(target),
+        )
+      )
+        return;
       const index = found.findIndex((entry) => entry.el.contains(target));
-      if (index < 0 || found[index]!.hold.id === activeRef.current) return;
+      if (index < 0) return;
       activeRef.current = found[index]!.hold.id;
       sync();
       setMessage(
@@ -480,8 +559,11 @@ export function HoldSpotlight({
     });
     // The frame can unmount while the spotlight's owner (and `open`) survive;
     // nothing inside the frame observes its own removal.
+    // A sheet above the frame that goes away drops focus to the page.
     const detach = new MutationObserver(() => {
-      if (!done && !host.isConnected) dismissRef.current?.();
+      if (done) return;
+      if (!host.isConnected) dismissRef.current?.();
+      else if (focusLost()) schedule();
     });
     detach.observe(document.body, { childList: true, subtree: true });
     sync();
@@ -502,6 +584,7 @@ export function HoldSpotlight({
       advanceRef.current = null;
       dismissRef.current = null;
       scheduleRef.current = null;
+      syncRef.current = null;
       setGeo(null);
     };
   }, [open, frameEl]);
@@ -532,15 +615,7 @@ export function HoldSpotlight({
           data-modal-layer=""
           data-hold-spotlight=""
           className="hold-spotlight"
-          style={
-            geo
-              ? ({
-                  width: geo.width,
-                  height: geo.height,
-                  "--hold-spotlight-inset": `${geo.inset}px`,
-                } as CSSProperties)
-              : undefined
-          }
+          style={geo ? { width: geo.width, height: geo.height } : undefined}
         >
           <svg
             className="hold-spotlight__scrim"
@@ -621,6 +696,7 @@ export function HoldSpotlight({
             aria-label={teach ? "Walkthrough" : "What needs attention"}
             data-hold-spotlight-bar=""
             className="hold-spotlight__bar"
+            style={geo ? { ...BAR_PLACED, top: geo.bar } : undefined}
           >
             {teach ? (
               <TeachStep
