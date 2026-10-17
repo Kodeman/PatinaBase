@@ -949,20 +949,31 @@ const DRAFT_REFUSALS: Array<[RegExp, string, boolean]> = [
   ],
 ];
 
+const DRAFT_UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
+
+const DRAFT_WRITE_SENT = /^Failed to create draft (?:studio )?invoice:\s*/;
+
 /**
- * A draft that never got written (useCreateDraftInvoice and
- * useCreateDraftStudioInvoice wrap the RPC's words as `Failed to create draft
- * [studio ]invoice: …`): a recognised refusal is said in the
- * composer's words and is the same refusal next time; anything else — a
- * dropped connection, a timeout, a message this table doesn't know — says only
- * that the invoice wasn't drafted, and may go through on a second try.
+ * A draft that failed (useCreateDraftInvoice and useCreateDraftStudioInvoice
+ * wrap the RPC's words as `Failed to create draft [studio ]invoice: …`): a
+ * recognised refusal is said in the composer's words and is the same refusal
+ * next time. Any other answer to the write — a dropped connection, a timeout,
+ * a message this table doesn't know — may hide a draft that landed, and neither
+ * RPC takes an idempotency key, so it is `unconfirmed` and never retried. A
+ * failure before the write says only that the invoice wasn't drafted, and may
+ * go through on a second try.
  */
-export function draftInvoiceRefusal(message: unknown): { message: string; retryable: boolean } {
+export function draftInvoiceRefusal(message: unknown): {
+  message: string;
+  retryable: boolean;
+  unconfirmed?: true;
+} {
   if (typeof message !== "string") return { message: DRAFT_GENERIC, retryable: true };
-  const reason = message.trim().replace(/^Failed to create draft (?:studio )?invoice:\s*/, "");
+  const reason = message.trim().replace(DRAFT_WRITE_SENT, "");
   const known = DRAFT_REFUSALS.find(([pattern]) => pattern.test(reason));
-  return known
-    ? { message: known[1], retryable: known[2] }
+  if (known) return { message: known[1], retryable: known[2] };
+  return DRAFT_WRITE_SENT.test(message.trim())
+    ? { message: DRAFT_UNCONFIRMED, retryable: false, unconfirmed: true }
     : { message: DRAFT_GENERIC, retryable: true };
 }
 
@@ -1074,6 +1085,9 @@ const SEND_REFUSALS: Array<[RegExp, string]> = [
   // Send-on-draft issues in the same request (K10): a draft already issued elsewhere, or an issue refused.
   [/^(?:invoice_not_draft|This invoice was already issued\.)$/, "This invoice was already issued. Reload the folio to resend it."],
   [/^issue_failed$/, "The invoice couldn't be issued. Reload the folio and try again."],
+  // A failed issue read back: issued, with no letter from this send; or unreadable.
+  [/^issued_unsent$/, "No letter went out with this send."],
+  [/^issue_unknown$/, "Patina couldn't tell whether the invoice issued. Check the folio before you send it again."],
   [/^(?:invoice_void|A voided invoice cannot be sent\.)$/, "This invoice was voided and can't be sent."],
   [
     /^(?:invoice_not_open|Reminders can only be sent on open \(sent or partially paid\) invoices\.)$/,

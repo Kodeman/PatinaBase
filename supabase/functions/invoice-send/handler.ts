@@ -284,6 +284,25 @@ export function createInvoiceSendHandler(deps: InvoiceSendDeps) {
       });
       if (issueErr || !issued) {
         console.error('invoice-send: issue failed', invoiceId, issueErr?.message);
+        // An error is not proof the issue rolled back: it may have committed
+        // and lost its reply. Only a re-read still showing a draft says not
+        // issued. Issued, it may be another send's issue, whose letter went,
+        // so invoice_not_draft's rule holds: no letter, the next is a Resend.
+        const { data: after, error: rereadErr } = await admin
+          .from('invoices')
+          .select('status, invoice_number')
+          .eq('id', invoiceId)
+          .maybeSingle();
+        if (rereadErr || !after) {
+          console.error('invoice-send: issue outcome unread', invoiceId, rereadErr?.message);
+          return json({ error: 'issue_unknown', detail: issueErr?.message }, 503);
+        }
+        if (after.status !== 'draft') {
+          return json(
+            { error: 'issued_unsent', issued: true, invoiceNumber: after.invoice_number ?? null },
+            409
+          );
+        }
         return json({ error: 'issue_failed', detail: issueErr?.message }, 409);
       }
       // The issued row (number, totals, due date, sent_at); its joins are unchanged.

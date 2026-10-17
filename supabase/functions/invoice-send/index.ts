@@ -19,7 +19,9 @@
 //   3b. Issue-first (`issue: true`, K10): a DRAFT is issued here — through the
 //      caller-JWT client, never the service role — only once step 3 found an
 //      address, and the letter goes to that same address. No address is 422
-//      no_recipient with the draft untouched.
+//      no_recipient with the draft untouched. A failed issue is re-read: still
+//      a draft is 409 issue_failed; issued is 409 issued_unsent (`issued:
+//      true`, no letter); an unreadable re-read is 503 issue_unknown.
 //   4. Send the invoice_sent email through the shared sendCompliantEmail
 //      chokepoint (category operational → suppression check, rate cap,
 //      unsubscribe headers, notification_log).

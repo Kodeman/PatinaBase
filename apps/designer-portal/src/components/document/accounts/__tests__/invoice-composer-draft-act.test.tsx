@@ -11,6 +11,9 @@
  * opens.
  * F4: Try again answers to the same readiness as Draft: while a read is out it
  * drafts nothing.
+ * SQ-1272 F4: a draft write whose answer is lost may have landed, and neither
+ * RPC takes an idempotency key: no Try again, the invoice lists re-read, and the
+ * act routes to them.
  */
 import { type ReactNode } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -300,15 +303,18 @@ describe("SQ-1262 F2: closing the composer retires its Draft", () => {
 });
 
 describe("SQ-1262 F4: Try again answers to the same readiness as Draft", () => {
-  /** A first Draft that fails before anything was written, so Try again is offered. */
+  /** A first Draft refused definitely before anything was written (its project
+   *  read failed), so Try again is offered. */
   async function failedOnce() {
     renderComposer();
     await readyToDraft();
-    rpcMode = "fail";
+    projectReadMode = "fail";
     fireEvent.click(draftAct());
-    expect(await screen.findByText("The invoice couldn't be drafted.")).toBeInTheDocument();
-    expect(draftWrites("create_draft_invoice")).toBe(1);
-    rpcMode = "answer";
+    expect(
+      await screen.findByText("We couldn't open this project to bill it. Reload and try again."),
+    ).toBeInTheDocument();
+    expect(draftWrites("create_draft_invoice")).toBe(0);
+    projectReadMode = "answer";
   }
 
   it("control: with the reads settled, Try again drafts", async () => {
@@ -317,7 +323,7 @@ describe("SQ-1262 F4: Try again answers to the same readiness as Draft", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
     await waitFor(() => expect(onDrafted).toHaveBeenCalledWith("invoice-1", "project-1"));
-    expect(draftWrites("create_draft_invoice")).toBe(2);
+    expect(draftWrites("create_draft_invoice")).toBe(1);
   });
 
   it("while the projects re-read is out, Try again drafts nothing and says why", async () => {
@@ -335,10 +341,44 @@ describe("SQ-1262 F4: Try again answers to the same readiness as Draft", () => {
     await settle();
 
     expect(projectReads).toBe(readsBefore);
-    expect(draftWrites("create_draft_invoice")).toBe(1);
+    expect(draftWrites("create_draft_invoice")).toBe(0);
     expect(onDrafted).not.toHaveBeenCalled();
     await waitFor(() =>
       expect(reasonLine()).toHaveTextContent("Checking this project before drafting its invoice."),
     );
   });
+});
+
+describe("SQ-1272 F4: a draft write whose answer is lost is never tried blind", () => {
+  const UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
+  const listKey = ["invoices", "list", {}];
+
+  it.each([
+    ["project", "create_draft_invoice", { projectId: "project-1" }, () => readyToDraft()],
+    ["studio", "create_draft_studio_invoice", {}, () => readyToDraftForStudio()],
+  ] as const)(
+    "%s: no Try again, the invoice lists re-read, and Check the invoices opens them",
+    async (_mode, writer, context, ready) => {
+      renderComposer(context);
+      await ready();
+      qc.setQueryData(listKey, []);
+      rpcMode = "fail";
+
+      fireEvent.click(draftAct());
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(UNCONFIRMED);
+      expect(draftWrites(writer)).toBe(1);
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+      expect(qc.getQueryState(listKey)?.isInvalidated).toBe(true);
+
+      const opened = jest.fn();
+      const onOpen = (e: Event) => opened((e as CustomEvent).detail);
+      window.addEventListener("document:open-ledger", onOpen);
+      fireEvent.click(screen.getByRole("button", { name: "Check the invoices" }));
+      window.removeEventListener("document:open-ledger", onOpen);
+      expect(opened).toHaveBeenCalledWith("accounts");
+      expect(draftWrites(writer)).toBe(1);
+      expect(onDrafted).not.toHaveBeenCalled();
+    },
+  );
 });

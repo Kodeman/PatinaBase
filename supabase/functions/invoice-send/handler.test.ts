@@ -10,6 +10,10 @@ interface World {
   canManage: boolean;
   capabilityError: string | null;
   issueError: string | null;
+  /** The issue commits (status 'sent'), then its reply is lost to a transport error. */
+  issueReplyLost: boolean;
+  /** Reading the invoice back after the issue fails with this message. */
+  rereadError: string | null;
   profile: { full_name: string | null; email: string | null } | null;
   /** The preferred-profile read fails with this message. */
   profileError: string | null;
@@ -49,6 +53,8 @@ function draftWorld(overrides: Partial<World> = {}): World {
     canManage: true,
     capabilityError: null,
     issueError: null,
+    issueReplyLost: false,
+    rereadError: null,
     profile: null,
     profileError: null,
     designerClients: [],
@@ -107,7 +113,11 @@ function handlerFor(world: World) {
           select: () => ({
             eq: () => ({
               maybeSingle: () =>
-                Promise.resolve({ data: structuredClone(world.invoice), error: null }),
+                Promise.resolve(
+                  world.rereadError && world.calls.includes("caller:issue_invoice")
+                    ? { data: null, error: { message: world.rereadError } }
+                    : { data: structuredClone(world.invoice), error: null },
+                ),
             }),
           }),
           update: () => ({
@@ -156,6 +166,9 @@ function handlerFor(world: World) {
               invoice_number: "INV-1071",
               sent_at: "2026-10-17T12:00:00Z",
             });
+            if (world.issueReplyLost) {
+              return Promise.resolve({ data: null, error: { message: "TypeError: Failed to fetch" } });
+            }
             const { project: _p, client: _c, designer: _d, ...row } = world.invoice;
             return Promise.resolve({ data: structuredClone(row), error: null });
           }
@@ -228,6 +241,36 @@ Deno.test("issue-first: a refused issue is 409 issue_failed and nothing is sent"
   assertEquals(status, 409);
   assertEquals(body.error, "issue_failed");
   assertEquals(body.detail, "Invoice has no lines");
+  assertEquals(world.sentTo, []);
+});
+
+// SQ-1272 F1 — an issue error is not proof nothing issued: the reply may be
+// lost after the commit. The invoice is read back, and only a draft is
+// issue_failed. Issued, no letter goes (it may be another send's issue, which
+// sent its own), so the client is never written to twice.
+Deno.test("issue-first: an issue that commits and loses its reply reads back issued — issued_unsent, its number, no letter", async () => {
+  const world = draftWorld({ designerClients: withRecipient, issueReplyLost: true });
+  const { status, body } = await post(world, { invoiceId: "inv-1", issue: true });
+
+  assertEquals(status, 409);
+  assertEquals(body.error, "issued_unsent");
+  assertEquals(body.issued, true);
+  assertEquals(body.invoiceNumber, "INV-1071");
+  assertEquals(world.invoice.status, "sent");
+  assertEquals(world.sentTo, []);
+});
+
+Deno.test("issue-first: an issue error whose read-back fails is 503 issue_unknown, never issue_failed, nothing sent", async () => {
+  const world = draftWorld({
+    designerClients: withRecipient,
+    issueError: "TypeError: Failed to fetch",
+    rereadError: "connection reset",
+  });
+  const { status, body } = await post(world, { invoiceId: "inv-1", issue: true });
+
+  assertEquals(status, 503);
+  assertEquals(body.error, "issue_unknown");
+  assertEquals("issued" in body, false);
   assertEquals(world.sentTo, []);
 });
 

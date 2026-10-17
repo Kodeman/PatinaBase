@@ -1311,6 +1311,8 @@ describe('SQ-1262 F3: a send-on-draft whose answer is lost', () => {
     ['a lost request', fetchError],
     ['a 5xx that is not JSON', nonJson5xx],
     ['JSON that names no error', ownRefusal({ code: 'WORKER_LIMIT', message: 'out of compute' })],
+    // SQ-1272 F1 — the function's own word that it could not read the issue back.
+    ['invoice-send’s issue_unknown', ownRefusal({ error: 'issue_unknown', detail: 'TypeError: Failed to fetch' })],
   ])('%s: the outcome is unknown, and the invoice and its money re-read', async (_label, error) => {
     const thrown = await refusal(error, true);
     expect(thrown.issueUnknown).toBe(true);

@@ -826,6 +826,9 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
         }
       );
       if (invErr) {
+        // The write went out: a lost answer may hide a draft that landed, and
+        // no idempotency key stops a second one, so the invoice lists re-read.
+        void queryClient.invalidateQueries({ queryKey: ['invoices'] });
         throw new Error(`Failed to create draft invoice: ${invErr.message ?? String(invErr)}`);
       }
 
@@ -891,6 +894,8 @@ export function useCreateDraftStudioInvoice(options?: { errorSurface?: 'inline' 
         }
       );
       if (error) {
+        // As useCreateDraftInvoice: the write went out, so the lists re-read.
+        void queryClient.invalidateQueries({ queryKey: ['invoices'] });
         throw new Error(
           `Failed to create draft studio invoice: ${error.message ?? String(error)}`
         );
@@ -1136,10 +1141,12 @@ export function useRecordPayment(options?: { errorSurface?: 'inline' }) {
 /**
  * A refused invoice-send, in the function's own words. `issued` is true when
  * a send-on-draft (`issue: true`) issued the draft before the letter failed,
+ * or read it back issued after a failed issue (`issued_unsent`, no letter),
  * and `invoiceNumber` is the number it took — the invoice is no longer a draft.
  * `issueUnknown` is true when a send-on-draft got no answer in the function's
- * own words (a lost request, a timeout, a 5xx that is not its JSON): the draft
- * may have issued or not.
+ * own words (a lost request, a timeout, a 5xx that is not its JSON), or its
+ * `issue_unknown` (it could not read the invoice back after a failed issue):
+ * the draft may have issued or not.
  */
 export class InvoiceSendError extends Error {
   readonly issued: boolean;
@@ -1227,8 +1234,9 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
           /* fall through to the generic message */
         }
         // invoice-send refuses in JSON naming an `error`, saying `issued` once
-        // it has issued; any other answer says nothing about an issue.
-        const answered = typeof body?.error === 'string';
+        // it has issued; any other answer says nothing about an issue, and
+        // `issue_unknown` is its own word that it could not tell.
+        const answered = typeof body?.error === 'string' && body.error !== 'issue_unknown';
         throw new InvoiceSendError(
           detail ?? error.message ?? 'Failed to send invoice',
           body,

@@ -8,6 +8,10 @@
  * Runs the real useProjects and useUnbilledTime against a real QueryClient and
  * an in-memory projects table and project_unbilled_time view, so the cached
  * data is genuinely retained.
+ *
+ * SQ-1272 F2 — the project's pieces, their coverage and their billing stages
+ * are read the same way (the real useProjectFFEItems, useFfeInvoiceCoverage and
+ * useFfeInvoiceStageCoverage): a failed one holds Draft, never reads as none.
  */
 import { type ReactNode } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -36,15 +40,18 @@ jest.mock("@patina/supabase", () => ({
   useCreateDraftInvoice: () => ({ mutateAsync: mockCreateDraft, isPending: false }),
   useCreateDraftStudioInvoice: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useDeleteDraftInvoice: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useFfeInvoiceCoverage: () => ({ data: undefined, isLoading: false }),
-  useFfeInvoiceStageCoverage: () => ({ data: undefined, isLoading: false }),
+  useFfeInvoiceCoverage: (projectId: string, opts?: { enabled?: boolean }) =>
+    jest.requireActual("@patina/supabase").useFfeInvoiceCoverage(projectId, opts),
+  useFfeInvoiceStageCoverage: (projectId: string | null) =>
+    jest.requireActual("@patina/supabase").useFfeInvoiceStageCoverage(projectId),
   useAddInvoiceBillingLines: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProjectPoCostLines: () => ({ data: [], isLoading: false }),
   useOrganizations: () => ({
     data: [{ id: "studio-1", name: "Middle West Studio", type: "design_studio", status: "active" }],
     isLoading: false,
   }),
-  useProjectFFEItems: () => ({ data: [], isLoading: false }),
+  useProjectFFEItems: (projectId: string) =>
+    jest.requireActual("@patina/supabase").useProjectFFEItems(projectId),
   useProjectInvoices: () => ({ data: [] }),
   useProjectPaymentMilestones: () => ({ data: [] }),
   useClaimTimeEntries: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -73,6 +80,10 @@ let table: Project[] = [];
 /** How the next read of each answers: as it stands, never, or with an error. */
 let projectsMode: "answer" | "hang" | "fail" = "answer";
 let timeMode: "answer" | "hang" | "fail" = "answer";
+/** The project's pieces, their coverage and their billing stages. */
+let piecesMode: "answer" | "hang" | "fail" = "answer";
+let coverageMode: "answer" | "hang" | "fail" = "answer";
+let stagesMode: "answer" | "hang" | "fail" = "answer";
 
 function respond(mode: "answer" | "hang" | "fail", rows: () => unknown[], what: string) {
   if (mode === "hang") return new Promise<never>(() => {});
@@ -81,6 +92,18 @@ function respond(mode: "answer" | "hang" | "fail", rows: () => unknown[], what: 
 }
 
 function from(name: string) {
+  if (name === "project_ffe_items") {
+    // Its query ends in three orders and is awaited as it stands.
+    const pieces = {
+      select: () => pieces,
+      eq: () => pieces,
+      is: () => pieces,
+      order: () => pieces,
+      then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+        respond(piecesMode, () => [], "pieces").then(resolve, reject),
+    };
+    return pieces;
+  }
   const builder = {
     select: () => builder,
     eq: () => builder,
@@ -90,6 +113,12 @@ function from(name: string) {
         : respond(timeMode, () => [], "hours"),
   };
   return builder;
+}
+
+function rpc(name: string) {
+  if (name === "get_ffe_invoice_coverage") return respond(coverageMode, () => [], "coverage");
+  if (name === "get_ffe_invoice_stage_coverage") return respond(stagesMode, () => [], "stages");
+  throw new Error(`unexpected rpc ${name}`);
 }
 
 const browser = globalThis as { __supabaseBrowserClient?: unknown };
@@ -152,7 +181,10 @@ beforeEach(() => {
   ];
   projectsMode = "answer";
   timeMode = "answer";
-  browser.__supabaseBrowserClient = { from };
+  piecesMode = "answer";
+  coverageMode = "answer";
+  stagesMode = "answer";
+  browser.__supabaseBrowserClient = { from, rpc };
 });
 afterEach(() => {
   qc.clear();
@@ -217,6 +249,19 @@ describe("SQ-1249 F1: the composer's readiness stands only on a settled read", (
 
     await heldOn("This project's hours couldn't be read. Reload the page to draft its invoice.");
     expect(qc.getQueryData(timeKey)).toBeDefined();
+  });
+
+  it.each([
+    ["pieces", () => (piecesMode = "fail"), ["project-ffe-items", "project-1"]],
+    ["coverage", () => (coverageMode = "fail"), ["ffe-invoice-coverage", "project-1"]],
+    ["billing stages", () => (stagesMode = "fail"), ["ffe-invoice-coverage", "project-1", "stages"]],
+  ] as const)("SQ-1272 F2: holds Draft on why after a cold %s read fails", async (_label, fail, key) => {
+    fail();
+    renderComposer();
+    addLine();
+    await waitFor(() => expect(qc.getQueryState([...key])?.status).toBe("error"));
+
+    await heldOn("This project couldn't be read. Reload the page to draft its invoice.");
   });
 
   it("never reads a project the projects read did not return as ready", async () => {

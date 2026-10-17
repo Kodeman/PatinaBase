@@ -246,17 +246,27 @@ export function InvoiceComposer({
     () => unbilledRiders(riders as ComposerRider[] | undefined),
     [riders],
   );
-  const { data: ffeItems, isLoading: ffeLoading } =
-    useProjectFFEItems(projectId);
-  const { data: coverage, isLoading: coverageLoading } = useFfeInvoiceCoverage(
-    projectId,
-    {
-      enabled: !!projectId,
-    },
-  );
+  const {
+    data: ffeItems,
+    isLoading: ffeLoading,
+    isFetching: ffeFetching,
+    isError: ffeFailed,
+  } = useProjectFFEItems(projectId);
+  const {
+    data: coverage,
+    isLoading: coverageLoading,
+    isFetching: coverageFetching,
+    isError: coverageFailed,
+  } = useFfeInvoiceCoverage(projectId, {
+    enabled: !!projectId,
+  });
   // C-31 — every live billing slot (full · deposit · balance) per line.
-  const { data: stageRows, isLoading: stagesLoading } =
-    useFfeInvoiceStageCoverage(projectId || null);
+  const {
+    data: stageRows,
+    isLoading: stagesLoading,
+    isFetching: stagesFetching,
+    isError: stagesFailed,
+  } = useFfeInvoiceStageCoverage(projectId || null);
   const billing = useMemo(
     () => lineBillingByItem(stageRows as ComposerStageSlot[] | undefined),
     [stageRows],
@@ -341,10 +351,13 @@ export function InvoiceComposer({
   // failure before anything was written may be tried again (act-fail-line.tsx
   // §money writes). `gap` marks a billing-gap refusal, which clears itself once
   // the gap does.
+  // `unconfirmed` marks a draft write whose answer was lost: it may have
+  // landed, so the act routes to the invoices instead of retrying.
   const [error, setError] = useState<{
     message: string;
     retryable: boolean;
     gap?: InvoiceBillingGap;
+    unconfirmed?: true;
   } | null>(null);
   // The billing writer's refusal of one named line, by its subject id: shown
   // beside that line, which the refusal unticked.
@@ -881,6 +894,9 @@ export function InvoiceComposer({
   // F1 — readiness reads the project and its hours as they stand. A read still
   // out (a first load, or a refetch over cached data) or a failed one
   // establishes nothing, so no client is taken as linked from it: unknown = held.
+  // SQ-1272 F2 — so do its pieces, their coverage and their billing stages: a
+  // failed read looks like no pieces, or none billed yet, and a ticked piece
+  // would drop off the draft.
   const readBlocker: ComposerBlocker | null =
     studioMode || !projectId
       ? null
@@ -894,7 +910,16 @@ export function InvoiceComposer({
               ? "time-unread"
               : timeLoading || timeFetching
                 ? "time-pending"
-                : null;
+                : ffeFailed || coverageFailed || stagesFailed
+                  ? "project-unread"
+                  : ffeLoading ||
+                      ffeFetching ||
+                      coverageLoading ||
+                      coverageFetching ||
+                      stagesLoading ||
+                      stagesFetching
+                    ? "project-pending"
+                    : null;
   // §A5 — the first unmet requirement; the held act names it and lands on it.
   const holds: InvoiceHold[] = readBlocker ? [] : assessInvoiceReadiness({
     clientLinked: !projectId || billingGap !== "no-client",
@@ -1106,7 +1131,7 @@ export function InvoiceComposer({
     } catch (e) {
       if (!live()) return;
       // create_draft_invoice refuses in its own words; say it in the composer's.
-      const failure: ReturnType<typeof preWriteFailure> =
+      const failure: ReturnType<typeof preWriteFailure> & { unconfirmed?: true } =
         e instanceof InvoiceBillingGapError
           ? preWriteFailure(e)
           : e instanceof OfflineRefusal
@@ -2360,6 +2385,26 @@ export function InvoiceComposer({
             onRetry={error?.retryable ? () => void draft() : undefined}
             retryKey="retry-draft-invoice"
           />
+          {error?.unconfirmed && (
+            <DocumentAction
+              actionKey="check-drafted-invoices"
+              surfaceKey="accounts"
+              regionKey="invoice-composer"
+              variant="tertiary"
+              className="mt-1.5"
+              onClick={() => {
+                onClose?.();
+                // command-bar's openLedger('accounts') event, dispatched here
+                // as open-hours-scope.ts does: importing command-bar would pull
+                // the whole palette into the composer.
+                window.dispatchEvent(
+                  new CustomEvent("document:open-ledger", { detail: "accounts" }),
+                );
+              }}
+            >
+              Check the invoices
+            </DocumentAction>
+          )}
         </>
       )}
       {/* F11 — in the DOM from mount, so a screen reader hears the reason the

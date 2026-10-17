@@ -1231,11 +1231,12 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
       "A selection is priced in another currency. Invoices bill in US dollars only.",
       false,
     ],
+    // SQ-1272 F4 — an answer to the write it doesn't know may hide a landed draft.
     [
       "one it doesn't",
       'Failed to create draft invoice: duplicate key value violates unique constraint "invoices_pkey" (12000 cents)',
-      "The invoice couldn't be drafted.",
-      true,
+      "We couldn't confirm the draft. Check the invoices before drafting again.",
+      false,
     ],
   ])("F13: says create_draft_invoice's %s in the composer's words", async (_label, raw, sentence, retryable) => {
     mockFfeItems = [SIDE_TABLE];
