@@ -94,6 +94,8 @@ jest.mock('@patina/supabase', () => ({
     },
   }),
   useProjectV2: () => ({ data: undefined }),
+  useSessionUserId: () => null,
+  useDocumentClientLinkHold: () => ({ data: null }),
   useProjectRoster: () => ({ data: [] }),
   // Every scan resolves a hero with a ready-to-use URL, so the door's
   // `withImage` filter keeps them all and nothing needs signing.

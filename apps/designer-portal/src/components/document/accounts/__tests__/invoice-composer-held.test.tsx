@@ -1679,7 +1679,7 @@ describe("InvoiceComposer · rate-pending hours name their fix (K8)", () => {
       expect(screen.queryByRole("button", { name: "Copy a note" })).not.toBeInTheDocument();
 
       fireEvent.click(setRate);
-      expect(opened).toHaveBeenCalledWith({ page: "studio", rateFor: "maria" });
+      expect(opened).toHaveBeenCalledWith({ page: "studio", rateFor: "maria", aboveFolio: true });
       expect(setRate).toHaveFocus();
     } finally {
       window.removeEventListener("document:open-account", onOpen);
@@ -1706,7 +1706,7 @@ describe("InvoiceComposer · rate-pending hours name their fix (K8)", () => {
 
       fireEvent.click(screen.getByRole("link", { name: "Set Maria Obi’s rate" }));
       expect(window.localStorage.getItem("patina.hours.viewer-studio-id")).toBe("studio-1");
-      expect(opened).toHaveBeenCalledWith({ page: "studio", rateFor: "maria" });
+      expect(opened).toHaveBeenCalledWith({ page: "studio", rateFor: "maria", aboveFolio: true });
     } finally {
       window.removeEventListener("document:open-account", onOpen);
       selectViewerStudioId(null);

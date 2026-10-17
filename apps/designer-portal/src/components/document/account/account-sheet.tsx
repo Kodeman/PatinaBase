@@ -29,6 +29,7 @@ import {
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { useAccountStudio } from '@/hooks/use-viewer-studio';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { authEvents } from '@/lib/analytics/events';
 import { DocSheet } from '../overlays/doc-sheet';
@@ -90,6 +91,7 @@ export function AccountSheet() {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState<AccountPage>('profile');
   const [rateFor, setRateFor] = useState<string | null>(null);
+  const [aboveFolio, setAboveFolio] = useState(false);
 
   // Flag hook stays above every early return / conditional branch below
   // (hook-order stability) even though this component has no early return
@@ -100,6 +102,7 @@ export function AccountSheet() {
   const { user, signOut } = useAuth();
   const { data: profile } = useProfile();
   const { data: orgs } = useOrganizations();
+  const { studio: accountStudio } = useAccountStudio();
   const hydrated = useHydrated();
 
   const { data: status } = useAvailability();
@@ -111,13 +114,17 @@ export function AccountSheet() {
   useEffect(() => {
     const onOpen = (e: Event) => {
       const detail = (
-        e as CustomEvent<{ page?: AccountPage; rateFor?: string } | undefined>
+        e as CustomEvent<
+          | { page?: AccountPage; rateFor?: string; aboveFolio?: boolean }
+          | undefined
+        >
       ).detail;
       const wanted = detail?.page;
       setPage(
         wanted && ACCOUNT_PAGES.includes(wanted) ? wanted : 'profile',
       );
       setRateFor(detail?.rateFor ?? null);
+      setAboveFolio(detail?.aboveFolio === true);
       setOpen(true);
     };
     window.addEventListener('document:open-account', onOpen);
@@ -151,7 +158,8 @@ export function AccountSheet() {
   const name =
     profile?.display_name || profile?.full_name || user?.name || null;
   const email = user?.email ?? profile?.email ?? '';
-  const studio = activeStudio(orgs);
+  // The studio the Studio page below answers for, so a switch there shows here.
+  const studio = activeStudio(accountStudio ? [accountStudio] : orgs);
   const currentStatus: AvailabilityStatus = hydrated
     ? (status ?? 'online')
     : 'offline';
@@ -162,7 +170,12 @@ export function AccountSheet() {
   ];
 
   return (
-    <DocSheet open={open} onClose={() => setOpen(false)} title="Account settings">
+    <DocSheet
+      open={open}
+      onClose={() => setOpen(false)}
+      title="Account settings"
+      aboveFolio={aboveFolio}
+    >
       <div className="mx-auto max-w-xl">
         {/* Identity front-matter — the literal answer to "what account is this". */}
         <div className="flex items-start gap-3.5">

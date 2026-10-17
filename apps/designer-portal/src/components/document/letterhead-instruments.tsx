@@ -20,7 +20,9 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
+  useDocumentClientLinkHold,
   useProjectV2,
+  useSessionUserId,
   useProjectRoster,
   resolveCoverPhoto,
   publicUrlToPath,
@@ -64,6 +66,7 @@ import {
 } from './document-action';
 import { ProposalPreview } from './proposal-preview';
 import { HouseholdSheet, useNoLoginRepair } from './overlays/household-sheet';
+import { CopyAct } from './copy-act';
 import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 /** The control focus returns to when the composer is cancelled: whatever was
@@ -391,7 +394,14 @@ export function LetterheadInstruments({
   // proposal, read here from the same `project-v2` query the page already holds
   // (page.tsx derives the chip's `designerClientId` the same way).
   const { data: project } = useProjectV2(projectId ?? '') as {
-    data: { proposal?: { designer_client_id?: string | null } | null } | undefined;
+    data:
+      | {
+          name?: string | null;
+          designer_id?: string | null;
+          designer?: { full_name?: string | null } | null;
+          proposal?: { designer_client_id?: string | null } | null;
+        }
+      | undefined;
   };
   const hasClient = Boolean(
     clientProfileId || (projectId && project?.proposal?.designer_client_id),
@@ -423,9 +433,32 @@ export function LetterheadInstruments({
   // with no repair. Proposal papers keep the picker's `Invite …`.
   const relationshipNoLogin = noLogin && !projectId && !proposalId;
   const [noLoginRepair, setNoLoginRepair] = useState<NoLoginRepair>(null);
+  // K5 (00796) — on a project, Link a client is the lead's act or a studio
+  // owner/admin's, the invoice composer's same hold. Anyone else is asked to
+  // ask the lead, with a note to copy (M4: nothing is sent). The lead is always
+  // admitted, so only anyone else waits on the read.
+  const viewerId = useSessionUserId();
+  const linkGated = Boolean(projectId) && messageHeld && !noLogin;
+  const isLead = !!viewerId && project?.designer_id === viewerId;
+  const { data: linkHold } = useDocumentClientLinkHold(
+    linkGated && !isLead ? projectId : null,
+  );
+  const askLead = linkGated && !isLead && linkHold !== null;
+  const leadName = project?.designer?.full_name || 'the lead designer';
+  const askNote = `Could you link a client to ${project?.name || 'this project'}? I'd like to message them.`;
+  const askNoteRef = useRef<HTMLSpanElement | null>(null);
   const withheld = noLogin
     ? messageNoLogin(firstName, relationshipNoLogin ? noLoginRepair : 'invite')
-    : MESSAGE_WITHHELD;
+    : askLead
+      ? {
+          // SQ-1069 — the lead has left the studio: only support can move it.
+          reason:
+            linkHold === 'lead_not_in_studio'
+              ? "The lead on this job has left the studio. Write to hello@patina.cloud and we'll move the job to someone on your team."
+              : `No client yet. Ask ${leadName} to link one.`,
+          repair: null,
+        }
+      : MESSAGE_WITHHELD;
   const heldLabel = messageLabel(noLogin ? firstName : null);
 
   // US-19 F3-2 (one-voice, P-2) — `Nudge {first}` lands here: the composer
@@ -663,6 +696,24 @@ export function LetterheadInstruments({
             repair={withheld.repair}
             reasonId={messageReasonId}
             onRepair={() => setLinking(true)}
+            ask={
+              askLead && linkHold !== 'lead_not_in_studio' ? (
+                <span className="inline-flex flex-col items-start">
+                  <span className="px-[6px] text-[11.5px] leading-tight text-[var(--text-muted)]">
+                    “<span ref={askNoteRef}>{askNote}</span>”
+                  </span>
+                  <CopyAct
+                    text={askNote}
+                    selectRef={askNoteRef}
+                    actionKey="copy-link-client-note"
+                    surfaceKey="open-document"
+                    regionKey="letterhead-actions"
+                  >
+                    Copy a note
+                  </CopyAct>
+                </span>
+              ) : null
+            }
           >
             {/* F2-9 (`one-voice`) — the letterhead prints D1's names at every
                 width, so the accessible name is the printed one. */}
@@ -873,6 +924,7 @@ function MessageCluster({
   repair,
   reasonId,
   onRepair,
+  ask,
   children,
 }: {
   held: boolean;
@@ -882,6 +934,8 @@ function MessageCluster({
   repair: string | null;
   reasonId: string;
   onRepair: () => void;
+  /** K5 — in place of a repair she may not make: the note she copies. */
+  ask?: ReactNode;
   children: ReactNode;
 }) {
   if (!held) return <>{children}</>;
@@ -898,6 +952,7 @@ function MessageCluster({
           {repair}
         </DocumentAction>
       )}
+      {ask}
     </span>
   );
 }

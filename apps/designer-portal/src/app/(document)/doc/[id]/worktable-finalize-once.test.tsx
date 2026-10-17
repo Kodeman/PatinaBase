@@ -73,6 +73,8 @@ jest.mock('@patina/supabase', () => ({
   useGeneratedRoomFilesByScan: () => ({ data: new Map() }),
   /* the page's own reads */
   useProjectV2: () => ({ data: undefined, isLoading: false, isError: false }),
+  useSessionUserId: () => null,
+  useDocumentClientLinkHold: () => ({ data: null }),
   useProjectPhases: () => ({ data: [] }),
   useProjectApprovals: () => ({ data: [] }),
   useProposalFeedback: () => ({ data: mockFeedback }),
