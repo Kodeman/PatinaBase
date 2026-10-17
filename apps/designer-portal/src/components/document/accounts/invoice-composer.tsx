@@ -83,7 +83,10 @@ import {
 import { computeInvoiceTotals, formatCurrency } from "@patina/shared";
 import { formatHoursLabel } from "@/lib/time-billing";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
-import { useViewerStudio } from "@/hooks/use-viewer-studio";
+import {
+  selectViewerStudioId,
+  useViewerStudio,
+} from "@/hooks/use-viewer-studio";
 import { ClientPicker } from "@/components/portal/client-picker";
 import { documentEvents } from "@/lib/analytics/document-events";
 import { OPEN_HOUSEHOLD_SHEET_EVENT } from "@/lib/document/registry";
@@ -340,7 +343,7 @@ export function InvoiceComposer({
   const stampProjectStudio = useStampProjectPricingStudio();
   // F8 — the studio this viewer answers for, chosen the way hours-ledger's
   // stamp door chooses it (one choice keys every surface).
-  const { studio: viewerStudio } = useViewerStudio();
+  const { studio: viewerStudio, candidates: viewerStudios } = useViewerStudio();
   // Someone above her can name it: she holds a seat that is not her own studio.
   const hasStudioOwner = studios.some((studio) => {
     const role = studio.membership?.role;
@@ -741,12 +744,13 @@ export function InvoiceComposer({
     selectedProject?.designer?.full_name ||
     "the lead designer";
   // K8 — the rate-pending group's fix. Rates are set by an owner/admin of the
-  // project's pricing studio, which must be the studio she answers for: the
-  // Account page's rate fields are that studio's.
+  // project's pricing studio. She may answer for another studio she owns (00295
+  // gives every designer a one-person workspace), so Set switches her to the
+  // pricing studio before opening the Account page, whose rate fields follow it.
+  const pricingStudioId = selectedProject?.studio_id ?? null;
   const canSetRates =
-    !!viewerStudio &&
-    !!selectedProject?.studio_id &&
-    viewerStudio.id === selectedProject.studio_id;
+    !!pricingStudioId &&
+    viewerStudios.some((studio) => studio.id === pricingStudioId);
   // One fix per person; the roster leaves the project's own designer unnamed.
   const ratePendingMembers = useMemo(() => {
     const names = new Map<string, string | null>();
@@ -1348,6 +1352,8 @@ export function InvoiceComposer({
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.currentTarget.focus();
+                                if (pricingStudioId)
+                                  selectViewerStudioId(pricingStudioId);
                                 openAccountPage("studio", {
                                   rateFor: member.userId,
                                 });

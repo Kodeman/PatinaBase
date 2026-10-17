@@ -12,6 +12,7 @@ import { InvoiceComposer } from "../invoice-composer";
 import { DocSheet } from "../../overlays/doc-sheet";
 import { PaperFolioSheet } from "../../overlays/paper-folio-sheet";
 import { OPEN_HOUSEHOLD_SHEET_EVENT } from "@/lib/document/registry";
+import { selectViewerStudioId } from "@/hooks/use-viewer-studio";
 
 const mockCreateStudioDraft = jest.fn();
 const mockCreateDraft = jest.fn();
@@ -1602,6 +1603,33 @@ describe("InvoiceComposer · rate-pending hours name their fix (K8)", () => {
       expect(setRate).toHaveFocus();
     } finally {
       window.removeEventListener("document:open-account", onOpen);
+    }
+  });
+
+  it("SQ-1060: an owner whose own workspace sorts first still gets Set, which switches her to the pricing studio", () => {
+    mockOrganizations = [
+      {
+        id: "studio-0",
+        name: "Leah Hartwell",
+        type: "design_studio",
+        status: "active",
+        membership: { role: "owner", status: "active" },
+      },
+      ...studio("studio-1", "owner"),
+    ];
+    const opened = jest.fn();
+    const onOpen = (e: Event) => opened((e as CustomEvent).detail);
+    window.addEventListener("document:open-account", onOpen);
+    try {
+      render(composer());
+      expect(screen.queryByText(/to set a rate/)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("link", { name: "Set Maria Obi’s rate" }));
+      expect(window.localStorage.getItem("patina.hours.viewer-studio-id")).toBe("studio-1");
+      expect(opened).toHaveBeenCalledWith({ page: "studio", rateFor: "maria" });
+    } finally {
+      window.removeEventListener("document:open-account", onOpen);
+      selectViewerStudioId(null);
     }
   });
 
