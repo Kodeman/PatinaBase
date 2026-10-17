@@ -43279,7 +43279,7 @@ export type Database = {
       promote_to_studio: {
         Args: {
           p_category: string
-          p_lead_time_weeks: number
+          p_lead_time_weeks?: number
           p_payment_terms: string
           p_product_id: string
           p_studio_id: string

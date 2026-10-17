@@ -332,7 +332,7 @@ export function PieceRoom({ productId }: { productId: string }) {
     categorization: !!p?.category,
     commerce: loadedSections?.commerce ?? false,
     lifecycle: p?.status === "published",
-    sourcing: !!(p?.vendor_id && p?.lead_time_weeks && p?.payment_terms),
+    sourcing: !!(p?.vendor_id && p?.payment_terms),
     seo: !!p?.seo_title,
     eye: hasTeaching,
   };
@@ -1026,7 +1026,7 @@ export function PieceRoom({ productId }: { productId: string }) {
                   ? "needed to share"
                   : "optional"
             }
-            done={!!(p.vendor_id && p.lead_time_weeks && p.payment_terms)}
+            done={!!(p.vendor_id && p.payment_terms)}
             open={activeFacet === "sourcing"}
             onToggle={() => selectFacet("sourcing")}
             readOnly={readOnly}
@@ -1061,7 +1061,6 @@ export function PieceRoom({ productId }: { productId: string }) {
                   serverValue={p.lead_time_weeks}
                   label="Lead time"
                   suffix="weeks"
-                  needed={studioNeeds}
                   readOnly={readOnly}
                 />
               </div>
