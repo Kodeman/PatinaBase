@@ -11540,6 +11540,16 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 
 **How (prop).** `holdFix="<element id>"` on `DocumentAction` and `ui/controls` `Button`. When the id is inside the act's `[data-spotlight-frame]`, the default window is that region; otherwise R185 applies unchanged. Record a change names its choices fieldset.
 
+### R187 · A selected unpriced piece holds the draft; labor is priced in its row, any other line in the Price lens, and the composer parks — US-36 K7, K13 — Kody 2026-10-16
+
+**Ruling (Kody).** A ticked piece with no client price holds Draft the invoice; it never bills at $0. A labor line takes its client price in the composer's own row. Any other line is priced in the Price lens and comes back through *Back to the invoice*, with the composer's work kept (parking).
+
+**How (SQ-1046).**
+- The composer lists each unpriced piece by name with its fix. It can be ticked only once priced. One that arrives ticked (an asked-for line, or a ticked line whose price went away) holds the draft, and its reason and fix share one row keyed `price-line:<id>` (R186).
+- Labor: the row's client-price field writes through `set_labor_line_price` (00755), typed as the Price lens takes it. Blur or Enter saves; Esc puts the typing back.
+- Any other line: *Price it* parks the composer, puts it away, and walks to `/doc/<id>/pieces?lens=price`. `FocusFfeLineRequest.cell` gains `price`, and only the Price lens answers it: on the typeable client price, or on the printed one where none can be typed.
+- Parking keeps the ticks, hours, notes and billing mode per project, in memory only (`lib/document/registry.tsx`, never storage). Reopening the composer on that project restores it. Drafting or discarding that composer clears it. While a job's composer is parked, its Price lens shows *Back to the invoice*.
+
 ### R185 · A pricing approval records what the client approved, never live FF&E — US-37 D5 amended — SQ-1169 2026-10-17
 
 **Amends US-37 D5 (Astra SQ-1168, repaired in SQ-1169, migration 00810).** D5 said a client approval snapshots the job's FF&E pricing. It now records only what the client approved, as she saw it. A spec book approval records the approved client edition's frozen lines from `spec_book_revisions.render_snapshot`, the model the client PDF was printed from: each line whose client price that PDF printed, at its frozen unit price, frozen quantity, implied total (unit × quantity, as D4 makes it) and frozen currency. Lines the edition did not list or did not price for the client are not approved. A budget approval records the approval event with no lines, because a budget approves ranges, not line prices. An addendum edition and an edition whose client profile hides prices also record no lines, since their printed prices cannot be recovered here. A non-blocking product-option consent through `apply_client_decision` records that decision's one line at the option's price and quantity, in USD (options carry no currency). Nothing ever falls back to live FF&E.
@@ -11548,4 +11558,4 @@ Neither reader returns cost, markup or retail. They do return names, rooms, quan
 
 **Locks (R182).** The approval path and the 00809 line pricing writers take the job label lock first, so a pricing edit lands wholly before or wholly after an approval and the change log never misses one. That amends 00809 (not yet on Strata) in its four single-line writers. Legacy line writers outside 00809 (`set_project_ffe_line_commercials`, `resolve_ack_line`) and raw service writes do not take it: an edit through them committed while a job's first approval is still open can go unlogged. The UI prices lines through the 00809 writers only. Measured by `supabase/tests/ffe/us37_pricing_approval_test.sql`, including a two-session interleave.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · last id = R186*
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · last id = R187*

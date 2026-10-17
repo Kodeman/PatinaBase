@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { DocumentAction } from '../document-action';
 import { DocSheet } from '../overlays/doc-sheet';
 import { PaperFolioSheet } from '../overlays/paper-folio-sheet';
@@ -275,6 +276,17 @@ describe('a held act that names its fix region (R186)', () => {
     expect(screen.getByRole('status')).toHaveTextContent('All set.');
   });
 
+  it('hands focus back to the act after a choice made from the keyboard-reachable radio', async () => {
+    const user = userEvent.setup();
+    render(<Chooser />);
+    fireEvent.click(continueAct());
+    await user.click(radio(/On the agreement/));
+
+    await waitFor(() => expect(layer()).toBeNull());
+    expect(screen.getByRole('status')).toHaveTextContent('All set.');
+    expect(continueAct()).toHaveFocus();
+  });
+
   it('keeps the reason window and Close when the site names no fix region', () => {
     render(<Chooser named={false} />);
     fireEvent.click(continueAct());
@@ -325,6 +337,140 @@ describe('a held act with its own holds or its own answer', () => {
 
     expect(say).toHaveBeenCalledTimes(1);
     expect(windows()).toEqual(['client', 'price']);
+  });
+});
+
+describe('a hold that clears while its field is being typed in (SQ-1201 F4)', () => {
+  const saveAct = () => screen.getByRole('button', { name: 'Save the delivery', hidden: true });
+  const field = (id: string) => screen.getByRole('textbox', { name: id, hidden: true });
+  // The spotlight re-reads its holds a frame after they change.
+  const nextFrame = () =>
+    act(() => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve())));
+
+  function Fields({
+    ids,
+    onClick,
+    targetField = false,
+  }: {
+    ids: string[];
+    onClick?: () => void;
+    /** Each hold targets its input itself, not the input's wrapper. */
+    targetField?: boolean;
+  }) {
+    const [values, setValues] = useState<Record<string, string>>({});
+    const holds: SpotlightHold[] = ids
+      .filter((id) => !values[id])
+      .map((id) => ({
+        id,
+        target: () =>
+          targetField
+            ? document.getElementById(`input-${id}`)
+            : document.getElementById(`field-${id}`),
+        label: `No ${id}`,
+        reason: `Set the ${id}.`,
+      }));
+    const fillAll = () => setValues(Object.fromEntries(ids.map((id) => [id, 'hello@example.com'])));
+    return (
+      <>
+        {/* A stand-in for a dialog above the frame, such as HouseholdSheet. */}
+        <button type="button" onClick={fillAll}>
+          Save their email
+        </button>
+        <div data-testid="frame" data-spotlight-frame>
+          <h3>Delivery</h3>
+          {ids.map((id) => (
+            <div key={id} id={`field-${id}`}>
+              <label>
+                {id}
+                <input
+                  id={`input-${id}`}
+                  value={values[id] ?? ''}
+                  onChange={(event) => setValues((prior) => ({ ...prior, [id]: event.target.value }))}
+                />
+              </label>
+            </div>
+          ))}
+          <DocumentAction
+            actionKey="save"
+            held={holds.length > 0}
+            disabled={holds.length > 0}
+            holds={holds}
+            onClick={onClick}
+          >
+            Save the delivery
+          </DocumentAction>
+        </div>
+      </>
+    );
+  }
+
+  async function typeKeyByKey(
+    user: ReturnType<typeof userEvent.setup>,
+    el: HTMLElement,
+    text: string,
+  ) {
+    for (const key of text) {
+      await user.type(el, key, { skipClick: true });
+      await nextFrame();
+      expect(el).toHaveFocus();
+    }
+  }
+
+  it('keeps every key in the first of two fields, its window lingering until focus leaves it', async () => {
+    const user = userEvent.setup();
+    render(<Fields ids={['arrival', 'notes']} />);
+    fireEvent.click(saveAct());
+    const first = field('arrival');
+    expect(first).toHaveFocus();
+    expect(windows()).toEqual(['arrival', 'notes']);
+
+    await typeKeyByKey(user, first, 'Arrival date');
+
+    expect(first).toHaveValue('Arrival date');
+    expect(windows().sort()).toEqual(['arrival', 'notes']);
+    expect(first.closest('[inert]')).toBeNull();
+    expect(layer()).not.toBeNull();
+
+    await user.tab();
+    expect(field('notes')).toHaveFocus();
+    await waitFor(() => expect(windows()).toEqual(['notes']));
+    expect(first.closest('[inert]')).not.toBeNull();
+  });
+
+  it('lifts on the last field’s first key, keeps focus in it and never presses the act', async () => {
+    const user = userEvent.setup();
+    const onClick = jest.fn();
+    render(<Fields ids={['arrival']} onClick={onClick} />);
+    fireEvent.click(saveAct());
+    const only = field('arrival');
+    expect(only).toHaveFocus();
+
+    await typeKeyByKey(user, only, 'Arrival date');
+
+    expect(only).toHaveValue('Arrival date');
+    expect(layer()).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('All set.');
+    expect(onClick).toHaveBeenCalledTimes(0);
+  });
+
+  it('focuses a hold’s target directly when the target is the field itself', () => {
+    render(<Fields ids={['arrival', 'notes']} targetField />);
+    fireEvent.click(saveAct());
+
+    expect(field('arrival')).toHaveFocus();
+  });
+
+  it('leaves focus outside the frame when the last hold clears from a dialog above it', async () => {
+    const user = userEvent.setup();
+    render(<Fields ids={['arrival']} />);
+    fireEvent.click(saveAct());
+    const outside = screen.getByRole('button', { name: 'Save their email' });
+
+    await user.click(outside);
+
+    await waitFor(() => expect(layer()).toBeNull());
+    expect(screen.getByRole('status')).toHaveTextContent('All set.');
+    expect(outside).toHaveFocus();
   });
 });
 

@@ -81,12 +81,31 @@ export interface ComposerFfeItem {
   /** An allowance's ceiling for the whole line (per unit × qty). */
   budget_max_cents?: number | null;
   room?: { name: string | null } | null;
+  /** `labor` lines take their client price in the composer (K7). */
+  line_kind?: string | null;
 }
 
 export interface ComposerAdhocRow {
   description: string;
   quantity: string;
   unitDollars: string;
+}
+
+/** What a composer that left for Price it keeps for its project (K7, K13). */
+export interface ParkedInvoiceComposer {
+  milestoneIds: string[];
+  timeEntryIds: string[];
+  ffeItemIds: string[];
+  ffeStage: "full" | "deposit";
+  depositPctText: string;
+  balanceItemIds: string[];
+  purchaseIds: string[];
+  riderIds: string[];
+  overrides: Array<[string, string]>;
+  adhoc: ComposerAdhocRow[];
+  taxRatePercent: string;
+  termsDays: string;
+  memo: string;
 }
 
 export const EMPTY_ADHOC: ComposerAdhocRow = {

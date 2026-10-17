@@ -114,6 +114,7 @@ jest.mock("@patina/supabase", () => ({
     dataUpdatedAt: mockProjectsUpdatedAt,
   }),
   useClaimTimeEntries: () => ({ mutateAsync: mockClaimTime, isPending: false }),
+  useSetLaborLinePrice: () => ({ mutate: jest.fn(), isPending: false }),
   useUnbilledTime: () => ({ data: { entries: mockUnbilledEntries, ratePendingEntries: mockRatePendingEntries }, isLoading: false }),
   // HT-21 (W5) — names the composer's time rows; unused by this suite's
   // studio-mode/empty-selection scenarios but called unconditionally.
@@ -1649,7 +1650,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(act()).not.toHaveAttribute("aria-describedby");
   });
 
-  it("F2: a ticked piece that turns unpriced drops out of the lines and does not hold the draft", async () => {
+  it("F2/K7: a ticked piece that turns unpriced holds the draft, its reason on its own row", async () => {
     const LAMP = { id: "ffe-2", name: "Floor lamp", quantity: 1, unit_price_cents: 30000, room: null };
     const context = { projectId: "project-1", initialFfeItemIds: ["ffe-1", "ffe-2"] };
     mockFfeItems = [SIDE_TABLE, LAMP];
@@ -1658,13 +1659,12 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
 
     mockFfeItems = [SIDE_TABLE, { ...LAMP, unit_price_cents: null }];
     rerender(composer(context));
-    expect(act()).not.toHaveAttribute("aria-disabled", "true");
+    expect(act()).toHaveAttribute("aria-disabled", "true");
+    const row = document.querySelector('[data-focus-key="price-line:ffe-2"]') as HTMLElement;
+    expect(row).toHaveTextContent("Set a client price for Floor lamp.");
+    expect(within(row).getByRole("link", { name: "Price it: Floor lamp" })).toBeInTheDocument();
     fireEvent.click(act());
-    await waitFor(() => expect(mockCreateDraft).toHaveBeenCalledTimes(1));
-    const ffeIds = mockCreateDraft.mock.calls[0][0].lines
-      .map((l: { ffeItemId?: string }) => l.ffeItemId)
-      .filter(Boolean);
-    expect(ffeIds).toEqual(["ffe-1"]);
+    expect(mockCreateDraft).not.toHaveBeenCalled();
   });
 
   it.each([

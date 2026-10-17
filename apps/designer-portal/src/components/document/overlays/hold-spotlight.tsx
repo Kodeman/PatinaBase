@@ -33,6 +33,29 @@ const GEOMETRY_MOTION: CSSProperties = {
     .join(", "),
 };
 
+const TEXT_TYPES = new Set([
+  "text",
+  "email",
+  "number",
+  "search",
+  "tel",
+  "url",
+  "password",
+  "date",
+]);
+
+// `type` reads back lowercased, and "text" for an untyped input.
+const isTextEntry = (el: Element) =>
+  el instanceof HTMLInputElement
+    ? TEXT_TYPES.has(el.type)
+    : el.matches("textarea, [contenteditable]");
+
+// `focusableWithin` looks at descendants only; a hold can target the control.
+const firstFocusable = (el: HTMLElement) =>
+  el.parentElement && focusableWithin(el.parentElement).includes(el)
+    ? el
+    : focusableWithin(el)[0];
+
 type SpotWindow = { id: string; x: number; y: number; w: number; h: number };
 type Geometry = {
   ids: string[];
@@ -46,7 +69,8 @@ export interface HoldSpotlightProps {
   frame: RefObject<HTMLElement | null>;
   holds: SpotlightHold[];
   open: boolean;
-  onClose: () => void;
+  /** `keepFocus`: the holds cleared and focus is not the spotlight's to move. */
+  onClose: (options?: { keepFocus: boolean }) => void;
   onNext?: (hold: SpotlightHold) => void;
 }
 
@@ -105,6 +129,10 @@ export function HoldSpotlight({
     let count = -1;
     let done = false;
     let geoKey = "";
+    let last: { hold: SpotlightHold; el: HTMLElement }[] = [];
+    // A cleared hold that still holds focus: live and windowed until focus
+    // leaves it, so typing that clears a hold on its first key keeps going.
+    let linger: { id: string; el: HTMLElement } | null = null;
     const staticHost = window.getComputedStyle(host).position === "static";
     const priorPosition = host.style.position;
     if (staticHost) host.style.position = "relative";
@@ -143,7 +171,7 @@ export function HoldSpotlight({
 
     const focusInto = (el: HTMLElement) => {
       const into =
-        focusableWithin(el)[0] ??
+        firstFocusable(el) ??
         (barRef.current ? focusableWithin(barRef.current)[0] : undefined);
       into?.focus({ preventScroll: true });
     };
@@ -163,6 +191,15 @@ export function HoldSpotlight({
       );
     };
 
+    // Lifting on its own hands focus back to the act only from a one-shot
+    // control in the frame: never out of a field being typed in, nor out of
+    // a dialog above the frame.
+    const focusStays = () => {
+      const active = document.activeElement;
+      if (!active || active === document.body) return false;
+      return !host.contains(active) || isTextEntry(active);
+    };
+
     const schedule = () => {
       if (!request && !done) request = window.requestAnimationFrame(sync);
     };
@@ -176,9 +213,31 @@ export function HoldSpotlight({
       if (found.length === 0) {
         done = true;
         setMessage("All set.");
-        onCloseRef.current();
+        onCloseRef.current({ keepFocus: focusStays() });
         return;
       }
+      const focused = document.activeElement;
+      if (
+        linger &&
+        (!focused ||
+          !linger.el.contains(focused) ||
+          found.some(
+            (entry) => entry.hold.id === linger!.id || entry.el === linger!.el,
+          ))
+      )
+        linger = null;
+      const cleared = focused
+        ? last.find(
+            (entry) =>
+              entry.el.contains(focused) &&
+              host.contains(entry.el) &&
+              !found.some(
+                (now) => now.hold.id === entry.hold.id || now.el === entry.el,
+              ),
+          )
+        : undefined;
+      if (cleared) linger = { id: cleared.hold.id, el: cleared.el };
+      last = found;
       const activeIndex = Math.max(
         0,
         found.findIndex((entry) => entry.hold.id === activeRef.current),
@@ -190,7 +249,11 @@ export function HoldSpotlight({
       // On a phone only the active window is cut, so only it stays live.
       const narrow = window.matchMedia(NARROW_QUERY).matches;
       const shown = narrow ? [active] : found;
-      settleInert([...shown.map((entry) => entry.el), root]);
+      const cut = [
+        ...shown.map(({ hold, el }) => ({ id: hold.id, el })),
+        ...(linger ? [linger] : []),
+      ];
+      settleInert([...cut.map((entry) => entry.el), root]);
 
       const watch = new Set<Element>([host, ...found.map((entry) => entry.el)]);
       observed.forEach((el) => {
@@ -210,13 +273,13 @@ export function HoldSpotlight({
       const ox = box.left + host.clientLeft - host.scrollLeft;
       const oy = box.top + host.clientTop - host.scrollTop;
       const width = host.clientWidth;
-      const windows = shown.map(({ hold, el }) => {
+      const windows = cut.map(({ id, el }) => {
         const r = el.getBoundingClientRect();
         const x = Math.max(0, r.left - ox - PAD);
         const y = Math.max(0, r.top - oy - PAD);
         const right = Math.min(width, r.right - ox + PAD);
         return {
-          id: hold.id,
+          id,
           x,
           y,
           w: Math.max(0, right - x),
@@ -280,7 +343,7 @@ export function HoldSpotlight({
       if (done) return;
       reveal(next.el);
       setMessage(`${index + 1} of ${found.length}: ${next.hold.reason}`);
-      focusableWithin(next.el)[0]?.focus({ preventScroll: true });
+      firstFocusable(next.el)?.focus({ preventScroll: true });
       onNextRef.current?.(next.hold);
     };
 
@@ -304,6 +367,15 @@ export function HoldSpotlight({
       );
     };
 
+    const onFocusOut = (event: FocusEvent) => {
+      if (done || !linger || !(event.target instanceof Node)) return;
+      if (!linger.el.contains(event.target)) return;
+      const next = event.relatedTarget;
+      if (next instanceof Node && linger.el.contains(next)) return;
+      linger = null;
+      schedule();
+    };
+
     // Capture phase, so the host sheet's own Esc never sees the key.
     const onKey = (event: KeyboardEvent) => {
       if (done || topActiveModalDialog() !== layer) return;
@@ -323,6 +395,7 @@ export function HoldSpotlight({
 
     document.addEventListener("keydown", onKey, true);
     document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
     window.addEventListener("scroll", schedule, {
       capture: true,
       passive: true,
@@ -353,6 +426,7 @@ export function HoldSpotlight({
       window.cancelAnimationFrame(request);
       document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
       window.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", schedule);
       mutations.disconnect();
