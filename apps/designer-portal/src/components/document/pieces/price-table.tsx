@@ -14,7 +14,9 @@
  *
  * Labor keeps its own writers (labor price, trade cost through 00692). A
  * released line prints its figures. A line whose cost moved under its price
- * carries a row of its own with the two ways to settle it. Labor is indented
+ * carries a row of its own with the two ways to settle it. A line whose client
+ * figures moved since the client approved them (00810) carries a hairline and
+ * the approved figure, muted, under each one that moved. Labor is indented
  * `↳` under its piece, the room's subtotal sits under a strong rule. The `⋯`
  * menu carries `Add labor`, `Make it an allowance`, `Reset to default markup`,
  * `Move to room…` and `Remove`; a gated act is `aria-disabled` with its reason
@@ -49,6 +51,12 @@ import {
 } from "@/lib/document/trade-pricing";
 import { MoveToRoomMenu, type MoveRoom } from "./move-to-room-menu";
 import { money, unitWordFor } from "./placement-chips";
+import {
+  approvedMoney,
+  ApprovedValue,
+  ChangedSinceApproval,
+  type ApprovedFigures,
+} from "./price-approval";
 
 export type PriceRowAct = "labor" | "allowance" | "reset" | "move" | "remove";
 
@@ -95,6 +103,11 @@ export interface PriceRow {
   note?: string | null;
   /** Acts this line cannot take, each with the sentence that says why. */
   gates?: Partial<Record<PriceRowAct, string>>;
+  /**
+   * What the client approved, while the line's figures differ from it (00810,
+   * R188): the approved figure prints muted beside the current one.
+   */
+  approved?: ApprovedFigures | null;
 }
 
 export interface PriceTableProps {
@@ -116,12 +129,15 @@ export interface PriceTableProps {
   onResetMarkup: (row: PriceRow) => void;
   onMove: (row: PriceRow, roomId: string) => void;
   onRemove: (row: PriceRow) => void;
+  /** Opens the line's change log since the approval. */
+  onChangeLog?: (row: PriceRow) => void;
 }
 
 /** Columns and widths: the a7 grid widened for two-way pricing. */
 const COLUMNS: Array<{ label: string; width: number; numeric?: boolean }> = [
-  { label: "Line", width: 248 },
-  { label: "Qty", width: 64, numeric: true },
+  // Qty is wide enough to print `Approved 4` under a changed quantity.
+  { label: "Line", width: 224 },
+  { label: "Qty", width: 88, numeric: true },
   { label: "Unit", width: 64 },
   { label: "Unit cost", width: 112, numeric: true },
   { label: "Markup", width: 88, numeric: true },
@@ -212,6 +228,7 @@ export function PriceTable({
   onResetMarkup,
   onMove,
   onRemove,
+  onChangeLog,
 }: PriceTableProps) {
   const uid = useId();
   const headingId = `${uid}-heading`;
@@ -277,6 +294,7 @@ export function PriceTable({
               // The lens says the move once the server answers (T-60a F4).
               onMove={onMove}
               onRemove={onRemove}
+              onChangeLog={onChangeLog}
               onGated={setAnnouncement}
             />
           ))}
@@ -311,6 +329,7 @@ interface LineRowProps {
   onResetMarkup: (row: PriceRow) => void;
   onMove: (row: PriceRow, roomId: string) => void;
   onRemove: (row: PriceRow) => void;
+  onChangeLog?: (row: PriceRow) => void;
   onGated: (reason: string) => void;
 }
 
@@ -325,8 +344,10 @@ function LineRows({
   onResetMarkup,
   onMove,
   onRemove,
+  onChangeLog,
   onGated,
 }: LineRowProps) {
+  const approved = row.approved ?? null;
   const ceiling = positive(row.allowanceCents) ? row.allowanceCents : null;
   const notPriced = row.clientCents == null;
   const markup = ceiling ? null : lineMarkup(row.tradeCents, row.clientCents);
@@ -343,10 +364,20 @@ function LineRows({
 
   return (
     <>
-      <tr data-line-id={row.id} className={ROW}>
+      <tr
+        data-line-id={row.id}
+        data-differs-from-approved={approved ? "" : undefined}
+        className={ROW}
+      >
         <td
           data-label="Line"
-          className={cn(CELL, "max-md:col-span-2", CARD_CELL)}
+          className={cn(
+            CELL,
+            "max-md:col-span-2",
+            CARD_CELL,
+            // The hairline mark of a line that moved since the approval.
+            approved && "border-l border-l-[var(--sheet-ink)]",
+          )}
         >
           <div className={cn("flex flex-col py-1", row.labor && "pl-6")}>
             <span className="flex flex-wrap items-center gap-2">
@@ -398,6 +429,12 @@ function LineRows({
                 {`Above retail (${money(row.retailCents)})`}
               </span>
             ) : null}
+            {approved ? (
+              <ChangedSinceApproval
+                name={row.name}
+                onChangeLog={onChangeLog ? () => onChangeLog(row) : undefined}
+              />
+            ) : null}
             {row.note ? (
               <span
                 id={noteId}
@@ -422,6 +459,9 @@ function LineRows({
           ) : (
             <span className={cn(NUM_CELL, "block")}>{row.quantity}</span>
           )}
+          {approved?.quantityDiffers ? (
+            <ApprovedCell text={String(approved.quantity)} />
+          ) : null}
         </td>
         <td data-label="Unit" className={cn(CELL, CARD_CELL)}>
           {unitWordFor(row.unit, row.quantity)}
@@ -493,6 +533,11 @@ function LineRows({
               )}
             </span>
           )}
+          {approved?.unitDiffers ? (
+            <ApprovedCell
+              text={approvedMoney(approved.unitClientCents, approved.currency)}
+            />
+          ) : null}
         </td>
         <td
           data-label="Line total"
@@ -500,6 +545,11 @@ function LineRows({
           className={cn(NUM_CELL, CARD_CELL)}
         >
           {priceText(lineTotal)}
+          {approved ? (
+            <ApprovedValue
+              text={approvedMoney(approved.lineTotalCents, approved.currency)}
+            />
+          ) : null}
         </td>
         <td data-label="Retail" className={cn("p-0", CARD_CELL)}>
           {row.pricingEditable ? (
@@ -611,6 +661,15 @@ function CostChangeRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+/** An approved figure under a typed cell, aligned with the figure above it. */
+function ApprovedCell({ text }: { text: string }) {
+  return (
+    <span className="block px-2 pb-1 text-right max-md:px-0 max-md:text-left">
+      <ApprovedValue text={text} />
+    </span>
   );
 }
 

@@ -17,7 +17,9 @@ import type { FfePricedLineKind } from "@patina/types";
 import { Input } from "@/components/ui/controls";
 import { cn } from "@/lib/utils";
 import { formatPct, type JobPricingSummary } from "@/lib/document/trade-pricing";
+import type { ProjectPricingApprovalTotal } from "@patina/supabase";
 import { money } from "./placement-chips";
+import { ApprovedTotalRow } from "./price-approval";
 
 export type AddedLineKind = Exclude<FfePricedLineKind, "goods">;
 
@@ -39,6 +41,14 @@ export interface PriceSummaryProps {
   onTaxRate: (rate: number | null) => void;
   /** The server's sentence for a refused target or tax write. */
   note?: string | null;
+  /**
+   * What the client approved (00810), once she has: the summary then prints
+   * the approved total beside the current one, and opens the job's change log.
+   */
+  approval?: {
+    totals: ProjectPricingApprovalTotal[];
+    onChangeLog: () => void;
+  } | null;
 }
 
 const ACT =
@@ -105,6 +115,7 @@ export function PriceSummary({
   onTarget,
   onTaxRate,
   note,
+  approval,
 }: PriceSummaryProps) {
   const targetPct = targetOverridePct ?? defaultPct;
   return (
@@ -170,6 +181,13 @@ export function PriceSummary({
           testId="total-with-tax"
         />
       </dl>
+      {approval ? (
+        <ApprovedTotalRow
+          totals={approval.totals}
+          currentCents={summary.totalClientCents}
+          onChangeLog={approval.onChangeLog}
+        />
+      ) : null}
       <p className="t-body-sm mt-2 text-[var(--sheet-ink-muted)]">
         {`Target ${formatPct(targetPct)}${targetOverridePct === null ? " (your default)" : " for this job"}. Tax is on the client price and stays out of the markup.`}
         {summary.unpricedCount > 0 ? (
