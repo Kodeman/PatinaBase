@@ -798,6 +798,12 @@ export function unparkInvoiceComposer(projectId: string): void {
   if (parkedComposers.delete(projectId)) parkedChanged();
 }
 
+export function clearParkedInvoiceComposers(): void {
+  if (parkedComposers.size === 0) return;
+  parkedComposers.clear();
+  parkedChanged();
+}
+
 /** For `useSyncExternalStore`: the Price lens's `Back to the invoice`. */
 export function subscribeParkedInvoiceComposers(listener: () => void): () => void {
   parkedListeners.add(listener);

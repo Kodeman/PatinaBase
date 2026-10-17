@@ -745,6 +745,8 @@ describe("InvoiceComposer · studio mode", () => {
           sortOrder: 0,
         },
       ],
+      // SQ-1262 F2 — the act's lifetime rides with the write.
+      signal: expect.any(AbortSignal),
     });
     expect(mockCreateDraft).not.toHaveBeenCalled();
     await waitFor(() =>
@@ -829,7 +831,8 @@ describe("InvoiceComposer · studio mode", () => {
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });
 
-  it("keeps Try again for a studio draft that failed for an unknown reason", async () => {
+  // SQ-1272 F4 — the write went out and its answer was lost: it may have landed.
+  it("offers no Try again for a studio draft whose write went unanswered", async () => {
     mockCreateStudioDraft.mockRejectedValue(
       new Error("Failed to create draft studio invoice: TypeError: Failed to fetch"),
     );
@@ -852,8 +855,11 @@ describe("InvoiceComposer · studio mode", () => {
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("The invoice couldn't be drafted.");
+    expect(alert).toHaveTextContent(
+      "We couldn't confirm the draft. Check the invoices before drafting again.",
+    );
     expect(alert).not.toHaveTextContent(/Failed to|TypeError/);
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check the invoices" })).toBeInTheDocument();
   });
 });

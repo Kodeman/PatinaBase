@@ -25,6 +25,12 @@ jest.mock('@patina/supabase', () => {
   const idle = { mutateAsync: jest.fn(), isPending: false };
   return {
     useEmailDelivery: () => ({ byRef: {}, isLoading: false, isError: false }),
+    // US-36 R2 — the folio's K10 recipient read and the band's milestone readiness.
+    useSessionUserId: () => null,
+    useDesignerClientForClientUser: () => ({ data: null, isLoading: false }),
+    useClient: () => ({ data: null, isLoading: false }),
+    useProjects: () => ({ data: [] }),
+    useDocumentClientLinkHold: () => ({ data: null }),
     useInvoice: () => ({ data: mockInvoice, isLoading: false, isError: false, refetch: jest.fn() }),
     useIssueInvoice: () => idle,
     useSendInvoice: () => idle,
@@ -43,7 +49,9 @@ jest.mock(
   { virtual: true },
 );
 
+// F3 (SQ-1249): the folio's Send reads the app's onlineManager before its fresh read.
 jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 

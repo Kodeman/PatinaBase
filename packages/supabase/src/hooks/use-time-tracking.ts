@@ -1196,6 +1196,8 @@ export function useStampProjectPricingStudio() {
       // it prices only hours logged AFTER the stamp (P-4 — no backfill).
       invalidateProjectTime(queryClient, projectId);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      // The project's own read, which the milestone draft hold stands on.
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       queryClient.invalidateQueries({ queryKey: ['document-hours-week'] });
       // The Hours sheet reads the stamped column off the DOCUMENT, on its own
       // key — not off the week's entries. Left out, a SUCCESSFUL repair kept
