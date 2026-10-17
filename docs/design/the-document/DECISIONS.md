@@ -11616,4 +11616,12 @@ With no studio on the invoice or its project, only the designer is admitted. Not
 
 **Cost-change buttons (F5).** "Keep client price" and "Keep markup" now name their line in the accessible name, label first ("Keep markup for LR-02 Rug"). Two flagged lines no longer read the same. The visible words are unchanged, and the accessible name starts with them.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R191 · R192 · last id = R192*
+### R193 · The spotlight lights only acts' holds; it never takes focus from a field being typed — US-36 R2 — SQ-1047 2026-10-17 (walk findings F4, F6)
+
+**Rate-pending hours are not a hold (F4).** `assessInvoiceReadiness` raises `rate-pending` only for ticked entries, and a rate-pending row cannot be ticked (MS-01). So an unticked hour waiting for a rate does not stop the draft, and it gets no window. The "N h waiting for a rate" line stays where it is, with its K8 re-rate link, and is not called out as something to fix before drafting. A ticked entry that loses its rate is still a hold.
+
+**Focus stays in the field being typed (F6).** When typing clears the last hold (a Regarding title, a unit price), the spotlight lifts and focus stays in that field. When a press clears it (a tick, a pick, a sheet that returns), focus goes back to the held act, as in s1.9. Moving focus away from someone mid-entry would lose their place.
+
+**Also from the walk (F7, SQ-1312).** An invoice's 'sent' means issued; this predates R2 (00178 state machine; folio comment "A send failure does NOT roll back the issue"). A failed email is recorded in `notification_log`. The folio's missing cue for a failed email, and the dead `send_failed` copy row, are SQ-1313.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R191 · R192 · R193 · last id = R193*
