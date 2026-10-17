@@ -19,14 +19,37 @@ async function open(email, url, vp = 'desk') {
   const s = await context(browser, email, vp);
   const page = await s.ctx.newPage();
   await page.goto(BASE + url, { waitUntil: 'domcontentloaded', timeout: 180000 });
-  await settle(page, 5000);
+  await settle(page, 9000);
+  // The Desk tour invitation sits over /desk for a first visit; set it aside like a returning designer.
+  const skip = page.getByRole('button', { name: /^skip for now$/i });
+  if (await skip.isVisible().catch(() => false)) { await skip.click(); await page.waitForTimeout(800); }
   return { ...s, page };
 }
 const folio = (page) => page.locator('[data-spotlight-frame]').last();
-const folioText = (page) => folio(page).innerText().catch(() => '');
+// The open sheet's text (dialog first); innerText carries CSS uppercase, so match with /i.
+const folioText = (page) => page.evaluate(() => {
+  const d = [...document.querySelectorAll('[role=dialog]')].pop();
+  return (d || document.body).innerText;
+}).catch(() => '');
+// Keyboard-only doorway: Tab to the folded "Project accounts" band, Enter, then Tab to Draft an invoice.
+async function kbdOpenComposer(page, r) {
+  r.tabsToAccounts = await tabTo(page, (f) => /project accounts/i.test(f.text), 200);
+  await page.keyboard.press('Enter'); await page.waitForTimeout(1200);
+  r.tabsToEntry = await tabTo(page, (f) => /^draft an invoice$/i.test(f.text), 60);
+  await page.keyboard.press('Enter'); await page.waitForTimeout(3000);
+  r.focusOnOpen = await focusOf(page);
+}
+// The composer's doorway is the accounts band's "Draft an invoice", which sits folded under
+// "Project accounts … UNFOLD"; "Bill N uninvoiced" (FF&E) is the fallback doorway.
 async function openComposer(page) {
-  await page.getByRole('button', { name: /^draft an invoice$/i }).first().click();
-  await page.waitForTimeout(2500);
+  const draft = page.getByRole('button', { name: /^draft an invoice$/i }).first();
+  if (!(await draft.isVisible().catch(() => false))) {
+    const unfold = page.getByRole('button', { name: /project accounts/i }).first();
+    if (await unfold.count()) { await unfold.click(); await page.waitForTimeout(1200); }
+  }
+  if (await draft.isVisible().catch(() => false)) await draft.click();
+  else await page.getByRole('button', { name: /^bill \d+ uninvoiced$/i }).first().click();
+  await page.waitForTimeout(3000);
 }
 const draftAct = (page) => page.getByRole('button', { name: /draft the invoice/i }).first();
 async function heldState(page) {
@@ -59,10 +82,8 @@ const S = {
     await run(`s2-member-ask-${vp}${keyboard ? '-kbd' : ''}`, async (r) => {
       const { page, iss, remote } = await open(BOB, `/doc/${P.quill}`, vp);
       r.iss = iss; r.remote = remote.length;
-      if (keyboard) {
-        const n = await tabTo(page, (f) => /draft an invoice/i.test(f.text), 150);
-        r.tabsToEntry = n; await page.keyboard.press('Enter'); await page.waitForTimeout(2500);
-      } else await openComposer(page);
+      if (keyboard) await kbdOpenComposer(page, r);
+      else await openComposer(page);
       const t = await folioText(page);
       r.consequence = (t.match(/[^\n]*has no client yet[^\n]*/i) || [null])[0];
       r.copyNote = /Copy a note/i.test(t); r.linkAct = /link a client/i.test(t.replace(/Ask [^\n]*link one/, ''));
@@ -75,7 +96,7 @@ const S = {
       await page.waitForTimeout(800);
       r.focus = await cueVisible(page); r.after = await heldState(page); r.statuses = await statuses(page);
       r.png.push(await shot(page, `s2-member-ask-${vp}${keyboard ? '-kbd' : ''}-b`));
-      if (!/Ask Leah Hartwell to link one/.test(r.consequence ?? '') || !r.copyNote) r.fail = true;
+      if (!/Ask Leah Hartwell to link one/i.test(r.consequence ?? '') || !r.copyNote) r.fail = true;
     });
   },
   // Studio owner who is not the lead (Leah on bob's Ashgrove) links a client from the composer.
@@ -94,7 +115,8 @@ const S = {
       await page.waitForTimeout(2000);
       r.urlAfterOpen = page.url();
       r.png.push(await shot(page, `s1-owner-links-${vp}-b-sheet`));
-      await page.getByRole('button', { name: /link a household/i }).first().click();
+      r.sheetText = (await folioText(page)).slice(0, 400);
+      await page.getByText(/^link a household…$/i).last().click(); await page.waitForTimeout(800);
       await page.keyboard.type('Client User'); await page.waitForTimeout(1500);
       r.options = await page.getByRole('option').allInnerTexts().catch(() => []);
       r.png.push(await shot(page, `s1-owner-links-${vp}-c-picker`));
@@ -139,6 +161,99 @@ const S = {
       r.pendingAfter = sql(`select count(*) from project_time_entries where project_id='${project}' and rate_source='none'`);
       r.png.push(await shot(page, `s6-price-them-${tag}-${vp}-b-priced`));
       if (!r.offer || r.pendingAfter !== '0') r.fail = true;
+    });
+  },
+  // K8 as Leah herself (owner of Local Dev Studio + her own workspace): composer → Set Phase One Bob's
+  // rate → account page → rate → Price them → back to the composer, whose rate group clears.
+  async s6_leah_k8(vp = 'desk', keyboard = true) {
+    await run(`s6-leah-k8-${vp}${keyboard ? '-kbd' : ''}`, async (r) => {
+      const { page, iss } = await open(LEAH, `/doc/${P.ash}`, vp);
+      r.iss = iss;
+      if (keyboard) await kbdOpenComposer(page, r); else await openComposer(page);
+      r.group = ((await folioText(page)).match(/[^\n]*waiting for a rate[^\n]*/i) || [null])[0];
+      r.png = [await shot(page, `s6-leah-k8-${vp}-a-composer`)];
+      if (keyboard) { r.tabsToSet = await tabTo(page, (f) => /^set .* rate$/i.test(f.text), 80); await page.keyboard.press('Enter'); }
+      else await page.locator('button, a', { hasText: /^set .* rate$/i }).first().click();
+      await page.waitForTimeout(6000);
+      r.urlAfterSet = page.url(); r.focusAfterSet = await focusOf(page);
+      r.png.push(await shot(page, `s6-leah-k8-${vp}-b-account`));
+      const field = page.getByRole('textbox', { name: /Hourly rate for Phase One Bob/i }).first();
+      r.fieldFound = await field.count();
+      r.pendingBefore = sql(`select count(*) from project_time_entries where project_id='${P.ash}' and rate_source='none'`);
+      if (keyboard && r.focusAfterSet?.aria && /Phase One Bob/i.test(r.focusAfterSet.aria)) r.landedOnField = true;
+      await field.scrollIntoViewIfNeeded(); await field.focus(); await field.fill('150');
+      await page.keyboard.press('Tab'); await page.waitForTimeout(3000);
+      const t = await page.evaluate(() => document.body.innerText);
+      r.offer = (t.match(/[^\n]*logged before this rate[^\n]*/i) || [null])[0];
+      r.statusesAfterSave = await statuses(page);
+      r.png.push(await shot(page, `s6-leah-k8-${vp}-c-offer`));
+      if (keyboard) { r.tabsToPrice = await tabTo(page, (f) => /price them/i.test(f.text), 20); await page.keyboard.press('Enter'); }
+      else await page.getByRole('button', { name: /price them/i }).click();
+      await page.waitForTimeout(3000);
+      r.statuses = await statuses(page);
+      r.pendingAfter = sql(`select count(*) from project_time_entries where project_id='${P.ash}' and rate_source='none'`);
+      r.priced = sql(`select string_agg(rate_source||':'||coalesce(hourly_rate_cents::text,'?')||':'||coalesce(rated_amount_cents::text,'?'), ',') from project_time_entries where project_id='${P.ash}'`).slice(0, 200);
+      r.png.push(await shot(page, `s6-leah-k8-${vp}-d-priced`));
+      await page.goto(BASE + `/doc/${P.ash}`, { waitUntil: 'domcontentloaded' }); await settle(page, 9000);
+      await openComposer(page);
+      const t2 = await folioText(page);
+      r.groupAfter = (t2.match(/[^\n]*waiting for a rate[^\n]*/i) || [null])[0];
+      r.unbilledAfter = (t2.match(/UNBILLED TIME[\s\S]{0,300}/i) || [null])[0];
+      r.png.push(await shot(page, `s6-leah-k8-${vp}-e-composer-cleared`));
+      if (!r.offer || r.pendingAfter !== '0' || r.groupAfter) r.fail = true;
+    });
+  },
+  // K8 by the Account page's own doorway (the composer's Set opens it under the composer, see report):
+  // Studio settings → switch to Local Dev Studio → bob's rate → Price them → composer group clears.
+  async s6_leah_k8_direct(vp = 'desk', keyboard = true, rate = '160') {
+    await run(`s6-leah-k8-direct-${vp}${keyboard ? '-kbd' : ''}`, async (r) => {
+      const { page, iss } = await open(LEAH, `/desk?account=studio`, vp);
+      r.iss = iss;
+      for (let i = 0; i < 3 && !/Local Dev Studio\s*\n\s*LOCAL-DEV-STUDIO/i.test(await folioText(page)); i++) {
+        await page.locator('button, a', { hasText: /switch/i }).first().click(); await page.waitForTimeout(2500);
+      }
+      r.studioShown = ((await folioText(page)).match(/STUDIO \d OF \d[^\n]*/i) || [null])[0];
+      const field = page.getByRole('textbox', { name: /Hourly rate for Phase One Bob/i }).first();
+      await field.scrollIntoViewIfNeeded();
+      r.png = [await shot(page, `s6-leah-k8-direct-${vp}-a-rates`)];
+      r.pendingBefore = sql(`select count(*) from project_time_entries where project_id='${P.ash}' and rate_source='none'`);
+      if (keyboard) { await field.focus(); await page.keyboard.press('Meta+a'); await page.keyboard.type(rate); }
+      else await field.fill(rate);
+      await page.keyboard.press('Tab'); await page.waitForTimeout(3000);
+      const t = await folioText(page);
+      r.offer = (t.match(/[^\n]*logged before this rate[^\n]*/i) || [null])[0];
+      r.focusAfterSave = await focusOf(page);
+      r.png.push(await shot(page, `s6-leah-k8-direct-${vp}-b-offer`));
+      if (keyboard) {
+        r.tabsToPrice = await tabTo(page, (f) => /price them/i.test(f.text), 200);
+        if (r.tabsToPrice < 0) r.shiftTabsToPrice = await tabTo(page, (f) => /price them/i.test(f.text), 25, 'Shift+Tab');
+        await page.keyboard.press('Enter');
+      } else await page.getByRole('button', { name: /price them/i }).click();
+      await page.waitForTimeout(3000);
+      r.statuses = await statuses(page);
+      r.after = ((await folioText(page)).match(/[^\n]*(Priced the hours|logged before this rate|could not|can.t)[^\n]*/gi) || []).slice(0, 4);
+      r.pendingAfter = sql(`select count(*) from project_time_entries where project_id='${P.ash}' and rate_source='none'`);
+      r.priced = sql(`select string_agg(rate_source||':'||coalesce(hourly_rate_cents::text,'?')||':'||coalesce(rated_amount_cents::text,'?'), ',') from project_time_entries where project_id='${P.ash}'`);
+      r.png.push(await shot(page, `s6-leah-k8-direct-${vp}-c-priced`));
+      await page.goto(BASE + `/doc/${P.ash}`, { waitUntil: 'domcontentloaded' }); await settle(page, 9000);
+      await openComposer(page);
+      const t2 = await folioText(page);
+      r.groupAfter = (t2.match(/[^\n]*waiting for a rate[^\n]*/i) || [null])[0];
+      r.unbilledAfter = (t2.match(/UNBILLED TIME[\s\S]{0,260}/i) || [null])[0];
+      r.png.push(await shot(page, `s6-leah-k8-direct-${vp}-d-composer`));
+      if (!r.offer || r.pendingAfter !== '0' || r.groupAfter) r.fail = true;
+    });
+  },
+  // K5 header: a plain member sees the Message act's "Link a client" repair; what does it open?
+  async s2_member_header(vp = 'desk') {
+    await run(`s2-member-header-${vp}`, async (r) => {
+      const { page } = await open(BOB, `/doc/${P.quill}`, vp);
+      const act = page.getByRole('button', { name: /^link a client$/i }).first();
+      r.headerAct = await act.count();
+      if (!r.headerAct) return;
+      await act.click(); await page.waitForTimeout(2500);
+      r.after = (await folioText(page)).slice(0, 700); r.url = page.url();
+      r.png = [await shot(page, `s2-member-header-${vp}`)];
     });
   },
   // K9 picker: two-studio designer vs one-studio designer.
@@ -201,7 +316,7 @@ const S = {
       const frames = [];
       await page.goto(BASE + `/doc/${project}`, { waitUntil: 'commit', timeout: 180000 });
       for (let i = 0; i < 100; i++) {
-        const snap = await page.evaluate(() => (document.body?.innerText.match(/[^\n]*(No client linked|Link a client before you bill this job|Nothing ordered yet|Release the next room)[^\n]*/gi) || []).join(' | ')).catch(() => '');
+        const snap = await page.evaluate(() => (document.body?.innerText.match(/[^\n]*(No client linked|Link a client before you bill this job|Nothing ordered yet|Release the next room|Open the pieces|Check what.s arriving|All open|\+\d+ more)[^\n]*/gi) || []).join(' | ')).catch(() => '');
         if (!frames.length || frames[frames.length - 1].snap !== snap) {
           frames.push({ t: i * 250, snap });
           if (frames.length <= 4 && snap) await shot(page, `s7-band-${tag}-${vp}-load${frames.length}`);
@@ -209,9 +324,9 @@ const S = {
         await page.waitForTimeout(250);
       }
       r.frames = frames;
-      const more = page.getByRole('button', { name: /^\+\d+ more$/i }).first();
-      if (await more.count()) { await more.click(); await page.waitForTimeout(800); }
-      r.setup = await page.evaluate(() => (document.body.innerText.match(/[^\n]*(client|budget|target|studio)[^\n]*/gi) || []).slice(0, 12));
+      const more = page.locator('button, a', { hasText: /^\+\d+ more$|^all open · \d+$/i }).first();
+      if (await more.count()) { await more.click(); await page.waitForTimeout(2500); }
+      r.setup = await page.evaluate(() => (([...document.querySelectorAll('[role=dialog]')].pop() || document.body).innerText.match(/[^\n]*(client|budget|target|studio)[^\n]*/gi) || []).slice(0, 12));
       r.png = [await shot(page, `s7-band-${tag}-${vp}-setup`)];
     });
   },
@@ -221,7 +336,7 @@ const S = {
       const { page } = await open(LEAH, `/doc/${P.quill}`, vp);
       await openComposer(page);
       r.geometry = await page.evaluate(() => {
-        const frame = [...document.querySelectorAll('[data-spotlight-frame]')].pop();
+        const frame = [...document.querySelectorAll('[role=dialog]')].pop();
         const fr = frame?.getBoundingClientRect();
         const total = [...frame.querySelectorAll('*')].filter((n) => /^total/i.test(n.innerText?.trim() ?? '') && n.children.length < 4).pop();
         const tr = total?.getBoundingClientRect();
@@ -236,7 +351,7 @@ const S = {
 
 const want = process.argv.slice(2);
 const plan = [
-  ['band', () => S.s7_band(P.harrow, 'harrow-money', 'desk')],
+  ['band', () => S.s7_band(P.ash, 'ash-hours', 'desk')],
   ['band', () => S.s7_band(P.wren, 'wren-nomoney', 'desk')],
   ['band', () => S.s7_band(P.ash, 'ash-hours', 'phone')],
   ['member', () => S.s2_member_ask('desk')],
@@ -245,7 +360,9 @@ const plan = [
   ['rate', () => S.s6_rate_group(BOB, 'member', 'desk')],
   ['rate', () => S.s6_rate_group(LEAH, 'owner', 'desk')],
   ['rate', () => S.s6_rate_group(LEAH, 'owner', 'phone')],
-  ['price', () => S.s6_price_them('studio_manager@patina.dev', 'Phase One Bob', P.ash, 'bob', 150, 'desk', true)],
+  ['header', () => S.s2_member_header('desk')],
+  ['k8', () => S.s6_leah_k8('desk', true)],
+  ['k8d', () => S.s6_leah_k8_direct('desk', true, '170')],
   ['price', () => S.s6_rate_group(LEAH, 'owner-after', 'desk')],
   ['solo', () => S.s5_solo_legacy('desk')],
   ['solo', () => S.s6_price_them(ALICE, 'Phase One Alice', P.fern, 'alice-self', 120, 'phone')],
@@ -253,6 +370,9 @@ const plan = [
   ['picker', () => S.s3_picker(LEAH, 'two-studio', 'phone')],
   ['picker', () => S.s3_picker(BOB, 'one-studio', 'desk')],
   ['name', () => S.s5_name_studio('desk', true)],
+  ['create', () => S.s3_picker(LEAH, 'two-studio-create', 'desk', { title: 'Quarry Shed', studio: 'Local Dev Studio' })],
+  ['create', () => S.s3_picker(BOB, 'one-studio-create', 'desk', { title: 'Bramble Loft' })],
+  ['band0', async () => S.s7_band(sql("select id from projects where name='Quarry Shed'"), 'quarry-nomoney', 'desk')],
   ['lows', () => S.s9_lows('phone')],
   ['lows', () => S.s9_lows('desk')],
   ['link', () => S.s1_owner_links('desk')],
