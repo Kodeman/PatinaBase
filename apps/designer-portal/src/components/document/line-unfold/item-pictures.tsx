@@ -70,7 +70,8 @@ export function ItemPictures({
   const reorder = useReorderFfeItemImages();
   const unlink = useUnlinkFfeItemImage();
 
-  const [notice, setNotice] = useState<string | null>(null);
+  // A refusal reads in terracotta ink, a confirmation in charcoal.
+  const [notice, setNotice] = useState<{ text: string; refused: boolean } | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
@@ -132,7 +133,7 @@ export function ItemPictures({
     try {
       await act();
     } catch (error) {
-      setNotice(refusalSentence(error));
+      setNotice({ text: refusalSentence(error), refused: true });
     }
   };
 
@@ -192,8 +193,8 @@ export function ItemPictures({
         : null,
       failure,
     ].filter(Boolean);
-    if (sentences.length > 0) setNotice(sentences.join(' '));
-    else if (added > 0) setNotice(`${added} ${added === 1 ? 'picture' : 'pictures'} added.`);
+    if (sentences.length > 0) setNotice({ text: sentences.join(' '), refused: true });
+    else if (added > 0) setNotice({ text: `${added} ${added === 1 ? 'picture' : 'pictures'} added.`, refused: false });
   };
 
   const makePrimary = (image: FfeItemImage) => {
@@ -427,9 +428,9 @@ export function ItemPictures({
       <p
         role="status"
         aria-live="polite"
-        className={`t-body-sm mt-2 empty:mt-0 ${notice && !notice.endsWith(' added.') ? 'text-[var(--color-terracotta-ink)]' : 'text-[var(--color-charcoal)]'}`}
+        className={`t-body-sm mt-2 empty:mt-0 ${!uploadProgress && notice?.refused ? 'text-[var(--color-terracotta-ink)]' : 'text-[var(--color-charcoal)]'}`}
       >
-        {uploadProgress ?? notice ?? ''}
+        {uploadProgress ?? notice?.text ?? ''}
       </p>
     </section>
   );

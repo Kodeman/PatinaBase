@@ -177,9 +177,12 @@ describe('ItemPictures', () => {
       mockUpload.mock.calls.map(([arg]) => `${arg.projectId}/${arg.itemId}/${arg.file.name}`),
     ).toEqual(['project-1/line-sofa/front.jpg', 'project-1/line-sofa/side.png']);
     expect(mockUpload.mock.calls[0][0].file).toBe(first);
-    expect(await screen.findByRole('status')).toHaveTextContent(
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent(
       'spin.gif is not a JPEG, PNG, WebP or AVIF picture, so it was not added.',
     );
+    // The refusal ends in "added." too; its tone comes from the act, not the words.
+    expect(status).toHaveClass('text-[var(--color-terracotta-ink)]');
   });
 
   it('announces upload progress and completion in its always-mounted status', async () => {
@@ -202,6 +205,7 @@ describe('ItemPictures', () => {
     await act(async () => { finishUpload[1](); });
     await act(async () => { finishUpload[2](); });
     await waitFor(() => expect(status).toHaveTextContent('3 pictures added.'));
+    expect(status).toHaveClass('text-[var(--color-charcoal)]');
   });
 
   it.each([
