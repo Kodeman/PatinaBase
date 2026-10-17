@@ -770,7 +770,8 @@ describe("billingRefusal", () => {
 
   it("maps every code and every literal detail invoice-send returns", () => {
     const source = readFileSync(
-      join(__dirname, "../../../../../../supabase/functions/invoice-send/index.ts"),
+      // F2 (SQ-1249): the flow moved to handler.ts, which also issues a draft.
+      join(__dirname, "../../../../../../supabase/functions/invoice-send/handler.ts"),
       "utf8",
     );
     const codes = Array.from(source.matchAll(/error:\s*'([a-zA-Z_]+)'/g), (m) => m[1]);
@@ -785,6 +786,8 @@ describe("billingRefusal", () => {
         "invoice_not_found",
         "lookup_failed",
         "invoice_not_issued",
+        "invoice_not_draft",
+        "issue_failed",
         "invoice_void",
         "invoice_not_open",
         "checkout_attempt_check_failed",
@@ -793,7 +796,7 @@ describe("billingRefusal", () => {
         "send_failed",
       ]),
     );
-    expect(details).toHaveLength(5);
+    expect(details).toHaveLength(6);
     for (const said of [...codes, ...details]) {
       expect(billingRefusal("send", said).sentence).not.toBe(GENERIC);
     }
@@ -903,8 +906,8 @@ describe("assessInvoiceReadiness", () => {
     expect(assessInvoiceReadiness({ ...common, selectedUnpricedLineIds: ["l1"], unpricedLineNames: { l1: "Sofa" } }).holds[0]).toMatchObject({
       reason: "Set a client price for Sofa.", repair: "Price it", fixer: "price-line", focusKey: "price-line:l1",
     });
-    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true, householdName: "The Lees" }).holds[0]).toMatchObject({
-      reason: "The Lees has no email to send to.", repair: "Add their email", fixer: "add-email", focusKey: "add-email",
+    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true, householdName: "Elena" }).holds[0]).toMatchObject({
+      reason: "Add Elena's email to send this.", repair: "Add their email", fixer: "add-email", focusKey: "add-email",
     });
   });
 
@@ -949,6 +952,6 @@ describe("assessInvoiceReadiness", () => {
     expect(assessInvoiceReadiness({ ...common, selectedRatePendingEntries: [{ userId: "9f2e-user" }] }).holds[0]?.reason).toBe(
       "These hours are waiting for a rate.",
     );
-    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true }).holds[0]?.reason).toBe("This household has no email to send to.");
+    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true }).holds[0]?.reason).toBe("Add the client's email to send this.");
   });
 });

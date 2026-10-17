@@ -103,6 +103,7 @@ import {
 import { buildRoomHref } from "@/lib/document/pieces/build-room-url";
 import { parseRough } from "@/lib/document/pieces/rough-in-keys";
 import { isLaborLine } from "@/lib/document/stamp-derivation";
+import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight";
 import { MESSAGE_WITHHELD } from "@/lib/document/act-names";
 import { topActiveModalDialog } from "../overlays/active-dialog";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
@@ -110,6 +111,7 @@ import { ActFailLine } from "@/components/feedback/act-fail-line";
 import { openAccountPage } from "../account/open-account-page";
 import { CopyAct } from "../copy-act";
 import { AppError } from "@/lib/error-handler";
+import { OfflineRefusal } from "@/lib/react-query";
 import {
   EMPTY_ADHOC,
   STUDIO_TARGET,
@@ -149,6 +151,7 @@ import {
   type ComposerStageSlot,
   type ComposerStudio,
   type InvoiceBillingGap,
+  type InvoiceHold,
   type ParkedInvoiceComposer,
   type StudioInvoiceBlocker,
 } from "@/lib/document/invoice-composer";
@@ -206,15 +209,23 @@ export function InvoiceComposer({
     studioInvoiceOn && !flagLoading && !context.projectId;
   const studioMode = studioChoiceAvailable && target === STUDIO_TARGET;
 
-  const { data: projects, dataUpdatedAt: projectsUpdatedAt = 0 } =
-    useProjects();
+  const {
+    data: projects,
+    dataUpdatedAt: projectsUpdatedAt = 0,
+    isLoading: projectsLoading,
+    isFetching: projectsFetching,
+    isError: projectsFailed,
+  } = useProjects();
   const { data: organizations, isLoading: organizationsLoading } =
     useOrganizations();
   const { data: milestones } = useProjectPaymentMilestones(projectId);
   const { data: projectInvoices } = useProjectInvoices(projectId || null);
-  const { data: unbilledTime, isLoading: timeLoading } = useUnbilledTime(
-    projectId || null,
-  );
+  const {
+    data: unbilledTime,
+    isLoading: timeLoading,
+    isFetching: timeFetching,
+    isError: timeFailed,
+  } = useUnbilledTime(projectId || null);
   // HT-21 (W5) — names the composer's time rows: project_unbilled_time
   // deliberately carries no author name (00596's dropped profiles join), so
   // the roster (already-read, project-scoped, RLS-clean) supplies it.
@@ -321,6 +332,11 @@ export function InvoiceComposer({
       if (!parkingRef.current) unparkInvoiceComposer(parkedFor);
     };
   }, [context.projectId, parked]);
+  // F2 — a Draft press is one act; closing the composer retires it. Retired
+  // before the draft is written, nothing is written; after, its own steps
+  // still finish or clean up, but it never opens the folio.
+  const draftAct = useRef<AbortController | null>(null);
+  useEffect(() => () => draftAct.current?.abort(), []);
   // `retryable` is decided where the failure is caught: only a transient
   // failure before anything was written may be tried again (act-fail-line.tsx
   // §money writes). `gap` marks a billing-gap refusal, which clears itself once
@@ -353,13 +369,9 @@ export function InvoiceComposer({
   const householdRef = useRef<HTMLDivElement>(null);
   const regardingRef = useRef<HTMLInputElement>(null);
   const depositPctRef = useRef<HTMLInputElement>(null);
-  const adhocRef = useRef<HTMLDivElement>(null);
-  const addLineRef = useRef<HTMLButtonElement>(null);
-  const linkClientRef = useRef<HTMLAnchorElement>(null);
   const nameStudioRef = useRef<HTMLButtonElement>(null);
   const confirmNameRef = useRef<HTMLButtonElement>(null);
   const askNoteRef = useRef<HTMLSpanElement>(null);
-  const askRateNoteRef = useRef<HTMLSpanElement>(null);
   const supportAddressRef = useRef<HTMLSpanElement>(null);
   const draftActRef = useRef<HTMLButtonElement>(null);
   // The project whose Link a client opened the household sheet, which hands
@@ -827,10 +839,6 @@ export function InvoiceComposer({
     pricingStudioOwner?.profiles?.display_name ||
     pricingStudioOwner?.profiles?.full_name ||
     "your studio owner";
-  const rateNote = askRateNote(
-    selectedProject?.name ?? "this project",
-    ratePendingMembers.flatMap((member) => (member.name ? [member.name] : [])),
-  );
   // F8 — stamp_project_pricing_studio (00606) names a studio only for its
   // owner or admin, and only one that EMPLOYS the designer (an active seat that
   // is neither guest nor owner). The rate-card condition it also checks is not
@@ -870,8 +878,25 @@ export function InvoiceComposer({
     seatedMembers[0].user_id === viewerId;
   useEffect(() => setConfirmingName(false), [projectId]);
 
+  // F1 — readiness reads the project and its hours as they stand. A read still
+  // out (a first load, or a refetch over cached data) or a failed one
+  // establishes nothing, so no client is taken as linked from it: unknown = held.
+  const readBlocker: ComposerBlocker | null =
+    studioMode || !projectId
+      ? null
+      : projectsFailed
+        ? "project-unread"
+        : projectsLoading || projectsFetching
+          ? "project-pending"
+          : !selectedProject
+            ? "project-unread"
+            : timeFailed
+              ? "time-unread"
+              : timeLoading || timeFetching
+                ? "time-pending"
+                : null;
   // §A5 — the first unmet requirement; the held act names it and lands on it.
-  const { holds } = assessInvoiceReadiness({
+  const holds: InvoiceHold[] = readBlocker ? [] : assessInvoiceReadiness({
     clientLinked: !projectId || billingGap !== "no-client",
     canLinkClient,
     clientLinkHold: linkHold ?? null,
@@ -898,10 +923,10 @@ export function InvoiceComposer({
       projectName: selectedProject?.name ?? "This project", canLinkClient, leadLeftStudio, leadName,
       canNameStudio, soloOwnerUnstamped, hasStudioOwner, studioLoading: organizationsLoading,
     }),
-  });
+  }).holds;
   const readinessBlocker: ComposerBlocker | null =
     holds[0]?.kind === "nothing-selected" ? "lines" : holds[0]?.kind ?? null;
-  const blocker: ComposerBlocker | null = readinessBlocker ?? (studioMode
+  const blocker: ComposerBlocker | null = readBlocker ?? readinessBlocker ?? (studioMode
     ? studioInvoiceBlocker({ clientId: studioClientId, title, studioId, lines })
     : !projectId
       ? "no-project"
@@ -935,59 +960,76 @@ export function InvoiceComposer({
       })
     : null;
 
-  const focusBlocker = (held: ComposerBlocker) => {
-    const root = containerRef.current;
-    const firstUnfilledLine = () => {
-      const rows =
-        adhocRef.current?.querySelectorAll<HTMLElement>("[data-adhoc-row]") ??
-        [];
-      for (const row of Array.from(rows)) {
-        const description = row.querySelector<HTMLInputElement>(
-          'input[aria-label="Line description"]',
-        );
-        const price = row.querySelector<HTMLInputElement>(
-          'input[aria-label="Unit price (dollars)"]',
-        );
-        if (description && !description.value.trim()) return description;
-        if (price && !(dollarsToCents(price.value) > 0)) return price;
-      }
-      return addLineRef.current;
-    };
-    // The hold's own key, never a prefix: another hold's row would match too.
-    const holdTarget = (kind: ComposerBlocker) => {
-      const key = holds.find((hold) => hold.kind === kind)?.focusKey;
-      return key ? root?.querySelector<HTMLElement>(`[data-focus-key="${key}"]`) : null;
-    };
-    const target: HTMLElement | null | undefined =
-      held === "no-client"
-        ? (linkClientRef.current ?? holdTarget(held))
-        : held === "no-studio"
-          ? (nameStudioRef.current ?? holdTarget(held))
-          : held === "no-project"
-            ? forSelectRef.current
-            : held === "lines"
-              ? firstUnfilledLine()
-              : held === "deposit"
-                ? depositPctRef.current
-                : held === "billing-figures"
-                  ? root?.querySelector<HTMLElement>(
-                      '[data-at-cost-row] input[aria-invalid="true"]',
-                    )
-                  : held === "household"
-                    ? householdRef.current?.querySelector<HTMLElement>(
-                        "button, input",
-                      )
-                    : held === "regarding"
-                      ? regardingRef.current
-                      : held === "rate-pending" ||
-                          held === "price-line" ||
-                          held === "send-no-recipient"
-                        ? holdTarget(held)
-                        : null;
-    // Focus never leaves the composer: a target outside it is no target.
-    if (target && root?.contains(target)) target.focus();
-  };
-  // The lines hold's key marks where focusBlocker("lines") lands.
+  // K1 — pressing the held Draft opens one window per hold. R186: a window
+  // spans its reason and its fix, so the fix stays live inside it. A readiness
+  // hold finds its window from its own key, never a prefix (another hold's row
+  // would match too); the composer's own holds name theirs directly.
+  const holdRegion = (el: Element | null | undefined): HTMLElement | null =>
+    el?.closest<HTMLElement>("[data-hold-region]") ??
+    (el instanceof HTMLElement ? el : null);
+  const keyedRegion = (key: string) => () =>
+    holdRegion(
+      containerRef.current?.querySelector(`[data-focus-key="${key}"]`),
+    );
+  const spotlightHolds: SpotlightHold[] = holds.map((hold) => ({
+    id: hold.focusKey,
+    label: hold.repair,
+    reason: hold.reason,
+    target: keyedRegion(hold.focusKey),
+  }));
+  const ownHold = (
+    kind: ComposerBlocker,
+    label: string,
+    target: () => Element | null | undefined,
+  ) =>
+    spotlightHolds.push({
+      id: kind,
+      label,
+      reason: blockerReason(kind, {
+        projectName: selectedProject?.name ?? "This project",
+        canLinkClient,
+        leadLeftStudio,
+        leadName,
+        canNameStudio,
+        soloOwnerUnstamped,
+        hasStudioOwner,
+        studioLoading: organizationsLoading,
+      }),
+      target: () => {
+        const el = target();
+        return el instanceof HTMLElement ? el : null;
+      },
+    });
+  // A missing studio in studio mode and a loading prefill have no fix here.
+  if (studioMode) {
+    if (!studioClientId)
+      ownHold("household", "Household", () => householdRef.current);
+    if (!title.trim())
+      ownHold("regarding", "Regarding", () =>
+        regardingRef.current?.closest("label"),
+      );
+    if (lines.length === 0)
+      ownHold("lines", "Add a line", keyedRegion("invoice-lines"));
+  } else if (!projectId) {
+    ownHold(
+      "no-project",
+      "Choose a project",
+      () => forSelectRef.current?.parentElement,
+    );
+  } else if (!readBlocker) {
+    // An unread project or its hours have no fix here, as a loading prefill.
+    if (depositBlocked)
+      ownHold("deposit", "Deposit", () =>
+        depositPctRef.current?.closest('[role="radiogroup"]'),
+      );
+    if (billingFiguresMissing)
+      ownHold("billing-figures", "Billed amount", () =>
+        containerRef.current
+          ?.querySelector('[data-at-cost-row] input[aria-invalid="true"]')
+          ?.closest("[data-at-cost-row]"),
+      );
+  }
+  // The lines hold's key marks the first unfilled row, then Add line.
   const firstUnfilledAdhoc = adhoc.findIndex(
     (line) =>
       !line.description.trim() || !(dollarsToCents(line.unitDollars) > 0),
@@ -1011,6 +1053,14 @@ export function InvoiceComposer({
   };
 
   const draft = async () => {
+    // F4 — every way in (Draft, Try again) answers to the same readiness.
+    if (!canDraft) {
+      if (blocker) setHeldBlocker(blocker);
+      return;
+    }
+    const act = new AbortController();
+    draftAct.current = act;
+    const live = () => !act.signal.aborted;
     setError(null);
     setRefusedLines(new Map());
 
@@ -1026,11 +1076,15 @@ export function InvoiceComposer({
             parseInt(termsDays, 10) >= 0 ? parseInt(termsDays, 10) : 15,
           memo: memo.trim() || undefined,
           lines,
+          signal: act.signal,
         });
-        onDrafted(studioInvoiceId, null);
+        if (live()) onDrafted(studioInvoiceId, null);
       } catch (e) {
+        if (!live()) return;
         setError(
-          draftInvoiceRefusal((e as { message?: unknown } | null)?.message),
+          e instanceof OfflineRefusal
+            ? { message: e.message, retryable: true }
+            : draftInvoiceRefusal((e as { message?: unknown } | null)?.message),
         );
       }
       return;
@@ -1047,13 +1101,17 @@ export function InvoiceComposer({
           parseInt(termsDays, 10) >= 0 ? parseInt(termsDays, 10) : 15,
         memo: memo.trim() || undefined,
         lines,
+        signal: act.signal,
       });
     } catch (e) {
+      if (!live()) return;
       // create_draft_invoice refuses in its own words; say it in the composer's.
       const failure: ReturnType<typeof preWriteFailure> =
         e instanceof InvoiceBillingGapError
           ? preWriteFailure(e)
-          : draftInvoiceRefusal((e as { message?: unknown } | null)?.message);
+          : e instanceof OfflineRefusal
+            ? { message: e.message, retryable: true }
+            : draftInvoiceRefusal((e as { message?: unknown } | null)?.message);
       if (failure.gap) {
         setBillingGapOverride({
           projectId,
@@ -1154,7 +1212,7 @@ export function InvoiceComposer({
       }
     }
 
-    onDrafted(invoice.id as string, projectId);
+    if (live()) onDrafted(invoice.id as string, projectId);
   };
 
   const skippedFfe = useMemo(() => {
@@ -1327,6 +1385,8 @@ export function InvoiceComposer({
 
       {(studioMode || projectId) && (
         <>
+          {/* K1 — the lines hold's window: every line a draft can carry. */}
+          <div data-hold-region="invoice-lines">
           {!studioMode && (
             <>
               {/* ── Milestones (00204) ─────────────────────────────────────── */}
@@ -1455,102 +1515,101 @@ export function InvoiceComposer({
                     would freeze a zero-dollar line under the 00177 invoiced
                     lock. The repair is the studio's rate card. */}
                 {!timeLoading && ratePendingEntries.length > 0 && (
-                  <>
-                    {ratePendingEntries.map((entry) => (
+                  <div>
+                    {ratePendingMembers.map((member) => (
+                      // K1 — each designer's rate-pending window: her hours
+                      // and her fix.
                       <div
-                        key={entry.id}
-                        className={`${ROW} opacity-60`}
-                        data-rate-pending="true"
-                        data-focus-key={`rate-pending:${entry.user_id}`}
-                        tabIndex={-1}
+                        key={member.userId}
+                        data-hold-region={`rate-pending:${member.userId}`}
                       >
-                        <input
-                          type="checkbox"
-                          className={CHECK}
-                          checked={false}
-                          disabled
-                          readOnly
-                          aria-label="This hour has no rate yet and cannot be invoiced"
-                        />
-                        <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
-                          {entry.member_name && (
-                            <span className="mr-1.5 text-[var(--color-clay-ink)]">
-                              {entry.member_name} ·
-                            </span>
-                          )}
-                          {fmtDay(entry.started_at)}
-                          {entry.notes && (
-                            <span className="ml-1.5 text-[var(--text-muted)]">
-                              {entry.notes}
-                            </span>
-                          )}
-                        </span>
-                        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                          {formatHoursLabel(entry.duration_minutes)} · rate
-                          pending
-                        </span>
-                        <span className="font-mono text-[11px] text-[var(--text-muted)]">
-                          rate pending
-                        </span>
+                        {ratePendingEntries
+                          .filter((entry) => entry.user_id === member.userId)
+                          .map((entry) => (
+                            <div
+                              key={entry.id}
+                              className={`${ROW} opacity-60`}
+                              data-rate-pending="true"
+                              data-focus-key={`rate-pending:${entry.user_id}`}
+                              tabIndex={-1}
+                            >
+                              <input
+                                type="checkbox"
+                                className={CHECK}
+                                checked={false}
+                                disabled
+                                readOnly
+                                aria-label="This hour has no rate yet and cannot be invoiced"
+                              />
+                              <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+                                {entry.member_name && (
+                                  <span className="mr-1.5 text-[var(--color-clay-ink)]">
+                                    {entry.member_name} ·
+                                  </span>
+                                )}
+                                {fmtDay(entry.started_at)}
+                                {entry.notes && (
+                                  <span className="ml-1.5 text-[var(--text-muted)]">
+                                    {entry.notes}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                                {formatHoursLabel(entry.duration_minutes)} · rate
+                                pending
+                              </span>
+                              <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                                rate pending
+                              </span>
+                            </div>
+                          ))}
+                        {/* K8 — with no pricing studio there is no rate to set;
+                            the studio hold below names that fix. */}
+                        {selectedProject?.studio_id &&
+                          (canSetRates ? (
+                            <div className="flex flex-wrap gap-x-3">
+                              {/* The Account sheet opens over the composer,
+                                  onto this member's rate field; the address
+                                  is the same sheet's doorway. */}
+                              <DocumentAction
+                                href="/desk?account=studio"
+                                actionKey="set-member-rate"
+                                surfaceKey="accounts"
+                                regionKey="invoice-composer"
+                                variant="tertiary"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.currentTarget.focus();
+                                  if (pricingStudioId)
+                                    selectViewerStudioId(pricingStudioId);
+                                  openAccountPage("studio", {
+                                    rateFor: member.userId,
+                                    aboveFolio: true,
+                                    fallbackFocusRef: pricedHoursLabelRef,
+                                  });
+                                }}
+                              >
+                                {member.name
+                                  ? `Set ${member.name}’s rate`
+                                  : "Set the studio rate"}
+                              </DocumentAction>
+                            </div>
+                          ) : (
+                            <RateAsk
+                              ownerName={rateOwnerName}
+                              note={askRateNote(
+                                selectedProject?.name ?? "this project",
+                                member.name ? [member.name] : [],
+                              )}
+                            />
+                          ))}
                       </div>
                     ))}
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {formatHoursLabel(ratePendingMinutes)} waiting for a rate
                       · they cannot be invoiced until the studio prices them
                     </p>
-                    {/* K8 — with no pricing studio there is no rate to set;
-                        the studio hold below names that fix. */}
-                    {selectedProject?.studio_id &&
-                      (canSetRates ? (
-                        <div className="flex flex-wrap gap-x-3">
-                          {ratePendingMembers.map((member) => (
-                            // The Account sheet opens over the composer, onto
-                            // this member's rate field; the address is the
-                            // same sheet's doorway.
-                            <DocumentAction
-                              key={member.userId}
-                              href="/desk?account=studio"
-                              actionKey="set-member-rate"
-                              surfaceKey="accounts"
-                              regionKey="invoice-composer"
-                              variant="tertiary"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.currentTarget.focus();
-                                if (pricingStudioId)
-                                  selectViewerStudioId(pricingStudioId);
-                                openAccountPage("studio", {
-                                  rateFor: member.userId,
-                                  aboveFolio: true,
-                                  fallbackFocusRef: pricedHoursLabelRef,
-                                });
-                              }}
-                            >
-                              {member.name
-                                ? `Set ${member.name}’s rate`
-                                : "Set the studio rate"}
-                            </DocumentAction>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="mt-1 text-sm text-[var(--color-charcoal)]">
-                          <p>Ask {rateOwnerName} to set a rate.</p>
-                          {/* M4 — the note goes nowhere on its own. */}
-                          <p className="mt-1 text-[var(--color-aged-oak)]">
-                            “
-                            <span ref={askRateNoteRef}>{rateNote}</span>
-                            ”
-                          </p>
-                          <CopyAct
-                            text={rateNote}
-                            selectRef={askRateNoteRef}
-                            actionKey="copy-set-rate-note"
-                          >
-                            Copy a note
-                          </CopyAct>
-                        </div>
-                      ))}
-                  </>
+                  </div>
                 )}
               </div>
 
@@ -1704,6 +1763,8 @@ export function InvoiceComposer({
                         key={it.id}
                         data-testid="composer-unpriced-line"
                         data-focus-key={focusKey}
+                        // Its own window, never the whole lines region.
+                        data-hold-region={focusKey}
                         tabIndex={-1}
                         className="outline-none"
                       >
@@ -1924,7 +1985,7 @@ export function InvoiceComposer({
           )}
 
           {/* ── Ad-hoc lines ───────────────────────────────────────────── */}
-          <div ref={adhocRef} className="mt-4">
+          <div className="mt-4">
             <p className={`${LABEL} mb-1`}>ad-hoc lines</p>
             {adhoc.map((line, i) => (
               <div
@@ -1989,7 +2050,6 @@ export function InvoiceComposer({
               </div>
             ))}
             <DocumentAction
-              ref={addLineRef}
               data-focus-key={
                 firstUnfilledAdhoc === -1 ? "invoice-lines" : undefined
               }
@@ -2002,6 +2062,7 @@ export function InvoiceComposer({
             >
               Add line
             </DocumentAction>
+          </div>
           </div>
 
           {/* ── Terms ──────────────────────────────────────────────────── */}
@@ -2062,7 +2123,11 @@ export function InvoiceComposer({
               </span>
             </div>
             {billingGap && selectedProject && (
-              <div className="w-full basis-full text-sm text-[var(--color-charcoal)]">
+              // K1/R186 — the gap hold's window: its reason and every fix act.
+              <div
+                data-hold-region={billingGap}
+                className="w-full basis-full text-sm text-[var(--color-charcoal)]"
+              >
                 {soloOwnerUnstamped ? (
                   <p
                     data-focus-key={askFocusKey}
@@ -2143,7 +2208,6 @@ export function InvoiceComposer({
                   // to the sheet's address. Focused on click because Safari
                   // does not focus a link it activates.
                   <DocumentAction
-                    ref={linkClientRef}
                     data-focus-key="link-client"
                     href={`/doc/${projectId}?sheet=household`}
                     actionKey="link-invoice-client"
@@ -2262,11 +2326,12 @@ export function InvoiceComposer({
               held={!canDraft && !creating}
               disabled={!canDraft && !creating}
               aria-describedby={!canDraft && !creating ? statusId : undefined}
+              // K3 — the reason line beside Draft speaks first; the
+              // spotlight then lights every hold.
               onHeldActivate={() => {
-                if (!blocker) return;
-                setHeldBlocker(blocker);
-                requestAnimationFrame(() => focusBlocker(blocker));
+                if (blocker) setHeldBlocker(blocker);
               }}
+              holds={spotlightHolds}
               loading={creating}
               loadingLabel="Drafting…"
               onClick={() => void draft()}
@@ -2321,6 +2386,10 @@ type ComposerBlocker =
   | "billing-figures"
   | "deposit"
   | "prefill"
+  | "project-pending"
+  | "project-unread"
+  | "time-pending"
+  | "time-unread"
   | "rate-pending"
   | "price-line"
   | "send-no-recipient";
@@ -2363,6 +2432,14 @@ function blockerReason(
       return "Adjust the deposit before drafting.";
     case "prefill":
       return "Wait for the invoice details to finish loading.";
+    case "project-pending":
+      return "Checking this project before drafting its invoice.";
+    case "project-unread":
+      return "This project couldn't be read. Reload the page to draft its invoice.";
+    case "time-pending":
+      return "Checking this project's hours before drafting its invoice.";
+    case "time-unread":
+      return "This project's hours couldn't be read. Reload the page to draft its invoice.";
     case "household":
       return "Choose the household this invoice is for first.";
     case "regarding":
@@ -2393,6 +2470,25 @@ function askRateNote(projectName: string, memberNames: string[]): string {
   return memberNames.length > 0
     ? `Could you set a rate for ${new Intl.ListFormat("en", { type: "conjunction" }).format(memberNames)}? I'm drafting ${projectName}'s invoice.`
     : `Could you set a rate for the hours on ${projectName}? I'm drafting its invoice.`;
+}
+
+/** K8 — one designer's ask, inside her rate-pending window. */
+function RateAsk({ ownerName, note }: { ownerName: string; note: string }) {
+  const noteRef = useRef<HTMLSpanElement>(null);
+  return (
+    <div className="mt-1 text-sm text-[var(--color-charcoal)]">
+      <p>Ask {ownerName} to set a rate.</p>
+      {/* M4 — the note goes nowhere on its own. */}
+      <p className="mt-1 text-[var(--color-aged-oak)]">
+        “
+        <span ref={noteRef}>{note}</span>
+        ”
+      </p>
+      <CopyAct text={note} selectRef={noteRef} actionKey="copy-set-rate-note">
+        Copy a note
+      </CopyAct>
+    </div>
+  );
 }
 
 /** A refusal before anything was written: a billing gap or a bad request is

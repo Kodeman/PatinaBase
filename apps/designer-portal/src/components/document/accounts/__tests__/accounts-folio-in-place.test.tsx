@@ -17,6 +17,12 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 const mockLedProjectIds = new Set<string>(['project-1']);
 
 jest.mock('@patina/supabase', () => ({
+  // US-36 R2 — the folio's K10 recipient read and the band's milestone readiness.
+  useSessionUserId: () => null,
+  useDesignerClientForClientUser: () => ({ data: null, isLoading: false }),
+  useClient: () => ({ data: null, isLoading: false }),
+  useProjects: () => ({ data: [] }),
+  useDocumentClientLinkHold: () => ({ data: null }),
   useEmailDelivery: () => ({ byRef: {}, isLoading: false, isError: false }),
   computeArAging: () => ({ totalBalanceCents: 0, buckets: [], openInvoices: [] }),
   invoiceDaysOverdue: () => 0,

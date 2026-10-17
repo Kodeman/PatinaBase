@@ -1003,6 +1003,17 @@ export interface InvoiceReadinessFacts {
   householdName?: string;
 }
 
+/** K10 — the folio's Send, held before anything issues: invoice-send would find no address. */
+export function sendNoRecipientHold(householdName?: string | null): InvoiceHold {
+  return {
+    kind: "send-no-recipient",
+    reason: `Add ${householdName || "the client"}'s email to send this.`,
+    repair: "Add their email",
+    fixer: "add-email",
+    focusKey: "add-email",
+  };
+}
+
 /** Readiness is derived without mutating composer state; holds follow repair order. */
 export function assessInvoiceReadiness(facts: InvoiceReadinessFacts): { ready: boolean; holds: InvoiceHold[] } {
   const holds: InvoiceHold[] = [];
@@ -1032,8 +1043,7 @@ export function assessInvoiceReadiness(facts: InvoiceReadinessFacts): { ready: b
     add("price-line", `Set a client price for ${facts.unpricedLineNames?.[id] || "this piece"}.`, "Price it", "price-line", `price-line:${id}`);
   if (!facts.selectedAnything)
     add("nothing-selected", "Add at least one line first.", "Select lines", "select-lines", "invoice-lines");
-  if (facts.sendNoRecipient)
-    add("send-no-recipient", `${facts.householdName || "This household"} has no email to send to.`, "Add their email", "add-email", "add-email");
+  if (facts.sendNoRecipient) holds.push(sendNoRecipientHold(facts.householdName));
 
   return { ready: holds.length === 0, holds };
 }
@@ -1061,6 +1071,9 @@ const SEND_REFUSALS: Array<[RegExp, string]> = [
   [/^invoice_not_found$/, "This invoice couldn't be found. Reload the accounts page and try again."],
   [/^lookup_failed$/, "The invoice couldn't be loaded. Reload the folio and try again."],
   [/^(?:invoice_not_issued|Issue the invoice before sending\.)$/, "Issue the invoice before sending it."],
+  // Send-on-draft issues in the same request (K10): a draft already issued elsewhere, or an issue refused.
+  [/^(?:invoice_not_draft|This invoice was already issued\.)$/, "This invoice was already issued. Reload the folio to resend it."],
+  [/^issue_failed$/, "The invoice couldn't be issued. Reload the folio and try again."],
   [/^(?:invoice_void|A voided invoice cannot be sent\.)$/, "This invoice was voided and can't be sent."],
   [
     /^(?:invoice_not_open|Reminders can only be sent on open \(sent or partially paid\) invoices\.)$/,

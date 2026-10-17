@@ -39,6 +39,20 @@ const mockAccountData = () => ({
   ...mockAccountOverride,
 });
 
+// US-36 R2 — the milestone draft's readiness reads the project and the viewer;
+// this project has its client and studio, so Generate is not held.
+jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
+  // F5 (SQ-1249): the draft hold reads the project's own entity, not the collection.
+  useProject: () => {
+    const data = { id: 'project-1', name: 'Lake House', client_id: 'client-1', studio_id: 'studio-1', designer_id: 'designer-1' };
+    // SQ-1223 R4: Generate re-reads the project before it drafts.
+    return { data, refetch: async () => ({ data, isError: false }) };
+  },
+  useSessionUserId: () => null,
+  useDocumentClientLinkHold: () => ({ data: null }),
+}));
+
 jest.mock('@/hooks/use-account-page', () => ({
   useAccountPage: () => ({
     data: mockQueryState === 'ready' ? mockAccountData() : undefined,
@@ -192,7 +206,7 @@ describe('AccountBand invoice handoff', () => {
     expect(mockRefetch).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces a failed recovery draft at the milestone, in the band’s words', () => {
+  it('surfaces a failed recovery draft at the milestone, in the band’s words', async () => {
     // The RPC's own words: its name and the milestone's id.
     const raw =
       'generate_milestone_invoice: milestone 5b1f0c7e-0000-4000-8000-000000000001 not found or access denied';
@@ -204,7 +218,8 @@ describe('AccountBand invoice handoff', () => {
     fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate invoice' }));
 
-    const alert = screen.getByRole('alert');
+    // SQ-1223 R4: the draft waits on Generate's fresh project read.
+    const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(
       "Could not draft the invoice — This milestone couldn't be found. Reload the project and try again.",
     );
