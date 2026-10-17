@@ -500,3 +500,84 @@ describe("Price lens: the keys", () => {
     );
   });
 });
+
+describe("Price lens: the status line speaks the summary after a commit (SQ-1171)", () => {
+  const succeed = (_vars: unknown, options?: { onSuccess?: () => void }) =>
+    options?.onSuccess?.();
+
+  /** The lens's one live line (the table keeps a quiet status of its own). */
+  function status(): string {
+    const line = screen
+      .getAllByRole("status")
+      .find((el) => el.hasAttribute("data-price-announce"));
+    return line?.textContent ?? "";
+  }
+
+  function rerenderLens(view: ReturnType<typeof renderLens>) {
+    view.rerender(<PriceLens docId="doc-1" projectId="proj" room={null} canSeeMoney />);
+  }
+
+  it("a committed markup speaks the new Client and Gap figures once", () => {
+    mockLinePricing.mockImplementation(succeed);
+    renderLens();
+    expect(status()).toBe("");
+    // The rug at 50%: +$300 on the job, $300 over the 35% target.
+    typeAndEnter("Markup, Rug", "50");
+    expect(status()).toBe("Client $9,178.95 · gap $300 over target.");
+    // The sofa at its cost: the job falls under the target.
+    typeAndEnter("Unit client price, Sofa", "1000");
+    expect(status()).toBe("Client $8,828.95 · gap $50 under target.");
+  });
+
+  it("a tax-rate commit speaks once the job's pricing comes back", () => {
+    mockSetProjectPricing.mockImplementation(succeed);
+    const view = renderLens();
+    const rate = screen.getByLabelText("Sales tax %");
+    fireEvent.focus(rate);
+    fireEvent.change(rate, { target: { value: "9.5" } });
+    fireEvent.blur(rate);
+    // The write landed; the summary has not moved yet, so nothing is said.
+    expect(status()).toBe("");
+    mockProjectPricing.data = { markupTargetPercent: null, salesTaxRate: 0.095 };
+    rerenderLens(view);
+    expect(status()).toBe("Client $8,878.95 · on target · tax $843.50.");
+  });
+
+  it("a target commit speaks the new gap", () => {
+    mockSetProjectPricing.mockImplementation(succeed);
+    const view = renderLens();
+    typeAndEnter("Target", "40");
+    mockProjectPricing.data = { markupTargetPercent: 40, salesTaxRate: null };
+    rerenderLens(view);
+    // 40% over $6,577 of cost is $9,207.80: the job sits $328.85 under it.
+    expect(status()).toBe("Client $8,878.95 · gap $328.85 under target.");
+  });
+
+  it("Esc says nothing; the next committed figure does", async () => {
+    mockLinePricing.mockImplementation(succeed);
+    const user = userEvent.setup();
+    renderLens();
+    await user.click(screen.getByLabelText("Markup, Lamp"));
+    await user.keyboard("99{Escape}");
+    expect(mockLinePricing).not.toHaveBeenCalled();
+    expect(status()).toBe("");
+    await user.keyboard("50{Enter}");
+    // The lamp at 50%: +$30 on the job.
+    expect(status()).toBe("Client $8,908.95 · gap $30 over target.");
+  });
+
+  it("a refused write keeps its sentence on the line and does not speak the summary", () => {
+    const sentence = "This line is invoiced, so its price stays as billed.";
+    mockLinePricing.mockImplementation(succeed);
+    mockLinePricing.mockImplementationOnce((_vars, options) =>
+      options?.onError?.(Object.assign(new Error(sentence), { code: "23514" })),
+    );
+    renderLens();
+    typeAndEnter("Unit client price, Sofa", "1500");
+    expect(within(rowOf("Sofa")).getByRole("alert")).toHaveTextContent(sentence);
+    expect(status()).toBe("");
+    // The same status line still speaks the next write that lands.
+    typeAndEnter("Markup, Rug", "50");
+    expect(status()).toBe("Client $9,178.95 · gap $300 over target.");
+  });
+});

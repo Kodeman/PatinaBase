@@ -69,6 +69,27 @@ export function ratePercentText(rate: number | null): string {
   return String(Math.round(rate * 100 * 1000) / 1000);
 }
 
+/**
+ * The summary as one spoken sentence, for the lens's status line after a
+ * committed figure (SQ-1171): `Client $8,609 · gap $1,240 under target.`
+ * Tax rides along only once the job has a rate.
+ */
+export function summarySentence(
+  summary: JobPricingSummary,
+  salesTaxRate: number | null,
+): string {
+  const parts = [`Client ${money(summary.totalClientCents)}`];
+  if (summary.gapPct !== null) {
+    parts.push(
+      summary.gapCents === 0
+        ? "on target"
+        : `gap ${money(Math.abs(summary.gapCents))} ${summary.gapCents > 0 ? "over" : "under"} target`,
+    );
+  }
+  if (salesTaxRate !== null) parts.push(`tax ${money(summary.taxCents)}`);
+  return `${parts.join(" · ")}.`;
+}
+
 function parsePercent(text: string): number | null | undefined {
   const cleaned = text.replace(/[%\s,]/g, "");
   if (cleaned === "") return null;

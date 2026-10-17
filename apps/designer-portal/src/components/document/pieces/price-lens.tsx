@@ -122,6 +122,7 @@ import {
   ADDED_KINDS,
   PriceActs,
   PriceSummary,
+  summarySentence,
   type AddedLineKind,
 } from "./price-summary";
 import { UndoToast } from "./undo-toast";
@@ -453,7 +454,21 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       }),
     [lines, projectPricing, myPricing],
   );
-  const byId = useMemo(() => new Map(lines.map((l) => [l.id, l])), [lines]);
+  // A committed figure speaks the new summary once, on the one status line,
+  // as soon as the summary has moved past what it read before the write
+  // (SQ-1171). A target or tax write moves it only once the job's pricing
+  // comes back from the server.
+  const [summaryDue, setSummaryDue] = useState<string | null>(null);
+  const spokenSummary = summarySentence(
+    summary,
+    projectPricing?.salesTaxRate ?? null,
+  );
+  useEffect(() => {
+    if (summaryDue === null || spokenSummary === summaryDue) return;
+    setSummaryDue(null);
+    setAnnouncement(spokenSummary);
+  }, [summaryDue, spokenSummary]);
+  const byId =useMemo(() => new Map(lines.map((l) => [l.id, l])), [lines]);
   const placements = useMemo(
     () => (placementData ?? []) as FfeRoomPlacement[],
     [placementData],
@@ -629,6 +644,13 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     });
   }
 
+  /** A write's success hook that speaks the summary once it has moved (SQ-1171). */
+  function speakSummaryOnSuccess() {
+    const before = spokenSummary;
+    setSummaryDue(null);
+    return () => setSummaryDue(before);
+  }
+
   /** A refused write: its figure goes, and the server's sentence stays on the line. */
   function refused(row: PriceRow, fallback: string) {
     return (cause: unknown) => {
@@ -649,18 +671,25 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
   ) {
     setNotice(null);
     noteLine(row.id, null);
+    const onSuccess = speakSummaryOnSuccess();
     const fallback = `The price on ${row.name} was not saved. Try again.`;
     if (field === "unit_cost_cents" && !row.pricingEditable) {
       commercials.mutate(
         { projectId, itemId: row.id, tradePriceCents: value ?? 0 },
-        { onError: refused(row, `The trade cost on ${row.name} was not saved. Try again.`) },
+        {
+          onSuccess,
+          onError: refused(row, `The trade cost on ${row.name} was not saved. Try again.`),
+        },
       );
       return;
     }
     if (field === "unit_client_price_cents" && row.labor) {
       laborPrice.mutate(
         { projectId, itemId: row.id, unitPriceCents: value ?? 0 },
-        { onError: refused(row, `The client price on ${row.name} was not saved. Try again.`) },
+        {
+          onSuccess,
+          onError: refused(row, `The client price on ${row.name} was not saved. Try again.`),
+        },
       );
       return;
     }
@@ -674,7 +703,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     }
     linePricing.mutate(
       { projectId, itemId: row.id, field, value },
-      { onError: refused(row, fallback) },
+      { onSuccess, onError: refused(row, fallback) },
     );
   }
 
@@ -688,6 +717,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
 
   function resetMarkup(row: PriceRow) {
     noteLine(row.id, null);
+    setSummaryDue(null);
     resetLine.mutate(
       { projectId, itemId: row.id },
       {
@@ -700,6 +730,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
 
   function resetJob() {
     setSummaryNote(null);
+    setSummaryDue(null);
     resetAll.mutate(
       { projectId },
       {
@@ -723,6 +754,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     setProjectPricing.mutate(
       { projectId, markupTargetPercent, salesTaxRate },
       {
+        onSuccess: speakSummaryOnSuccess(),
         onError: (cause) =>
           setSummaryNote(
             errorText(cause) ?? "The job's pricing was not saved. Try again.",
