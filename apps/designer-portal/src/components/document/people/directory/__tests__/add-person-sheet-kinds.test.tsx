@@ -925,6 +925,23 @@ describe("the recorded studio, while it is still resolving", () => {
     expect(promote).not.toHaveBeenCalled();
   });
 
+  it("asks again AND opens the held reason in one spotlight window on the press", async () => {
+    recordedStudio.isError = true;
+    openSub();
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
+    await waitFor(() => expect(recordedStudioRefetch).toHaveBeenCalled());
+    expect(
+      Array.from(
+        document.querySelectorAll("[data-hold-spotlight-window]"),
+        (el) => el.getAttribute("data-hold-spotlight-window"),
+      ),
+    ).toEqual(["add-person-recorded-studio-held"]);
+    const note = document.getElementById("add-person-recorded-studio-held");
+    expect(note).toHaveTextContent(/Press again to try once more/);
+    expect(note?.closest("[inert]")).toBeNull();
+    expect(addParty).not.toHaveBeenCalled();
+  });
+
   /**
    * The same silence by the other road: the default `networkMode: 'online'`
    * parks an offline fetch at `fetchStatus: 'paused'`, which is neither

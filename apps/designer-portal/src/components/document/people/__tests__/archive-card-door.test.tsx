@@ -94,12 +94,16 @@ describe("ArchiveCardDoor", () => {
       </div>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Put this card away" }));
-    const reason = document.querySelector(
-      '[data-hold-spotlight-bar] .hold-spotlight__reason',
-    );
-    expect(await screen.findByRole("group", { name: "What needs attention" })).toBeInTheDocument();
-    expect(reason).toHaveTextContent(/owner or an admin/);
-    expect(reason?.closest("[inert]")).toBeNull();
+    expect(
+      Array.from(
+        document.querySelectorAll("[data-hold-spotlight-window]"),
+        (el) => el.getAttribute("data-hold-spotlight-window"),
+      ),
+    ).toEqual(["archive-held-card-dana"]);
+    // The ask note is the window: it says who can put the card away.
+    const note = document.getElementById("archive-held-card-dana");
+    expect(note).toHaveTextContent(/owner or an admin/);
+    expect(note?.closest("[inert]")).toBeNull();
   });
 
   it("writes nothing when a held act is pressed", () => {

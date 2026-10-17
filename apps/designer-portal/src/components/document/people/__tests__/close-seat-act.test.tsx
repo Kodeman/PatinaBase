@@ -135,6 +135,27 @@ describe("CloseSeatAct", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("opens the money reason in one spotlight window when the held act is pressed", () => {
+    seatAuthority = [{ scope: "money", effective_to: null }];
+    studioOrgs = [{ id: "studio-1", membership: { role: "member" } }];
+    render(
+      <div data-spotlight-frame>
+        <CloseSeatAct {...props} />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close this seat" }));
+    expect(
+      Array.from(
+        document.querySelectorAll("[data-hold-spotlight-window]"),
+        (el) => el.getAttribute("data-hold-spotlight-window"),
+      ),
+    ).toEqual(["close-seat-held-seat-dana"]);
+    // The ask note names who can close it, and stays live in the window.
+    const note = document.getElementById("close-seat-held-seat-dana");
+    expect(note).toHaveTextContent(/owner or an admin of the studio/);
+    expect(note?.closest("[inert]")).toBeNull();
+  });
+
   it("offers the act to the principal on the same seat", () => {
     seatAuthority = [{ scope: "money", effective_to: null }];
     studioOrgs = [{ id: "studio-1", membership: { role: "admin" } }];
