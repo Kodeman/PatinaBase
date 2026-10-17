@@ -250,6 +250,73 @@ Deno.test("snapshot checksum mismatch fails before image resolution or upload", 
   assertEquals(repo.failed[0].code, "snapshot_checksum_mismatch");
 });
 
+// F7 (SQ-1292). A typed round client price over a cost that does not divide it
+// stores a repeating markup (00809). The pins below are psql output on the same
+// snapshot: `wire` is the jsonb text PostgREST delivers, `sql` is
+// _spec_book_canonical_json of it and `checksum` its sha256, as
+// prepare_spec_book_issue computes. 00818 rounds markupPercent to four places.
+const F7_SNAPSHOT_PINS = {
+  pre00818: {
+    wire:
+      '{"items": [{"pricing": {"currency": "USD", "markupPercent": 33.3333333333333333, "tradePriceCents": 180000, "clientPriceCents": 240000}, "quantity": 1, "ffeItemId": "81800000-0000-4000-8000-000000000501"}, {"pricing": {"currency": "USD", "markupPercent": 42.8571428571428571, "tradePriceCents": 70000, "clientPriceCents": 100000}, "quantity": 3, "ffeItemId": "81800000-0000-4000-8000-000000000502"}], "contractVersion": 1}',
+    sql:
+      '{"contractVersion":1,"items":[{"ffeItemId":"81800000-0000-4000-8000-000000000501","pricing":{"clientPriceCents":240000,"currency":"USD","markupPercent":33.3333333333333333,"tradePriceCents":180000},"quantity":1},{"ffeItemId":"81800000-0000-4000-8000-000000000502","pricing":{"clientPriceCents":100000,"currency":"USD","markupPercent":42.8571428571428571,"tradePriceCents":70000},"quantity":3}]}',
+    checksum:
+      "a293abdfa689dcf23e4cd223a06ccb7b9d57d6dc379562473adfdb8f176b7f62",
+  },
+  post00818: {
+    wire:
+      '{"items": [{"pricing": {"currency": "USD", "markupPercent": 33.3333, "tradePriceCents": 180000, "clientPriceCents": 240000}, "quantity": 1, "ffeItemId": "81800000-0000-4000-8000-000000000501"}, {"pricing": {"currency": "USD", "markupPercent": 42.8571, "tradePriceCents": 70000, "clientPriceCents": 100000}, "quantity": 3, "ffeItemId": "81800000-0000-4000-8000-000000000502"}], "contractVersion": 1}',
+    sql:
+      '{"contractVersion":1,"items":[{"ffeItemId":"81800000-0000-4000-8000-000000000501","pricing":{"clientPriceCents":240000,"currency":"USD","markupPercent":33.3333,"tradePriceCents":180000},"quantity":1},{"ffeItemId":"81800000-0000-4000-8000-000000000502","pricing":{"clientPriceCents":100000,"currency":"USD","markupPercent":42.8571,"tradePriceCents":70000},"quantity":3}]}',
+    checksum:
+      "9056f0acba43ddf0d8b80385a736fc69f5500961d1a59db538a39659370640ce",
+  },
+};
+
+Deno.test("F7: a 00818 repeating-decimal snapshot round-trips through JSON.parse and canonicalStringify to the SQL checksum", async () => {
+  const fixed = F7_SNAPSHOT_PINS.post00818;
+  const text = canonicalStringify(JSON.parse(fixed.wire));
+  assertEquals(text, fixed.sql);
+  assertEquals(await sha256Hex(text), fixed.checksum);
+
+  // Why 00818 rounds: the full-precision markup does not survive the parse.
+  const unrounded = F7_SNAPSHOT_PINS.pre00818;
+  const drifted = canonicalStringify(JSON.parse(unrounded.wire));
+  assertEquals(drifted.includes('"markupPercent":33.333333333333336'), true);
+  assertEquals(drifted === unrounded.sql, false);
+});
+
+Deno.test("F7: the renderer accepts a frozen snapshot whose markup is a rounded repeating decimal", async () => {
+  // The edge function gets render_snapshot through JSON.parse and the
+  // checksum SQL computed. SQL prints a JSON number's digits exactly; every
+  // other number in the fixture is an integer, which both sides print alike.
+  const markupLiteral = "33.3333"; // trim_scale(round(33.3333333333333333, 4))
+  const snapshot = frozenSnapshot();
+  const items = snapshot.items as Array<Record<string, unknown>>;
+  items[0].pricing = {
+    ...(items[0].pricing as Record<string, unknown>),
+    markupPercent: "__F7_MARKUP__",
+  };
+  const wire = JSON.stringify(snapshot).replace(
+    '"__F7_MARKUP__"',
+    markupLiteral,
+  );
+  const sqlCanonical = canonicalStringify(snapshot).replace(
+    '"__F7_MARKUP__"',
+    markupLiteral,
+  );
+
+  const repo = await repository();
+  repo.claim = { ...repo.claim!, audience: "internal" };
+  repo.revision.renderSnapshot = JSON.parse(wire);
+  repo.revision.snapshotChecksum = await sha256Hex(sqlCanonical);
+  const result = await runSpecBookRender(repo, ARTIFACT_ID).catch(() => null);
+  assertEquals(repo.failed, []);
+  assertEquals(repo.uploads.length, 1);
+  assertEquals(result?.finalized, true);
+});
+
 Deno.test("addendum rejects a base snapshot checksum mismatch before rendering", async () => {
   const repo = await repository();
   const base = await repository();
