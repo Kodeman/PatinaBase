@@ -476,6 +476,9 @@ BEGIN
     ADD COLUMN studio_id uuid
       REFERENCES public.organizations(id) ON DELETE SET NULL;
 
+  -- proposals carries deferred FK triggers; checks run per statement so ENABLE TRIGGER
+  -- never meets pending events (55006).
+  SET CONSTRAINTS ALL IMMEDIATE;
   ALTER TABLE public.proposals DISABLE TRIGGER update_proposals_updated_at;
   LOOP
     UPDATE public.proposals AS proposal

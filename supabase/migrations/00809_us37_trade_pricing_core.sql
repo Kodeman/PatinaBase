@@ -251,6 +251,9 @@ COMMENT ON COLUMN public.project_ffe_items.pending_markup_held_percent IS
 DO $$
 BEGIN
   PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+  -- The markup_percent rewrite above makes every row new to this transaction, so the
+  -- UPDATE queues deferred FK checks; flush them or ENABLE TRIGGER fails (55006).
+  SET CONSTRAINTS ALL IMMEDIATE;
   ALTER TABLE public.project_ffe_items DISABLE TRIGGER USER;
   UPDATE public.project_ffe_items AS item
      SET retail_unit_cents = product.price_retail
@@ -656,6 +659,9 @@ CREATE TRIGGER zzz_ffe_markup_truth_trg
 DO $$
 BEGIN
   PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+  -- The markup_percent rewrite above makes every row new to this transaction, so the
+  -- UPDATE queues deferred FK checks; flush them or ENABLE TRIGGER fails (55006).
+  SET CONSTRAINTS ALL IMMEDIATE;
   ALTER TABLE public.project_ffe_items DISABLE TRIGGER USER;
   UPDATE public.project_ffe_items
      SET markup_percent = public._ffe_true_markup(unit_price_cents, trade_price_cents)
