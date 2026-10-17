@@ -979,6 +979,25 @@ describe("SQ-857 — the spec book walk fixes", () => {
     }));
   });
 
+  it("does not treat preflight blockers as warnings to acknowledge", async () => {
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench", item_type: "allowance", document_code: "F-01", project_room_id: null, room: null, image_url: null }));
+    prepareIssueMutateAsync.mockRejectedValueOnce({
+      message: "spec_book_preflight_failed",
+      code: "23514",
+      details: JSON.stringify({
+        blockers: [{ code: "missing_required_fact", ffeItemId: "bench" }],
+        warnings: [{ id: "stale-source:bench", code: "stale_source_verification", ffeItemId: "bench" }],
+      }),
+    });
+    const user = userEvent.setup();
+    render(<SpecBookWorkspace projectId="project-1" />);
+    await user.click(screen.getByRole("button", { name: "Run issue checks" }));
+    await user.type(screen.getByLabelText("Issue-with-warnings reason"), "Reviewed with the client");
+    await user.click(screen.getByRole("button", { name: /Issue 2 editions/ }));
+    expect(await screen.findByText("The issue could not complete.")).toBeInTheDocument();
+    expect(screen.queryByText("The server found warnings to acknowledge. Review them, then issue again.")).not.toBeInTheDocument();
+  });
+
   it("holds Issue when the project has no studio", async () => {
     withLines(buildItem({}, { id: "bench", name: "Built-in bench", item_type: "allowance", document_code: "F-01", project_room_id: null, room: null, image_url: null }));
     mockProjectData = { name: "Oak project", studio_id: null };

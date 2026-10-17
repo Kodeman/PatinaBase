@@ -58,8 +58,8 @@ type ServerIssueWarning = {
 };
 
 function serverWarningsFromError(error: unknown): ServerIssueWarning[] | null {
-  const candidate = error as { code?: string; details?: unknown };
-  if (candidate?.code !== "23514" && candidate?.message !== "spec_book_warnings_unacknowledged") return null;
+  const candidate = error as { message?: string; details?: unknown };
+  if (candidate?.message !== "spec_book_warnings_unacknowledged") return null;
   let details: unknown = candidate.details;
   if (typeof details === "string") {
     try { details = JSON.parse(details); } catch { return null; }
@@ -1221,6 +1221,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   }, [data?.items, requestedItemId, selectedItemId]);
 
   const toggleAudience = (audience: SpecBookAudience) => {
+    setServerIssueWarnings(null);
     setAudiences((current) =>
       current.includes(audience)
         ? current.filter((value) => value !== audience)
@@ -1310,6 +1311,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         issue_type: issueType,
         duration_ms: Math.round(performance.now() - issueStarted),
       });
+      setServerIssueWarnings(null);
       setIssueFeedback(
         rendered.some((result) => result.finalized)
           ? "Revision issued. Every audience artifact is durable."
@@ -1323,7 +1325,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         setIssueFeedback("The server found warnings to acknowledge. Review them, then issue again.");
         setView("preflight");
       } else {
-        const message = error instanceof Error ? error.message : "";
+        const message = (error as { message?: string })?.message ?? "";
         setIssueFeedback(
           project.data && project.data.studio_id == null && /spec book not found or not accessible/i.test(message)
             ? "This job isn't in a studio yet. Name its studio, then issue."
