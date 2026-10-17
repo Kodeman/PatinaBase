@@ -41497,6 +41497,10 @@ export type Database = {
         Args: { p_proposal_id: string }
         Returns: Json
       }
+      get_client_presentation_identity: {
+        Args: { p_project_id?: string; p_proposal_id?: string }
+        Returns: Json
+      }
       get_client_project_review_bundle: {
         Args: { p_edition_id: string }
         Returns: Json

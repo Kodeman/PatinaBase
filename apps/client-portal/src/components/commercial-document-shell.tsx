@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { Clock3, FileText, ReceiptText } from 'lucide-react';
-import { createBrowserClient } from '@patina/supabase';
+import { createBrowserClient, type PresentationIdentity } from '@patina/supabase';
 import {
   Button,
   Dialog,
@@ -13,6 +13,7 @@ import {
 } from '@patina/design-system';
 import { DESIGN_BUILD_PAPER_COPY } from '@patina/types';
 import { AgreementPartsBody } from '@/components/agreement-parts-body';
+import { PresentedBy } from '@/components/presented-by';
 import { DesignBuildBody } from '@/components/commercial/design-build-body';
 import { Stamp } from '@/components/threshold/instruments/stamp';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
@@ -70,7 +71,14 @@ function calendarDate(value: string): string {
   return formatCalendarDate(value) ?? date(value);
 }
 
-export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocumentBundle }) {
+export function CommercialDocumentShell({
+  bundle,
+  presentedBy = null,
+}: {
+  bundle: CommercialDocumentBundle;
+  /** US-37 #6 — who presents this paper: the studio mark and the lead's contact. */
+  presentedBy?: PresentationIdentity | null;
+}) {
   const { document } = bundle;
   if (document.kind === 'legacy') return null;
 
@@ -180,6 +188,10 @@ export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocument
       )}
 
       <SignatureLedger bundle={bundle} />
+
+      {/* US-37 #6 — the studio and its lead, as the paper's last lines over
+          the footer rule. Renders nothing when the studio filled nothing. */}
+      <PresentedBy identity={presentedBy} className="mt-10" />
 
       <footer className="mt-10 flex justify-between border-t border-[var(--border-subtle)] pt-5 type-meta-small text-[var(--text-muted)]">
         <span>Patina</span>
