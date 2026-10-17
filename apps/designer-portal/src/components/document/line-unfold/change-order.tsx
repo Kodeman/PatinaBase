@@ -232,7 +232,7 @@ export function ChangeOrderSheet({
       kind="po-change"
     >
       <div data-testid="po-change-sheet" className="space-y-4">
-        <fieldset>
+        <fieldset id="po-change-kind-fix">
           <legend className={LABEL_CLS}>What changed</legend>
           <div className="mt-1.5 space-y-1">
             {CHANGE_KINDS.map((k, i) => (
@@ -332,6 +332,7 @@ export function ChangeOrderSheet({
             variant="primary"
             disabled={pending || missing || gate.held}
             held={gate.held}
+            holdFix={kind === null ? 'po-change-kind-fix' : undefined}
             aria-describedby={gate.held ? heldId : undefined}
             loading={startChange.isPending}
             loadingLabel="Recording…"

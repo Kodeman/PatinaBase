@@ -155,9 +155,15 @@ export function ActDraft({
         : 'read-only';
   const readOnly = mode === 'read-only';
   const lead = viewer.leadFirstName ?? 'the lead';
-  const complete =
-    initial === null ||
-    (body.trim().length > 0 && (initial.subject === null || subject.trim().length > 0));
+  const missingSubject = initial !== null && initial.subject !== null && subject.trim().length === 0;
+  const missingBody = initial !== null && body.trim().length === 0;
+  const complete = !missingSubject && !missingBody;
+  const draftSubjectReason = 'Add a subject to continue.';
+  const draftBodyReason = 'Write the message to continue.';
+  const draftReasonIds = [
+    ...(missingSubject ? [`${regionKey}-subject-reason`] : []),
+    ...(missingBody ? [`${regionKey}-body-reason`] : []),
+  ].join(' ') || undefined;
   const text = (): ActDraftText => ({ subject: subject.trim(), body: body.trim() });
 
   // SQ-751 F2 · SQ-774 R3 — the send boundary reads the job's lead again,
@@ -307,35 +313,49 @@ export function ActDraft({
           {viewer.handoff.note}
         </p>
       )}
-      {initial && initial.subject !== null && (
-        <div>
-          <label htmlFor={`${regionKey}-subject`} className={LABEL_CLS}>
-            Subject
-          </label>
-          <Input
-            id={`${regionKey}-subject`}
-            value={subject}
-            maxLength={300}
-            readOnly={readOnly}
-            onChange={(event) => setSubject(event.target.value)}
-          />
-        </div>
-      )}
-      {initial && (
-        <div>
-          <label htmlFor={`${regionKey}-body`} className={LABEL_CLS}>
-            {bodyLabel}
-          </label>
-          <Textarea
-            id={`${regionKey}-body`}
-            rows={8}
-            value={body}
-            maxLength={4000}
-            readOnly={readOnly}
-            onChange={(event) => setBody(event.target.value)}
-          />
-        </div>
-      )}
+      <div id={`${regionKey}-draft-fields`}>
+        {initial && initial.subject !== null && (
+          <div>
+            <label htmlFor={`${regionKey}-subject`} className={LABEL_CLS}>
+              Subject
+            </label>
+            <Input
+              id={`${regionKey}-subject`}
+              value={subject}
+              aria-describedby={missingSubject ? `${regionKey}-subject-reason` : undefined}
+              maxLength={300}
+              readOnly={readOnly}
+              onChange={(event) => setSubject(event.target.value)}
+            />
+          </div>
+        )}
+        {initial && (
+          <div>
+            <label htmlFor={`${regionKey}-body`} className={LABEL_CLS}>
+              {bodyLabel}
+            </label>
+            <Textarea
+              id={`${regionKey}-body`}
+              rows={8}
+              value={body}
+              aria-describedby={missingBody ? `${regionKey}-body-reason` : undefined}
+              maxLength={4000}
+              readOnly={readOnly}
+              onChange={(event) => setBody(event.target.value)}
+            />
+          </div>
+        )}
+        {missingSubject && (
+          <p id={`${regionKey}-subject-reason`} className="t-body-sm">
+            {draftSubjectReason}
+          </p>
+        )}
+        {missingBody && (
+          <p id={`${regionKey}-body-reason`} className="t-body-sm">
+            {draftBodyReason}
+          </p>
+        )}
+      </div>
       {error && (
         <p
           role="alert"
@@ -365,6 +385,16 @@ export function ActDraft({
               variant="primary"
               disabled={!complete}
               held={!complete}
+              holds={[
+                ...(missingSubject
+                  ? [{ id: `${regionKey}-subject`, target: () => document.getElementById(`${regionKey}-subject`), label: 'Subject', reason: draftSubjectReason }]
+                  : []),
+                ...(missingBody
+                  ? [{ id: `${regionKey}-body`, target: () => document.getElementById(`${regionKey}-body`), label: bodyLabel, reason: draftBodyReason }]
+                  : []),
+              ]}
+              holdFix={`${regionKey}-draft-fields`}
+              aria-describedby={draftReasonIds}
               loading={pending}
               loadingLabel={regionKey === 'act-release-order' ? 'Approving…' : 'Sending…'}
               onClick={() => void run(onSend, true)}
@@ -377,6 +407,16 @@ export function ActDraft({
               variant="primary"
               disabled={!complete}
               held={!complete}
+              holds={[
+                ...(missingSubject
+                  ? [{ id: `${regionKey}-subject`, target: () => document.getElementById(`${regionKey}-subject`), label: 'Subject', reason: draftSubjectReason }]
+                  : []),
+                ...(missingBody
+                  ? [{ id: `${regionKey}-body`, target: () => document.getElementById(`${regionKey}-body`), label: bodyLabel, reason: draftBodyReason }]
+                  : []),
+              ]}
+              holdFix={`${regionKey}-draft-fields`}
+              aria-describedby={draftReasonIds}
               loading={pending}
               loadingLabel="Saving…"
               onClick={() => void run(onSaveForLead!, false)}
