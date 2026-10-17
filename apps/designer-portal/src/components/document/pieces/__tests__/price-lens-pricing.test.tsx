@@ -13,12 +13,15 @@ import userEvent from "@testing-library/user-event";
 
 type Row = Record<string, unknown> & { id: string };
 
-const mockItems: { data: Row[] } = { data: [] };
+/** A query's served figures, and whether a refetch of it is in flight. */
+const mockItems: { data: Row[]; fetching: boolean } = { data: [], fetching: false };
 const mockProjectPricing: {
   data: { markupTargetPercent: number | null; salesTaxRate: number | null };
-} = { data: { markupTargetPercent: null, salesTaxRate: null } };
+  fetching: boolean;
+} = { data: { markupTargetPercent: null, salesTaxRate: null }, fetching: false };
 const mockLinePricing = jest.fn();
 const mockCommercials = jest.fn();
+const mockLabor = jest.fn();
 const mockLineKind = jest.fn(async () => ({}));
 const mockResolve = jest.fn();
 const mockResetLine = jest.fn();
@@ -34,10 +37,10 @@ const mutation = (fn: jest.Mock) => ({
 });
 
 jest.mock("@patina/supabase", () => ({
-  useProjectFFEItems: () => ({ data: mockItems.data }),
+  useProjectFFEItems: () => ({ data: mockItems.data, isFetching: mockItems.fetching }),
   useProjectRoomPlacements: () => ({ data: [] }),
   useSetFfeLineCommercials: () => mutation(mockCommercials),
-  useSetLaborLinePrice: () => mutation(jest.fn()),
+  useSetLaborLinePrice: () => mutation(mockLabor),
   useMakeFfeLineAllowance: () => mutation(jest.fn()),
   useAddLaborLine: () => mutation(jest.fn()),
   useArchiveProjectSelection: () => mutation(jest.fn()),
@@ -50,6 +53,7 @@ jest.mock("@patina/supabase", () => ({
   useCreateNamedProjectNeed: () => mutation(mockCreateLine),
   useProjectPricing: () => ({
     data: { projectId: "proj", updatedAt: null, ...mockProjectPricing.data },
+    isFetching: mockProjectPricing.fetching,
   }),
   useSetProjectPricing: () => mutation(mockSetProjectPricing),
   usePricingSettings: () => ({
@@ -158,7 +162,9 @@ function typeAndEnter(label: string, text: string) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockItems.data = fixture();
+  mockItems.fetching = false;
   mockProjectPricing.data = { markupTargetPercent: null, salesTaxRate: null };
+  mockProjectPricing.fetching = false;
 });
 
 describe("Price lens: Kody's acceptance (US-37 #4)", () => {
@@ -502,8 +508,73 @@ describe("Price lens: the keys", () => {
 });
 
 describe("Price lens: the status line speaks the summary after a commit (SQ-1171)", () => {
-  const succeed = (_vars: unknown, options?: { onSuccess?: () => void }) =>
-    options?.onSuccess?.();
+  type Callbacks = {
+    onSuccess?: () => void;
+    onSettled?: () => void;
+    onError?: (cause: unknown) => void;
+  };
+  type Query = { fetching: boolean };
+
+  /** A server line after a write: its stamp moves. */
+  const later = { updated_at: "2026-10-17T01:00:00Z" };
+  const labor = {
+    ...base,
+    id: "s6",
+    name: "Install sofa",
+    line_kind: "labor",
+    parent_ffe_item_id: "s1",
+    product_id: null,
+    trade_price_cents: 10000,
+    unit_price_cents: 13500,
+  };
+  function withLabor(overrides: Partial<Row> = {}): Row[] {
+    return [...fixture(), { ...labor, ...overrides }];
+  }
+
+  /**
+   * A write as TanStack 5.90 runs it: the hook's own onSuccess starts the
+   * refetch of what it changed, then this call's onSuccess and onSettled
+   * fire together, before that refetch lands.
+   */
+  function succeed(...refetches: Query[]) {
+    return (_vars: unknown, options?: Callbacks) => {
+      for (const query of refetches) query.fetching = true;
+      options?.onSuccess?.();
+      options?.onSettled?.();
+    };
+  }
+
+  /**
+   * Holds each call until it is answered. As in TanStack, every answered call
+   * starts its refetch, but a call's own callbacks fire only while it is the
+   * writer's latest call.
+   */
+  function held(fn: jest.Mock, ...refetches: Query[]) {
+    const calls: Callbacks[] = [];
+    fn.mockImplementation((_vars: unknown, options?: Callbacks) => {
+      calls.push(options ?? {});
+    });
+    return (index: number) =>
+      act(() => {
+        for (const query of refetches) query.fetching = true;
+        if (index !== calls.length - 1) return;
+        calls[index].onSuccess?.();
+        calls[index].onSettled?.();
+      });
+  }
+
+  /** The refetch lands: the server's figures come back and nothing is fetching. */
+  function land(
+    view: ReturnType<typeof renderLens>,
+    items?: Row[],
+    pricing?: typeof mockProjectPricing.data,
+  ) {
+    if (items) mockItems.data = items;
+    if (pricing) mockProjectPricing.data = pricing;
+    mockItems.fetching = false;
+    mockProjectPricing.fetching = false;
+    rerenderLens(view);
+  }
 
   /** The lens's one live line (the table keeps a quiet status of its own). */
   function status(): string {
@@ -513,24 +584,42 @@ describe("Price lens: the status line speaks the summary after a commit (SQ-1171
     return line?.textContent ?? "";
   }
 
+  /** How many times the live line's words have changed: each one is spoken. */
+  function listen(): () => number {
+    const line = document.querySelector("[data-price-announce]") as HTMLElement;
+    const observer = new MutationObserver(() => undefined);
+    observer.observe(line, { childList: true, characterData: true, subtree: true });
+    let spoken = 0;
+    return () => (spoken += observer.takeRecords().length);
+  }
+
   function rerenderLens(view: ReturnType<typeof renderLens>) {
     view.rerender(<PriceLens docId="doc-1" projectId="proj" room={null} canSeeMoney />);
   }
 
-  it("a committed markup speaks the new Client and Gap figures once", () => {
-    mockLinePricing.mockImplementation(succeed);
-    renderLens();
+  it("a committed markup speaks the new Client and Gap figures once its refetch lands", () => {
+    mockLinePricing.mockImplementation(succeed(mockItems));
+    const view = renderLens();
     expect(status()).toBe("");
     // The rug at 50%: +$300 on the job, $300 over the 35% target.
     typeAndEnter("Markup, Rug", "50");
+    expect(status()).toBe("");
+    land(view, fixture({ s2: { ...later, unit_price_cents: 300000 } }));
     expect(status()).toBe("Client $9,178.95 · gap $300 over target.");
     // The sofa at its cost: the job falls under the target.
     typeAndEnter("Unit client price, Sofa", "1000");
+    land(
+      view,
+      fixture({
+        s1: { ...later, unit_price_cents: 100000 },
+        s2: { ...later, unit_price_cents: 300000 },
+      }),
+    );
     expect(status()).toBe("Client $8,828.95 · gap $50 under target.");
   });
 
   it("a tax-rate commit speaks once the job's pricing comes back", () => {
-    mockSetProjectPricing.mockImplementation(succeed);
+    mockSetProjectPricing.mockImplementation(succeed(mockProjectPricing, mockItems));
     const view = renderLens();
     const rate = screen.getByLabelText("Sales tax %");
     fireEvent.focus(rate);
@@ -538,46 +627,150 @@ describe("Price lens: the status line speaks the summary after a commit (SQ-1171
     fireEvent.blur(rate);
     // The write landed; the summary has not moved yet, so nothing is said.
     expect(status()).toBe("");
-    mockProjectPricing.data = { markupTargetPercent: null, salesTaxRate: 0.095 };
-    rerenderLens(view);
+    land(view, undefined, { markupTargetPercent: null, salesTaxRate: 0.095 });
     expect(status()).toBe("Client $8,878.95 · on target · tax $843.50.");
   });
 
   it("a target commit speaks the new gap", () => {
-    mockSetProjectPricing.mockImplementation(succeed);
+    mockSetProjectPricing.mockImplementation(succeed(mockProjectPricing, mockItems));
     const view = renderLens();
     typeAndEnter("Target", "40");
-    mockProjectPricing.data = { markupTargetPercent: 40, salesTaxRate: null };
-    rerenderLens(view);
+    land(view, undefined, { markupTargetPercent: 40, salesTaxRate: null });
     // 40% over $6,577 of cost is $9,207.80: the job sits $328.85 under it.
     expect(status()).toBe("Client $8,878.95 · gap $328.85 under target.");
   });
 
   it("Esc says nothing; the next committed figure does", async () => {
-    mockLinePricing.mockImplementation(succeed);
+    mockLinePricing.mockImplementation(succeed(mockItems));
     const user = userEvent.setup();
-    renderLens();
+    const view = renderLens();
     await user.click(screen.getByLabelText("Markup, Lamp"));
     await user.keyboard("99{Escape}");
     expect(mockLinePricing).not.toHaveBeenCalled();
     expect(status()).toBe("");
     await user.keyboard("50{Enter}");
+    land(view, fixture({ s5: { ...later, unit_price_cents: 30000 } }));
     // The lamp at 50%: +$30 on the job.
     expect(status()).toBe("Client $8,908.95 · gap $30 over target.");
   });
 
   it("a refused write keeps its sentence on the line and does not speak the summary", () => {
     const sentence = "This line is invoiced, so its price stays as billed.";
-    mockLinePricing.mockImplementation(succeed);
+    mockLinePricing.mockImplementation(succeed(mockItems));
     mockLinePricing.mockImplementationOnce((_vars, options) =>
       options?.onError?.(Object.assign(new Error(sentence), { code: "23514" })),
     );
-    renderLens();
+    const view = renderLens();
     typeAndEnter("Unit client price, Sofa", "1500");
     expect(within(rowOf("Sofa")).getByRole("alert")).toHaveTextContent(sentence);
     expect(status()).toBe("");
     // The same status line still speaks the next write that lands.
     typeAndEnter("Markup, Rug", "50");
+    land(view, fixture({ s2: { ...later, unit_price_cents: 300000 } }));
+    expect(status()).toBe("Client $9,178.95 · gap $300 over target.");
+  });
+
+  // SQ-1183 (SQ-1179 F1–F3). Every write below runs as TanStack runs it: the
+  // call's own onSuccess and onSettled come before the refetch lands.
+  it("F1: a labor client price speaks once its refetch moves the summary", () => {
+    mockLabor.mockImplementation(succeed(mockItems));
+    mockItems.data = withLabor();
+    const view = renderLens();
+    typeAndEnter("Unit client price, Install sofa", "200");
+    expect(mockLabor).toHaveBeenCalled();
+    expect(status()).toBe("");
+    land(view, withLabor({ ...later, unit_price_cents: 20000 }));
+    expect(status()).toBe("Client $9,078.95 · gap $65 over target.");
+  });
+
+  it("F1: a labor trade cost (00692) speaks once its refetch moves the gap", () => {
+    mockCommercials.mockImplementation(succeed(mockItems));
+    mockItems.data = withLabor();
+    const view = renderLens();
+    typeAndEnter("Unit cost, Install sofa", "50");
+    expect(mockCommercials).toHaveBeenCalled();
+    expect(status()).toBe("");
+    land(view, withLabor({ ...later, trade_price_cents: 5000 }));
+    expect(status()).toBe("Client $9,013.95 · gap $67.50 over target.");
+  });
+
+  it("F2: an unchanged target lapses with its refetch; a later move says nothing", () => {
+    mockSetProjectPricing.mockImplementation(succeed(mockProjectPricing, mockItems));
+    const view = renderLens();
+    // The designer's default is already 35%.
+    typeAndEnter("Target", "35");
+    expect(mockSetProjectPricing).toHaveBeenCalled();
+    land(view, undefined, { markupTargetPercent: 35, salesTaxRate: null });
+    expect(status()).toBe("");
+    // Another device moves the rug's price.
+    land(view, fixture({ s2: { ...later, unit_price_cents: 400000 } }));
+    expect(status()).toBe("");
+  });
+
+  it("an unchanged Retail commit lapses with its refetch; a later move says nothing", () => {
+    mockLinePricing.mockImplementation(succeed(mockItems));
+    const view = renderLens();
+    typeAndEnter("Retail, Rug", "5000");
+    land(view, fixture({ s2: { ...later, retail_unit_cents: 500000 } }));
+    expect(status()).toBe("");
+    land(
+      view,
+      fixture({ s2: { ...later, retail_unit_cents: 500000, unit_price_cents: 400000 } }),
+    );
+    expect(status()).toBe("");
+  });
+
+  it("F3: an unchanged Retail commit before the target's refetch does not drop the target's sentence", () => {
+    mockSetProjectPricing.mockImplementation(succeed(mockProjectPricing, mockItems));
+    mockLinePricing.mockImplementation(succeed(mockItems));
+    const view = renderLens();
+    typeAndEnter("Target", "40");
+    expect(status()).toBe("");
+    typeAndEnter("Retail, Rug", "5000");
+    expect(mockLinePricing).toHaveBeenCalled();
+    land(view, fixture({ s2: { ...later, retail_unit_cents: 500000 } }), {
+      markupTargetPercent: 40,
+      salesTaxRate: null,
+    });
+    expect(status()).toBe("Client $8,878.95 · gap $328.85 under target.");
+  });
+
+  it("R: two quick markup commits speak the final figures once, after the refetch", () => {
+    const answer = held(mockLinePricing, mockItems);
+    const view = renderLens();
+    const heard = listen();
+    typeAndEnter("Markup, Rug", "50");
+    typeAndEnter("Markup, Lamp", "50");
+    answer(0);
+    answer(1);
+    expect(status()).toBe("");
+    land(
+      view,
+      fixture({
+        s2: { ...later, unit_price_cents: 300000 },
+        s5: { ...later, unit_price_cents: 30000 },
+      }),
+    );
+    expect(status()).toBe("Client $9,208.95 · gap $330 over target.");
+    expect(heard()).toBe(1);
+    expect(document.querySelectorAll("[data-price-announce]")).toHaveLength(1);
+  });
+
+  it("a markup still speaks when a Retail commit on the same writer follows before it answers", () => {
+    const answer = held(mockLinePricing, mockItems);
+    const view = renderLens();
+    typeAndEnter("Markup, Rug", "50");
+    typeAndEnter("Retail, Lamp", "5000");
+    // Only the latest call hears its own onSuccess.
+    answer(0);
+    answer(1);
+    land(
+      view,
+      fixture({
+        s2: { ...later, unit_price_cents: 300000 },
+        s5: { ...later, retail_unit_cents: 500000 },
+      }),
+    );
     expect(status()).toBe("Client $9,178.95 · gap $300 over target.");
   });
 });

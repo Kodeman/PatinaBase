@@ -371,7 +371,8 @@ export function PriceLens(props: PriceLensProps) {
 }
 
 function PriceSheet({ docId, projectId, room }: PriceLensProps) {
-  const { data: lineData } = useProjectFFEItems(projectId);
+  const { data: lineData, isFetching: linesFetching } =
+    useProjectFFEItems(projectId);
   const { data: placementData } = useProjectRoomPlacements(projectId);
   const { data: roomRows } = useDocumentRooms(projectId);
   const { data: resolution } = useDocumentEngagement(docId);
@@ -383,7 +384,8 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
   const resetLine = useResetFfeLineMarkup();
   const resetAll = useResetProjectMarkups();
   const createLine = useCreateNamedProjectNeed();
-  const { data: projectPricing } = useProjectPricing(projectId);
+  const { data: projectPricing, isFetching: pricingFetching } =
+    useProjectPricing(projectId);
   const setProjectPricing = useSetProjectPricing();
   const { data: myPricing } = usePricingSettings();
   const archive = useArchiveProjectSelection();
@@ -417,12 +419,16 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     () => (roomRows ?? []).map((r) => ({ id: r.id, name: r.name })),
     [roomRows],
   );
-  const lines = useMemo(
+  const servedLines = useMemo(
     () =>
-      liveBuildRoomLines(lineData as unknown as PriceLine[] | undefined)
-        .filter((line) => !hidden.has(line.id))
-        .map((line) => withPending(line, pending.get(line.id))),
-    [lineData, hidden, pending],
+      liveBuildRoomLines(lineData as unknown as PriceLine[] | undefined).filter(
+        (line) => !hidden.has(line.id),
+      ),
+    [lineData, hidden],
+  );
+  const lines = useMemo(
+    () => servedLines.map((line) => withPending(line, pending.get(line.id))),
+    [servedLines, pending],
   );
 
   // A typed figure gives way once the server's line has moved past it.
@@ -443,31 +449,34 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     });
   }, [lineData, pending]);
 
+  const jobTargets = useMemo(
+    () => ({
+      targetMarkupPct:
+        projectPricing?.markupTargetPercent ??
+        myPricing?.defaultMarkupPercent ??
+        35,
+      salesTaxRate: projectPricing?.salesTaxRate ?? null,
+    }),
+    [projectPricing, myPricing],
+  );
   const summary = useMemo(
-    () =>
-      summarizeJob(lines.map(pricingLineOf), {
-        targetMarkupPct:
-          projectPricing?.markupTargetPercent ??
-          myPricing?.defaultMarkupPercent ??
-          35,
-        salesTaxRate: projectPricing?.salesTaxRate ?? null,
-      }),
-    [lines, projectPricing, myPricing],
+    () => summarizeJob(lines.map(pricingLineOf), jobTargets),
+    [lines, jobTargets],
   );
-  // A committed figure speaks the new summary once, on the one status line,
-  // as soon as the summary has moved past what it read before the write
-  // (SQ-1171). A target or tax write moves it only once the job's pricing
-  // comes back from the server.
-  const [summaryDue, setSummaryDue] = useState<string | null>(null);
-  const spokenSummary = summarySentence(
-    summary,
-    projectPricing?.salesTaxRate ?? null,
-  );
+  // Each successful write speaks the summary once, on the one status line
+  // (SQ-1171), after the figures it changed come back: its hook has already
+  // started that refetch, so the write waits until neither the lines nor the
+  // job's pricing is fetching (SQ-1183). It speaks only if the summary moved
+  // past what it read before the write; otherwise it lapses.
+  const [summaryDue, setSummaryDue] = useState<readonly string[]>([]);
+  const spokenSummary = summarySentence(summary, jobTargets.salesTaxRate);
+  const figuresFetching = linesFetching || pricingFetching;
   useEffect(() => {
-    if (summaryDue === null || spokenSummary === summaryDue) return;
-    setSummaryDue(null);
-    setAnnouncement(spokenSummary);
-  }, [summaryDue, spokenSummary]);
+    if (summaryDue.length === 0 || figuresFetching) return;
+    setSummaryDue([]);
+    if (summaryDue.some((before) => before !== spokenSummary))
+      setAnnouncement(spokenSummary);
+  }, [summaryDue, spokenSummary, figuresFetching]);
   const byId =useMemo(() => new Map(lines.map((l) => [l.id, l])), [lines]);
   const placements = useMemo(
     () => (placementData ?? []) as FfeRoomPlacement[],
@@ -644,11 +653,16 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     });
   }
 
-  /** A write's success hook that speaks the summary once it has moved (SQ-1171). */
+  /** A write's success hook: its summary is spoken once its refetch lands (SQ-1171). */
   function speakSummaryOnSuccess() {
-    const before = spokenSummary;
-    setSummaryDue(null);
-    return () => setSummaryDue(before);
+    // Read from the server's figures alone. TanStack calls a writer's
+    // per-call onSuccess for its latest call only, so a figure typed just
+    // before on the same writer must still count as a move.
+    const before = summarySentence(
+      summarizeJob(servedLines.map(pricingLineOf), jobTargets),
+      jobTargets.salesTaxRate,
+    );
+    return () => setSummaryDue((due) => [...due, before]);
   }
 
   /** A refused write: its figure goes, and the server's sentence stays on the line. */
@@ -717,7 +731,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
 
   function resetMarkup(row: PriceRow) {
     noteLine(row.id, null);
-    setSummaryDue(null);
+    setSummaryDue([]);
     resetLine.mutate(
       { projectId, itemId: row.id },
       {
@@ -730,7 +744,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
 
   function resetJob() {
     setSummaryNote(null);
-    setSummaryDue(null);
+    setSummaryDue([]);
     resetAll.mutate(
       { projectId },
       {
