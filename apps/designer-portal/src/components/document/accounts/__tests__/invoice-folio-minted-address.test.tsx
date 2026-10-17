@@ -97,6 +97,12 @@ jest.mock('@patina/supabase/client', () => ({
     from: (table: string) => builder(table === 'invoices' ? sentInvoice : []),
     rpc: (name: string, args: unknown) => rpc(name, args),
     functions: { invoke: (name: string, args: unknown) => invoke(name, args) },
+    // US-36 R2 — the folio's K10 recipient read asks who is signed in.
+    auth: {
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+      getSession: async () => ({ data: { session: null }, error: null }),
+      getUser: async () => ({ data: { user: null }, error: null }),
+    },
   }),
 }));
 

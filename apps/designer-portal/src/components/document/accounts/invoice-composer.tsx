@@ -103,6 +103,7 @@ import {
 import { buildRoomHref } from "@/lib/document/pieces/build-room-url";
 import { parseRough } from "@/lib/document/pieces/rough-in-keys";
 import { isLaborLine } from "@/lib/document/stamp-derivation";
+import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight";
 import { MESSAGE_WITHHELD } from "@/lib/document/act-names";
 import { topActiveModalDialog } from "../overlays/active-dialog";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
@@ -353,9 +354,6 @@ export function InvoiceComposer({
   const householdRef = useRef<HTMLDivElement>(null);
   const regardingRef = useRef<HTMLInputElement>(null);
   const depositPctRef = useRef<HTMLInputElement>(null);
-  const adhocRef = useRef<HTMLDivElement>(null);
-  const addLineRef = useRef<HTMLButtonElement>(null);
-  const linkClientRef = useRef<HTMLAnchorElement>(null);
   const nameStudioRef = useRef<HTMLButtonElement>(null);
   const confirmNameRef = useRef<HTMLButtonElement>(null);
   const askNoteRef = useRef<HTMLSpanElement>(null);
@@ -935,59 +933,87 @@ export function InvoiceComposer({
       })
     : null;
 
-  const focusBlocker = (held: ComposerBlocker) => {
-    const root = containerRef.current;
-    const firstUnfilledLine = () => {
-      const rows =
-        adhocRef.current?.querySelectorAll<HTMLElement>("[data-adhoc-row]") ??
-        [];
-      for (const row of Array.from(rows)) {
-        const description = row.querySelector<HTMLInputElement>(
-          'input[aria-label="Line description"]',
-        );
-        const price = row.querySelector<HTMLInputElement>(
-          'input[aria-label="Unit price (dollars)"]',
-        );
-        if (description && !description.value.trim()) return description;
-        if (price && !(dollarsToCents(price.value) > 0)) return price;
-      }
-      return addLineRef.current;
-    };
-    // The hold's own key, never a prefix: another hold's row would match too.
-    const holdTarget = (kind: ComposerBlocker) => {
-      const key = holds.find((hold) => hold.kind === kind)?.focusKey;
-      return key ? root?.querySelector<HTMLElement>(`[data-focus-key="${key}"]`) : null;
-    };
-    const target: HTMLElement | null | undefined =
-      held === "no-client"
-        ? (linkClientRef.current ?? holdTarget(held))
-        : held === "no-studio"
-          ? (nameStudioRef.current ?? holdTarget(held))
-          : held === "no-project"
-            ? forSelectRef.current
-            : held === "lines"
-              ? firstUnfilledLine()
-              : held === "deposit"
-                ? depositPctRef.current
-                : held === "billing-figures"
-                  ? root?.querySelector<HTMLElement>(
-                      '[data-at-cost-row] input[aria-invalid="true"]',
-                    )
-                  : held === "household"
-                    ? householdRef.current?.querySelector<HTMLElement>(
-                        "button, input",
-                      )
-                    : held === "regarding"
-                      ? regardingRef.current
-                      : held === "rate-pending" ||
-                          held === "price-line" ||
-                          held === "send-no-recipient"
-                        ? holdTarget(held)
-                        : null;
-    // Focus never leaves the composer: a target outside it is no target.
-    if (target && root?.contains(target)) target.focus();
-  };
-  // The lines hold's key marks where focusBlocker("lines") lands.
+  // K1 — pressing the held Draft opens one window per hold. R186: a window
+  // spans its reason and its fix, so the fix stays live inside it. A readiness
+  // hold finds its window from its own key, never a prefix (another hold's row
+  // would match too); the composer's own holds name theirs directly.
+  const holdRegion = (el: Element | null | undefined): HTMLElement | null =>
+    el?.closest<HTMLElement>("[data-hold-region]") ??
+    (el instanceof HTMLElement ? el : null);
+  const keyedRegion = (key: string) => () =>
+    holdRegion(
+      containerRef.current?.querySelector(`[data-focus-key="${key}"]`),
+    );
+  const spotlightHolds: SpotlightHold[] = [];
+  for (const hold of holds) {
+    // One window holds every designer's rate-pending hours.
+    const pending =
+      hold.kind === "rate-pending"
+        ? spotlightHolds.find((spot) => spot.id === "rate-pending")
+        : undefined;
+    if (pending) {
+      pending.reason = `${pending.reason} ${hold.reason}`;
+      continue;
+    }
+    spotlightHolds.push({
+      id: hold.kind === "rate-pending" ? "rate-pending" : hold.focusKey,
+      label: hold.repair,
+      reason: hold.reason,
+      target: keyedRegion(hold.focusKey),
+    });
+  }
+  const ownHold = (
+    kind: ComposerBlocker,
+    label: string,
+    target: () => Element | null | undefined,
+  ) =>
+    spotlightHolds.push({
+      id: kind,
+      label,
+      reason: blockerReason(kind, {
+        projectName: selectedProject?.name ?? "This project",
+        canLinkClient,
+        leadLeftStudio,
+        leadName,
+        canNameStudio,
+        soloOwnerUnstamped,
+        hasStudioOwner,
+        studioLoading: organizationsLoading,
+      }),
+      target: () => {
+        const el = target();
+        return el instanceof HTMLElement ? el : null;
+      },
+    });
+  // A missing studio in studio mode and a loading prefill have no fix here.
+  if (studioMode) {
+    if (!studioClientId)
+      ownHold("household", "Household", () => householdRef.current);
+    if (!title.trim())
+      ownHold("regarding", "Regarding", () =>
+        regardingRef.current?.closest("label"),
+      );
+    if (lines.length === 0)
+      ownHold("lines", "Add a line", keyedRegion("invoice-lines"));
+  } else if (!projectId) {
+    ownHold(
+      "no-project",
+      "Choose a project",
+      () => forSelectRef.current?.parentElement,
+    );
+  } else {
+    if (depositBlocked)
+      ownHold("deposit", "Deposit", () =>
+        depositPctRef.current?.closest('[role="radiogroup"]'),
+      );
+    if (billingFiguresMissing)
+      ownHold("billing-figures", "Billed amount", () =>
+        containerRef.current
+          ?.querySelector('[data-at-cost-row] input[aria-invalid="true"]')
+          ?.closest("[data-at-cost-row]"),
+      );
+  }
+  // The lines hold's key marks the first unfilled row, then Add line.
   const firstUnfilledAdhoc = adhoc.findIndex(
     (line) =>
       !line.description.trim() || !(dollarsToCents(line.unitDollars) > 0),
@@ -1327,6 +1353,8 @@ export function InvoiceComposer({
 
       {(studioMode || projectId) && (
         <>
+          {/* K1 — the lines hold's window: every line a draft can carry. */}
+          <div data-hold-region="invoice-lines">
           {!studioMode && (
             <>
               {/* ── Milestones (00204) ─────────────────────────────────────── */}
@@ -1455,7 +1483,8 @@ export function InvoiceComposer({
                     would freeze a zero-dollar line under the 00177 invoiced
                     lock. The repair is the studio's rate card. */}
                 {!timeLoading && ratePendingEntries.length > 0 && (
-                  <>
+                  // K1 — the rate-pending hold's window: the hours and their fix.
+                  <div data-hold-region="rate-pending">
                     {ratePendingEntries.map((entry) => (
                       <div
                         key={entry.id}
@@ -1550,7 +1579,7 @@ export function InvoiceComposer({
                           </CopyAct>
                         </div>
                       ))}
-                  </>
+                  </div>
                 )}
               </div>
 
@@ -1924,7 +1953,7 @@ export function InvoiceComposer({
           )}
 
           {/* ── Ad-hoc lines ───────────────────────────────────────────── */}
-          <div ref={adhocRef} className="mt-4">
+          <div className="mt-4">
             <p className={`${LABEL} mb-1`}>ad-hoc lines</p>
             {adhoc.map((line, i) => (
               <div
@@ -1989,7 +2018,6 @@ export function InvoiceComposer({
               </div>
             ))}
             <DocumentAction
-              ref={addLineRef}
               data-focus-key={
                 firstUnfilledAdhoc === -1 ? "invoice-lines" : undefined
               }
@@ -2002,6 +2030,7 @@ export function InvoiceComposer({
             >
               Add line
             </DocumentAction>
+          </div>
           </div>
 
           {/* ── Terms ──────────────────────────────────────────────────── */}
@@ -2062,7 +2091,11 @@ export function InvoiceComposer({
               </span>
             </div>
             {billingGap && selectedProject && (
-              <div className="w-full basis-full text-sm text-[var(--color-charcoal)]">
+              // K1/R186 — the gap hold's window: its reason and every fix act.
+              <div
+                data-hold-region={billingGap}
+                className="w-full basis-full text-sm text-[var(--color-charcoal)]"
+              >
                 {soloOwnerUnstamped ? (
                   <p
                     data-focus-key={askFocusKey}
@@ -2143,7 +2176,6 @@ export function InvoiceComposer({
                   // to the sheet's address. Focused on click because Safari
                   // does not focus a link it activates.
                   <DocumentAction
-                    ref={linkClientRef}
                     data-focus-key="link-client"
                     href={`/doc/${projectId}?sheet=household`}
                     actionKey="link-invoice-client"
@@ -2262,11 +2294,12 @@ export function InvoiceComposer({
               held={!canDraft && !creating}
               disabled={!canDraft && !creating}
               aria-describedby={!canDraft && !creating ? statusId : undefined}
+              // K3 — the reason line beside Draft speaks first; the
+              // spotlight then lights every hold.
               onHeldActivate={() => {
-                if (!blocker) return;
-                setHeldBlocker(blocker);
-                requestAnimationFrame(() => focusBlocker(blocker));
+                if (blocker) setHeldBlocker(blocker);
               }}
+              holds={spotlightHolds}
               loading={creating}
               loadingLabel="Drafting…"
               onClick={() => void draft()}

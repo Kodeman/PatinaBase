@@ -6,13 +6,29 @@
  * household, the regarding line and the resolved studio (S4 · S12 · S8).
  */
 
-import { useEffect, useState } from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useEffect, useState, type ReactElement, type ReactNode } from "react";
+import { fireEvent, render as renderBare, screen, waitFor, within } from "@testing-library/react";
 import { InvoiceComposer } from "../invoice-composer";
 import { DocSheet } from "../../overlays/doc-sheet";
 import { PaperFolioSheet } from "../../overlays/paper-folio-sheet";
 import { OPEN_HOUSEHOLD_SHEET_EVENT } from "@/lib/document/registry";
 import { selectViewerStudioId } from "@/hooks/use-viewer-studio";
+
+// The composer is always drawn inside DocSheet's panel, a spotlight frame (US-36 K2).
+function Frame({ children }: { children: ReactNode }) {
+  return <div data-spotlight-frame="">{children}</div>;
+}
+const render = (ui: ReactElement) => renderBare(ui, { wrapper: Frame });
+/** The spotlight's windows, by hold id, in order. */
+const spotWindows = () =>
+  Array.from(document.querySelectorAll("[data-hold-spotlight-window]")).map((el) =>
+    el.getAttribute("data-hold-spotlight-window"),
+  );
+/** The reason line beside the held Draft act (K3), never the spotlight's own announcer. */
+const reasonLine = () =>
+  document.getElementById(
+    screen.getByRole("button", { name: "Draft the invoice" }).getAttribute("aria-describedby") ?? "",
+  );
 
 const mockCreateStudioDraft = jest.fn();
 const mockCreateDraft = jest.fn();
@@ -900,7 +916,8 @@ describe("InvoiceComposer · studio mode", () => {
     expect(act).not.toBeDisabled();
     expect(screen.getByText("Hollis House has no client yet. Link one to bill it.")).toBeInTheDocument();
     fireEvent.click(act);
-    expect(screen.getByRole("status")).toHaveTextContent("Link a client before drafting this invoice.");
+    expect(reasonLine()).toHaveTextContent("Link a client before drafting this invoice.");
+    expect(spotWindows()).toEqual(["link-client", "invoice-lines"]);
     await waitFor(() => expect(screen.getByRole("link", { name: "Link a client" })).toHaveFocus());
   });
 
@@ -1058,18 +1075,20 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     );
   });
 
-  it("SQ-1084: a viewer who can't link lands on the Ask line when the held act is pressed", async () => {
+  it("SQ-1084/R186: a viewer who can't link gets one window on the Ask line, focused on its live Copy a note", async () => {
     mockProjectClientId = null;
     mockViewerId = "co-member-2";
     mockLinkHold = "not_permitted";
     render(composer());
     fireEvent.click(act());
-    await waitFor(() =>
-      expect(screen.getByText("Hollis House has no client yet. Ask Leah Ames to link one.")).toHaveFocus(),
-    );
+    expect(spotWindows()).toEqual(["ask-link-client", "invoice-lines"]);
+    expect(
+      screen.getByText("Hollis House has no client yet. Ask Leah Ames to link one.").closest("[inert]"),
+    ).toBeNull();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Copy a note" })).toHaveFocus());
   });
 
-  it("SQ-1084: with the lead gone, the owner lands on the support line when the held act is pressed", async () => {
+  it("SQ-1084/R186: with the lead gone, the owner's window holds the support line and its live Copy the address", async () => {
     mockProjectClientId = null;
     mockViewerId = "studio-admin-3";
     mockLinkHold = "lead_not_in_studio";
@@ -1078,7 +1097,9 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     // The held reason repeats the support sentence in the status line, so find the line itself.
     const supportLine = document.querySelector<HTMLElement>('[data-focus-key="support-link-client"]');
     expect(supportLine).toHaveTextContent(/^The lead on this job has left the studio/);
-    await waitFor(() => expect(supportLine).toHaveFocus());
+    expect(spotWindows()).toEqual(["support-link-client", "invoice-lines"]);
+    expect(supportLine?.closest("[inert]")).toBeNull();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Copy the address" })).toHaveFocus());
   });
 
   it("K5: an owner/admin of the project's studio is offered Link a client, though not its lead", async () => {
@@ -1387,20 +1408,31 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(document.activeElement).toBe(document.body);
   });
 
-  it("F6: lands a held deposit on Deposit percent", async () => {
+  it("F6/K1: lights a held deposit's stage group, its percent live inside the window", async () => {
     mockFfeItems = [SIDE_TABLE];
     render(composer({ projectId: "project-1", initialFfeItemIds: ["ffe-1"] }));
     fireEvent.click(screen.getByLabelText("as a deposit of"));
     fireEvent.change(screen.getByLabelText("Deposit percent"), { target: { value: "120" } });
     fireEvent.click(act());
-    expect(screen.getByRole("status")).toHaveTextContent("Adjust the deposit before drafting.");
-    await waitFor(() => expect(screen.getByLabelText("Deposit percent")).toHaveFocus());
+    expect(reasonLine()).toHaveTextContent("Adjust the deposit before drafting.");
+    expect(spotWindows()).toEqual(["deposit"]);
+    expect(screen.getByLabelText("Deposit percent").closest("[inert]")).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole("radiogroup", { name: "Bill the ticked lines" })).toContainElement(
+        document.activeElement as HTMLElement,
+      ),
+    );
+    // Fixing it closes the spotlight and hands focus back to Draft.
+    fireEvent.change(screen.getByLabelText("Deposit percent"), { target: { value: "50" } });
+    await waitFor(() => expect(spotWindows()).toEqual([]));
+    await waitFor(() => expect(act()).toHaveFocus());
   });
 
   it("F6: lands a project with no line on its empty line", async () => {
     render(composer());
     fireEvent.click(act());
-    expect(screen.getByRole("status")).toHaveTextContent("Add at least one line first.");
+    expect(reasonLine()).toHaveTextContent("Add at least one line first.");
+    expect(spotWindows()).toEqual(["invoice-lines"]);
     await waitFor(() => expect(screen.getByLabelText("Line description")).toHaveFocus());
   });
 
@@ -1419,8 +1451,13 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     ];
     render(composer({ projectId: "project-1", initialCostLineIds: ["r2"] }));
     fireEvent.click(act());
-    expect(screen.getByRole("status")).toHaveTextContent("Add the missing billing figures first.");
-    await waitFor(() => expect(screen.getByLabelText("Billed amount · Liftgate")).toHaveFocus());
+    expect(reasonLine()).toHaveTextContent("Add the missing billing figures first.");
+    expect(spotWindows()).toEqual(["billing-figures"]);
+    const billed = screen.getByLabelText("Billed amount · Liftgate");
+    expect(billed.closest("[inert]")).toBeNull();
+    await waitFor(() =>
+      expect(billed.closest("[data-at-cost-row]")).toContainElement(document.activeElement as HTMLElement),
+    );
   });
 
   it("F7: in studio mode names and lands on what the studio invoice lacks, never a project", async () => {
@@ -1450,6 +1487,29 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     await waitFor(() => expect(screen.getByLabelText("Line description")).toHaveFocus());
   });
 
+  it("K1: in studio mode the press lights every missing field; each fix takes its window away, the last hands focus back to Draft", async () => {
+    mockFlag = { value: true, isLoading: false };
+    render(composer({}));
+    pickStudio();
+    fireEvent.click(act());
+    expect(spotWindows()).toEqual(["household", "regarding", "lines"]);
+    expect(reasonLine()).toHaveTextContent("Choose the household this invoice is for first.");
+    await waitFor(() => expect(screen.getByRole("button", { name: "pick household" })).toHaveFocus());
+
+    fireEvent.click(screen.getByRole("button", { name: "pick household" }));
+    await waitFor(() => expect(spotWindows()).toEqual(["regarding", "lines"]));
+    fireEvent.change(screen.getByPlaceholderText("Design consultation · Sept 2026"), {
+      target: { value: "Design consultation" },
+    });
+    await waitFor(() => expect(spotWindows()).toEqual(["lines"]));
+    fireEvent.change(screen.getByLabelText("Line description"), { target: { value: "Design fee" } });
+    fireEvent.change(screen.getByLabelText("Unit price (dollars)"), { target: { value: "450" } });
+    await waitFor(() => expect(spotWindows()).toEqual([]));
+    expect(document.querySelector("[data-hold-spotlight]")).toBeNull();
+    await waitFor(() => expect(act()).toHaveFocus());
+    expect(act()).toBeEnabled();
+  });
+
   it("F8: offers Name studio to the owner of a studio that employs the designer, and says why it was refused", async () => {
     mockProjectStudioId = null;
     mockViewerId = "owner-1";
@@ -1473,6 +1533,24 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Middle West Studio has no rate for this project's designer yet. Add one on the studio rate card first.",
     );
+  });
+
+  it("R186: Name studio and its inline confirm stay live inside the studio hold's window", async () => {
+    mockProjectStudioId = null;
+    mockViewerId = "owner-1";
+    mockOrganizations = studioWith("owner");
+    mockStudioMembers = [{ user_id: "designer-1", role: "member", status: "active" }];
+    mockFfeItems = [SIDE_TABLE];
+    render(composer({ projectId: "project-1", initialFfeItemIds: ["ffe-1"] }));
+    fireEvent.click(act());
+    expect(spotWindows()).toEqual(["name-studio"]);
+    const nameStudio = screen.getByRole("button", { name: "Name studio" });
+    await waitFor(() => expect(nameStudio).toHaveFocus());
+    expect(screen.getByText("Naming a studio stamps it on every invoice this project sends.").closest("[inert]")).toBeNull();
+    fireEvent.click(nameStudio);
+    const confirm = screen.getByRole("group", { name: "Confirm naming the studio" });
+    expect(confirm.closest("[inert]")).toBeNull();
+    await waitFor(() => expect(within(confirm).getByRole("button", { name: "Name" })).toHaveFocus());
   });
 
   it("K12: Name studio says what it stamps, then asks once inline before it does", async () => {
@@ -1617,7 +1695,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
       ),
     ).toBeInTheDocument();
     fireEvent.click(act());
-    expect(screen.getByRole("status")).toHaveTextContent(
+    expect(reasonLine()).toHaveTextContent(
       "Hollis House can’t be billed until a studio that employs its designer names it.",
     );
     expect(screen.queryByText(/studio owner/)).not.toBeInTheDocument();
@@ -1640,7 +1718,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(act()).toHaveAttribute("aria-describedby", status.id);
 
     fireEvent.click(act());
-    expect(screen.getByRole("status")).toBe(status);
+    expect(reasonLine()).toBe(status);
     expect(status).toHaveTextContent("Add at least one line first.");
 
     fireEvent.change(screen.getByLabelText("Line description"), { target: { value: "Design fee" } });
@@ -1704,7 +1782,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(document.querySelector("p[data-focus-key]")).toBeNull();
   });
 
-  it("F4/F6: a ticked hour that turns rate-pending lands the held act on its own designer's row", async () => {
+  it("F4/F6/K1: a ticked hour that turns rate-pending lights one window over the pending hours and their fix", async () => {
     const hour = { user_id: "designer-1", duration_minutes: 60, amount_cents: 15000, started_at: "2026-10-01T15:00:00Z" };
     const context = { projectId: "project-1", initialTimeEntryIds: ["te-1"] };
     mockUnbilledEntries = [{ ...hour, id: "te-1", notes: "Site visit" }];
@@ -1718,10 +1796,14 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     ];
     rerender(composer(context));
     fireEvent.click(act());
-    expect(screen.getByText("These hours are waiting for a rate.")).toHaveAttribute("role", "status");
+    expect(reasonLine()).toHaveTextContent("These hours are waiting for a rate.");
     const row = screen.getByText("Site visit").closest("[data-rate-pending]");
     expect(row).toHaveAttribute("data-focus-key", "rate-pending:designer-1");
-    await waitFor(() => expect(row).toHaveFocus());
+    expect(spotWindows()).toEqual(["rate-pending", "invoice-lines"]);
+    const region = row?.closest("[data-hold-region]");
+    expect(region).toHaveAttribute("data-hold-region", "rate-pending");
+    expect(region?.closest("[inert]")).toBeNull();
+    await waitFor(() => expect(region).toContainElement(document.activeElement as HTMLElement));
   });
 
   it("F8: keys the lines hold where its press lands, the first unfilled row, then Add line", async () => {

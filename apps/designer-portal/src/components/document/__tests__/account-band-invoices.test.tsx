@@ -39,6 +39,14 @@ const mockAccountData = () => ({
   ...mockAccountOverride,
 });
 
+// US-36 R2 — the milestone draft's readiness reads the project and the viewer.
+jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
+  useProjects: () => ({ data: [] }),
+  useSessionUserId: () => null,
+  useDocumentClientLinkHold: () => ({ data: null }),
+}));
+
 jest.mock('@/hooks/use-account-page', () => ({
   useAccountPage: () => ({
     data: mockQueryState === 'ready' ? mockAccountData() : undefined,

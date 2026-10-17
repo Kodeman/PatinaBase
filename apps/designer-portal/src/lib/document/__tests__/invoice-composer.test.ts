@@ -903,8 +903,8 @@ describe("assessInvoiceReadiness", () => {
     expect(assessInvoiceReadiness({ ...common, selectedUnpricedLineIds: ["l1"], unpricedLineNames: { l1: "Sofa" } }).holds[0]).toMatchObject({
       reason: "Set a client price for Sofa.", repair: "Price it", fixer: "price-line", focusKey: "price-line:l1",
     });
-    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true, householdName: "The Lees" }).holds[0]).toMatchObject({
-      reason: "The Lees has no email to send to.", repair: "Add their email", fixer: "add-email", focusKey: "add-email",
+    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true, householdName: "Elena" }).holds[0]).toMatchObject({
+      reason: "Add Elena's email to send this.", repair: "Add their email", fixer: "add-email", focusKey: "add-email",
     });
   });
 
@@ -949,6 +949,6 @@ describe("assessInvoiceReadiness", () => {
     expect(assessInvoiceReadiness({ ...common, selectedRatePendingEntries: [{ userId: "9f2e-user" }] }).holds[0]?.reason).toBe(
       "These hours are waiting for a rate.",
     );
-    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true }).holds[0]?.reason).toBe("This household has no email to send to.");
+    expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true }).holds[0]?.reason).toBe("Add the client's email to send this.");
   });
 });

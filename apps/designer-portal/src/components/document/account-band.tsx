@@ -12,7 +12,13 @@
  * STUDIO EYES ONLY — excluded from the client mirror, enforced by CI test.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import {
+  useDocumentClientLinkHold,
+  useProjects,
+  useSessionUserId,
+} from '@patina/supabase';
 import {
   exportAccountsQbo,
   useAccountPage,
@@ -24,7 +30,11 @@ import {
 import { InkAlert, SavingWord } from './work-block';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
-import { billingRefusal } from '@/lib/document/invoice-composer';
+import { assessInvoiceReadiness, billingRefusal } from '@/lib/document/invoice-composer';
+import { MESSAGE_WITHHELD } from '@/lib/document/act-names';
+import { OPEN_HOUSEHOLD_SHEET_EVENT } from '@/lib/document/registry';
+import type { SpotlightHold } from '@/lib/document/spotlight/use-hold-spotlight';
+import { CopyAct } from './copy-act';
 import {
   formatCurrencyTotal,
   formatMoney,
@@ -54,13 +64,162 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 const GATE_SECTIONS: SectionKey[] = ['project', 'install', 'care'];
 
+const SUPPORT_ADDRESS = 'hello@patina.cloud';
+
+/** US-36 R2 — the milestone draft runs the composer's readiness first: the
+ *  RPC drafts a client-less invoice the folio would then offer to send, so a
+ *  project with no client (or no studio) holds Generate before anything is
+ *  written. Same sentences and the same K5-gated fixes as the composer. */
+function useMilestoneDraftHold(projectId: string, wanted: boolean) {
+  const { data: projects } = useProjects();
+  const viewerId = useSessionUserId();
+  const project = wanted ? (projects?.find((p) => p.id === projectId) ?? null) : null;
+  const noClient = !!project && !project.client_id;
+  const isLead = !!viewerId && project?.designer_id === viewerId;
+  const { data: linkHold } = useDocumentClientLinkHold(noClient && !isLead ? projectId : null);
+  const canLinkClient = isLead || linkHold === null;
+  const leadLeftStudio = noClient && !isLead && linkHold === 'lead_not_in_studio';
+  const leadName =
+    project?.designer?.display_name || project?.designer?.full_name || 'the lead designer';
+  const projectName = project?.name ?? 'This project';
+  const holds = project
+    ? assessInvoiceReadiness({
+        clientLinked: !noClient,
+        canLinkClient,
+        clientLinkHold: linkHold ?? null,
+        pricingStudioLinked: project.studio_id != null,
+        // The composer carries the studio's own K-gated naming; the band walks there.
+        canNameStudio: true,
+        soloOwnerUnstamped: false,
+        selectedRatePendingEntries: [],
+        selectedUnpricedLineIds: [],
+        selectedAnything: true,
+        noClientReason: leadLeftStudio
+          ? `The lead on this job has left the studio. Write to ${SUPPORT_ADDRESS} and we'll move the job to someone on your team.`
+          : canLinkClient
+            ? `${projectName} has no client yet. Link one to bill it.`
+            : `${projectName} has no client yet. Ask ${leadName} to link one.`,
+        noStudioReason: `${projectName} isn't tied to your studio yet.`,
+      }).holds
+    : [];
+  return { holds, projectName, canLinkClient, leadLeftStudio };
+}
+
+type MilestoneDraftHold = ReturnType<typeof useMilestoneDraftHold>;
+
+function askLinkNote(projectName: string): string {
+  return `Could you link a client to ${projectName}? I'm drafting its invoice.`;
+}
+
+/** Each hold's reason with its fix beside it: the spotlight's window (R186). */
+function MilestoneDraftHoldLines({
+  hold,
+  projectId,
+  reasonId,
+  regionRefs,
+}: {
+  hold: MilestoneDraftHold;
+  projectId: string;
+  reasonId: string;
+  regionRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+}) {
+  const pathname = usePathname();
+  const supportRef = useRef<HTMLSpanElement | null>(null);
+  const noteRef = useRef<HTMLSpanElement | null>(null);
+  return (
+    <>
+      {hold.holds.map((h) => (
+        <div
+          key={h.kind}
+          ref={(el) => {
+            regionRefs.current[h.kind] = el;
+          }}
+          data-hold-region={h.kind}
+          className="mt-1.5 text-[11.5px] text-[var(--color-charcoal)]"
+        >
+          {h.kind === 'no-client' && hold.leadLeftStudio ? (
+            <p id={`${reasonId}-${h.kind}`}>
+              The lead on this job has left the studio. Write to{' '}
+              <span ref={supportRef} className="font-mono text-[11px]">
+                {SUPPORT_ADDRESS}
+              </span>{' '}
+              and we&apos;ll move the job to someone on your team.
+            </p>
+          ) : (
+            <p id={`${reasonId}-${h.kind}`}>{h.reason}</p>
+          )}
+          {h.kind === 'no-client' && hold.leadLeftStudio && (
+            <CopyAct
+              text={SUPPORT_ADDRESS}
+              selectRef={supportRef}
+              actionKey="copy-support-address"
+              regionKey="payment-milestone"
+            >
+              Copy the address
+            </CopyAct>
+          )}
+          {h.kind === 'no-client' && !hold.canLinkClient && !hold.leadLeftStudio && (
+            <>
+              <p className="mt-1 text-[var(--color-aged-oak)]">
+                &ldquo;<span ref={noteRef}>{askLinkNote(hold.projectName)}</span>&rdquo;
+              </p>
+              <CopyAct
+                text={askLinkNote(hold.projectName)}
+                selectRef={noteRef}
+                actionKey="copy-link-client-note"
+                regionKey="payment-milestone"
+              >
+                Copy a note
+              </CopyAct>
+            </>
+          )}
+          {h.kind === 'no-client' && hold.canLinkClient && (
+            <DocumentAction
+              href={`/doc/${projectId}?sheet=household`}
+              actionKey="link-milestone-client"
+              surfaceKey="accounts"
+              regionKey="payment-milestone"
+              variant="tertiary"
+              onClick={(e) => {
+                e.currentTarget.focus();
+                if (pathname === `/doc/${projectId}`) {
+                  e.preventDefault();
+                  window.dispatchEvent(new CustomEvent(OPEN_HOUSEHOLD_SHEET_EVENT));
+                }
+              }}
+            >
+              {MESSAGE_WITHHELD.repair}
+            </DocumentAction>
+          )}
+          {h.kind === 'no-studio' && (
+            <DocumentAction
+              actionKey="name-milestone-studio"
+              surfaceKey="accounts"
+              regionKey="payment-milestone"
+              variant="tertiary"
+              onClick={() => openInvoiceComposer({ projectId })}
+            >
+              Name it in the composer
+            </DocumentAction>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function MilestoneRow({
   m,
   projectId,
   headless,
+  draftHolds,
+  draftReasonIds,
 }: {
   m: AccountMilestone;
   projectId: string;
+  /** US-36 R2 — what holds Generate, one spotlight window per hold. */
+  draftHolds: SpotlightHold[];
+  draftReasonIds?: string;
   /** Inside the Money region the head already carries the inked leader, so a
    *  per-milestone primary would stand a second leader beside it. */
   headless: boolean;
@@ -170,7 +329,10 @@ function MilestoneRow({
           surfaceKey="accounts"
           regionKey="payment-milestone"
           variant={headless ? 'secondary' : 'primary'}
-          disabled={generate.isPending}
+          disabled={generate.isPending || draftHolds.length > 0}
+          held={draftHolds.length > 0}
+          holds={draftHolds}
+          aria-describedby={draftHolds.length > 0 ? draftReasonIds : undefined}
           loading={generate.isPending}
           loadingLabel="Generating…"
           onClick={() => {
@@ -239,6 +401,19 @@ export function AccountBand({
   const [exportNote, setExportNote] = useState<string | null>(null);
   const [amendmentOpen, setAmendmentOpen] = useState(false);
   const changeOnly = activeSection === 'install' || activeSection === 'care';
+  const draftHold = useMilestoneDraftHold(
+    projectId,
+    !!data?.milestones.some((m) => !m.invoice_id),
+  );
+  const draftReasonId = useId();
+  const draftRegions = useRef<Record<string, HTMLDivElement | null>>({});
+  const draftHolds: SpotlightHold[] = draftHold.holds.map((h) => ({
+    id: h.kind,
+    label: h.repair,
+    reason: h.reason,
+    target: () => draftRegions.current[h.kind] ?? null,
+  }));
+  const draftReasonIds = draftHold.holds.map((h) => `${draftReasonId}-${h.kind}`).join(' ');
 
   useEffect(() => {
     if (!changeOnly) return;
@@ -444,8 +619,21 @@ export function AccountBand({
                 Payment schedule
               </p>
               {data.milestones.map((m) => (
-                <MilestoneRow key={m.id} m={m} projectId={projectId} headless={headless} />
+                <MilestoneRow
+                  key={m.id}
+                  m={m}
+                  projectId={projectId}
+                  headless={headless}
+                  draftHolds={draftHolds}
+                  draftReasonIds={draftReasonIds}
+                />
               ))}
+              <MilestoneDraftHoldLines
+                hold={draftHold}
+                projectId={projectId}
+                reasonId={draftReasonId}
+                regionRefs={draftRegions}
+              />
             </div>
           )}
 
