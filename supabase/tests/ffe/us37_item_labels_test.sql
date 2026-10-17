@@ -15,8 +15,10 @@
 --   moves       moving rooms never relabels
 --   restore     a restored item whose label was taken gets the next one
 --   supersede   the replacement carries its predecessor's label
---   backfill    sort_order, created_at order; existing codes untouched;
---               removed items untouched; a second run changes nothing
+--   backfill    sort_order, created_at order; existing codes untouched, but
+--               a later twin of a shared label gets the next one, so the
+--               index builds; removed items untouched; a second run changes
+--               nothing
 --   index       the unique index refuses a clash when the trigger is off
 --
 -- Run: supabase test db supabase/tests/ffe/us37_item_labels_test.sql
@@ -24,7 +26,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(41);
+SELECT plan(43);
 
 -- ── objects ────────────────────────────────────────────────────────────────
 SELECT ok(
@@ -336,9 +338,19 @@ SELECT is(
 );
 
 -- ── backfill ───────────────────────────────────────────────────────────────
--- Commit-time checks run now (as a COMMIT would), so the table can be altered.
+-- Commit-time checks run now (as a COMMIT would), which leaves no pending
+-- trigger events, so the table can be altered. Then back to deferred: the
+-- thread-primary AFTER trigger must run before the deferred consistency check.
+-- The ROLLBACK at the end turns the trigger back on.
 SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
 ALTER TABLE public.project_ffe_items DISABLE TRIGGER zz_ffe_assign_item_label_trg;
+-- A job from before 00808 can hold twin labels (proposal twins carried by
+-- activation). The index is set aside to stage them, then rebuilt from its
+-- own definition.
+CREATE TEMP TABLE label_index AS
+  SELECT pg_get_indexdef('public.project_ffe_items_label_unique'::regclass) AS def;
+DROP INDEX public.project_ffe_items_label_unique;
 
 INSERT INTO public.project_ffe_items (id, project_id, project_room_id, assignment_scope, name, sort_order, created_at, doc_code) VALUES
   ('b8084000-0000-4000-8000-000000000005', 'b8081000-0000-4000-8000-000000000002', NULL, 'unassigned', 'Existing', 9, '2026-01-01 09:00+00', '002'),
@@ -346,29 +358,45 @@ INSERT INTO public.project_ffe_items (id, project_id, project_room_id, assignmen
   ('b8084000-0000-4000-8000-000000000002', 'b8081000-0000-4000-8000-000000000002', NULL, 'unassigned', 'Later twin', 1, '2026-01-01 12:00+00', NULL),
   ('b8084000-0000-4000-8000-000000000003', 'b8081000-0000-4000-8000-000000000002', NULL, 'unassigned', 'Earlier twin', 1, '2026-01-01 11:00+00', NULL),
   ('b8084000-0000-4000-8000-000000000004', 'b8081000-0000-4000-8000-000000000002', 'b8082000-0000-4000-8000-000000000005', 'room', 'Rug', 2, '2026-01-01 10:00+00', NULL),
-  ('b8084000-0000-4000-8000-000000000007', 'b8081000-0000-4000-8000-000000000002', NULL, 'unassigned', 'Blank', 3, '2026-01-01 10:00+00', ' ');
+  ('b8084000-0000-4000-8000-000000000007', 'b8081000-0000-4000-8000-000000000002', NULL, 'unassigned', 'Blank', 3, '2026-01-01 10:00+00', ' '),
+  ('b8084000-0000-4000-8000-000000000008', 'b8081000-0000-4000-8000-000000000002', 'b8082000-0000-4000-8000-000000000005', 'room', 'Sofa', 5, '2026-01-01 10:00+00', 'LR-04'),
+  ('b8084000-0000-4000-8000-000000000009', 'b8081000-0000-4000-8000-000000000002', 'b8082000-0000-4000-8000-000000000005', 'room', 'Sofa, same label', 5, '2026-01-01 11:00+00', ' lr-04'),
+  ('b8084000-0000-4000-8000-000000000010', 'b8081000-0000-4000-8000-000000000002', NULL, 'unassigned', 'Existing, same label', 10, '2026-01-01 10:00+00', '002');
 INSERT INTO public.project_ffe_items (id, project_id, name, sort_order, doc_code, removed_at, removed_by, removal_reason)
 VALUES ('b8084000-0000-4000-8000-000000000006', 'b8081000-0000-4000-8000-000000000002', 'Removed', 4, NULL,
         now(), 'b8080000-0000-4000-8000-000000000001', 'not needed');
 
-SELECT is(public._ffe_backfill_item_labels(), 5, 'the backfill labels the 5 live items without a label');
+-- Building an index needs no pending trigger events either.
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+SELECT throws_ok(
+  (SELECT def FROM label_index),
+  '23505',
+  'could not create unique index "project_ffe_items_label_unique"',
+  'the unique index cannot build over twin labels'
+);
+SELECT is(public._ffe_backfill_item_labels(), 7,
+  'the backfill labels the 5 live items without a label and the 2 later twins');
 SELECT is(
   ARRAY(SELECT COALESCE(doc_code, '<null>') FROM public.project_ffe_items
         WHERE project_id = 'b8081000-0000-4000-8000-000000000002' ORDER BY id),
-  ARRAY['003', '005', '004', 'LR-01', '002', '<null>', '006'],
-  'backfill follows sort_order then created_at; the existing 002 is untouched; the removed item is left alone'
+  ARRAY['003', '005', '004', 'LR-05', '002', '<null>', '006', 'LR-04', 'LR-06', '007'],
+  'backfill follows sort_order then created_at; the existing 002 and LR-04 stay with their first holder, the later twins get the next label; the removed item is left alone'
 );
 SELECT is(public._ffe_backfill_item_labels(), 0, 'a second backfill labels nothing');
 SELECT is(
   ARRAY(SELECT COALESCE(doc_code, '<null>') FROM public.project_ffe_items
         WHERE project_id = 'b8081000-0000-4000-8000-000000000002' ORDER BY id),
-  ARRAY['003', '005', '004', 'LR-01', '002', '<null>', '006'],
+  ARRAY['003', '005', '004', 'LR-05', '002', '<null>', '006', 'LR-04', 'LR-06', '007'],
   'a second backfill changes no label'
 );
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+SELECT lives_ok((SELECT def FROM label_index), 'the unique index builds over the backfilled job');
 
 -- ── the index backstop (trigger still off) ─────────────────────────────────
 SELECT throws_ok(
-  $$ UPDATE public.project_ffe_items SET doc_code = ' lr-01'
+  $$ UPDATE public.project_ffe_items SET doc_code = ' lr-05'
      WHERE id = 'b8084000-0000-4000-8000-000000000001' $$,
   '23505',
   'duplicate key value violates unique constraint "project_ffe_items_label_unique"',
@@ -379,8 +407,6 @@ SELECT lives_ok(
      WHERE id = 'b8084000-0000-4000-8000-000000000006' $$,
   'a removed item may hold a label a live item uses'
 );
-
-ALTER TABLE public.project_ffe_items ENABLE TRIGGER zz_ffe_assign_item_label_trg;
 
 SELECT * FROM finish();
 ROLLBACK;

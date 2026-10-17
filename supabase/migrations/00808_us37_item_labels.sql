@@ -36,7 +36,10 @@
 -- writes are RPC-only, guard_ffe_rpc_mutation 00438).
 --
 -- Backfill: live items without a label, per job in sort_order, created_at,
--- id order. Existing codes are untouched. User triggers are disabled for the
+-- id order. Existing codes are untouched, except a later twin: where two live
+-- items in a job already share a label (proposal twins carried by activation),
+-- the first keeps it and the later one gets the next label, so the unique
+-- index can build. User triggers are disabled for the
 -- backfill (00729 pattern) so updated_at keeps its meaning. A removed item
 -- without a label gets one if it is restored.
 --
@@ -192,18 +195,11 @@ CREATE TRIGGER zz_ffe_assign_item_label_trg
   ON public.project_ffe_items
   FOR EACH ROW EXECUTE FUNCTION public.ffe_assign_item_label();
 
--- ─── 4. Unique among the job's live items ───────────────────────────────────
--- The trigger's check gives the plain sentence; the index is the backstop
--- for any write that races it.
-
-CREATE UNIQUE INDEX IF NOT EXISTS project_ffe_items_label_unique
-  ON public.project_ffe_items (project_id, lower(btrim(doc_code)))
-  WHERE doc_code IS NOT NULL
-    AND btrim(doc_code) <> ''
-    AND removed_at IS NULL
-    AND design_disposition <> 'superseded';
-
--- ─── 5. Backfill ────────────────────────────────────────────────────────────
+-- ─── 4. Backfill ────────────────────────────────────────────────────────────
+-- Activation carries proposal codes and proposal twins are allowed, so a job
+-- can already hold two live items with one label. The first (sort_order,
+-- created_at, id) keeps it; a later twin gets the next label, as an item
+-- entering the job would. Otherwise the unique index below could not build.
 
 CREATE OR REPLACE FUNCTION public._ffe_backfill_item_labels()
 RETURNS integer
@@ -215,12 +211,21 @@ DECLARE
   v_count integer := 0;
 BEGIN
   FOR v_item IN
-    SELECT item.id, item.project_id, item.project_room_id
-    FROM public.project_ffe_items AS item
-    WHERE btrim(COALESCE(item.doc_code, '')) = ''
-      AND item.removed_at IS NULL
-      AND item.design_disposition <> 'superseded'
-    ORDER BY item.project_id, item.sort_order, item.created_at, item.id
+    SELECT live.id, live.project_id, live.project_room_id
+    FROM (
+      SELECT item.id, item.project_id, item.project_room_id, item.doc_code,
+        item.sort_order, item.created_at,
+        row_number() OVER (
+          PARTITION BY item.project_id, lower(btrim(item.doc_code))
+          ORDER BY item.sort_order, item.created_at, item.id
+        ) AS label_rank
+      FROM public.project_ffe_items AS item
+      WHERE item.removed_at IS NULL
+        AND item.design_disposition <> 'superseded'
+    ) AS live
+    WHERE btrim(COALESCE(live.doc_code, '')) = ''
+       OR live.label_rank > 1
+    ORDER BY live.project_id, live.sort_order, live.created_at, live.id
   LOOP
     UPDATE public.project_ffe_items
     SET doc_code = public._ffe_next_item_label(v_item.project_id, v_item.project_room_id)
@@ -232,7 +237,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public._ffe_backfill_item_labels() IS
-  'One-time label backfill (00808): live items without a label, per job in sort_order, created_at, id order. Idempotent; returns how many it labeled.';
+  'One-time label backfill (00808): live items without a label, and later twins of a label two live items in a job share, per job in sort_order, created_at, id order; each gets the next label. Idempotent; returns how many it labeled.';
 
 DO $$
 BEGIN
@@ -241,6 +246,17 @@ BEGIN
   ALTER TABLE public.project_ffe_items ENABLE TRIGGER USER;
 END;
 $$;
+
+-- ─── 5. Unique among the job's live items ───────────────────────────────────
+-- The trigger's check gives the plain sentence; the index is the backstop
+-- for any write that races it. Built after the backfill has parted twins.
+
+CREATE UNIQUE INDEX IF NOT EXISTS project_ffe_items_label_unique
+  ON public.project_ffe_items (project_id, lower(btrim(doc_code)))
+  WHERE doc_code IS NOT NULL
+    AND btrim(doc_code) <> ''
+    AND removed_at IS NULL
+    AND design_disposition <> 'superseded';
 
 -- ─── 6. The writer ──────────────────────────────────────────────────────────
 
