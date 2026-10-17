@@ -212,7 +212,7 @@ describe('LineUnfold · REMOVE THIS LINE', () => {
     renderUnfold({ auth: { track: 'draft', number: 4 } as LineAuthorization });
     fireEvent.click(removeAct());
     expect(screen.getAllByRole('status').find((status) => status.textContent?.includes(DRAFT_REFUSAL))).toHaveTextContent(DRAFT_REFUSAL);
-    expect(screen.queryByText(REFUSAL, { selector: '[role="status"]' })).not.toBeInTheDocument();
+    screen.getAllByRole('status').forEach((s) => expect(s).not.toHaveTextContent(REFUSAL));
     expect(screen.queryByTestId('line-remove-form')).toBeNull();
     expect(mockArchiveHook).not.toHaveBeenCalled();
   });

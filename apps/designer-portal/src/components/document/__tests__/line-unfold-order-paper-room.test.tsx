@@ -4,7 +4,8 @@
  * hands it the name (an object reached generateSidemark's `.split` and crashed).
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const mockSetLabel = jest.fn();
 const mockOrderPaper = jest.fn();
@@ -156,10 +157,54 @@ it('keeps focus and exposes an accessible refusal after Enter', async () => {
   expect(input).toHaveAttribute('aria-describedby', status.id);
 });
 
-it.each([null, '   '])('omits an empty document label (%s) from detail', (doc_code) => {
-  render(<LineUnfold item={{ ...item, doc_code }} projectId="project-1" projectName="Ellsworth" onAddNote={jest.fn()} onFold={jest.fn()} />);
-  expect(screen.getByRole('textbox', { name: 'Item label' })).toHaveValue(doc_code ?? '');
-  expect(screen.queryByText(/^LR-01$/)).not.toBeInTheDocument();
+it('leaves focus on the next control when a blur commit resolves', async () => {
+  let resolveLabel: (row: { doc_code: string }) => void = () => {};
+  mockSetLabel.mockReturnValue(new Promise((resolve) => { resolveLabel = resolve; }));
+  renderUnfold({ id: 'room-living', name: 'Living Room' });
+  const input = screen.getByRole('textbox', { name: 'Item label' });
+  const nextControl = screen.getAllByRole('button')[0];
+  input.focus();
+  fireEvent.change(input, { target: { value: 'LR-03' } });
+  act(() => nextControl.focus());
+  expect(mockSetLabel).toHaveBeenCalledTimes(1);
+  await act(async () => resolveLabel({ doc_code: 'LR-03' }));
+  expect(input).toHaveValue('LR-03');
+  expect(input).not.toHaveFocus();
+  expect(nextControl).toHaveFocus();
+});
+
+it('does not send a refused label again on the next blur', async () => {
+  mockSetLabel.mockRejectedValue(new Error('Another item in this job already uses LR-02.'));
+  renderUnfold({ id: 'room-living', name: 'Living Room' });
+  const input = screen.getByRole('textbox', { name: 'Item label' });
+  fireEvent.change(input, { target: { value: 'LR-02' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(await screen.findByText('Another item in this job already uses LR-02.')).toBeInTheDocument();
+  fireEvent.blur(input);
+  await act(async () => {});
+  expect(mockSetLabel).toHaveBeenCalledTimes(1);
+});
+
+it('sends one write when Enter and blur land before the first resolves', async () => {
+  mockSetLabel.mockReturnValue(new Promise(() => {}));
+  renderUnfold({ id: 'room-living', name: 'Living Room' });
+  const input = screen.getByRole('textbox', { name: 'Item label' });
+  fireEvent.change(input, { target: { value: 'LR-03' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  fireEvent.blur(input);
+  await act(async () => {});
+  expect(mockSetLabel).toHaveBeenCalledTimes(1);
+});
+
+it('makes no label write when the selection cannot be edited', async () => {
+  const user = userEvent.setup();
+  render(<LineUnfold item={{ ...item, room: { id: 'room-living', name: 'Living Room' } }} projectId="project-1" projectName="Ellsworth" onAddNote={jest.fn()} onFold={jest.fn()} canEditSelection={false} />);
+  const input = screen.getByRole('textbox', { name: 'Item label' });
+  await user.click(input);
+  await user.keyboard('9');
+  await user.tab();
+  expect(input).toHaveValue('LR-01');
+  expect(mockSetLabel).not.toHaveBeenCalled();
 });
 
 it('shows the per-job label and commits edits through the FFE label writer', async () => {

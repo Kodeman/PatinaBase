@@ -234,19 +234,30 @@ export function LineUnfold({
   }, [item.doc_code]);
   const [labelStatus, setLabelStatus] = useState<string | null>(null);
   const labelRefusal = labelStatus !== null && labelStatus !== 'Label saved.';
-  const commitLabel = async () => {
+  // A ref, not render-time isPending: a second Enter or blur before the
+  // re-render would otherwise send the write twice.
+  const labelInFlight = useRef(false);
+  const labelRefused = useRef<string | null>(null);
+  const commitLabel = async (fromEnter: boolean) => {
     const next = labelDraft.trim();
-    if (next === labelBaseline.current || setLabel.isPending) return;
+    if (next === labelBaseline.current || next === labelRefused.current || labelInFlight.current) return;
+    labelInFlight.current = true;
     setLabelStatus(null);
     try {
       const row = await setLabel.mutateAsync({ projectId, itemId: item.id, label: next || null });
+      labelRefused.current = null;
       labelBaseline.current = row.doc_code ?? '';
       setLabelDraft(labelBaseline.current);
       setLabelStatus('Label saved.');
     } catch (error) {
+      labelRefused.current = next;
       setLabelStatus(itemLabelRefusal((error as Error).message, next) ?? (error as Error).message);
     } finally {
-      labelInputRef.current?.focus();
+      labelInFlight.current = false;
+      // Only Enter keeps the designer in the field; a blur commit leaves focus
+      // wherever they went, and nothing takes it back from another control.
+      const active = document.activeElement;
+      if (fromEnter && (!active || active === document.body)) labelInputRef.current?.focus();
     }
   };
   // R1-F29: removing asks for a reason; a line on an instrument or a PO is
@@ -357,10 +368,10 @@ export function LineUnfold({
               skipLabelBlurCommit.current = false;
               return;
             }
-            void commitLabel();
+            void commitLabel(false);
           }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') { event.preventDefault(); void commitLabel(); }
+            if (event.key === 'Enter') { event.preventDefault(); void commitLabel(true); }
             if (event.key === 'Escape') {
               skipLabelBlurCommit.current = true;
               setLabelDraft(labelBaseline.current);

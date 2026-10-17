@@ -80,7 +80,7 @@ import {
   numberPurchaseOrder,
   persistSidemarkDefault,
   PO_OUT_OF_SYNC_DETAIL,
-  poLineRoomLabel,
+  poPdfLine,
   type PoLinePlacement,
   type SupplyingLine,
   type SupplyingPurchaseOrder,
@@ -91,10 +91,8 @@ import {
   readStudioOrdersEmail,
   resolveVendorRecipient,
   storePoDocument,
-  vendorConfigurationLines,
   type VendorConfigurationSpec,
   type VendorProductMaster,
-  vendorSafeSpecNotes,
 } from './lib.ts';
 import { revisionedPoNumber, snapshotPurchaseOrderSpec, snapshotsSpecOnSend } from './revision.ts';
 
@@ -478,32 +476,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Render the PDF ──────────────────────────────────────────────────────
-  const lines = items.map((item) => {
-    const quantity = item.quantity ?? 1;
-    // TRADE pricing — same COALESCE the 00186 total uses.
-    const unitTradeCents = item.trade_price_cents ?? item.unit_price_cents ?? 0;
-    // The configured spec block (P0-1): what the designer actually specified,
-    // vendor-safe (selections / components / dimensions / COM / config hash —
-    // never retail or markup). Empty array for an unconfigured line with no
-    // flat spec fields, which renders exactly as before.
-    // Unconfigured lines resolve each flat field spec → product master (C-06).
-    const configurationLines = [
-      ...vendorConfigurationLines(item.spec, item.product),
-      ...(comArriving.get(item.id) ?? []),
-    ];
-    return {
-      name: item.name,
-      docCode: item.doc_code,
-      room: poLineRoomLabel(item.room?.name ?? null, item.placements, item.unit),
-      quantity,
-      unit: item.unit,
-      unitTradeCents,
-      lineTotalCents: unitTradeCents * quantity,
-      specNotes: vendorSafeSpecNotes(item.notes),
-      category: item.ffe_category,
-      configurationLines: configurationLines.length > 0 ? configurationLines : undefined,
-    };
-  });
+  const lines = items.map((item) => poPdfLine(item, comArriving));
   const tradeTotalCents = lines.reduce((sum, l) => sum + l.lineTotalCents, 0);
   const patternLabel = paymentPatternLabel(po.payment_pattern);
   const paymentRows = payments.map((p) => ({

@@ -187,7 +187,7 @@ function fmtDate(value: string): string {
 
 // ─── Document tree ───────────────────────────────────────────────────────────
 
-function PoDocument(data: PoPdfData) {
+export function PoDocument(data: PoPdfData) {
   const metaBits = [data.poNumber, `Issued ${fmtDate(data.issuedAt)}`];
   if (data.sidemark) metaBits.push(`Sidemark: ${data.sidemark}`);
 

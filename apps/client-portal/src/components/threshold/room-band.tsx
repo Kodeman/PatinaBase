@@ -524,7 +524,7 @@ function PieceRecord({ piece }: { piece: ClientSelection }) {
       </p>
       {detail && <p className="mt-0.5">{detail}</p>}
       {piece.docCode && (
-        <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+        <p className="mt-0.5 font-mono text-[12px] text-[var(--text-muted)]">
           {piece.docCode}
         </p>
       )}

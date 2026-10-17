@@ -577,7 +577,7 @@ function FFELine({
 
   const body = (
     <>
-      <div className="flex items-center gap-3.5">
+      <div className="flex min-w-0 items-center gap-3.5">
         {installState &&
           (damageIsTheStamp ? (
             <span
