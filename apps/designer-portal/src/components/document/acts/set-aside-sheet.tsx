@@ -95,7 +95,7 @@ export function SetAsideSheet({
           <span className="font-medium">{jobName}</span>
           {` · ${line}`}
         </p>
-        <div className="field">
+        <div id="set-aside-day-field" className="field">
           <span className="label">Back on</span>
           <DateTextInput
             value={until}
@@ -110,7 +110,7 @@ export function SetAsideSheet({
             </span>
           )}
         </div>
-        <div className="field">
+        <div id="set-aside-reason-field" className="field">
           <label className="label" htmlFor="set-aside-reason">
             Waiting on
           </label>
@@ -144,6 +144,24 @@ export function SetAsideSheet({
             variant="primary"
             disabled={!complete}
             held={!complete}
+            holds={[
+              ...(dayMissing
+                ? [{
+                    id: 'set-aside-day',
+                    target: () => document.getElementById('set-aside-day-field'),
+                    label: 'Back on',
+                    reason: 'Choose a day after today.',
+                  }]
+                : []),
+              ...(reasonMissing
+                ? [{
+                    id: 'set-aside-reason',
+                    target: () => document.getElementById('set-aside-reason-field'),
+                    label: 'Waiting on',
+                    reason: 'Say what the line waits on.',
+                  }]
+                : []),
+            ]}
             onHeldActivate={() => setTried(true)}
             onClick={() => void save()}
             loading={pending}

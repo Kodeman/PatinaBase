@@ -81,7 +81,6 @@ export function ServiceAgreementSendSheet({
   const turnkey = document.kind === "design_build";
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<string | null>(null);
-  const [held, setHeld] = useState<string | null>(null);
   const blockerListId = useId();
   const noteHintId = useId();
   const readiness =
@@ -185,14 +184,12 @@ export function ServiceAgreementSendSheet({
           />
         </label>
 
-        {/* One region, two voices: the send's own result, and the reason a
-            held act refused. Present so an activation is never silent. */}
         <p
           role="status"
           aria-live="polite"
           className="mt-4 text-[12px] text-[var(--color-mocha)]"
         >
-          {result ?? held}
+          {result}
         </p>
 
         <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
@@ -223,13 +220,22 @@ export function ServiceAgreementSendSheet({
                in flight, marking the act `aria-disabled` with no reason
                attached and announcing that a ready agreement was not ready. */
             held={!readiness.ready}
-            onHeldActivate={() => {
-              setResult(null);
-              setHeld(
-                readiness.blockers[0] ??
-                  "This agreement is not ready to send yet.",
-              );
-            }}
+            holds={
+              readiness.ready
+                ? undefined
+                : [
+                    {
+                      id: blockerListId,
+                      target: () =>
+                        window.document.getElementById(blockerListId),
+                      label: "Finish before sending",
+                      reason:
+                        readiness.blockers[0] ??
+                        "This agreement is not ready to send yet.",
+                    },
+                  ]
+            }
+            onHeldActivate={() => setResult(null)}
             aria-describedby={readiness.ready ? undefined : blockerListId}
             loading={send.isPending}
           >
