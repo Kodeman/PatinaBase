@@ -377,7 +377,12 @@ export function PoPreview({
         onClick={() => onOpenChange(false)}
         className="absolute inset-0 cursor-default bg-[rgba(44,41,38,0.45)]"
       />
-      <div className="absolute inset-x-0 top-[4vh] mx-auto flex h-[92vh] w-[min(720px,94vw)] flex-col rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]">
+      {/* The lifted paper is the held acts' frame (K2): the desk already
+          recedes behind it, so the spotlight darkens the paper alone. */}
+      <div
+        data-spotlight-frame
+        className="absolute inset-x-0 top-[4vh] mx-auto flex h-[92vh] w-[min(720px,94vw)] flex-col rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]"
+      >
         <div className="flex items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] px-5 py-3">
           <div>
             <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
