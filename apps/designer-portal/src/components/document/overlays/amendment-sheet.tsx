@@ -691,6 +691,7 @@ function HeldSend({
   children: ReactNode;
 }) {
   const reasonId = useId();
+  const fixId = useId();
   if (!held) {
     return (
       <DocumentAction
@@ -713,6 +714,7 @@ function HeldSend({
           variant="primary"
           disabled
           held
+          holdFix={fixId}
           aria-describedby={reasonId}
         >
           {children}
@@ -721,7 +723,7 @@ function HeldSend({
           Link a client first.
         </p>
       </div>
-      <DocumentAction actionKey="link-client" variant="secondary" onClick={onLink}>
+      <DocumentAction id={fixId} actionKey="link-client" variant="secondary" onClick={onLink}>
         Link a client
       </DocumentAction>
     </>

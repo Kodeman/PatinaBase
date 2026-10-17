@@ -504,6 +504,30 @@ export function SendSheet({
                     : 'Confirm sending with parts still missing first.';
   // In flight keeps its own native-disabled "Sending…" form; held is the refusal.
   const sendHeld = sendHeldReason !== null && !sendProposal.isPending;
+  // The last three reasons are all fixed in this sheet, so each one still
+  // standing is listed: fixing one leaves the rest windowed, never "All set."
+  const sheetHeld =
+    sendHeld &&
+    (sendHeldReason === 'Correct the CC address first.' ||
+      sendHeldReason === 'Resolve what is listed above first.' ||
+      sendHeldReason === 'Confirm sending with parts still missing first.');
+  const ccSendHold = sheetHeld && Boolean(ccEmailError);
+  const blockersHold = sheetHeld && hasBlockers;
+  const incompleteAckHold =
+    sheetHeld &&
+    !hasBlockers &&
+    Boolean(readiness?.requiresIncompleteAcknowledgement && !acknowledgedIncomplete);
+  const sendSpotlightHolds = [
+    ...(ccSendHold
+      ? [{ id: 'send-sheet-cc-hold', target: () => document.getElementById('send-sheet-cc-fix'), label: 'CC address', reason: 'Correct the CC address first.' }]
+      : []),
+    ...(blockersHold
+      ? [{ id: 'send-sheet-blockers-hold', target: () => document.getElementById('send-sheet-blockers'), label: 'Not safe to send yet', reason: 'Resolve what is listed above first.' }]
+      : []),
+    ...(incompleteAckHold
+      ? [{ id: 'send-sheet-ack-hold', target: () => document.getElementById('send-sheet-ack-fix'), label: 'Incomplete acknowledgement', reason: 'Confirm sending with parts still missing first.' }]
+      : []),
+  ];
 
   const handleSend = async () => {
     if (!canSend || sendAttemptInFlight.current) return;
@@ -725,7 +749,7 @@ export function SendSheet({
           <div className="mt-5 space-y-5">
             {/* Link-a-client banner */}
             {!proposal.client_id && (
-              <div className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3.5">
+              <div id={`${sendReasonId}-fix`} className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3.5">
                 <p className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
                   Link a client to send
                 </p>
@@ -836,7 +860,7 @@ export function SendSheet({
 
             <div className="grid grid-cols-2 gap-x-6 gap-y-5">
               {/* CC */}
-              <div className="flex flex-col gap-1.5">
+              <div id="send-sheet-cc-fix" className="flex flex-col gap-1.5">
                 <label className={labelCls} htmlFor="send-sheet-cc">
                   CC (optional)
                 </label>
@@ -848,9 +872,7 @@ export function SendSheet({
                   placeholder="partner@email.com"
                   maxLength={254}
                   aria-invalid={ccEmailError ? true : undefined}
-                  aria-describedby={
-                    ccEmailError ? 'send-sheet-cc-error' : undefined
-                  }
+                  aria-describedby={ccEmailError ? 'send-sheet-cc-error' : undefined}
                   className={fieldCls}
                 />
                 {ccEmailError && (
@@ -938,7 +960,7 @@ export function SendSheet({
               )}
 
               {!checkingClientCopy && !autosaveReviewError && !clientCopyError && hasBlockers && (
-                <div role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]">
+                <div id="send-sheet-blockers" role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]">
                   <p className="font-semibold">Not safe to send yet</p>
                   <ul className="mt-1 list-disc space-y-1 pl-5">
                     {readiness?.blockers.map((blocker, index) => (
@@ -953,7 +975,7 @@ export function SendSheet({
                 !clientCopyError &&
                 !hasBlockers &&
                 readiness?.requiresIncompleteAcknowledgement && (
-                  <div className="mt-2 text-[12px] text-[var(--color-mocha)]">
+                  <div id="send-sheet-ack-fix" className="mt-2 text-[12px] text-[var(--color-mocha)]">
                     <p className="font-semibold">This draft is incomplete</p>
                     {readiness.warnings.map((warning) => (
                       <p key={warning} className="mt-1">
@@ -962,6 +984,7 @@ export function SendSheet({
                     ))}
                     <label className="mt-2 flex items-start gap-2">
                       <input
+                        id="send-sheet-incomplete-acknowledgement"
                         type="checkbox"
                         checked={acknowledgedIncomplete}
                         onChange={(event) =>
@@ -971,6 +994,7 @@ export function SendSheet({
                       />
                       <span>I reviewed the missing parts and still want to send this version.</span>
                     </label>
+                    {incompleteAckHold && <p id="send-sheet-ack-hold-reason" className="mt-1 text-[11px] text-[var(--text-muted)]">Confirm sending with parts still missing first.</p>}
                   </div>
                 )}
 
@@ -1098,7 +1122,17 @@ export function SendSheet({
                     onClick={handleSend}
                     disabled={!canSend}
                     held={sendHeld}
-                    aria-describedby={sendHeld ? sendReasonId : undefined}
+                    holds={sendSpotlightHolds}
+                    aria-describedby={
+                      sendHeld
+                        ? ccSendHold
+                          ? 'send-sheet-cc-error'
+                          : incompleteAckHold
+                            ? 'send-sheet-ack-hold-reason'
+                            : sendReasonId
+                        : undefined
+                    }
+                    holdFix={sendHeldReason === 'Link a client first.' ? `${sendReasonId}-fix` : undefined}
                     loading={sendProposal.isPending}
                     loadingLabel="Sending…"
                     trailing="→"
@@ -1112,7 +1146,7 @@ export function SendSheet({
                   >
                     Send later
                   </DocumentAction>
-                  {sendHeld && (
+                  {sendHeld && !ccSendHold && !incompleteAckHold && (
                     <p
                       id={sendReasonId}
                       className="basis-full text-[11.5px] text-[var(--text-muted)]"

@@ -212,6 +212,37 @@ describe("the paperwork mint act", () => {
     expect(mintMutate).not.toHaveBeenCalled();
   });
 
+  // R186 — the press lights the day field that fixes the hold, live and focused.
+  it("opens the day field in one spotlight window when the held act is pressed", async () => {
+    render(
+      <div data-spotlight-frame>
+        <PaperworkLinkAct
+          companyId="firm-twin-cities"
+          firmName="Twin Cities Drywall"
+          windowEnd={null}
+          onAnnounce={announce}
+          now={NOW}
+        />
+      </div>,
+    );
+    fireEvent.click(screen.getByText("Mint a paperwork link"));
+    fireEvent.click(screen.getByLabelText("Their next window — a day I name"));
+    fireEvent.click(screen.getByText("Open the door").closest("button")!);
+    expect(
+      Array.from(
+        document.querySelectorAll("[data-hold-spotlight-window]"),
+        (el) => el.getAttribute("data-hold-spotlight-window"),
+      ),
+    ).toEqual(["paperwork-link-firm-twin-cities-day"]);
+    const day = screen.getByLabelText("The day it closes");
+    expect(day.closest("[inert]")).toBeNull();
+    expect(document.activeElement).toBe(day);
+    fireEvent.change(day, { target: { value: "2026-11-21" } });
+    await waitFor(() =>
+      expect(document.querySelector("[data-hold-spotlight]")).toBeNull(),
+    );
+  });
+
   it("prints the address once, and says it will not print it again", async () => {
     renderAct("2026-11-21");
     fireEvent.click(screen.getByText("Mint a paperwork link"));

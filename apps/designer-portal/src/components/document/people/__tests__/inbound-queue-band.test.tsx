@@ -124,6 +124,34 @@ describe("the inbound queue band", () => {
     expect(rejectMutate).not.toHaveBeenCalled();
   });
 
+  // R186 — the press lights the field that fixes the hold, live and focused.
+  it("opens the reason field in one spotlight window when the held refusal is pressed", async () => {
+    render(
+      <div data-spotlight-frame>
+        <InboundQueueBand
+          holderId="firm-northgate"
+          firmName="Northgate Electric"
+          onAnnounce={announce}
+        />
+      </div>,
+    );
+    fireEvent.click(screen.getByText("Reject"));
+    fireEvent.click(screen.getByText("Refuse it").closest("button")!);
+    expect(
+      Array.from(
+        document.querySelectorAll("[data-hold-spotlight-window]"),
+        (el) => el.getAttribute("data-hold-spotlight-window"),
+      ),
+    ).toEqual(["inbound-reason-doc-1"]);
+    const field = screen.getByLabelText("Why it is refused");
+    expect(field.closest("[inert]")).toBeNull();
+    expect(document.activeElement).toBe(field);
+    fireEvent.change(field, { target: { value: "Expired policy" } });
+    await waitFor(() =>
+      expect(document.querySelector("[data-hold-spotlight]")).toBeNull(),
+    );
+  });
+
   it("sends the reason with the refusal and names the note it drafts", async () => {
     renderBand();
     fireEvent.click(screen.getByText("Reject"));

@@ -87,6 +87,25 @@ describe("ArchiveCardDoor", () => {
     ).toBeInTheDocument();
   });
 
+  it("opens the standing reason in a spotlight when the act is held", async () => {
+    render(
+      <div data-spotlight-frame>
+        <ArchiveCardDoor {...props} canArchive={false} />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Put this card away" }));
+    expect(
+      Array.from(
+        document.querySelectorAll("[data-hold-spotlight-window]"),
+        (el) => el.getAttribute("data-hold-spotlight-window"),
+      ),
+    ).toEqual(["archive-held-card-dana"]);
+    // The ask note is the window: it says who can put the card away.
+    const note = document.getElementById("archive-held-card-dana");
+    expect(note).toHaveTextContent(/owner or an admin/);
+    expect(note?.closest("[inert]")).toBeNull();
+  });
+
   it("writes nothing when a held act is pressed", () => {
     render(<ArchiveCardDoor {...props} canArchive={false} />);
     fireEvent.click(screen.getByRole("button", { name: "Put this card away" }));

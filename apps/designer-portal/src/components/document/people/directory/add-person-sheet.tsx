@@ -2361,6 +2361,21 @@ export function AddPersonSheet({
                 }
               : undefined
           }
+          // The retry above answers the press; the window shows why it is
+          // held. The reason is not the first id in aria-describedby, so the
+          // default window would light the consequence sentence instead.
+          holds={
+            heldReason
+              ? [
+                  {
+                    id: heldReason.id,
+                    target: () => document.getElementById(heldReason.id),
+                    label: "Add to directory",
+                    reason: heldReason.sentence,
+                  },
+                ]
+              : undefined
+          }
           onClick={() => void submit()}
         >
           {isEditMode

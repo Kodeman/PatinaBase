@@ -2,9 +2,9 @@
  * SQ-1211 — the drafting room's paper column is the composer's spotlight
  * frame. The composer renders its own RoomShell, so this suite renders the
  * real shell and the real DocumentAction: the held Send resolves that frame,
- * and the composer's own answer (sayWhyHeld) still says why on a press.
+ * and its press opens the hold's window there and says why (R186).
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { AgreementPart } from "@patina/types";
 import { AgreementComposer } from "../agreement-composer";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
@@ -92,7 +92,7 @@ function bundleWith(parts: AgreementPart[]): CommercialDocumentBundle {
 }
 
 describe("AgreementComposer · the drafting room's spotlight frame (SQ-1211)", () => {
-  it("holds Send inside the Room's paper column and still says why on a press", () => {
+  it("holds Send inside the Room's paper column and still says why on a press", async () => {
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     render(<AgreementComposer proposal={proposal} bundle={bundleWith([])} />);
 
@@ -107,15 +107,25 @@ describe("AgreementComposer · the drafting room's spotlight frame (SQ-1211)", (
       expect(window.getComputedStyle(el).position).not.toBe("fixed");
     }
 
-    // The site answers the press itself (onHeldActivate, no holds): the
-    // reason lands in the room's status region; the default spotlight and
-    // the never-silent fallback both stand aside.
+    // A missing fee is a listed hold whose fixer, the seam's + Add a part,
+    // is in the frame: the press opens its window there, the fixer stays
+    // live, and the spotlight says why in the blocker's words. The
+    // never-silent fallback stands aside.
     const blocker = document.getElementById(send.getAttribute("aria-describedby")!)!;
-    const status = document.getElementById("room-status")!;
-    expect(status.textContent).not.toBe(blocker.textContent);
     fireEvent.click(send);
-    expect(status.textContent).toBe(blocker.textContent);
-    expect(document.querySelector("[data-hold-spotlight]")).toBeNull();
+    await waitFor(() =>
+      expect(
+        Array.from(frame!.querySelectorAll("[data-hold-spotlight-window]")).map((el) =>
+          el.getAttribute("data-hold-spotlight-window"),
+        ),
+      ).toEqual(["add-a-part"]),
+    );
+    const seam = within(frame!).getAllByRole("button", { name: "+ Add a part", hidden: true })[0]!;
+    expect(seam.closest("[inert]")).toBeNull();
+    expect(frame!.querySelector(".hold-spotlight__reason")).toHaveTextContent(blocker.textContent!);
+    expect(frame!.querySelector("[data-hold-spotlight-root] [role='status']")).toHaveTextContent(
+      `1 thing needs attention: ${blocker.textContent}`,
+    );
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });

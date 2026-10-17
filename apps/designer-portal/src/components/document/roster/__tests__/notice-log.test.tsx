@@ -182,3 +182,27 @@ describe('NoticeLog', () => {
     expect(screen.getByText('– Everyone on the job has been told.')).toBeInTheDocument();
   });
 });
+
+/** US-36 R3 / R186 — the held save's window is the list that fixes it. */
+describe('NoticeLog — pressing the held save', () => {
+  it('opens a spotlight on the names, live and focused', () => {
+    render(
+      <div data-spotlight-frame>
+        <NoticeLog projectId="okonkwo" seats={SEATS} told={[]} panelId="notice-panel" />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Log who was told/ }));
+    const save = screen.getByRole('button', { name: /Save this note/ });
+    fireEvent.click(save);
+
+    const luis = screen.getByRole('checkbox', { name: 'Luis Ochoa' });
+    const windows = Array.from(document.querySelectorAll('[data-hold-spotlight-window]'));
+    expect(windows.map((el) => el.getAttribute('data-hold-spotlight-window'))).toEqual([
+      luis.closest('ul')!.id,
+    ]);
+    expect(save.closest('[inert]')).not.toBeNull();
+    expect(luis.closest('[inert]')).toBeNull();
+    expect(document.activeElement).toBe(luis);
+    expect(logToldMutate).not.toHaveBeenCalled();
+  });
+});

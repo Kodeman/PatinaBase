@@ -55,6 +55,7 @@ import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import { partDrawsNothing } from "../../../commercial/agreement-parts-body";
 import { ServiceAgreementSendSheet } from "../../../commercial/service-agreement-send-sheet";
 import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
+import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight";
 import { suppressNextArrival } from "@/lib/arrival/nav";
 import { useTeachingHold } from "@/lib/teaching/hold-registry";
 import {
@@ -72,6 +73,7 @@ import { AUTHORITY_STANDING_LABEL, authorityStanding } from "./schedules";
 import {
   assessAgreementReadiness,
   blockersForPart,
+  MISSING_PART_BLOCKERS,
   documentBlockers,
   duplicateMoneyBlocker,
   BLANK_ROLE_BLOCKER,
@@ -84,7 +86,12 @@ import {
   type TurnkeyContext,
 } from "./turnkey";
 import { TradeAgreementsStrip } from "../../../commercial/trade-agreements";
-import { GalleyPart, FoldAct, type GalleyPartIds } from "./galley/galley-part";
+import {
+  GalleyPart,
+  FoldAct,
+  firstFoldField,
+  type GalleyPartIds,
+} from "./galley/galley-part";
 import { GalleyFold } from "./galley/galley-fold";
 import { PartOutline } from "./galley/part-outline";
 import { StudioStrip, StudioRun } from "./galley/studio-strip";
@@ -1304,26 +1311,140 @@ export function AgreementComposer({
       : sendWord;
 
   const sendHeld = !readiness.ready || refusedAtSave || readOnly;
-  /* Check 8 — activating a held act never fails silently: it writes the
-     reason into the one status region and moves focus to the part that is
-     unmet, or to the seam where the missing part would be added. */
-  const sayWhyHeld = () => {
-    // The blocker announced is the blocker whose part takes the focus: the
-    // two were different sentences, so the room named the fee floor and sent
-    // the caret to a part the fee floor had nothing to do with.
-    const reason =
-      heldOn?.message ??
-      roomBlockers[0] ??
-      readiness.blockers[0]?.message ??
-      localRefusal() ??
-      undefined;
-    if (reason) setAnnouncement(reason);
-    const target = heldOnPart
-      ? window.document.getElementById(idsFor(heldOnPart.partKey).foldAct)
-      : window.document.querySelector<HTMLElement>(".g-seam .g-act");
-    target?.focus();
-  };
+  const frozenReason = turnkeyFrozen
+    ? // W3R1-08 — a turnkey DRAFT with `design-build` off has not left the
+      // studio; what is true is that the class's editors are not mounted for
+      // this reader.
+      "This is a design-build agreement, and it does not open for you yet. Its parts are shown as they stand."
+    : "This agreement has left the studio. Its parts are fixed as sent.";
 
+  /* R186 — what the held Send's spotlight windows. A part's window is the
+     whole part, its open fold included, so the fields it opens are live in
+     it; a part the paper prints nothing for keeps its fold act in the
+     studio's strip, which takes the window until the fold is open. Holds are
+     keyed on the part key, which survives a save (N-8), and told apart by
+     place where two parts share one. A read-only paper has no fixer for any
+     of it: one window on the reason. */
+  const sendHolds: SpotlightHold[] = [];
+  if (sendHeld) {
+    const inRoom = (selector: string, attribute: string, value: string) =>
+      Array.from(
+        room.current?.querySelectorAll<HTMLElement>(selector) ?? [],
+      ).filter((el) => el.getAttribute(attribute) === value);
+    const keyCount = new Map<string, number>();
+    const stripCount = new Map<string, number>();
+    const placed = new Map(
+      leaves.map((leaf) => {
+        const nth = keyCount.get(leaf.part.partKey) ?? 0;
+        keyCount.set(leaf.part.partKey, nth + 1);
+        const stripNth = stripCount.get(leaf.ids.section) ?? 0;
+        if (leaf.hasStrip) stripCount.set(leaf.ids.section, stripNth + 1);
+        return [leaf.part.id, { leaf, nth, stripNth }] as const;
+      }),
+    );
+    const unplaced: string[] = [];
+    if (!readOnly) {
+      const flagged = new Set(
+        readiness.blockers.flatMap((blocker) =>
+          blocker.partId ? [blocker.partId] : [],
+        ),
+      );
+      for (const partId of flagged) {
+        const entry = placed.get(partId);
+        if (!entry) {
+          unplaced.push(...blockersForPart(readiness, partId));
+          continue;
+        }
+        const { leaf, nth, stripNth } = entry;
+        const { part, ids } = leaf;
+        const title = part.title.trim() || "Untitled part";
+        const named = rows.filter(
+          (row) => (row.title.trim() || "Untitled part") === title,
+        );
+        sendHolds.push({
+          id: `part:${part.partKey}:${nth}`,
+          target: () =>
+            !leaf.silent || part.partKey === openKey
+              ? (inRoom("section.g-part[data-part-key]", "data-part-key", part.partKey)[
+                  nth
+                ] ?? null)
+              : (inRoom("aside[data-beside]", "data-beside", ids.section)[
+                  stripNth
+                ] ?? null),
+          label:
+            named.length > 1
+              ? `${title} · part ${rows.indexOf(part) + 1}`
+              : title,
+          reason: leaf.partBlockers.join(" "),
+        });
+      }
+      const missing = [
+        ...new Set(
+          readiness.blockers
+            .filter(
+              (blocker) =>
+                blocker.partId === null &&
+                MISSING_PART_BLOCKERS.has(blocker.message),
+            )
+            .map((blocker) => blocker.message),
+        ),
+      ];
+      if (missing.length > 0) {
+        sendHolds.push({
+          id: "add-a-part",
+          target: () => room.current?.querySelector<HTMLElement>(".g-seam") ?? null,
+          label: "Add a part",
+          reason: missing.join(" "),
+        });
+      }
+    }
+    const printed = roomBlockers.filter(
+      (message) => !MISSING_PART_BLOCKERS.has(message),
+    );
+    const reasons = readOnly
+      ? [frozenReason]
+      : [
+          ...new Set([
+            ...readiness.blockers
+              .filter(
+                (blocker) =>
+                  blocker.partId === null &&
+                  !MISSING_PART_BLOCKERS.has(blocker.message),
+              )
+              .map((blocker) => blocker.message),
+            ...unplaced,
+          ]),
+        ];
+    // Send stays held until every hold is gone, so the list never empties
+    // while it is: what no part or seam answers is the agreement's own reason.
+    if (reasons.length > 0 || sendHolds.length === 0) {
+      const reasonId = readOnly
+        ? "agreement-frozen-reason"
+        : printed.length > 0
+          ? "agreement-blockers"
+          : "room-status-wrap";
+      sendHolds.push({
+        id: "agreement",
+        target: () => window.document.getElementById(reasonId),
+        label: "This agreement",
+        reason: reasons.join(" ") || localRefusal() || readinessVoice,
+      });
+    }
+  }
+  /* An open part's window is entered at its first field: its fold act, where
+     the spotlight would otherwise land, folds the part on the next press. */
+  const enterOpenFold = (event: React.FocusEvent<HTMLDivElement>) => {
+    const act = event.target;
+    if (!openKey || act.id !== idsFor(openKey).foldAct) return;
+    const frame = act.closest("[data-spotlight-frame]");
+    if (!frame?.querySelector("[data-hold-spotlight]")) return;
+    const section = act.closest<HTMLElement>("section.g-part[data-part-key]");
+    const from = event.relatedTarget;
+    if (!section || (from instanceof Node && section.contains(from))) return;
+    firstFoldField(
+      section.querySelector<HTMLElement>(`#${idsFor(openKey).foldPanel}`),
+    )?.focus({ preventScroll: true });
+  };
   const preparedFor = recipientName
     ? recipientEmail
       ? `${recipientName} · ${recipientEmail}`
@@ -1339,7 +1460,7 @@ export function AgreementComposer({
       }
     >
       <div className="g-page">
-        <div className="g-room" ref={room}>
+        <div className="g-room" ref={room} onFocus={enterOpenFold}>
           <header className="g-head">
             <p className="t-head g-eyebrow">
               {/* W3R2-06 — keyed off the document's KIND, not the flag. */}
@@ -1432,12 +1553,7 @@ export function AgreementComposer({
             {saveNote && <p className="t-body-sm g-reason">{saveNote}</p>}
             {readOnly && (
               <p className="t-body-sm g-reason" id="agreement-frozen-reason">
-                {turnkeyFrozen
-                  ? // W3R1-08 — a turnkey DRAFT with `design-build` off has not
-                    // left the studio; what is true is that the class's editors
-                    // are not mounted for this reader.
-                    "This is a design-build agreement, and it does not open for you yet. Its parts are shown as they stand."
-                  : "This agreement has left the studio. Its parts are fixed as sent."}
+                {frozenReason}
               </p>
             )}
             {/* §A10, checks 5/6 — ONE region, authored here, present at load,
@@ -1491,7 +1607,7 @@ export function AgreementComposer({
 
           <div className="g-galley-foot">
             {roomBlockers.length > 0 && (
-              <div className="studio-note g-blockers">
+              <div className="studio-note g-blockers" id="agreement-blockers">
                 <span className="t-head head">The studio</span>
                 {roomBlockers.map((message, index) => (
                   <p
@@ -1530,7 +1646,7 @@ export function AgreementComposer({
                 disabled={sendHeld}
                 held
                 aria-describedby={sendHeld ? liveBlockerId : undefined}
-                onHeldActivate={sayWhyHeld}
+                holds={sendHolds.length ? sendHolds : undefined}
                 onClick={() => void reviewAndSend()}
               >
                 {sendLabel}
