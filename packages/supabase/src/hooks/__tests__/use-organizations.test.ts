@@ -10,13 +10,15 @@ vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => ({ from }),
 }));
 
+const invalidateQueries = vi.fn();
+
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({ invalidateQueries }),
 }));
 
-import { useStudiosEmployingMember } from '../use-organizations';
+import { useInviteMember, useStudiosEmployingMember } from '../use-organizations';
 
 type QueryConfig = {
   queryKey: unknown[];
@@ -25,11 +27,26 @@ type QueryConfig = {
 };
 
 beforeEach(() => {
+  invalidateQueries.mockReset();
   rows = [];
   from.mockReset().mockImplementation(() => ({ select }));
   select.mockReset().mockImplementation(() => ({ in: inFilter }));
   inFilter.mockReset().mockImplementation(() => ({ eq }));
   eq.mockReset().mockImplementation(() => Promise.resolve({ data: rows, error: null }));
+});
+
+describe('member mutation invalidation', () => {
+  it('invalidates the employing-member query after an invite', () => {
+    const mutation = useInviteMember() as unknown as {
+      onSuccess: (data: unknown, variables: { organizationId: string }) => void;
+    };
+
+    mutation.onSuccess({}, { organizationId: 'studio-1' });
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['organization-members', 'employing'],
+    });
+  });
 });
 
 describe('useStudiosEmployingMember (SQ-1091)', () => {

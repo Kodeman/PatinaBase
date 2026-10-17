@@ -414,6 +414,7 @@ export function useInviteMember() {
       queryClient.invalidateQueries({
         queryKey: ['organization-members', variables.organizationId],
       });
+      queryClient.invalidateQueries({ queryKey: ['organization-members', 'employing'] });
     },
   });
 }
@@ -442,6 +443,7 @@ export function useAcceptInvitation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['organization-members', 'employing'] });
       queryClient.invalidateQueries({ queryKey: ['pending-invitations'] });
       queryClient.invalidateQueries({ queryKey: documentClientAuthorityKeys.all });
     },
@@ -500,6 +502,7 @@ export function useUpdateMemberRole() {
       queryClient.invalidateQueries({
         queryKey: ['organization-members', data.organization_id],
       });
+      queryClient.invalidateQueries({ queryKey: ['organization-members', 'employing'] });
       // Any project in this studio may have this member as its lead or its
       // owner/admin, so the whole K5 family is stale.
       queryClient.invalidateQueries({ queryKey: documentClientAuthorityKeys.all });
@@ -538,6 +541,7 @@ export function useRemoveMember() {
           queryKey: ['organization-members', data.organizationId],
         });
       }
+      queryClient.invalidateQueries({ queryKey: ['organization-members', 'employing'] });
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
       queryClient.invalidateQueries({ queryKey: documentClientAuthorityKeys.all });
     },
@@ -567,6 +571,7 @@ export function useLeaveOrganization() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['organization-members', 'employing'] });
       queryClient.invalidateQueries({ queryKey: documentClientAuthorityKeys.all });
     },
   });
@@ -602,6 +607,7 @@ export function useTransferOrganizationOwnership() {
       queryClient.invalidateQueries({
         queryKey: ['organization-members', variables.organizationId],
       });
+      queryClient.invalidateQueries({ queryKey: ['organization-members', 'employing'] });
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
       queryClient.invalidateQueries({ queryKey: documentClientAuthorityKeys.all });
     },
