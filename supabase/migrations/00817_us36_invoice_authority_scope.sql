@@ -18,7 +18,10 @@
 --   · the job's lead or team as can_buy_for_project (00813) defines them, on
 --     a job whose studio IS the invoice's studio;
 --   · an active owner/admin of the invoice's studio (is_org_admin_or_owner,
---     the K5 precedent of document_client_link_hold, 00796);
+--     the K5 precedent of document_client_link_hold, 00796), when that
+--     studio is an active design_studio: is_org_admin_or_owner reads the
+--     seat alone (00484), so a suspended studio's owner would otherwise keep
+--     the authority its suspension withdrew (SQ-1278 F1);
 --   · an active non-guest member of the invoice's studio, when that studio is
 --     an active design_studio in which the invoice's designer also holds an
 --     active non-guest seat (today's _can_author_proposal arm, held to the
@@ -38,7 +41,8 @@
 -- §2 re-points the money writes that checked _can_manage_invoice_owner(
 -- designer_id) to can_manage_invoice(p_invoice_id), so a direct RPC call is
 -- held to the same studio: issue_invoice (its guard is in
--- _issue_invoice_pre_00412), record_invoice_payment, void_invoice and
+-- _issue_invoice_pre_00412, and public.issue_invoice now asks first),
+-- record_invoice_payment, void_invoice and
 -- add_invoice_billing_lines. Each refusal keeps its text and code, the same
 -- for a missing invoice and a denied one.
 -- Not re-pointed: generate_milestone_invoice (00397) authorizes the
@@ -46,9 +50,11 @@
 -- actor (00578) already requires the actor's seat in the job's studio and
 -- invoices.studio_id = projects.studio_id. _can_manage_invoice_owner keeps
 -- its body for generate_milestone_invoice.
--- Inherited, not changed: public.issue_invoice (00412) runs its linked-time
--- and retainer checks before the guard, so its check_violation answers an
--- outsider for an invoice with pending linked time or an unpaid retainer.
+-- public.issue_invoice (00412) ran its linked-time and retainer checks before
+-- that guard, so its check_violation told an outsider that an invoice had
+-- pending linked time or an unpaid retainer (SQ-1278 F2). It now asks
+-- can_manage_invoice first and refuses with the guard's own words; the two
+-- checks follow unchanged.
 --
 -- Signature, LANGUAGE, volatility, SECURITY DEFINER, search_path and the ACL
 -- of every function here are unchanged; CREATE OR REPLACE keeps each ACL, so
@@ -56,6 +62,7 @@
 -- is false whether or not the invoice exists.
 --
 -- Lineage: can_manage_invoice 00397 → 00817;
+--   public.issue_invoice 00412 → 00817;
 --   _issue_invoice_pre_00412 00397 (public.issue_invoice wrapper; renamed by
 --   00412) → 00817; record_invoice_payment 00397 (wrapper) → 00817;
 --   void_invoice 00397 (wrapper) → 00817; add_invoice_billing_lines
@@ -87,7 +94,19 @@ AS $$
               project.studio_id = invoice_studio.id
               AND public.can_buy_for_project(project.id)
             )
-            OR public.is_org_admin_or_owner(invoice_studio.id)
+            -- is_org_admin_or_owner reads the seat only; 00556 keeps it blind
+            -- to organizations.status for roster management. Invoice
+            -- authority needs the studio itself active.
+            OR (
+              public.is_org_admin_or_owner(invoice_studio.id)
+              AND EXISTS (
+                SELECT 1
+                FROM public.organizations AS studio
+                WHERE studio.id = invoice_studio.id
+                  AND studio.type = 'design_studio'
+                  AND studio.status = 'active'
+              )
+            )
             OR EXISTS (
               SELECT 1
               FROM public.organization_members AS actor_membership
@@ -115,7 +134,8 @@ COMMENT ON FUNCTION public.can_manage_invoice(uuid) IS
   'Authenticated capability check shared by invoice-send, regenerate_invoice_link and get_invoice_link '
   '(00397, 00817 R191). True for the invoice''s designer; or, within the invoice''s studio '
   '(invoices.studio_id, else its project''s studio_id): the lead or team of a job in that studio '
-  '(can_buy_for_project), an active owner/admin of that studio, or an active non-guest member of that '
+  '(can_buy_for_project), an active owner/admin of that studio while it is an active design_studio, '
+  'or an active non-guest member of that '
   'active design_studio in which the designer also holds an active non-guest seat. With no studio, only '
   'the designer. False for a missing invoice and for anyone else alike.';
 
@@ -127,9 +147,9 @@ COMMENT ON FUNCTION public.can_manage_invoice(uuid) IS
 -- same for a missing invoice and a denied one. CREATE OR REPLACE keeps each
 -- ACL.
 
--- issue_invoice's guard: public.issue_invoice (00412) checks linked time and
--- the retainer, then calls _issue_invoice_pre_00412, the 00397 wrapper that
--- 00412 renamed. That body holds the guard.
+-- issue_invoice's guard: public.issue_invoice (00412, restated after this)
+-- checks linked time and the retainer, then calls _issue_invoice_pre_00412,
+-- the 00397 wrapper that 00412 renamed. That body holds the guard.
 CREATE OR REPLACE FUNCTION public._issue_invoice_pre_00412(
   p_invoice_id uuid,
   p_due_date date DEFAULT NULL
@@ -152,6 +172,48 @@ BEGIN
   END IF;
 
   RETURN public._issue_invoice_authorized_legacy_00397(p_invoice_id, p_due_date);
+END;
+$$;
+
+-- public.issue_invoice: the 00412 body, the latest, with can_manage_invoice
+-- asked before its linked-time and retainer checks. The refusal is the
+-- guard's above, word for word and P0001, as for a missing invoice; the
+-- checks after it are unchanged, and _issue_invoice_pre_00412 still locks the
+-- row and asks again.
+CREATE OR REPLACE FUNCTION public.issue_invoice(
+  p_invoice_id uuid,
+  p_due_date date DEFAULT NULL
+)
+RETURNS public.invoices
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NOT public.can_manage_invoice(p_invoice_id) THEN
+    RAISE EXCEPTION 'issue_invoice: invoice % not found or access denied', p_invoice_id;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.project_time_entries t
+    WHERE t.invoice_id = p_invoice_id AND t.billing_state <> 'authorized'
+  ) THEN
+    RAISE EXCEPTION 'issue_invoice: linked time includes entries pending authorization or nonbillable'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.project_time_entries t
+    JOIN public.project_billing_authorities a ON a.id = t.billing_authority_id
+    WHERE t.invoice_id = p_invoice_id
+      AND a.retainer_activation_policy = 'retainer_paid'
+      AND NOT EXISTS (
+        SELECT 1 FROM public.invoices ri WHERE ri.id = a.retainer_invoice_id
+          AND ri.status = 'paid' AND ri.amount_paid_cents >= ri.total_cents
+      )
+  ) THEN
+    RAISE EXCEPTION 'issue_invoice: signed retainer invoice must be paid first'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN public._issue_invoice_pre_00412(p_invoice_id, p_due_date);
 END;
 $$;
 

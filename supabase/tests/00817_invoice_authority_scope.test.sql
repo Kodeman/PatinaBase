@@ -23,11 +23,18 @@
 --   no studio    only the designer: C, D's peer in A, is refused
 --   departed     with D's B seat suspended, T (the job's team) and O (B's
 --                owner) are still admitted
+--   (h) C        issue_invoice on D's studio-B draft 106, which has pending
+--                linked time, refuses her exactly as for a missing invoice;
+--                D still meets the linked-time check after the guard
+--   (g) O        with studio B suspended, B's owner is refused; D, the
+--                designer, is still admitted, as before 00817
 --
 -- Negative control: with the 00817 bodies set aside (00397 and 00718), (a),
 -- the get_invoice_link refusal, the four money-write refusals, O on the
 -- studio-A invoice, the studio-less refusal and both departed-designer
--- admissions fail.
+-- admissions fail. With only the SQ-1278 F1 studio gate set aside, (g)'s
+-- owner refusal fails; with only F2 (00412's public.issue_invoice) set aside,
+-- (h)'s two outsider refusals fail.
 --
 -- Run: cd supabase && supabase test db tests/00817_invoice_authority_scope.test.sql
 --  or: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
@@ -36,7 +43,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(27);
+SELECT plan(33);
 
 -- ─── fixtures (as postgres) ────────────────────────────────────────────────
 
@@ -90,12 +97,45 @@ VALUES
   ('81700000-0000-4000-8000-000000000102', '81700000-0000-4000-8000-000000000002', '81700000-0000-4000-8000-0000000000a1', 'draft', 1000, 1000, 'studio-A invoice'),
   ('81700000-0000-4000-8000-000000000103', '81700000-0000-4000-8000-000000000003', '81700000-0000-4000-8000-0000000000a1', 'draft', 1000, 1000, 'studio-less invoice'),
   ('81700000-0000-4000-8000-000000000104', '81700000-0000-4000-8000-000000000001', '81700000-0000-4000-8000-0000000000a1', 'draft', 1000, 1000, 'studio-B draft D issues'),
-  ('81700000-0000-4000-8000-000000000105', '81700000-0000-4000-8000-000000000001', '81700000-0000-4000-8000-0000000000a1', 'draft', 1000, 1000, 'studio-B draft O issues');
+  ('81700000-0000-4000-8000-000000000105', '81700000-0000-4000-8000-000000000001', '81700000-0000-4000-8000-0000000000a1', 'draft', 1000, 1000, 'studio-B draft O issues'),
+  ('81700000-0000-4000-8000-000000000106', '81700000-0000-4000-8000-000000000001', '81700000-0000-4000-8000-0000000000a1', 'draft', 1000, 1000, 'studio-B draft with pending linked time');
 
 INSERT INTO public.invoice_line_items (invoice_id, kind, description, quantity, unit_amount_cents, amount_cents, sort_order)
 VALUES
   ('81700000-0000-4000-8000-000000000104', 'adhoc', 'Design fee', 1, 1000, 1000, 0),
-  ('81700000-0000-4000-8000-000000000105', 'adhoc', 'Design fee', 1, 1000, 1000, 0);
+  ('81700000-0000-4000-8000-000000000105', 'adhoc', 'Design fee', 1, 1000, 1000, 0),
+  ('81700000-0000-4000-8000-000000000106', 'adhoc', 'Design fee', 1, 1000, 1000, 0);
+
+-- Draft 106 carries linked time still pending authorization, the state
+-- issue_invoice's first check names. The classifier and the link guard would
+-- not write it, so this one insert runs with the table's triggers off.
+ALTER TABLE public.project_time_entries DISABLE TRIGGER USER;
+INSERT INTO public.project_time_entries (
+  id, project_id, studio_id, user_id, started_at, duration_minutes, billable,
+  invoice_id, billing_state, rate_source
+)
+VALUES (
+  '81700000-0000-4000-8000-000000000301', '81700000-0000-4000-8000-000000000001',
+  '81700000-0000-4000-8000-0000000000f2', '81700000-0000-4000-8000-0000000000a1',
+  now() - interval '2 hours', 60, true,
+  '81700000-0000-4000-8000-000000000106', 'pending_authorization', 'none'
+);
+ALTER TABLE public.project_time_entries ENABLE TRIGGER USER;
+
+-- issue_invoice's answer for one invoice id, with the id written <id>, so a
+-- refusal can be compared with the one for a missing invoice.
+CREATE FUNCTION pg_temp.issue_invoice_answer(p_invoice_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM public.issue_invoice(p_invoice_id, NULL);
+  RETURN 'issued';
+EXCEPTION WHEN OTHERS THEN
+  RETURN SQLSTATE || ' ' || replace(SQLERRM, p_invoice_id::text, '<id>');
+END;
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.issue_invoice_answer(uuid) TO authenticated;
 
 DO $$
 BEGIN
@@ -113,6 +153,13 @@ BEGIN
            WHERE id IN ('81700000-0000-4000-8000-000000000104', '81700000-0000-4000-8000-000000000105')
              AND studio_id = '81700000-0000-4000-8000-0000000000f2' AND status = 'draft') = 2,
          'SETUP: drafts 104 and 105 must carry studio B';
+  ASSERT (SELECT studio_id = '81700000-0000-4000-8000-0000000000f2' AND status = 'draft'
+            FROM public.invoices WHERE id = '81700000-0000-4000-8000-000000000106'),
+         'SETUP: draft 106 must carry studio B';
+  ASSERT EXISTS (SELECT 1 FROM public.project_time_entries
+                  WHERE invoice_id = '81700000-0000-4000-8000-000000000106'
+                    AND billing_state = 'pending_authorization'),
+         'SETUP: draft 106 must have linked time pending authorization';
   ASSERT NOT EXISTS (SELECT 1 FROM public.invoices WHERE id = '81700000-0000-4000-8000-0000000001ff'),
          'SETUP: the missing invoice id must not exist';
 END $$;
@@ -130,6 +177,18 @@ SELECT ok(
   'can_manage_invoice(uuid) stays a STABLE SECURITY DEFINER sql function returning boolean, search_path = public');
 SELECT ok(has_function_privilege('authenticated', 'public.can_manage_invoice(uuid)', 'EXECUTE'),
   'authenticated keeps EXECUTE on can_manage_invoice');
+SELECT ok(
+  (SELECT p.prosecdef
+          AND p.prolang = (SELECT l.oid FROM pg_language AS l WHERE l.lanname = 'plpgsql')
+          AND p.prorettype = 'public.invoices'::regtype
+          AND p.pronargdefaults = 1
+          AND p.proconfig = ARRAY['search_path=public, pg_temp']
+     FROM pg_proc AS p
+    WHERE p.oid = 'public.issue_invoice(uuid,date)'::regprocedure)
+  AND has_function_privilege('authenticated', 'public.issue_invoice(uuid,date)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.issue_invoice(uuid,date)', 'EXECUTE')
+  AND NOT has_function_privilege('service_role', 'public.issue_invoice(uuid,date)', 'EXECUTE'),
+  'issue_invoice(uuid, date) stays a SECURITY DEFINER plpgsql function, search_path = public, pg_temp, EXECUTE for authenticated only');
 
 -- ─── (f) anon ──────────────────────────────────────────────────────────────
 
@@ -268,6 +327,59 @@ SET LOCAL request.jwt.claims = '{"sub":"81700000-0000-4000-8000-0000000000a3","r
 
 SELECT is(public.can_manage_invoice('81700000-0000-4000-8000-000000000101'), true,
   'departed designer: the owner of studio B is still admitted');
+
+RESET ROLE;
+
+-- ─── (h) issue_invoice asks for authority before the billing checks ────────
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81700000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+
+SELECT is(pg_temp.issue_invoice_answer('81700000-0000-4000-8000-000000000106'),
+  'P0001 issue_invoice: invoice <id> not found or access denied',
+  '(h) issue_invoice refuses C on draft 106, which has pending linked time, with P0001 not found or access denied');
+SELECT is(pg_temp.issue_invoice_answer('81700000-0000-4000-8000-000000000106'),
+  pg_temp.issue_invoice_answer('81700000-0000-4000-8000-0000000001ff'),
+  '(h) C gets the same code and words on draft 106 as for an invoice that does not exist');
+
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81700000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+
+SELECT throws_ok($$SELECT public.issue_invoice('81700000-0000-4000-8000-000000000106', NULL)$$, '23514',
+  'issue_invoice: linked time includes entries pending authorization or nonbillable',
+  '(h) D, the designer, still meets the linked-time check after the guard');
+
+RESET ROLE;
+
+-- ─── (g) studio B suspended: its owner loses the invoice, D keeps it ───────
+-- D's B seat is active again, so suspension alone separates O from 00397's
+-- answer (_can_author_proposal admits a peer only in an active studio, and
+-- the designer herself whatever the studio's status).
+
+SET LOCAL request.jwt.claims = '{}';
+
+UPDATE public.organization_members
+   SET status = 'active'
+ WHERE id = '81700000-0000-4000-8000-0000000000e2';
+UPDATE public.organizations
+   SET status = 'suspended'
+ WHERE id = '81700000-0000-4000-8000-0000000000f2';
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81700000-0000-4000-8000-0000000000a3","role":"authenticated"}';
+
+SELECT is(public.can_manage_invoice('81700000-0000-4000-8000-000000000101'), false,
+  '(g) the owner of suspended studio B, who is not the designer, is refused on the studio-B invoice');
+
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81700000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+
+SELECT is(public.can_manage_invoice('81700000-0000-4000-8000-000000000101'), true,
+  '(g) D, the designer, is still admitted on her invoice in suspended studio B, as before 00817');
 
 RESET ROLE;
 
