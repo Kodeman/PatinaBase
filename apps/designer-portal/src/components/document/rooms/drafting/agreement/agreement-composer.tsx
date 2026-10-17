@@ -72,6 +72,7 @@ import { AUTHORITY_STANDING_LABEL, authorityStanding } from "./schedules";
 import {
   assessAgreementReadiness,
   blockersForPart,
+  partsNeedingAttention,
   documentBlockers,
   duplicateMoneyBlocker,
   BLANK_ROLE_BLOCKER,
@@ -1303,27 +1304,19 @@ export function AgreementComposer({
         }).format(retainerCents / 100)} retainer`
       : sendWord;
 
+  const sendHolds = partsNeedingAttention(readiness) > 0
+    ? Array.from(new Set(readiness.blockers.flatMap((blocker) => blocker.partId ? [blocker.partId] : []))).flatMap((partId) => {
+        const part = parts.find((candidate) => candidate.id === partId);
+        if (!part) return [];
+        return [{
+          id: partId,
+          target: () => window.document.getElementById(idsFor(part.partKey).foldAct),
+          label: 'Fix ' + part.kind + ' part',
+          reason: blockersForPart(readiness, partId).join(' '),
+        }];
+      })
+    : [];
   const sendHeld = !readiness.ready || refusedAtSave || readOnly;
-  /* Check 8 — activating a held act never fails silently: it writes the
-     reason into the one status region and moves focus to the part that is
-     unmet, or to the seam where the missing part would be added. */
-  const sayWhyHeld = () => {
-    // The blocker announced is the blocker whose part takes the focus: the
-    // two were different sentences, so the room named the fee floor and sent
-    // the caret to a part the fee floor had nothing to do with.
-    const reason =
-      heldOn?.message ??
-      roomBlockers[0] ??
-      readiness.blockers[0]?.message ??
-      localRefusal() ??
-      undefined;
-    if (reason) setAnnouncement(reason);
-    const target = heldOnPart
-      ? window.document.getElementById(idsFor(heldOnPart.partKey).foldAct)
-      : window.document.querySelector<HTMLElement>(".g-seam .g-act");
-    target?.focus();
-  };
-
   const preparedFor = recipientName
     ? recipientEmail
       ? `${recipientName} · ${recipientEmail}`
@@ -1530,7 +1523,7 @@ export function AgreementComposer({
                 disabled={sendHeld}
                 held
                 aria-describedby={sendHeld ? liveBlockerId : undefined}
-                onHeldActivate={sayWhyHeld}
+                holds={sendHolds.length ? sendHolds : undefined}
                 onClick={() => void reviewAndSend()}
               >
                 {sendLabel}

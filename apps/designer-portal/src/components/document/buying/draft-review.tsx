@@ -155,6 +155,7 @@ export function DraftReview({
 
   return (
     <section
+      id={`${fieldId}-recipient-fix`}
       aria-label={`${label}, drafted`}
       data-testid="draft-review"
       className="mt-2 flex flex-col gap-1.5 border-t border-[var(--color-pearl)] pt-2"
@@ -198,6 +199,7 @@ export function DraftReview({
               regionKey={regionKey}
               variant="primary"
               held={!recipient}
+              holdFix={!recipient && onAddAddress ? `${fieldId}-recipient-fix` : undefined}
               aria-describedby={recipient ? undefined : `${fieldId}-no-address`}
               disabled={pending || !recipient || blank}
               loading={update.isPending || send.isPending}
