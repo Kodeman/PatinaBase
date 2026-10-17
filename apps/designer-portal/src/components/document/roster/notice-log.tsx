@@ -59,6 +59,7 @@ export function NoticeLog({
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const heldId = useId();
+  const pickId = useId();
   const [note, setNote] = useState<string | null>(null);
   const logTold = useLogSiteAccessTold();
   const recordNotice = useRecordNotice();
@@ -98,7 +99,7 @@ export function NoticeLog({
                 – Everyone on the job has been told.
               </p>
             ) : (
-              <ul className="flex flex-col">
+              <ul id={pickId} className="flex flex-col">
                 {untold.map((seat) => (
                   <li key={seat.seatId}>
                     <button
@@ -192,6 +193,7 @@ export function NoticeLog({
                   recordNotice.isPending
                 }
                 aria-describedby={picked.length === 0 ? heldId : undefined}
+                holdFix={pickId}
                 loading={logTold.isPending || recordNotice.isPending}
                 loadingLabel="Writing…"
               >
