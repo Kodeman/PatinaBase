@@ -56,8 +56,9 @@ const firstFocusable = (el: HTMLElement) =>
     ? el
     : focusableWithin(el)[0];
 
-// How far fixed chrome outside the frame (the studio drawer) rises from the
-// viewport's foot.
+// How far fixed chrome beside the frame (the studio drawer) rises from the
+// viewport's foot. A fixed element holding the frame (the PO preview's
+// overlay) is the frame's own shell, not chrome.
 const footChrome = (host: HTMLElement) => {
   if (typeof document.elementFromPoint !== "function") return 0;
   let el = document.elementFromPoint(
@@ -66,7 +67,9 @@ const footChrome = (host: HTMLElement) => {
   );
   for (; el && !host.contains(el); el = el.parentElement) {
     if (window.getComputedStyle(el).position === "fixed")
-      return Math.max(0, window.innerHeight - el.getBoundingClientRect().top);
+      return el.contains(host)
+        ? 0
+        : Math.max(0, window.innerHeight - el.getBoundingClientRect().top);
   }
   return 0;
 };
@@ -349,12 +352,12 @@ export function HoldSpotlight({
         ? (barRef.current?.offsetHeight ?? 0) + (narrow ? 0 : 32)
         : 0;
       const height = Math.max(host.clientHeight, bottom + reserve);
-      // A taught frame that scrolls with the page docks its bar to the
-      // viewport's foot, above the fixed chrome there.
-      const dock =
-        lesson && !/auto|scroll/.test(hostStyle.overflowY)
-          ? -footChrome(host)
-          : inset;
+      // A frame that scrolls with the page docks its bar to the viewport's
+      // foot, above the fixed chrome there: its padding (the paper's landing
+      // reserve) is no edge the bar sticks to.
+      const dock = /auto|scroll/.test(hostStyle.overflowY)
+        ? inset
+        : -footChrome(host);
       const ids = found.map((entry) => entry.hold.id);
       const key = JSON.stringify([ids, windows, width, height, dock]);
       if (key !== geoKey) {
