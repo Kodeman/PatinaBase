@@ -1,36 +1,55 @@
 /**
- * The approved pricing snapshot and the post-approval change log (US-37 #4,
- * migration 00810). A client approval of a priced artifact (spec book or
- * budget) snapshots the job's FF&E client pricing; every later change to a
- * line's price fields is logged. Both readers are designer-team only (42501
- * otherwise). Line writes refresh them through invalidateFfeCaches.
+ * What the client approved and the post-approval change log (US-37 #4,
+ * migration 00810). A client approval records the lines she approved as she
+ * saw them: the approved spec book edition's frozen lines, or the one line a
+ * product-option decision placed (a budget approval records none). Every
+ * later change to a line's price fields is logged. Both readers are
+ * designer-team only (42501 otherwise). Line writes refresh them through
+ * invalidateFfeCaches, approval answers through invalidateProjectApprovalQueries,
+ * and both refresh while foregrounded like the approval reads.
  */
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { pricingApprovalKeys } from '../query-keys/pricing';
+import { approvalForegroundRefresh } from './use-project-approvals';
 
 const getSupabase = () => createBrowserClient();
 
-/** One line as the client approved it. */
+export type ProjectPricingApprovalSource = 'project_approval' | 'client_decision';
+
+/** One line as the client approved it: the item's own latest approval. */
 export interface ProjectPricingApprovalLine {
   itemId: string;
-  approvedUnitClientPriceCents: number | null;
+  /** The approval this line was approved in. */
+  approvalId: string;
+  approvalSource: ProjectPricingApprovalSource;
+  approvedAt: string;
+  approvedUnitClientPriceCents: number;
   approvedQuantity: number;
-  approvedLineTotalCents: number | null;
-  /** The line's unit price, quantity or total moved, or it left the job's live set. */
+  approvedLineTotalCents: number;
+  /** ISO 4217 code of the approved price. */
+  currency: string;
+  /** The line's unit price, quantity, total or currency moved, or it left the job's live set. */
   differs: boolean;
 }
 
-/** The job's latest approved pricing snapshot (get_project_pricing_approval). */
+/** The approved total in one currency; totals are never summed across currencies. */
+export interface ProjectPricingApprovalTotal {
+  currency: string;
+  cents: number;
+}
+
+/** What the client approved on the job (get_project_pricing_approval); the header is the latest approval. */
 export interface ProjectPricingApproval {
   approvalId: string;
-  approvalSource: 'project_approval';
+  approvalSource: ProjectPricingApprovalSource;
   /** The approved client_decisions id. */
   approvalRef: string;
   approvedAt: string;
   /** The approving client. */
   approvedBy: string | null;
-  approvedTotalCents: number;
+  /** One entry per currency of the approved lines, by currency code. */
+  approvedTotals: ProjectPricingApprovalTotal[];
   lines: ProjectPricingApprovalLine[];
 }
 
@@ -55,7 +74,7 @@ export interface FfePricingEvent {
   at: string;
 }
 
-/** The job's approved pricing snapshot, or null before any priced approval. */
+/** What the client approved on the job, or null before any approval. */
 export function useProjectPricingApproval(projectId: string | undefined) {
   return useQuery({
     queryKey: pricingApprovalKeys.approval(projectId ?? ''),
@@ -67,6 +86,7 @@ export function useProjectPricingApproval(projectId: string | undefined) {
       return (data ?? null) as unknown as ProjectPricingApproval | null;
     },
     enabled: !!projectId,
+    ...approvalForegroundRefresh,
   });
 }
 
@@ -83,5 +103,6 @@ export function useFfePricingEvents(projectId: string | undefined, itemId?: stri
       return (data ?? []) as unknown as FfePricingEvent[];
     },
     enabled: !!projectId,
+    ...approvalForegroundRefresh,
   });
 }

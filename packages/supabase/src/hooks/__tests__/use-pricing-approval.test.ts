@@ -26,12 +26,16 @@ vi.mock('@tanstack/react-query', () => ({
 // Import AFTER mocks.
 import { useFfePricingEvents, useProjectPricingApproval } from '../use-pricing-approval';
 import { invalidateFfeCaches } from '../use-procurement';
+import { invalidateProjectApprovalQueries } from '../use-project-approvals';
 import { pricingApprovalKeys } from '../../query-keys/pricing';
 
 interface QueryConfig<T> {
   queryKey: readonly unknown[];
   queryFn: () => Promise<T>;
   enabled: boolean;
+  refetchOnWindowFocus?: boolean;
+  refetchInterval?: number;
+  refetchIntervalInBackground?: boolean;
 }
 
 beforeEach(() => {
@@ -44,9 +48,19 @@ const APPROVAL = {
   approvalRef: 'd1',
   approvedAt: '2026-10-17T07:00:00Z',
   approvedBy: 'c1',
-  approvedTotalCents: 220000,
+  approvedTotals: [
+    { currency: 'EUR', cents: 60000 },
+    { currency: 'USD', cents: 160000 },
+  ],
   lines: [
-    { itemId: 'i1', approvedUnitClientPriceCents: 160000, approvedQuantity: 1, approvedLineTotalCents: 160000, differs: false },
+    {
+      itemId: 'i1', approvalId: 'a1', approvalSource: 'project_approval', approvedAt: '2026-10-17T07:00:00Z',
+      approvedUnitClientPriceCents: 160000, approvedQuantity: 1, approvedLineTotalCents: 160000, currency: 'USD', differs: false,
+    },
+    {
+      itemId: 'i2', approvalId: 'a1', approvalSource: 'project_approval', approvedAt: '2026-10-17T07:00:00Z',
+      approvedUnitClientPriceCents: 30000, approvedQuantity: 2, approvedLineTotalCents: 60000, currency: 'EUR', differs: false,
+    },
   ],
 };
 
@@ -112,6 +126,33 @@ describe('useFfePricingEvents', () => {
     const refusal = { code: '42501', message: 'project not found or access denied' };
     rpc.mockResolvedValueOnce({ data: null, error: refusal });
     await expect(config.queryFn()).rejects.toBe(refusal);
+  });
+});
+
+describe('foreground refresh', () => {
+  it('both readers refresh every 30s while foregrounded, like the approval reads', () => {
+    for (const config of [
+      useProjectPricingApproval('p1') as unknown as QueryConfig<unknown>,
+      useFfePricingEvents('p1', 'i1') as unknown as QueryConfig<unknown>,
+    ]) {
+      expect(config.refetchInterval).toBe(30_000);
+      expect(config.refetchIntervalInBackground).toBe(false);
+      expect(config.refetchOnWindowFocus).toBe(true);
+    }
+  });
+});
+
+describe('invalidateProjectApprovalQueries', () => {
+  it('refreshes the snapshot and every events query of the job after an approval answer', async () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    await invalidateProjectApprovalQueries(
+      { invalidateQueries } as unknown as QueryClient,
+      { projectId: 'p1', decisionId: 'd1' },
+    );
+    const keys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+
+    expect(keys).toContainEqual(pricingApprovalKeys.approval('p1'));
+    expect(keys).toContainEqual(pricingApprovalKeys.eventsForProject('p1'));
   });
 });
 

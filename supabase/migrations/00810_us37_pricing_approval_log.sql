@@ -1,72 +1,115 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00810 · US-37 #4 server: the approved pricing snapshot and the
---         post-approval change log (SQ-1106)
+-- 00810 · US-37 #4 server: what the client approved, and the post-approval
+--         change log (SQ-1106, repaired by SQ-1169 for Astra SQ-1168)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- When a client approves a priced artifact, the job's FF&E client pricing is
--- copied as "the approved snapshot". From then on, every change to a line's
--- price fields is logged: who changed it, when, which field, the old value and
--- the new value. That lets the studio see what moved since the client said
--- yes. Designer team only: no client role can read any of it (D6).
+-- When a client approves FF&E pricing, the lines and prices she approved are
+-- recorded as an approval. From then on, every change to a line's price fields
+-- is logged: who changed it, when, which field, the old value and the new
+-- value. That lets the studio see what moved since the client said yes.
+-- Designer team only: no client role can read any of it (D6). R185 records
+-- the amended D5 rule.
 --
--- ── The approval event (evidence) ─────────────────────────────────────────
--- The snapshot is taken in exactly one place,
--- _respond_project_approval_checked (latest body 00569:1250-1631, re-grafted
--- in §7). It fires on outcome 'approved', and only when the decision's
--- artifact is a spec_book_artifact or a budget_version:
---   * This is where a CLIENT approves a project artifact. Both entry points
---     reach it: respond_project_approval (00569, from the web approval-ask and
---     iOS ProjectApprovals) and apply_client_decision's project_artifact_v1
---     branch (00808).
---   * Those two kinds carry FF&E money. The client spec book prints each
---     line's client price (spec-book-render/render-model.ts). A budget_version
---     is a published money schedule pinned by a checkpoint fingerprint
---     (00422, 00463).
--- These events are deliberately left out:
---   * plan_issue approvals. Drawings carry no money; re-baselining on one
---     would silently accept price changes the client never saw.
---   * Furnishings authorization execution (00578). The signed prices are
---     already frozen in furnishing_authorization_items, which is the client's
---     authority. 00809 locks those lines afterwards ("Released lines change
---     through Record a change."). An authorization also names one wave, so a
---     job-wide snapshot would mark lines it never named as approved.
---   * Legacy proposal accept and activation. Client signing is retired (the
---     sign route answers 410), activation is a designer act (00763), and the
---     client approved proposal_items, not FF&E lines.
--- The snapshot copies the lines' live values at the moment of approval, not
--- values frozen when the edition was issued.
+-- ── What an approval records (F1, F3) ─────────────────────────────────────
+-- An approval records only what the client approved, never live FF&E state:
+--   * spec_book_artifact. The baseline is the approved edition's own frozen
+--     lines: spec_book_revisions.render_snapshot, the exact model the
+--     spec-book-render function printed the client PDF from (00380 freezes it
+--     at issue; triggers keep it immutable). A line is recorded when the
+--     client PDF printed its client price, as render-model.ts decides it: the
+--     line is visible to the client audience, and the frozen template's client
+--     profile allows clientPrice (no explicit allow list means the default,
+--     which does). Each recorded line keeps the frozen unit client price,
+--     the frozen quantity (1 when absent, as the renderer reads it), the line
+--     total that the edition implies (unit x quantity: the PDF prints the unit
+--     price and the quantity, and D4 makes the total their product) and the
+--     frozen currency (USD when absent, as the renderer reads it). Lines not
+--     in the edition, and lines whose price it did not print, are not marked
+--     approved.
+--   * An addendum edition prints only what changed against its base, by an
+--     audience hash the renderer computes, so its printed scope cannot be
+--     recovered here. Its approval records no lines.
+--   * budget_version. A budget checkpoint approves aggregate ranges, not line
+--     prices, so its approval records no lines.
+--   * client_decision (F4). apply_client_decision's product-option branch
+--     (non-blocking decision, priced product option; iOS selectOption) is the
+--     client's consent to ONE item. The approval records that decision's own
+--     line at the option's price, quantity and currency (options carry no
+--     currency; the branch writes the line in USD). An option without a price
+--     records no line. No other line is marked approved.
+-- An approval with no lines still starts the change log and still appears as
+-- the job's latest approval in the reader.
 --
--- ── Locks ─────────────────────────────────────────────────────────────────
--- snapshot_project_pricing only reads project_ffe_items; it takes no row
--- locks. ffe_pricing_approvals has no FK to projects, and
--- ffe_pricing_approval_lines has no FK to items, so a snapshot takes no KEY
--- SHARE on a job or an item. It does not call _ffe_lock_job_labels:
--- respond_project_approval holds the decision and the released items by then,
--- and taking the job lock after them would invert R182.
--- The log trigger inserts under the item row lock its own UPDATE already
--- holds. Its FK item_id -> project_ffe_items takes KEY SHARE on that same row,
--- which adds no new edge. ffe_pricing_events.project_id, approved_by and actor
--- have no FK, so a missing profile can never refuse an edit.
--- Approval rows outlive a hard-deleted job, the same tradeoff as story #21.
+-- ── Where the client approves (evidence) ──────────────────────────────────
+--   * _respond_project_approval_checked (latest body 00569:1250-1631,
+--     re-grafted in §7), on outcome 'approved' for a spec_book_artifact or a
+--     budget_version. Both Stage-2 entry points reach it: respond_project_
+--     approval (00569, web approval-ask and iOS ProjectApprovals) and
+--     apply_client_decision's project_artifact_v1 branch (00808).
+--   * _apply_client_decision_authorized (latest body 00808:1036-1348,
+--     re-grafted in §7b), in the non-blocking product-option branch.
+-- Left out, as before: plan_issue approvals (drawings carry no money);
+-- furnishings authorization execution (00578: its signed prices are frozen in
+-- furnishing_authorization_items and 00809 locks those lines); legacy
+-- proposal accept and activation (client signing is retired, activation is a
+-- designer act, and the client approved proposal_items, not FF&E lines).
+--
+-- ── Locks (F2) ────────────────────────────────────────────────────────────
+-- The log trigger writes only when the job already has an approval, so the
+-- first approval and a concurrent pricing edit must serialize: an edit lands
+-- wholly before the approval (and the approval, which reads frozen values,
+-- does not depend on it) or wholly after it (and is logged). Both sides take
+-- the job label lock _ffe_lock_job_labels(project) FIRST (R182):
+--   * _respond_project_approval_checked now takes it before its decision row
+--     lock (§7). respond_project_approval locks nothing before calling it, and
+--     apply_client_decision already holds it (00808 §9; re-entrant).
+--   * _apply_client_decision_authorized takes it first already (00808).
+--   * The 00809 line writers set_ffe_line_pricing, set_ffe_line_kind,
+--     resolve_ffe_cost_change and reset_ffe_line_markup now take it before
+--     their item row lock. That is an amendment to 00809 (unapplied on
+--     Strata), made because the review's repro runs through
+--     set_ffe_line_pricing and no other common boundary exists.
+--     reset_project_markups, supersede_project_selection and configured
+--     placement took it already (00809). The triggers run inside a writer.
+--   * Not changed: legacy line writers outside 00809, for example
+--     set_project_ffe_line_commercials (00692) and resolve_ack_line (00718),
+--     and raw service writes. They lock the line without the job lock, so an
+--     edit through them committed while a first approval is still open can go
+--     unlogged. The UI writes pricing through the 00809 writers only.
+-- Isolation: the trigger re-reads ffe_pricing_approvals under READ COMMITTED
+-- (PostgREST's level), after the writer's lock wait, so it sees an approval
+-- committed while the writer waited.
+-- A snapshot reads frozen rows and inserts its own rows. ffe_pricing_approvals
+-- has no FK to projects and ffe_pricing_approval_lines none to items, so it
+-- takes no KEY SHARE on a job or an item. The log trigger inserts under the
+-- item row lock its own UPDATE already holds; its FK item_id ->
+-- project_ffe_items takes KEY SHARE on that same row. ffe_pricing_events.
+-- project_id, approved_by and actor have no FK, so a missing profile can
+-- never refuse an edit. Approval rows outlive a hard-deleted job (story #21).
 --
 -- ── The change log ────────────────────────────────────────────────────────
 -- ffe_pricing_events is written by an AFTER UPDATE trigger, so it catches
 -- every writer: set_ffe_line_pricing, the line editors, the 00809 resets,
--- configuration placement and raw service writes. Because the trigger fires
--- AFTER, it sees the final values, including markup_percent as
--- zzz_ffe_markup_truth_trg recomputed it. It logs nothing until the job has a
--- snapshot. 00809's _ffe_pricing_audit (audit_logs) stays as it is.
+-- configuration placement, the decision feed-through and raw service writes.
+-- Because the trigger fires AFTER, it sees the final values, including
+-- markup_percent as zzz_ffe_markup_truth_trg recomputed it. It logs nothing
+-- until the job has an approval. 00809's _ffe_pricing_audit stays as it is.
 --
 -- ── API ───────────────────────────────────────────────────────────────────
 --   get_project_pricing_approval(p_project_id uuid) -> jsonb | null
 --     Team only (_ffe_require_studio_project, 42501 otherwise). NULL when the
---     job has no approval. Otherwise {approvalId, approvalSource,
---     approvalRef, approvedAt, approvedBy, approvedTotalCents,
---     lines:[{itemId, approvedUnitClientPriceCents, approvedQuantity,
---     approvedLineTotalCents, differs}]}.
---     differs is true when the line's unit price, quantity or line total is
---     now different from the snapshot, or when the line has left the job's
---     live set (removed, not selected, superseded, moved or deleted).
+--     job has no approval. Otherwise {approvalId, approvalSource, approvalRef,
+--     approvedAt, approvedBy} of the job's latest approval (approved_at, then
+--     id), approvedTotals [{currency, cents}] (one entry per currency, never
+--     summed across currencies) and lines. Each line is the item's own latest
+--     approved line across the job's approvals (an approval binds only the
+--     lines it names): {itemId, approvalId, approvalSource, approvedAt,
+--     approvedUnitClientPriceCents, approvedQuantity, approvedLineTotalCents,
+--     currency, differs}. differs is true when the live line's unit price,
+--     quantity, line total or currency is different from the approved value,
+--     or the line has left the job's live set (removed, not selected,
+--     superseded, moved or deleted). A line added after the approval is not
+--     in the lines.
 --   get_ffe_pricing_events(p_project_id uuid, p_item_id uuid DEFAULT NULL)
 --     -> jsonb array, newest first: [{id, itemId, field, oldValue, newValue,
 --     actorId, actorName, at}]. Team only (42501 otherwise).
@@ -84,7 +127,8 @@ CREATE TABLE IF NOT EXISTS public.ffe_pricing_approvals (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
   project_id uuid NOT NULL,
   approval_source text NOT NULL
-    CONSTRAINT ffe_pricing_approvals_source_ck CHECK (approval_source IN ('project_approval')),
+    CONSTRAINT ffe_pricing_approvals_source_ck
+    CHECK (approval_source IN ('project_approval', 'client_decision')),
   approval_ref uuid NOT NULL,
   approved_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   approved_by uuid
@@ -94,10 +138,10 @@ CREATE INDEX IF NOT EXISTS ffe_pricing_approvals_project_latest_idx
   ON public.ffe_pricing_approvals (project_id, approved_at DESC, id DESC);
 
 COMMENT ON TABLE public.ffe_pricing_approvals IS
-  'One row per client approval that snapshotted a job''s FF&E client pricing (00810). The latest row '
-  'per project_id (approved_at, then id) is the approved snapshot. approval_ref is the approved '
-  'client_decisions id for approval_source project_approval. No FK to projects or profiles (lock '
-  'order, 00810 header). Designer team read only.';
+  'One row per client approval of FF&E pricing (00810). approval_ref is the client_decisions id: a '
+  'Stage-2 approval for approval_source project_approval, a product-option decision for '
+  'client_decision. The latest row per project_id (approved_at, then id) is the job''s latest '
+  'approval. No FK to projects or profiles (lock order, 00810 header). Designer team read only.';
 
 -- ─── 2. ffe_pricing_approval_lines ──────────────────────────────────────────
 
@@ -105,16 +149,22 @@ CREATE TABLE IF NOT EXISTS public.ffe_pricing_approval_lines (
   approval_id uuid NOT NULL
     REFERENCES public.ffe_pricing_approvals(id) ON DELETE CASCADE,
   item_id uuid NOT NULL,
-  unit_client_cents integer,
+  unit_client_cents integer NOT NULL,
   quantity integer NOT NULL,
-  line_total_cents integer,
+  line_total_cents bigint NOT NULL,
+  currency text NOT NULL
+    CONSTRAINT ffe_pricing_approval_lines_currency_ck CHECK (currency ~ '^[A-Z]{3}$'),
   PRIMARY KEY (approval_id, item_id)
 );
 
+CREATE INDEX IF NOT EXISTS ffe_pricing_approval_lines_item_idx
+  ON public.ffe_pricing_approval_lines (item_id);
+
 COMMENT ON TABLE public.ffe_pricing_approval_lines IS
-  'The FF&E lines as the client approved them (00810): unit client price, quantity and line total of '
-  'every live line (not removed, not not_selected, not superseded) at the approval. item_id has no FK, '
-  'so a snapshot takes no lock on an item. Designer team read only.';
+  'The FF&E lines as the client approved them (00810): unit client price, quantity, line total and '
+  'currency, read from the approved artifact''s frozen lines or the approved option, never from live '
+  'FF&E. Only the lines the approval names. item_id has no FK, so recording one takes no lock on an '
+  'item. Designer team read only.';
 
 -- ─── 3. ffe_pricing_events ──────────────────────────────────────────────────
 
@@ -203,6 +253,7 @@ GRANT SELECT ON public.ffe_pricing_events TO authenticated;
 GRANT ALL ON public.ffe_pricing_events TO service_role;
 
 -- ─── 5. snapshot_project_pricing ────────────────────────────────────────────
+-- The caller holds the job label lock (00810 header, Locks).
 
 CREATE OR REPLACE FUNCTION public.snapshot_project_pricing(
   p_project_id uuid,
@@ -216,28 +267,130 @@ SET search_path TO 'public', 'pg_temp'
 AS $$
 DECLARE
   v_approval_id uuid;
+  v_snapshot jsonb;
+  v_profiles jsonb;
+  v_allow jsonb;
 BEGIN
   INSERT INTO public.ffe_pricing_approvals (project_id, approval_source, approval_ref, approved_by)
   VALUES (p_project_id, p_source, p_ref, auth.uid())
   RETURNING id INTO v_approval_id;
 
-  INSERT INTO public.ffe_pricing_approval_lines (
-    approval_id, item_id, unit_client_cents, quantity, line_total_cents
-  )
-  SELECT v_approval_id, item.id, item.unit_price_cents, item.quantity, item.line_total_cents
-  FROM public.project_ffe_items AS item
-  WHERE item.project_id = p_project_id
-    AND item.removed_at IS NULL
-    AND item.design_disposition NOT IN ('not_selected', 'superseded');
+  IF p_source = 'project_approval' THEN
+    -- The approved client edition's frozen render model; none for a budget,
+    -- a drawing set or an addendum (00810 header).
+    SELECT revision.render_snapshot INTO v_snapshot
+    FROM public.project_approval_artifacts AS approval_artifact
+    JOIN public.spec_book_artifacts AS artifact ON artifact.id = approval_artifact.source_id
+    JOIN public.spec_book_revisions AS revision ON revision.id = artifact.revision_id
+    JOIN public.spec_books AS book ON book.id = revision.spec_book_id
+    WHERE approval_artifact.decision_id = p_ref
+      AND approval_artifact.project_id = p_project_id
+      AND approval_artifact.source_kind = 'spec_book_artifact'
+      AND artifact.audience = 'client'
+      AND book.project_id = p_project_id
+      AND revision.status = 'issued'
+      AND revision.issue_type <> 'addendum';
+
+    IF v_snapshot IS NOT NULL THEN
+      -- render-model.ts audienceAllowTokens: the frozen template's client
+      -- profile; an explicit allow list replaces the default, which prints
+      -- the client price.
+      v_profiles := CASE
+        WHEN jsonb_typeof(v_snapshot #> '{template,audienceProfiles}') = 'object'
+          THEN v_snapshot #> '{template,audienceProfiles}'
+        WHEN jsonb_typeof(v_snapshot #> '{template,audience_profiles}') = 'object'
+          THEN v_snapshot #> '{template,audience_profiles}'
+      END;
+      v_allow := CASE
+        WHEN jsonb_typeof(v_profiles #> '{client,allow}') = 'array'
+          THEN v_profiles #> '{client,allow}'
+      END;
+
+      IF v_allow IS NULL OR v_allow ? 'clientPrice' OR v_allow ? '*' THEN
+        INSERT INTO public.ffe_pricing_approval_lines (
+          approval_id, item_id, unit_client_cents, quantity, line_total_cents, currency
+        )
+        SELECT DISTINCT ON (frozen.item_id)
+          v_approval_id, frozen.item_id, frozen.unit_cents, frozen.quantity,
+          frozen.unit_cents::bigint * frozen.quantity, frozen.currency
+        FROM (
+          SELECT
+            line.item_key::uuid AS item_id,
+            round((line.price #>> '{}')::numeric)::integer AS unit_cents,
+            COALESCE(round((NULLIF(line.entry->'quantity', 'null'::jsonb) #>> '{}')::numeric)::integer, 1)
+              AS quantity,
+            CASE WHEN upper(line.pricing->>'currency') ~ '^[A-Z]{3}$'
+              THEN upper(line.pricing->>'currency') ELSE 'USD' END AS currency,
+            line.ordinality
+          FROM (
+            SELECT
+              entry.value AS entry,
+              entry.ordinality,
+              COALESCE(entry.value->>'id', entry.value->>'ffeItemId', entry.value->>'ffe_item_id') AS item_key,
+              pricing.value AS pricing,
+              COALESCE(
+                NULLIF(pricing.value->'clientPriceCents', 'null'::jsonb),
+                NULLIF(pricing.value->'client_price_cents', 'null'::jsonb),
+                NULLIF(pricing.value->'unitPriceCents', 'null'::jsonb),
+                NULLIF(pricing.value->'unit_price_cents', 'null'::jsonb)
+              ) AS price,
+              COALESCE(NULLIF(entry.value->'audiences', 'null'::jsonb),
+                       NULLIF(entry.value->'includedAudiences', 'null'::jsonb),
+                       NULLIF(entry.value->'included_audiences', 'null'::jsonb)) AS audiences,
+              COALESCE(NULLIF(entry.value->'audienceVisibility', 'null'::jsonb),
+                       NULLIF(entry.value->'audience_visibility', 'null'::jsonb),
+                       NULLIF(entry.value->'visibility', 'null'::jsonb)) AS visibility
+            FROM unnest(ARRAY['items', 'allowances', 'tbd']) AS section(key)
+            CROSS JOIN LATERAL jsonb_array_elements(
+              CASE WHEN jsonb_typeof(v_snapshot->section.key) = 'array'
+                THEN v_snapshot->section.key ELSE '[]'::jsonb END
+            ) WITH ORDINALITY AS entry(value, ordinality)
+            CROSS JOIN LATERAL (
+              SELECT CASE WHEN jsonb_typeof(entry.value->'pricing') = 'object'
+                THEN entry.value->'pricing' ELSE entry.value END AS value
+            ) AS pricing
+          ) AS line
+          WHERE line.item_key ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            AND jsonb_typeof(line.price) = 'number'
+            -- render-model.ts itemVisibleToAudience, for the client.
+            AND CASE
+              WHEN jsonb_typeof(line.audiences) = 'array' THEN line.audiences ? 'client'
+              WHEN jsonb_typeof(line.visibility->'client') = 'boolean'
+                THEN (line.visibility->>'client')::boolean
+              ELSE true
+            END
+        ) AS frozen
+        ORDER BY frozen.item_id, frozen.ordinality;
+      END IF;
+    END IF;
+
+  ELSIF p_source = 'client_decision' THEN
+    -- The one line this product-option decision placed, at the option's own
+    -- price and quantity. Options carry no currency; the branch writes USD.
+    INSERT INTO public.ffe_pricing_approval_lines (
+      approval_id, item_id, unit_client_cents, quantity, line_total_cents, currency
+    )
+    SELECT v_approval_id, item.id, option.price, COALESCE(option.quantity, 1),
+           option.price::bigint * COALESCE(option.quantity, 1), 'USD'
+    FROM public.client_decision_options AS option
+    JOIN public.project_ffe_items AS item
+      ON item.source_decision_id = option.decision_id
+     AND item.project_id = p_project_id
+    WHERE option.decision_id = p_ref
+      AND option.selected
+      AND option.price IS NOT NULL;
+  END IF;
 
   RETURN v_approval_id;
 END;
 $$;
 
 COMMENT ON FUNCTION public.snapshot_project_pricing(uuid, text, uuid) IS
-  'Records the job''s approved FF&E pricing (00810): an ffe_pricing_approvals row (approved_by = '
-  'auth.uid()) and an ffe_pricing_approval_lines row per live line. Reads items without locking them. '
-  'Internal: called by _respond_project_approval_checked on a priced approval.';
+  'Records a client approval of FF&E pricing (00810): an ffe_pricing_approvals row (approved_by = '
+  'auth.uid()) and a line per item the client approved. project_approval: the approved client spec '
+  'edition''s frozen render model, only lines whose client price it printed; no lines for a budget or '
+  'an addendum. client_decision: the decision''s own line at the selected option''s price. Never '
+  'reads live FF&E prices. Internal; the caller holds the job label lock.';
 
 REVOKE ALL ON FUNCTION public.snapshot_project_pricing(uuid, text, uuid) FROM PUBLIC, anon, authenticated;
 
@@ -281,7 +434,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.ffe_pricing_events_log() IS
-  'AFTER UPDATE on project_ffe_items (00810): when the job has an approved pricing snapshot, writes one '
+  'AFTER UPDATE on project_ffe_items (00810): when the job has a pricing approval, writes one '
   'ffe_pricing_events row per changed unit_price_cents, quantity, line_total_cents, markup_percent, '
   'trade_price_cents or line_kind, with auth.uid() as actor. Logs nothing before the first approval.';
 
@@ -301,9 +454,10 @@ CREATE TRIGGER ffe_pricing_events_log_trg
   )
   EXECUTE FUNCTION public.ffe_pricing_events_log();
 
--- ─── 7. The approval path takes the snapshot ────────────────────────────────
--- Re-grafted from the latest body (00569:1250-1631). The only change is the
--- gated PERFORM inside the approved block, after the released items.
+-- ─── 7. The Stage-2 approval path records what was approved ─────────────────
+-- Re-grafted from the latest body (00569:1250-1631). The only changes: the
+-- job label lock before the decision row lock (F2), and the gated PERFORM
+-- inside the approved block, after the released items.
 
 CREATE OR REPLACE FUNCTION public._respond_project_approval_checked(
   p_decision_id uuid,
@@ -387,6 +541,13 @@ BEGIN
     RAISE EXCEPTION 'a Stage-2 signature requires a consent method'
       USING ERRCODE = 'check_violation';
   END IF;
+
+  -- 00810 (SQ-1169 F2, R182): the job label lock comes before the decision
+  -- row lock, through an unlocked read of the decision's job. The line
+  -- pricing writers take it first too, so an edit lands wholly before or
+  -- wholly after the approval this answer may record.
+  PERFORM public._ffe_lock_job_labels(decision.project_id)
+  FROM public.client_decisions AS decision WHERE decision.id = p_decision_id;
 
   SELECT * INTO v_decision
   FROM public.client_decisions AS decision
@@ -582,7 +743,7 @@ BEGIN
     INTO v_released_names
     FROM released
     WHERE NULLIF(btrim(released.name), '') IS NOT NULL;
-    -- 00810: a priced approval records the job's approved FF&E pricing.
+    -- 00810: a priced approval records what the client approved.
     IF v_artifact.source_kind IN ('spec_book_artifact', 'budget_version') THEN
       PERFORM public.snapshot_project_pricing(v_decision.project_id, 'project_approval', p_decision_id);
     END IF;
@@ -692,6 +853,329 @@ REVOKE ALL ON FUNCTION public._respond_project_approval_checked(
   uuid, text, uuid, timestamptz, text, text, text
 ) FROM PUBLIC, anon, authenticated, service_role;
 
+-- ─── 7b. The product-option consent records its one line (F4) ───────────────
+-- Re-grafted from the latest body (00808:1036-1348). The only change: the
+-- PERFORM after the non-blocking product-option branch places its line. The
+-- body already takes the job label lock first (00808). CREATE OR REPLACE
+-- keeps its grants.
+
+CREATE OR REPLACE FUNCTION public._apply_client_decision_authorized(
+  p_decision_id uuid,
+  p_selected_option_id uuid,
+  p_actor uuid,
+  p_client_consent_method text DEFAULT NULL,
+  p_client_signature text DEFAULT NULL,
+  p_client_note text DEFAULT NULL,
+  p_quantity integer DEFAULT NULL
+)
+RETURNS public.client_decisions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_decision public.client_decisions%ROWTYPE;
+  v_option public.client_decision_options%ROWTYPE;
+  v_receipt public.project_approval_action_receipts%ROWTYPE;
+  v_selected_option_id uuid;
+  v_selected_outcome text;
+  v_requested_signature text := NULLIF(
+    btrim(COALESCE(p_client_signature, '')), ''
+  );
+  v_stored_signature text;
+  v_room_id uuid;
+  v_trade_price integer;
+  v_markup numeric(5,2);
+BEGIN
+  -- 00808 (SQ-1137): the job label lock comes before the decision row lock,
+  -- through an unlocked read of the decision's job. It is unconditional: whether
+  -- this answer writes an item (status, blocking, the chosen option) is only
+  -- settled under the decision row lock.
+  PERFORM public._ffe_lock_job_labels(decision.project_id)
+  FROM public.client_decisions AS decision WHERE decision.id = p_decision_id;
+
+  SELECT * INTO v_decision
+  FROM public.client_decisions
+  WHERE id = p_decision_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'decision % not found', p_decision_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  IF v_decision.approval_contract = 'project_artifact_v1' THEN
+    IF p_actor IS DISTINCT FROM auth.uid()
+       OR p_client_note IS NOT NULL
+       OR (p_quantity IS NOT NULL AND p_quantity <> 1)
+    THEN
+      RAISE EXCEPTION
+        'Stage-2 installed option response cannot carry comment or quantity evidence'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF v_decision.status = 'responded' THEN
+      SELECT option.id, option.approval_outcome
+      INTO v_selected_option_id, v_selected_outcome
+      FROM public.client_decision_options AS option
+      WHERE option.decision_id = p_decision_id
+        AND option.selected
+      ORDER BY option.id
+      LIMIT 1;
+      IF v_selected_option_id IS DISTINCT FROM p_selected_option_id THEN
+        RAISE EXCEPTION 'decision % was already resolved with another option',
+          p_decision_id
+          USING ERRCODE = 'serialization_failure';
+      END IF;
+
+      SELECT * INTO v_receipt
+      FROM public.project_approval_action_receipts AS receipt
+      WHERE receipt.decision_id = p_decision_id
+        AND receipt.action_kind = 'responded'
+        AND receipt.idempotency_key =
+            'installed-option:' || p_selected_option_id::text;
+      v_stored_signature := NULLIF(
+        btrim(COALESCE(v_decision.client_signature, '')), ''
+      );
+      IF v_receipt.id IS NULL
+         OR v_receipt.actor_id IS DISTINCT FROM p_actor
+         OR v_receipt.project_id IS DISTINCT FROM v_decision.project_id
+         OR v_receipt.result->>'decisionId' IS DISTINCT FROM p_decision_id::text
+         OR v_receipt.result->>'projectId' IS DISTINCT FROM v_decision.project_id::text
+         OR v_receipt.result->>'optionId' IS DISTINCT FROM p_selected_option_id::text
+         OR v_receipt.result->>'outcome' IS DISTINCT FROM v_selected_outcome
+         OR v_decision.selected_by IS DISTINCT FROM p_actor
+         OR v_decision.answered_by IS DISTINCT FROM p_actor
+         OR v_decision.answer IS DISTINCT FROM v_selected_outcome
+         OR p_client_consent_method IS DISTINCT FROM
+            v_decision.client_consent_method
+         OR v_requested_signature IS DISTINCT FROM v_stored_signature
+      THEN
+        RAISE EXCEPTION
+          'installed Stage-2 response replay conflicts with immutable evidence'
+          USING ERRCODE = 'unique_violation';
+      END IF;
+      RETURN v_decision;
+    END IF;
+
+    PERFORM public._respond_project_approval_checked(
+      p_decision_id, NULL, p_selected_option_id, v_decision.updated_at,
+      'installed-option:' || p_selected_option_id::text,
+      p_client_consent_method, p_client_signature
+    );
+    SELECT * INTO STRICT v_decision
+    FROM public.client_decisions
+    WHERE id = p_decision_id;
+    RETURN v_decision;
+  END IF;
+
+  -- Deterministic replay: repeating the same winning option returns the same
+  -- terminal row; trying to overwrite a different winner is a stale conflict.
+  IF v_decision.status = 'responded' THEN
+    SELECT id INTO v_selected_option_id
+    FROM public.client_decision_options
+    WHERE decision_id = p_decision_id AND selected = true
+    ORDER BY id
+    LIMIT 1;
+    IF v_selected_option_id IS NOT DISTINCT FROM p_selected_option_id THEN
+      PERFORM public._enqueue_decision_notification(
+        p_decision_id, 'decision_resolved'
+      );
+      RETURN v_decision;
+    END IF;
+    RAISE EXCEPTION 'decision % was already resolved with another option', p_decision_id
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+
+  IF v_decision.status <> 'pending' THEN
+    RAISE EXCEPTION 'decision % cannot be applied from status %',
+      p_decision_id, v_decision.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM 1
+  FROM public.client_decision_options
+  WHERE decision_id = p_decision_id
+  ORDER BY id
+  FOR UPDATE;
+
+  SELECT * INTO v_option
+  FROM public.client_decision_options
+  WHERE id = p_selected_option_id
+    AND decision_id = p_decision_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'option % does not belong to decision %',
+      p_selected_option_id, p_decision_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_quantity IS NOT NULL AND p_quantity < 1 THEN
+    RAISE EXCEPTION 'decision option quantity must be at least 1'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF p_client_consent_method IS NOT NULL
+     AND p_client_consent_method NOT IN ('electronic_signature', 'click_through')
+  THEN
+    RAISE EXCEPTION 'invalid client consent method %', p_client_consent_method
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF p_client_consent_method = 'electronic_signature'
+     AND char_length(btrim(COALESCE(p_client_signature, ''))) < 2
+  THEN
+    RAISE EXCEPTION 'an electronic signature of at least 2 characters is required'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config('app.client_decision_write_id', p_decision_id::text, true);
+
+  UPDATE public.client_decision_options
+  SET selected = (id = p_selected_option_id),
+      client_note = CASE WHEN id = p_selected_option_id
+        THEN COALESCE(p_client_note, client_note) ELSE client_note END,
+      quantity = CASE WHEN id = p_selected_option_id
+        THEN COALESCE(p_quantity, quantity) ELSE quantity END
+  WHERE decision_id = p_decision_id;
+
+  SELECT * INTO v_option
+  FROM public.client_decision_options
+  WHERE id = p_selected_option_id;
+
+  UPDATE public.client_decisions
+  SET status = 'responded',
+      responded_at = now(),
+      selected_by = p_actor,
+      client_consent_method = p_client_consent_method,
+      client_signature = CASE WHEN p_client_consent_method IS NULL
+        THEN NULL ELSE NULLIF(btrim(COALESCE(p_client_signature, '')), '') END,
+      client_consented_at = CASE WHEN p_client_consent_method IS NULL
+        THEN NULL ELSE now() END,
+      updated_at = now()
+  WHERE id = p_decision_id
+  RETURNING * INTO v_decision;
+
+  UPDATE public.project_ffe_items
+  SET blocked = false,
+      blocked_reason = NULL,
+      blocked_by_decision_id = NULL,
+      last_status_change_at = now(),
+      updated_at = now()
+  WHERE blocked_by_decision_id = p_decision_id
+    AND project_id = v_decision.project_id;
+
+  -- Preserve 00175/00185's one-line-per-decision dual-pricing feed-through.
+  IF v_decision.project_id IS NOT NULL
+     AND v_option.product_id IS NOT NULL
+     AND v_decision.blocking_status = 'non_blocking'
+  THEN
+    v_room_id := (
+      SELECT room.id
+      FROM public.project_rooms AS room
+      WHERE room.id = v_decision.room_id
+        AND room.project_id = v_decision.project_id
+    );
+
+    SELECT product.price_trade INTO v_trade_price
+    FROM public.products AS product
+    WHERE product.id = v_option.product_id;
+
+    IF v_trade_price IS NULL OR v_trade_price < 0 THEN
+      v_trade_price := GREATEST(COALESCE(v_option.price, 0), 0);
+      v_markup := 0;
+    ELSIF v_trade_price > 0
+          AND COALESCE(v_option.price, 0) > v_trade_price
+    THEN
+      v_markup := LEAST(
+        round(((COALESCE(v_option.price, 0)::numeric / v_trade_price) - 1) * 100, 2),
+        999.99
+      );
+    ELSE
+      v_markup := 0;
+    END IF;
+
+    -- 00763 (F18): the scope follows the room. With no room, a 'room' line
+    -- becomes 'unassigned'; 'throughout' and 'unassigned' stay as they are.
+    UPDATE public.project_ffe_items
+    SET product_id = v_option.product_id,
+        name = v_option.name,
+        project_room_id = v_room_id,
+        assignment_scope = CASE
+          WHEN v_room_id IS NOT NULL THEN 'room'
+          WHEN assignment_scope = 'room' THEN 'unassigned'
+          ELSE assignment_scope
+        END,
+        quantity = COALESCE(v_option.quantity, 1),
+        unit_price_cents = COALESCE(v_option.price, 0),
+        trade_price_cents = v_trade_price,
+        markup_percent = v_markup,
+        line_total_cents = COALESCE(v_option.price, 0)
+          * COALESCE(v_option.quantity, 1),
+        currency = 'USD',
+        updated_at = now()
+    WHERE source_decision_id = p_decision_id;
+
+    IF NOT FOUND THEN
+      INSERT INTO public.project_ffe_items (
+        project_id, project_room_id, assignment_scope, product_id, source_decision_id,
+        name, item_type, status, quantity, unit_price_cents,
+        trade_price_cents, markup_percent, line_total_cents
+      ) VALUES (
+        v_decision.project_id, v_room_id,
+        CASE WHEN v_room_id IS NOT NULL THEN 'room' ELSE 'unassigned' END,
+        v_option.product_id, p_decision_id,
+        v_option.name, 'fixed', 'specified', COALESCE(v_option.quantity, 1),
+        COALESCE(v_option.price, 0), v_trade_price, v_markup,
+        COALESCE(v_option.price, 0) * COALESCE(v_option.quantity, 1)
+      );
+    END IF;
+    -- 00810 (SQ-1169 F4): the client approved this one line at the option's price.
+    PERFORM public.snapshot_project_pricing(v_decision.project_id, 'client_decision', p_decision_id);
+
+    IF jsonb_typeof(v_option.selection_snapshot) = 'array'
+       AND jsonb_array_length(v_option.selection_snapshot) > 0
+    THEN
+      UPDATE public.project_ffe_specs AS spec
+      SET material = COALESCE((
+            SELECT string_agg(chosen.selection->>'valueLabel', ', '
+                              ORDER BY chosen.ordinality)
+            FROM jsonb_array_elements(v_option.selection_snapshot)
+                 WITH ORDINALITY AS chosen(selection, ordinality)
+            WHERE lower(chosen.selection->>'groupCode') = 'material'
+          ), spec.material),
+          finish = COALESCE((
+            SELECT string_agg(chosen.selection->>'valueLabel', ', '
+                              ORDER BY chosen.ordinality)
+            FROM jsonb_array_elements(v_option.selection_snapshot)
+                 WITH ORDINALITY AS chosen(selection, ordinality)
+            WHERE lower(chosen.selection->>'groupCode') = 'finish'
+          ), spec.finish),
+          color_fabric = COALESCE((
+            SELECT string_agg(chosen.selection->>'valueLabel', ', '
+                              ORDER BY chosen.ordinality)
+            FROM jsonb_array_elements(v_option.selection_snapshot)
+                 WITH ORDINALITY AS chosen(selection, ordinality)
+            WHERE lower(chosen.selection->>'groupCode')
+                  IN ('color', 'colour', 'fabric', 'color_fabric', 'upholstery')
+          ), spec.color_fabric),
+          updated_at = now()
+      WHERE spec.ffe_item_id IN (
+              SELECT item.id
+              FROM public.project_ffe_items AS item
+              WHERE item.source_decision_id = p_decision_id
+                AND item.project_id = v_decision.project_id
+            )
+        AND spec.configuration_locked_at IS NULL;
+    END IF;
+  END IF;
+
+  PERFORM set_config('app.client_decision_write_id', '', true);
+  PERFORM public._enqueue_decision_notification(
+    p_decision_id, 'decision_resolved'
+  );
+  RETURN v_decision;
+END;
+$$;
+
 -- ─── 8. Readers ─────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.get_project_pricing_approval(p_project_id uuid)
@@ -703,7 +1187,7 @@ AS $$
 DECLARE
   v_approval public.ffe_pricing_approvals%ROWTYPE;
   v_lines jsonb;
-  v_total bigint;
+  v_totals jsonb;
 BEGIN
   PERFORM public._ffe_require_studio_project(p_project_id);
 
@@ -716,33 +1200,63 @@ BEGIN
     RETURN NULL;
   END IF;
 
+  -- Each item's own latest approved line: an approval binds only the lines
+  -- it names, so a later approval without lines keeps the earlier ones.
+  WITH latest AS (
+    SELECT DISTINCT ON (line.item_id)
+      line.item_id, line.approval_id, line.unit_client_cents, line.quantity,
+      line.line_total_cents, line.currency, approval.approval_source, approval.approved_at
+    FROM public.ffe_pricing_approval_lines AS line
+    JOIN public.ffe_pricing_approvals AS approval ON approval.id = line.approval_id
+    WHERE approval.project_id = p_project_id
+    ORDER BY line.item_id, approval.approved_at DESC, approval.id DESC
+  )
   SELECT
     COALESCE(
-      jsonb_agg(
-        jsonb_build_object(
-          'itemId', line.item_id,
-          'approvedUnitClientPriceCents', line.unit_client_cents,
-          'approvedQuantity', line.quantity,
-          'approvedLineTotalCents', line.line_total_cents,
-          'differs', (
-            item.id IS NULL
-            OR item.project_id IS DISTINCT FROM v_approval.project_id
-            OR item.removed_at IS NOT NULL
-            OR item.design_disposition IN ('not_selected', 'superseded')
-            OR item.unit_price_cents IS DISTINCT FROM line.unit_client_cents
-            OR item.quantity IS DISTINCT FROM line.quantity
-            OR item.line_total_cents IS DISTINCT FROM line.line_total_cents
+      (
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'itemId', latest.item_id,
+            'approvalId', latest.approval_id,
+            'approvalSource', latest.approval_source,
+            'approvedAt', latest.approved_at,
+            'approvedUnitClientPriceCents', latest.unit_client_cents,
+            'approvedQuantity', latest.quantity,
+            'approvedLineTotalCents', latest.line_total_cents,
+            'currency', latest.currency,
+            'differs', (
+              item.id IS NULL
+              OR item.project_id IS DISTINCT FROM p_project_id
+              OR item.removed_at IS NOT NULL
+              OR item.design_disposition IN ('not_selected', 'superseded')
+              OR item.unit_price_cents IS DISTINCT FROM latest.unit_client_cents
+              OR item.quantity IS DISTINCT FROM latest.quantity
+              OR item.line_total_cents IS DISTINCT FROM latest.line_total_cents
+              OR item.currency IS DISTINCT FROM latest.currency
+            )
           )
+          ORDER BY latest.item_id
         )
-        ORDER BY line.item_id
+        FROM latest
+        LEFT JOIN public.project_ffe_items AS item ON item.id = latest.item_id
       ),
       '[]'::jsonb
     ),
-    COALESCE(sum(line.line_total_cents::bigint), 0)
-  INTO v_lines, v_total
-  FROM public.ffe_pricing_approval_lines AS line
-  LEFT JOIN public.project_ffe_items AS item ON item.id = line.item_id
-  WHERE line.approval_id = v_approval.id;
+    COALESCE(
+      (
+        SELECT jsonb_agg(
+          jsonb_build_object('currency', total.currency, 'cents', total.cents)
+          ORDER BY total.currency
+        )
+        FROM (
+          SELECT latest.currency, sum(latest.line_total_cents)::bigint AS cents
+          FROM latest
+          GROUP BY latest.currency
+        ) AS total
+      ),
+      '[]'::jsonb
+    )
+  INTO v_lines, v_totals;
 
   RETURN jsonb_build_object(
     'approvalId', v_approval.id,
@@ -750,18 +1264,20 @@ BEGIN
     'approvalRef', v_approval.approval_ref,
     'approvedAt', v_approval.approved_at,
     'approvedBy', v_approval.approved_by,
-    'approvedTotalCents', v_total,
+    'approvedTotals', v_totals,
     'lines', v_lines
   );
 END;
 $$;
 
 COMMENT ON FUNCTION public.get_project_pricing_approval(uuid) IS
-  'The job''s approved FF&E pricing snapshot (00810), for the designer team only (42501 otherwise): NULL '
-  'before any approval; else {approvalId, approvalSource, approvalRef, approvedAt, approvedBy, '
-  'approvedTotalCents, lines:[{itemId, approvedUnitClientPriceCents, approvedQuantity, '
-  'approvedLineTotalCents, differs}]}. differs is true when the live line''s unit price, quantity or '
-  'total no longer equals the snapshot, or the line left the job''s live set.';
+  'What the client approved on the job (00810), for the designer team only (42501 otherwise): NULL '
+  'before any approval; else {approvalId, approvalSource, approvalRef, approvedAt, approvedBy} of the '
+  'latest approval, approvedTotals:[{currency, cents}] (never summed across currencies) and lines: '
+  'each item''s own latest approved line, [{itemId, approvalId, approvalSource, approvedAt, '
+  'approvedUnitClientPriceCents, approvedQuantity, approvedLineTotalCents, currency, differs}]. '
+  'differs is true when the live unit price, quantity, total or currency is different from the '
+  'approved value, or the line left the job''s live set.';
 
 CREATE OR REPLACE FUNCTION public.get_ffe_pricing_events(
   p_project_id uuid,

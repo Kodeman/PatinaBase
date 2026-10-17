@@ -7194,24 +7194,27 @@ export type Database = {
       ffe_pricing_approval_lines: {
         Row: {
           approval_id: string
+          currency: string
           item_id: string
-          line_total_cents: number | null
+          line_total_cents: number
           quantity: number
-          unit_client_cents: number | null
+          unit_client_cents: number
         }
         Insert: {
           approval_id: string
+          currency: string
           item_id: string
-          line_total_cents?: number | null
+          line_total_cents: number
           quantity: number
-          unit_client_cents?: number | null
+          unit_client_cents: number
         }
         Update: {
           approval_id?: string
+          currency?: string
           item_id?: string
-          line_total_cents?: number | null
+          line_total_cents?: number
           quantity?: number
-          unit_client_cents?: number | null
+          unit_client_cents?: number
         }
         Relationships: [
           {
