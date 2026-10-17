@@ -36938,6 +36938,7 @@ export type Database = {
         }
         Returns: Json
       }
+      _ffe_backfill_item_labels: { Args: never; Returns: number }
       _ffe_extracted_commercial: {
         Args: { p_ordinal: number; p_row: Json }
         Returns: Json
@@ -36950,6 +36951,15 @@ export type Database = {
       _ffe_is_studio_actor: {
         Args: { p_actor_id: string; p_owner_id: string }
         Returns: boolean
+      }
+      _ffe_item_label_prefix: { Args: { p_room_name: string }; Returns: string }
+      _ffe_lock_job_labels: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
+      _ffe_next_item_label: {
+        Args: { p_project_id: string; p_room_id: string }
+        Returns: string
       }
       _ffe_require_studio_project: {
         Args: { p_project_id: string }
@@ -45747,6 +45757,71 @@ export type Database = {
           p_required_coapprover_id: string
         }
         Returns: Json
+      }
+      set_project_ffe_item_label: {
+        Args: { p_item_id: string; p_label: string }
+        Returns: {
+          added_via: string | null
+          assignment_scope: string
+          blocked: boolean | null
+          blocked_by_decision_id: string | null
+          blocked_reason: string | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          created_at: string
+          currency: string
+          custom_fields: Json
+          design_disposition: string
+          doc_code: string | null
+          eta: string | null
+          ffe_category: string | null
+          id: string
+          installed_on: string | null
+          item_type: string
+          last_status_change_at: string | null
+          line_group_id: string | null
+          line_kind: string
+          line_total_cents: number | null
+          link_kind: string | null
+          markup_percent: number | null
+          name: string
+          notes: string | null
+          parent_ffe_item_id: string | null
+          po_number: string | null
+          product_id: string | null
+          project_id: string
+          project_room_id: string | null
+          purchase_order_id: string | null
+          quantity: number
+          received_quantity: number | null
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by: string | null
+          removed_disposition: string | null
+          role_identity: string
+          rough_cents: number | null
+          selection_thread_id: string
+          sort_order: number
+          source_authorization_item_id: string | null
+          source_commercial_document_id: string | null
+          source_decision_id: string | null
+          source_proposal_item_id: string | null
+          status: string
+          supersedes_ffe_item_id: string | null
+          trade_price_cents: number | null
+          trade_scope_document_id: string | null
+          unit: string
+          unit_price_cents: number | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_project_ffe_line_build_fields: {
         Args: { p_item_id: string; p_request: Json }
