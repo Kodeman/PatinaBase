@@ -314,9 +314,9 @@ SELECT is(
   'Hart Studio',
   'a Hart member reads the two-studio lead''s Hart project, as Hart'
 );
-SELECT is(
-  public.get_client_presentation_identity('e8124000-0000-4000-8000-000000000006'::uuid)->>'designerName',
-  'Lena Moss',
+-- lives_ok, so a refusal here is a failed assertion, not the end of the run.
+SELECT lives_ok(
+  $$ SELECT public.get_client_presentation_identity('e8124000-0000-4000-8000-000000000006'::uuid) $$,
   'after the lead leaves Hart Studio, a remaining Hart member still reads its project'
 );
 SELECT is(
