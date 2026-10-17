@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import type { PresentationIdentity } from '@patina/supabase';
 
 /* ── PRESENTED BY (US-37 #6, contract D8) ────────────────────────────────────
@@ -135,17 +135,24 @@ export function PresentedBy({ identity, className }: PresentedByProps) {
           {contact.length > 0 && (
             <p
               data-testid="presented-by-contact"
-              className="font-mono text-[11.5px] leading-[1.6] tracking-[0.04em] text-[var(--text-muted)] [overflow-wrap:anywhere]"
+              className="font-mono text-[11.5px] leading-[1.6] tracking-[0.04em] text-[var(--text-muted)]"
             >
+              {/* Each part is one unit, so a narrow screen wraps between the
+                  name, the email, the phone and the website, never inside a
+                  phone number. The separator rides at the end of the part
+                  before it, so no line opens on a dot. */}
               {contact.map((part, index) => (
-                <span key={part.key}>
-                  {index > 0 && (
-                    <span aria-hidden="true" data-testid="presented-by-separator">
-                      {' · '}
-                    </span>
-                  )}
-                  {part.node}
-                </span>
+                <Fragment key={part.key}>
+                  {index > 0 && ' '}
+                  <span className="inline-block max-w-full [overflow-wrap:anywhere]">
+                    {part.node}
+                    {index < contact.length - 1 && (
+                      <span aria-hidden="true" data-testid="presented-by-separator">
+                        {' ·'}
+                      </span>
+                    )}
+                  </span>
+                </Fragment>
               ))}
             </p>
           )}
