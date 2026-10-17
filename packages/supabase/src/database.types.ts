@@ -18475,6 +18475,126 @@ export type Database = {
           },
         ]
       }
+      project_ffe_item_images: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_primary: boolean
+          item_id: string
+          position: number
+          project_id: string
+          source: string
+          source_product_id: string | null
+          storage_path: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_primary?: boolean
+          item_id: string
+          position?: number
+          project_id: string
+          source: string
+          source_product_id?: string | null
+          storage_path?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_primary?: boolean
+          item_id?: string
+          position?: number
+          project_id?: string
+          source?: string
+          source_product_id?: string | null
+          storage_path?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_item_images_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_item_images_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_item_images_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_item_images_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_item_images_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
+            columns: ["source_product_id"]
+            isOneToOne: false
+            referencedRelation: "edge_catalog_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
+            columns: ["source_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
+            columns: ["source_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
+            columns: ["source_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
+            columns: ["source_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_item_images_source_product_id_fkey"
+            columns: ["source_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
       project_ffe_items: {
         Row: {
           added_via: string | null
@@ -36211,6 +36331,7 @@ export type Database = {
         Args: { p_context: string; p_proposal_id: string }
         Returns: undefined
       }
+      _backfill_ffe_item_library_images: { Args: never; Returns: number }
       _board_deck_import_assert_lease: {
         Args: { p_import_id: string; p_lease_owner: string }
         Returns: undefined
@@ -36950,6 +37071,75 @@ export type Database = {
       _ffe_is_studio_actor: {
         Args: { p_actor_id: string; p_owner_id: string }
         Returns: boolean
+      }
+      _ffe_item_images_require_team: {
+        Args: { p_item_id: string }
+        Returns: {
+          added_via: string | null
+          assignment_scope: string
+          blocked: boolean | null
+          blocked_by_decision_id: string | null
+          blocked_reason: string | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          created_at: string
+          currency: string
+          custom_fields: Json
+          design_disposition: string
+          doc_code: string | null
+          eta: string | null
+          ffe_category: string | null
+          id: string
+          installed_on: string | null
+          item_type: string
+          last_status_change_at: string | null
+          line_group_id: string | null
+          line_kind: string
+          line_total_cents: number | null
+          link_kind: string | null
+          markup_percent: number | null
+          name: string
+          notes: string | null
+          parent_ffe_item_id: string | null
+          po_number: string | null
+          product_id: string | null
+          project_id: string
+          project_room_id: string | null
+          purchase_order_id: string | null
+          quantity: number
+          received_quantity: number | null
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by: string | null
+          removed_disposition: string | null
+          role_identity: string
+          rough_cents: number | null
+          selection_thread_id: string
+          sort_order: number
+          source_authorization_item_id: string | null
+          source_commercial_document_id: string | null
+          source_decision_id: string | null
+          source_proposal_item_id: string | null
+          status: string
+          supersedes_ffe_item_id: string | null
+          trade_price_cents: number | null
+          trade_scope_document_id: string | null
+          unit: string
+          unit_price_cents: number | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _ffe_item_snapshot_library_images: {
+        Args: { p_item_id: string }
+        Returns: number
       }
       _ffe_require_studio_project: {
         Args: { p_project_id: string }
@@ -38181,6 +38371,34 @@ export type Database = {
       activate_proposal_as_project: {
         Args: { p_proposal_id: string; p_start_date?: string }
         Returns: string
+      }
+      add_ffe_item_image: {
+        Args: {
+          p_item_id: string
+          p_source?: string
+          p_source_product_id?: string
+          p_storage_path?: string
+          p_url: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_primary: boolean
+          item_id: string
+          position: number
+          project_id: string
+          source: string
+          source_product_id: string | null
+          storage_path: string | null
+          url: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_item_images"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       add_household_member: {
         Args: {
@@ -42005,6 +42223,10 @@ export type Database = {
         Returns: string[]
       }
       identity_seat_count: { Args: { p_identity_key: string }; Returns: number }
+      image_urls: {
+        Args: { p: Database["public"]["Tables"]["project_ffe_items"]["Row"] }
+        Returns: string[]
+      }
       immutable_array_to_string: {
         Args: { arr: string[]; sep: string }
         Returns: string
@@ -43204,6 +43426,10 @@ export type Database = {
         Returns: Json
       }
       preview_taste_update: { Args: { p_judgment_id: number }; Returns: Json }
+      primary_image_url: {
+        Args: { p: Database["public"]["Tables"]["project_ffe_items"]["Row"] }
+        Returns: string
+      }
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
@@ -44619,6 +44845,28 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reorder_ffe_item_images: {
+        Args: { p_image_ids: string[]; p_item_id: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_primary: boolean
+          item_id: string
+          position: number
+          project_id: string
+          source: string
+          source_product_id: string | null
+          storage_path: string | null
+          url: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_item_images"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       reorder_palette_swatches: {
         Args: {
           p_ordered_ids: string[]
@@ -45665,6 +45913,28 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "feedback"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_ffe_item_primary_image: {
+        Args: { p_image_id: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_primary: boolean
+          item_id: string
+          position: number
+          project_id: string
+          source: string
+          source_product_id: string | null
+          storage_path: string | null
+          url: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_item_images"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -47202,6 +47472,10 @@ export type Database = {
       unkeep_board_deck_import_item: {
         Args: { p_item_id: string }
         Returns: Json
+      }
+      unlink_ffe_item_image: {
+        Args: { p_image_id: string }
+        Returns: undefined
       }
       update_client_decision: {
         Args: {

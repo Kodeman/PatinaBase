@@ -318,10 +318,11 @@ function ffeWashTone(kind: LineStamp['kind']): RowWashTone {
   return 'clay';
 }
 
-/** A non-empty product image URL off the already-joined `product.images`
- *  (`useProjectFFEItems`'s `.select()` joins `product:products!product_id(id,
- *  name, images, brand)` — no hook change needed, see build/00-seams-b). */
+/** The item's own primary picture (`primary_image_url`, 00807), else — only
+ *  when the item has no pictures of its own — the joined `product.images[0]`. */
 function ffeThumbSrc(item: FFERow): string | null {
+  const own = item.primary_image_url;
+  if (typeof own === 'string' && own.length > 0) return own;
   const src = item.product?.images?.[0];
   return typeof src === 'string' && src.length > 0 ? src : null;
 }

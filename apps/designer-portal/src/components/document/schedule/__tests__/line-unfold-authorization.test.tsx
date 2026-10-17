@@ -277,6 +277,28 @@ describe('LineUnfold · the authorization gate', () => {
 });
 
 describe('LineUnfold · piece artifact plate', () => {
+  it('prefers the line\'s own primary picture over the live product image (00807)', () => {
+    renderUnfold({
+      showArtifactPlate: true,
+      item: {
+        ...item,
+        name: 'Halden Sofa',
+        quantity: 1,
+        primary_image_url: 'https://images.example.com/halden-own.jpg',
+        product: {
+          id: 'product-1',
+          name: 'Halden Sofa',
+          brand: 'Hollowell Woodshop',
+          images: ['https://images.example.com/halden-sofa.jpg'],
+        },
+      },
+    });
+
+    expect(
+      screen.getByRole('img', { name: 'Halden Sofa by Hollowell Woodshop' }),
+    ).toHaveAttribute('src', 'https://images.example.com/halden-own.jpg');
+  });
+
   it('uses the joined product image, maker, and configuration language', () => {
     renderUnfold({
       showArtifactPlate: true,

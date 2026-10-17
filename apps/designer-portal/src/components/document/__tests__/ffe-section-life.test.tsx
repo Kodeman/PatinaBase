@@ -195,6 +195,18 @@ describe('FF&E thumbnails', () => {
     expect(slot).toBeTruthy();
   });
 
+  it('prefers the line\'s own primary picture over the live product image (00807)', () => {
+    mockItems = [
+      {
+        ...baseFurnishing,
+        primary_image_url: 'https://cdn.patina.cloud/bed-own.jpg',
+        product: { id: 'p1', name: 'Bed', images: ['https://cdn.patina.cloud/bed.jpg'], brand: 'Sturdy Oak' },
+      },
+    ];
+    renderSection();
+    expect(document.querySelector('img')).toHaveAttribute('src', 'https://cdn.patina.cloud/bed-own.jpg');
+  });
+
   it('treats an empty images array the same as no product', () => {
     mockItems = [{ ...baseFurnishing, product: { id: 'p1', name: 'Bed', images: [], brand: 'Sturdy Oak' } }];
     renderSection();
