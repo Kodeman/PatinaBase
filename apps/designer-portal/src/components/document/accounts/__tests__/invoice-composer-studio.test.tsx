@@ -856,7 +856,7 @@ describe("InvoiceComposer · studio mode", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(
-      "We couldn't confirm the draft. Check the invoices before drafting again.",
+      "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.",
     );
     expect(alert).not.toHaveTextContent(/Failed to|TypeError/);
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();

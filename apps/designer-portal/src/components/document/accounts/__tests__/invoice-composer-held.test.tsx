@@ -1235,7 +1235,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     [
       "one it doesn't",
       'Failed to create draft invoice: duplicate key value violates unique constraint "invoices_pkey" (12000 cents)',
-      "We couldn't confirm the draft. Check the invoices before drafting again.",
+      "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.",
       false,
     ],
   ])("F13: says create_draft_invoice's %s in the composer's words", async (_label, raw, sentence, retryable) => {

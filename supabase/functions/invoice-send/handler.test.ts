@@ -16,6 +16,8 @@ interface World {
   issueReplyLost: boolean;
   /** Reading the invoice back after the issue fails with this message. */
   rereadError: string | null;
+  /** Another writer's change that commits just before the issue locks the row. */
+  movedFirst: Record<string, unknown> | null;
   profile: { full_name: string | null; email: string | null } | null;
   /** The preferred-profile read fails with this message. */
   profileError: string | null;
@@ -58,6 +60,7 @@ function draftWorld(overrides: Partial<World> = {}): World {
     issueErrorCode: "",
     issueReplyLost: false,
     rereadError: null,
+    movedFirst: null,
     profile: null,
     profileError: null,
     designerClients: [],
@@ -158,6 +161,7 @@ function handlerFor(world: World) {
           }
           if (name === "issue_invoice") {
             assertEquals(args.p_invoice_id, world.invoice.id);
+            if (world.movedFirst) Object.assign(world.invoice, world.movedFirst);
             if (world.issueError) {
               return Promise.resolve({
                 data: null,
@@ -296,6 +300,39 @@ Deno.test("issue-first: a lost issue reply that reads back a draft is 503 issue_
   assertEquals("issued" in body, false);
   assertEquals(world.sentTo, []);
 });
+
+// SQ-1286 F2 — a failed issue reads back issued_unsent only as `sent`, the
+// status issue_invoice leaves; `issued: true` is the folio's "Resend to retry".
+Deno.test("issue-first: a draft voided before the issue reads back void — 409 invoice_void, never issued, nothing sent", async () => {
+  const world = draftWorld({ designerClients: withRecipient, movedFirst: { status: "void" } });
+  const { status, body } = await post(world, { invoiceId: "inv-1", issue: true });
+
+  assertEquals(world.calls.includes("caller:issue_invoice"), true);
+  assertEquals(status, 409);
+  assertEquals(body.error, "invoice_void");
+  assertEquals(body.detail, "A voided invoice cannot be sent.");
+  assertEquals("issued" in body, false);
+  assertEquals(world.calls.includes("send"), false);
+  assertEquals(world.sentTo, []);
+});
+
+for (const [paid, amountPaid] of [["paid", 120000], ["partially_paid", 40000]] as const) {
+  Deno.test(`issue-first: a draft issued and ${paid} elsewhere reads back ${paid} — 409 invoice_not_draft, never issued_unsent, nothing sent`, async () => {
+    const world = draftWorld({
+      designerClients: withRecipient,
+      movedFirst: { status: paid, invoice_number: "INV-1070", amount_paid_cents: amountPaid },
+    });
+    const { status, body } = await post(world, { invoiceId: "inv-1", issue: true });
+
+    assertEquals(world.calls.includes("caller:issue_invoice"), true);
+    assertEquals(status, 409);
+    assertEquals(body.error, "invoice_not_draft");
+    assertEquals(body.detail, "This invoice was already issued.");
+    assertEquals("issued" in body, false);
+    assertEquals(world.calls.includes("send"), false);
+    assertEquals(world.sentTo, []);
+  });
+}
 
 Deno.test("issue-first: a send that fails after the issue says the invoice was issued, and its number", async () => {
   const world = draftWorld({ designerClients: withRecipient, sendFails: true });

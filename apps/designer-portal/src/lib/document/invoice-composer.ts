@@ -949,7 +949,10 @@ const DRAFT_REFUSALS: Array<[RegExp, string, boolean]> = [
   ],
 ];
 
-export const DRAFT_UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
+// SQ-1286 F1 — a draft that landed may be missing its hours (claim_time_entries
+// never ran) or its other lines, so the designer is told not to send it.
+export const DRAFT_UNCONFIRMED =
+  "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.";
 
 const DRAFT_WRITE_SENT = /^Failed to create draft (?:studio )?invoice:\s*/;
 

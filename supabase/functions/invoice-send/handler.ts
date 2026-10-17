@@ -300,9 +300,24 @@ export function createInvoiceSendHandler(deps: InvoiceSendDeps) {
           console.error('invoice-send: issue outcome unread', invoiceId, rereadErr?.message);
           return json({ error: 'issue_unknown', detail: issueErr?.message }, 503);
         }
-        if (after.status !== 'draft') {
+        // SQ-1286 F2 — issued_unsent's `issued: true` reads as "Resend to
+        // retry", so it answers only for the status issue_invoice leaves
+        // behind. Voided, or paid since, is that status's own refusal.
+        if (after.status === 'sent') {
           return json(
             { error: 'issued_unsent', issued: true, invoiceNumber: after.invoice_number ?? null },
+            409
+          );
+        }
+        if (after.status === 'void') {
+          return json(
+            { error: 'invoice_void', detail: 'A voided invoice cannot be sent.' },
+            409
+          );
+        }
+        if (after.status !== 'draft') {
+          return json(
+            { error: 'invoice_not_draft', detail: 'This invoice was already issued.' },
             409
           );
         }

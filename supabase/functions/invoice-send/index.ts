@@ -20,8 +20,10 @@
 //      caller-JWT client, never the service role — only once step 3 found an
 //      address, and the letter goes to that same address. No address is 422
 //      no_recipient with the draft untouched. A failed issue is re-read:
-//      issued is 409 issued_unsent (`issued: true`, no letter); still a draft
-//      is 409 issue_failed only when issue_invoice refused with its SQLSTATE;
+//      sent is 409 issued_unsent (`issued: true`, no letter); void is 409
+//      invoice_void, and paid or part-paid is 409 invoice_not_draft, neither
+//      `issued`; still a draft is 409 issue_failed only when issue_invoice
+//      refused with its SQLSTATE;
 //      still a draft after a lost reply, or an unreadable re-read, is 503
 //      issue_unknown.
 //   4. Send the invoice_sent email through the shared sendCompliantEmail

@@ -359,7 +359,7 @@ describe("SQ-1262 F4: Try again answers to the same readiness as Draft", () => {
 });
 
 describe("SQ-1272 F4: a draft write whose answer is lost is never tried blind", () => {
-  const UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
+  const UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.";
   const listKey = ["invoices", "list", {}];
 
   it.each([
@@ -393,7 +393,7 @@ describe("SQ-1272 F4: a draft write whose answer is lost is never tried blind", 
 });
 
 describe("SQ-1282 F1: an unconfirmed draft holds the primary Draft until the composer closes", () => {
-  const UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
+  const UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.";
   const spotWindows = () =>
     Array.from(document.querySelectorAll("[data-hold-spotlight-window]")).map((el) =>
       el.getAttribute("data-hold-spotlight-window"),

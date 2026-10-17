@@ -644,7 +644,7 @@ describe("draftInvoiceRefusal", () => {
   ])("says %s is unconfirmed, with no retry", (_label, message) => {
     const said = draftInvoiceRefusal(message);
     expect(said).toEqual({
-      message: "We couldn't confirm the draft. Check the invoices before drafting again.",
+      message: "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.",
       retryable: false,
       unconfirmed: true,
     });
@@ -811,7 +811,8 @@ describe("billingRefusal", () => {
         "send_failed",
       ]),
     );
-    expect(details).toHaveLength(6);
+    // SQ-1287: the issue read-back repeats invoice_void's and invoice_not_draft's details.
+    expect(new Set(details).size).toBe(6);
     for (const said of [...codes, ...details]) {
       expect(billingRefusal("send", said).sentence).not.toBe(GENERIC);
     }
