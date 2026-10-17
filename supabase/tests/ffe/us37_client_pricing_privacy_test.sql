@@ -62,6 +62,10 @@ AS $$
      OR lower(k.key) = 'unit_price';
 $$;
 
+-- The helpers run as the role under test (SECURITY INVOKER).
+GRANT EXECUTE ON FUNCTION pg_temp.visible_rows(text), pg_temp.private_keys(jsonb)
+  TO authenticated, anon;
+
 -- ─── fixtures (as postgres) ────────────────────────────────────────────────
 -- O leads job P (client C) and job Q (client K), both in studio A; O is also
 -- a member of the unrelated org B. T is O's teammate in A. C is a plain
