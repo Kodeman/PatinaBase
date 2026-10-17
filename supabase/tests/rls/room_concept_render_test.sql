@@ -315,10 +315,11 @@ DECLARE
     'allowance', 'assignmentScope', 'category', 'clientLineTotalCents',
     'clientUnitPriceCents', 'conceptRenderCaption', 'conceptRenderUploadedAt',
     'conceptRenderUploadedBy', 'conceptRenderUrl', 'docCode', 'id', 'imageUrl',
-    'instrument', 'itemType', 'kind', 'logisticsStatus', 'name', 'productId',
-    'quantity', 'roomId', 'roomName', 'rooms', 'threadId', 'tradeJourney',
-    'unit', 'updatedAt'
+    'imageUrls', 'instrument', 'itemType', 'kind', 'logisticsStatus', 'name',
+    'primaryImageUrl', 'productId', 'quantity', 'roomId', 'roomName', 'rooms',
+    'threadId', 'tradeJourney', 'unit', 'updatedAt'
   ];  -- rooms and unit: 00745 (US-21 T-37), additive; roomName stays the primary.
+      -- imageUrls and primaryImageUrl: 00807 (US-37), additive.
   v_keys text[];
   v_line jsonb;
   v_kinds text[];

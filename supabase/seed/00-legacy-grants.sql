@@ -22608,6 +22608,180 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00806_us37_lead_time_optional.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.promote_to_studio(UUID, UUID, JSONB, TEXT, TEXT, TEXT, INTEGER, TEXT) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00806_us37_lead_time_optional.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.promote_to_studio(UUID, UUID, JSONB, TEXT, TEXT, TEXT, INTEGER, TEXT) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.project_ffe_item_images_derive_project() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_ffe_item_images FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_ffe_item_images TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.project_ffe_item_images TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.primary_image_url(public.project_ffe_items) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.primary_image_url(public.project_ffe_items) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.image_urls(public.project_ffe_items) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.image_urls(public.project_ffe_items) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_item_snapshot_library_images(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.snapshot_ffe_item_library_images() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._backfill_ffe_item_library_images() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_item_images_require_team(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_item_images_require_image(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.add_ffe_item_image(uuid, text, text, text, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.add_ffe_item_image(uuid, text, text, text, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_ffe_item_primary_image(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_ffe_item_primary_image(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reorder_ffe_item_images(uuid, uuid[]) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reorder_ffe_item_images(uuid, uuid[]) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.unlink_ffe_item_image(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.unlink_ffe_item_image(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_selections(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid) TO authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_threshold(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_threshold(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_current_item_snapshots(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00807_us37_project_item_images.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._spec_book_current_item_snapshots(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
