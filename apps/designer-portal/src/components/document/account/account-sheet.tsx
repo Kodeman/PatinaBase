@@ -114,19 +114,18 @@ export function AccountSheet() {
 
   useEffect(() => {
     const onOpen = (e: Event) => {
-      const detail = (
-        e as CustomEvent<
-          | { page?: AccountPage; rateFor?: string; aboveFolio?: boolean; fallbackFocusRef?: React.RefObject<HTMLElement | null> }
-          | undefined
-        >
-      ).detail;
+      const request = e as CustomEvent<
+        | { page?: AccountPage; rateFor?: string; aboveFolio?: boolean }
+        | undefined
+      > & { fallbackFocusRef?: React.RefObject<HTMLElement | null> };
+      const detail = request.detail;
       const wanted = detail?.page;
       setPage(
         wanted && ACCOUNT_PAGES.includes(wanted) ? wanted : 'profile',
       );
       setRateFor(detail?.rateFor ?? null);
       setAboveFolio(detail?.aboveFolio === true);
-      setFallbackFocusRef(detail?.fallbackFocusRef);
+      setFallbackFocusRef(request.fallbackFocusRef);
       setOpen(true);
     };
     window.addEventListener('document:open-account', onOpen);

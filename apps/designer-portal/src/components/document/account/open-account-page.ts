@@ -19,14 +19,15 @@ export function openAccountPage(
     fallbackFocusRef?: React.RefObject<HTMLElement | null>;
   } = {},
 ) {
-  window.dispatchEvent(
-    new CustomEvent('document:open-account', {
-      detail: {
-        page,
-        rateFor: options.rateFor,
-        aboveFolio: options.aboveFolio,
-        fallbackFocusRef: options.fallbackFocusRef,
-      },
-    }),
-  );
+  const event = new CustomEvent('document:open-account', {
+    detail: {
+      page,
+      rateFor: options.rateFor,
+      aboveFolio: options.aboveFolio,
+    },
+  }) as CustomEvent & {
+    fallbackFocusRef?: React.RefObject<HTMLElement | null>;
+  };
+  event.fallbackFocusRef = options.fallbackFocusRef;
+  window.dispatchEvent(event);
 }
