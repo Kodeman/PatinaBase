@@ -358,6 +358,20 @@ describe("the 24h floor is words beside an offered act, not a dead control", () 
     );
   });
 
+  it("opens the floor's reason in one spotlight window when the held act is pressed", () => {
+    openProfile();
+    fireEvent.click(screen.getByRole("button", { name: "Resend text invitation" }));
+    expect(
+      Array.from(
+        document.querySelectorAll("[data-hold-spotlight-window]"),
+        (el) => el.getAttribute("data-hold-spotlight-window"),
+      ),
+    ).toEqual(["field-resend-reason"]);
+    const note = document.getElementById("field-resend-reason");
+    expect(note).toHaveTextContent(/you can ask again after/);
+    expect(note?.closest("[inert]")).toBeNull();
+  });
+
   it("sends nothing when it is pressed anyway, note or no note", () => {
     openProfile();
     fireEvent.change(screen.getByLabelText("Consent details"), {

@@ -198,6 +198,7 @@ export function DraftReview({
               regionKey={regionKey}
               variant="primary"
               held={!recipient}
+              holdFix={!recipient && onAddAddress ? `${fieldId}-recipient-fix` : undefined}
               aria-describedby={recipient ? undefined : `${fieldId}-no-address`}
               disabled={pending || !recipient || blank}
               loading={update.isPending || send.isPending}
@@ -208,6 +209,7 @@ export function DraftReview({
             </DocumentAction>
             {!recipient && onAddAddress && (
               <DocumentAction
+                id={`${fieldId}-recipient-fix`}
                 actionKey="add-maker-address"
                 surfaceKey={surfaceKey}
                 regionKey={regionKey}

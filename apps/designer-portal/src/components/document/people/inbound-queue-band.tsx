@@ -173,6 +173,7 @@ function InboundRow({
               held={!reasonWritten}
               disabled={!reasonWritten}
               aria-describedby={!reasonWritten ? heldId : undefined}
+              holdFix={reasonId}
               loading={rejectDoc.isPending}
               loadingLabel="Recording…"
               onClick={() =>

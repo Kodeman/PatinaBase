@@ -13,7 +13,7 @@
  *  · the invite control only ever appears for a not_asked party WITH a phone
  *    on file (no phone → nothing to text → no control).
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { PartyRole } from "@patina/supabase";
 import { PartyProfileSheet } from "../party-profile-sheet";
 
@@ -195,6 +195,38 @@ describe("PartyProfileSheet — not_asked with a phone shows the invite-to-texts
     expect(submit).toHaveAttribute("aria-describedby", "field-invite-reason");
     expect(document.getElementById("field-invite-reason")).toHaveTextContent(
       "Tick the consent box above first.",
+    );
+  });
+
+  // R186 — the press lights the consent box that fixes the hold, live and
+  // focused; ticking it lifts the spotlight.
+  it("opens the consent box in one spotlight window when the held invite is pressed", async () => {
+    personData.current = person({ consent_status: "not_asked" });
+    render(
+      <PartyProfileSheet
+        open
+        partyId="party-1"
+        role={ROLE}
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send text consent invitation" }),
+    );
+    const box = screen.getByRole("checkbox");
+    const windows = Array.from(
+      document.querySelectorAll("[data-hold-spotlight-window]"),
+      (el) => el.getAttribute("data-hold-spotlight-window"),
+    );
+    expect(windows).toHaveLength(1);
+    expect(document.getElementById(windows[0]!)).toContainElement(box);
+    expect(box.closest("[inert]")).toBeNull();
+    expect(document.activeElement).toBe(box);
+    expect(recordConsentMutate).not.toHaveBeenCalled();
+    fireEvent.click(box);
+    await waitFor(() =>
+      expect(document.querySelector("[data-hold-spotlight]")).toBeNull(),
     );
   });
 

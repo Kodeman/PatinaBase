@@ -174,6 +174,21 @@ export const TURNKEY_PRICING_BASIS_BLOCKER =
 export const TURNKEY_DRAWS_BLOCKER =
   "A design-build agreement needs a draw schedule.";
 
+/** R-5 and R-6 when the composition has no part to file them against: the
+ *  fix is a part the designer adds at a seam. */
+export const NO_FEE_BLOCKER =
+  "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.";
+export const NO_CEILING_BLOCKER =
+  "An agreement that bills hourly needs a ceiling. Add a Ceiling part, or remove the role rates.";
+
+/** The document blockers a part added at a seam would answer. */
+export const MISSING_PART_BLOCKERS: ReadonlySet<string> = new Set([
+  NO_FEE_BLOCKER,
+  NO_CEILING_BLOCKER,
+  TURNKEY_PRICING_BASIS_BLOCKER,
+  TURNKEY_DRAWS_BLOCKER,
+]);
+
 /** R10 — the attestation gate holds at send, not only at template selection.
  *  An attestation can expire between composing and sending. */
 export const TURNKEY_ATTESTATION_BLOCKER =
@@ -567,7 +582,7 @@ export function assessAgreementReadiness({
       ) ?? null;
     add(
       rateCardPart?.id ?? null,
-      "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",
+      NO_FEE_BLOCKER,
       { ask: "name a fee", cleared: "Role rates name the fee" },
     );
   }
@@ -607,7 +622,7 @@ export function assessAgreementReadiness({
     );
     add(
       ceilingPart?.id ?? null,
-      "An agreement that bills hourly needs a ceiling. Add a Ceiling part, or remove the role rates.",
+      NO_CEILING_BLOCKER,
       { ask: "name a ceiling" },
     );
   }

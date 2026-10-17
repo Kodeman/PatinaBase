@@ -62,11 +62,34 @@ function reasonHold(
 }
 
 /**
+ * A press with no spotlight to open is never silent: focus goes to the act's
+ * first `aria-describedby` element, so a screen reader reads the reason, or
+ * stays on the act when it names none. Nothing new is announced.
+ */
+function pointAtReason(act: HTMLElement) {
+  const label = words(act.getAttribute('aria-label') ?? act.textContent);
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn(
+      `Held act "${label}" has no spotlight frame or no reason in its frame; focus goes to its reason.`,
+    );
+  }
+  const reason = (act.getAttribute('aria-describedby') ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((id) => document.getElementById(id))
+    .find((el): el is HTMLElement => el !== null);
+  if (!reason) return;
+  if (!reason.matches(CONTROL)) reason.setAttribute('tabindex', '-1');
+  reason.focus();
+}
+
+/**
  * What pressing a held DocumentAction or Button does (US-36 K4). A site's
  * `onHeldActivate` always runs. With `holds`, the press then opens one window
  * per hold; with neither, one window on the act's `aria-describedby` reason.
  * A site with `onHeldActivate` and no `holds` answers the press itself. With
- * no frame, or no reason inside it, the press is swallowed as before.
+ * no frame, or no reason inside it, and no `onHeldActivate`, focus goes to
+ * the reason (`pointAtReason`).
  * `holdFix` is the element id of the region that fixes that reason.
  */
 export function useHeldAct(
@@ -86,7 +109,10 @@ export function useHeldAct(
       if (onHeldActivate && !listed) return;
       const host = frameOf(act);
       const hold = host && !listed ? reasonHold(act, host, holdFix) : null;
-      if (!host || (!listed && !hold)) return;
+      if (!host || (!listed && !hold)) {
+        if (!onHeldActivate) pointAtReason(act);
+        return;
+      }
       frame.current = host;
       setOwn(hold ? [hold] : null);
       setMounted(true);

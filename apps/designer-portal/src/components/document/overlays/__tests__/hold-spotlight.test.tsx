@@ -8,6 +8,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { useEffect, useRef } from "react";
+import type { CSSProperties } from "react";
 import { HoldSpotlight } from "../hold-spotlight";
 import { topActiveModalDialog } from "../active-dialog";
 import { focusableWithin } from "@/lib/full-screen-boundary";
@@ -317,5 +318,109 @@ describe("HoldSpotlight when its frame unmounts while open", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// jsdom lays nothing out, so these read the inset the bar's sticky `bottom`
+// subtracts: the frame's padding in a frame that scrolls itself, minus the
+// fixed foot chrome's height in one that scrolls with the page.
+describe("HoldSpotlight bar dock", () => {
+  const CHROME = 72;
+
+  function DockHarness({ frameStyle }: { frameStyle: CSSProperties }) {
+    const frame = useRef<HTMLDivElement>(null);
+    const target = useRef<HTMLButtonElement>(null);
+    const holds = useRef<SpotlightHold[]>([
+      { ...CLIENT, target: () => target.current },
+    ]).current;
+    return (
+      <div>
+        <div ref={frame} data-testid="frame" style={frameStyle}>
+          <button ref={target} type="button">
+            Link a client
+          </button>
+        </div>
+        <nav data-testid="drawer" style={{ position: "fixed", bottom: 0 }}>
+          Studio
+        </nav>
+        <HoldSpotlight frame={frame} holds={holds} open onClose={jest.fn()} />
+      </div>
+    );
+  }
+
+  beforeEach(() => {
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: () => screen.queryByTestId("drawer"),
+    });
+    jest
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        const top =
+          this.dataset.testid === "drawer" ? window.innerHeight - CHROME : 0;
+        return {
+          top,
+          bottom: top,
+          left: 0,
+          right: 0,
+          width: 0,
+          height: 0,
+          x: 0,
+          y: top,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    delete (document as { elementFromPoint?: unknown }).elementFromPoint;
+  });
+
+  const inset = () =>
+    layer()?.style.getPropertyValue("--hold-spotlight-inset") ?? null;
+
+  it("docks above the fixed foot chrome on a frame that scrolls with the page, ignoring its landing reserve", async () => {
+    render(<DockHarness frameStyle={{ paddingBottom: "640px" }} />);
+    await waitFor(() => expect(inset()).toBe(`${-CHROME}px`));
+  });
+
+  it("docks to the frame's own foot inside a scrolling sheet panel", async () => {
+    render(
+      <DockHarness frameStyle={{ paddingBottom: "24px", overflowY: "auto" }} />,
+    );
+    await waitFor(() => expect(inset()).toBe("24px"));
+  });
+
+  it("does not dock above the fixed overlay that holds the frame (the PO preview)", async () => {
+    function OverlayHarness() {
+      const frame = useRef<HTMLDivElement>(null);
+      const target = useRef<HTMLButtonElement>(null);
+      const holds = useRef<SpotlightHold[]>([
+        { ...CLIENT, target: () => target.current },
+      ]).current;
+      return (
+        <div style={{ position: "fixed", inset: 0 }}>
+          <button
+            type="button"
+            data-testid="backdrop"
+            aria-label="Close"
+            style={{ position: "absolute", inset: 0 }}
+          />
+          <div ref={frame} style={{ position: "absolute", top: "4vh" }}>
+            <button ref={target} type="button">
+              Link a client
+            </button>
+          </div>
+          <HoldSpotlight frame={frame} holds={holds} open onClose={jest.fn()} />
+        </div>
+      );
+    }
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: () => screen.queryByTestId("backdrop"),
+    });
+    render(<OverlayHarness />);
+    await waitFor(() => expect(inset()).toBe("0px"));
   });
 });

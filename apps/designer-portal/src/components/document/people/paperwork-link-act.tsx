@@ -266,6 +266,7 @@ export function PaperworkLinkAct({
                 aria-describedby={
                   namedDayMissing ? `${bandId}-held` : undefined
                 }
+                holdFix={`${bandId}-day`}
                 loading={mint.isPending}
                 loadingLabel="Opening…"
                 onClick={openTheDoor}
