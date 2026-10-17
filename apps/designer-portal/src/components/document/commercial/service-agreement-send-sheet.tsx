@@ -220,6 +220,22 @@ export function ServiceAgreementSendSheet({
                in flight, marking the act `aria-disabled` with no reason
                attached and announcing that a ready agreement was not ready. */
             held={!readiness.ready}
+            holds={
+              readiness.ready
+                ? undefined
+                : [
+                    {
+                      id: blockerListId,
+                      target: () =>
+                        window.document.getElementById(blockerListId),
+                      label: "Finish before sending",
+                      reason:
+                        readiness.blockers[0] ??
+                        "This agreement is not ready to send yet.",
+                    },
+                  ]
+            }
+            onHeldActivate={() => setResult(null)}
             aria-describedby={readiness.ready ? undefined : blockerListId}
             loading={send.isPending}
           >

@@ -1,8 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+const mockSend = jest.fn();
 jest.mock("@/hooks/use-commercial-documents", () => ({
-  useSendServiceAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useSendServiceAgreement: () => ({ mutateAsync: mockSend, isPending: false }),
 }));
 
 import type { AgreementPart } from "@patina/types";
@@ -270,8 +271,56 @@ describe("ServiceAgreementSendSheet · synthesis §5", () => {
 
     await user.click(sendAct);
     await waitFor(() =>
-      expect(window.document.querySelectorAll("[data-hold-spotlight-window]")).toHaveLength(1),
+      expect(
+        window.document.querySelectorAll("[data-hold-spotlight-window]"),
+      ).toHaveLength(1),
     );
+    const windowEl = window.document.querySelector(
+      "[data-hold-spotlight-window]",
+    );
+    expect(windowEl).toHaveAttribute("data-hold-spotlight-window", described);
+    expect(
+      window.document.querySelector("[data-hold-spotlight-bar]"),
+    ).toHaveTextContent("This agreement names no fee.");
+    expect(blockerList).toHaveTextContent("This agreement names no fee.");
+  });
+
+  it("clears a stale send failure when the held act is pressed", async () => {
+    const user = userEvent.setup();
+    mockSend.mockReset().mockRejectedValueOnce(new Error("Send failed."));
+    const props = {
+      open: true,
+      onClose: jest.fn(),
+      document,
+      terms,
+      rates,
+      recipientEmail: "sarah@example.com",
+      parts: parts(),
+    };
+    const view = render(<ServiceAgreementSendSheet {...props} />);
+    await user.click(
+      screen.getByRole("button", {
+        name: "Send the agreement · $5,000.00 retainer",
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Send failed.");
+
+    view.rerender(
+      <ServiceAgreementSendSheet
+        {...props}
+        readinessOverride={{
+          ready: false,
+          blockers: ["This agreement names no fee."],
+          notes: [],
+        }}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Send the agreement · $5,000.00 retainer",
+      }),
+    );
+    expect(screen.getAllByRole("status")[0]).toBeEmptyDOMElement();
   });
 
   it("keeps the offline-signature act at the sheet foot", () => {

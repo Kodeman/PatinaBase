@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * US-28 S4 (U-Q6) — Record a payment, in a sheet scoped to one record. It
@@ -21,9 +21,9 @@
  * runs the sheet's width; the day reads as a day ("Monday 12 October 2026").
  */
 
-import { useRef, useState, type ReactNode } from 'react';
-import { Banknote } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useRef, useState, type ReactNode } from "react";
+import { Banknote } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useInvoice,
   usePOPayments,
@@ -33,17 +33,21 @@ import {
   useVendorPayments,
   type InvoicePaymentMethod,
   type VendorPaymentMethodKind,
-} from '@patina/supabase';
-import { INVOICE_PAYMENT_METHOD_LABELS } from '@patina/shared';
-import { invoiceBalanceCents } from '@/lib/document/account-summary';
-import type { DeskNeed } from '@/lib/document/desk-need-list';
-import { WEEKDAY_FORMAT, legalDate } from '@/lib/document/dates';
-import { fmtDay, todayYmd } from '@/lib/document/format';
-import { FolioCalendar, FolioPopover } from '../date';
-import { DocumentAction, DocumentActionGroup } from '../document-action';
-import { DocSheetHead } from '../overlays/doc-sheet';
-import { METHOD_WORD, paidToward, parseUsdToCents } from '../line-unfold/record-payment';
-import { Missing, Reading, useOrder } from './act-sheets';
+} from "@patina/supabase";
+import { INVOICE_PAYMENT_METHOD_LABELS } from "@patina/shared";
+import { invoiceBalanceCents } from "@/lib/document/account-summary";
+import type { DeskNeed } from "@/lib/document/desk-need-list";
+import { WEEKDAY_FORMAT, legalDate } from "@/lib/document/dates";
+import { fmtDay, todayYmd } from "@/lib/document/format";
+import { FolioCalendar, FolioPopover } from "../date";
+import { DocumentAction, DocumentActionGroup } from "../document-action";
+import { DocSheetHead } from "../overlays/doc-sheet";
+import {
+  METHOD_WORD,
+  paidToward,
+  parseUsdToCents,
+} from "../line-unfold/record-payment";
+import { Missing, Reading, useOrder } from "./act-sheets";
 
 interface SheetProps {
   need: DeskNeed;
@@ -51,19 +55,26 @@ interface SheetProps {
 }
 
 const KIND_WORD: Record<string, string> = {
-  deposit: 'Deposit',
-  balance: 'Balance',
-  milestone: 'Payment',
-  full_upfront: 'Payment in full',
+  deposit: "Deposit",
+  balance: "Balance",
+  milestone: "Payment",
+  full_upfront: "Payment in full",
 };
 
-const VENDOR_METHODS: readonly VendorPaymentMethodKind[] = ['check', 'ach', 'wire', 'card', 'cash', 'other'];
-const INVOICE_METHODS: readonly Exclude<InvoicePaymentMethod, 'stripe'>[] = [
-  'check',
-  'wire',
-  'ach_manual',
-  'cash',
-  'other',
+const VENDOR_METHODS: readonly VendorPaymentMethodKind[] = [
+  "check",
+  "ach",
+  "wire",
+  "card",
+  "cash",
+  "other",
+];
+const INVOICE_METHODS: readonly Exclude<InvoicePaymentMethod, "stripe">[] = [
+  "check",
+  "wire",
+  "ach_manual",
+  "cash",
+  "other",
 ];
 
 /** R1b — cents → "¥3,400.50". Every currency is stored as amount × 100 and
@@ -71,20 +82,22 @@ const INVOICE_METHODS: readonly Exclude<InvoicePaymentMethod, 'stripe'>[] = [
  *  digits, whatever the currency's own (ISO's JPY default would round
  *  340050 to "¥3,401"). The shared invoice formatter keeps its ISO digits. */
 const money = (cents: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
     currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(cents / 100);
 
-const capitalised = (words: string) => words.charAt(0).toUpperCase() + words.slice(1);
-const errText = (e: unknown) => (e instanceof Error && e.message ? ` ${e.message}` : '');
+const capitalised = (words: string) =>
+  words.charAt(0).toUpperCase() + words.slice(1);
+const errText = (e: unknown) =>
+  e instanceof Error && e.message ? ` ${e.message}` : "";
 
 /** 'YYYY-MM-DD' → "Monday 12 October 2026", read at local noon so no
  *  timezone moves the day. */
 function longDay(ymd: string) {
-  const [year, month, day] = ymd.split('-').map(Number);
+  const [year, month, day] = ymd.split("-").map(Number);
   const at = new Date(year!, month! - 1, day!, 12);
   return `${WEEKDAY_FORMAT.format(at)} ${legalDate(at)}`;
 }
@@ -123,14 +136,18 @@ function DayField({
           {longDay(value)}
         </button>
         {open ? (
-          <FolioPopover onClose={() => setOpen(false)} returnFocusRef={triggerRef} aria-label={label}>
+          <FolioPopover
+            onClose={() => setOpen(false)}
+            returnFocusRef={triggerRef}
+            aria-label={label}
+          >
             <FolioCalendar
-              modes={['day']}
-              value={{ kind: 'day', date: value }}
+              modes={["day"]}
+              value={{ kind: "day", date: value }}
               today={todayYmd()}
               readoutLabels={{ day: label, span: label }}
               onCommit={(selection) => {
-                if (selection.kind !== 'day') return;
+                if (selection.kind !== "day") return;
                 onChange(selection.date);
                 setOpen(false);
               }}
@@ -144,7 +161,15 @@ function DayField({
 
 /** The sheet's foot: Put back, and beside it the act it may carry. Every state
  *  of the sheet stands on it, so the way back is always in the same place. */
-function PaymentFoot({ regionKey, onDone, children }: { regionKey: string; onDone: () => void; children?: ReactNode }) {
+function PaymentFoot({
+  regionKey,
+  onDone,
+  children,
+}: {
+  regionKey: string;
+  onDone: () => void;
+  children?: ReactNode;
+}) {
   return (
     <DocumentActionGroup
       surfaceKey="open-document"
@@ -152,7 +177,11 @@ function PaymentFoot({ regionKey, onDone, children }: { regionKey: string; onDon
       aria-label="Record the payment"
       className="rec-foot"
     >
-      <DocumentAction actionKey={`${regionKey}-put-back`} variant="tertiary" onClick={onDone}>
+      <DocumentAction
+        actionKey={`${regionKey}-put-back`}
+        variant="tertiary"
+        onClick={onDone}
+      >
         Put back
       </DocumentAction>
       {children}
@@ -172,7 +201,13 @@ interface SheetRead {
 const failedRead = (read: SheetRead) => read.isError && read.data === undefined;
 
 /** A failed read says so and reads again on request. */
-function ReadFailed({ regionKey, reads }: { regionKey: string; reads: readonly SheetRead[] }) {
+function ReadFailed({
+  regionKey,
+  reads,
+}: {
+  regionKey: string;
+  reads: readonly SheetRead[];
+}) {
   const failed = reads.filter(failedRead);
   return (
     <div data-act-read-failed className="space-y-4">
@@ -199,7 +234,8 @@ function ReadFailed({ regionKey, reads }: { regionKey: string; reads: readonly S
  *  has its data keeps the form up, so a failed background refresh never
  *  takes the amount she typed. Null once the record can be read. */
 function unread(regionKey: string, reads: readonly SheetRead[]) {
-  if (reads.some(failedRead)) return <ReadFailed regionKey={regionKey} reads={reads} />;
+  if (reads.some(failedRead))
+    return <ReadFailed regionKey={regionKey} reads={reads} />;
   if (reads.some((read) => read.data === undefined)) return <Reading />;
   return null;
 }
@@ -226,7 +262,11 @@ function PaymentForm<M extends string>({
   dayLabel: string;
   methods: readonly (readonly [M, string])[];
   consequence: (full: boolean) => string;
-  onRecord: (input: { amountCents: number; day: string; method: M }) => Promise<unknown>;
+  onRecord: (input: {
+    amountCents: number;
+    day: string;
+    method: M;
+  }) => Promise<unknown>;
   onDone: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -239,7 +279,10 @@ function PaymentForm<M extends string>({
   const amountCents = parseUsdToCents(amount);
   const over = amountCents != null && amountCents > balanceCents;
   const complete = amountCents != null && !over;
-  const label = amountCents != null ? `Record ${money(amountCents, currency)}` : 'Record the payment';
+  const label =
+    amountCents != null
+      ? `Record ${money(amountCents, currency)}`
+      : "Record the payment";
 
   const submit = async () => {
     if (!complete || pending) return;
@@ -248,7 +291,7 @@ function PaymentForm<M extends string>({
     try {
       await onRecord({ amountCents: amountCents!, day, method });
       // The Desk reads money under its own key: one act, every surface.
-      void queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      void queryClient.invalidateQueries({ queryKey: ["document-state"] });
       onDone();
     } catch (e) {
       setFailed(`The payment did not record.${errText(e)} Try again.`);
@@ -270,17 +313,28 @@ function PaymentForm<M extends string>({
             inputMode="decimal"
             value={amount}
             aria-invalid={amountCents == null || over || undefined}
-            aria-describedby={amountCents == null || over ? `${regionKey}-amount-reason` : undefined}
+            aria-describedby={
+              amountCents == null || over
+                ? `${regionKey}-amount-reason`
+                : undefined
+            }
             onChange={(event) => setAmount(event.target.value)}
           />
         </span>
         {(amountCents == null || over) && (
           <span id={`${regionKey}-amount-reason`} className="reason t-body-sm">
-            {over ? `No more than ${money(balanceCents, currency)} is open.` : 'Enter the amount received.'}
+            {over
+              ? `No more than ${money(balanceCents, currency)} is open.`
+              : "Enter the amount received."}
           </span>
         )}
       </div>
-      <DayField id={`${regionKey}-day`} label={dayLabel} value={day} onChange={setDay} />
+      <DayField
+        id={`${regionKey}-day`}
+        label={dayLabel}
+        value={day}
+        onChange={setDay}
+      />
       <div className="field">
         <label className="label" htmlFor={`${regionKey}-method`}>
           Method
@@ -300,7 +354,9 @@ function PaymentForm<M extends string>({
           </select>
         </span>
       </div>
-      <p className="t-body-sm text-[var(--text-muted)]">{consequence(amountCents === balanceCents)}</p>
+      <p className="t-body-sm text-[var(--text-muted)]">
+        {consequence(amountCents === balanceCents)}
+      </p>
       {failed && (
         <p role="alert" data-act-record-failed className="t-body-sm">
           {failed}
@@ -314,7 +370,7 @@ function PaymentForm<M extends string>({
           variant="terminal"
           disabled={!complete}
           held={!complete}
-          holdFix={`${regionKey}-amount-fix`}
+          aria-describedby={complete ? undefined : `${regionKey}-amount-reason`}
           loading={pending}
           loadingLabel="Recording…"
           onClick={() => void submit()}
@@ -329,43 +385,58 @@ function PaymentForm<M extends string>({
 /** A maker's scheduled payment: its line's own act (in place of the ledger). */
 function MakerPayment({ need, onDone }: SheetProps) {
   const poPaymentId = need.need.recordId!;
-  const purchaseOrderId = need.need.ledger?.context?.purchaseOrderId ?? '';
+  const purchaseOrderId = need.need.ledger?.context?.purchaseOrderId ?? "";
   const order = useOrder(need.projectId, purchaseOrderId);
   // useOrder reports only a successful read. The same purchase-orders query
   // (one cache entry) tells a failed read from one still on its way.
   const orders = usePurchaseOrders({ projectId: need.projectId });
   const schedule = usePOPayments(purchaseOrderId);
   const records = useVendorPayments(purchaseOrderId);
-  const record = useRecordVendorPayment({ errorSurface: 'inline' });
-  const waiting = unread('act-record-payment', [orders, schedule, records]);
-  if (waiting) return standing('act-record-payment', waiting, onDone);
+  const record = useRecordVendorPayment({ errorSurface: "inline" });
+  const waiting = unread("act-record-payment", [orders, schedule, records]);
+  if (waiting) return standing("act-record-payment", waiting, onDone);
   // A PO that is gone takes its schedule with it (po_payments cascades), so
   // its payment reads as missing here.
   const row = schedule.data?.find((payment) => payment.id === poPaymentId);
-  const remainder = row ? Math.max(row.amount_cents - paidToward(records.data, row.id), 0) : 0;
-  if (!row || row.state === 'paid' || row.state === 'refunded' || remainder === 0)
-    return standing('act-record-payment', <Missing />, onDone);
+  const remainder = row
+    ? Math.max(row.amount_cents - paidToward(records.data, row.id), 0)
+    : 0;
+  if (
+    !row ||
+    row.state === "paid" ||
+    row.state === "refunded" ||
+    remainder === 0
+  )
+    return standing("act-record-payment", <Missing />, onDone);
 
   // USD by constraint: neither purchase_orders nor po_payments carries a
   // currency column, and record_vendor_payment (00695) writes the ledger
   // row's currency_code as USD when, as here, none is passed.
-  const currency = 'USD';
-  const maker = order.maker ?? 'the maker';
-  const word = row.label?.trim() || KIND_WORD[row.kind] || 'Payment';
-  const due = row.due_date ? `, due ${fmtDay(row.due_date)}` : '';
+  const currency = "USD";
+  const maker = order.maker ?? "the maker";
+  const word = row.label?.trim() || KIND_WORD[row.kind] || "Payment";
+  const due = row.due_date ? `, due ${fmtDay(row.due_date)}` : "";
   return (
     <PaymentForm<VendorPaymentMethodKind>
       regionKey="act-record-payment"
-      record={`${word} to ${maker}, ${money(remainder, currency)}${due}${order.label ? ` · ${order.label}` : ''}.`}
+      record={`${word} to ${maker}, ${money(remainder, currency)}${due}${order.label ? ` · ${order.label}` : ""}.`}
       balanceCents={remainder}
       currency={currency}
       dayLabel="Paid on"
-      methods={VENDOR_METHODS.map((kind) => [kind, capitalised(METHOD_WORD[kind])] as const)}
+      methods={VENDOR_METHODS.map(
+        (kind) => [kind, capitalised(METHOD_WORD[kind])] as const,
+      )}
       consequence={(full) =>
         `Recording the payment ${full ? `marks the ${word.toLowerCase()} paid` : `counts toward the ${word.toLowerCase()}`}. It sends nothing to ${maker}.`
       }
       onRecord={({ amountCents, day, method }) =>
-        record.mutateAsync({ purchaseOrderId, poPaymentId, amountCents, paidOn: day, method })
+        record.mutateAsync({
+          purchaseOrderId,
+          poPaymentId,
+          amountCents,
+          paidOn: day,
+          method,
+        })
       }
       onDone={onDone}
     />
@@ -376,29 +447,38 @@ function MakerPayment({ need, onDone }: SheetProps) {
 function InvoicePayment({ need, onDone }: SheetProps) {
   const invoiceId = need.need.recordId!;
   const read = useInvoice(invoiceId);
-  const record = useRecordPayment({ errorSurface: 'inline' });
-  const waiting = unread('act-record-invoice-payment', [read]);
-  if (waiting) return standing('act-record-invoice-payment', waiting, onDone);
+  const record = useRecordPayment({ errorSurface: "inline" });
+  const waiting = unread("act-record-invoice-payment", [read]);
+  if (waiting) return standing("act-record-invoice-payment", waiting, onDone);
   // A gone invoice reads back as null.
   const invoice = read.data;
-  const open = invoice && (invoice.status === 'sent' || invoice.status === 'partially_paid');
+  const open =
+    invoice &&
+    (invoice.status === "sent" || invoice.status === "partially_paid");
   const balance = invoice ? invoiceBalanceCents(invoice) : 0;
-  if (!invoice || !open || balance === 0) return standing('act-record-invoice-payment', <Missing />, onDone);
+  if (!invoice || !open || balance === 0)
+    return standing("act-record-invoice-payment", <Missing />, onDone);
 
   const client =
-    invoice.client?.full_name?.trim() || invoice.project?.client?.full_name?.trim() || 'the client';
-  const label = invoice.invoice_number ? `Invoice ${invoice.invoice_number}` : 'The invoice';
-  const due = invoice.due_date ? `, due ${fmtDay(invoice.due_date)}` : '';
+    invoice.client?.full_name?.trim() ||
+    invoice.project?.client?.full_name?.trim() ||
+    "the client";
+  const label = invoice.invoice_number
+    ? `Invoice ${invoice.invoice_number}`
+    : "The invoice";
+  const due = invoice.due_date ? `, due ${fmtDay(invoice.due_date)}` : "";
   return (
-    <PaymentForm<Exclude<InvoicePaymentMethod, 'stripe'>>
+    <PaymentForm<Exclude<InvoicePaymentMethod, "stripe">>
       regionKey="act-record-invoice-payment"
       record={`${label} · ${money(balance, invoice.currency)} open${due}.`}
       balanceCents={balance}
       currency={invoice.currency}
       dayLabel="Date received"
-      methods={INVOICE_METHODS.map((method) => [method, INVOICE_PAYMENT_METHOD_LABELS[method]] as const)}
+      methods={INVOICE_METHODS.map(
+        (method) => [method, INVOICE_PAYMENT_METHOD_LABELS[method]] as const,
+      )}
       consequence={(full) =>
-        `Recording the payment ${full ? 'marks the invoice paid' : 'counts toward the invoice'}. It sends nothing to ${client}.`
+        `Recording the payment ${full ? "marks the invoice paid" : "counts toward the invoice"}. It sends nothing to ${client}.`
       }
       onRecord={({ amountCents, day, method }) =>
         record.mutateAsync({
@@ -428,7 +508,11 @@ export function RecordPaymentSheet(props: SheetProps) {
   return (
     <>
       <DocSheetHead icon={Banknote} title="Record a payment" />
-      {props.need.need.kind === 'overdue_invoice' ? <InvoicePayment {...props} /> : <MakerPayment {...props} />}
+      {props.need.need.kind === "overdue_invoice" ? (
+        <InvoicePayment {...props} />
+      ) : (
+        <MakerPayment {...props} />
+      )}
     </>
   );
 }
