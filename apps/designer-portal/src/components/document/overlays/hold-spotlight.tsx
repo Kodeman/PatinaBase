@@ -56,6 +56,21 @@ const firstFocusable = (el: HTMLElement) =>
     ? el
     : focusableWithin(el)[0];
 
+// How far fixed chrome outside the frame (the studio drawer) rises from the
+// viewport's foot.
+const footChrome = (host: HTMLElement) => {
+  if (typeof document.elementFromPoint !== "function") return 0;
+  let el = document.elementFromPoint(
+    window.innerWidth / 2,
+    window.innerHeight - 1,
+  );
+  for (; el && !host.contains(el); el = el.parentElement) {
+    if (window.getComputedStyle(el).position === "fixed")
+      return Math.max(0, window.innerHeight - el.getBoundingClientRect().top);
+  }
+  return 0;
+};
+
 type SpotWindow = { id: string; x: number; y: number; w: number; h: number };
 type Geometry = {
   ids: string[];
@@ -65,6 +80,22 @@ type Geometry = {
   inset: number;
 };
 
+/**
+ * A walkthrough step (US-36 K13): one window on what the step shows, the
+ * step's copy in the bar with Back and Next, and no fix slot. A step whose
+ * target is not in the frame keeps the bar with no window.
+ */
+export type SpotlightTeach = {
+  /** Zero-based. */
+  step: number;
+  total: number;
+  onBack: () => void;
+  /** On the last step, the act that ends the walkthrough. */
+  onNext: () => void;
+  /** The last step's act; "Done" when unset. */
+  doneLabel?: string;
+};
+
 export interface HoldSpotlightProps {
   frame: RefObject<HTMLElement | null>;
   holds: SpotlightHold[];
@@ -72,6 +103,8 @@ export interface HoldSpotlightProps {
   /** `keepFocus`: the holds cleared and focus is not the spotlight's to move. */
   onClose: (options?: { keepFocus: boolean }) => void;
   onNext?: (hold: SpotlightHold) => void;
+  /** Teach mode: each hold's label and reason are a step's heading and body. */
+  teach?: SpotlightTeach;
 }
 
 const things = (n: number) => (n === 1 ? "1 thing" : `${n} things`);
@@ -82,6 +115,7 @@ export function HoldSpotlight({
   open,
   onClose,
   onNext,
+  teach,
 }: HoldSpotlightProps) {
   const [frameEl, setFrameEl] = useState<HTMLElement | null>(null);
   const [geo, setGeo] = useState<Geometry | null>(null);
@@ -97,6 +131,7 @@ export function HoldSpotlight({
   const onCloseRef = useRef(onClose);
   const onNextRef = useRef(onNext);
   const reducedRef = useRef(reduced);
+  const teachRef = useRef(teach);
   const activeRef = useRef<string | null>(null);
   const advanceRef = useRef<(() => void) | null>(null);
   const dismissRef = useRef<(() => void) | null>(null);
@@ -107,6 +142,7 @@ export function HoldSpotlight({
     onCloseRef.current = onClose;
     onNextRef.current = onNext;
     reducedRef.current = reduced;
+    teachRef.current = teach;
   });
 
   // Re-read on open too, for a spotlight rendered inside its own frame.
@@ -130,6 +166,7 @@ export function HoldSpotlight({
     let done = false;
     let geoKey = "";
     let last: { hold: SpotlightHold; el: HTMLElement }[] = [];
+    let taught = -1;
     // A cleared hold that still holds focus: live and windowed until focus
     // leaves it, so typing that clears a hold on its first key keeps going.
     let linger: { id: string; el: HTMLElement } | null = null;
@@ -168,6 +205,11 @@ export function HoldSpotlight({
         marked.add(el);
       });
     };
+
+    const focusPrimary = () =>
+      barRef.current
+        ?.querySelector<HTMLElement>("[data-spotlight-primary]")
+        ?.focus({ preventScroll: true });
 
     const focusInto = (el: HTMLElement) => {
       const into =
@@ -210,7 +252,8 @@ export function HoldSpotlight({
       request = 0;
       if (done) return;
       const found = resolve();
-      if (found.length === 0) {
+      const lesson = teachRef.current;
+      if (found.length === 0 && !lesson) {
         done = true;
         setMessage("All set.");
         onCloseRef.current({ keepFocus: focusStays() });
@@ -226,29 +269,30 @@ export function HoldSpotlight({
           ))
       )
         linger = null;
-      const cleared = focused
-        ? last.find(
-            (entry) =>
-              entry.el.contains(focused) &&
-              host.contains(entry.el) &&
-              !found.some(
-                (now) => now.hold.id === entry.hold.id || now.el === entry.el,
-              ),
-          )
-        : undefined;
+      const cleared =
+        focused && !lesson
+          ? last.find(
+              (entry) =>
+                entry.el.contains(focused) &&
+                host.contains(entry.el) &&
+                !found.some(
+                  (now) => now.hold.id === entry.hold.id || now.el === entry.el,
+                ),
+            )
+          : undefined;
       if (cleared) linger = { id: cleared.hold.id, el: cleared.el };
       last = found;
       const activeIndex = Math.max(
         0,
         found.findIndex((entry) => entry.hold.id === activeRef.current),
       );
-      const active = found[activeIndex]!;
-      activeRef.current = active.hold.id;
-      setActiveId(active.hold.id);
+      const active = found[activeIndex] as (typeof found)[number] | undefined;
+      activeRef.current = active?.hold.id ?? null;
+      setActiveId(activeRef.current);
 
       // On a phone only the active window is cut, so only it stays live.
       const narrow = window.matchMedia(NARROW_QUERY).matches;
-      const shown = narrow ? [active] : found;
+      const shown = !active ? [] : narrow ? [active] : found;
       const cut = [
         ...shown.map(({ hold, el }) => ({ id: hold.id, el })),
         ...(linger ? [linger] : []),
@@ -305,15 +349,34 @@ export function HoldSpotlight({
         ? (barRef.current?.offsetHeight ?? 0) + (narrow ? 0 : 32)
         : 0;
       const height = Math.max(host.clientHeight, bottom + reserve);
+      // A taught frame that scrolls with the page docks its bar to the
+      // viewport's foot, above the fixed chrome there.
+      const dock =
+        lesson && !/auto|scroll/.test(hostStyle.overflowY)
+          ? -footChrome(host)
+          : inset;
       const ids = found.map((entry) => entry.hold.id);
-      const key = JSON.stringify([ids, windows, width, height, inset]);
+      const key = JSON.stringify([ids, windows, width, height, dock]);
       if (key !== geoKey) {
         geoKey = key;
-        setGeo({ ids, windows, width, height, inset });
+        setGeo({ ids, windows, width, height, inset: dock });
+      }
+
+      if (lesson) {
+        if (taught !== lesson.step) {
+          taught = lesson.step;
+          const hold = holdsRef.current[0];
+          setMessage(
+            `Step ${lesson.step + 1} of ${lesson.total}: ${hold?.label ?? ""}. ${hold?.reason ?? ""}`,
+          );
+          if (active) reveal(active.el);
+          focusPrimary();
+        } else if (focusLost()) focusPrimary();
+        return;
       }
 
       const n = found.length;
-      const reason = active.hold.reason;
+      const reason = active!.hold.reason;
       const first = count === -1;
       if (first) {
         setMessage(
@@ -326,8 +389,8 @@ export function HoldSpotlight({
       }
       count = n;
       if (first || focusLost()) {
-        reveal(active.el);
-        focusInto(active.el);
+        reveal(active!.el);
+        focusInto(active!.el);
       }
     };
 
@@ -540,46 +603,117 @@ export function HoldSpotlight({
                     : activeWindow.y + activeWindow.h + 4,
               }}
             >
-              {activeIndex + 1} of {total} · {activeHold.label}
+              {teach ? (
+                activeHold.label
+              ) : (
+                <>
+                  {activeIndex + 1} of {total} · {activeHold.label}
+                </>
+              )}
             </span>
           )}
           <div
             ref={barRef}
             role="group"
-            aria-label="What needs attention"
+            aria-label={teach ? "Walkthrough" : "What needs attention"}
             data-hold-spotlight-bar=""
             className="hold-spotlight__bar"
           >
-            {activeHold && (
-              <p className="hold-spotlight__reason">{activeHold.reason}</p>
+            {teach ? (
+              <TeachStep
+                teach={teach}
+                hold={activeHold}
+                onSkip={() => dismissRef.current?.()}
+              />
+            ) : (
+              <>
+                {activeHold && (
+                  <p className="hold-spotlight__reason">{activeHold.reason}</p>
+                )}
+                {activeHold?.fix}
+                <div className="hold-spotlight__acts">
+                  {total > 1 && (
+                    <DocumentAction
+                      actionKey="spotlight-next"
+                      surfaceKey="spotlight"
+                      regionKey="hold-spotlight"
+                      variant="secondary"
+                      onClick={() => advanceRef.current?.()}
+                    >
+                      Next
+                    </DocumentAction>
+                  )}
+                  <DocumentAction
+                    actionKey="spotlight-close"
+                    surfaceKey="spotlight"
+                    regionKey="hold-spotlight"
+                    variant="tertiary"
+                    onClick={() => dismissRef.current?.()}
+                  >
+                    Close
+                  </DocumentAction>
+                </div>
+              </>
             )}
-            {activeHold?.fix}
-            <div className="hold-spotlight__acts">
-              {total > 1 && (
-                <DocumentAction
-                  actionKey="spotlight-next"
-                  surfaceKey="spotlight"
-                  regionKey="hold-spotlight"
-                  variant="secondary"
-                  onClick={() => advanceRef.current?.()}
-                >
-                  Next
-                </DocumentAction>
-              )}
-              <DocumentAction
-                actionKey="spotlight-close"
-                surfaceKey="spotlight"
-                regionKey="hold-spotlight"
-                variant="tertiary"
-                onClick={() => dismissRef.current?.()}
-              >
-                Close
-              </DocumentAction>
-            </div>
           </div>
         </div>
       )}
     </div>,
     frameEl,
+  );
+}
+
+function TeachStep({
+  teach,
+  hold,
+  onSkip,
+}: {
+  teach: SpotlightTeach;
+  hold: SpotlightHold | undefined;
+  onSkip: () => void;
+}) {
+  const last = teach.step === teach.total - 1;
+  return (
+    <>
+      <div className="hold-spotlight__reason">
+        <p className="m-0 font-[family-name:var(--font-meta)] text-[11px] font-medium uppercase leading-4 tracking-[0.08em]">
+          Step {teach.step + 1} of {teach.total}
+        </p>
+        {hold?.label && <p className="m-0 font-medium">{hold.label}</p>}
+        {hold?.reason && <p className="m-0">{hold.reason}</p>}
+      </div>
+      <div className="hold-spotlight__acts">
+        <DocumentAction
+          actionKey="spotlight-skip"
+          surfaceKey="spotlight"
+          regionKey="hold-spotlight"
+          variant="tertiary"
+          onClick={onSkip}
+        >
+          Skip tour
+        </DocumentAction>
+        {teach.step > 0 && (
+          <DocumentAction
+            actionKey="spotlight-back"
+            surfaceKey="spotlight"
+            regionKey="hold-spotlight"
+            variant="tertiary"
+            onClick={teach.onBack}
+          >
+            Back
+          </DocumentAction>
+        )}
+        <DocumentAction
+          actionKey={last ? "spotlight-done" : "spotlight-next"}
+          surfaceKey="spotlight"
+          regionKey="hold-spotlight"
+          variant="secondary"
+          data-spotlight-primary=""
+          onClick={teach.onNext}
+        >
+          {last ? (teach.doneLabel ?? "Done") : "Next"}
+        </DocumentAction>
+      </div>
+    </>
   );
 }

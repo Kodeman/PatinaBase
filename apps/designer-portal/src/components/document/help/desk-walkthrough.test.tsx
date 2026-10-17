@@ -6,19 +6,21 @@
  *     coachmark to Radix's top-left fallback (spec §11.2 / proposal §12).
  *   · Step 6's CTA marks the tour complete, then opens the capture-lead sheet
  *     over the Desk (decisions #1) — the tour ends by acting, not describing.
+ *   · US-36 K13: the steps render through the hold spotlight's teach mode,
+ *     framed by the Desk's paper column — Back/Next, a persisted Done, Esc
+ *     skips, no shadow.
  *
  * Mocks the RESOLVED `@patina/help-system` barrel path (not the `@patina/…`
  * specifier) — jest's SWC path-aliasing means `jest.mock('@patina/help-system',
  * …)` is silently ignored (Trap 1, patina-testing skill), and the real barrel
  * reaches `@portabletext/react`, which throws a raw ESM `SyntaxError` under
- * Jest (Trap 2). The fake `TourController` below renders a "Capture a lead" button
- * that calls `onComplete` directly — this pins desk-walkthrough.tsx's own
- * `onComplete` wiring, not TourController's internal persistence (already
- * covered by the help-system package's own tests).
+ * Jest (Trap 2). The `TourController` below records its props and renders the
+ * REAL controller module (persistence + step state), with its Sanity lookup
+ * stubbed so every step shows its fallback copy.
  */
 import fs from 'fs';
 import path from 'path';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
 const mockOpenCaptureLead = jest.fn();
 jest.mock('@/components/document/command-bar', () => ({
@@ -49,6 +51,24 @@ jest.mock('@/hooks/use-desk-engagements', () => ({
 jest.mock('./help-state-provider', () => ({
   useHelpState: () => ({ helpStateReady: true }),
 }));
+
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: {
+    actionShown: jest.fn(),
+    actionSelected: jest.fn(),
+    wayfinding: { walkthroughStarted: jest.fn() },
+  },
+}));
+
+// The real controller's own Sanity lookup (its coachmark, never rendered now).
+jest.mock('../../../../../../packages/help-system/src/hooks/useHelpContent.ts', () => ({
+  useHelpContent: () => ({ data: null }),
+}));
+
+const mockTourControllerPath =
+  '../../../../../../packages/help-system/src/proactive/TourController/TourController.tsx';
+const mockTourStatePath =
+  '../../../../../../packages/help-system/src/proactive/TourController/tourState.ts';
 
 const mockGetTourState = jest.fn(() => ({}));
 const mockSetTourState = jest.fn();
@@ -100,34 +120,24 @@ jest.mock('../../../../../../packages/help-system/src/index.ts', () => ({
       fallbackCtaLabel?: string;
     }>;
     persona?: string;
-    onComplete?: () => void;
-    children: (api: unknown) => React.ReactNode;
   }) => {
     mockTourCaptured.steps = props.steps;
     mockTourCaptured.persona = props.persona;
-    const api = {
-      currentStep: props.steps.length - 1,
-      totalSteps: props.steps.length,
-      isActive: true,
-      start: jest.fn(),
-      next: jest.fn(),
-      prev: jest.fn(),
-      skip: jest.fn(),
-      complete: () => props.onComplete?.(),
-      restart: jest.fn(),
-      CoachmarkSlot: () => (
-        <button type="button" onClick={() => props.onComplete?.()}>
-          Capture a lead
-        </button>
-      ),
-    };
-    return <>{props.children(api)}</>;
+    const { TourController: Real } = jest.requireActual(mockTourControllerPath);
+    return <Real {...props} />;
   },
+  useHelpContent: () => ({ data: null }),
   getTourState: (...args: [string]) => mockGetTourState(...args),
   setTourState: (...args: [string, unknown]) => mockSetTourState(...args),
 }));
 
-import { DeskWalkthrough } from './desk-walkthrough';
+import { DeskWalkthrough, START_DESK_WALKTHROUGH_EVENT } from './desk-walkthrough';
+import { DESK_WALKTHROUGH_TOUR_ID } from './desk-walkthrough-gate';
+
+beforeAll(() => {
+  // jsdom has no layout: each step's beforeShow scrolls its anchor.
+  Element.prototype.scrollIntoView = jest.fn();
+});
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -157,11 +167,147 @@ describe('DeskWalkthrough — step 1 anchor', () => {
   });
 });
 
-describe('DeskWalkthrough — step 6 acts', () => {
-  it('clicking the step-6 CTA "Capture a lead" completes the tour and opens the capture-lead sheet', () => {
-    render(<DeskWalkthrough />);
+// ─── US-36 K13 — the steps, through the spotlight's teach mode ───────────────
 
-    fireEvent.click(screen.getByRole('button', { name: 'Capture a lead' }));
+const STEP_ID = (n: number) => `designer-portal/tours/desk-walkthrough/step-${n}`;
+
+/** The Desk as the tour sees it: its paper column, and the drawer outside it. */
+function Desk() {
+  return (
+    <>
+      <main>
+        <header>
+          <h1 data-tour-anchor="desk-greeting">Good morning, Leah</h1>
+          <button type="button" data-tour-anchor="desk-capture-lead">
+            Inquiry
+          </button>
+          <button type="button" data-tour-anchor="desk-find-anything">
+            Find anything
+          </button>
+        </header>
+        <p data-tour-anchor="desk-folio">The Hartley house</p>
+        <nav aria-label="Contents" data-tour-anchor="desk-contents">
+          Library
+        </nav>
+      </main>
+      <nav aria-label="Studio drawer" data-tour-anchor="studio-drawer">
+        Doors
+      </nav>
+      <DeskWalkthrough />
+    </>
+  );
+}
+
+function startTour() {
+  render(<Desk />);
+  act(() => {
+    window.dispatchEvent(new Event(START_DESK_WALKTHROUGH_EVENT));
+  });
+  return () => within(screen.getByRole('group', { name: 'Walkthrough' }));
+}
+
+const savedTour = () =>
+  jest.requireActual(mockTourStatePath).getTourState(DESK_WALKTHROUGH_TOUR_ID);
+
+describe('DeskWalkthrough — the spotlight teaches each step (US-36 K13)', () => {
+  it('opens on step 1 framed by the Desk paper column, its window on the greeting', () => {
+    const bar = startTour();
+
+    expect(bar().getByText('Step 1 of 6')).toBeInTheDocument();
+    expect(bar().getByText('Studio overview')).toBeInTheDocument();
+    const spotlight = document.querySelector('[data-hold-spotlight]');
+    expect(spotlight?.closest('main')).not.toBeNull();
+    expect(document.querySelector(`[data-hold-spotlight-window="${STEP_ID(1)}"]`)).not.toBeNull();
+    // The greeting is live in its window; the rest of the column is inert.
+    expect(screen.getByText('The Hartley house')).toHaveAttribute('inert');
+    expect(screen.getByText('Good morning, Leah').closest('[inert]')).toBeNull();
+    // Back has nothing to go back to on the first step.
+    expect(bar().queryByRole('button', { name: 'Back' })).toBeNull();
+  });
+
+  it('Next advances the step and moves the window to its anchor', async () => {
+    const bar = startTour();
+
+    fireEvent.click(bar().getByRole('button', { name: 'Next' }));
+
+    expect(bar().getByText('Step 2 of 6')).toBeInTheDocument();
+    expect(bar().getByText('One client, one document')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        document.querySelector(`[data-hold-spotlight-window="${STEP_ID(2)}"]`),
+      ).not.toBeNull(),
+    );
+    expect(document.querySelector(`[data-hold-spotlight-window="${STEP_ID(1)}"]`)).toBeNull();
+    // The step is announced outside the inert subtree and focus sits on Next.
+    expect(screen.getByRole('status')).toHaveTextContent(/^Step 2 of 6: One client, one document\./);
+    expect(bar().getByRole('button', { name: 'Next' })).toHaveFocus();
+  });
+
+  it('Back returns to the previous step', async () => {
+    const bar = startTour();
+
+    fireEvent.click(bar().getByRole('button', { name: 'Next' }));
+    fireEvent.click(bar().getByRole('button', { name: 'Back' }));
+
+    expect(bar().getByText('Step 1 of 6')).toBeInTheDocument();
+    expect(bar().getByText('Studio overview')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        document.querySelector(`[data-hold-spotlight-window="${STEP_ID(1)}"]`),
+      ).not.toBeNull(),
+    );
+  });
+
+  it('a step anchored outside the column (the drawer) keeps its bar, with no window and the drawer live', async () => {
+    const bar = startTour();
+
+    for (let i = 0; i < 3; i += 1) fireEvent.click(bar().getByRole('button', { name: 'Next' }));
+
+    expect(bar().getByText('Step 4 of 6')).toBeInTheDocument();
+    expect(bar().getByText('The studio drawer')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(document.querySelector('[data-hold-spotlight-window]')).toBeNull(),
+    );
+    expect(screen.getByRole('navigation', { name: 'Studio drawer' }).closest('[inert]')).toBeNull();
+  });
+
+  it('Done on step 6 persists the tour as seen and opens the capture-lead sheet', () => {
+    const bar = startTour();
+
+    for (let i = 0; i < 5; i += 1) fireEvent.click(bar().getByRole('button', { name: 'Next' }));
+    expect(bar().getByText('Step 6 of 6')).toBeInTheDocument();
+    fireEvent.click(bar().getByRole('button', { name: 'Record an inquiry' }));
+
+    expect(savedTour().completed).toBe(true);
+    expect(mockOpenCaptureLead).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem('patina:margin-note:desk-first-touch')).not.toBeNull();
+    expect(document.querySelector('[data-hold-spotlight]')).toBeNull();
+  });
+
+  it('Esc skips the tour', () => {
+    startTour();
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+    expect(savedTour().abandoned).toBe(true);
+    expect(document.querySelector('[data-hold-spotlight]')).toBeNull();
+    expect(mockOpenCaptureLead).not.toHaveBeenCalled();
+  });
+
+  it('wears no shadow and no opacity (D4)', () => {
+    startTour();
+
+    expect(document.querySelector('[data-hold-spotlight]')).not.toBeNull();
+    expect(document.querySelectorAll('[class*="shadow"], [class*="opacity"]')).toHaveLength(0);
+  });
+});
+
+describe('DeskWalkthrough — step 6 acts', () => {
+  it('clicking the step-6 CTA "Record an inquiry" completes the tour and opens the capture-lead sheet', () => {
+    const bar = startTour();
+
+    for (let i = 0; i < 5; i += 1) fireEvent.click(bar().getByRole('button', { name: 'Next' }));
+    fireEvent.click(bar().getByRole('button', { name: 'Record an inquiry' }));
 
     expect(mockOpenCaptureLead).toHaveBeenCalledTimes(1);
     // handleComplete's other side effect — retiring the desk-first-touch
