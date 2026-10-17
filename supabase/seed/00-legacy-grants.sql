@@ -23016,6 +23016,102 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.ffe_pricing_approvals FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.ffe_pricing_approvals TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.ffe_pricing_approvals TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.ffe_pricing_approval_lines FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.ffe_pricing_approval_lines TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.ffe_pricing_approval_lines TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.ffe_pricing_events FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.ffe_pricing_events TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.ffe_pricing_events TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.snapshot_project_pricing(uuid, text, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ffe_pricing_events_log() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._respond_project_approval_checked( uuid, text, uuid, timestamptz, text, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_pricing_approval(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_pricing_approval(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_ffe_pricing_events(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00810_us37_pricing_approval_log.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_ffe_pricing_events(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00812_us37_presentation_identity.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.get_client_presentation_identity(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
@@ -23073,6 +23169,12 @@ END $g$;
 -- 00813_us37_inherited_pricing_paths.sql
 DO $g$ BEGIN
   GRANT SELECT ( aesthete_model_version, aesthete_vector, aesthete_vector_at, available_colors, brand, capture_provenance, capture_source, captured_at, captured_by, catalog_equivalent_id, category, colors, configuration_mode, configuration_pricing_strategy, configuration_revision, configuration_updated_at, created_at, deleted_at, description, dimensions, embedding, embedding_updated_at, field_capture_id, finish, finishes, freight_class, id, images, layer, lead_time_weeks, material_tags, materials, merged_into_id, name, owner_user_id, patina_managed, payment_terms, photo_verified_at, price_retail, promoted_at, promoted_by, promoted_from_id, published_at, quality_score, retailer_id, search_vector, seo_description, seo_title, shipping_flat_cents, short_description, sku, slug, source_url, status, studio_id, style_caption, style_tags, subcategory, tags, updated_at, usage_notes, vendor_contact, vendor_id, vendor_sku ) ON public.products TO anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00814_us37_aesthete_view_revoke.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.v_aesthete_personal_input, public.v_aesthete_studio_input, public.v_aesthete_catalog_input FROM anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
