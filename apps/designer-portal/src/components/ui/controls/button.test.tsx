@@ -74,7 +74,7 @@ describe("Button · held", () => {
 /**
  * US-36 K4 — pressing a held Button lights up what holds it, inside the
  * nearest `data-spotlight-frame`. A site's own onHeldActivate still answers
- * alone; with no frame, the press is swallowed as before.
+ * alone; with no frame, focus goes to the reason (SQ-1211).
  */
 describe("Button · held spotlight", () => {
   const REASON = "Link a client with an email address.";
@@ -129,11 +129,19 @@ describe("Button · held spotlight", () => {
     );
   });
 
-  it("keeps today's behaviour when no frame holds it", () => {
+  it("moves focus to its reason when no frame holds it (SQ-1211)", () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     render(<Sheet framed={false} />);
     fireEvent.click(send());
     expect(layer()).toBeNull();
     expect(screen.queryByRole("status")).toBeNull();
+    const reason = document.getElementById("why")!;
+    expect(document.activeElement).toBe(reason);
+    expect(reason).toHaveAttribute("tabindex", "-1");
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"Send the agreement"'),
+    );
+    warn.mockRestore();
   });
 
   it("opens one window per hold when given holds", () => {

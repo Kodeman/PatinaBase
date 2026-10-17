@@ -28,7 +28,10 @@ export function useHoldSpotlight(holds: SpotlightHold[]) {
       fromEl ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setIsOpen(true);
   }, []);
-  const close = useCallback(() => setIsOpen(false), []);
+  const close = useCallback((options?: { keepFocus: boolean }) => {
+    if (options?.keepFocus) opener.current = null;
+    setIsOpen(false);
+  }, []);
 
   // A passive effect, so it runs after HoldSpotlight's layout cleanup has
   // lifted the `inert` it laid over the opener.
