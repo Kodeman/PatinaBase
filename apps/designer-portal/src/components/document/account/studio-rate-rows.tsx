@@ -109,7 +109,7 @@ export function StudioRateRows({
   // K8 — the row the last save on this field wrote. The offer prices at that
   // row and no other, so it never appears for a rate already in force.
   const [saved, setSaved] = useState<StudioMemberRate | null>(null);
-  const [priced, setPriced] = useState<{ rateId: string; minutes: number } | null>(
+  const [priced, setPriced] = useState<{ rateId: string; count: number } | null>(
     null,
   );
   useEffect(() => {
@@ -238,10 +238,11 @@ export function StudioRateRows({
             loadingLabel="Pricing…"
             onClick={() => {
               const rateId = saved.id;
-              const minutes = pendingMinutes;
+              // The server's count, not the estimate shown: hours can move
+              // between the read and the act.
               rerate.mutate(
                 { rateId, expectedRateCents: saved.hourly_rate_cents },
-                { onSuccess: () => setPriced({ rateId, minutes }) },
+                { onSuccess: (count) => setPriced({ rateId, count }) },
               );
             }}
           >
@@ -251,7 +252,11 @@ export function StudioRateRows({
       )}
       <ActFailLine error={rerate.error && rerateRefusal(rerate.error)} />
       <p role="status" className={META}>
-        {priced ? `Priced ${hoursOf(priced.minutes)} hours.` : ''}
+        {priced
+          ? priced.count > 0
+            ? 'Priced the hours logged before this rate.'
+            : 'No hours were waiting for this rate.'
+          : ''}
       </p>
 
       {history.length > 0 && (

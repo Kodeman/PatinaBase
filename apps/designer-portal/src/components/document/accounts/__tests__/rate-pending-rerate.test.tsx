@@ -95,7 +95,7 @@ describe('StudioRateRows · re-rate pending hours (K8)', () => {
     ).toBeInTheDocument();
   });
 
-  it('prices only on the act, at the saved row, then says how many hours', () => {
+  it('prices only on the act, at the saved row, then says it priced them', () => {
     render(rows({ pendingMinutes: 90 }));
     saveRate();
     expect(mockRerate).not.toHaveBeenCalled();
@@ -109,8 +109,20 @@ describe('StudioRateRows · re-rate pending hours (K8)', () => {
     const [, options] = mockRerate.mock.calls[0] as [unknown, { onSuccess: (n: number) => void }];
     act(() => options.onSuccess(2));
 
-    expect(screen.getByRole('status')).toHaveTextContent('Priced 1.5 hours.');
+    expect(screen.getByRole('status')).toHaveTextContent('Priced the hours logged before this rate.');
     expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+  });
+
+  it("SQ-1090: says nothing was priced when the server priced no hours, whatever the estimate said", () => {
+    render(rows({ pendingMinutes: 90 }));
+    saveRate();
+    fireEvent.click(screen.getByRole('button', { name: 'Price them' }));
+
+    const [, options] = mockRerate.mock.calls[0] as [unknown, { onSuccess: (n: number) => void }];
+    act(() => options.onSuccess(0));
+
+    expect(screen.getByRole('status')).toHaveTextContent('No hours were waiting for this rate.');
+    expect(screen.getByRole('status')).not.toHaveTextContent(/Priced/);
   });
 
   it('never offers the line on a row whose writes would price nothing (HT-3-e(2))', () => {
