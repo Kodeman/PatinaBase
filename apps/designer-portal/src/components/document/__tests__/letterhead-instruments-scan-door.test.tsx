@@ -43,6 +43,8 @@ jest.mock('@patina/supabase', () => ({
     auth: { getUser: () => Promise.resolve({ data: { user: null } }) },
   }),
   useProjectV2: () => ({ data: undefined }),
+  useSessionUserId: () => null,
+  useDocumentClientLinkHold: () => ({ data: null }),
   useProjectRoster: () => ({ data: [] }),
   // A resolved hero photo with no path to sign — `useClientScans` passes its
   // `image_url` straight through, which is all this door's own tile-picker

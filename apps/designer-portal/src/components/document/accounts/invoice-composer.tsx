@@ -96,6 +96,7 @@ import { topActiveModalDialog } from "../overlays/active-dialog";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { ActFailLine } from "@/components/feedback/act-fail-line";
 import { openAccountPage } from "../account/open-account-page";
+import { CopyAct } from "../copy-act";
 import { AppError } from "@/lib/error-handler";
 import {
   EMPTY_ADHOC,
@@ -1360,6 +1361,7 @@ export function InvoiceComposer({
                                   selectViewerStudioId(pricingStudioId);
                                 openAccountPage("studio", {
                                   rateFor: member.userId,
+                                  aboveFolio: true,
                                 });
                               }}
                             >
@@ -2129,62 +2131,6 @@ function askRateNote(projectName: string, memberNames: string[]): string {
   return memberNames.length > 0
     ? `Could you set a rate for ${new Intl.ListFormat("en", { type: "conjunction" }).format(memberNames)}? I'm drafting ${projectName}'s invoice.`
     : `Could you set a rate for the hours on ${projectName}? I'm drafting its invoice.`;
-}
-
-/**
- * A quiet copy act. Nothing is sent (M4): the text goes to the clipboard, or,
- * where the clipboard refuses, the visible text is selected for a manual copy.
- * writeText is called inside the click, which Safari requires.
- */
-function CopyAct({
-  text,
-  selectRef,
-  actionKey,
-  children,
-}: {
-  text: string;
-  selectRef: RefObject<HTMLElement | null>;
-  actionKey: string;
-  children: ReactNode;
-}) {
-  const [copied, setCopied] = useState(false);
-  const selectText = () => {
-    const node = selectRef.current;
-    const selection = window.getSelection();
-    if (!node || !selection) return;
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  };
-  return (
-    <div className="flex flex-wrap items-center gap-x-3">
-      <DocumentAction
-        actionKey={actionKey}
-        surfaceKey="accounts"
-        regionKey="invoice-composer"
-        variant="tertiary"
-        onClick={() => {
-          setCopied(false);
-          try {
-            navigator.clipboard
-              .writeText(text)
-              .then(() => setCopied(true), selectText);
-          } catch {
-            selectText();
-          }
-        }}
-      >
-        {children}
-      </DocumentAction>
-      <span
-        role="status"
-        className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
-      >
-        {copied ? "Copied." : ""}
-      </span>
-    </div>
-  );
 }
 
 /** A refusal before anything was written: a billing gap or a bad request is

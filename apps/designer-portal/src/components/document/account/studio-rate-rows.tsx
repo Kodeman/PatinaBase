@@ -41,8 +41,8 @@ const META =
   't-head text-[var(--color-aged-oak)]';
 
 const dollars = (cents: number) => (cents / 100).toFixed(2);
-/** K8 counts hours, never entries. */
-const hoursOf = (minutes: number) => (minutes / 60).toFixed(1);
+/** K8 counts hours, never entries: to one decimal, with no trailing `.0`. */
+const hoursOf = (minutes: number) => String(Math.round(minutes / 6) / 10);
 
 /** K8 — 00797 refuses in its own words behind its function's name, and the
  *  superseded refusal carries the row's id. Say the words without either;
@@ -112,6 +112,13 @@ export function StudioRateRows({
   const [priced, setPriced] = useState<{ rateId: string; count: number } | null>(
     null,
   );
+  // The save rides the field's blur, so focus has already moved on: when the
+  // save raises the offer, its act takes focus; otherwise focus stays put.
+  const priceRef = useRef<HTMLButtonElement>(null);
+  const offerFor = saved && pendingMinutes > 0 ? saved.id : null;
+  useEffect(() => {
+    if (offerFor) priceRef.current?.focus();
+  }, [offerFor]);
   useEffect(() => {
     if (!focusOnMount) return;
     // Two frames: the sheet lands its own focus the frame after it opens, and
@@ -230,6 +237,7 @@ export function StudioRateRows({
             {`${hoursOf(pendingMinutes)} hours were logged before this rate. Price them at $${dollars(saved.hourly_rate_cents)}/hr?`}
           </p>
           <DocumentAction
+            ref={priceRef}
             actionKey="price-rate-pending-hours"
             surfaceKey="account"
             regionKey="studio-rates"

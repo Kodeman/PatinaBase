@@ -95,6 +95,45 @@ describe('StudioRateRows · re-rate pending hours (K8)', () => {
     ).toBeInTheDocument();
   });
 
+  it('SQ-1113: prints whole hours without a trailing .0, and keeps a real fraction', () => {
+    render(rows({ pendingMinutes: 180 }));
+    saveRate();
+    expect(
+      screen.getByText('3 hours were logged before this rate. Price them at $175.00/hr?'),
+    ).toBeInTheDocument();
+  });
+
+  it('SQ-1113: a save that raises the offer moves focus to Price them', async () => {
+    render(
+      <>
+        {rows({ pendingMinutes: 90 })}
+        <input aria-label="Next rate field" />
+      </>,
+    );
+    const next = screen.getByLabelText('Next rate field');
+    next.focus();
+    saveRate();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Price them' })).toHaveFocus());
+  });
+
+  it('SQ-1113: a save that raises no offer leaves focus in the next field', async () => {
+    render(
+      <>
+        {rows({ pendingMinutes: 0 })}
+        <input aria-label="Next rate field" />
+      </>,
+    );
+    const next = screen.getByLabelText('Next rate field');
+    next.focus();
+    saveRate();
+
+    await act(async () => {
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+    });
+    expect(next).toHaveFocus();
+  });
+
   it('prices only on the act, at the saved row, then says it priced them', () => {
     render(rows({ pendingMinutes: 90 }));
     saveRate();

@@ -37,6 +37,8 @@ jest.mock('@patina/supabase', () => ({
     auth: { getUser: () => Promise.resolve({ data: { user: null } }) },
   }),
   useProjectV2: () => ({ data: {} }),
+  useSessionUserId: () => null,
+  useDocumentClientLinkHold: () => ({ data: null }),
   useProjectRoster: () => ({ data: [] }),
   resolveCoverPhoto: () => null,
   publicUrlToPath: () => null,

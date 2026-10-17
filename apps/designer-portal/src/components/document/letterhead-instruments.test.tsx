@@ -43,6 +43,10 @@ import {
 // No tier recorded — the instrument's own default is `milestone`, which is
 // the tier the W3-R4 row is specified against. F52 cases set a proposal.
 let mockProject: Record<string, unknown> = {};
+// K5 — who is reading, and the server's link hold for her (null: she may link).
+let mockViewerId: string | null = 'viewer-1';
+let mockLinkHold: 'not_permitted' | 'lead_not_in_studio' | null = null;
+let mockLinkHoldReads: Array<string | null> = [];
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -66,6 +70,11 @@ jest.mock('@patina/supabase', () => ({
     auth: { getUser: () => Promise.resolve({ data: { user: null } }) },
   }),
   useProjectV2: () => ({ data: mockProject }),
+  useSessionUserId: () => mockViewerId,
+  useDocumentClientLinkHold: (projectId: string | null) => {
+    mockLinkHoldReads.push(projectId);
+    return { data: projectId ? mockLinkHold : undefined };
+  },
   useProjectRoster: () => ({ data: [{ id: 'r1' }, { id: 'r2' }] }),
   resolveCoverPhoto: () => null,
   publicUrlToPath: () => null,
@@ -406,6 +415,78 @@ describe('Message needs a linked client (F52)', () => {
     expect(screen.queryByText('Link a client first.')).not.toBeInTheDocument();
     fireEvent.click(message);
     expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+});
+
+/**
+ * SQ-1113 (K5, 00796) — the header's Link a client answers to the same hold as
+ * the invoice composer's: the lead or an owner/admin of the project's studio
+ * links; anyone else is asked to ask the lead, with a note to copy.
+ */
+describe('Link a client on the letterhead follows K5', () => {
+  beforeEach(() => {
+    installTier(true);
+    mockViewerId = 'viewer-1';
+    mockLinkHold = null;
+    mockLinkHoldReads = [];
+    mockProject = {
+      name: 'Ashgrove',
+      designer_id: 'lead-1',
+      designer: { full_name: 'Leah Hartwell' },
+    };
+  });
+  afterEach(() => {
+    mockViewerId = 'viewer-1';
+    mockLinkHold = null;
+    mockProject = {};
+  });
+
+  function renderNoClient() {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <LetterheadInstruments projectId="proj-1" clientProfileId={null} clientName="Client User" />
+      </QueryClientProvider>,
+    );
+  }
+
+  it('a member who may not link: the ask and Copy a note, and no Link act', () => {
+    mockLinkHold = 'not_permitted';
+    renderNoClient();
+
+    expect(mockLinkHoldReads).toContain('proj-1');
+    const message = screen.getByRole('button', { name: 'Message the client' });
+    expect(message).toHaveAttribute('aria-disabled', 'true');
+    expect(document.getElementById(message.getAttribute('aria-describedby')!)).toHaveTextContent(
+      'No client yet. Ask Leah Hartwell to link one.',
+    );
+    expect(screen.queryByRole('button', { name: 'Link a client' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Could you link a client to Ashgrove? I'd like to message them."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy a note' })).toBeInTheDocument();
+    expect(screen.queryByTestId('household-sheet')).not.toBeInTheDocument();
+  });
+
+  it('an owner (not the lead) whom the server admits: LINK A CLIENT, opening the sheet', () => {
+    mockLinkHold = null;
+    renderNoClient();
+
+    expect(mockLinkHoldReads).toContain('proj-1');
+    expect(screen.queryByText(/Ask Leah Hartwell/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy a note' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Link a client' }));
+    expect(screen.getByTestId('household-sheet')).toBeInTheDocument();
+  });
+
+  it('the lead links without waiting on the read', () => {
+    mockViewerId = 'lead-1';
+    mockLinkHold = 'not_permitted';
+    renderNoClient();
+
+    expect(mockLinkHoldReads).not.toContain('proj-1');
+    expect(screen.getByRole('button', { name: 'Link a client' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy a note' })).not.toBeInTheDocument();
   });
 });
 
