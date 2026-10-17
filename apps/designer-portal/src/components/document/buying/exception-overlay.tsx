@@ -349,6 +349,7 @@ export function ExceptionPathSheet({
   const [error, setError] = useState<string | null>(null);
   const pathName = useId();
   const heldId = useId();
+  const choiceFixId = useId();
 
   const vendorName = exception.purchase_order?.vendor?.name ?? 'the maker';
   const label = exceptionTypeLabel(exception.type);
@@ -432,7 +433,7 @@ export function ExceptionPathSheet({
           <SubstitutionFlow exception={exception} onDecline={() => { setDeclined(true); setChosen(null); }} />
         ) : (
           <>
-            <fieldset>
+            <fieldset id={choiceFixId}>
               <legend className={LABEL_CLS}>Resolution</legend>
               <div className="mt-1.5 space-y-1">
                 {paths.map((p) => (
@@ -488,6 +489,7 @@ export function ExceptionPathSheet({
                 variant="primary"
                 disabled={pending || missing || gate.held}
                 held={gate.held}
+                holdFix={gate.held ? choiceFixId : undefined}
                 aria-describedby={gate.held ? heldId : undefined}
                 loading={pending}
                 loadingLabel="Recording…"

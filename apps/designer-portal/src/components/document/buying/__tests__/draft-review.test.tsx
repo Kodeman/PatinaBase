@@ -134,6 +134,29 @@ describe('DraftReview', () => {
     expect(onAddAddress).toHaveBeenCalledTimes(1);
   });
 
+  it('R186: pressing the held Send in its frame windows Add recipient email and lands focus on it', async () => {
+    render(
+      <div data-spotlight-frame="">
+        <DraftReview
+          draft={{ ...DRAFT, to_email: null }}
+          addressee="Fixture Metalworks"
+          onAddAddress={jest.fn()}
+        />
+      </div>,
+    );
+    const add = screen.getByRole('button', { name: 'Add recipient email' });
+    fireEvent.click(screen.getByRole('button', { name: 'Send correspondence' }));
+    await waitFor(() =>
+      expect(
+        Array.from(document.querySelectorAll('[data-hold-spotlight-window]')).map((el) =>
+          el.getAttribute('data-hold-spotlight-window'),
+        ),
+      ).toEqual([add.id]),
+    );
+    expect(add).toHaveFocus();
+    expect(screen.getByLabelText('Subject')).not.toHaveFocus();
+  });
+
   it('with no addressee known, the held Send still says why, and offers no repair it cannot land', () => {
     render(<DraftReview draft={{ ...DRAFT, to_email: null }} />);
     const send = screen.getByRole('button', { name: 'Send correspondence' });
