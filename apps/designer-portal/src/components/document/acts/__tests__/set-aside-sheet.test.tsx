@@ -68,9 +68,13 @@ describe('SetAsideSheet (U-Q5)', () => {
   it('opens one spotlight window per missing field, then removes the fixed field', async () => {
     const { onSave } = renderSheet();
     const user = userEvent.setup();
+    // The sheet takes focus on its first frame; a person presses after that.
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
     await user.click(saveButton());
     const windows = () => document.querySelectorAll('[data-hold-spotlight-window]');
     await waitFor(() => expect(windows()).toHaveLength(2));
+    expect(screen.getByLabelText('Back on').closest('[inert]')).toBeNull();
+    expect(screen.getByLabelText('Back on')).toHaveFocus();
 
     fill('Back on', '2026-10-16');
     await user.click(screen.getByLabelText('Waiting on'));

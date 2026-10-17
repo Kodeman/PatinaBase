@@ -7,7 +7,7 @@
  * meets it and the sentence standing beside it.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ArchiveCardDoor, archivedSentence } from "../archive-card-door";
 
 const archiveMutate = jest.fn();
@@ -104,6 +104,9 @@ describe("ArchiveCardDoor", () => {
     const note = document.getElementById("archive-held-card-dana");
     expect(note).toHaveTextContent(/owner or an admin/);
     expect(note?.closest("[inert]")).toBeNull();
+    // A note-only window holds nothing to focus: focus goes to the bar.
+    const bar = document.querySelector<HTMLElement>("[data-hold-spotlight-bar]")!;
+    expect(within(bar).getAllByRole("button")[0]).toHaveFocus();
   });
 
   it("writes nothing when a held act is pressed", () => {
