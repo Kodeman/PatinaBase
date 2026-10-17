@@ -66,6 +66,7 @@ import {
   QUIET_FOCUS,
   ROOM_HEADING_ATTR,
 } from "@/lib/document/pieces/sheet-focus";
+import { ItemLabelPrefix } from "./item-label";
 import { MoveToRoomMenu, type MoveRoom } from "./move-to-room-menu";
 import { unitWordFor } from "./placement-chips";
 import {
@@ -86,6 +87,8 @@ export type RoughInGroupTarget = { groupId: string } | { name: string } | null;
 export interface RoughInRow {
   id: string;
   name: string;
+  /** The item label (00808), printed before the name; none on a pending line. */
+  label?: string | null;
   quantity: number;
   unit: FfeLineUnit;
   /** Per unit, internal, printed `~$4,800` (Q7, D12). */
@@ -725,6 +728,7 @@ function LineRow({
               {GROUP_MEMBER_MARK}
             </span>
           ) : null}
+          <ItemLabelPrefix label={row.label} />
           <input
             ref={nameRef}
             aria-label={`Line ${index + 1}`}
@@ -852,6 +856,7 @@ function LineCard({
               {GROUP_MEMBER_MARK}
             </span>
           ) : null}
+          <ItemLabelPrefix label={row.label} />
           <input
             ref={nameRef}
             aria-label={`Line ${index + 1}`}

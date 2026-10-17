@@ -285,6 +285,8 @@ interface PriceLine extends OverviewLine {
   updated_at?: string | null;
   /** ISO 4217 code of the line's prices (00661, USD by default). */
   currency?: string | null;
+  /** The item label (00808). */
+  doc_code?: string | null;
 }
 
 type Tool =
@@ -719,6 +721,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     return {
       id: line.id,
       name: lineName(line),
+      label: line.doc_code ?? null,
       productName: line.product?.name ?? null,
       quantity,
       unit: line.unit,

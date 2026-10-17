@@ -49,6 +49,7 @@ import {
   marginFromClient,
   markupFromClient,
 } from "@/lib/document/trade-pricing";
+import { ItemLabelPrefix, labelledName } from "./item-label";
 import { MoveToRoomMenu, type MoveRoom } from "./move-to-room-menu";
 import { money, unitWordFor } from "./placement-chips";
 import {
@@ -63,6 +64,8 @@ export type PriceRowAct = "labor" | "allowance" | "reset" | "move" | "remove";
 export interface PriceRow {
   id: string;
   name: string;
+  /** The item label (00808), printed before the line's name. */
+  label?: string | null;
   /** The filled product, printed under the line's name (a7). */
   productName?: string | null;
   quantity: number;
@@ -389,6 +392,7 @@ function LineRows({
                   ↳
                 </span>
               ) : null}
+              <ItemLabelPrefix label={row.label} />
               {/* Focus lands here once ADD LABOR adds this line (T-60a F6). */}
               <span
                 data-line-name=""
@@ -619,6 +623,7 @@ function CostChangeRow({
     cost && change.heldMarkupPct != null
       ? clientFromMarkup(cost, change.heldMarkupPct)
       : null;
+  const lineName = labelledName(row.label, row.name);
   return (
     <tr
       data-cost-change-for={row.id}
@@ -636,6 +641,7 @@ function CostChangeRow({
           </p>
           <button
             type="button"
+            aria-label={`Keep client price for ${lineName}`}
             onClick={() => onResolve("keep_client")}
             className={ACT}
           >
@@ -648,6 +654,7 @@ function CostChangeRow({
           ) : null}
           <button
             type="button"
+            aria-label={`Keep markup for ${lineName}`}
             onClick={() => onResolve("keep_markup")}
             className={ACT}
           >
