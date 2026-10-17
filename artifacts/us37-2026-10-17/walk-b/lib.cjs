@@ -18,6 +18,9 @@ async function open(portal, size = 'wide', opts = {}) {
   const statePath = path.join(STATE, `${portal}-${opts.email || PORTALS[portal].email}.json`);
   const context = await browser.newContext({
     viewport: SIZES[size],
+    // BYPASS_CSP=1: local-only harness setting. The client CSP allows https images only,
+    // and local storage is http://127.0.0.1:54321 (ENV-2); prod storage is https.
+    bypassCSP: process.env.BYPASS_CSP === '1',
     storageState: fs.existsSync(statePath) ? statePath : undefined,
   });
   const page = await context.newPage();
