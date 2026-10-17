@@ -417,7 +417,7 @@ export function InvoiceComposer({
   // still shown — printing HT-26's "rate pending" is what tells the studio the
   // rate card is the repair, where silently dropping the hour would have read as
   // the hour going missing.
-  const rateStatusRef = useRef<HTMLParagraphElement>(null);
+  const pricedHoursLabelRef = useRef<HTMLParagraphElement>(null);
   const ratePendingEntries = useMemo(
     () =>
       (unbilledTime?.ratePendingEntries ?? []).map((entry) => ({
@@ -1216,7 +1216,10 @@ export function InvoiceComposer({
 
               {/* ── Unbilled time (00177 view — resolved rates, R75/BIL-08) ── */}
               <div className="mt-4">
-                <p className={`${LABEL} mb-0.5`}>
+                {/* Where focus lands when the rate sheet closes after pricing:
+                    the Set act that opened it has unmounted, and the priced
+                    hours now list under this label. */}
+                <p ref={pricedHoursLabelRef} tabIndex={-1} className={`${LABEL} mb-0.5`}>
                   unbilled time
                   {unbilledEntries.length > 1 && (
                     <button
@@ -1363,7 +1366,7 @@ export function InvoiceComposer({
                                 openAccountPage("studio", {
                                   rateFor: member.userId,
                                   aboveFolio: true,
-                                  fallbackFocusRef: rateStatusRef,
+                                  fallbackFocusRef: pricedHoursLabelRef,
                                 });
                               }}
                             >
@@ -2050,8 +2053,6 @@ export function InvoiceComposer({
           moment it is written; only its words change. */}
       <p
         id={statusId}
-        ref={rateStatusRef}
-        tabIndex={-1}
         role="status"
         className={
           heldReason ? "mt-2 text-sm text-[var(--color-charcoal)]" : "sr-only"
