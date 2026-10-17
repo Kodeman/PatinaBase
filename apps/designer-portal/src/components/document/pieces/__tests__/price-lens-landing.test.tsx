@@ -32,6 +32,7 @@ jest.mock("@patina/supabase", () => ({
   useResetFfeLineMarkup: () => mutation(),
   useResetProjectMarkups: () => mutation(),
   useCreateNamedProjectNeed: () => mutation(),
+  useProjectPricingApproval: () => ({ data: null }),
   useProjectPricing: () => ({
     data: { projectId: "proj", updatedAt: null, markupTargetPercent: null, salesTaxRate: null },
     isFetching: false,
