@@ -1352,7 +1352,15 @@ describe('Threshold — the acts the house owes', () => {
     expect(signOut).toHaveBeenCalledTimes(1);
   });
 
+  it('omits the colophon when curated presentation identity has no firm', () => {
+    mockPresentation.mockReturnValue({ data: { designerName: 'Nora Quist' } });
+    renderThreshold();
+
+    expect(screen.queryByText(/Prepared by/)).not.toBeInTheDocument();
+  });
+
   it('closes with the colophon when the studio has a name', () => {
+    mockPresentation.mockReturnValue({ data: { firmName: 'Quist Interiors' } });
     renderThreshold();
 
     expect(
@@ -1390,9 +1398,7 @@ describe('Threshold — the acts the house owes', () => {
     renderThreshold();
 
     expect(screen.queryByTestId('presented-by')).not.toBeInTheDocument();
-    expect(
-      screen.getByText('Prepared by Quist Interiors · Sent through Patina'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/Prepared by/)).not.toBeInTheDocument();
   });
 
   it('renders no orphan hairline when the studio name is absent', () => {
