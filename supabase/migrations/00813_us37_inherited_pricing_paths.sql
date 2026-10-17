@@ -74,6 +74,11 @@
 --        relationship's household studio, else her only design-studio seat,
 --        else NULL (designer only).
 --      · clone_proposal stamps the copy from its source.
+--      · SQ-1244 (Astra SQ-1238 F1/F2): a writer that binds its new paper
+--        to a job after inserting it names that job for the insert
+--        (create_furnishings_authorization_from_schedule,
+--        create_trade_scope, create_service_addendum), and a job a signed-in
+--        drafter names counts only when can_buy_for_project admits her.
 --      · existing rows are backfilled ONCE, in the block that adds the
 --        column, by recorded authority alone. A current seat says nothing
 --        about whom a past proposal was drafted for, so an unbound historical
@@ -130,11 +135,19 @@
 --   po_release_preview       00726 → 00813 (one delta: the gate)
 --   clone_proposal           00399 → 00813 (00399:6738-6913 verbatim; one
 --                            delta: the copy's studio stamp)
+--   create_furnishings_authorization_from_schedule
+--                            00462 → 00813 (00462:1408-1441 verbatim; one
+--                            delta: the stamp's job setting)
+--   create_trade_scope       00578 → 00813 (00578:3218-3302 verbatim; one
+--                            delta: the stamp's job setting)
+--   create_service_addendum  00422 → 00813 (00422:1816-1899 verbatim; one
+--                            delta: the stamp's job setting)
 -- New: proposals.studio_id (added and backfilled once, in one guarded block),
 -- _proposal_recorded_studio, _proposal_studio_for, stamp_proposal_studio
 -- (zzz_stamp_proposal_studio_trg), guard_proposal_studio_stamp
--- (guard_proposal_studio_stamp_trg). A later clone_proposal must graft from
--- this body.
+-- (guard_proposal_studio_stamp_trg). A later clone_proposal,
+-- create_furnishings_authorization_from_schedule, create_trade_scope or
+-- create_service_addendum must graft from this body.
 -- Nothing here locks FFE rows, so R182 does not apply. No 00807/00808/00809
 -- function is redefined.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -365,16 +378,43 @@ REVOKE ALL ON FUNCTION public._proposal_studio_for(uuid, uuid, uuid, uuid, uuid)
 -- is ignored. zzz_ runs it after every other BEFORE INSERT trigger, so it sees
 -- the final designer, job, parent and relationship. SECURITY DEFINER because
 -- an INVOKER read of organization_members returns a partial membership list.
+-- SQ-1244 (Astra SQ-1238):
+--   F1. A commercial writer inserts its paper with no job and binds it to one
+--       in project_commercial_documents right after, so the binding (step 2)
+--       cannot exist yet. The writer names that job in the transaction-local
+--       app.proposal_stamp_project_id for its insert, and it is step 2 here.
+--       Only database code can set it (a signed-in caller runs no SET), and
+--       the writer has already authorized the caller for that job.
+--   F2. The job a signed-in drafter names counts only when can_buy_for_project
+--       admits her; otherwise the draft is stamped as if it named no job, so
+--       a foreign job's studio is never copied onto her draft. Without a
+--       signed-in drafter (database code, the service role) the job counts.
 CREATE OR REPLACE FUNCTION public.stamp_proposal_studio()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  v_project_id uuid;
+  v_binding_project_id uuid :=
+    NULLIF(current_setting('app.proposal_stamp_project_id', true), '')::uuid;
 BEGIN
-  NEW.studio_id := public._proposal_studio_for(
-    NEW.id, NEW.designer_id, NEW.project_id, NEW.parent_proposal_id,
-    NEW.designer_client_id
+  IF auth.uid() IS NULL
+     OR COALESCE(public.can_buy_for_project(NEW.project_id), false) THEN
+    v_project_id := NEW.project_id;
+  END IF;
+  NEW.studio_id := COALESCE(
+    (SELECT project.studio_id
+       FROM public.projects AS project
+      WHERE project.id = v_project_id),
+    (SELECT project.studio_id
+       FROM public.projects AS project
+      WHERE project.id = v_binding_project_id),
+    public._proposal_studio_for(
+      NEW.id, NEW.designer_id, NULL, NEW.parent_proposal_id,
+      NEW.designer_client_id
+    )
   );
   RETURN NEW;
 END;
@@ -693,6 +733,248 @@ USING (
       )
   )
 );
+
+-- 2d. The commercial writers that bind a new paper to a job (SQ-1244, Astra
+-- SQ-1238 F1). Each inserts its proposal with no job and binds it in
+-- project_commercial_documents after (an immediate FK, 00412:114), so the
+-- binding step of the stamp cannot see it yet. Each names the job in
+-- app.proposal_stamp_project_id for its insert and clears it after; an
+-- error rolls the setting back with the insert. Their latest bodies,
+-- verbatim, with that one delta; CREATE OR REPLACE keeps each one's ACL,
+-- SECURITY DEFINER and search_path.
+--   create_furnishings_authorization_from_schedule: 00462:1408-1441, the
+--     public entry. Its only path to the insert is 00462 → the 00445
+--     wrapper (_create_furnishings_authorization_from_schedule_impl) →
+--     _create_furnishings_authorization_from_schedule_00444_impl
+--     (00744:348), which inserts one proposal, so the setting spans the
+--     release as app.furnishing_authorization_project_id already does.
+--   create_trade_scope: 00578:3218-3302.
+--   create_service_addendum: 00422:1816-1899. It inserts its paper with
+--     the engagement authority as parent; ruling B puts the job first.
+-- Every other proposal writer was checked: begin_direction_from_discovery
+-- (00414) binds no job; clone_proposal stamps from its source (2b);
+-- create_furnishings_authorization and create_furnishing_wave_draft (00422)
+-- are retired and raise; _countersign_design_services_agreement_impl (00619)
+-- binds an agreement that already exists, whose stamp stays as drafted.
+
+CREATE OR REPLACE FUNCTION public.create_furnishings_authorization_from_schedule(
+  p_project_id uuid,
+  p_name text,
+  p_ffe_item_ids uuid[],
+  p_deposit_percent numeric DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_previous text := current_setting(
+    'app.furnishing_authorization_project_id', true
+  );
+  v_result jsonb;
+BEGIN
+  PERFORM set_config(
+    'app.furnishing_authorization_project_id', p_project_id::text, true
+  );
+  -- 00813 (SQ-1244, F1): the release binds its new paper to this job; the
+  -- paper's stamp reads it (stamp_proposal_studio).
+  PERFORM set_config('app.proposal_stamp_project_id', p_project_id::text, true);
+  v_result := public._create_furnishings_authorization_from_schedule_impl(
+    p_project_id, p_name, p_ffe_item_ids, p_deposit_percent
+  );
+  PERFORM set_config(
+    'app.furnishing_authorization_project_id', COALESCE(v_previous, ''), true
+  );
+  PERFORM set_config('app.proposal_stamp_project_id', '', true);
+  RETURN v_result;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.furnishing_authorization_project_id', COALESCE(v_previous, ''), true
+  );
+  PERFORM set_config('app.proposal_stamp_project_id', '', true);
+  RAISE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.create_trade_scope(
+  p_project_id uuid,
+  p_title text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_project public.projects%ROWTYPE;
+  v_origin public.proposals%ROWTYPE;
+  v_title text := btrim(COALESCE(p_title, ''));
+  v_proposal_id uuid := extensions.gen_random_uuid();
+  v_document_id uuid;
+BEGIN
+  IF v_actor IS NULL OR char_length(v_title) < 2 THEN
+    RAISE EXCEPTION 'a trade scope requires an authenticated author and a title'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_project FROM public.projects WHERE id = p_project_id FOR SHARE;
+  IF NOT FOUND OR NOT public._can_author_proposal(v_project.designer_id) THEN
+    RAISE EXCEPTION 'project % not found or access denied', p_project_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- The same origin proof the furnishings rail requires, byte-for-byte. A trade
+  -- scope is an exercise of commercial authority; a project with no executed
+  -- design-services agreement has none to exercise.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.project_commercial_documents d
+    JOIN public.proposals p ON p.id = d.proposal_id
+    WHERE d.project_id = p_project_id AND d.is_origin
+      AND d.document_kind IN ('design_services', 'design_build') AND p.commercial_state = 'executed'
+  ) THEN
+    RAISE EXCEPTION 'project % has no executed design-services origin', p_project_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT origin_proposal.* INTO v_origin
+  FROM public.project_commercial_documents origin
+  JOIN public.proposals origin_proposal ON origin_proposal.id = origin.proposal_id
+  WHERE origin.project_id = p_project_id AND origin.is_origin
+    AND origin.document_kind IN ('design_services', 'design_build')
+    AND origin_proposal.commercial_state = 'executed'
+  LIMIT 1;
+
+  -- 00813 (SQ-1244, F1): this paper is bound to p_project_id below; its
+  -- stamp reads that job (stamp_proposal_studio).
+  PERFORM set_config('app.proposal_stamp_project_id', p_project_id::text, true);
+  INSERT INTO public.proposals (
+    id, designer_id, client_id, designer_client_id, title, description,
+    subtotal, discount_amount, discount_percent, tax_rate, tax_amount,
+    total_amount, deposit_percent, status, version, project_address,
+    client_visibility_tier, feedback_enabled, document_kind, commercial_state
+  ) VALUES (
+    v_proposal_id, v_project.designer_id, v_project.client_id,
+    v_origin.designer_client_id, v_title,
+    'Trade work priced as a scope against a named party.',
+    0, 0, 0, 0, 0, 0, 0, 'draft', 1,
+    v_origin.project_address, 'full', v_origin.feedback_enabled,
+    'trade_scope', 'draft'
+  );
+  PERFORM set_config('app.proposal_stamp_project_id', '', true);
+
+  -- The skeleton. Price and party arrive through the studio's editing surface
+  -- and set_trade_scope_party / select_trade_bid; what matters here is that the
+  -- row EXISTS, so every later read has one shape to answer with.
+  INSERT INTO public.trade_scope_terms (proposal_id) VALUES (v_proposal_id);
+
+  INSERT INTO public.project_commercial_documents (
+    project_id, proposal_id, document_kind, created_by
+  ) VALUES (
+    p_project_id, v_proposal_id, 'trade_scope', v_actor
+  ) RETURNING id INTO v_document_id;
+
+  RETURN jsonb_build_object(
+    'proposalId', v_proposal_id,
+    'documentId', v_document_id,
+    'projectId', p_project_id,
+    'title', v_title,
+    'commercialState', 'draft',
+    'progressState', 'none',
+    'documentFingerprint', public._commercial_document_fingerprint(v_proposal_id)
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.create_service_addendum(
+  p_project_id uuid,
+  p_title text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_origin public.proposals%ROWTYPE;
+  v_source_proposal_id uuid;
+  v_proposal_id uuid := extensions.gen_random_uuid();
+  v_document_id uuid;
+  v_title text := btrim(COALESCE(p_title, ''));
+BEGIN
+  IF v_actor IS NULL OR char_length(v_title) < 2 THEN
+    RAISE EXCEPTION 'service addendum requires an authenticated author and title'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT origin_proposal.*
+  INTO v_origin
+  FROM public.project_commercial_documents origin
+  JOIN public.proposals origin_proposal ON origin_proposal.id = origin.proposal_id
+  WHERE origin.project_id = p_project_id AND origin.is_origin
+    AND origin_proposal.commercial_state = 'executed'
+    AND public._can_author_proposal(origin_proposal.designer_id)
+  LIMIT 1;
+  IF v_origin.id IS NULL THEN
+    RAISE EXCEPTION 'project % has no executed design-services authority', p_project_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT authority.source_proposal_id
+  INTO v_source_proposal_id
+  FROM public.project_billing_authorities authority
+  WHERE authority.project_id = p_project_id AND authority.status = 'active'
+  ORDER BY authority.effective_at DESC
+  LIMIT 1;
+  IF v_source_proposal_id IS NULL THEN
+    RAISE EXCEPTION 'project % has no active billing authority', p_project_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- 00813 (SQ-1244, F1): this paper is bound to p_project_id below; its
+  -- stamp reads that job (stamp_proposal_studio).
+  PERFORM set_config('app.proposal_stamp_project_id', p_project_id::text, true);
+  INSERT INTO public.proposals (
+    id, designer_id, client_id, designer_client_id, title, description,
+    total_amount, status, version, parent_proposal_id, project_address,
+    client_visibility_tier, feedback_enabled, document_kind, commercial_state
+  ) VALUES (
+    v_proposal_id, v_origin.designer_id, v_origin.client_id,
+    v_origin.designer_client_id, v_title, 'Additional design-services authority',
+    0, 'draft', 1, v_source_proposal_id, v_origin.project_address,
+    v_origin.client_visibility_tier, v_origin.feedback_enabled,
+    'service_addendum', 'draft'
+  );
+  PERFORM set_config('app.proposal_stamp_project_id', '', true);
+  INSERT INTO public.proposal_service_terms (
+    proposal_id, scope, deliverables, exclusions, billing_ceiling_cents,
+    retainer_amount_cents, retainer_activation_policy, billing_cadence,
+    currency, terms, current_rate_version, furnishings_deposit_percent
+  ) SELECT
+    v_proposal_id, t.scope, t.deliverables, t.exclusions,
+    t.billing_ceiling_cents, 0, 'immediate', t.billing_cadence,
+    t.currency, t.terms, t.current_rate_version, t.furnishings_deposit_percent
+  FROM public.proposal_service_terms t WHERE t.proposal_id = v_source_proposal_id;
+  INSERT INTO public.proposal_service_rates (
+    proposal_id, version, role_name, hourly_rate_cents, sort_order, effective_at
+  ) SELECT v_proposal_id, r.version + 1, r.role_name, r.hourly_rate_cents,
+      r.sort_order, now()
+  FROM public.proposal_service_rates r WHERE r.proposal_id = v_source_proposal_id;
+  UPDATE public.proposal_service_terms SET current_rate_version = current_rate_version + 1
+  WHERE proposal_id = v_proposal_id;
+  INSERT INTO public.project_commercial_documents (
+    project_id, proposal_id, document_kind, source_proposal_id, created_by
+  ) VALUES (
+    p_project_id, v_proposal_id, 'service_addendum', v_source_proposal_id, v_actor
+  ) RETURNING id INTO v_document_id;
+
+  RETURN jsonb_build_object(
+    'proposalId', v_proposal_id, 'documentId', v_document_id,
+    'projectId', p_project_id, 'documentKind', 'service_addendum',
+    'commercialState', 'draft'
+  );
+END;
+$$;
 
 -- ── 3. F3: anon reads the catalog, never its trade price ───────────────────
 -- Column privileges only bite once the table-level SELECT is gone; revoking

@@ -25,7 +25,13 @@
 --                       no table-level SELECT, while every anon reader's column
 --                       set still reads; a signed-in designer still reads all
 --                       three trade columns.
---   R189 history        (SQ-1218, Astra SQ-1213 F2/F3) the column is dropped
+--   SQ-1244 writers     (Astra SQ-1238 F1/F2) a furnishings release, a trade
+--                       scope and a service addendum on studio-A job W carry
+--                       A although W's agreement carries its household's B; a
+--                       designer off job S's team who names S on a draft is
+--                       stamped as if she named no job, and S's teammate still
+--                       gets A.
+--   R189 history       (SQ-1218, Astra SQ-1213 F2/F3) the column is dropped
 --                       and 00813 replayed, as a deployed database first met
 --                       it: the one backfill stamps by recorded authority only
 --                       (job, commercial-document binding, parent). A
@@ -43,7 +49,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(63);
+SELECT plan(71);
 
 -- ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -412,6 +418,136 @@ SELECT is(pg_temp.visible_rows($$SELECT 1 FROM public.products WHERE id = '81300
   1, 'R3 authenticated: a signed-in designer still reads the trade figures in configuration_summary and pricing_tiers');
 
 RESET ROLE;
+
+-- ─── SQ-1244: a new paper takes its job's studio, never a foreign one's ────
+-- (Astra SQ-1238 F1/F2.) W is a studio-A job of lead O, who also sits in B.
+-- Its executed agreement was drafted from client F's relationship, whose
+-- household is in B, so the agreement carries B. Each commercial writer
+-- inserts its paper with no job and binds it to W after; ruling B stamps the
+-- paper with W's studio A, not the household's B. Z, a designer seated only
+-- in B, is not on job S's team: her draft naming S is stamped as if it named
+-- no job (her only seat, B), never S's A.
+
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('81300000-0000-4000-8000-0000000000a8', 'us37-inherited-forward-client@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('81300000-0000-4000-8000-0000000000a9', 'us37-inherited-outsider@test.invalid',       '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+  ('81300000-0000-4000-8000-0000000000a8', 'us37-inherited-forward-client@test.invalid', 'Inherited Forward Client', false, now(), now()),
+  ('81300000-0000-4000-8000-0000000000a9', 'us37-inherited-outsider@test.invalid',       'Inherited Outsider',       true,  now(), now())
+ON CONFLICT (id) DO UPDATE
+SET email = EXCLUDED.email, full_name = EXCLUDED.full_name, is_designer = EXCLUDED.is_designer;
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('81300000-0000-4000-8000-0000000000ea', '81300000-0000-4000-8000-0000000000a9', '81300000-0000-4000-8000-0000000000f2', 'member', 'active', now());
+-- provision_studio_on_designer may give Z a studio of her own; B stays her
+-- only seat.
+SET LOCAL ROLE service_role;
+UPDATE public.organization_members
+   SET status = 'removed'
+ WHERE user_id = '81300000-0000-4000-8000-0000000000a9'
+   AND organization_id <> '81300000-0000-4000-8000-0000000000f2';
+RESET ROLE;
+
+INSERT INTO public.projects (id, name, designer_id, client_id, created_by, studio_id, status)
+VALUES ('81300000-0000-4000-8000-000000000004', 'Inherited Job W',
+        '81300000-0000-4000-8000-0000000000a1', '81300000-0000-4000-8000-0000000000a8',
+        '81300000-0000-4000-8000-0000000000a1', '81300000-0000-4000-8000-0000000000f1', 'active');
+INSERT INTO public.client_households (id, organization_id, designer_id, display_name)
+VALUES ('81300000-0000-4000-8000-000000000807', '81300000-0000-4000-8000-0000000000f2', '81300000-0000-4000-8000-0000000000a1', 'Inherited Household F');
+INSERT INTO public.designer_clients (id, designer_id, client_id, household_id, status)
+VALUES ('81300000-0000-4000-8000-000000000808', '81300000-0000-4000-8000-0000000000a1', '81300000-0000-4000-8000-0000000000a8', '81300000-0000-4000-8000-000000000807', 'active');
+-- W's executed design-services origin and its engagement authority, a room,
+-- a budget over it and one priced line in it: what the three writers need.
+INSERT INTO public.proposals (id, project_id, designer_id, client_id, designer_client_id, title, status, document_kind, commercial_state)
+VALUES ('81300000-0000-4000-8000-000000000801', NULL, '81300000-0000-4000-8000-0000000000a1', '81300000-0000-4000-8000-0000000000a8',
+        '81300000-0000-4000-8000-000000000808', 'Inherited Design services W', 'accepted', 'design_services', 'executed');
+INSERT INTO public.project_commercial_documents (id, project_id, proposal_id, document_kind, is_origin, bound_at, executed_at, created_by)
+VALUES ('81300000-0000-4000-8000-000000000802', '81300000-0000-4000-8000-000000000004', '81300000-0000-4000-8000-000000000801',
+        'design_services', true, now(), now(), '81300000-0000-4000-8000-0000000000a1');
+INSERT INTO public.project_billing_authorities (
+  id, project_id, commercial_document_id, source_proposal_id, billing_ceiling_cents,
+  retainer_activation_policy, billing_cadence
+) VALUES ('81300000-0000-4000-8000-000000000803', '81300000-0000-4000-8000-000000000004', '81300000-0000-4000-8000-000000000802',
+          '81300000-0000-4000-8000-000000000801', 100000, 'immediate', 'monthly');
+INSERT INTO public.project_rooms (id, project_id, name, sort_order)
+VALUES ('81300000-0000-4000-8000-000000000804', '81300000-0000-4000-8000-000000000004', 'Hall', 0);
+INSERT INTO public.project_budget_versions (id, project_id, version, created_by)
+VALUES ('81300000-0000-4000-8000-000000000805', '81300000-0000-4000-8000-000000000004', 1, '81300000-0000-4000-8000-0000000000a1');
+INSERT INTO public.project_budget_lines (budget_version_id, project_room_id, room_name, category, low_cents, target_cents, high_cents)
+VALUES ('81300000-0000-4000-8000-000000000805', '81300000-0000-4000-8000-000000000804', 'Hall', 'Furnishings', 10000, 50000, 90000);
+SELECT set_config('app.ffe_mutation_rpc', 'on', true);
+SELECT set_config('app.ffe_pricing_writer', 'on', true);
+INSERT INTO public.project_ffe_items (
+  id, project_id, project_room_id, assignment_scope, name, status, item_type, quantity, unit,
+  unit_price_cents, trade_price_cents, line_total_cents, vendor_id, vendor_name, design_disposition, sort_order
+) VALUES ('81300000-0000-4000-8000-000000000806', '81300000-0000-4000-8000-000000000004', '81300000-0000-4000-8000-000000000804',
+          'room', 'Hall bench', 'specified', 'fixed', 1, 'each', 12000, 10000, 12000,
+          '81300000-0000-4000-8000-000000000011', 'Inherited Mill', 'selected', 0);
+SELECT set_config('app.ffe_pricing_writer', '', true);
+SELECT set_config('app.ffe_mutation_rpc', '', true);
+DO $fixture$
+DECLARE
+  v_published jsonb;
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    '{"sub":"81300000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
+  v_published := public.publish_budget_checkpoint('81300000-0000-4000-8000-000000000004',
+                                                  '81300000-0000-4000-8000-000000000805');
+  PERFORM public.override_budget_checkpoint((v_published->>'checkpointId')::uuid,
+    'Client travelling; proceeding on the reviewed budget.');
+END
+$fixture$;
+
+SELECT ok(
+  (SELECT studio_id = '81300000-0000-4000-8000-0000000000f1' FROM public.projects WHERE id = '81300000-0000-4000-8000-000000000004')
+  AND (SELECT count(*) = 2 FROM public.organization_members
+        WHERE user_id = '81300000-0000-4000-8000-0000000000a1' AND status = 'active'
+          AND organization_id IN ('81300000-0000-4000-8000-0000000000f1', '81300000-0000-4000-8000-0000000000f2'))
+  AND (SELECT studio_id = '81300000-0000-4000-8000-0000000000f2' FROM public.proposals WHERE id = '81300000-0000-4000-8000-000000000801'),
+  'SQ-1244 fixture: job W is studio A''s, its lead O also sits in B, and its agreement carries its household''s studio B'
+);
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81300000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+SELECT set_config('us37.w_release', public.create_furnishings_authorization_from_schedule(
+  '81300000-0000-4000-8000-000000000004', 'Authorization No. 1',
+  ARRAY['81300000-0000-4000-8000-000000000806'::uuid], NULL)->>'proposalId', true);
+SELECT set_config('us37.w_scope', public.create_trade_scope(
+  '81300000-0000-4000-8000-000000000004', 'Hall millwork')->>'proposalId', true);
+SELECT set_config('us37.w_addendum', public.create_service_addendum(
+  '81300000-0000-4000-8000-000000000004', 'Added design hours')->>'proposalId', true);
+-- The job a writer names ends with it: O's next draft names no job.
+INSERT INTO public.proposals (id, designer_id, title, status)
+VALUES ('81300000-0000-4000-8000-000000000811', '81300000-0000-4000-8000-0000000000a1', 'Inherited draft after the writers', 'draft');
+RESET ROLE;
+
+SELECT is((SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = current_setting('us37.w_release')::uuid),
+  '81300000-0000-4000-8000-0000000000f1', 'SQ-1244 F1 (a): a furnishings release on W is stamped W''s studio A, not its agreement household''s B');
+SELECT is((SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = current_setting('us37.w_scope')::uuid),
+  '81300000-0000-4000-8000-0000000000f1', 'SQ-1244 F1 (b): a trade scope on W is stamped W''s studio A, not its agreement household''s B');
+SELECT is((SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = current_setting('us37.w_addendum')::uuid),
+  '81300000-0000-4000-8000-0000000000f1', 'SQ-1244 F1 (c): a service addendum on W is stamped W''s studio A, not its parent agreement''s B');
+SELECT is((SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = '81300000-0000-4000-8000-000000000811'),
+  'none', 'SQ-1244 F1 (d): O''s next draft, with no job, parent or household, is not stamped W''s studio (two seats: none)');
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81300000-0000-4000-8000-0000000000a9","role":"authenticated"}';
+SELECT is(public.can_buy_for_project('81300000-0000-4000-8000-000000000001'), false,
+  'SQ-1244 F2 fixture: Z, seated only in B, is not on studio-A job S''s team');
+INSERT INTO public.proposals (id, project_id, designer_id, title, status)
+VALUES ('81300000-0000-4000-8000-000000000809', '81300000-0000-4000-8000-000000000001', '81300000-0000-4000-8000-0000000000a9', 'Inherited outsider draft naming S', 'draft');
+SET LOCAL request.jwt.claims = '{"sub":"81300000-0000-4000-8000-0000000000a3","role":"authenticated"}';
+INSERT INTO public.proposals (id, project_id, designer_id, title, status)
+VALUES ('81300000-0000-4000-8000-000000000810', '81300000-0000-4000-8000-000000000001', '81300000-0000-4000-8000-0000000000a3', 'Inherited teammate draft on S', 'draft');
+RESET ROLE;
+-- The fixtures below are written with O signed in, as before this section.
+SET LOCAL request.jwt.claims = '{"sub":"81300000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+
+SELECT is((SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = '81300000-0000-4000-8000-000000000809'),
+  '81300000-0000-4000-8000-0000000000f2', 'SQ-1244 F2: Z''s draft naming job S is stamped as if it named none (her only seat B), never S''s studio A');
+SELECT is((SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = '81300000-0000-4000-8000-000000000810'),
+  '81300000-0000-4000-8000-0000000000f1', 'SQ-1244 F2 control: S''s teammate T drafting on S still gets S''s studio A');
 
 -- ─── R189: the one backfill reads recorded authority only ──────────────────
 -- (SQ-1218, Astra SQ-1213 F2/F3.) These run last: dropping the column
