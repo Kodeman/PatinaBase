@@ -127,6 +127,8 @@ interface RoughInLine extends PieceLineStageRow {
   selection_thread_id?: string | null;
   budget_min_cents?: number | null;
   line_group_id?: string | null;
+  /** The item label (00808). */
+  doc_code?: string | null;
 }
 
 /** Thread id → its need label, where it has one. */
@@ -582,6 +584,7 @@ export function RoughInLens({
       return {
         id: line.id,
         name: needOf(line),
+        label: line.doc_code ?? null,
         quantity: line.quantity ?? 0,
         unit: lineUnit(line),
         roughCents: line.rough_cents ?? null,

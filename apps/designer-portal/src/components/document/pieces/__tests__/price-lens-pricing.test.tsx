@@ -283,18 +283,61 @@ describe("Price lens: Kody's acceptance (US-37 #4)", () => {
     expect(within(flag).getByText("35.0%, $1,350")).toBeInTheDocument();
     expect(document.querySelector('[data-cost-change-for="s2"]')).toBeNull();
 
-    fireEvent.click(within(flag).getByRole("button", { name: "Keep client price" }));
+    fireEvent.click(within(flag).getByRole("button", { name: "Keep client price for Sofa" }));
     expect(mockResolve).toHaveBeenCalledWith(
       { projectId: "proj", itemId: "s1", resolution: "keep_client" },
       expect.anything(),
     );
-    fireEvent.click(within(flag).getByRole("button", { name: "Keep markup" }));
+    fireEvent.click(within(flag).getByRole("button", { name: "Keep markup for Sofa" }));
     expect(mockResolve).toHaveBeenLastCalledWith(
       { projectId: "proj", itemId: "s1", resolution: "keep_markup" },
       expect.anything(),
     );
     // The flag stands until the server's line says it is settled.
     expect(document.querySelector('[data-cost-change-for="s1"]')).not.toBeNull();
+  });
+
+  it("names each flagged line in its two settle buttons (US-37 #3, SQ-1111 F5)", () => {
+    const flagged = {
+      pending_cost_prev_cents: 90000,
+      pending_cost_changed_at: "2026-10-17T01:00:00Z",
+      pending_markup_held_percent: 35,
+    };
+    mockItems.data = fixture({
+      s1: { ...flagged, doc_code: "LR-01" },
+      s2: { ...flagged, doc_code: "LR-02" },
+    });
+    renderLens();
+    const names = Array.from(
+      document.querySelectorAll("[data-cost-change-for] button"),
+    ).map((button) => button.getAttribute("aria-label"));
+    expect(names).toEqual([
+      "Keep client price for LR-01 Sofa",
+      "Keep markup for LR-01 Sofa",
+      "Keep client price for LR-02 Rug",
+      "Keep markup for LR-02 Rug",
+    ]);
+    const rug = document.querySelector('[data-cost-change-for="s2"]') as HTMLElement;
+    expect(
+      within(rug).getByRole("button", { name: "Keep markup for LR-02 Rug" }),
+    ).toHaveTextContent("Keep markup");
+  });
+});
+
+describe("the item label in the LINE column (US-37 #3, SQ-1111 F2)", () => {
+  it("prints a line's label before its name, and nothing on a line without one", () => {
+    mockItems.data = fixture({ s2: { doc_code: "LR-02" } });
+    renderLens();
+    const rug = rowOf("Rug");
+    const line = rug.querySelector('[data-label="Line"]') as HTMLElement;
+    const label = within(line).getByText("LR-02");
+    expect(label).toHaveAttribute("data-item-label");
+    expect(label).toHaveClass("font-mono");
+    expect(
+      label.compareDocumentPosition(within(line).getByText("Rug")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(rowOf("Sofa").querySelector("[data-item-label]")).toBeNull();
   });
 });
 

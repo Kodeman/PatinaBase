@@ -34,6 +34,7 @@ const mockCommercials = jest.fn();
 const mockBuildFields = jest.fn();
 const mockLaborPrice = jest.fn();
 const mockPlace = jest.fn();
+const mockSetLabel = jest.fn();
 
 const mutation = (fn: jest.Mock) => ({ mutateAsync: fn, isPending: false });
 
@@ -62,6 +63,9 @@ jest.mock("@patina/supabase", () => ({
   useFfePairLines: () => ({ data: [] }),
   useLinkFfePair: () => mutation(jest.fn()),
   useCreateNamedProjectNeed: () => mutation(jest.fn()),
+  useSetFfeItemLabel: () => mutation(mockSetLabel),
+  itemLabelRefusal: (message: string) =>
+    /^Another item in this job already uses .+\.$/.test(message) ? message : null,
 }));
 jest.mock("@/lib/analytics/document-events", () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -336,6 +340,10 @@ const pane = async () => {
   return section;
 };
 
+/** The lens's polite live region (the pane's label field has its own status). */
+const announced = () =>
+  screen.getByTestId("spec-lens").querySelector('p[role="status"][aria-live="polite"]');
+
 const rowFor = (name: string) =>
   screen
     .getByRole("list", { name: "Lines" })
@@ -478,6 +486,79 @@ describe("the right pane", () => {
     ).toHaveValue("Painted");
   });
 
+  it("prints the item label before the name in the heading, and nothing without one (US-37 #3)", async () => {
+    mockItems.data = [{ ...L1, doc_code: "LR-01" }, L2, L3, F1, R1, R1A];
+    renderLens();
+    const section = await pane();
+    const heading = within(section).getByRole("heading", { level: 2 });
+    expect(heading).toHaveTextContent("LR-01 Custom cabinet · ×2");
+    const label = within(heading).getByText("LR-01");
+    expect(label).toHaveAttribute("data-item-label");
+    expect(label).toHaveClass("font-mono");
+
+    fireEvent.click(rowFor("Countertop for custom cabinets"));
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId("spec-fields-pane")).getByRole("heading", {
+          level: 2,
+        }),
+      ).toHaveTextContent("Countertop for custom cabinets"),
+    );
+    expect(
+      within(screen.getByTestId("spec-fields-pane"))
+        .getByRole("heading", { level: 2 })
+        .querySelector("[data-item-label]"),
+    ).toBeNull();
+  });
+
+  it("edits the item label through useSetFfeItemLabel (US-37 #3, SQ-1111 F1)", async () => {
+    mockItems.data = [{ ...L1, doc_code: "LR-01" }, L2, L3, F1, R1, R1A];
+    mockSetLabel.mockResolvedValue({ doc_code: "LR-07" });
+    renderLens();
+    const section = await pane();
+    const input = within(section).getByRole("textbox", { name: "Item label" });
+    expect(input).toHaveValue("LR-01");
+    fireEvent.change(input, { target: { value: "LR-07" } });
+    fireEvent.blur(input);
+    await waitFor(() =>
+      expect(mockSetLabel).toHaveBeenCalledWith({
+        projectId: "p1",
+        itemId: "l1",
+        label: "LR-07",
+      }),
+    );
+    expect(await within(section).findByRole("status")).toHaveTextContent(
+      "Label saved.",
+    );
+  });
+
+  it("shows the server's sentence when the label is taken in this job (US-37 #3, SQ-1111 F1)", async () => {
+    mockItems.data = [{ ...L1, doc_code: "LR-01" }, L2, L3, F1, R1, R1A];
+    mockSetLabel.mockRejectedValue(
+      new Error("Another item in this job already uses LR-02."),
+    );
+    renderLens();
+    const section = await pane();
+    const input = within(section).getByRole("textbox", { name: "Item label" });
+    fireEvent.change(input, { target: { value: "LR-02" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() =>
+      expect(within(section).getByRole("status")).toHaveTextContent(
+        "Another item in this job already uses LR-02.",
+      ),
+    );
+    expect(mockSetLabel).toHaveBeenCalledWith({
+      projectId: "p1",
+      itemId: "l1",
+      label: "LR-02",
+    });
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute(
+      "aria-describedby",
+      within(section).getByRole("status").id,
+    );
+  });
+
   it("prints the rough figure dim, pointing to Price", async () => {
     renderLens();
     await pane();
@@ -570,7 +651,7 @@ describe("the stamp", () => {
       name: "FILL THIS LINE",
     });
     expect(fillAct).toHaveFocus();
-    expect(screen.getByRole("status")).toHaveTextContent(
+    expect(announced()).toHaveTextContent(
       "Emtek Ribbon & Reed knob chosen. Fill this line, or put it back.",
     );
 
@@ -598,7 +679,7 @@ describe("the stamp", () => {
     expect(document.activeElement).toHaveTextContent(
       "Hardware, 2 knobs for custom cabinet · ×2",
     );
-    expect(screen.getByRole("status")).toHaveTextContent(
+    expect(announced()).toHaveTextContent(
       "Hardware, 2 knobs for custom cabinet filled with Emtek Ribbon & Reed knob.",
     );
 
