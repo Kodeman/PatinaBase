@@ -20,7 +20,7 @@
  * roster row's own authority phrase already branches that way.
  */
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   HOUSEHOLD_MEMBER_ROLE_LABELS,
   householdOwnsGrant,
@@ -362,6 +362,8 @@ export function HouseholdBand({
   const [clearing, setClearing] = useState(false);
   const [figure, setFigure] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const errorId = useId();
+  const roleGroupId = useId();
 
   const addMember = useAddHouseholdMember();
   const setThreshold = useSetHouseholdThreshold();
@@ -842,6 +844,18 @@ export function HouseholdBand({
                     : undefined
                 }
                 onHeldActivate={() => setError(HOUSEHOLD_AUTHORITY_HELD_REASON)}
+                holds={
+                  !isPrincipal
+                    ? [
+                        {
+                          id: `household-authority-held-${member.id}`,
+                          target: () => document.getElementById(errorId),
+                          label: "Record the authority",
+                          reason: HOUSEHOLD_AUTHORITY_HELD_REASON,
+                        },
+                      ]
+                    : undefined
+                }
                 loading={addMember.isPending}
                 loadingLabel="Recording…"
               >
@@ -872,6 +886,7 @@ export function HouseholdBand({
 
           <span className={`mt-3 mb-1 block ${META}`}>What they do here</span>
           <div
+            id={roleGroupId}
             role="group"
             aria-label="What they do here"
             className="flex flex-wrap gap-x-4"
@@ -954,6 +969,27 @@ export function HouseholdBand({
                     : HOUSEHOLD_PICK_HELD_REASON,
                 )
               }
+              holds={
+                addHeld
+                  ? [
+                      {
+                        id: "household-grant-held",
+                        target: () => document.getElementById(roleGroupId),
+                        label: "Add to the household",
+                        reason: HOUSEHOLD_ADD_HELD_REASON,
+                      },
+                    ]
+                  : !personId
+                    ? [
+                        {
+                          id: "household-person-held",
+                          target: () => document.getElementById("household-person"),
+                          label: "Add to the household",
+                          reason: HOUSEHOLD_PICK_HELD_REASON,
+                        },
+                      ]
+                    : undefined
+              }
               loading={addMember.isPending}
               loadingLabel="Adding…"
             >
@@ -972,6 +1008,7 @@ export function HouseholdBand({
 
       {error && (
         <p
+          id={errorId}
           role="alert"
           className="mt-1.5 text-[0.72rem] text-[var(--color-terracotta-ink)]"
         >

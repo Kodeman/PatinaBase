@@ -2,7 +2,7 @@
 
 /**
  * The Desk Walkthrough (R97) — the desk-first intro tour. A WelcomeModal plus a
- * six-step coachmark sequence that NEVER leaves `/desk` (a step routing into
+ * six-step spotlight sequence that NEVER leaves `/desk` (a step routing into
  * `/doc/` would auto-start the R4 timer, which must never lie — Design 1). This
  * component is mounted once in the (document) layout and self-guards to the
  * Desk; on every other surface it renders nothing.
@@ -35,8 +35,9 @@
  *
  * Every content lookup carries a hard-coded fallback (per step / the modal) so a
  * Sanity outage or pre-publish state can NEVER render an invisible, un-advanceable
- * tour (spec §13.4). D4: the popover ships a `shadow-lg`; we override it to paper
- * with `shadow-none` via `coachmarkClassName`.
+ * tour (spec §13.4). Steps render through the hold spotlight's teach mode
+ * (US-36 K13), framed by the Desk's paper column: one window on the step's
+ * anchor, the step's copy and Back/Next in the bar. D4: no shadow, no fade.
  */
 
 import {
@@ -58,10 +59,15 @@ import {
   WelcomeModal,
   getTourState,
   setTourState,
+  useHelpContent,
+  type CoachmarkContent,
   type CoachmarkStep,
+  type Persona,
   type TourControllerAPI,
   type TourState,
 } from '@patina/help-system';
+import { HoldSpotlight } from '@/components/document/overlays/hold-spotlight';
+import type { SpotlightHold } from '@/lib/document/spotlight/use-hold-spotlight';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { documentEvents } from '@/lib/analytics/document-events';
@@ -83,25 +89,14 @@ import {
 // 'margin_note'. The note itself also recedes on this event (its actionEvents).
 export const START_DESK_WALKTHROUGH_EVENT = 'document:start-desk-walkthrough';
 
-// ─── D4 paper styling for the coachmark popover ───────────────────────────────
-//
-// The package popover defaults to `bg-primary … shadow-lg`. `twMerge` (inside
-// TourController) means these later classes win: paper ink border, aged desk
-// paper, body ink, and — the D4 non-negotiable — no drop. `shadow-none` is a
-// negation, not a shadow.
-const COACHMARK_CLASSNAME =
-  'rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] text-[var(--text-body)] shadow-none';
-
 // ─── Per-step anchor scroll (reduced-motion aware) ────────────────────────────
 //
-// Each step scrolls its own anchor to the viewport center before its coachmark
-// shows. On a POPULATED desk the page scrolls (folders + field + Studio index),
-// so a step whose anchor sits far above or below the current scroll position
-// (the header verbs after the drawer, say) would otherwise render its coachmark
-// off-screen against an anchor Radix can't reach — the tour flying off the page.
-// Fresh-signup desks are short and never scroll, so this is a no-op there; it is
-// the existing-designer replay path (tall desks) this keeps legible. Radix
-// repositions the popover as the smooth scroll settles.
+// Each step scrolls its own anchor into view as it shows. On a POPULATED desk
+// the page scrolls (folders + field + Studio index), so a step whose anchor
+// sits far above or below the current scroll position (the header verbs after
+// the drawer, say) would otherwise light a window off-screen. Fresh-signup
+// desks are short and never scroll, so this is a no-op there; it is the
+// existing-designer replay path (tall desks) this keeps legible.
 function scrollAnchorIntoView(
   selector: string,
   block: ScrollLogicalPosition = 'nearest',
@@ -132,9 +127,8 @@ const STEPS: CoachmarkStep[] = [
   {
     surfaceKey: TOUR.Step1TheDesk,
     // Anchored on the greeting header, not the needs-your-hand roster: a quiet
-    // Desk (no live jobs) never renders that region, which orphaned the
-    // coachmark to Radix's fallback top-left corner. The greeting always
-    // renders, populated or not.
+    // Desk (no live jobs) never renders that region, which left the step
+    // with nothing to point at. The greeting always renders, populated or not.
     anchorSelector: '[data-tour-anchor="desk-greeting"]',
     side: 'bottom',
     beforeShow: scrollAnchorIntoView('[data-tour-anchor="desk-greeting"]'),
@@ -164,6 +158,8 @@ const STEPS: CoachmarkStep[] = [
     anchorSelector: '[data-tour-anchor="studio-drawer"]',
     side: 'top',
     // The drawer is fixed to the viewport bottom — always in view, no scroll.
+    // It sits outside the Desk's paper column, so the step has no window: the
+    // column darkens and the drawer below it stays lit (K2: no page veil).
     fallbackHeading: 'The studio drawer',
     fallbackBody:
       'The studio’s doors, always at the bottom. Hours log themselves while a document is in hand. The bell opens The Post.',
@@ -571,20 +567,99 @@ function DeskWalkthroughInner() {
         className="shadow-none"
       />
 
+      {/* The spotlight owns the keys (Esc skips, Enter presses the focused
+          act), so the controller's document-level Esc/Enter stays off. */}
       <TourController
         tourId={DESK_WALKTHROUGH_TOUR_ID}
         steps={steps}
         persona={persona}
-        paused={commandBarOpen}
-        coachmarkClassName={COACHMARK_CLASSNAME}
+        paused
         onComplete={handleComplete}
         onAbandon={handleAbandon}
       >
         {(api) => {
           tourApiRef.current = api;
-          return <api.CoachmarkSlot />;
+          return (
+            <DeskTourSpotlight
+              api={api}
+              steps={steps}
+              persona={persona}
+              paused={commandBarOpen}
+            />
+          );
         }}
       </TourController>
     </>
+  );
+}
+
+// ─── The step, as the spotlight teaches it ─────────────────────────────────────
+
+const cmsText = (value: string | undefined) =>
+  typeof value === 'string' && value.length > 0 ? value : null;
+
+/** The Desk's paper column: the frame the walkthrough darkens (K2). */
+const deskColumn = () =>
+  document.querySelector('[data-tour-anchor="desk-greeting"]')?.closest<HTMLElement>('main') ??
+  null;
+
+function DeskTourSpotlight({
+  api,
+  steps,
+  persona,
+  paused,
+}: {
+  api: TourControllerAPI;
+  steps: CoachmarkStep[];
+  persona: Persona;
+  /** The ⌘K palette is open: the spotlight lifts, the tour keeps its step. */
+  paused: boolean;
+}) {
+  const step = steps[api.currentStep] ?? steps[0]!;
+  // CMS copy wins; the step's fallbacks cover Sanity downtime and pre-publish,
+  // so the tour is never invisible-but-active (spec §13.4).
+  const { data } = useHelpContent(step.surfaceKey, 'coachmark', persona);
+  const cm = data as CoachmarkContent | null;
+  const heading = cmsText(cm?.heading) ?? step.fallbackHeading ?? '';
+  const body = cmsText(cm?.body) ?? step.fallbackBody ?? '';
+  const doneLabel = cm?.ctaLabel ?? step.fallbackCtaLabel;
+
+  const [column, setColumn] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (api.isActive) setColumn(deskColumn());
+  }, [api.isActive]);
+  const frame = useMemo(() => ({ current: column }), [column]);
+
+  const holds = useMemo<SpotlightHold[]>(
+    () => [
+      {
+        id: step.surfaceKey,
+        target: () =>
+          step.anchorSelector
+            ? document.querySelector<HTMLElement>(step.anchorSelector)
+            : null,
+        label: heading,
+        reason: body,
+      },
+    ],
+    [step, heading, body],
+  );
+
+  const { totalSteps, currentStep, next, prev, skip, complete } = api;
+  const last = currentStep === totalSteps - 1;
+  return (
+    <HoldSpotlight
+      frame={frame}
+      holds={holds}
+      open={api.isActive && !paused && column !== null && Boolean(heading || body)}
+      onClose={() => skip()}
+      teach={{
+        step: currentStep,
+        total: totalSteps,
+        onBack: prev,
+        onNext: last ? complete : next,
+        doneLabel,
+      }}
+    />
   );
 }

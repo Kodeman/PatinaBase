@@ -694,6 +694,7 @@ export function RosterRow({
 
   const panelId = `roster-row-${row.key.replace(/[^A-Za-z0-9_-]/g, '')}`;
   const refusalId = `${panelId}-refusal`;
+  const noteId = `${panelId}-note`;
 
   /**
    * CR-2 — THE DATE THE TOKEN WILL ACTUALLY CARRY, on this door too.
@@ -1224,6 +1225,18 @@ export function RosterRow({
                     onHeldActivate={() =>
                       setNote(refusal ? SEAT_DELETE_REFUSAL_SENTENCES[refusal] : null)
                     }
+                    holds={
+                      refusal
+                        ? [
+                            {
+                              id: refusalId,
+                              target: () => document.getElementById(noteId),
+                              label: 'Added by mistake',
+                              reason: SEAT_DELETE_REFUSAL_SENTENCES[refusal],
+                            },
+                          ]
+                        : undefined
+                    }
                     onClick={() =>
                       void removeParty
                         .mutateAsync({ id: seatId, projectId })
@@ -1275,6 +1288,18 @@ export function RosterRow({
                     held={!canText}
                     aria-describedby={!canText ? `${panelId}-text-held` : undefined}
                     onHeldActivate={() => setNote(textHeldSentence)}
+                    holds={
+                      !canText
+                        ? [
+                            {
+                              id: `${panelId}-text-held`,
+                              target: () => document.getElementById(noteId),
+                              label: 'Text',
+                              reason: textHeldSentence,
+                            },
+                          ]
+                        : undefined
+                    }
                   >
                     Text
                   </DocumentAction>
@@ -1327,6 +1352,18 @@ export function RosterRow({
                       closeHeld ? `${panelId}-close-held` : undefined
                     }
                     onHeldActivate={() => setNote(closeHeldSentence)}
+                    holds={
+                      closeHeld
+                        ? [
+                            {
+                              id: `${panelId}-close-held`,
+                              target: () => document.getElementById(noteId),
+                              label: 'Close this seat',
+                              reason: closeHeldSentence,
+                            },
+                          ]
+                        : undefined
+                    }
                     className="ml-auto"
                   >
                     Close this seat
@@ -1427,6 +1464,7 @@ export function RosterRow({
 
             {note && (
               <p
+                id={noteId}
                 data-roster-row-note
                 className="mt-2 break-all border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] px-3 py-2 text-[0.7rem] text-[var(--color-charcoal)]"
               >

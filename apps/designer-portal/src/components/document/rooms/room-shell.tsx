@@ -205,7 +205,7 @@ export function RoomShell({
       </div>
 
       {/* The paper itself. Bottom padding clears the fixed Drawer + log strip. */}
-      <div className="relative z-10 flex-1 pb-[96px] min-[1180px]:pb-[84px]">
+      <div data-spotlight-frame className="relative z-10 flex-1 pb-[96px] min-[1180px]:pb-[84px]">
         {children}
       </div>
 

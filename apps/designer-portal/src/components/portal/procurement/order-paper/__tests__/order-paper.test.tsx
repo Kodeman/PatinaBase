@@ -92,7 +92,8 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 jest.mock('@/components/document/overlays/doc-sheet', () => ({
   DocSheet: ({ title, pageLabel, children }: { title: string; pageLabel?: string; children: ReactNode }) => (
-    <div role="dialog" aria-label={title}>
+    // The real DocSheet panel is a spotlight frame (US-36 K2).
+    <div role="dialog" aria-label={title} data-spotlight-frame="">
       <p data-testid="running-head">{pageLabel}</p>
       {children}
     </div>
@@ -184,7 +185,7 @@ describe('the terminal act', () => {
 });
 
 describe('ship-to', () => {
-  it('preselects nothing and holds the terminal act until a choice is made', () => {
+  it('preselects nothing and holds the terminal act until a choice is made', async () => {
     renderPaper();
     const radios = within(shipToGroup()).getAllByRole('radio');
     expect(radios.length).toBeGreaterThan(1);
@@ -193,8 +194,21 @@ describe('ship-to', () => {
 
     expect(terminal()).toHaveAttribute('aria-disabled', 'true');
     expect(terminal()).toHaveAccessibleDescription('choose where this ships');
+    const group = shipToGroup();
     fireEvent.click(terminal());
-    expect(screen.getByRole('alert')).toHaveTextContent('Choose where this ships.');
+    // R186: the press opens the spotlight with one window, on the ship-to
+    // choice itself, which stays live and takes focus.
+    await waitFor(() =>
+      expect(
+        Array.from(document.querySelectorAll('[data-hold-spotlight-window]')).map((el) =>
+          el.getAttribute('data-hold-spotlight-window'),
+        ),
+      ).toEqual(['ship-to']),
+    );
+    expect(group.closest('[inert]')).toBeNull();
+    expect(terminal().closest('[inert]')).not.toBeNull();
+    expect(group).toContainElement(document.activeElement as HTMLElement);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(mockCreate).not.toHaveBeenCalled();
     expect(mockSend).not.toHaveBeenCalled();
   });

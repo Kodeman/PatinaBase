@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+const mockSend = jest.fn();
 jest.mock("@/hooks/use-commercial-documents", () => ({
-  useSendServiceAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useSendServiceAgreement: () => ({ mutateAsync: mockSend, isPending: false }),
 }));
 
 import type { AgreementPart } from "@patina/types";
@@ -236,7 +237,7 @@ describe("ServiceAgreementSendSheet · synthesis §5", () => {
     ).toBeVisible();
   });
 
-  it("holds an unready Send rather than disabling it, and says why on activation", async () => {
+  it("opens one spotlight window on the blocker list for an unready Send", async () => {
     const user = userEvent.setup();
     render(
       <ServiceAgreementSendSheet
@@ -255,23 +256,78 @@ describe("ServiceAgreementSendSheet · synthesis §5", () => {
       />,
     );
 
-    const act = screen.getByRole("button", {
+    const sendAct = screen.getByRole("button", {
       name: "Send the agreement · $5,000.00 retainer",
     });
     // Held, never disabled: it keeps its place in the tab order.
-    expect(act).toHaveAttribute("aria-disabled", "true");
-    expect(act).toBeEnabled();
+    expect(sendAct).toHaveAttribute("aria-disabled", "true");
+    expect(sendAct).toBeEnabled();
     expect(screen.getByText("Finish before sending")).toBeVisible();
-    const described = act.getAttribute("aria-describedby");
+    const described = sendAct.getAttribute("aria-describedby");
     expect(described).toBeTruthy();
-    expect(window.document.getElementById(described!)?.textContent).toContain(
-      "This agreement names no fee.",
-    );
+    const blockerList = window.document.getElementById(described!);
+    expect(blockerList).toHaveTextContent("This agreement names no fee.");
+    expect(blockerList?.closest("[data-spotlight-frame]")).not.toBeNull();
 
-    await user.click(act);
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "This agreement names no fee.",
+    await user.click(sendAct);
+    await waitFor(() =>
+      expect(
+        window.document.querySelectorAll("[data-hold-spotlight-window]"),
+      ).toHaveLength(1),
     );
+    const windowEl = window.document.querySelector(
+      "[data-hold-spotlight-window]",
+    );
+    expect(windowEl).toHaveAttribute("data-hold-spotlight-window", described);
+    expect(
+      window.document.querySelector("[data-hold-spotlight-bar]"),
+    ).toHaveTextContent("This agreement names no fee.");
+    await waitFor(() =>
+      expect(
+        window.document.querySelector(
+          '[data-hold-spotlight-root] [role="status"]',
+        ),
+      ).toHaveTextContent("1 thing needs attention: This agreement names no fee."),
+    );
+    expect(blockerList).toHaveTextContent("This agreement names no fee.");
+  });
+
+  it("clears a stale send failure when the held act is pressed", async () => {
+    const user = userEvent.setup();
+    mockSend.mockReset().mockRejectedValueOnce(new Error("Send failed."));
+    const props = {
+      open: true,
+      onClose: jest.fn(),
+      document,
+      terms,
+      rates,
+      recipientEmail: "sarah@example.com",
+      parts: parts(),
+    };
+    const view = render(<ServiceAgreementSendSheet {...props} />);
+    await user.click(
+      screen.getByRole("button", {
+        name: "Send the agreement · $5,000.00 retainer",
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Send failed.");
+
+    view.rerender(
+      <ServiceAgreementSendSheet
+        {...props}
+        readinessOverride={{
+          ready: false,
+          blockers: ["This agreement names no fee."],
+          notes: [],
+        }}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Send the agreement · $5,000.00 retainer",
+      }),
+    );
+    expect(screen.getAllByRole("status")[0]).toBeEmptyDOMElement();
   });
 
   it("keeps the offline-signature act at the sheet foot", () => {

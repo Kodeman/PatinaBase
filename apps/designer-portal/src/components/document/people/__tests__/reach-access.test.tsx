@@ -702,6 +702,28 @@ describe("minting a door", () => {
     expect(act).toHaveAttribute("aria-disabled", "true");
   });
 
+  it("opens its reason in one spotlight window when the held act is pressed", () => {
+    renderReach({ seatId: null });
+    const act = screen.getByRole("button", { name: "Mint access" });
+    // The room's paper column, as RoomShell marks it.
+    (act.closest("body > div") as HTMLElement).setAttribute(
+      "data-spotlight-frame",
+      "",
+    );
+    const reasonId = act.getAttribute("aria-describedby") as string;
+    fireEvent.click(act);
+    expect(
+      Array.from(
+        document.querySelectorAll("[data-hold-spotlight-window]"),
+        (el) => el.getAttribute("data-hold-spotlight-window"),
+      ),
+    ).toEqual([reasonId]);
+    const note = document.getElementById(reasonId);
+    expect(note).toHaveTextContent(/\S/);
+    expect(note?.closest("[inert]")).toBeNull();
+    expect(mintLink).not.toHaveBeenCalled();
+  });
+
   /**
    * QA-R11-1 — the one mint control used to be wired unconditionally to
    * `useCreateFieldLink()`, so pressing it on a CLIENT's card minted a

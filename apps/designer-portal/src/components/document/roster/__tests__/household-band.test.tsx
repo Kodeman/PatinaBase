@@ -853,3 +853,76 @@ describe("the change-order figure, as an act", () => {
     expect(setThresholdMutate).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * US-36 R3 / R186 — a held act opens a spotlight in its sheet: one window on
+ * the fixer where the band has one, else on the note the press prints.
+ */
+describe("HouseholdBand — pressing a held act", () => {
+  const windows = () =>
+    Array.from(document.querySelectorAll("[data-hold-spotlight-window]")).map(
+      (el) => el.getAttribute("data-hold-spotlight-window"),
+    );
+  const framed = () =>
+    render(
+      <div data-spotlight-frame>
+        <HouseholdBand {...props} />
+      </div>,
+    );
+
+  it("windows the note for Record the authority, which has no fixer here", () => {
+    memberRole = "member";
+    household = {
+      ...(household as Record<string, unknown>),
+      member_person_ids: ["card-adaeze", "card-chidi"],
+    };
+    clientRepSeatCardIds = ["card-chidi"];
+    framed();
+    const act = screen.getByRole("button", { name: "Record the authority" });
+    fireEvent.click(act);
+
+    expect(windows()).toEqual([act.getAttribute("aria-describedby")]);
+    const note = screen.getByRole("alert", { hidden: true });
+    expect(note).toHaveTextContent(HOUSEHOLD_AUTHORITY_HELD_REASON);
+    expect(note.closest("[inert]")).toBeNull();
+    expect(act.closest("[inert]")).not.toBeNull();
+    // The note holds no control, so focus lands on the spotlight's own bar.
+    expect(document.activeElement).toBe(
+      document.querySelector("[data-hold-spotlight-bar] button"),
+    );
+    expect(addMemberMutate).not.toHaveBeenCalled();
+  });
+
+  it("windows the role choice when only the principal may add a signer", () => {
+    memberRole = "member";
+    framed();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a household member" }),
+    );
+    const act = screen.getByRole("button", { name: "Add to the household" });
+    fireEvent.click(act);
+
+    expect(windows()).toEqual(["household-grant-held"]);
+    const fixer = screen.getByRole("button", { name: "decides the work" });
+    expect(fixer.closest("[inert]")).toBeNull();
+    expect(act.closest("[inert]")).not.toBeNull();
+    expect(document.activeElement).toBe(fixer);
+    expect(addMemberMutate).not.toHaveBeenCalled();
+  });
+
+  it("windows the person picker when nobody is chosen yet", () => {
+    framed();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a household member" }),
+    );
+    const act = screen.getByRole("button", { name: "Add to the household" });
+    fireEvent.click(act);
+
+    expect(windows()).toEqual(["household-person-held"]);
+    const fixer = screen.getByLabelText("Who else is in this household");
+    expect(fixer.closest("[inert]")).toBeNull();
+    expect(act.closest("[inert]")).not.toBeNull();
+    expect(document.activeElement).toBe(fixer);
+    expect(addMemberMutate).not.toHaveBeenCalled();
+  });
+});

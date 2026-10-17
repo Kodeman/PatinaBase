@@ -192,6 +192,15 @@ export function AckCheckForm({
   const differences = rows.filter((r) => rowAgreement(r, current[r.key] ?? '') === 'differs').length;
   const invalid = rows.some((r) => isInvalid(r, current[r.key] ?? ''));
   const invalidId = `ack-invalid-${purchaseOrderId}`;
+  // A header row's key (`freight`, `ship_date`) is the same on every PO.
+  const rowId = (key: string) => `ack-invalid-row-${purchaseOrderId}-${key}`;
+  const invalidRows = rows.filter((row) => isInvalid(row, current[row.key] ?? ''));
+  const invalidHolds = invalidRows.map((row) => ({
+    id: row.key,
+    target: () => window.document.getElementById(rowId(row.key)),
+    label: rowLabel(row.piece, row.field),
+    reason: 'Prices are dollars and cents; quantities are whole numbers.',
+  }));
 
   const setValue = (key: string, value: string) => setValues({ ...current, [key]: value });
 
@@ -313,6 +322,7 @@ export function AckCheckForm({
               {rows.map((row) => (
                 <FormRow
                   key={row.key}
+                  rowId={rowId(row.key)}
                   row={row}
                   value={current[row.key] ?? ''}
                   showQuoted={showQuoted}
@@ -349,6 +359,7 @@ export function AckCheckForm({
           variant="primary"
           disabled={logAck.isPending || isLoading || invalid}
           held={invalid}
+          holds={invalidHolds.length ? invalidHolds : undefined}
           aria-describedby={invalid ? invalidId : undefined}
           loading={logAck.isPending}
           loadingLabel="Logging…"
@@ -382,6 +393,7 @@ export function AckCheckForm({
 }
 
 function FormRow({
+  rowId,
   row,
   value,
   showQuoted,
@@ -389,6 +401,7 @@ function FormRow({
   oneVoice,
   onChange,
 }: {
+  rowId: string;
   row: AckRow;
   value: string;
   showQuoted: boolean;
@@ -400,7 +413,7 @@ function FormRow({
   const differs = rowAgreement(row, value) === 'differs';
   const shown = (v: string) => (row.kind === 'money' ? `$${v}` : v);
   return (
-    <tr data-testid={`ack-row-${row.key}`} className="border-t border-[var(--color-pearl)]">
+    <tr id={rowId} data-testid={`ack-row-${row.key}`} className="border-t border-[var(--color-pearl)]">
       <th scope="row" className={`${CELL_CLS} font-normal`}>{label}</th>
       {showQuoted && (
         <td className={`${CELL_CLS} font-mono`}>{row.quoted != null ? shown(row.quoted) : '—'}</td>

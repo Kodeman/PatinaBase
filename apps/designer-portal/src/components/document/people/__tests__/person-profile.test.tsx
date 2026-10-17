@@ -517,6 +517,30 @@ describe("Send a text", () => {
     );
   });
 
+  it("opens its reason in one spotlight window when the held act is pressed", () => {
+    personData.current = person({ consent_status: "opted_out" });
+    const { onOpenSeat } = renderCard();
+    const act = screen.getByRole("button", { name: "Send text message" });
+    // The room's paper column, as RoomShell marks it.
+    (act.closest("body > div") as HTMLElement).setAttribute(
+      "data-spotlight-frame",
+      "",
+    );
+    fireEvent.click(act);
+    expect(
+      Array.from(
+        document.querySelectorAll("[data-hold-spotlight-window]"),
+        (el) => el.getAttribute("data-hold-spotlight-window"),
+      ),
+    ).toEqual([act.getAttribute("aria-describedby")]);
+    const note = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(note).toHaveTextContent(/no standing consent/);
+    expect(note?.closest("[inert]")).toBeNull();
+    expect(onOpenSeat).not.toHaveBeenCalled();
+  });
+
   it("opens the seat’s own sheet when consent stands", () => {
     const { onOpenSeat } = renderCard();
     fireEvent.click(screen.getByRole("button", { name: "Send text message" }));

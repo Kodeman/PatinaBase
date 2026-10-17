@@ -5,6 +5,7 @@
  */
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const startMutateAsync = jest.fn();
 
@@ -178,6 +179,84 @@ describe('ChangeOrderAct — the sheet', () => {
     const record = within(sheet).getByRole('button', { name: 'Record the change' });
     expect(record).toHaveAttribute('aria-disabled', 'true');
     expect(record).toHaveAttribute('aria-describedby', held.id);
+  });
+
+  it('keeps the spotlight reason synchronized with the current authorization hold', async () => {
+    const view = renderAct(sent, authorized);
+    const sheet = openSheet();
+    fireEvent.click(within(sheet).getByRole('radio', { name: /Credit/ }));
+    const record = within(sheet).getByRole('button', { name: 'Record the change' });
+    fireEvent.click(record);
+    await waitFor(() =>
+      expect(document.querySelector('[data-hold-spotlight-window]')).toBeTruthy(),
+    );
+    expect(document.querySelector('[data-hold-spotlight-bar]')).toHaveTextContent(
+      "This needs the client's yes.",
+    );
+
+    view.rerender(
+      <ChangeOrderAct
+        item={{ id: 'line-1' }}
+        po={sent}
+        projectId="project-1"
+        auth={{ track: 'awaiting', number: 8 }}
+        vendorName="Hale"
+        poLabel="PO-1042"
+      />,
+    );
+    await waitFor(() =>
+      expect(document.querySelector('[data-hold-spotlight-bar]')).toHaveTextContent(
+        'authorization № 8',
+      ),
+    );
+  });
+
+  it('spotlights the kind choices when nothing is chosen, live and focused (R186)', async () => {
+    renderAct();
+    const sheet = openSheet();
+    await userEvent.setup().click(within(sheet).getByRole('button', { name: 'Record the change' }));
+
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-hold-spotlight-window]')).toHaveLength(1),
+    );
+    expect(document.querySelector('[data-hold-spotlight-window]')).toHaveAttribute(
+      'data-hold-spotlight-window',
+      'po-change-kind',
+    );
+    expect(document.querySelector('[data-hold-spotlight-bar]')).toHaveTextContent('Choose what changed.');
+    const radios = within(sheet).getAllByRole('radio');
+    for (const radio of radios) expect(radio.closest('[inert]')).toBeNull();
+    await waitFor(() => expect(radios[0]).toHaveFocus());
+  });
+
+  it('a price-bearing pick from the kind window opens the price hold as its own window, the choices still live (F4)', async () => {
+    const user = userEvent.setup();
+    renderAct(sent, authorized);
+    const sheet = openSheet();
+    await user.click(within(sheet).getByRole('button', { name: 'Record the change' }));
+    await waitFor(() =>
+      expect(document.querySelector('[data-hold-spotlight-window]')).toHaveAttribute(
+        'data-hold-spotlight-window',
+        'po-change-kind',
+      ),
+    );
+
+    const credit = within(sheet).getByRole('radio', { name: /Credit/ });
+    await user.click(credit);
+
+    const held = within(sheet).getByTestId('po-change-held');
+    const windowIds = () =>
+      Array.from(document.querySelectorAll('[data-hold-spotlight-window]'), (el) =>
+        el.getAttribute('data-hold-spotlight-window'),
+      );
+    await waitFor(() => expect(windowIds()).toContain(held.id));
+    expect(document.querySelector('[data-hold-spotlight-bar]')).toHaveTextContent(
+      "This needs the client's yes.",
+    );
+    expect(held.closest('[inert]')).toBeNull();
+    expect(credit).toBeChecked();
+    expect(credit.closest('[inert]')).toBeNull();
+    expect(credit).toHaveFocus();
   });
 
   it('records a claim with the line, the kind and the reason', async () => {

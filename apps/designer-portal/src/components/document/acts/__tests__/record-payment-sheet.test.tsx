@@ -187,6 +187,27 @@ describe('Record a payment to a maker', () => {
     expect(document.querySelectorAll('[data-action-variant="primary"], [data-action-variant="inked"]')).toHaveLength(0);
   });
 
+  it('opens the amount field as the held-payment spotlight window, live and focused (R186)', async () => {
+    openSheet(PAYMENT_NEED);
+    const amount = screen.getByLabelText('Amount');
+    fireEvent.change(amount, { target: { value: '' } });
+    const button = screen.getByRole('button', { name: 'Record the payment' });
+    const reason = document.getElementById(button.getAttribute('aria-describedby') ?? '');
+    expect(reason).toHaveTextContent('Enter the amount received.');
+    await userEvent.setup().click(button);
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-hold-spotlight-window]')).toHaveLength(1),
+    );
+    const fix = amount.closest('.field');
+    expect(fix?.id).toMatch(/-amount-fix$/);
+    expect(document.querySelector('[data-hold-spotlight-window]')).toHaveAttribute(
+      'data-hold-spotlight-window',
+      fix?.id,
+    );
+    expect(amount.closest('[inert]')).toBeNull();
+    await waitFor(() => expect(amount).toHaveFocus());
+  });
+
   it('stands Put back in the foot beside the filled act, never in the head (money-p3)', async () => {
     openSheet(PAYMENT_NEED);
     const dialog = screen.getByRole('dialog');

@@ -155,9 +155,24 @@ export function ActDraft({
         : 'read-only';
   const readOnly = mode === 'read-only';
   const lead = viewer.leadFirstName ?? 'the lead';
-  const complete =
-    initial === null ||
-    (body.trim().length > 0 && (initial.subject === null || subject.trim().length > 0));
+  const missingSubject = initial !== null && initial.subject !== null && subject.trim().length === 0;
+  const missingBody = initial !== null && body.trim().length === 0;
+  const complete = !missingSubject && !missingBody;
+  const draftSubjectReason = 'Add a subject to continue.';
+  const draftBodyReason = 'Write the message to continue.';
+  const reasonsShown = mode === 'send' || mode === 'save';
+  const holds = [
+    ...(missingSubject
+      ? [{ id: `${regionKey}-subject`, target: () => document.getElementById(`${regionKey}-subject`), label: 'Subject', reason: draftSubjectReason }]
+      : []),
+    ...(missingBody
+      ? [{ id: `${regionKey}-body`, target: () => document.getElementById(`${regionKey}-body`), label: bodyLabel, reason: draftBodyReason }]
+      : []),
+  ];
+  const draftReasonIds = [
+    ...(missingSubject ? [`${regionKey}-subject-reason`] : []),
+    ...(missingBody ? [`${regionKey}-body-reason`] : []),
+  ].join(' ') || undefined;
   const text = (): ActDraftText => ({ subject: subject.trim(), body: body.trim() });
 
   // SQ-751 F2 · SQ-774 R3 — the send boundary reads the job's lead again,
@@ -315,10 +330,16 @@ export function ActDraft({
           <Input
             id={`${regionKey}-subject`}
             value={subject}
+            aria-describedby={missingSubject && reasonsShown ? `${regionKey}-subject-reason` : undefined}
             maxLength={300}
             readOnly={readOnly}
             onChange={(event) => setSubject(event.target.value)}
           />
+          {missingSubject && reasonsShown && (
+            <p id={`${regionKey}-subject-reason`} className="t-body-sm">
+              {draftSubjectReason}
+            </p>
+          )}
         </div>
       )}
       {initial && (
@@ -330,10 +351,16 @@ export function ActDraft({
             id={`${regionKey}-body`}
             rows={8}
             value={body}
+            aria-describedby={missingBody && reasonsShown ? `${regionKey}-body-reason` : undefined}
             maxLength={4000}
             readOnly={readOnly}
             onChange={(event) => setBody(event.target.value)}
           />
+          {missingBody && reasonsShown && (
+            <p id={`${regionKey}-body-reason`} className="t-body-sm">
+              {draftBodyReason}
+            </p>
+          )}
         </div>
       )}
       {error && (
@@ -365,6 +392,8 @@ export function ActDraft({
               variant="primary"
               disabled={!complete}
               held={!complete}
+              holds={holds}
+              aria-describedby={draftReasonIds}
               loading={pending}
               loadingLabel={regionKey === 'act-release-order' ? 'Approving…' : 'Sending…'}
               onClick={() => void run(onSend, true)}
@@ -377,6 +406,8 @@ export function ActDraft({
               variant="primary"
               disabled={!complete}
               held={!complete}
+              holds={holds}
+              aria-describedby={draftReasonIds}
               loading={pending}
               loadingLabel="Saving…"
               onClick={() => void run(onSaveForLead!, false)}
