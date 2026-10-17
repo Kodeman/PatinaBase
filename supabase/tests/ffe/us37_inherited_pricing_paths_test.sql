@@ -31,6 +31,11 @@
 --                       designer off job S's team who names S on a draft is
 --                       stamped as if she named no job, and S's teammate still
 --                       gets A.
+--   SQ-1258 residuals   (Astra SQ-1256 F1/F2, 00816) Z's duplicate of that
+--                       draft keeps its B, while O, on S's team, duplicating
+--                       it gets A. Z, who shares only B with W's lead, opens
+--                       no trade scope and no service addendum on W; W's
+--                       teammate T still opens both, stamped A.
 --   R189 history       (SQ-1218, Astra SQ-1213 F2/F3) the column is dropped
 --                       and 00813 replayed, as a deployed database first met
 --                       it: the one backfill stamps by recorded authority only
@@ -49,7 +54,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(71);
+SELECT plan(77);
 
 -- ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -548,6 +553,65 @@ SELECT is((SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE 
   '81300000-0000-4000-8000-0000000000f2', 'SQ-1244 F2: Z''s draft naming job S is stamped as if it named none (her only seat B), never S''s studio A');
 SELECT is((SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = '81300000-0000-4000-8000-000000000810'),
   '81300000-0000-4000-8000-0000000000f1', 'SQ-1244 F2 control: S''s teammate T drafting on S still gets S''s studio A');
+
+-- ─── SQ-1258: a copy or a new paper reads no job its writer is not on ──────
+-- (Astra SQ-1256 F1/F2, 00816.) F1: Z duplicates her draft 809, which names
+-- studio-A job S and carries her own seat's B. clone_proposal used to restamp
+-- the copy with S's A; it now keeps the source's B, because Z is not on S's
+-- team. O, who is on S's team, duplicating the same draft still gets S's A.
+-- F2: Z shares studio B with W's lead O but is not on studio-A job W's team.
+-- create_trade_scope and create_service_addendum admitted her through
+-- _can_author_proposal and stamped her paper W's A; both now refuse her. O's
+-- teammate T, on W's team but not its lead, still opens both, stamped A.
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"81300000-0000-4000-8000-0000000000a9","role":"authenticated"}';
+SELECT set_config('us37.z_clone', public.clone_proposal('81300000-0000-4000-8000-000000000809', 'duplicate')::text, true);
+SET LOCAL request.jwt.claims = '{"sub":"81300000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+SELECT set_config('us37.o_clone_of_z', public.clone_proposal('81300000-0000-4000-8000-000000000809', 'duplicate')::text, true);
+RESET ROLE;
+
+SELECT is((SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = current_setting('us37.z_clone')::uuid),
+  '81300000-0000-4000-8000-0000000000f2', 'SQ-1258 F1: Z''s duplicate of her draft naming S keeps the draft''s stamp B, never S''s studio A');
+SELECT is((SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = current_setting('us37.o_clone_of_z')::uuid),
+  '81300000-0000-4000-8000-0000000000f1', 'SQ-1258 F1 control: O, on S''s team, duplicating the same draft gets S''s studio A');
+
+-- The writers' gates read the caller from the claims; postgres may call the
+-- revoked _can_author_proposal.
+SET LOCAL request.jwt.claims = '{"sub":"81300000-0000-4000-8000-0000000000a9","role":"authenticated"}';
+SELECT ok(
+  public._can_author_proposal('81300000-0000-4000-8000-0000000000a1')
+  AND NOT public.can_buy_for_project('81300000-0000-4000-8000-000000000004'),
+  'SQ-1258 F2 fixture: Z may author for W''s lead O (they share studio B) but is not on studio-A job W''s team'
+);
+
+SET LOCAL ROLE authenticated;
+SELECT throws_ok(
+  $$SELECT public.create_trade_scope('81300000-0000-4000-8000-000000000004', 'Outsider millwork')$$,
+  '42501', 'project 81300000-0000-4000-8000-000000000004 not found or access denied',
+  'SQ-1258 F2 (a): Z, who shares only studio B with W''s lead, opens no trade scope on studio-A job W'
+);
+SELECT throws_ok(
+  $$SELECT public.create_service_addendum('81300000-0000-4000-8000-000000000004', 'Outsider design hours')$$,
+  '23514', 'project 81300000-0000-4000-8000-000000000004 has no executed design-services authority',
+  'SQ-1258 F2 (b): Z, who shares only studio B with W''s lead, opens no service addendum on studio-A job W'
+);
+
+SET LOCAL request.jwt.claims = '{"sub":"81300000-0000-4000-8000-0000000000a3","role":"authenticated"}';
+SELECT set_config('us37.t_scope', public.create_trade_scope(
+  '81300000-0000-4000-8000-000000000004', 'Teammate millwork')->>'proposalId', true);
+SELECT set_config('us37.t_addendum', public.create_service_addendum(
+  '81300000-0000-4000-8000-000000000004', 'Teammate design hours')->>'proposalId', true);
+RESET ROLE;
+-- The fixtures below are written with O signed in, as before this section.
+SET LOCAL request.jwt.claims = '{"sub":"81300000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+
+SELECT is(
+  ARRAY[(SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = current_setting('us37.t_scope')::uuid),
+        (SELECT COALESCE(studio_id::text, 'none') FROM public.proposals WHERE id = current_setting('us37.t_addendum')::uuid)],
+  ARRAY['81300000-0000-4000-8000-0000000000f1', '81300000-0000-4000-8000-0000000000f1'],
+  'SQ-1258 F2 control: W''s teammate T, not its lead, still opens a trade scope and a service addendum on W, both stamped A'
+);
 
 -- ─── R189: the one backfill reads recorded authority only ──────────────────
 -- (SQ-1218, Astra SQ-1213 F2/F3.) These run last: dropping the column
