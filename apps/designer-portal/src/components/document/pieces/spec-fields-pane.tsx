@@ -91,6 +91,8 @@ export type SpecLensLine = PieceLineStageRow & {
   role_identity?: string | null;
   purchase_order_id?: string | null;
   selection_thread_id?: string | null;
+  /** The item's own primary picture (00807), shown before the product's. */
+  primary_image_url?: string | null;
   product?: {
     id?: string;
     name?: string | null;

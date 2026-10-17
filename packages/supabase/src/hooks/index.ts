@@ -2642,6 +2642,9 @@ export * from "./use-pieces";
 // US-37 #3: per-job item labels (doc_code, 00808) — the writer and the clash sentence.
 export { itemLabelRefusal, useSetFfeItemLabel, type SetFfeItemLabelInput } from "./use-item-labels";
 
+// US-37 #1+#2: a project item's own pictures — snapshot, uploads, primary, order, unlink.
+export * from "./use-ffe-item-images";
+
 // US-34 N2: optimistic ink for internal records, and the never-optimistic list.
 export {
   useOptimisticMutation,

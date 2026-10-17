@@ -162,6 +162,7 @@ jest.mock("@/components/portal/proposals/product-picker-modal", () => ({
 
 import { SpecLens } from "../spec-lens";
 import {
+  lineImageUrl,
   linesForPlace,
   nextUnfinishedId,
   specProgress,
@@ -807,6 +808,45 @@ describe("the image (D15)", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the item's own primary picture, not the piece's, and counts an upload-only line (US-37 D1)", async () => {
+    mockItems.data = [
+      // An upload-only line: no piece, one picture of its own.
+      { ...L1, primary_image_url: "https://img.test/cabinet-upload.jpg" },
+      // A piece whose item primary is not the piece's first image.
+      {
+        ...L2,
+        product_id: "prod-slab",
+        product: {
+          id: "prod-slab",
+          name: "Calacatta slab",
+          images: ["https://img.test/slab-a.jpg"],
+        },
+        primary_image_url: "https://img.test/slab-b.jpg",
+      },
+      L3,
+      F1,
+      R1,
+      R1A,
+    ];
+    renderLens();
+    const section = await pane();
+    expect(
+      within(section).getByRole("img", { name: "The image for Custom cabinet" }),
+    ).toHaveAttribute("src", "https://img.test/cabinet-upload.jpg");
+    const list = screen.getByRole("list", { name: "Lines" });
+    expect(within(list).getAllByRole("button")[0]).toHaveTextContent(
+      "Custom cabinetPlaceholder4 OF 6",
+    );
+
+    fireEvent.click(rowFor("Countertop for custom cabinets"));
+    const slab = await pane();
+    expect(
+      within(slab).getByRole("img", {
+        name: "The image for Countertop for custom cabinets",
+      }),
+    ).toHaveAttribute("src", "https://img.test/slab-b.jpg");
+  });
+
   it("saves a spec field on blur with its row version", async () => {
     renderLens();
     const section = await pane();
@@ -1035,6 +1075,36 @@ describe("spec-progress", () => {
       ),
     ).toBe(6);
     expect(specProgress({}, { selected_dimensions: { unit: "in" } })).toBe(0);
+  });
+
+  it("reads the chosen image, then the item's primary, then the piece's first only without one (US-37 D1)", () => {
+    const piece = { images: ["https://img.test/piece-a.jpg"] };
+    const chosen = { selected_media: [{ url: "https://img.test/chosen.jpg" }] };
+    expect(
+      lineImageUrl(
+        { primary_image_url: "https://img.test/item-b.jpg", product: piece },
+        chosen,
+      ),
+    ).toBe("https://img.test/chosen.jpg");
+    expect(
+      lineImageUrl(
+        { primary_image_url: "https://img.test/item-b.jpg", product: piece },
+        { selected_media: [] },
+      ),
+    ).toBe("https://img.test/item-b.jpg");
+    expect(
+      lineImageUrl({ primary_image_url: null, product: piece }, null),
+    ).toBe("https://img.test/piece-a.jpg");
+    expect(lineImageUrl({ primary_image_url: null, product: null }, null)).toBe(
+      null,
+    );
+  });
+
+  it("counts an upload-only line as pictured (US-37 D1)", () => {
+    expect(
+      specProgress({ primary_image_url: "https://img.test/upload.jpg" }, null),
+    ).toBe(1);
+    expect(specProgress({ primary_image_url: null }, null)).toBe(0);
   });
 
   it("finds the next unfinished line after the current one, wrapping", () => {
