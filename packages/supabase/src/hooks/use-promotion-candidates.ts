@@ -29,9 +29,9 @@ export interface UsePromotionCandidatesOptions {
 
 /**
  * Personal-layer products that meet the PRD §6.1 promotion candidate
- * criteria. Reads from the `v_promotion_candidates` view (migration 00153)
- * which inherits products-table RLS — each designer sees only their own
- * candidates.
+ * criteria. Reads from the `v_promotion_candidates` view (migration 00153).
+ * The view runs with its owner's rights, not RLS; since 00815 it returns
+ * only the caller's own pieces (owner_user_id = auth.uid()).
  *
  * Used by the Sprint 2 PromotionBanner. The hook returns both the list
  * and a `count` so the banner can render "Ready to promote · N" without a

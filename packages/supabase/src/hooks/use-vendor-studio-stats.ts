@@ -36,10 +36,10 @@ export function computeSignalStrength(stats: VendorStudioStats): SignalStrength 
 }
 
 /**
- * Aggregate stats for a (vendor, studio) pair. Reads from the
- * SECURITY INVOKER view created in migration 00159 — RLS on the
- * underlying products / projects / purchase_orders tables enforces
- * cross-studio isolation automatically.
+ * Aggregate stats for a (vendor, studio) pair. Reads from the view created
+ * in migration 00159. The view runs with its owner's rights, not RLS; since
+ * 00815 it returns only studios where the caller holds an active, non-guest
+ * seat, with figures counted across all of that studio's projects.
  *
  * Returns `null` when the pair has no studio-layer items yet — a
  * brand-new vendor or a studio that hasn't promoted anything from
