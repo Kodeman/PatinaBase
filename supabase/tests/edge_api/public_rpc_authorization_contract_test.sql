@@ -948,7 +948,8 @@ BEGIN
         ('public._primary_studio_for(uuid)', 'sql', 'p_user uuid', 'uuid', 's', true, ARRAY['search_path=pg_catalog, public, pg_temp']::text[], '6426ab0bd755fd1902056e687741a2c0c1b2c1cf3e1c4a332a0ec766dde266ac'),
         ('public.is_org_owner(uuid,uuid)', 'sql', '_organization_id uuid, _user_id uuid DEFAULT auth.uid()', 'boolean', 's', true, ARRAY['search_path=pg_catalog, public, pg_temp']::text[], '22d2aa28a5b1e69ee449c8684a3497af2eee0c5358791b0f36754f7a8cc37d10'),
         ('public.guard_org_membership_changes()', 'plpgsql', '', 'trigger', 'v', true, ARRAY['search_path=pg_catalog, public, pg_temp']::text[], '137fc04097baf5beba2397edd97726a6c79f26e369900a200ba4caa059ef17cc'),
-        ('public.transfer_studio_ownership(uuid,uuid)', 'plpgsql', 'p_org_id uuid, p_new_owner uuid', 'void', 'v', true, ARRAY['search_path=pg_catalog, public, pg_temp']::text[], 'b65238ed6ff01d284daeaf0198febf8a906a5faaa3259518c6e672b01c4b1d49'),
+        -- 00800 (SQ-1087) locks both seats in user_id order before the promotion.
+        ('public.transfer_studio_ownership(uuid,uuid)', 'plpgsql', 'p_org_id uuid, p_new_owner uuid', 'void', 'v', true, ARRAY['search_path=pg_catalog, public, pg_temp']::text[], '856fdd9dc5da36664ef5f8c067499ef26d053dd631c21bfb4f097de0c9e819af'),
         ('public.agent_tasks_set_updated_at()', 'plpgsql', '', 'trigger', 'v', false, ARRAY['search_path=pg_catalog, public, pg_temp']::text[], '42bbab957ef0446fcfebf4936a8fc1b27986e1a1a3ba349937141bb528507261'),
         ('public.enforce_agent_task_transition()', 'plpgsql', '', 'trigger', 'v', false, ARRAY['search_path=pg_catalog, public, pg_temp']::text[], '441ca944d5290844cda7dd76c66b559094b540006d3167acdfd7cff7bbb3db40'),
         ('public.agent_task_audit_trigger()', 'plpgsql', '', 'trigger', 'v', true, ARRAY['search_path=pg_catalog, public, pg_temp']::text[], 'bf2cff90cc9ed5d4451110214bea5ad6458003b9e883e8124d1ef771b699ceb3'),
