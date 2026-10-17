@@ -5,7 +5,7 @@
  * number and status stamp, the client and the project doorway, typed line
  * items (milestone / time / ffe / adhoc per 00178/00187), totals, payment
  * history, and the acts row — Issue & send · Record payment · Resend · Void ·
- * Print — reusing useInvoice / useIssueInvoice / useSendInvoice /
+ * Print — reusing useInvoice / useSendInvoice (which issues a draft, SQ-1249) /
  * useRecordPayment / useVoidInvoice 1:1 (the old Billing detail page's logic,
  * rebuilt in the charcoal/paper grammar: quiet inline confirmations, R83
  * terracotta inline errors, NO toasts, zero shadows).
@@ -17,17 +17,22 @@
  * visibility only for `.proposal-print-area`, which the folio never carried.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
+  designerClientForClientUserQuery,
+  designerClientQuery,
   invoiceLinkIsLive,
+  useClient,
+  useDesignerClientForClientUser,
   useEmailDelivery,
   useInvoice,
   useInvoiceLink,
-  useIssueInvoice,
   useRecordPayment,
   useRegenerateInvoiceLink,
   useSendInvoice,
+  InvoiceSendError,
+  useSessionUserId,
   useVoidInvoice,
   RegenerateInvoiceLinkError,
   type Invoice,
@@ -44,7 +49,8 @@ import {
   isInvoiceOverdue,
   timeLineHoursLabel,
 } from '@patina/shared';
-import { useQueryClient } from '@tanstack/react-query';
+import { onlineManager, useQueryClient } from '@tanstack/react-query';
+import { OFFLINE_NOT_SENT, OfflineRefusal, readWhileOnline } from '@/lib/react-query';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DeliveryWord } from '../delivery-word';
@@ -52,8 +58,15 @@ import { InvoiceStateWord, MoneyWord } from './money-state-word';
 import { fmtDay, todayYmd } from '@/lib/document/format';
 import { voiceFirstName } from '@/lib/document/document-guide';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { needActLabel } from '@/lib/document/act-names';
-import { billingRefusal, dollarsToCents } from '@/lib/document/invoice-composer';
+import { MESSAGE_WITHHELD, needActLabel } from '@/lib/document/act-names';
+import {
+  billingRefusal,
+  dollarsToCents,
+  sendNoRecipientHold,
+  type InvoiceHold,
+} from '@/lib/document/invoice-composer';
+import type { SpotlightHold } from '@/lib/document/spotlight/use-hold-spotlight';
+import { HouseholdSheet } from '../overlays/household-sheet';
 import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
 import { useReconcileInvoiceCheckout } from '@/hooks/use-invoice-checkout-reconciliation';
 import { AccountsQueryFailure } from './accounts-query-failure';
@@ -76,6 +89,79 @@ const INPUT =
 type ActPanel = 'send' | 'resend' | 'payment' | 'void' | 'regenerate-link' | null;
 type CopyStatus = 'idle' | 'copied' | 'failed';
 
+/** A null repair has no fix in the folio: the window is the reason alone. */
+type SendHold = Pick<InvoiceHold, 'reason' | 'focusKey'> & { repair: string | null };
+
+/** A recipient read counts only once it has answered and is neither
+ *  re-reading nor failed; cached data alone establishes nothing. */
+type RecipientRead<T> = { data: T | null | undefined; pending: boolean; failed: boolean };
+
+function recipientFirstName(invoice: Invoice | null | undefined, householdName?: string | null) {
+  return voiceFirstName(
+    invoice?.client?.full_name ?? invoice?.project?.client?.full_name ?? householdName,
+  );
+}
+
+function recipientUncheckedHold(clientFirst: string | null): SendHold {
+  return {
+    reason: `${clientFirst ? `${clientFirst}'s` : "The client's"} email couldn't be checked. Reload the folio to send this.`,
+    repair: null,
+    focusKey: 'send-recipient',
+  };
+}
+
+/**
+ * K10 — what holds Send before issue. invoice-send's order
+ * (invoice-send/index.ts): the invoice client's profile email, else the
+ * project client's (only when the invoice names none), else the client's
+ * newest designer_clients row in the INVOICE DESIGNER's book. Unknown is held:
+ * an unreadable profile, a pending or failed read, never ready.
+ */
+function sendRecipientHold(
+  invoice: Invoice | null | undefined,
+  relationship: RecipientRead<{ id: string }>,
+  household: RecipientRead<{ client_name?: string | null; client_email?: string | null }>,
+  viewerId: string | null | undefined,
+): SendHold | null {
+  if (invoice?.status !== 'draft') return null;
+  const clientUserId = invoice.client_id ?? invoice.project?.client_id ?? null;
+  const profile = invoice.client_id ? invoice.client : invoice.project?.client;
+  const householdSettled =
+    !relationship.pending && !relationship.failed && !household.pending && !household.failed;
+  if (
+    invoice.client?.email ||
+    profile?.email ||
+    (householdSettled && household.data?.client_email?.trim())
+  ) {
+    return null;
+  }
+  if (!clientUserId) {
+    return { reason: 'Link a client to send this.', repair: MESSAGE_WITHHELD.repair, focusKey: 'add-email' };
+  }
+  const clientFirst = recipientFirstName(invoice, household.data?.client_name);
+  if (relationship.pending || household.pending) {
+    return {
+      reason: `Checking ${clientFirst ?? 'the client'}'s email before this sends.`,
+      repair: null,
+      focusKey: 'send-recipient',
+    };
+  }
+  if (relationship.failed || household.failed) return recipientUncheckedHold(clientFirst);
+  if (relationship.data?.id) return sendNoRecipientHold(clientFirst);
+  if (viewerId === invoice.designer_id) {
+    return { reason: sendNoRecipientHold(clientFirst).reason, repair: null, focusKey: 'send-recipient' };
+  }
+  const designerName =
+    invoice.designer?.full_name?.trim() ||
+    invoice.designer?.business_name?.trim() ||
+    'the designer who drew it';
+  return {
+    reason: `Only ${designerName} can see ${clientFirst ?? 'this client'}'s email. Ask them to send this invoice.`,
+    repair: null,
+    focusKey: 'send-recipient',
+  };
+}
+
 export function InvoiceFolio({
   invoiceId,
   onOpenDocument,
@@ -90,7 +176,6 @@ export function InvoiceFolio({
 }) {
   const qc = useQueryClient();
   const { data: invoice, isLoading, isError, refetch } = useInvoice(invoiceId);
-  const issue = useIssueInvoice({ errorSurface: 'inline' });
   const send = useSendInvoice({ errorSurface: 'inline' });
   const recordPayment = useRecordPayment({ errorSurface: 'inline' });
   const voidInvoice = useVoidInvoice({ errorSurface: 'inline' });
@@ -104,6 +189,72 @@ export function InvoiceFolio({
     'invoice',
     invoice && invoice.status !== 'draft' ? [invoice.id] : [],
   );
+  // K10 — Send is held BEFORE issue until invoice-send's address is known,
+  // read here in the INVOICE DESIGNER's book, which studio RLS (00316) lets a
+  // co-member read too.
+  const viewerId = useSessionUserId();
+  const clientUserId = invoice?.client_id ?? invoice?.project?.client_id ?? null;
+  const {
+    data: relationship,
+    isLoading: relationshipLoading,
+    isFetching: relationshipFetching,
+    isError: relationshipFailed,
+  } = useDesignerClientForClientUser(
+    invoice?.status === 'draft' ? clientUserId : null,
+    invoice?.designer_id,
+  );
+  const {
+    data: household,
+    isLoading: householdLoading,
+    isFetching: householdFetching,
+    isError: householdFailed,
+  } = useClient(relationship?.id ?? '');
+  const [householdOpen, setHouseholdOpen] = useState(false);
+  // The fresh recipient read before issue is under way (doIssueAndSend).
+  const [confirmingRecipient, setConfirmingRecipient] = useState(false);
+  // F4 — a Send press commits its act; closing the folio (or pointing it at
+  // another invoice) retires it, and the act checks after every await.
+  const actToken = useRef(0);
+  useEffect(
+    () => () => {
+      actToken.current += 1;
+      setConfirmingRecipient(false);
+    },
+    [invoiceId],
+  );
+  const sendReasonId = useId();
+  const sendHoldRef = useRef<HTMLDivElement | null>(null);
+  const sendActRef = useRef<HTMLButtonElement | null>(null);
+  // R2 — a re-read after an invalidation, or a failed one, establishes
+  // nothing, even with its earlier answer still cached.
+  const sendHold = sendRecipientHold(
+    invoice,
+    {
+      data: relationship,
+      pending: !!(relationshipLoading || relationshipFetching),
+      failed: !!relationshipFailed,
+    },
+    {
+      data: household,
+      pending: !!(householdLoading || householdFetching),
+      failed: !!householdFailed,
+    },
+    viewerId,
+  );
+  // US-19 (one-voice): `Send the invoice` and `Record the payment` are their
+  // acts' one names (D1), and each commit is filled (`terminal`, R162) beneath
+  // the consequence sentence its panel already states (R141).
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const sendHolds: SpotlightHold[] = sendHold
+    ? [
+        {
+          id: sendHold.focusKey,
+          label: sendHold.repair ?? (oneVoice ? 'Send the invoice' : 'Issue & send'),
+          reason: sendHold.reason,
+          target: () => sendHoldRef.current,
+        },
+      ]
+    : [];
 
   const [act, setAct] = useState<ActPanel>(null);
   /** R51's quiet confirmation grammar — sage when it landed, terracotta when not. */
@@ -115,10 +266,6 @@ export function InvoiceFolio({
   const [reference, setReference] = useState('');
   const [receivedDate, setReceivedDate] = useState(() => todayYmd());
   const [showClientFallback, setShowClientFallback] = useState(false);
-  // US-19 (one-voice): `Send the invoice` and `Record the payment` are their
-  // acts' one names (D1), and each commit is filled (`terminal`, R162) beneath
-  // the consequence sentence its panel already states (R141).
-  const oneVoice = useFeatureFlag('one-voice').value === true;
   // F3-3 — the landing happens once, when an invoice that can take a payment
   // has read; the panel is then hers to close and reopen as before.
   const confirmPaymentRef = useRef<HTMLButtonElement | null>(null);
@@ -239,7 +386,7 @@ export function InvoiceFolio({
   // A studio invoice has no house, so there is no document to walk into.
   const documentProjectId = invoice.project_id;
   const busy =
-    issue.isPending ||
+    confirmingRecipient ||
     send.isPending ||
     recordPayment.isPending ||
     voidInvoice.isPending ||
@@ -254,46 +401,124 @@ export function InvoiceFolio({
     setAct((prev) => (prev === panel ? null : panel));
   };
 
-  // Issue & send: issue_invoice RPC first (number, totals, milestone flips),
-  // then the invoice-send edge fn. A send failure does NOT roll back the issue
-  // — the folio re-reads as issued and Resend carries the retry (old page 1:1).
+  // Issue & send: ONE invoice-send request with issue: true (F2) — the function
+  // resolves the recipient, issues the draft as the designer only once it has
+  // one (number, totals, milestone flips), and sends to that same address. A
+  // send failure does NOT roll back the issue — the folio re-reads as issued
+  // and Resend carries the retry (old page 1:1).
+  // R2 — the one fresh, uncached read of the recipient immediately before
+  // issue: the invoice (its profiles), then the newest relationship and its
+  // household. A read that fails, or answers no address, holds. It is the
+  // folio's say-so only; the function's own resolution decides the issue.
+  const readSendHoldFresh = async (): Promise<SendHold | null> => {
+    const fresh = await refetch();
+    const draft = fresh.isError ? undefined : fresh.data;
+    if (!draft) return recipientUncheckedHold(recipientFirstName(invoice, household?.client_name));
+    // invoice-send reads the profile first: an address there, or no client to
+    // look up, is the whole answer.
+    const unasked = { data: null, pending: false, failed: false };
+    const profileAnswer = sendRecipientHold(draft, unasked, unasked, viewerId);
+    const freshClientId = draft.client_id ?? draft.project?.client_id ?? null;
+    if (!profileAnswer || !freshClientId) return profileAnswer;
+    try {
+      const freshRelationship = await qc.fetchQuery({
+        ...designerClientForClientUserQuery(freshClientId, draft.designer_id),
+        staleTime: 0,
+        retry: false,
+      });
+      const freshHousehold = freshRelationship?.id
+        ? await qc.fetchQuery({
+            ...designerClientQuery(freshRelationship.id),
+            staleTime: 0,
+            retry: false,
+          })
+        : null;
+      return sendRecipientHold(
+        draft,
+        { data: freshRelationship, pending: false, failed: false },
+        { data: freshHousehold, pending: false, failed: false },
+        viewerId,
+      );
+    } catch {
+      const failed = { data: null, pending: false, failed: true };
+      return sendRecipientHold(draft, failed, failed, viewerId);
+    }
+  };
+
   const doIssueAndSend = async () => {
+    // K10 — issuing is irreversible, so nothing issues until its recipient is
+    // established, whatever state the press came from.
+    if (sendHold) {
+      setNote(`Could not issue — ${sendHold.reason}`);
+      return;
+    }
+    // F3 — offline, the press refuses before any read: an offline read pauses,
+    // and would resume into an irreversible issue on reconnect.
+    if (!onlineManager.isOnline()) {
+      setNote(`Could not issue — ${OFFLINE_NOT_SENT}`);
+      return;
+    }
+    const token = ++actToken.current;
+    const live = () => actToken.current === token;
     setNote(null);
+    setConfirmingRecipient(true);
+    let freshHold: SendHold | null;
+    try {
+      freshHold = await readWhileOnline(readSendHoldFresh);
+    } catch (e) {
+      // The connection dropped while the read was out: the act expires.
+      freshHold =
+        e instanceof OfflineRefusal
+          ? { reason: e.message, repair: null, focusKey: 'send-recipient' }
+          : recipientUncheckedHold(recipientFirstName(invoice, household?.client_name));
+    }
+    if (!live()) return;
+    setConfirmingRecipient(false);
+    if (freshHold) {
+      setNote(`Could not issue — ${freshHold.reason}`);
+      return;
+    }
     setShowClientFallback(false);
     setToolbarCopyStatus('idle');
     setBandCopyStatus('idle');
-    let issued: Invoice;
-    try {
-      issued = await issue.mutateAsync({
-        invoiceId,
-        projectId: invoice.project_id ?? undefined,
-      });
-    } catch (e) {
-      setNote(`Could not issue — ${billingRefusal('issue', e).sentence}`);
-      return;
-    }
     try {
       const result = await send.mutateAsync({
         invoiceId,
         projectId: invoice.project_id ?? undefined,
         message: message.trim() || undefined,
+        issue: true,
       });
+      if (!live()) return;
       setNote(
         result.emailSent
-          ? `Invoice ${issued.invoice_number ?? ''} issued · emailed ${result.recipient}`.trim()
-          : `Invoice ${issued.invoice_number ?? ''} issued · email skipped`.trim(),
+          ? `Invoice ${result.invoiceNumber ?? ''} issued · emailed ${result.recipient}`.trim()
+          : `Invoice ${result.invoiceNumber ?? ''} issued · email skipped`.trim(),
       );
       setShowClientFallback(!result.emailSent);
       setAct(null);
       setMessage('');
     } catch (e) {
-      setNote(
-        `Could not send — issued as ${issued.invoice_number ?? 'this invoice'}. ${
-          billingRefusal('send', e).sentence
-        } Resend to retry.`,
-      );
-      setShowClientFallback(true);
-      setAct(null);
+      if (!live()) return;
+      if (e instanceof InvoiceSendError && e.issued) {
+        setNote(
+          `Could not send — issued as ${e.invoiceNumber ?? 'this invoice'}. ${
+            billingRefusal('send', e).sentence
+          } Resend to retry.`,
+        );
+        setShowClientFallback(true);
+        setAct(null);
+        return;
+      }
+      // F3 — no answer in the function's own words: it may have issued. The
+      // hook re-reads the invoice; the folio never says it did not.
+      if (e instanceof InvoiceSendError && e.issueUnknown) {
+        setNote(
+          'Could not tell whether this invoice issued — no answer came back. Check the folio before you send it again.',
+        );
+        setAct(null);
+        return;
+      }
+      setNote(`Could not issue — ${e instanceof OfflineRefusal ? e.message : billingRefusal('send', e).sentence}`);
     }
   };
 
@@ -672,9 +897,13 @@ export function InvoiceFolio({
         <DocumentActionGroup surfaceKey="accounts" regionKey="invoice-actions">
           {isDraft && (
             <DocumentAction
+              ref={sendActRef}
               actionKey="issue-and-send-invoice"
               variant="primary"
-              disabled={busy}
+              disabled={busy || !!sendHold}
+              held={!!sendHold}
+              aria-describedby={sendHold ? sendReasonId : undefined}
+              holds={sendHolds}
               onClick={() => openPanel('send')}
             >
               {oneVoice ? 'Send the invoice' : 'Issue & send'}
@@ -766,6 +995,29 @@ export function InvoiceFolio({
             </DocumentAction>
           )}
         </DocumentActionGroup>
+
+        {/* K10 — why Send is held and its fix, visible before the press (K3);
+            the press lights this one window. */}
+        {sendHold && (
+          <div
+            ref={sendHoldRef}
+            data-hold-region={sendHold.focusKey}
+            className="mt-2 flex flex-wrap items-baseline gap-x-3 text-[11.5px] text-[var(--color-charcoal)]"
+          >
+            <p id={sendReasonId}>{sendHold.reason}</p>
+            {sendHold.repair && (
+              <DocumentAction
+                actionKey="add-invoice-recipient"
+                surfaceKey="accounts"
+                regionKey="invoice-actions"
+                variant="tertiary"
+                onClick={() => setHouseholdOpen(true)}
+              >
+                {sendHold.repair}
+              </DocumentAction>
+            )}
+          </div>
+        )}
 
         {/* THE ADDRESS IS SHOWN ONCE — the paperwork mint's own sentence
             (`paperworkMintedSentence`), because this is the same bargain:
@@ -890,7 +1142,10 @@ export function InvoiceFolio({
               <DocumentAction
                 actionKey={act === 'send' ? 'confirm-issue-and-send' : 'confirm-resend'}
                 variant={oneVoice && act === 'send' ? 'terminal' : 'primary'}
-                disabled={busy}
+                disabled={busy || (act === 'send' && !!sendHold)}
+                held={act === 'send' && !!sendHold}
+                aria-describedby={act === 'send' && sendHold ? sendReasonId : undefined}
+                holds={act === 'send' ? sendHolds : undefined}
                 loading={busy}
                 loadingLabel="Sending…"
                 onClick={() => void (act === 'send' ? doIssueAndSend() : doResend())}
@@ -904,6 +1159,9 @@ export function InvoiceFolio({
               <DocumentAction
                 actionKey="cancel-invoice-send"
                 variant="tertiary"
+                // F4 — a pressed Send is committed; it shows its pending state
+                // until it lands, and cannot be dismissed out from under it.
+                disabled={busy}
                 onClick={() => setAct(null)}
               >
                 never mind
@@ -1088,6 +1346,28 @@ export function InvoiceFolio({
           </div>
         )}
       </div>
+      {/* K10 — "Add their email" lays the household sheet above the folio,
+          on its email field. A client linked there reaches this invoice
+          through its project, so the folio re-reads when it closes. */}
+      {householdOpen && (
+        <HouseholdSheet
+          open
+          onClose={() => {
+            setHouseholdOpen(false);
+            void refetch();
+          }}
+          engagementKind={invoice.project_id ? 'project' : 'relationship'}
+          projectId={invoice.project_id}
+          proposalId={null}
+          clientProfileId={clientUserId}
+          designerClientId={relationship?.id ?? null}
+          clientName={invoice.client?.full_name ?? invoice.project?.client?.full_name ?? ''}
+          aboveFolio
+          landOnEmail={!!clientUserId}
+          // Saving the email clears the hold, and its Add their email with it.
+          fallbackFocusRef={sendActRef}
+        />
+      )}
     </div>
   );
 }
