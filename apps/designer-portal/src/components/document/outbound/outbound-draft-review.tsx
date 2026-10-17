@@ -271,18 +271,15 @@ export function OutboundDraftReview({
               Discard draft
             </DocumentAction>
           </div>
-          {!ready && canSend && (
-            <p className="text-[11px] text-[var(--text-muted)]">
-              Loading who leads this project…
-            </p>
-          )}
-          {(!canSend || !recipient) && (
+          {(!ready || !canSend || !recipient) && (
             <p id={`${fieldId}-send-hold-reason`} className="text-[11px] text-[var(--text-muted)]">
-              {!recipient && !canSend
-                ? `No address on file. ${lead} sees this first.`
-                : !recipient
-                  ? 'No address on file.'
-                  : `${lead} sees this first.`}
+              {!ready
+                ? 'Loading who leads this project…'
+                : !recipient && !canSend
+                  ? `No address on file. ${lead} sees this first.`
+                  : !recipient
+                    ? 'No address on file.'
+                    : `${lead} sees this first.`}
             </p>
           )}
           {saved && (

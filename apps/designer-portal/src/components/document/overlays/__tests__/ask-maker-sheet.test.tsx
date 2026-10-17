@@ -195,6 +195,23 @@ describe('AskMakerSheet', () => {
     expect(labels).toEqual(['Hold for review', 'Discard']);
   });
 
+  it('shows each missing field reason beside its input and describes the input', () => {
+    renderWithQuery(
+      <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />,
+    );
+    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: '' } });
+
+    const subject = screen.getByLabelText('Subject');
+    const note = screen.getByLabelText('Note');
+    const subjectReasonId = subject.getAttribute('aria-describedby');
+    const noteReasonId = note.getAttribute('aria-describedby');
+    expect(subjectReasonId).toBeTruthy();
+    expect(noteReasonId).toBeTruthy();
+    expect(document.getElementById(subjectReasonId!)).toHaveTextContent('Add a subject to continue.');
+    expect(document.getElementById(noteReasonId!)).toHaveTextContent('Add a note to continue.');
+  });
+
   it('opens a window per missing note field and lifts each as it is filled', async () => {
     renderWithQuery(
       <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />,

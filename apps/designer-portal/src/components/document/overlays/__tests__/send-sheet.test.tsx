@@ -434,6 +434,8 @@ describe('SendSheet canonical client-copy validation', () => {
     expect(
       await screen.findByText('Still missing: mood boards.'),
     ).toBeInTheDocument();
+    await waitFor(() => expect(send).toHaveAttribute('aria-describedby', 'send-sheet-ack-hold-reason'));
+    expect(screen.getByText('Confirm sending with parts still missing first.')).toBeInTheDocument();
 
     fireEvent.click(
       await screen.findByRole('checkbox', {
@@ -908,6 +910,8 @@ describe('SendSheet canonical client-copy validation', () => {
         target: { value: 'not-an-email' },
       });
       expectHeldWithReason(send, 'Correct the CC address first.');
+      fireEvent.click(send);
+      expect(screen.getByText('Correct the CC address first.')).toBeInTheDocument();
     });
   });
 
