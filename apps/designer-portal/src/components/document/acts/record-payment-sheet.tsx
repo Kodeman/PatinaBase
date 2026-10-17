@@ -259,7 +259,7 @@ function PaymentForm<M extends string>({
   return (
     <div data-act-record-payment className="space-y-5">
       <p className="t-body [overflow-wrap:anywhere]">{record}</p>
-      <div className="field">
+      <div id={`${regionKey}-amount-fix`} className="field">
         <label className="label" htmlFor={`${regionKey}-amount`}>
           Amount
         </label>
@@ -314,6 +314,7 @@ function PaymentForm<M extends string>({
           variant="terminal"
           disabled={!complete}
           held={!complete}
+          holdFix={`${regionKey}-amount-fix`}
           loading={pending}
           loadingLabel="Recording…"
           onClick={() => void submit()}

@@ -52,8 +52,10 @@ describe('SetAsideSheet (U-Q5)', () => {
     expect(saveButton()).toHaveAttribute('aria-disabled', 'true');
     await user.click(saveButton());
     expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByText('Choose a day after today.')).toBeInTheDocument();
-    expect(screen.getByText('Say what the line waits on.')).toBeInTheDocument();
+    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toEqual([
+      'Choose a day after today.',
+      'Say what the line waits on.',
+    ]);
 
     // A day alone is not enough: the reason is required too.
     fill('Back on', '2026-10-16');
@@ -63,6 +65,18 @@ describe('SetAsideSheet (U-Q5)', () => {
     expect(screen.getByLabelText('Waiting on')).toHaveAttribute('aria-invalid', 'true');
   });
 
+  it('opens one spotlight window per missing field, then removes the fixed field', async () => {
+    const { onSave } = renderSheet();
+    const user = userEvent.setup();
+    await user.click(saveButton());
+    const windows = () => document.querySelectorAll('[data-hold-spotlight-window]');
+    await waitFor(() => expect(windows()).toHaveLength(2));
+
+    fill('Back on', '2026-10-16');
+    await waitFor(() => expect(windows()).toHaveLength(1));
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it('refuses today as the day it comes back', async () => {
     const { onSave } = renderSheet();
     const user = userEvent.setup();
@@ -70,7 +84,7 @@ describe('SetAsideSheet (U-Q5)', () => {
     fill('Waiting on', 'the Chens’ bench decision');
     await user.click(saveButton());
     expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByText('Choose a day after today.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose a day after today.');
   });
 
   it('hands the day and the trimmed reason to the line’s writer, then puts the sheet back', async () => {

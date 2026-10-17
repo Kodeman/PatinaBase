@@ -262,6 +262,19 @@ describe('Chase this PO', () => {
     expect(mockSendDraft).not.toHaveBeenCalled();
   });
 
+  it('opens one spotlight window per missing draft field, then removes the fixed field', async () => {
+    openSheet(PO_NEED);
+    fireEvent.change(textbox('Subject'), { target: { value: '' } });
+    fireEvent.change(textbox('Note'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
+    const windows = () => document.querySelectorAll('[data-hold-spotlight-window]');
+    await waitFor(() => expect(windows()).toHaveLength(2));
+
+    fireEvent.change(textbox('Note'), { target: { value: 'A note for the maker.' } });
+    await waitFor(() => expect(windows()).toHaveLength(1));
+    expect(screen.getAllByText('Add a subject to continue.')).toHaveLength(2);
+  });
+
   it('sends only from its named control, then marks the need acted', async () => {
     openSheet(PO_NEED);
     fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
