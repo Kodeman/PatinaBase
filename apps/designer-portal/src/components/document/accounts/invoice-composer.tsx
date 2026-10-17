@@ -70,6 +70,7 @@ import {
   useProjectPoCostLines,
   useOrganizationMembers,
   useOrganizations,
+  useStudiosEmployingMember,
   useSessionUserId,
   useProjectFFEItems,
   useProjectRoster,
@@ -783,21 +784,24 @@ export function InvoiceComposer({
   // F8 — stamp_project_pricing_studio (00606) names a studio only for its
   // owner or admin, and only one that EMPLOYS the designer (an active seat that
   // is neither guest nor owner). The rate-card condition it also checks is not
-  // readable here; that refusal comes back through ActFailLine.
+  // readable here; that refusal comes back through ActFailLine. SQ-1091 — she
+  // may own or administer more than the studio she answers for (00295 gives
+  // every designer a one-person workspace), so the naming studio is the first of
+  // them that employs the lead.
+  const { data: employingStudioIds } = useStudiosEmployingMember(
+    billingGap === "no-studio" ? viewerStudios.map((studio) => studio.id) : [],
+    selectedProject?.designer_id ?? null,
+  );
+  const namingStudio =
+    billingGap === "no-studio"
+      ? (viewerStudios.find((studio) =>
+          (employingStudioIds ?? []).includes(studio.id),
+        ) ?? null)
+      : null;
+  const canNameStudio = !!namingStudio && !!projectId;
   const { data: viewerStudioMembers } = useOrganizationMembers(
     billingGap === "no-studio" && viewerStudio ? viewerStudio.id : "",
   );
-  const canNameStudio =
-    billingGap === "no-studio" &&
-    !!viewerStudio &&
-    !!projectId &&
-    (viewerStudioMembers ?? []).some(
-      (member: AnyRecord) =>
-        member.user_id === selectedProject?.designer_id &&
-        member.status === "active" &&
-        member.role !== "guest" &&
-        member.role !== "owner",
-    );
   // R173 — a solo owner (the only active non-guest seat in the one studio she
   // holds) on a project opened before it had a studio. The server keeps that
   // project closed to her (HT-3-g(3)), so the only fix is support's.
@@ -1906,13 +1910,13 @@ export function InvoiceComposer({
                     {MESSAGE_WITHHELD.repair}
                   </DocumentAction>
                 )}
-                {canNameStudio && viewerStudio && (
+                {canNameStudio && namingStudio &&(
                   <p className="mt-1">
                     Naming a studio stamps it on every invoice this project
                     sends.
                   </p>
                 )}
-                {canNameStudio && viewerStudio && (
+                {canNameStudio && namingStudio &&(
                   <DocumentAction
                     ref={nameStudioRef}
                     actionKey="name-invoice-studio"
@@ -1931,14 +1935,14 @@ export function InvoiceComposer({
                     Name studio
                   </DocumentAction>
                 )}
-                {canNameStudio && viewerStudio && confirmingName && (
+                {canNameStudio && namingStudio &&confirmingName && (
                   // K12 — one inline confirm, no modal: the stamp is final.
                   <div
                     role="group"
                     aria-label="Confirm naming the studio"
                     className="mt-1 flex flex-wrap items-center gap-x-3"
                   >
-                    <p>Name {viewerStudio.name}? This can&apos;t be undone.</p>
+                    <p>Name {namingStudio.name}? This can&apos;t be undone.</p>
                     <DocumentAction
                       ref={confirmNameRef}
                       actionKey="confirm-name-invoice-studio"
@@ -1949,7 +1953,7 @@ export function InvoiceComposer({
                       loadingLabel="Naming…"
                       onClick={() => {
                         stampProjectStudio.mutate(
-                          { projectId, studioId: viewerStudio.id },
+                          { projectId, studioId: namingStudio.id },
                           {
                             onError: (e) => {
                               setConfirmingName(false);
@@ -1957,7 +1961,7 @@ export function InvoiceComposer({
                               setNameStudioError(
                                 stampStudioRefusal(
                                   (e as { message?: unknown } | null)?.message,
-                                  viewerStudio.name,
+                                  namingStudio.name,
                                 ),
                               );
                             },

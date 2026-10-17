@@ -231,6 +231,34 @@ export function useOrganizationMembers(organizationId: string) {
 }
 
 /**
+ * Which of `studioIds` EMPLOY `userId`: an active seat that is neither guest
+ * nor owner, the rule stamp_project_pricing_studio (00606) names a studio by.
+ * One read over every studio, resolving to the ids that pass.
+ */
+export function useStudiosEmployingMember(studioIds: string[], userId: string | null) {
+  return useQuery({
+    queryKey: ['organization-members', 'employing', userId, studioIds],
+    queryFn: async () => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('organization_members')
+        .select('organization_id, role, status')
+        .in('organization_id', studioIds)
+        .eq('user_id', userId as string);
+
+      if (error) throw error;
+      return (data ?? [])
+        .filter(
+          (seat) =>
+            seat.status === 'active' && seat.role !== 'guest' && seat.role !== 'owner',
+        )
+        .map((seat) => seat.organization_id as string);
+    },
+    enabled: studioIds.length > 0 && !!userId,
+  });
+}
+
+/**
  * Get pending invitations for the current user
  */
 export function usePendingInvitations() {

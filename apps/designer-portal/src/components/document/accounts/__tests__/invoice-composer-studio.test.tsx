@@ -42,6 +42,7 @@ jest.mock("@patina/supabase", () => ({
   useOrganizationMembers: (orgId: string) => ({
     data: orgId ? mockStudioMembers : undefined,
   }),
+  useStudiosEmployingMember: () => ({ data: undefined }),
   useCreateDraftInvoice: () => ({
     mutateAsync: mockCreateDraft,
     isPending: false,
