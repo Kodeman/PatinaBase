@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
+import { getAuthenticatedDesignerAdmin } from '@/lib/supabase-admin';
 
 const TIER_VALUES = ['maker_piece', 'designers_pick', 'sourced'] as const;
 
@@ -53,13 +54,18 @@ function snakeToCamel(product: Record<string, unknown>) {
 
 // GET /api/catalog/products/:id
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase: any = await createServerClient();
+    // Designer-private (R189): no session is 401, a signed-in account with no
+    // designer or admin role is 403 and never sees a tradePrice. The read stays
+    // on the session client, under RLS.
+    const auth = await getAuthenticatedDesignerAdmin(request);
+    if ('error' in auth) return auth.error;
 
     const { data, error } = await supabase
       .from('products')

@@ -6,7 +6,7 @@
  * after it is made, behind `seatDeleteRefusal`.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CloseSeatAct, closeSeatConfirmSentence } from "../close-seat-act";
 
 const closeMutate = jest.fn();
@@ -154,6 +154,9 @@ describe("CloseSeatAct", () => {
     const note = document.getElementById("close-seat-held-seat-dana");
     expect(note).toHaveTextContent(/owner or an admin of the studio/);
     expect(note?.closest("[inert]")).toBeNull();
+    // A note-only window holds nothing to focus: focus goes to the bar.
+    const bar = document.querySelector<HTMLElement>("[data-hold-spotlight-bar]")!;
+    expect(within(bar).getAllByRole("button")[0]).toHaveFocus();
   });
 
   it("offers the act to the principal on the same seat", () => {

@@ -2,6 +2,11 @@
 -- Run:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 -f supabase/tests/document/advance_project_phase_atomicity_test.sql
+-- Also runs under `supabase test db` (pg_prove): it plans one TAP test, and the
+-- final ok prints only after every assertion above it ran without an error.
+
+\set ON_ERROR_STOP on
+SELECT '1..1';
 
 CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA extensions;
 
@@ -517,11 +522,13 @@ SELECT pg_temp.expect_phase_failure(
   'in_progress', '42501',
   'advance_project_phase: project not found or access denied'
 );
+RESET ROLE;
 DO $$ BEGIN
   ASSERT (SELECT status = 'in_progress' FROM public.project_phases
           WHERE id = 'aa000000-0000-4000-8000-0000000000b0'),
     'outsider denial must preserve the target';
 END $$;
+SET LOCAL ROLE authenticated;
 
 -- An active non-guest design-studio peer may resume. Resume uses the same RPC
 -- and exact three-key receipt, with the resumed phase as the sole next_phase_ids item.
@@ -2048,3 +2055,6 @@ BEGIN
   PERFORM extensions.dblink_disconnect('gate_setup');
 END;
 $$;
+
+-- Reached only when every assertion above passed: ON_ERROR_STOP aborts first.
+SELECT 'ok 1 - advance_project_phase atomicity, authority, graph and ACL regression completed';

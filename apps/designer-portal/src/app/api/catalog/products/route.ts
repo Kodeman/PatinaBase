@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
+import { getAuthenticatedDesignerAdmin } from '@/lib/supabase-admin';
 
 const TIER_VALUES = ['maker_piece', 'designers_pick', 'sourced'] as const;
 
@@ -44,6 +45,11 @@ export async function GET(request: NextRequest) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generated types not yet updated for new columns
     const supabase: any = await createServerClient();
+    // Designer-private (R189): no session is 401, a signed-in account with no
+    // designer or admin role is 403 and never sees a tradePrice. The read stays
+    // on the session client, under RLS.
+    const auth = await getAuthenticatedDesignerAdmin(request);
+    if ('error' in auth) return auth.error;
     const { searchParams } = new URL(request.url);
 
     const page = parseInt(searchParams.get('page') || '1', 10);

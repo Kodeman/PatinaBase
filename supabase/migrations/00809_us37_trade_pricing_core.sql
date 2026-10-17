@@ -1138,6 +1138,10 @@ DECLARE
   v_total numeric;
   v_placed bigint;
 BEGIN
+  -- 00810 (SQ-1169 F2, R182): the job label lock comes before the line lock, so
+  -- an edit lands wholly before or wholly after a first pricing approval.
+  PERFORM public._ffe_lock_job_labels(item.project_id)
+  FROM public.project_ffe_items AS item WHERE item.id = p_item_id;
   SELECT * INTO v_old FROM public.project_ffe_items WHERE id = p_item_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'project not found or access denied'
@@ -1259,6 +1263,10 @@ DECLARE
   v_new public.project_ffe_items%ROWTYPE;
   v_lock text;
 BEGIN
+  -- 00810 (SQ-1169 F2, R182): the job label lock comes before the line lock, so
+  -- an edit lands wholly before or wholly after a first pricing approval.
+  PERFORM public._ffe_lock_job_labels(item.project_id)
+  FROM public.project_ffe_items AS item WHERE item.id = p_item_id;
   SELECT * INTO v_old FROM public.project_ffe_items WHERE id = p_item_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'project not found or access denied'
@@ -1306,6 +1314,10 @@ DECLARE
   v_lock text;
   v_client numeric;
 BEGIN
+  -- 00810 (SQ-1169 F2, R182): the job label lock comes before the line lock, so
+  -- an edit lands wholly before or wholly after a first pricing approval.
+  PERFORM public._ffe_lock_job_labels(item.project_id)
+  FROM public.project_ffe_items AS item WHERE item.id = p_item_id;
   SELECT * INTO v_old FROM public.project_ffe_items WHERE id = p_item_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'project not found or access denied'
@@ -1393,6 +1405,10 @@ DECLARE
   v_markup numeric;
   v_client numeric;
 BEGIN
+  -- 00810 (SQ-1169 F2, R182): the job label lock comes before the line lock, so
+  -- an edit lands wholly before or wholly after a first pricing approval.
+  PERFORM public._ffe_lock_job_labels(item.project_id)
+  FROM public.project_ffe_items AS item WHERE item.id = p_item_id;
   SELECT * INTO v_old FROM public.project_ffe_items WHERE id = p_item_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'project not found or access denied'

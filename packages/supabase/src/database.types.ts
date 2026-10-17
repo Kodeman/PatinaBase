@@ -7191,6 +7191,109 @@ export type Database = {
           },
         ]
       }
+      ffe_pricing_approval_lines: {
+        Row: {
+          approval_id: string
+          currency: string
+          item_id: string
+          line_total_cents: number
+          quantity: number
+          unit_client_cents: number
+        }
+        Insert: {
+          approval_id: string
+          currency: string
+          item_id: string
+          line_total_cents: number
+          quantity: number
+          unit_client_cents: number
+        }
+        Update: {
+          approval_id?: string
+          currency?: string
+          item_id?: string
+          line_total_cents?: number
+          quantity?: number
+          unit_client_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ffe_pricing_approval_lines_approval_id_fkey"
+            columns: ["approval_id"]
+            isOneToOne: false
+            referencedRelation: "ffe_pricing_approvals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ffe_pricing_approvals: {
+        Row: {
+          approval_ref: string
+          approval_source: string
+          approved_at: string
+          approved_by: string | null
+          id: string
+          project_id: string
+        }
+        Insert: {
+          approval_ref: string
+          approval_source: string
+          approved_at?: string
+          approved_by?: string | null
+          id?: string
+          project_id: string
+        }
+        Update: {
+          approval_ref?: string
+          approval_source?: string
+          approved_at?: string
+          approved_by?: string | null
+          id?: string
+          project_id?: string
+        }
+        Relationships: []
+      }
+      ffe_pricing_events: {
+        Row: {
+          actor: string | null
+          at: string
+          field: string
+          id: string
+          item_id: string
+          new_value: string | null
+          old_value: string | null
+          project_id: string
+        }
+        Insert: {
+          actor?: string | null
+          at?: string
+          field: string
+          id?: string
+          item_id: string
+          new_value?: string | null
+          old_value?: string | null
+          project_id: string
+        }
+        Update: {
+          actor?: string | null
+          at?: string
+          field?: string
+          id?: string
+          item_id?: string
+          new_value?: string | null
+          old_value?: string | null
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ffe_pricing_events_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       field_captures: {
         Row: {
           app_version: string | null
@@ -23685,6 +23788,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -23737,6 +23841,7 @@ export type Database = {
           signed_by_name?: string | null
           signed_ip?: string | null
           status?: string
+          studio_id?: string | null
           subject?: string | null
           subtotal?: number | null
           superseded_at?: string | null
@@ -23789,6 +23894,7 @@ export type Database = {
           signed_by_name?: string | null
           signed_ip?: string | null
           status?: string
+          studio_id?: string | null
           subject?: string | null
           subtotal?: number | null
           superseded_at?: string | null
@@ -23887,6 +23993,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "proposal_send_dispatches"
             referencedColumns: ["proposal_id", "id"]
+          },
+          {
+            foreignKeyName: "proposals_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "proposals_template_id_fkey"
@@ -36624,6 +36751,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -37013,6 +37141,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -37536,6 +37665,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -37776,8 +37906,26 @@ export type Database = {
         Args: { p_context: string; p_proposal_id: string }
         Returns: string
       }
+      _proposal_recorded_studio: {
+        Args: {
+          p_parent_proposal_id: string
+          p_project_id: string
+          p_proposal_id: string
+        }
+        Returns: string
+      }
       _proposal_review_fingerprint: {
         Args: { p_proposal_id: string }
+        Returns: string
+      }
+      _proposal_studio_for: {
+        Args: {
+          p_designer_client_id: string
+          p_designer_id: string
+          p_parent_proposal_id: string
+          p_project_id: string
+          p_proposal_id: string
+        }
         Returns: string
       }
       _provision_studio: {
@@ -38075,6 +38223,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -39319,6 +39468,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subject: string | null
           subtotal: number | null
           superseded_at: string | null
@@ -41947,6 +42097,10 @@ export type Database = {
           invoice_status: string
         }[]
       }
+      get_ffe_pricing_events: {
+        Args: { p_item_id?: string; p_project_id: string }
+        Returns: Json
+      }
       get_invoice_link: { Args: { p_invoice_id: string }; Returns: Json }
       get_invoice_payment_options: {
         Args: { p_invoice_id: string }
@@ -42037,6 +42191,10 @@ export type Database = {
       }
       get_project_ffe_readiness: {
         Args: { p_ffe_item_id: string }
+        Returns: Json
+      }
+      get_project_pricing_approval: {
+        Args: { p_project_id: string }
         Returns: Json
       }
       get_project_review_media_manifest: {
@@ -45875,6 +46033,7 @@ export type Database = {
               signed_by_name: string | null
               signed_ip: string | null
               status: string
+              studio_id: string | null
               subject: string | null
               subtotal: number | null
               superseded_at: string | null
@@ -45941,6 +46100,7 @@ export type Database = {
               signed_by_name: string | null
               signed_ip: string | null
               status: string
+              studio_id: string | null
               subject: string | null
               subtotal: number | null
               superseded_at: string | null
@@ -47258,6 +47418,10 @@ export type Database = {
           p_subject_id: string
         }
         Returns: undefined
+      }
+      snapshot_project_pricing: {
+        Args: { p_project_id: string; p_ref: string; p_source: string }
+        Returns: string
       }
       snapshot_purchase_order_spec: {
         Args: { p_po_id: string }

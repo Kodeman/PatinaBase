@@ -23,7 +23,7 @@
  * `resendUnavailableReason` and `resendRefusalWords` come through
  * `jest.requireActual`, so a copy change in @patina/supabase moves this suite.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import {
   QueryClient,
   QueryClientProvider,
@@ -370,6 +370,9 @@ describe("the 24h floor is words beside an offered act, not a dead control", () 
     const note = document.getElementById("field-resend-reason");
     expect(note).toHaveTextContent(/you can ask again after/);
     expect(note?.closest("[inert]")).toBeNull();
+    // A note-only window holds nothing to focus: focus goes to the bar.
+    const bar = document.querySelector<HTMLElement>("[data-hold-spotlight-bar]")!;
+    expect(within(bar).getAllByRole("button")[0]).toHaveFocus();
   });
 
   it("sends nothing when it is pressed anyway, note or no note", () => {
