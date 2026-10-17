@@ -21,6 +21,10 @@ import { QueryClientProvider, onlineManager, type QueryClient } from "@tanstack/
 import { OFFLINE_NOT_SENT, nextSubjectQueryClient } from "@/lib/react-query";
 import { InvoiceComposer } from "../invoice-composer";
 
+/** The project's invoices as the composer holds them, and its re-read of them. */
+let mockProjectInvoices: Array<{ id: string; status: string }> = [];
+const mockRefetchInvoices = jest.fn();
+
 jest.mock("@patina/supabase", () => ({
   InvoiceBillingGapError: jest.requireActual("@patina/supabase").InvoiceBillingGapError,
   // The reads and the two draft writers are the real hooks.
@@ -46,7 +50,7 @@ jest.mock("@patina/supabase", () => ({
     isLoading: false,
   }),
   useProjectFFEItems: () => ({ data: [], isLoading: false }),
-  useProjectInvoices: () => ({ data: [] }),
+  useProjectInvoices: () => ({ data: mockProjectInvoices, refetch: mockRefetchInvoices }),
   useProjectPaymentMilestones: () => ({ data: [] }),
   useClaimTimeEntries: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetLaborLinePrice: () => ({ mutate: jest.fn(), isPending: false }),
@@ -183,6 +187,9 @@ beforeEach(() => {
   rpcMode = "answer";
   projectReads = 0;
   deferred = [];
+  mockProjectInvoices = [];
+  // The reconcile read stays out unless a test answers it.
+  mockRefetchInvoices.mockImplementation(() => new Promise(() => {}));
   rpc.mockImplementation((name: string) =>
     answer(
       rpcMode,
@@ -381,4 +388,72 @@ describe("SQ-1272 F4: a draft write whose answer is lost is never tried blind", 
       expect(onDrafted).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("SQ-1282 F1: an unconfirmed draft holds the primary Draft until its reconcile read answers", () => {
+  const UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
+  const spotWindows = () =>
+    Array.from(document.querySelectorAll("[data-hold-spotlight-window]")).map((el) =>
+      el.getAttribute("data-hold-spotlight-window"),
+    );
+
+  it.each([
+    ["project", "create_draft_invoice", { projectId: "project-1" }, () => readyToDraft()],
+    ["studio", "create_draft_studio_invoice", {}, () => readyToDraftForStudio()],
+  ] as const)(
+    "%s: held on why before the press; pressing it writes nothing and lights Check the invoices",
+    async (_mode, writer, context, ready) => {
+      renderComposer(context);
+      await ready();
+      rpcMode = "fail";
+      fireEvent.click(draftAct());
+      expect(await screen.findByRole("alert")).toHaveTextContent(UNCONFIRMED);
+      expect(draftWrites(writer)).toBe(1);
+
+      // Before the press: held, its reason and its fix in view.
+      expect(draftAct()).toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("alert")).toHaveTextContent(UNCONFIRMED);
+      expect(screen.getByRole("button", { name: "Check the invoices" })).toBeInTheDocument();
+      expect(spotWindows()).toEqual([]);
+
+      fireEvent.click(draftAct());
+      await settle();
+
+      expect(draftWrites(writer)).toBe(1);
+      await waitFor(() => expect(spotWindows()).toContain("draft-unconfirmed"));
+      expect(reasonLine()).toHaveTextContent(UNCONFIRMED);
+      expect(onDrafted).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [
+      "shows the draft landed: it opens as the folio",
+      [
+        { id: "invoice-landed", status: "draft" },
+        { id: "invoice-old", status: "draft" },
+      ],
+    ],
+    ["shows none landed: Draft is free again", [{ id: "invoice-old", status: "draft" }]],
+  ])("project: the reconcile read %s", async (label, after) => {
+    mockProjectInvoices = [{ id: "invoice-old", status: "draft" }];
+    mockRefetchInvoices.mockResolvedValue({ isError: false, data: after });
+    renderComposer();
+    await readyToDraft();
+    rpcMode = "fail";
+
+    fireEvent.click(draftAct());
+    await waitFor(() => expect(mockRefetchInvoices).toHaveBeenCalledTimes(1));
+    await settle();
+
+    expect(draftWrites("create_draft_invoice")).toBe(1);
+    if (label.startsWith("shows the draft landed")) {
+      expect(onDrafted).toHaveBeenCalledWith("invoice-landed", "project-1");
+      return;
+    }
+    expect(onDrafted).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("The invoice couldn't be drafted.");
+    expect(draftAct()).not.toHaveAttribute("aria-disabled");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
 });

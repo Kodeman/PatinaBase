@@ -1147,23 +1147,37 @@ export function useRecordPayment(options?: { errorSurface?: 'inline' }) {
  * own words (a lost request, a timeout, a 5xx that is not its JSON), or its
  * `issue_unknown` (it could not read the invoice back after a failed issue):
  * the draft may have issued or not.
+ * `code` is the function's own `error` word, when it gave one.
  */
 export class InvoiceSendError extends Error {
   readonly issued: boolean;
   readonly issueUnknown: boolean;
   readonly invoiceNumber: string | null;
+  readonly code: string | null;
 
   constructor(
     message: string,
-    refusal?: { issued?: unknown; invoiceNumber?: unknown } | null,
+    refusal?: { error?: unknown; issued?: unknown; invoiceNumber?: unknown } | null,
     issueUnknown = false,
   ) {
     super(message);
     this.issued = refusal?.issued === true;
     this.issueUnknown = !this.issued && issueUnknown;
     this.invoiceNumber = typeof refusal?.invoiceNumber === 'string' ? refusal.invoiceNumber : null;
+    this.code = typeof refusal?.error === 'string' ? refusal.error : null;
   }
 }
+
+/**
+ * SQ-1282 F3 — invoice-send refusals that say the invoice's status is not the
+ * one the caller acted on (handler.ts): the cached invoice is stale.
+ */
+const STATUS_REFUSALS: ReadonlySet<string> = new Set([
+  'invoice_not_draft',
+  'invoice_not_issued',
+  'invoice_void',
+  'invoice_not_open',
+]);
 
 /**
  * Sends (or resends) the invoice email to the client via the invoice-send
@@ -1252,9 +1266,15 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
     },
     // A send-on-draft that issued before the letter failed moved the invoice
     // and its milestones as surely as a successful one; one whose answer was
-    // lost may have, so the folio re-reads to find out.
+    // lost may have, so the folio re-reads to find out. A refusal naming
+    // another status says the cache is stale, so it re-reads too.
     onError: (error, { projectId, invoiceId }) => {
-      if (error instanceof InvoiceSendError && (error.issued || error.issueUnknown)) {
+      if (
+        error instanceof InvoiceSendError &&
+        (error.issued ||
+          error.issueUnknown ||
+          (error.code !== null && STATUS_REFUSALS.has(error.code)))
+      ) {
         invalidateInvoiceEffects(queryClient, projectId, invoiceId);
         queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
       }

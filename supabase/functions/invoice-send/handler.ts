@@ -65,6 +65,9 @@ interface InvoiceRow {
   } | null;
 }
 
+/** A Postgres SQLSTATE: five digits or capitals. A fetch failure's code is empty. */
+const SQLSTATE = /^[0-9A-Z]{5}$/;
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -285,9 +288,9 @@ export function createInvoiceSendHandler(deps: InvoiceSendDeps) {
       if (issueErr || !issued) {
         console.error('invoice-send: issue failed', invoiceId, issueErr?.message);
         // An error is not proof the issue rolled back: it may have committed
-        // and lost its reply. Only a re-read still showing a draft says not
-        // issued. Issued, it may be another send's issue, whose letter went,
-        // so invoice_not_draft's rule holds: no letter, the next is a Resend.
+        // and lost its reply. Issued on a re-read, it may be another send's
+        // issue, whose letter went, so invoice_not_draft's rule holds: no
+        // letter, the next is a Resend.
         const { data: after, error: rereadErr } = await admin
           .from('invoices')
           .select('status, invoice_number')
@@ -302,6 +305,13 @@ export function createInvoiceSendHandler(deps: InvoiceSendDeps) {
             { error: 'issued_unsent', issued: true, invoiceNumber: after.invoice_number ?? null },
             409
           );
+        }
+        // SQ-1282 F2 — still a draft says not issued only when issue_invoice
+        // itself refused: PostgREST answered with the function's SQLSTATE, so
+        // its transaction rolled back. A lost or timed-out reply may belong to
+        // an issue that commits after this read, which does not lock.
+        if (issueErr && !SQLSTATE.test(String(issueErr.code ?? ''))) {
+          return json({ error: 'issue_unknown', detail: issueErr.message }, 503);
         }
         return json({ error: 'issue_failed', detail: issueErr?.message }, 409);
       }

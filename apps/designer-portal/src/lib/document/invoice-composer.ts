@@ -884,7 +884,7 @@ export function refusedBillingLines<T extends { request: InvoiceBillingLineReque
   );
 }
 
-const DRAFT_GENERIC = "The invoice couldn't be drafted.";
+export const DRAFT_GENERIC = "The invoice couldn't be drafted.";
 
 /** Each refusal useCreateDraftInvoice or create_draft_invoice (00511, and the
  *  line triggers it fires: 00666, 00764) can give, the composer's sentence
@@ -949,7 +949,7 @@ const DRAFT_REFUSALS: Array<[RegExp, string, boolean]> = [
   ],
 ];
 
-const DRAFT_UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
+export const DRAFT_UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
 
 const DRAFT_WRITE_SENT = /^Failed to create draft (?:studio )?invoice:\s*/;
 

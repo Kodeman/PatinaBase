@@ -112,7 +112,7 @@ jest.mock("@patina/supabase", () => ({
     isLoading: mockOrganizationsLoading,
   }),
   useProjectFFEItems: () => ({ data: mockFfeItems, isLoading: false }),
-  useProjectInvoices: () => ({ data: [] }),
+  useProjectInvoices: () => ({ data: [], refetch: () => new Promise(() => {}) }),
   useProjectPaymentMilestones: () => ({ data: [] }),
   useProjects: () => ({
     data: [

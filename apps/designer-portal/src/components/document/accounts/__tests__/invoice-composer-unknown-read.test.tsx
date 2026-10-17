@@ -264,6 +264,40 @@ describe("SQ-1249 F1: the composer's readiness stands only on a settled read", (
     await heldOn("This project couldn't be read. Reload the page to draft its invoice.");
   });
 
+  // SQ-1282 F4 (K3/K4) — the failed read's reason is in view before the press,
+  // and the press lights it with its repair, Try again, which reads it again.
+  it.each([
+    ["pieces", (mode: "answer" | "fail") => (piecesMode = mode), ["project-ffe-items", "project-1"]],
+    ["coverage", (mode: "answer" | "fail") => (coverageMode = mode), ["ffe-invoice-coverage", "project-1"]],
+    [
+      "billing stages",
+      (mode: "answer" | "fail") => (stagesMode = mode),
+      ["ffe-invoice-coverage", "project-1", "stages"],
+    ],
+  ] as const)("SQ-1282 F4: a failed %s read holds Draft on a reason in view, and the press lights it", async (_label, set, key) => {
+    const reason = "This project couldn't be read. Reload the page to draft its invoice.";
+    set("fail");
+    renderComposer();
+    addLine();
+    await waitFor(() => expect(qc.getQueryState([...key])?.status).toBe("error"));
+    await waitFor(() => expect(draftAct()).toHaveAttribute("aria-disabled", "true"));
+
+    // Before the press: the reason and its repair are in view; nothing is lit.
+    expect(screen.getByRole("alert")).toHaveTextContent(reason);
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(reasonLine()).toHaveTextContent("");
+    expect(spotWindows()).toEqual([]);
+
+    fireEvent.click(draftAct());
+    await waitFor(() => expect(spotWindows()).toEqual(["project-unread"]));
+    expect(mockCreateDraft).not.toHaveBeenCalled();
+
+    set("answer");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(draftAct()).not.toHaveAttribute("aria-disabled"));
+    expect(qc.getQueryState([...key])?.status).toBe("success");
+  });
+
   it("never reads a project the projects read did not return as ready", async () => {
     table = [];
     renderComposer();

@@ -10,6 +10,8 @@ interface World {
   canManage: boolean;
   capabilityError: string | null;
   issueError: string | null;
+  /** The SQLSTATE issue_invoice refused with; empty, as supabase-js reports a lost request. */
+  issueErrorCode: string;
   /** The issue commits (status 'sent'), then its reply is lost to a transport error. */
   issueReplyLost: boolean;
   /** Reading the invoice back after the issue fails with this message. */
@@ -53,6 +55,7 @@ function draftWorld(overrides: Partial<World> = {}): World {
     canManage: true,
     capabilityError: null,
     issueError: null,
+    issueErrorCode: "",
     issueReplyLost: false,
     rereadError: null,
     profile: null,
@@ -156,7 +159,10 @@ function handlerFor(world: World) {
           if (name === "issue_invoice") {
             assertEquals(args.p_invoice_id, world.invoice.id);
             if (world.issueError) {
-              return Promise.resolve({ data: null, error: { message: world.issueError } });
+              return Promise.resolve({
+                data: null,
+                error: { message: world.issueError, code: world.issueErrorCode },
+              });
             }
             if (world.invoice.status !== "draft") {
               return Promise.resolve({ data: null, error: { message: "Invoice is not a draft" } });
@@ -235,7 +241,11 @@ Deno.test("issue-first: a draft with an address is issued as the caller, then se
 });
 
 Deno.test("issue-first: a refused issue is 409 issue_failed and nothing is sent", async () => {
-  const world = draftWorld({ designerClients: withRecipient, issueError: "Invoice has no lines" });
+  const world = draftWorld({
+    designerClients: withRecipient,
+    issueError: "Invoice has no lines",
+    issueErrorCode: "P0001",
+  });
   const { status, body } = await post(world, { invoiceId: "inv-1", issue: true });
 
   assertEquals(status, 409);
@@ -268,6 +278,19 @@ Deno.test("issue-first: an issue error whose read-back fails is 503 issue_unknow
   });
   const { status, body } = await post(world, { invoiceId: "inv-1", issue: true });
 
+  assertEquals(status, 503);
+  assertEquals(body.error, "issue_unknown");
+  assertEquals("issued" in body, false);
+  assertEquals(world.sentTo, []);
+});
+
+// SQ-1282 F2 — a lost reply with the invoice still a draft on the re-read:
+// the issue may commit after that read, so the outcome is unknown.
+Deno.test("issue-first: a lost issue reply that reads back a draft is 503 issue_unknown, never issue_failed, nothing sent", async () => {
+  const world = draftWorld({ designerClients: withRecipient, issueError: "TypeError: Failed to fetch" });
+  const { status, body } = await post(world, { invoiceId: "inv-1", issue: true });
+
+  assertEquals(world.invoice.status, "draft");
   assertEquals(status, 503);
   assertEquals(body.error, "issue_unknown");
   assertEquals("issued" in body, false);

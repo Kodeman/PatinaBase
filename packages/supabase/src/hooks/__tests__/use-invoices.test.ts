@@ -1338,4 +1338,21 @@ describe('SQ-1262 F3: a send-on-draft whose answer is lost', () => {
     const thrown = await refusal(fetchError, false);
     expect(thrown.issueUnknown).toBe(false);
   });
+
+  // SQ-1282 F3 — the server's status is not the cached one: it re-reads.
+  it.each([
+    ['invoice_not_draft', true],
+    ['invoice_not_issued', false],
+    ['invoice_void', false],
+    ['invoice_not_open', false],
+  ])('a %s refusal is answered, and the invoice and its money re-read', async (code, issue) => {
+    const thrown = await refusal(ownRefusal({ error: code, detail: 'status moved' }), issue);
+    expect(thrown.issueUnknown).toBe(false);
+    expect(thrown.issued).toBe(false);
+
+    (useSendInvoice() as unknown as SendConfig).onError(thrown, vars);
+    expect(invalidatedKeys()).toContainEqual(['invoices']);
+    expect(invalidatedKeys()).toContainEqual(['project-financials', 'proj-1']);
+    expect(invalidatedKeys()).toContainEqual(['project-payment-milestones', 'proj-1']);
+  });
 });

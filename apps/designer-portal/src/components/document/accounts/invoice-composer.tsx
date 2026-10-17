@@ -107,7 +107,7 @@ import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight"
 import { MESSAGE_WITHHELD } from "@/lib/document/act-names";
 import { topActiveModalDialog } from "../overlays/active-dialog";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
-import { ActFailLine } from "@/components/feedback/act-fail-line";
+import { ActFailLine, TRY_AGAIN } from "@/components/feedback/act-fail-line";
 import { openAccountPage } from "../account/open-account-page";
 import { CopyAct } from "../copy-act";
 import { AppError } from "@/lib/error-handler";
@@ -121,6 +121,8 @@ import {
   balanceOwedItems,
   buildBillingLines,
   depositCents,
+  DRAFT_GENERIC,
+  DRAFT_UNCONFIRMED,
   lineClientPriceCents,
   assessInvoiceReadiness,
   buildComposerLines,
@@ -215,16 +217,19 @@ export function InvoiceComposer({
     isLoading: projectsLoading,
     isFetching: projectsFetching,
     isError: projectsFailed,
+    refetch: refetchProjects,
   } = useProjects();
   const { data: organizations, isLoading: organizationsLoading } =
     useOrganizations();
   const { data: milestones } = useProjectPaymentMilestones(projectId);
-  const { data: projectInvoices } = useProjectInvoices(projectId || null);
+  const { data: projectInvoices, refetch: refetchProjectInvoices } =
+    useProjectInvoices(projectId || null);
   const {
     data: unbilledTime,
     isLoading: timeLoading,
     isFetching: timeFetching,
     isError: timeFailed,
+    refetch: refetchTime,
   } = useUnbilledTime(projectId || null);
   // HT-21 (W5) — names the composer's time rows: project_unbilled_time
   // deliberately carries no author name (00596's dropped profiles join), so
@@ -251,12 +256,14 @@ export function InvoiceComposer({
     isLoading: ffeLoading,
     isFetching: ffeFetching,
     isError: ffeFailed,
+    refetch: refetchFfe,
   } = useProjectFFEItems(projectId);
   const {
     data: coverage,
     isLoading: coverageLoading,
     isFetching: coverageFetching,
     isError: coverageFailed,
+    refetch: refetchCoverage,
   } = useFfeInvoiceCoverage(projectId, {
     enabled: !!projectId,
   });
@@ -266,6 +273,7 @@ export function InvoiceComposer({
     isLoading: stagesLoading,
     isFetching: stagesFetching,
     isError: stagesFailed,
+    refetch: refetchStages,
   } = useFfeInvoiceStageCoverage(projectId || null);
   const billing = useMemo(
     () => lineBillingByItem(stageRows as ComposerStageSlot[] | undefined),
@@ -352,7 +360,8 @@ export function InvoiceComposer({
   // §money writes). `gap` marks a billing-gap refusal, which clears itself once
   // the gap does.
   // `unconfirmed` marks a draft write whose answer was lost: it may have
-  // landed, so the act routes to the invoices instead of retrying.
+  // landed, so the act routes to the invoices instead of retrying, and Draft
+  // holds until a read of them answers (SQ-1282 F1).
   const [error, setError] = useState<{
     message: string;
     retryable: boolean;
@@ -600,7 +609,8 @@ export function InvoiceComposer({
     setTickedRiderIds(new Set());
     setOverrides(new Map());
     setSeededFor(null);
-    setError(null);
+    // An unconfirmed draft still holds: only its reconcile read clears it.
+    setError((prev) => (prev?.unconfirmed ? prev : null));
     setRefusedLines(new Map());
   };
 
@@ -920,6 +930,17 @@ export function InvoiceComposer({
                       stagesFetching
                     ? "project-pending"
                     : null;
+  const readFailed =
+    readBlocker === "project-unread" || readBlocker === "time-unread";
+  // Try again re-reads whichever read failed (or the projects read that
+  // came back without this project).
+  const retryReads = () => {
+    if (projectsFailed || !selectedProject) void refetchProjects();
+    if (timeFailed) void refetchTime();
+    if (ffeFailed) void refetchFfe();
+    if (coverageFailed) void refetchCoverage();
+    if (stagesFailed) void refetchStages();
+  };
   // §A5 — the first unmet requirement; the held act names it and lands on it.
   const holds: InvoiceHold[] = readBlocker ? [] : assessInvoiceReadiness({
     clientLinked: !projectId || billingGap !== "no-client",
@@ -951,7 +972,9 @@ export function InvoiceComposer({
   }).holds;
   const readinessBlocker: ComposerBlocker | null =
     holds[0]?.kind === "nothing-selected" ? "lines" : holds[0]?.kind ?? null;
-  const blocker: ComposerBlocker | null = readBlocker ?? readinessBlocker ?? (studioMode
+  // SQ-1282 F1 — a draft that may have landed holds Draft first: a second
+  // create_draft call could write a second invoice.
+  const blocker: ComposerBlocker | null = (error?.unconfirmed ? "draft-unconfirmed" : null) ?? readBlocker ?? readinessBlocker ?? (studioMode
     ? studioInvoiceBlocker({ clientId: studioClientId, title, studioId, lines })
     : !projectId
       ? "no-project"
@@ -996,12 +1019,7 @@ export function InvoiceComposer({
     holdRegion(
       containerRef.current?.querySelector(`[data-focus-key="${key}"]`),
     );
-  const spotlightHolds: SpotlightHold[] = holds.map((hold) => ({
-    id: hold.focusKey,
-    label: hold.repair,
-    reason: hold.reason,
-    target: keyedRegion(hold.focusKey),
-  }));
+  const spotlightHolds: SpotlightHold[] = [];
   const ownHold = (
     kind: ComposerBlocker,
     label: string,
@@ -1025,6 +1043,19 @@ export function InvoiceComposer({
         return el instanceof HTMLElement ? el : null;
       },
     });
+  // SQ-1282 F1 — its window spans the warning and Check the invoices.
+  if (error?.unconfirmed)
+    ownHold("draft-unconfirmed", "Check the invoices", () =>
+      containerRef.current?.querySelector('[data-hold-region="draft-unconfirmed"]'),
+    );
+  spotlightHolds.push(
+    ...holds.map((hold) => ({
+      id: hold.focusKey,
+      label: hold.repair,
+      reason: hold.reason,
+      target: keyedRegion(hold.focusKey),
+    })),
+  );
   // A missing studio in studio mode and a loading prefill have no fix here.
   if (studioMode) {
     if (!studioClientId)
@@ -1041,8 +1072,13 @@ export function InvoiceComposer({
       "Choose a project",
       () => forSelectRef.current?.parentElement,
     );
+  } else if (readFailed) {
+    // SQ-1282 F4 — a failed read's window: its reason and Try again.
+    ownHold(readBlocker, TRY_AGAIN, () =>
+      containerRef.current?.querySelector('[data-hold-region="read-failed"]'),
+    );
   } else if (!readBlocker) {
-    // An unread project or its hours have no fix here, as a loading prefill.
+    // A read still out has no fix here, as a loading prefill.
     if (depositBlocked)
       ownHold("deposit", "Deposit", () =>
         depositPctRef.current?.closest('[role="radiogroup"]'),
@@ -1116,6 +1152,11 @@ export function InvoiceComposer({
     }
 
     const timeLine = lines.find((l) => l.kind === "time");
+    // SQ-1282 F1 — the project's invoices as the write went out, so a draft
+    // it landed is told from the rest.
+    const knownInvoiceIds = projectInvoices
+      ? new Set((projectInvoices as AnyRecord[]).map((i) => i.id as string))
+      : null;
     let invoice: AnyRecord;
     try {
       invoice = await createDraft.mutateAsync({
@@ -1145,6 +1186,18 @@ export function InvoiceComposer({
         });
       }
       setError(failure);
+      if (!failure.unconfirmed || !knownInvoiceIds) return;
+      // The reconcile read: Draft stays held until the project's invoices,
+      // read after the lost answer, show the draft landed (it opens as the
+      // folio, as a confirmed one would) or show none did. A failed read
+      // leaves it held, with Check the invoices.
+      const read = await refetchProjectInvoices();
+      if (!live() || read.isError || !read.data) return;
+      const landed = (read.data as AnyRecord[]).find(
+        (i) => i.status === "draft" && !knownInvoiceIds.has(i.id as string),
+      );
+      if (landed) onDrafted(landed.id as string, projectId);
+      else setError({ message: DRAFT_GENERIC, retryable: true });
       return;
     }
 
@@ -2371,39 +2424,70 @@ export function InvoiceComposer({
             </p>
           )}
 
-          {/* R83 — the inline failure band, at the act site. */}
-          <ActFailLine
-            error={
-              error
-                ? new AppError({
-                    code: "INVOICE_DRAFT",
-                    message: error.message,
+          {/* R83 — the inline failure band, at the act site. An unconfirmed
+              draft's band is its hold's window (SQ-1282 F1). */}
+          <div
+            data-hold-region={error?.unconfirmed ? "draft-unconfirmed" : undefined}
+          >
+            <ActFailLine
+              error={
+                error
+                  ? new AppError({
+                      code: "INVOICE_DRAFT",
+                      message: error.message,
+                    })
+                  : null
+              }
+              className="mt-2"
+              onRetry={error?.retryable ? () => void draft() : undefined}
+              retryKey="retry-draft-invoice"
+            />
+            {error?.unconfirmed && (
+              <DocumentAction
+                actionKey="check-drafted-invoices"
+                surfaceKey="accounts"
+                regionKey="invoice-composer"
+                variant="tertiary"
+                className="mt-1.5"
+                onClick={() => {
+                  onClose?.();
+                  // command-bar's openLedger('accounts') event, dispatched here
+                  // as open-hours-scope.ts does: importing command-bar would pull
+                  // the whole palette into the composer.
+                  window.dispatchEvent(
+                    new CustomEvent("document:open-ledger", { detail: "accounts" }),
+                  );
+                }}
+              >
+                Check the invoices
+              </DocumentAction>
+            )}
+          </div>
+          {readFailed && (
+            // SQ-1282 F4 (K3) — a failed read says why before Draft is
+            // pressed, beside the act that reads it again: its hold's window.
+            <div data-hold-region="read-failed">
+              <ActFailLine
+                error={
+                  new AppError({
+                    code: "INVOICE_READ",
+                    message: blockerReason(readBlocker, {
+                      projectName: selectedProject?.name ?? "This project",
+                      canLinkClient,
+                      leadLeftStudio,
+                      leadName,
+                      canNameStudio,
+                      soloOwnerUnstamped,
+                      hasStudioOwner,
+                      studioLoading: organizationsLoading,
+                    }),
                   })
-                : null
-            }
-            className="mt-2"
-            onRetry={error?.retryable ? () => void draft() : undefined}
-            retryKey="retry-draft-invoice"
-          />
-          {error?.unconfirmed && (
-            <DocumentAction
-              actionKey="check-drafted-invoices"
-              surfaceKey="accounts"
-              regionKey="invoice-composer"
-              variant="tertiary"
-              className="mt-1.5"
-              onClick={() => {
-                onClose?.();
-                // command-bar's openLedger('accounts') event, dispatched here
-                // as open-hours-scope.ts does: importing command-bar would pull
-                // the whole palette into the composer.
-                window.dispatchEvent(
-                  new CustomEvent("document:open-ledger", { detail: "accounts" }),
-                );
-              }}
-            >
-              Check the invoices
-            </DocumentAction>
+                }
+                className="mt-2"
+                onRetry={retryReads}
+                retryKey="retry-invoice-reads"
+              />
+            </div>
           )}
         </>
       )}
@@ -2437,7 +2521,8 @@ type ComposerBlocker =
   | "time-unread"
   | "rate-pending"
   | "price-line"
-  | "send-no-recipient";
+  | "send-no-recipient"
+  | "draft-unconfirmed";
 
 function blockerReason(
   blocker: ComposerBlocker,
@@ -2499,6 +2584,8 @@ function blockerReason(
       return "Set a client price for this piece.";
     case "send-no-recipient":
       return "This household has no email to send to.";
+    case "draft-unconfirmed":
+      return DRAFT_UNCONFIRMED;
   }
 }
 
