@@ -423,6 +423,63 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
     expect(screen.getByLabelText("Bill Pair of table lamps")).toBeChecked();
     expect(screen.getByLabelText("Bill Estate sale")).toBeChecked();
   });
+
+  // SQ-1289 F3 — the kept draft is known and incomplete: Draft holds for the
+  // composer's life, as an unconfirmed one does, and routes to the invoices.
+  it.each([
+    [
+      "claim",
+      "Some of these hours were just billed on another invoice. Nothing was billed; the draft still holds those hours. Void it to release them.",
+    ],
+    ["lines", "Pair of table lamps is already on another invoice. Nothing was billed; the draft was kept. Delete or void it."],
+  ] as const)(
+    "a stranded %s rollback holds the primary Draft: pressing it creates nothing and lights Check the invoices",
+    async (step, stranded) => {
+      if (step === "claim") {
+        mockUnbilledEntries = [
+          { id: "te-1", user_id: "designer-1", duration_minutes: 120, amount_cents: 30000, started_at: "2026-10-01T15:00:00Z" },
+        ];
+        mockClaimTime.mockRejectedValue(
+          new Error(
+            "Time entry 5b1f0c7e-0000-4000-8000-000000000001 is attached to invoice 9a2e4d10-0000-4000-8000-000000000003; only notes (and detaching the invoice) may change.",
+          ),
+        );
+      } else {
+        mockAddBilling.mockRejectedValue({
+          message: "add_invoice_billing_lines: purchase p1 is already billed",
+        });
+      }
+      mockDeleteDraft.mockRejectedValue(new Error("network error"));
+      const onDrafted = jest.fn();
+      render(
+        <InvoiceComposer
+          context={
+            step === "claim"
+              ? { projectId: "project-1", initialTimeEntryIds: ["te-1"] }
+              : { projectId: "project-1", initialPurchaseIds: ["p1", "p2"] }
+          }
+          onDrafted={onDrafted}
+        />,
+      );
+      const act = () => screen.getByRole("button", { name: "Draft the invoice" });
+      await waitFor(() => expect(act()).not.toHaveAttribute("aria-disabled"));
+      fireEvent.click(act());
+      expect(await screen.findByRole("alert")).toHaveTextContent(stranded);
+      expect(mockCreateDraft).toHaveBeenCalledTimes(1);
+
+      // Held before the press, its fix in view; hiding Try again is not the gate.
+      expect(act()).toHaveAttribute("aria-disabled", "true");
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Check the invoices" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Delete/ })).not.toBeInTheDocument();
+
+      fireEvent.click(act());
+      await waitFor(() => expect(spotWindows()).toContain("draft-unconfirmed"));
+      expect(reasonLine()).toHaveTextContent(stranded);
+      expect(mockCreateDraft).toHaveBeenCalledTimes(1);
+      expect(onDrafted).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("InvoiceComposer · riders at cost (C-31)", () => {

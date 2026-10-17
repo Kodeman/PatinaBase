@@ -707,6 +707,8 @@ describe("billingRefusal", () => {
     noRecipient: "This invoice has no client email yet. Add their email, then send it.",
     notIssued: "Issue the invoice before sending it.",
     void: "This invoice was voided and can't be sent.",
+    // SQ-1289 F2: status-neutral; a paid or void invoice has no Resend to promise.
+    notDraft: "This invoice was already issued. Reload the folio to see where it stands.",
     notOpen: "Only an open invoice can receive a reminder.",
     checkFailed: "The invoice's payment status couldn't be checked. Try sending it again.",
     inFlight: "The client is paying this invoice now. Send the note after the payment finishes.",
@@ -743,6 +745,7 @@ describe("billingRefusal", () => {
     ["send", "no_recipient", SENT.noRecipient],
     ["send", "invoice_not_issued", SENT.notIssued],
     ["send", "invoice_void", SENT.void],
+    ["send", "invoice_not_draft", SENT.notDraft],
     ["send", "invoice_not_open", SENT.notOpen],
     ["send", "checkout_attempt_check_failed", SENT.checkFailed],
     ["send", "checkout_in_flight", SENT.inFlight],
@@ -757,6 +760,7 @@ describe("billingRefusal", () => {
     // ... and the details it throws in their place.
     ["send", "Issue the invoice before sending.", SENT.notIssued],
     ["send", "A voided invoice cannot be sent.", SENT.void],
+    ["send", "This invoice was already issued.", SENT.notDraft],
     ["send", "Reminders can only be sent on open (sent or partially paid) invoices.", SENT.notOpen],
     ["send", "Patina could not check whether this invoice is being paid right now. Try again.", SENT.checkFailed],
     [

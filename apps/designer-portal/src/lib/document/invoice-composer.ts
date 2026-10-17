@@ -1086,7 +1086,7 @@ const SEND_REFUSALS: Array<[RegExp, string]> = [
   [/^lookup_failed$/, "The invoice couldn't be loaded. Reload the folio and try again."],
   [/^(?:invoice_not_issued|Issue the invoice before sending\.)$/, "Issue the invoice before sending it."],
   // Send-on-draft issues in the same request (K10): a draft already issued elsewhere, or an issue refused.
-  [/^(?:invoice_not_draft|This invoice was already issued\.)$/, "This invoice was already issued. Reload the folio to resend it."],
+  [/^(?:invoice_not_draft|This invoice was already issued\.)$/, "This invoice was already issued. Reload the folio to see where it stands."],
   [/^issue_failed$/, "The invoice couldn't be issued. Reload the folio and try again."],
   // A failed issue read back: issued, with no letter from this send; or unreadable.
   [/^issued_unsent$/, "No letter went out with this send."],

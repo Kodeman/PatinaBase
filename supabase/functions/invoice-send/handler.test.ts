@@ -316,6 +316,22 @@ Deno.test("issue-first: a draft voided before the issue reads back void — 409 
   assertEquals(world.sentTo, []);
 });
 
+// SQ-1289 F1 — a stale draft folio sent after a void: the first read finds it
+// void, and that answers invoice_void, never "already issued".
+Deno.test("issue-first: a draft already void on the first read is 409 invoice_void, never issued, nothing sent", async () => {
+  const world = draftWorld({ designerClients: withRecipient });
+  world.invoice.status = "void";
+  const { status, body } = await post(world, { invoiceId: "inv-1", issue: true });
+
+  assertEquals(status, 409);
+  assertEquals(body.error, "invoice_void");
+  assertEquals(body.detail, "A voided invoice cannot be sent.");
+  assertEquals("issued" in body, false);
+  assertEquals(world.calls.includes("caller:issue_invoice"), false);
+  assertEquals(world.calls.includes("send"), false);
+  assertEquals(world.sentTo, []);
+});
+
 for (const [paid, amountPaid] of [["paid", 120000], ["partially_paid", 40000]] as const) {
   Deno.test(`issue-first: a draft issued and ${paid} elsewhere reads back ${paid} — 409 invoice_not_draft, never issued_unsent, nothing sent`, async () => {
     const world = draftWorld({

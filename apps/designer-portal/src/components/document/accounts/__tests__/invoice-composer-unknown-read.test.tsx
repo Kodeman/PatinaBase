@@ -14,9 +14,10 @@
  * useFfeInvoiceStageCoverage): a failed one holds Draft, never reads as none.
  */
 import { type ReactNode } from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { InvoiceComposer } from "../invoice-composer";
+import { parkInvoiceComposer, unparkInvoiceComposer } from "@/lib/document/registry";
 
 const mockCreateDraft = jest.fn();
 
@@ -57,7 +58,9 @@ jest.mock("@patina/supabase", () => ({
   useClaimTimeEntries: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetLaborLinePrice: () => ({ mutate: jest.fn(), isPending: false }),
   useProjectRoster: () => ({ data: [] }),
-  useStudioPurchases: () => ({ data: [], isLoading: false }),
+  // SQ-1289 F5 — the real read, so a parked purchase meets a real failure.
+  useStudioPurchases: (scope: { projectId: string } | null) =>
+    jest.requireActual("@patina/supabase").useStudioPurchases(scope),
 }));
 
 jest.mock("next/navigation", () => ({
@@ -84,6 +87,10 @@ let timeMode: "answer" | "hang" | "fail" = "answer";
 let piecesMode: "answer" | "hang" | "fail" = "answer";
 let coverageMode: "answer" | "hang" | "fail" = "answer";
 let stagesMode: "answer" | "hang" | "fail" = "answer";
+let purchasesMode: "answer" | "hang" | "fail" = "answer";
+/** The pieces and purchases the reads return when they answer. */
+let pieceRows: unknown[] = [];
+let purchaseRows: unknown[] = [];
 
 function respond(mode: "answer" | "hang" | "fail", rows: () => unknown[], what: string) {
   if (mode === "hang") return new Promise<never>(() => {});
@@ -100,7 +107,7 @@ function from(name: string) {
       is: () => pieces,
       order: () => pieces,
       then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
-        respond(piecesMode, () => [], "pieces").then(resolve, reject),
+        respond(piecesMode, () => pieceRows, "pieces").then(resolve, reject),
     };
     return pieces;
   }
@@ -110,7 +117,9 @@ function from(name: string) {
     order: () =>
       name === "projects"
         ? respond(projectsMode, () => table.map((p) => ({ ...p })), "projects")
-        : respond(timeMode, () => [], "hours"),
+        : name === "studio_purchases"
+          ? respond(purchasesMode, () => purchaseRows, "purchases")
+          : respond(timeMode, () => [], "hours"),
   };
   return builder;
 }
@@ -184,6 +193,10 @@ beforeEach(() => {
   piecesMode = "answer";
   coverageMode = "answer";
   stagesMode = "answer";
+  purchasesMode = "answer";
+  pieceRows = [];
+  purchaseRows = [];
+  unparkInvoiceComposer("project-1");
   browser.__supabaseBrowserClient = { from, rpc };
 });
 afterEach(() => {
@@ -306,5 +319,91 @@ describe("SQ-1249 F1: the composer's readiness stands only on a settled read", (
     await waitFor(() => expect(qc.getQueryState(["projects"])?.status).toBe("success"));
 
     await heldOn("This project couldn't be read. Reload the page to draft its invoice.");
+  });
+});
+
+const checkboxOf = (name: string) =>
+  within(screen.getByText(name).closest("label") as HTMLElement).getByRole("checkbox");
+const tryAgain = () => screen.getByRole("button", { name: "Try again" });
+
+describe("SQ-1289 F4: a failed pieces read keeps the asked-for pieces", () => {
+  it("a failed read, then a successful Try again, ticks the requested pieces", async () => {
+    const key = ["project-ffe-items", "project-1"];
+    pieceRows = [{ id: "ffe-1", name: "Side table", quantity: 1, unit_price_cents: 12000, room: null }];
+    piecesMode = "fail";
+    render(
+      <InvoiceComposer context={{ projectId: "project-1", initialFfeItemIds: ["ffe-1"] }} onDrafted={jest.fn()} />,
+      { wrapper: Frame },
+    );
+    await waitFor(() => expect(qc.getQueryState(key)?.status).toBe("error"));
+    await waitFor(() => expect(draftAct()).toHaveAttribute("aria-disabled", "true"));
+
+    piecesMode = "answer";
+    fireEvent.click(tryAgain());
+    await waitFor(() => expect(qc.getQueryState(key)?.status).toBe("success"));
+    await waitFor(() => expect(checkboxOf("Side table")).toBeChecked());
+    await waitFor(() => expect(draftAct()).not.toHaveAttribute("aria-disabled"));
+  });
+});
+
+describe("SQ-1289 F5: a parked purchase holds Draft until the purchases read succeeds", () => {
+  const purchasesKey = ["buying-phase2", "purchases", "project:project-1"];
+  const parkPurchase = () =>
+    parkInvoiceComposer("project-1", {
+      milestoneIds: [],
+      timeEntryIds: [],
+      ffeItemIds: [],
+      ffeStage: "full",
+      depositPctText: "50",
+      balanceItemIds: [],
+      purchaseIds: ["p1"],
+      riderIds: [],
+      overrides: [],
+      adhoc: [{ description: "Design fee", quantity: "1", unitDollars: "450" }],
+      taxRatePercent: "0",
+      termsDays: "15",
+      memo: "",
+    });
+
+  it("a failed purchases read holds Draft on why, with Try again, and creates nothing", async () => {
+    parkPurchase();
+    purchaseRows = [
+      {
+        id: "p1",
+        status: "recorded",
+        billable_to_client: true,
+        invoice_line_id: null,
+        payee_name: "CB2",
+        description: "Pair of table lamps",
+        purchased_on: "2026-10-03",
+        amount_cents: 120050,
+        tax_cents: 0,
+        buyer_premium_cents: 0,
+        shipping_cents: 0,
+      },
+    ];
+    purchasesMode = "fail";
+    renderComposer();
+    await waitFor(() => expect(qc.getQueryState(purchasesKey)?.status).toBe("error"));
+
+    await heldOn("This project couldn't be read. Reload the page to draft its invoice.");
+    await waitFor(() => expect(spotWindows()).toEqual(["project-unread"]));
+    expect(mockCreateDraft).not.toHaveBeenCalled();
+
+    // Read back, the parked purchase is still ticked and Draft stands ready.
+    purchasesMode = "answer";
+    fireEvent.click(tryAgain());
+    await waitFor(() => expect(draftAct()).not.toHaveAttribute("aria-disabled"));
+    expect(screen.getByLabelText("Bill Pair of table lamps")).toBeChecked();
+  });
+
+  it("a purchases read still out holds Draft without the failure copy", async () => {
+    parkPurchase();
+    purchasesMode = "hang";
+    renderComposer();
+
+    await heldOn("Checking this project before drafting its invoice.");
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(screen.queryByText("This project couldn't be read. Reload the page to draft its invoice.")).not.toBeInTheDocument();
   });
 });

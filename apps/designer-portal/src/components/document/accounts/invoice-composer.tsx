@@ -220,8 +220,20 @@ export function InvoiceComposer({
   } = useProjects();
   const { data: organizations, isLoading: organizationsLoading } =
     useOrganizations();
-  const { data: milestones } = useProjectPaymentMilestones(projectId);
-  const { data: projectInvoices } = useProjectInvoices(projectId || null);
+  const {
+    data: milestones,
+    isPending: milestonesPending,
+    isFetching: milestonesFetching,
+    isError: milestonesFailed,
+    refetch: refetchMilestones,
+  } = useProjectPaymentMilestones(projectId);
+  const {
+    data: projectInvoices,
+    isPending: projectInvoicesPending,
+    isFetching: projectInvoicesFetching,
+    isError: projectInvoicesFailed,
+    refetch: refetchProjectInvoices,
+  } = useProjectInvoices(projectId || null);
   const {
     data: unbilledTime,
     isLoading: timeLoading,
@@ -235,12 +247,22 @@ export function InvoiceComposer({
   const { data: roster } = useProjectRoster(projectId || null);
   // C-25 / C-31 — the project's purchases and PO riders still owed a client
   // line; each bills at cost on its own line (R-PB7).
-  const { data: purchases, isLoading: purchasesLoading } = useStudioPurchases(
-    projectId ? { projectId } : null,
-  );
-  const { data: riders, isLoading: ridersLoading } = useProjectPoCostLines(
-    projectId || null,
-  );
+  const {
+    data: purchases,
+    isLoading: purchasesLoading,
+    isPending: purchasesPending,
+    isFetching: purchasesFetching,
+    isError: purchasesFailed,
+    refetch: refetchPurchases,
+  } = useStudioPurchases(projectId ? { projectId } : null);
+  const {
+    data: riders,
+    isLoading: ridersLoading,
+    isPending: ridersPending,
+    isFetching: ridersFetching,
+    isError: ridersFailed,
+    refetch: refetchRiders,
+  } = useProjectPoCostLines(projectId || null);
   const offerablePurchases = useMemo(
     () => unbilledPurchases(purchases as ComposerPurchase[] | undefined),
     [purchases],
@@ -361,12 +383,16 @@ export function InvoiceComposer({
   // landed, so the act routes to the invoices instead of retrying, and Draft
   // holds until the composer closes: create_draft_invoice takes no idempotency
   // key, so no read of the invoices can prove what the write did (SQ-1284).
+  // `stranded` marks a draft known to be written and incomplete, whose
+  // rollback failed: it holds Draft the same way (SQ-1289 F3).
   const [error, setError] = useState<{
     message: string;
     retryable: boolean;
     gap?: InvoiceBillingGap;
     unconfirmed?: true;
+    stranded?: true;
   } | null>(null);
+  const keptDraft = error?.unconfirmed || error?.stranded ? error : null;
   // The billing writer's refusal of one named line, by its subject id: shown
   // beside that line, which the refusal unticked.
   const [refusedLines, setRefusedLines] = useState<ReadonlyMap<string, string>>(
@@ -524,7 +550,9 @@ export function InvoiceComposer({
     const wantsTime = (context.initialTimeEntryIds ?? []).length > 0;
     const wantsPurchases = (context.initialPurchaseIds ?? []).length > 0;
     const wantsRiders = (context.initialCostLineIds ?? []).length > 0;
-    if (wantsFfe && !ffeSettled) return;
+    // SQ-1289 F4 — a failed read settles with nothing; the seed waits for Try again.
+    if (wantsFfe && (!ffeSettled || !ffeItems || coverageFailed || stagesFailed))
+      return;
     if (wantsTime && (timeLoading || !unbilledTime)) return;
     if (wantsPurchases && (purchasesLoading || !purchases)) return;
     if (wantsRiders && (ridersLoading || !riders)) return;
@@ -576,6 +604,9 @@ export function InvoiceComposer({
     context.initialPurchaseIds,
     context.initialCostLineIds,
     ffeSettled,
+    ffeItems,
+    coverageFailed,
+    stagesFailed,
     ffePartition,
     balanceOwed,
     timeLoading,
@@ -608,8 +639,8 @@ export function InvoiceComposer({
     setTickedRiderIds(new Set());
     setOverrides(new Map());
     setSeededFor(null);
-    // An unconfirmed draft still holds: only closing the composer clears it.
-    setError((prev) => (prev?.unconfirmed ? prev : null));
+    // An unconfirmed or stranded draft still holds: only closing the composer clears it.
+    setError((prev) => (prev?.unconfirmed || prev?.stranded ? prev : null));
     setRefusedLines(new Map());
   };
 
@@ -906,6 +937,23 @@ export function InvoiceComposer({
   // SQ-1272 F2 — so do its pieces, their coverage and their billing stages: a
   // failed read looks like no pieces, or none billed yet, and a ticked piece
   // would drop off the draft.
+  // SQ-1289 F5 — so do the purchases, riders and milestones a selection
+  // (saved or parked) names: unread, they bill as nothing.
+  const purchasesNeeded = tickedPurchaseIds.size > 0;
+  const ridersNeeded = tickedRiderIds.size > 0;
+  const milestonesNeeded = tickedMilestoneIds.size > 0;
+  const selectionReadFailed =
+    (purchasesNeeded && purchasesFailed) ||
+    (ridersNeeded && ridersFailed) ||
+    (milestonesNeeded && (milestonesFailed || projectInvoicesFailed));
+  const selectionReadPending =
+    (purchasesNeeded && (purchasesPending || purchasesFetching)) ||
+    (ridersNeeded && (ridersPending || ridersFetching)) ||
+    (milestonesNeeded &&
+      (milestonesPending ||
+        milestonesFetching ||
+        projectInvoicesPending ||
+        projectInvoicesFetching));
   const readBlocker: ComposerBlocker | null =
     studioMode || !projectId
       ? null
@@ -919,14 +967,18 @@ export function InvoiceComposer({
               ? "time-unread"
               : timeLoading || timeFetching
                 ? "time-pending"
-                : ffeFailed || coverageFailed || stagesFailed
+                : ffeFailed ||
+                    coverageFailed ||
+                    stagesFailed ||
+                    selectionReadFailed
                   ? "project-unread"
                   : ffeLoading ||
                       ffeFetching ||
                       coverageLoading ||
                       coverageFetching ||
                       stagesLoading ||
-                      stagesFetching
+                      stagesFetching ||
+                      selectionReadPending
                     ? "project-pending"
                     : null;
   const readFailed =
@@ -939,6 +991,10 @@ export function InvoiceComposer({
     if (ffeFailed) void refetchFfe();
     if (coverageFailed) void refetchCoverage();
     if (stagesFailed) void refetchStages();
+    if (purchasesFailed) void refetchPurchases();
+    if (ridersFailed) void refetchRiders();
+    if (milestonesFailed) void refetchMilestones();
+    if (projectInvoicesFailed) void refetchProjectInvoices();
   };
   // §A5 — the first unmet requirement; the held act names it and lands on it.
   const holds: InvoiceHold[] = readBlocker ? [] : assessInvoiceReadiness({
@@ -972,8 +1028,9 @@ export function InvoiceComposer({
   const readinessBlocker: ComposerBlocker | null =
     holds[0]?.kind === "nothing-selected" ? "lines" : holds[0]?.kind ?? null;
   // SQ-1282 F1 — a draft that may have landed holds Draft first: a second
-  // create_draft call could write a second invoice.
-  const blocker: ComposerBlocker | null = (error?.unconfirmed ? "draft-unconfirmed" : null) ?? readBlocker ?? readinessBlocker ?? (studioMode
+  // create_draft call could write a second invoice. So does one known to have
+  // landed incomplete (SQ-1289 F3).
+  const blocker: ComposerBlocker | null = (keptDraft ? "draft-unconfirmed" : null) ?? readBlocker ?? readinessBlocker ?? (studioMode
     ? studioInvoiceBlocker({ clientId: studioClientId, title, studioId, lines })
     : !projectId
       ? "no-project"
@@ -995,7 +1052,8 @@ export function InvoiceComposer({
     if (error?.gap && billingGap !== error.gap) setError(null);
   }, [error, billingGap]);
   const heldReason = heldBlocker
-    ? holds.find((hold) => hold.kind === heldBlocker)?.reason ?? blockerReason(heldBlocker, {
+    ? (heldBlocker === "draft-unconfirmed" ? keptDraft?.message : undefined) ??
+      holds.find((hold) => hold.kind === heldBlocker)?.reason ?? blockerReason(heldBlocker, {
         projectName: selectedProject?.name ?? "This project",
         canLinkClient,
         leadLeftStudio,
@@ -1023,11 +1081,12 @@ export function InvoiceComposer({
     kind: ComposerBlocker,
     label: string,
     target: () => Element | null | undefined,
+    reason?: string,
   ) =>
     spotlightHolds.push({
       id: kind,
       label,
-      reason: blockerReason(kind, {
+      reason: reason ?? blockerReason(kind, {
         projectName: selectedProject?.name ?? "This project",
         canLinkClient,
         leadLeftStudio,
@@ -1043,9 +1102,12 @@ export function InvoiceComposer({
       },
     });
   // SQ-1282 F1 — its window spans the warning and Check the invoices.
-  if (error?.unconfirmed)
-    ownHold("draft-unconfirmed", "Check the invoices", () =>
-      containerRef.current?.querySelector('[data-hold-region="draft-unconfirmed"]'),
+  if (keptDraft)
+    ownHold(
+      "draft-unconfirmed",
+      "Check the invoices",
+      () => containerRef.current?.querySelector('[data-hold-region="draft-unconfirmed"]'),
+      keptDraft.message,
     );
   spotlightHolds.push(
     ...holds.map((hold) => ({
@@ -1213,6 +1275,7 @@ export function InvoiceComposer({
             ? `${reason} Nothing was billed; the draft still holds those hours. Void it to release them.`
             : `${reason} Nothing was billed.`,
           retryable: false,
+          ...(stranded ? { stranded: true as const } : {}),
         });
         return;
       }
@@ -1267,6 +1330,7 @@ export function InvoiceComposer({
             ? `${reason} Nothing was billed; the draft was kept. Delete or void it.`
             : `${reason} Nothing was billed.`,
           retryable: false,
+          ...(stranded ? { stranded: true as const } : {}),
         });
         return;
       }
@@ -2409,7 +2473,7 @@ export function InvoiceComposer({
           {/* R83 — the inline failure band, at the act site. An unconfirmed
               draft's band is its hold's window (SQ-1282 F1). */}
           <div
-            data-hold-region={error?.unconfirmed ? "draft-unconfirmed" : undefined}
+            data-hold-region={keptDraft ? "draft-unconfirmed" : undefined}
           >
             <ActFailLine
               error={
@@ -2424,7 +2488,7 @@ export function InvoiceComposer({
               onRetry={error?.retryable ? () => void draft() : undefined}
               retryKey="retry-draft-invoice"
             />
-            {error?.unconfirmed && (
+            {keptDraft && (
               <DocumentAction
                 actionKey="check-drafted-invoices"
                 surfaceKey="accounts"

@@ -158,6 +158,17 @@ export function createInvoiceSendHandler(deps: InvoiceSendDeps) {
         409
       );
     }
+    // Void answers first, issue-first or not: a stale draft folio sent after a
+    // void must not be told the invoice "was already issued".
+    if (invoice.status === 'void') {
+      return json(
+        {
+          error: 'invoice_void',
+          detail: 'A voided invoice cannot be sent.',
+        },
+        409
+      );
+    }
     // Issue-first sends a draft and nothing else: an issued invoice was
     // already sent by whoever issued it, and its next letter is a Resend.
     if (issueFirst && invoice.status !== 'draft') {
@@ -165,15 +176,6 @@ export function createInvoiceSendHandler(deps: InvoiceSendDeps) {
         {
           error: 'invoice_not_draft',
           detail: 'This invoice was already issued.',
-        },
-        409
-      );
-    }
-    if (invoice.status === 'void') {
-      return json(
-        {
-          error: 'invoice_void',
-          detail: 'A voided invoice cannot be sent.',
         },
         409
       );
