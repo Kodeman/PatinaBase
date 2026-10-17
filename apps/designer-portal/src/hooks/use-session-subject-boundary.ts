@@ -8,6 +8,7 @@ import { retireQueryClient } from '@/lib/react-query';
 import { dropPreviousSubjectAutosaves } from '@/hooks/use-buffered-autosave';
 import { retireAnalyticsSubject } from '@/lib/analytics/subject';
 import { dismissReturnToLeadUndo } from '@/components/document/return-to-lead-undo';
+import { clearParkedInvoiceComposers } from '@/lib/document/registry';
 
 /**
  * US-34 F1 — the cache boundary between signed-in subjects.
@@ -100,6 +101,7 @@ function retire(client: QueryClient): void {
   client.clear();
   client.unmount();
   dropPreviousSubjectAutosaves();
+  clearParkedInvoiceComposers();
   dismissReturnToLeadUndo();
   retireAnalyticsSubject();
 
