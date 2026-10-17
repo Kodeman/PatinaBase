@@ -22,6 +22,12 @@ import { nextSubjectQueryClient, SubjectChangedError } from '@/lib/react-query';
 import { setToastFunction } from '@/lib/error-handler';
 import { forThisSubject } from '@/lib/analytics/subject';
 import {
+  parkInvoiceComposer,
+  parkedInvoiceComposer,
+  subscribeParkedInvoiceComposers,
+} from '@/lib/document/registry';
+import type { ParkedInvoiceComposer } from '@/lib/document/invoice-composer';
+import {
   ReturnToLeadUndo,
   offerReturnToLeadUndo,
 } from '@/components/document/return-to-lead-undo';
@@ -274,6 +280,47 @@ afterEach(() => {
 });
 
 describe('useSessionSubjectBoundary', () => {
+  const parkedComposer: ParkedInvoiceComposer = {
+    milestoneIds: [],
+    timeEntryIds: [],
+    ffeItemIds: [],
+    ffeStage: 'full',
+    depositPctText: '',
+    balanceItemIds: [],
+    purchaseIds: [],
+    riderIds: [],
+    overrides: [],
+    adhoc: [],
+    taxRatePercent: '',
+    termsDays: '',
+    memo: 'A private invoice note',
+  };
+
+  it('clears parked invoice composers and notifies once when the subject changes', async () => {
+    const first = newClient();
+    renderApp(first, <Rows />);
+    await screen.findByText('user-a row');
+    parkInvoiceComposer('project-a', parkedComposer);
+    const listener = jest.fn();
+    const unsubscribe = subscribeParkedInvoiceComposers(listener);
+
+    signInAs('user-b');
+
+    expect(parkedInvoiceComposer('project-a')).toBeNull();
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it('keeps parked invoice composers on a same-subject token refresh', async () => {
+    renderApp(newClient(), <Rows />);
+    await screen.findByText('user-a row');
+    parkInvoiceComposer('project-a', parkedComposer);
+
+    act(() => mockEmit!('TOKEN_REFRESHED', { user: { id: 'user-a' }, access_token: 'jwt-user-a-r1' }));
+
+    expect(parkedInvoiceComposer('project-a')).toBe(parkedComposer);
+  });
+
   it('user A to user B with no SIGNED_OUT: B reads from a fresh client that holds nothing of A', async () => {
     const first = newClient();
     first.setQueryData(['unwatched'], ['user-a secret']);
