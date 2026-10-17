@@ -4,6 +4,8 @@
 // under plain `deno test` without booting Deno.serve (index.ts imports this
 // module; index.test.ts tests it directly).
 
+import type { PoPdfLine } from '../_shared/po-pdf.ts';
+
 // ─── Payload parsing ─────────────────────────────────────────────────────────
 
 export type PoSendMode = 'preview' | 'send' | 'mark_sent';
@@ -1010,4 +1012,54 @@ export function poLineRoomLabel(
     .map((p) => `${p.room?.name?.trim() || 'Room'} ${p.quantity}`)
     .join(' · ');
   return `${rooms}${unitWord}`;
+}
+
+// ─── PDF line mapping ────────────────────────────────────────────────────────
+
+/** The FFE row fields a printed PO line reads (index.ts FfeItemRow). */
+export interface PoPdfLineSource {
+  id: string;
+  name: string;
+  doc_code: string | null;
+  quantity: number | null;
+  unit: string | null;
+  trade_price_cents: number | null;
+  unit_price_cents: number | null;
+  notes: string | null;
+  ffe_category: string | null;
+  room: { name: string } | null;
+  placements: PoLinePlacement[] | null;
+  spec: VendorConfigurationSpec | null;
+  product: VendorProductMaster | null;
+}
+
+/** One FFE row to the line the maker's PO prints. */
+export function poPdfLine(
+  item: PoPdfLineSource,
+  comArriving: ReadonlyMap<string, string[]>,
+): PoPdfLine {
+  const quantity = item.quantity ?? 1;
+  // TRADE pricing — same COALESCE the 00186 total uses.
+  const unitTradeCents = item.trade_price_cents ?? item.unit_price_cents ?? 0;
+  // The configured spec block (P0-1): what the designer actually specified,
+  // vendor-safe (selections / components / dimensions / COM / config hash —
+  // never retail or markup). Empty array for an unconfigured line with no
+  // flat spec fields, which renders exactly as before.
+  // Unconfigured lines resolve each flat field spec → product master (C-06).
+  const configurationLines = [
+    ...vendorConfigurationLines(item.spec, item.product),
+    ...(comArriving.get(item.id) ?? []),
+  ];
+  return {
+    name: item.name,
+    docCode: item.doc_code,
+    room: poLineRoomLabel(item.room?.name ?? null, item.placements, item.unit),
+    quantity,
+    unit: item.unit,
+    unitTradeCents,
+    lineTotalCents: unitTradeCents * quantity,
+    specNotes: vendorSafeSpecNotes(item.notes),
+    category: item.ffe_category,
+    configurationLines: configurationLines.length > 0 ? configurationLines : undefined,
+  };
 }

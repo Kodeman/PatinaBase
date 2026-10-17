@@ -7,8 +7,69 @@
 // prints "COM arriving separately": only a 'com' link is the COM pair.
 
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { comArrivingSeparately, poLineRoomLabel } from "./lib.ts";
-import { poQuantityLabel } from "../_shared/po-pdf.ts";
+import { comArrivingSeparately, poLineRoomLabel, poPdfLine } from "./lib.ts";
+import { PoDocument, poLineItemLabel, poQuantityLabel } from "../_shared/po-pdf.ts";
+
+Deno.test("PO line labels lead the item name when present", () => {
+  assertEquals(poLineItemLabel("Linen sofa", "LR-01"), "LR-01 · Linen sofa");
+});
+
+Deno.test("PO lines without a label preserve the existing item name", () => {
+  assertEquals(poLineItemLabel("Linen sofa"), "Linen sofa");
+  assertEquals(poLineItemLabel("Linen sofa", "  "), "Linen sofa");
+});
+
+// SQ-1173 R6: the label reaches the printed page — the FFE row's doc_code
+// maps onto the PDF line, and the item cell prints it before the name.
+const SOFA_ROW = {
+  id: "line-sofa",
+  name: "Linen sofa",
+  doc_code: "LR-01",
+  quantity: 1,
+  unit: null,
+  trade_price_cents: 410000,
+  unit_price_cents: 650000,
+  notes: null,
+  ffe_category: null,
+  room: { name: "Living Room" },
+  placements: null,
+  spec: null,
+  product: null,
+};
+
+// deno-lint-ignore no-explicit-any
+function printedStrings(node: any, out: string[] = []): string[] {
+  if (typeof node === "string") out.push(node);
+  else if (Array.isArray(node)) node.forEach((child) => printedStrings(child, out));
+  else if (node && typeof node === "object" && "props" in node) printedStrings(node.props.children, out);
+  return out;
+}
+
+Deno.test("the FFE row's label maps onto the PO line", () => {
+  assertEquals(poPdfLine(SOFA_ROW, new Map()).docCode, "LR-01");
+});
+
+Deno.test("the PO item cell prints the label before the name", () => {
+  const page = PoDocument({
+    poNumber: "PO-1043",
+    issuedAt: "2026-10-17T00:00:00Z",
+    studioName: "Middle West",
+    designerName: "Leah",
+    designerEmail: null,
+    vendorName: "Kessler",
+    vendorContactLines: [],
+    projectName: "Ellsworth",
+    sidemark: null,
+    shipTo: null,
+    paymentPatternLabel: "Net 30",
+    payments: [],
+    lines: [poPdfLine(SOFA_ROW, new Map())],
+    tradeTotalCents: 410000,
+  });
+  const strings = printedStrings(page);
+  assertEquals(strings.includes("LR-01 · Linen sofa"), true);
+  assertEquals(strings.includes("Linen sofa"), false);
+});
 
 const WALLPAPER = { id: "line-wallpaper", spec: {} };
 const INSTALLER_PO = { id: "po-2001", po_number: "PO-2001", vendor: { name: "Hang Right" } };
