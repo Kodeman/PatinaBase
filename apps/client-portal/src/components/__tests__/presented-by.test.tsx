@@ -56,6 +56,23 @@ describe('PresentedBy', () => {
     expect(screen.getByTestId('presented-by-separator').textContent).toBe(' ·');
   });
 
+  it('preserves a phone extension in the dial link and leaves prose unlinked', () => {
+    const { rerender } = render(
+      <PresentedBy identity={{ phone: '+1 (212) 555-0100 ext. 123' }} />,
+    );
+    expect(screen.getByTestId('presented-by-phone')).toHaveAttribute(
+      'href',
+      'tel:+12125550100;ext=123',
+    );
+    expect(screen.getByTestId('presented-by-phone')).toHaveTextContent(
+      '+1 (212) 555-0100 ext. 123',
+    );
+
+    rerender(<PresentedBy identity={{ phone: 'call the studio x123' }} />);
+    expect(screen.getByTestId('presented-by-phone').tagName).toBe('SPAN');
+    expect(screen.getByTestId('presented-by-phone')).toHaveTextContent('call the studio x123');
+  });
+
   it('designer fields empty → the firm’s email and phone, as the server falls back', () => {
     // What 00812 returns for a lead with blank email/phone: the firm's, per field.
     const identity = toPresentationIdentity({

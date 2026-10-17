@@ -44,8 +44,13 @@ function websiteLabel(website: string): string {
 }
 
 function telHref(phone: string): string | null {
-  const digits = phone.replace(/[^\d+]/g, '');
-  return digits.replace(/\+/g, '').length > 0 ? `tel:${digits}` : null;
+  const extensionMatch = phone.match(/(?:[,;]?\s*(?:ext\.?|x|#)\s*[:.]?\s*)(\d+)\s*$/i);
+  const number = extensionMatch ? phone.slice(0, extensionMatch.index) : phone;
+  if (/[a-z]/i.test(number)) return null;
+
+  const digits = number.replace(/[^\d+]/g, '');
+  if (digits.replace(/\+/g, '').length === 0) return null;
+  return `tel:${digits}${extensionMatch ? `;ext=${extensionMatch[1]}` : ''}`;
 }
 
 const LINK_CLASS =

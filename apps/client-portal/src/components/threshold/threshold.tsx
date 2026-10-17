@@ -1078,7 +1078,7 @@ export function Threshold({
                 page furniture over the colophon. Absence is silence here too:
                 PresentedBy draws only the fields the studio filled. */}
             <PresentedBy identity={presentationQuery.data} />
-            <Colophon studioName={studioName} />
+            <Colophon studioName={words(presentationQuery.data?.firmName)} />
           </div>
         </>
       )}

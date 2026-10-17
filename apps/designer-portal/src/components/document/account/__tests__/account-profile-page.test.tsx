@@ -58,6 +58,22 @@ describe('AccountProfilePage · phone (US-37 #6)', () => {
     expect(mutate).toHaveBeenCalledWith({ full_name: 'Leah Hart', bio: '', phone: '+1 555 0199' });
   });
 
+  it('shows full_name ahead of stale display_name and retains it on refetch', () => {
+    profile = { display_name: 'Leah', full_name: 'Leah Hart', bio: '' };
+    const { rerender } = render(<AccountProfilePage />);
+    const name = screen.getByLabelText('Display name');
+    expect(name).toHaveValue('Leah Hart');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(mutate).toHaveBeenCalledWith({ full_name: 'Leah Hart', bio: '', phone: null });
+
+    // The server refetch still contains the old display_name; full_name is the
+    // authoritative presentation name and remains what the field shows.
+    profile = { display_name: 'Leah', full_name: 'Leah Hart', bio: '' };
+    rerender(<AccountProfilePage />);
+    expect(screen.getByLabelText('Display name')).toHaveValue('Leah Hart');
+  });
+
   it('stores a blank phone as null so the studio phone answers instead', () => {
     profile = { full_name: 'Leah Hart', bio: '', phone: '+1 555 0101' };
     render(<AccountProfilePage />);
