@@ -41,6 +41,7 @@ export function AccountProfilePage() {
 
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
+  const [phone, setPhone] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [pwDone, setPwDone] = useState(false);
 
@@ -55,13 +56,16 @@ export function AccountProfilePage() {
         profile.display_name || profile.full_name || user?.name || '',
       );
       setBio(profile.bio || '');
+      setPhone(profile.phone || '');
     }
   }, [profile, user?.name]);
 
   const handleSaveProfile = () => {
     // `full_name` is the column the old settings form writes; display name reads
     // it back via the useAuth merge, so we keep the same write to avoid drift.
-    updateProfile.mutate({ full_name: displayName, bio });
+    // US-37 #6 — a blank phone is stored as NULL, so the client presentation
+    // falls back to the studio's phone instead of printing an empty line.
+    updateProfile.mutate({ full_name: displayName, bio, phone: phone.trim() || null });
   };
 
   const handleUpdatePassword = () => {
@@ -158,6 +162,24 @@ export function AccountProfilePage() {
           />
           <p className={HELP}>
             A short intro shown to homeowners reviewing your work.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="account-phone" className={LABEL}>
+            Phone
+          </label>
+          <input
+            id="account-phone"
+            type="tel"
+            autoComplete="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className={FIELD}
+          />
+          <p className={HELP}>
+            Shown to clients with your name on the papers they approve.
+            Leave it blank and they see the studio&apos;s phone.
           </p>
         </div>
 

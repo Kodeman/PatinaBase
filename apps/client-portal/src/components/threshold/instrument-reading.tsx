@@ -1,5 +1,6 @@
 'use client';
 
+import { usePresentationIdentity } from '@patina/supabase';
 import { CommercialDocumentShell } from '@/components/commercial-document-shell';
 import { useClientCommercialDocument } from '@/hooks/use-commercial-client';
 
@@ -24,6 +25,8 @@ export interface InstrumentReadingProps {
 
 export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
   const bundle = useClientCommercialDocument(proposalId);
+  // US-37 #6 — the paper's own presenter; a houseless paper resolves through itself.
+  const presentation = usePresentationIdentity({ proposalId });
 
   if (bundle.isLoading) {
     return (
@@ -80,7 +83,7 @@ export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
       data-testid="instrument-reading"
       className="mt-4 border border-[var(--border-subtle)] bg-[var(--bg-warm)] p-1"
     >
-      <CommercialDocumentShell bundle={bundle.data} />
+      <CommercialDocumentShell bundle={bundle.data} presentedBy={presentation.data} />
     </div>
   );
 }

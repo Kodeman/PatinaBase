@@ -1170,6 +1170,11 @@ export type {
   StudioIdentitySource,
   UseStudioIdentityParams,
 } from "./use-studio-identity";
+export { usePresentationIdentity, toPresentationIdentity } from "./use-presentation-identity";
+export type {
+  PresentationIdentity,
+  UsePresentationIdentityParams,
+} from "./use-presentation-identity";
 export {
   useUserRoles,
   useUserPermissions,
