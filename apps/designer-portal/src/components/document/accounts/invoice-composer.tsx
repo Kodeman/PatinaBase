@@ -357,7 +357,6 @@ export function InvoiceComposer({
   const nameStudioRef = useRef<HTMLButtonElement>(null);
   const confirmNameRef = useRef<HTMLButtonElement>(null);
   const askNoteRef = useRef<HTMLSpanElement>(null);
-  const askRateNoteRef = useRef<HTMLSpanElement>(null);
   const supportAddressRef = useRef<HTMLSpanElement>(null);
   const draftActRef = useRef<HTMLButtonElement>(null);
   // The project whose Link a client opened the household sheet, which hands
@@ -825,10 +824,6 @@ export function InvoiceComposer({
     pricingStudioOwner?.profiles?.display_name ||
     pricingStudioOwner?.profiles?.full_name ||
     "your studio owner";
-  const rateNote = askRateNote(
-    selectedProject?.name ?? "this project",
-    ratePendingMembers.flatMap((member) => (member.name ? [member.name] : [])),
-  );
   // F8 — stamp_project_pricing_studio (00606) names a studio only for its
   // owner or admin, and only one that EMPLOYS the designer (an active seat that
   // is neither guest nor owner). The rate-card condition it also checks is not
@@ -944,24 +939,12 @@ export function InvoiceComposer({
     holdRegion(
       containerRef.current?.querySelector(`[data-focus-key="${key}"]`),
     );
-  const spotlightHolds: SpotlightHold[] = [];
-  for (const hold of holds) {
-    // One window holds every designer's rate-pending hours.
-    const pending =
-      hold.kind === "rate-pending"
-        ? spotlightHolds.find((spot) => spot.id === "rate-pending")
-        : undefined;
-    if (pending) {
-      pending.reason = `${pending.reason} ${hold.reason}`;
-      continue;
-    }
-    spotlightHolds.push({
-      id: hold.kind === "rate-pending" ? "rate-pending" : hold.focusKey,
-      label: hold.repair,
-      reason: hold.reason,
-      target: keyedRegion(hold.focusKey),
-    });
-  }
+  const spotlightHolds: SpotlightHold[] = holds.map((hold) => ({
+    id: hold.focusKey,
+    label: hold.repair,
+    reason: hold.reason,
+    target: keyedRegion(hold.focusKey),
+  }));
   const ownHold = (
     kind: ComposerBlocker,
     label: string,
@@ -1483,102 +1466,100 @@ export function InvoiceComposer({
                     would freeze a zero-dollar line under the 00177 invoiced
                     lock. The repair is the studio's rate card. */}
                 {!timeLoading && ratePendingEntries.length > 0 && (
-                  // K1 — the rate-pending hold's window: the hours and their fix.
-                  <div data-hold-region="rate-pending">
-                    {ratePendingEntries.map((entry) => (
+                  <div>
+                    {ratePendingMembers.map((member) => (
+                      // K1 — each designer's rate-pending window: her hours
+                      // and her fix.
                       <div
-                        key={entry.id}
-                        className={`${ROW} opacity-60`}
-                        data-rate-pending="true"
-                        data-focus-key={`rate-pending:${entry.user_id}`}
-                        tabIndex={-1}
+                        key={member.userId}
+                        data-hold-region={`rate-pending:${member.userId}`}
                       >
-                        <input
-                          type="checkbox"
-                          className={CHECK}
-                          checked={false}
-                          disabled
-                          readOnly
-                          aria-label="This hour has no rate yet and cannot be invoiced"
-                        />
-                        <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
-                          {entry.member_name && (
-                            <span className="mr-1.5 text-[var(--color-clay-ink)]">
-                              {entry.member_name} ·
-                            </span>
-                          )}
-                          {fmtDay(entry.started_at)}
-                          {entry.notes && (
-                            <span className="ml-1.5 text-[var(--text-muted)]">
-                              {entry.notes}
-                            </span>
-                          )}
-                        </span>
-                        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                          {formatHoursLabel(entry.duration_minutes)} · rate
-                          pending
-                        </span>
-                        <span className="font-mono text-[11px] text-[var(--text-muted)]">
-                          rate pending
-                        </span>
+                        {ratePendingEntries
+                          .filter((entry) => entry.user_id === member.userId)
+                          .map((entry) => (
+                            <div
+                              key={entry.id}
+                              className={`${ROW} opacity-60`}
+                              data-rate-pending="true"
+                              data-focus-key={`rate-pending:${entry.user_id}`}
+                              tabIndex={-1}
+                            >
+                              <input
+                                type="checkbox"
+                                className={CHECK}
+                                checked={false}
+                                disabled
+                                readOnly
+                                aria-label="This hour has no rate yet and cannot be invoiced"
+                              />
+                              <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+                                {entry.member_name && (
+                                  <span className="mr-1.5 text-[var(--color-clay-ink)]">
+                                    {entry.member_name} ·
+                                  </span>
+                                )}
+                                {fmtDay(entry.started_at)}
+                                {entry.notes && (
+                                  <span className="ml-1.5 text-[var(--text-muted)]">
+                                    {entry.notes}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                                {formatHoursLabel(entry.duration_minutes)} · rate
+                                pending
+                              </span>
+                              <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                                rate pending
+                              </span>
+                            </div>
+                          ))}
+                        {/* K8 — with no pricing studio there is no rate to set;
+                            the studio hold below names that fix. */}
+                        {selectedProject?.studio_id &&
+                          (canSetRates ? (
+                            <div className="flex flex-wrap gap-x-3">
+                              {/* The Account sheet opens over the composer,
+                                  onto this member's rate field; the address
+                                  is the same sheet's doorway. */}
+                              <DocumentAction
+                                href="/desk?account=studio"
+                                actionKey="set-member-rate"
+                                surfaceKey="accounts"
+                                regionKey="invoice-composer"
+                                variant="tertiary"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.currentTarget.focus();
+                                  if (pricingStudioId)
+                                    selectViewerStudioId(pricingStudioId);
+                                  openAccountPage("studio", {
+                                    rateFor: member.userId,
+                                    aboveFolio: true,
+                                    fallbackFocusRef: pricedHoursLabelRef,
+                                  });
+                                }}
+                              >
+                                {member.name
+                                  ? `Set ${member.name}’s rate`
+                                  : "Set the studio rate"}
+                              </DocumentAction>
+                            </div>
+                          ) : (
+                            <RateAsk
+                              ownerName={rateOwnerName}
+                              note={askRateNote(
+                                selectedProject?.name ?? "this project",
+                                member.name ? [member.name] : [],
+                              )}
+                            />
+                          ))}
                       </div>
                     ))}
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {formatHoursLabel(ratePendingMinutes)} waiting for a rate
                       · they cannot be invoiced until the studio prices them
                     </p>
-                    {/* K8 — with no pricing studio there is no rate to set;
-                        the studio hold below names that fix. */}
-                    {selectedProject?.studio_id &&
-                      (canSetRates ? (
-                        <div className="flex flex-wrap gap-x-3">
-                          {ratePendingMembers.map((member) => (
-                            // The Account sheet opens over the composer, onto
-                            // this member's rate field; the address is the
-                            // same sheet's doorway.
-                            <DocumentAction
-                              key={member.userId}
-                              href="/desk?account=studio"
-                              actionKey="set-member-rate"
-                              surfaceKey="accounts"
-                              regionKey="invoice-composer"
-                              variant="tertiary"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.currentTarget.focus();
-                                if (pricingStudioId)
-                                  selectViewerStudioId(pricingStudioId);
-                                openAccountPage("studio", {
-                                  rateFor: member.userId,
-                                  aboveFolio: true,
-                                  fallbackFocusRef: pricedHoursLabelRef,
-                                });
-                              }}
-                            >
-                              {member.name
-                                ? `Set ${member.name}’s rate`
-                                : "Set the studio rate"}
-                            </DocumentAction>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="mt-1 text-sm text-[var(--color-charcoal)]">
-                          <p>Ask {rateOwnerName} to set a rate.</p>
-                          {/* M4 — the note goes nowhere on its own. */}
-                          <p className="mt-1 text-[var(--color-aged-oak)]">
-                            “
-                            <span ref={askRateNoteRef}>{rateNote}</span>
-                            ”
-                          </p>
-                          <CopyAct
-                            text={rateNote}
-                            selectRef={askRateNoteRef}
-                            actionKey="copy-set-rate-note"
-                          >
-                            Copy a note
-                          </CopyAct>
-                        </div>
-                      ))}
                   </div>
                 )}
               </div>
@@ -1733,6 +1714,8 @@ export function InvoiceComposer({
                         key={it.id}
                         data-testid="composer-unpriced-line"
                         data-focus-key={focusKey}
+                        // Its own window, never the whole lines region.
+                        data-hold-region={focusKey}
                         tabIndex={-1}
                         className="outline-none"
                       >
@@ -2426,6 +2409,25 @@ function askRateNote(projectName: string, memberNames: string[]): string {
   return memberNames.length > 0
     ? `Could you set a rate for ${new Intl.ListFormat("en", { type: "conjunction" }).format(memberNames)}? I'm drafting ${projectName}'s invoice.`
     : `Could you set a rate for the hours on ${projectName}? I'm drafting its invoice.`;
+}
+
+/** K8 — one designer's ask, inside her rate-pending window. */
+function RateAsk({ ownerName, note }: { ownerName: string; note: string }) {
+  const noteRef = useRef<HTMLSpanElement>(null);
+  return (
+    <div className="mt-1 text-sm text-[var(--color-charcoal)]">
+      <p>Ask {ownerName} to set a rate.</p>
+      {/* M4 — the note goes nowhere on its own. */}
+      <p className="mt-1 text-[var(--color-aged-oak)]">
+        “
+        <span ref={noteRef}>{note}</span>
+        ”
+      </p>
+      <CopyAct text={note} selectRef={noteRef} actionKey="copy-set-rate-note">
+        Copy a note
+      </CopyAct>
+    </div>
+  );
 }
 
 /** A refusal before anything was written: a billing gap or a bad request is

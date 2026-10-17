@@ -39,10 +39,13 @@ const mockAccountData = () => ({
   ...mockAccountOverride,
 });
 
-// US-36 R2 — the milestone draft's readiness reads the project and the viewer.
+// US-36 R2 — the milestone draft's readiness reads the project and the viewer;
+// this project has its client and studio, so Generate is not held.
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
-  useProjects: () => ({ data: [] }),
+  useProjects: () => ({
+    data: [{ id: 'project-1', name: 'Lake House', client_id: 'client-1', studio_id: 'studio-1', designer_id: 'designer-1' }],
+  }),
   useSessionUserId: () => null,
   useDocumentClientLinkHold: () => ({ data: null }),
 }));

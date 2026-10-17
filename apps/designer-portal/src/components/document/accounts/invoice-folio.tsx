@@ -114,51 +114,89 @@ export function InvoiceFolio({
     'invoice',
     invoice && invoice.status !== 'draft' ? [invoice.id] : [],
   );
-  // K10 — Send is held BEFORE issue when invoice-send would find no address.
+  // K10 — Send is held BEFORE issue until invoice-send's address is known.
   // Its order (invoice-send/index.ts): the invoice client's profile email, else
-  // the project client's (only when the invoice names none), else that client's
-  // designer_clients address in the invoice designer's book. That last read is
-  // the viewer's own book, so it answers only when she drew the invoice.
+  // the project client's (only when the invoice names none), else the client's
+  // newest designer_clients row in the INVOICE DESIGNER's book — read here by
+  // that designer, which studio RLS (00316) lets a co-member read too.
   const viewerId = useSessionUserId();
   const clientUserId = invoice?.client_id ?? invoice?.project?.client_id ?? null;
-  const { data: relationship, isLoading: relationshipLoading } =
-    useDesignerClientForClientUser(invoice?.status === 'draft' ? clientUserId : null);
-  const { data: household, isLoading: householdLoading } = useClient(relationship?.id ?? '');
+  const {
+    data: relationship,
+    isLoading: relationshipLoading,
+    isError: relationshipFailed,
+  } = useDesignerClientForClientUser(
+    invoice?.status === 'draft' ? clientUserId : null,
+    invoice?.designer_id,
+  );
+  const {
+    data: household,
+    isLoading: householdLoading,
+    isError: householdFailed,
+  } = useClient(relationship?.id ?? '');
   const [householdOpen, setHouseholdOpen] = useState(false);
   const sendReasonId = useId();
   const sendHoldRef = useRef<HTMLDivElement | null>(null);
+  const sendActRef = useRef<HTMLButtonElement | null>(null);
   // The profile that invoice-send reads first. When the folio cannot see it
   // (null with a client named), the answer is unknown — never a hold.
   const profile = invoice?.client_id ? invoice.client : invoice?.project?.client;
-  const sendHold: InvoiceHold | null =
-    invoice?.status !== 'draft' || invoice.client?.email || profile?.email
+  const clientFirst = voiceFirstName(
+    invoice?.client?.full_name ?? invoice?.project?.client?.full_name ?? household?.client_name,
+  );
+  const designerName =
+    invoice?.designer?.full_name?.trim() ||
+    invoice?.designer?.business_name?.trim() ||
+    'the designer who drew it';
+  // A null repair has no fix in the folio: the window is the reason alone.
+  const sendHold: (Pick<InvoiceHold, 'reason' | 'focusKey'> & { repair: string | null }) | null =
+    invoice?.status !== 'draft' ||
+    invoice.client?.email ||
+    profile?.email ||
+    household?.client_email?.trim()
       ? null
       : !clientUserId
         ? {
-            kind: 'send-no-recipient',
             reason: 'Link a client to send this.',
             repair: MESSAGE_WITHHELD.repair,
-            fixer: 'link-client',
             focusKey: 'add-email',
           }
-        : profile &&
-            viewerId === invoice.designer_id &&
-            !relationshipLoading &&
-            !householdLoading &&
-            !household?.client_email?.trim()
-          ? sendNoRecipientHold(
-              voiceFirstName(
-                invoice.client?.full_name ??
-                  invoice.project?.client?.full_name ??
-                  household?.client_name,
-              ),
-            )
-          : null;
+        : !profile
+          ? null
+          : relationshipLoading || householdLoading
+            ? {
+                reason: `Checking ${clientFirst ?? 'the client'}'s email before this sends.`,
+                repair: null,
+                focusKey: 'send-recipient',
+              }
+            : (relationshipFailed && !relationship) || (householdFailed && !household)
+              ? {
+                  reason: `${clientFirst ? `${clientFirst}'s` : "The client's"} email couldn't be checked. Reload the folio to send this.`,
+                  repair: null,
+                  focusKey: 'send-recipient',
+                }
+              : relationship?.id
+                ? sendNoRecipientHold(clientFirst)
+                : viewerId === invoice.designer_id
+                  ? {
+                      reason: sendNoRecipientHold(clientFirst).reason,
+                      repair: null,
+                      focusKey: 'send-recipient',
+                    }
+                  : {
+                      reason: `Only ${designerName} can see ${clientFirst ?? 'this client'}'s email. Ask them to send this invoice.`,
+                      repair: null,
+                      focusKey: 'send-recipient',
+                    };
+  // US-19 (one-voice): `Send the invoice` and `Record the payment` are their
+  // acts' one names (D1), and each commit is filled (`terminal`, R162) beneath
+  // the consequence sentence its panel already states (R141).
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const sendHolds: SpotlightHold[] = sendHold
     ? [
         {
           id: sendHold.focusKey,
-          label: sendHold.repair,
+          label: sendHold.repair ?? (oneVoice ? 'Send the invoice' : 'Issue & send'),
           reason: sendHold.reason,
           target: () => sendHoldRef.current,
         },
@@ -175,10 +213,6 @@ export function InvoiceFolio({
   const [reference, setReference] = useState('');
   const [receivedDate, setReceivedDate] = useState(() => todayYmd());
   const [showClientFallback, setShowClientFallback] = useState(false);
-  // US-19 (one-voice): `Send the invoice` and `Record the payment` are their
-  // acts' one names (D1), and each commit is filled (`terminal`, R162) beneath
-  // the consequence sentence its panel already states (R141).
-  const oneVoice = useFeatureFlag('one-voice').value === true;
   // F3-3 — the landing happens once, when an invoice that can take a payment
   // has read; the panel is then hers to close and reopen as before.
   const confirmPaymentRef = useRef<HTMLButtonElement | null>(null);
@@ -318,6 +352,12 @@ export function InvoiceFolio({
   // then the invoice-send edge fn. A send failure does NOT roll back the issue
   // — the folio re-reads as issued and Resend carries the retry (old page 1:1).
   const doIssueAndSend = async () => {
+    // K10 — issuing is irreversible, so nothing issues until its recipient is
+    // established, whatever state the press came from.
+    if (sendHold) {
+      setNote(`Could not issue — ${sendHold.reason}`);
+      return;
+    }
     setNote(null);
     setShowClientFallback(false);
     setToolbarCopyStatus('idle');
@@ -732,6 +772,7 @@ export function InvoiceFolio({
         <DocumentActionGroup surfaceKey="accounts" regionKey="invoice-actions">
           {isDraft && (
             <DocumentAction
+              ref={sendActRef}
               actionKey="issue-and-send-invoice"
               variant="primary"
               disabled={busy || !!sendHold}
@@ -839,15 +880,17 @@ export function InvoiceFolio({
             className="mt-2 flex flex-wrap items-baseline gap-x-3 text-[11.5px] text-[var(--color-charcoal)]"
           >
             <p id={sendReasonId}>{sendHold.reason}</p>
-            <DocumentAction
-              actionKey="add-invoice-recipient"
-              surfaceKey="accounts"
-              regionKey="invoice-actions"
-              variant="tertiary"
-              onClick={() => setHouseholdOpen(true)}
-            >
-              {sendHold.repair}
-            </DocumentAction>
+            {sendHold.repair && (
+              <DocumentAction
+                actionKey="add-invoice-recipient"
+                surfaceKey="accounts"
+                regionKey="invoice-actions"
+                variant="tertiary"
+                onClick={() => setHouseholdOpen(true)}
+              >
+                {sendHold.repair}
+              </DocumentAction>
+            )}
           </div>
         )}
 
@@ -1193,6 +1236,8 @@ export function InvoiceFolio({
           clientName={invoice.client?.full_name ?? invoice.project?.client?.full_name ?? ''}
           aboveFolio
           landOnEmail={!!clientUserId}
+          // Saving the email clears the hold, and its Add their email with it.
+          fallbackFocusRef={sendActRef}
         />
       )}
     </div>

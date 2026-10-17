@@ -57,6 +57,7 @@ import {
   invoiceSubjectName,
 } from '../_shared/invoice-subject.ts';
 import { invoiceLetterMustHold, letterPortalUrl } from '../_shared/invoice-links.ts';
+import { newestDesignerClient } from './recipient.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -272,14 +273,17 @@ Deno.serve(async (req: Request) => {
   }
 
   if (!recipientEmail && clientUserId) {
-    const { data: dc } = await admin
-      .from('designer_clients')
-      .select('client_email, client_name')
-      .eq('designer_id', invoice.designer_id)
-      .eq('client_id', clientUserId)
-      .maybeSingle();
-    recipientEmail = (dc as any)?.client_email ?? null;
-    recipientName = recipientName ?? (dc as any)?.client_name ?? null;
+    const { row: dc, error: dcError } = await newestDesignerClient(
+      admin,
+      invoice.designer_id,
+      clientUserId
+    );
+    if (dcError) {
+      console.error('invoice-send: recipient lookup failed', invoiceId, dcError.message);
+      return json({ error: 'lookup_failed' }, 500);
+    }
+    recipientEmail = dc?.client_email ?? null;
+    recipientName = recipientName ?? dc?.client_name ?? null;
   }
 
   if (!recipientEmail) {

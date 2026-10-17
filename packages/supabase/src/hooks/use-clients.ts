@@ -212,17 +212,24 @@ export function useClient(clientId: string) {
  * scope to the signed-in designer and cap the ordered result before calling
  * `maybeSingle()`. Use when you hold a project's `client_id` but not its
  * relationship id — e.g. when opening the decision composer.
+ *
+ * `designerId` reads another designer's book instead — the row invoice-send
+ * reads for an invoice that designer drew. Studio RLS (00316) admits a
+ * co-member; anyone else reads null.
  */
 export function useDesignerClientForClientUser(
   clientUserId: string | null | undefined,
+  designerId?: string | null,
 ) {
   return useQuery({
-    queryKey: ['designer-client-for-user', clientUserId],
+    queryKey: designerId
+      ? ['designer-client-for-user', clientUserId, designerId]
+      : ['designer-client-for-user', clientUserId],
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const userId = await getSessionUserId();
+      const userId = designerId || (await getSessionUserId());
       if (!userId) return null;
 
       const { data, error } = await supabase

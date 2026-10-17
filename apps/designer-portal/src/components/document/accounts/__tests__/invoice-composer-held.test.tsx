@@ -1782,7 +1782,64 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(document.querySelector("p[data-focus-key]")).toBeNull();
   });
 
-  it("F4/F6/K1: a ticked hour that turns rate-pending lights one window over the pending hours and their fix", async () => {
+  it("SQ-1203 F1: two ticked unpriced pieces light two windows, each its own row and fix; the other lines stay under the scrim", async () => {
+    const LAMP = { id: "ffe-2", name: "Floor lamp", quantity: 1, unit_price_cents: 30000, room: null };
+    const RUG = { id: "ffe-3", name: "Wool rug", quantity: 1, unit_price_cents: 40000, room: null };
+    const context = { projectId: "project-1", initialFfeItemIds: ["ffe-1", "ffe-2", "ffe-3"] };
+    mockFfeItems = [SIDE_TABLE, LAMP, RUG];
+    const { rerender } = render(composer(context));
+
+    mockFfeItems = [SIDE_TABLE, { ...LAMP, unit_price_cents: null }, { ...RUG, unit_price_cents: null }];
+    rerender(composer(context));
+    fireEvent.click(act());
+
+    await waitFor(() => expect(spotWindows()).toEqual(["price-line:ffe-2", "price-line:ffe-3"]));
+    const lampRow = document.querySelector('[data-focus-key="price-line:ffe-2"]') as HTMLElement;
+    const rugRow = document.querySelector('[data-focus-key="price-line:ffe-3"]') as HTMLElement;
+    expect(lampRow).toHaveAttribute("data-hold-region", "price-line:ffe-2");
+    expect(rugRow).toHaveAttribute("data-hold-region", "price-line:ffe-3");
+    // Each row's fix is live in its own window.
+    expect(within(lampRow).getByRole("link", { name: "Price it: Floor lamp" }).closest("[inert]")).toBeNull();
+    expect(within(rugRow).getByRole("link", { name: "Price it: Wool rug" }).closest("[inert]")).toBeNull();
+    // The priced piece and the ad-hoc line are no part of either window.
+    expect(screen.getByText("Side table").closest("[inert]")).not.toBeNull();
+    expect(screen.getByLabelText("Line description").closest("[inert]")).not.toBeNull();
+    expect(mockCreateDraft).not.toHaveBeenCalled();
+  });
+
+  it("SQ-1203 F7: two designers' rate-pending hours keep a window each; pricing one lifts only hers", async () => {
+    const hour = { duration_minutes: 60, amount_cents: 15000, started_at: "2026-10-01T15:00:00Z" };
+    const context = { projectId: "project-1", initialTimeEntryIds: ["te-1", "te-2"] };
+    const siteVisit = { ...hour, id: "te-1", user_id: "designer-1", notes: "Site visit" };
+    const sketching = { ...hour, id: "te-2", user_id: "designer-2", notes: "Sketching" };
+    mockUnbilledEntries = [siteVisit, sketching];
+    const { rerender } = render(composer(context));
+    await waitFor(() => expect(act()).not.toHaveAttribute("aria-disabled", "true"));
+
+    mockUnbilledEntries = [];
+    mockRatePendingEntries = [siteVisit, sketching];
+    rerender(composer(context));
+    fireEvent.click(act());
+
+    await waitFor(() =>
+      expect(spotWindows()).toEqual(["rate-pending:designer-1", "rate-pending:designer-2", "invoice-lines"]),
+    );
+    const leadRegion = screen.getByText("Site visit").closest("[data-hold-region]");
+    const teamRegion = screen.getByText("Sketching").closest("[data-hold-region]");
+    expect(leadRegion).toHaveAttribute("data-hold-region", "rate-pending:designer-1");
+    expect(teamRegion).toHaveAttribute("data-hold-region", "rate-pending:designer-2");
+    expect(leadRegion).not.toContainElement(screen.getByText("Sketching"));
+
+    // designer-2's hour is priced; designer-1's stays pending.
+    mockUnbilledEntries = [sketching];
+    mockRatePendingEntries = [siteVisit];
+    rerender(composer(context));
+    await waitFor(() => expect(spotWindows()).toEqual(["rate-pending:designer-1"]));
+    expect(act()).toHaveAttribute("aria-disabled", "true");
+    expect(mockCreateDraft).not.toHaveBeenCalled();
+  });
+
+  it("F4/F6/K1: a ticked hour that turns rate-pending lights its designer's window over her pending hours and their fix", async () => {
     const hour = { user_id: "designer-1", duration_minutes: 60, amount_cents: 15000, started_at: "2026-10-01T15:00:00Z" };
     const context = { projectId: "project-1", initialTimeEntryIds: ["te-1"] };
     mockUnbilledEntries = [{ ...hour, id: "te-1", notes: "Site visit" }];
@@ -1799,9 +1856,10 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     expect(reasonLine()).toHaveTextContent("These hours are waiting for a rate.");
     const row = screen.getByText("Site visit").closest("[data-rate-pending]");
     expect(row).toHaveAttribute("data-focus-key", "rate-pending:designer-1");
-    expect(spotWindows()).toEqual(["rate-pending", "invoice-lines"]);
+    expect(spotWindows()).toEqual(["rate-pending:designer-1", "invoice-lines"]);
     const region = row?.closest("[data-hold-region]");
-    expect(region).toHaveAttribute("data-hold-region", "rate-pending");
+    expect(region).toHaveAttribute("data-hold-region", "rate-pending:designer-1");
+    expect(region).not.toContainElement(screen.getByText("Sketching"));
     expect(region?.closest("[inert]")).toBeNull();
     await waitFor(() => expect(region).toContainElement(document.activeElement as HTMLElement));
   });

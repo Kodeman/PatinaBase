@@ -257,6 +257,8 @@ export interface HouseholdSheetProps {
   /** US-36 K10 — opened by the invoice folio's held Send ("Add their email"):
    *  straight into EDIT, with focus on the email field. */
   landOnEmail?: boolean;
+  /** Where focus returns on close when the opener has unmounted meanwhile. */
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 }
 
 /** set_document_client (00387) only lets the engagement's lead designer link
@@ -285,6 +287,7 @@ export function HouseholdSheet({
   landOnRepair = false,
   aboveFolio = false,
   landOnEmail = false,
+  fallbackFocusRef,
 }: HouseholdSheetProps) {
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const contentRef = useRef<HTMLDivElement>(null);
@@ -426,7 +429,13 @@ export function HouseholdSheet({
   );
 
   return (
-    <DocSheet open={open} onClose={onClose} title="The household" aboveFolio={aboveFolio}>
+    <DocSheet
+      open={open}
+      onClose={onClose}
+      title="The household"
+      aboveFolio={aboveFolio}
+      fallbackFocusRef={fallbackFocusRef}
+    >
       <div ref={contentRef} className="mx-auto max-w-xl">
         <p className={labelCls}>The household</p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">

@@ -74,17 +74,30 @@ const emptyHousehold: Household = {
 };
 let mockHousehold: Household = emptyHousehold;
 const mockHouseholdListeners = new Set<() => void>();
+let mockViewer = 'designer-1';
+/** Studio RLS (00316): the invoice designer's book opens to a studio co-member. */
+let mockViewerIsCoMember = false;
+/** A forced relationship read (pending, failed, empty); null reads the books. */
+let mockRelationshipRead: { data?: { id: string } | null; isLoading?: boolean; isError?: boolean } | null =
+  null;
+let mockHouseholdLoading = false;
+const mockRelationshipLookup = jest.fn();
 
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));
 
 jest.mock('@patina/supabase', () => ({
-  useSessionUserId: () => 'designer-1',
-  useDesignerClientForClientUser: (id: string | null | undefined) => ({
-    data: id ? { id: 'dc-1' } : null,
-    isLoading: false,
-  }),
+  useSessionUserId: () => mockViewer,
+  // The client's row lives in designer-1's book; it reads as designer-1 or a
+  // co-member of her studio, and as null to anyone else.
+  useDesignerClientForClientUser: (id: string | null | undefined, designerId?: string | null) => {
+    mockRelationshipLookup(id, designerId);
+    if (mockRelationshipRead) return { isLoading: false, ...mockRelationshipRead };
+    const book = designerId ?? mockViewer;
+    const readable = book === 'designer-1' && (mockViewer === 'designer-1' || mockViewerIsCoMember);
+    return { data: id && readable ? { id: 'dc-1' } : null, isLoading: false };
+  },
   // A read that re-renders when the household row changes, the way the
   // ['designer-client', id] invalidation does in the app.
   useClient: (id: string) => {
@@ -95,7 +108,9 @@ jest.mock('@patina/supabase', () => ({
         mockHouseholdListeners.delete(bump);
       };
     }, []);
-    return { data: id ? mockHousehold : undefined, isLoading: false };
+    return id && mockHouseholdLoading
+      ? { data: undefined, isLoading: true }
+      : { data: id ? mockHousehold : undefined, isLoading: false };
   },
   useUpdateClientContact: () => ({ mutate: mockUpdateContact, isPending: false, error: null }),
   useClientInvitationStatus: () => ({ data: null, isLoading: false, isError: false }),
@@ -157,6 +172,10 @@ beforeEach(() => {
   mockInvoice = baseInvoice;
   mockHousehold = emptyHousehold;
   mockHouseholdListeners.clear();
+  mockViewer = 'designer-1';
+  mockViewerIsCoMember = false;
+  mockRelationshipRead = null;
+  mockHouseholdLoading = false;
   mockIssue.mockResolvedValue({ ...baseInvoice, status: 'sent' });
   mockSend.mockResolvedValue({ emailSent: true, recipient: 'elena@example.com' });
   // Saving the household's details writes its email; the read re-renders.
@@ -240,6 +259,121 @@ it('K10 control: with an email on file, Send issues and sends', async () => {
   await waitFor(() => expect(mockIssue).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
   expect(spotWindows()).toEqual([]);
+});
+
+/** Re-renders the folio after a read changes underneath it. */
+const reread = () => act(() => mockHouseholdListeners.forEach((bump) => bump()));
+
+/** Send held on its reason alone: no fix to offer, and the press issues nothing. */
+async function expectHeldWithoutFix(reason: string) {
+  const send = sendAct();
+  expect(send).toHaveAttribute('aria-disabled', 'true');
+  expect(document.getElementById(send.getAttribute('aria-describedby') ?? '')).toHaveTextContent(reason);
+  expect(screen.queryByRole('button', { name: 'Add their email' })).not.toBeInTheDocument();
+  fireEvent.click(send);
+  await waitFor(() => expect(spotWindows()).toEqual(['send-recipient']));
+  expect(mockIssue).not.toHaveBeenCalled();
+  expect(mockSend).not.toHaveBeenCalled();
+}
+
+describe('SQ-1203 F2: Send fails closed while its recipient is unknown', () => {
+  it('holds Send with a loading reason while the relationship read is pending', async () => {
+    mockRelationshipRead = { data: undefined, isLoading: true };
+    renderFolio();
+    await expectHeldWithoutFix("Checking Elena's email before this sends.");
+  });
+
+  it('holds Send with a loading reason while the household read is pending', async () => {
+    mockHouseholdLoading = true;
+    renderFolio();
+    await expectHeldWithoutFix("Checking Elena's email before this sends.");
+  });
+
+  it('a confirmation opened while ready issues nothing once the reads go pending again', async () => {
+    mockHousehold = { ...emptyHousehold, client_email: 'elena@example.com' };
+    renderFolio();
+    fireEvent.click(sendAct());
+    const confirm = () => {
+      const acts = screen.getAllByRole('button', { name: 'Issue & send' });
+      return acts[acts.length - 1];
+    };
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Issue & send' })).toHaveLength(2));
+    expect(confirm()).not.toHaveAttribute('aria-disabled');
+
+    mockRelationshipRead = { data: undefined, isLoading: true };
+    reread();
+    expect(confirm()).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(confirm());
+
+    await waitFor(() => expect(spotWindows()).toEqual(['send-recipient']));
+    expect(mockIssue).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+});
+
+describe('SQ-1203 F3: a teammate-drawn draft reads the invoice designer’s book', () => {
+  beforeEach(() => {
+    mockViewer = 'owner-2';
+    mockInvoice = {
+      ...baseInvoice,
+      designer: { id: 'designer-1', full_name: 'Dana Wolfe', business_name: null },
+    };
+  });
+
+  it('an owner of the same studio reads that row, and its Add their email is live in the window', async () => {
+    mockViewerIsCoMember = true;
+    renderFolio();
+    expect(mockRelationshipLookup).toHaveBeenCalledWith('client-1', 'designer-1');
+    const send = sendAct();
+    expect(send).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText("Add Elena's email to send this.")).toBeInTheDocument();
+
+    fireEvent.click(send);
+    await waitFor(() => expect(spotWindows()).toEqual(['add-email']));
+    expect(screen.getByRole('button', { name: 'Add their email' }).closest('[inert]')).toBeNull();
+    expect(mockIssue).not.toHaveBeenCalled();
+  });
+
+  it('a viewer whose studio RLS hides that row is held, told who can send it, with no fix', async () => {
+    renderFolio();
+    expect(mockRelationshipLookup).toHaveBeenCalledWith('client-1', 'designer-1');
+    await expectHeldWithoutFix("Only Dana Wolfe can see Elena's email. Ask them to send this invoice.");
+  });
+});
+
+describe('SQ-1203 F5: Add their email is offered only with a relationship to edit', () => {
+  it('with no relationship row, the hold keeps its reason and offers no fix', async () => {
+    mockRelationshipRead = { data: null };
+    renderFolio();
+    await expectHeldWithoutFix("Add Elena's email to send this.");
+  });
+
+  it('with a failed relationship read, Send is held on why, with no fix', async () => {
+    mockRelationshipRead = { data: undefined, isError: true };
+    renderFolio();
+    await expectHeldWithoutFix("Elena's email couldn't be checked. Reload the folio to send this.");
+  });
+});
+
+it('SQ-1203 F6: once the saved email takes Add their email away, putting the sheet back lands on Send', async () => {
+  renderFolio();
+  fireEvent.click(screen.getByRole('button', { name: 'Add their email' }));
+  const email = await screen.findByLabelText('Email on file');
+  fireEvent.change(email, { target: { value: 'elena@example.com' } });
+  act(() => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Add their email' })).not.toBeInTheDocument(),
+  );
+
+  fireEvent.keyDown(document, { key: 'Escape' });
+
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'The household' })).not.toBeInTheDocument(),
+  );
+  await waitFor(() => expect(sendAct()).toHaveFocus());
+  expect(mockIssue).not.toHaveBeenCalled();
 });
 
 it('K10: a folio that cannot see the client account holds nothing (the answer is unknown)', () => {

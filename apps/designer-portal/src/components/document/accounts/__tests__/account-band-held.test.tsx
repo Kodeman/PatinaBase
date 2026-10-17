@@ -35,6 +35,8 @@ let mockProject: Project = baseProject;
 let mockViewer: string | null = 'lead-1';
 let mockLinkHold: 'not_permitted' | 'lead_not_in_studio' | null = null;
 const mockProjectListeners = new Set<() => void>();
+/** A projects read that has not answered with the project (pending or failed). */
+let mockProjectsRead: { data: undefined; isLoading: boolean; isError: boolean } | null = null;
 
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
@@ -48,7 +50,7 @@ jest.mock('@patina/supabase', () => ({
         mockProjectListeners.delete(bump);
       };
     }, []);
-    return { data: [mockProject] };
+    return mockProjectsRead ?? { data: [mockProject] };
   },
   useSessionUserId: () => mockViewer,
   useDocumentClientLinkHold: (projectId: string | null) => ({
@@ -143,6 +145,23 @@ beforeEach(() => {
   mockViewer = 'lead-1';
   mockLinkHold = null;
   mockProjectListeners.clear();
+  mockProjectsRead = null;
+});
+
+it.each([
+  ['pending', { isLoading: true, isError: false }, 'Checking this project before drafting its invoice.'],
+  ['failed', { isLoading: false, isError: true }, "This project couldn't be read. Reload the page to draft its invoice."],
+])('SQ-1203 F4: while the project read is %s, Generate is held on why and drafts nothing', async (_state, read, reason) => {
+  mockProjectsRead = { data: undefined, ...read };
+  renderBand();
+  const generate = generateAct();
+  expect(generate).toHaveAttribute('aria-disabled', 'true');
+  expect(document.getElementById(generate.getAttribute('aria-describedby') ?? '')).toHaveTextContent(reason);
+
+  fireEvent.click(generate);
+
+  await waitFor(() => expect(spotWindows()).toEqual(['project-read']));
+  expect(mockGenerate).not.toHaveBeenCalled();
 });
 
 it('R2/K5: with no client the lead sees Generate held, and the press lights the client window with Link a client live inside it', async () => {

@@ -66,14 +66,24 @@ const GATE_SECTIONS: SectionKey[] = ['project', 'install', 'care'];
 
 const SUPPORT_ADDRESS = 'hello@patina.cloud';
 
+/** The window of a Generate held until its project reads; it has no fix. */
+const PROJECT_READ = 'project-read';
+
 /** US-36 R2 — the milestone draft runs the composer's readiness first: the
  *  RPC drafts a client-less invoice the folio would then offer to send, so a
  *  project with no client (or no studio) holds Generate before anything is
  *  written. Same sentences and the same K5-gated fixes as the composer. */
 function useMilestoneDraftHold(projectId: string, wanted: boolean) {
-  const { data: projects } = useProjects();
+  const { data: projects, isLoading: projectsLoading } = useProjects();
   const viewerId = useSessionUserId();
   const project = wanted ? (projects?.find((p) => p.id === projectId) ?? null) : null;
+  // Readiness needs the project; without it the RPC would draft unchecked.
+  const wait =
+    wanted && !project
+      ? projectsLoading
+        ? 'Checking this project before drafting its invoice.'
+        : "This project couldn't be read. Reload the page to draft its invoice."
+      : null;
   const noClient = !!project && !project.client_id;
   const isLead = !!viewerId && project?.designer_id === viewerId;
   const { data: linkHold } = useDocumentClientLinkHold(noClient && !isLead ? projectId : null);
@@ -102,7 +112,7 @@ function useMilestoneDraftHold(projectId: string, wanted: boolean) {
         noStudioReason: `${projectName} isn't tied to your studio yet.`,
       }).holds
     : [];
-  return { holds, projectName, canLinkClient, leadLeftStudio };
+  return { holds, wait, projectName, canLinkClient, leadLeftStudio };
 }
 
 type MilestoneDraftHold = ReturnType<typeof useMilestoneDraftHold>;
@@ -128,6 +138,17 @@ function MilestoneDraftHoldLines({
   const noteRef = useRef<HTMLSpanElement | null>(null);
   return (
     <>
+      {hold.wait && (
+        <div
+          ref={(el) => {
+            regionRefs.current[PROJECT_READ] = el;
+          }}
+          data-hold-region={PROJECT_READ}
+          className="mt-1.5 text-[11.5px] text-[var(--color-charcoal)]"
+        >
+          <p id={`${reasonId}-${PROJECT_READ}`}>{hold.wait}</p>
+        </div>
+      )}
       {hold.holds.map((h) => (
         <div
           key={h.kind}
@@ -407,13 +428,13 @@ export function AccountBand({
   );
   const draftReasonId = useId();
   const draftRegions = useRef<Record<string, HTMLDivElement | null>>({});
-  const draftHolds: SpotlightHold[] = draftHold.holds.map((h) => ({
-    id: h.kind,
-    label: h.repair,
-    reason: h.reason,
-    target: () => draftRegions.current[h.kind] ?? null,
-  }));
-  const draftReasonIds = draftHold.holds.map((h) => `${draftReasonId}-${h.kind}`).join(' ');
+  const draftHolds: SpotlightHold[] = [
+    ...(draftHold.wait
+      ? [{ id: PROJECT_READ, label: 'Generate invoice', reason: draftHold.wait }]
+      : []),
+    ...draftHold.holds.map((h) => ({ id: h.kind, label: h.repair, reason: h.reason })),
+  ].map((h) => ({ ...h, target: () => draftRegions.current[h.id] ?? null }));
+  const draftReasonIds = draftHolds.map((h) => `${draftReasonId}-${h.id}`).join(' ');
 
   useEffect(() => {
     if (!changeOnly) return;
