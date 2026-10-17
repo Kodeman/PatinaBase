@@ -1268,7 +1268,7 @@ function pieceFacts(
   const dimensions = formatDimensions(p.dimensions);
   if (dimensions) facts.push(["Dimensions", dimensions]);
   if (p.materials?.length) facts.push(["Materials", p.materials.join(", ")]);
-  if (p.lead_time_weeks != null) {
+  if (p.lead_time_weeks != null && p.lead_time_weeks > 0) {
     facts.push([
       "Lead time",
       `${p.lead_time_weeks} ${p.lead_time_weeks === 1 ? "week" : "weeks"}`,
