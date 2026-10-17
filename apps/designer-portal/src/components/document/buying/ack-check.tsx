@@ -192,6 +192,13 @@ export function AckCheckForm({
   const differences = rows.filter((r) => rowAgreement(r, current[r.key] ?? '') === 'differs').length;
   const invalid = rows.some((r) => isInvalid(r, current[r.key] ?? ''));
   const invalidId = `ack-invalid-${purchaseOrderId}`;
+  const invalidRows = rows.filter((row) => isInvalid(row, current[row.key] ?? ''));
+  const invalidHolds = invalidRows.map((row) => ({
+    id: row.key,
+    target: () => window.document.getElementById(`ack-invalid-row-${row.key}`),
+    label: rowLabel(row.piece, row.field),
+    reason: 'Prices are dollars and cents; quantities are whole numbers.',
+  }));
 
   const setValue = (key: string, value: string) => setValues({ ...current, [key]: value });
 
@@ -349,6 +356,7 @@ export function AckCheckForm({
           variant="primary"
           disabled={logAck.isPending || isLoading || invalid}
           held={invalid}
+          holds={invalidHolds.length ? invalidHolds : undefined}
           aria-describedby={invalid ? invalidId : undefined}
           loading={logAck.isPending}
           loadingLabel="Logging…"
@@ -400,7 +408,7 @@ function FormRow({
   const differs = rowAgreement(row, value) === 'differs';
   const shown = (v: string) => (row.kind === 'money' ? `$${v}` : v);
   return (
-    <tr data-testid={`ack-row-${row.key}`} className="border-t border-[var(--color-pearl)]">
+    <tr id={`ack-invalid-row-${row.key}`} data-testid={`ack-row-${row.key}`} className="border-t border-[var(--color-pearl)]">
       <th scope="row" className={`${CELL_CLS} font-normal`}>{label}</th>
       {showQuoted && (
         <td className={`${CELL_CLS} font-mono`}>{row.quoted != null ? shown(row.quoted) : '—'}</td>

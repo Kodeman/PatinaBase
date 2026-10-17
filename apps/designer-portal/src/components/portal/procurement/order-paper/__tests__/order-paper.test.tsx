@@ -194,7 +194,9 @@ describe('ship-to', () => {
     expect(terminal()).toHaveAttribute('aria-disabled', 'true');
     expect(terminal()).toHaveAccessibleDescription('choose where this ships');
     fireEvent.click(terminal());
-    expect(screen.getByRole('alert')).toHaveTextContent('Choose where this ships.');
+    expect(screen.getByText('choose where this ships')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(mockCreate).not.toHaveBeenCalled();
     expect(mockSend).not.toHaveBeenCalled();
   });

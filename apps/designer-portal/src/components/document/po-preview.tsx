@@ -139,7 +139,7 @@ function ShipToNotSetBand({
   };
 
   return (
-    <div className="border-t border-[var(--color-pearl)] px-5 py-2.5">
+    <div id="po-ship-to-fix" className="border-t border-[var(--color-pearl)] px-5 py-2.5">
       <p className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
         Ship-to not set
       </p>
@@ -481,6 +481,7 @@ export function PoPreview({
               variant="secondary"
               disabled={sending || marking || shipToMissing}
               held={shipToHeld}
+              holdFix={shipToHeld ? "po-ship-to-fix" : undefined}
               aria-describedby={shipToHeld ? shipToReasonId : undefined}
               loading={marking}
               loadingLabel="Marking…"
@@ -504,6 +505,7 @@ export function PoPreview({
               !signedUrl || !recipient || sending || marking || shipToMissing
             }
             held={shipToHeld}
+            holdFix={shipToHeld ? "po-ship-to-fix" : undefined}
             aria-describedby={shipToHeld ? shipToReasonId : undefined}
             loading={sending}
             loadingLabel="Sending…"

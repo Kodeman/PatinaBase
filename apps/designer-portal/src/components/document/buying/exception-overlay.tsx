@@ -432,7 +432,7 @@ export function ExceptionPathSheet({
           <SubstitutionFlow exception={exception} onDecline={() => { setDeclined(true); setChosen(null); }} />
         ) : (
           <>
-            <fieldset>
+            <fieldset id="exception-path-choice-fix">
               <legend className={LABEL_CLS}>Resolution</legend>
               <div className="mt-1.5 space-y-1">
                 {paths.map((p) => (
@@ -488,6 +488,7 @@ export function ExceptionPathSheet({
                 variant="primary"
                 disabled={pending || missing || gate.held}
                 held={gate.held}
+                holdFix={gate.held ? "exception-path-choice-fix" : undefined}
                 aria-describedby={gate.held ? heldId : undefined}
                 loading={pending}
                 loadingLabel="Recording…"

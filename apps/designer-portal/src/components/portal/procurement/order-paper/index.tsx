@@ -802,6 +802,14 @@ function PaperSheet({
         ? `Release to ${vendor.name} · ${amount}`
         : terminalLabel({ vendorName: vendor.name, amount, isPatinaMaker });
   const terminalHeld = !isPatinaMaker && !hasShipTo;
+  const shipToHolds = terminalHeld
+    ? [{
+        id: 'ship-to',
+        target: () => window.document.getElementById('order-paper-ship-to-fix'),
+        label: 'Ship-to location',
+        reason: SHIP_TO_REQUIRED_MESSAGE,
+      }]
+    : undefined;
   const heldRecord = releasePaper.held
     ? [
         'Held for release',
@@ -894,7 +902,7 @@ function PaperSheet({
             />
           </label>
           {!isPatinaMaker && (
-            <div className="sm:col-span-2">
+            <div id="order-paper-ship-to-fix" className="sm:col-span-2">
               <ShipToChoice
                 {...shipToAddresses}
                 locations={com.orderLocations(shipToAddresses.locations)}
@@ -1116,10 +1124,7 @@ function PaperSheet({
                 disabled={busy !== null || terminalHeld}
                 held={terminalHeld}
                 aria-describedby={terminalHeld ? 'order-paper-held-reason' : undefined}
-                onHeldActivate={() => {
-                  setShipToInvalid(true);
-                  setError(SHIP_TO_REQUIRED_MESSAGE);
-                }}
+                holds={shipToHolds}
                 onClick={holdForRelease}
               >
                 {label}
@@ -1150,10 +1155,7 @@ function PaperSheet({
                   disabled={busy !== null || terminalHeld}
                   held={terminalHeld}
                   aria-describedby={terminalHeld ? 'order-paper-held-reason' : undefined}
-                  onHeldActivate={() => {
-                    setShipToInvalid(true);
-                    setError(SHIP_TO_REQUIRED_MESSAGE);
-                  }}
+                  holds={shipToHolds}
                   onClick={() => send('send')}
                 >
                   {label}
