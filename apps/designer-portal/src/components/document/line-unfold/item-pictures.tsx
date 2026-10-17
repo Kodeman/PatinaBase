@@ -73,9 +73,11 @@ export function ItemPictures({
   const [notice, setNotice] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   // A move shows at once; the refetch takes over when it lands.
   const [pendingOrder, setPendingOrder] = useState<string[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const uploadControlRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
 
   useEffect(() => {
@@ -138,22 +140,27 @@ export function ItemPictures({
     if (picked.length === 0) return;
     setNotice(null);
     setUploading(true);
+    setUploadProgress(null);
     const refused: string[] = [];
     let failure: string | null = null;
+    let added = 0;
     // One at a time, so each lands after the last in the order chosen.
-    for (const file of picked) {
+    for (const [index, file] of picked.entries()) {
+      setUploadProgress(`Uploading ${index + 1} of ${picked.length} pictures…`);
       if (!FFE_ITEM_IMAGE_TYPES[file.type]) {
         refused.push(file.name);
         continue;
       }
       try {
         await upload.mutateAsync({ projectId, itemId, file });
+        added += 1;
       } catch (error) {
         failure = refusalSentence(error);
         break;
       }
     }
     setUploading(false);
+    setUploadProgress(null);
     const sentences = [
       refused.length > 0
         ? `${refused.join(', ')} ${refused.length === 1 ? 'is' : 'are'} not a JPEG, PNG, WebP or AVIF picture, so ${refused.length === 1 ? 'it was' : 'they were'} not added.`
@@ -161,6 +168,29 @@ export function ItemPictures({
       failure,
     ].filter(Boolean);
     if (sentences.length > 0) setNotice(sentences.join(' '));
+    else if (added > 0) setNotice(`${added} ${added === 1 ? 'picture' : 'pictures'} added.`);
+  };
+
+  const focusPictureAct = (index: number) => {
+    window.requestAnimationFrame(() => {
+      const row = index >= 0 ? listRef.current?.querySelectorAll('li')[index] : null;
+      row?.querySelector<HTMLElement>('button:not([aria-disabled="true"])')?.focus();
+      if (!row) uploadControlRef.current?.querySelector<HTMLElement>('button')?.focus();
+    });
+  };
+
+  const makePrimary = (image: FfeItemImage, index: number) => {
+    void run(async () => {
+      await setPrimary.mutateAsync({ projectId, itemId, imageId: image.id });
+      focusPictureAct(index);
+    });
+  };
+
+  const removePicture = (index: number, image: FfeItemImage) => {
+    void run(async () => {
+      await unlink.mutateAsync({ projectId, itemId, imageId: image.id });
+      focusPictureAct(index < total - 1 ? index : index - 1);
+    });
   };
 
   if (isLoading && !images) return null;
@@ -228,11 +258,7 @@ export function ItemPictures({
                         regionKey={REGION}
                         variant="secondary"
                         disabled={busy}
-                        onClick={() =>
-                          run(() =>
-                            setPrimary.mutateAsync({ projectId, itemId, imageId: image.id }),
-                          )
-                        }
+                        onClick={() => makePrimary(image, index)}
                       >
                         Make primary
                       </DocumentAction>
@@ -270,9 +296,7 @@ export function ItemPictures({
                       regionKey={REGION}
                       variant="tertiary"
                       disabled={busy}
-                      onClick={() =>
-                        run(() => unlink.mutateAsync({ projectId, itemId, imageId: image.id }))
-                      }
+                      onClick={() => removePicture(index, image)}
                     >
                       {UNLINK_COPY}
                     </DocumentAction>
@@ -285,7 +309,7 @@ export function ItemPictures({
       )}
 
       {canEdit && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-1">
+        <div ref={uploadControlRef} className="mt-2 flex flex-wrap items-center gap-x-1">
           <input
             ref={fileRef}
             type="file"
@@ -369,11 +393,9 @@ export function ItemPictures({
         </div>
       )}
 
-      {notice && (
-        <p role="status" className="t-body-sm mt-2 text-[var(--color-terracotta-ink)]">
-          {notice}
-        </p>
-      )}
+      <p role="status" aria-live="polite" className="t-body-sm mt-2 text-[var(--color-terracotta-ink)]">
+        {uploadProgress ?? notice ?? ''}
+      </p>
     </section>
   );
 }

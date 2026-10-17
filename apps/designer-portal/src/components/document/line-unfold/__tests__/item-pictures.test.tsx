@@ -182,6 +182,52 @@ describe('ItemPictures', () => {
     );
   });
 
+  it('announces upload progress and completion in its always-mounted status', async () => {
+    const finishUpload: Array<() => void> = [];
+    mockUpload.mockImplementation(
+      () => new Promise<void>((resolve) => { finishUpload.push(resolve); }),
+    );
+    renderPictures();
+    const status = screen.getByRole('status');
+    expect(status).toBeEmptyDOMElement();
+    const files = [
+      new File(['1'], 'front.jpg', { type: 'image/jpeg' }),
+      new File(['2'], 'side.png', { type: 'image/png' }),
+      new File(['3'], 'back.webp', { type: 'image/webp' }),
+    ];
+    fireEvent.change(screen.getByTestId('line-pictures-file'), { target: { files } });
+    expect(status).toHaveTextContent('Uploading 1 of 3 pictures…');
+    await act(async () => { finishUpload[0](); });
+    expect(status).toHaveTextContent('Uploading 2 of 3 pictures…');
+    await act(async () => { finishUpload[1](); });
+    await act(async () => { finishUpload[2](); });
+    await waitFor(() => expect(status).toHaveTextContent('3 pictures added.'));
+  });
+
+  it('returns focus to the next picture after Unlink', async () => {
+    const view = renderPictures();
+    mockUnlink.mockImplementationOnce(async () => {
+      mockImages.current = [picture('a', 0, true), picture('c', 1)];
+      view.rerender(<ItemPictures item={LIBRARY_LINE} projectId="project-1" canEdit />);
+    });
+    fireEvent.click(within(group(2, 3)).getByRole('button', { name: UNLINK_COPY }));
+    await act(async () => {});
+    flushFrames();
+    expect(within(group(2, 2)).getByRole('button', { name: 'Make primary' })).toHaveFocus();
+  });
+
+  it('moves focus to the next act after Make primary', async () => {
+    const view = renderPictures();
+    mockSetPrimary.mockImplementationOnce(async () => {
+      mockImages.current = [picture('a', 0, true), picture('b', 1), picture('c', 2, true)];
+      view.rerender(<ItemPictures item={LIBRARY_LINE} projectId="project-1" canEdit />);
+    });
+    fireEvent.click(within(group(3, 3)).getByRole('button', { name: 'Make primary' }));
+    await act(async () => {});
+    flushFrames();
+    expect(within(group(3, 3, true)).getByRole('button', { name: 'Earlier' })).toHaveFocus();
+  });
+
   it('a line with no library piece still takes uploads but offers nothing from the library', () => {
     mockImages.current = [];
     renderPictures(CUSTOM_LINE);
@@ -220,8 +266,10 @@ describe('ItemPictures', () => {
     });
     renderPictures();
     fireEvent.click(within(group(2, 3)).getByRole('button', { name: UNLINK_COPY }));
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      "Only the studio on this job can change this piece's pictures.",
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        "Only the studio on this job can change this piece's pictures.",
+      ),
     );
   });
 
