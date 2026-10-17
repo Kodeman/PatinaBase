@@ -143,11 +143,12 @@ BEGIN
 
   -- The reader's first row.
   PERFORM extensions.dblink_exec('sq1087_reader', 'BEGIN');
-  PERFORM extensions.dblink_exec('sq1087_reader', format(
+  PERFORM 1
+  FROM extensions.dblink('sq1087_reader', format(
     'SELECT 1 FROM public.organization_members
       WHERE organization_id = %L AND user_id = %L FOR SHARE',
     p_org, v_lower
-  ));
+  )) AS remote(one integer);
 
   PERFORM extensions.dblink_send_query('sq1087_transfer', format(
     'SELECT public.transfer_studio_ownership(%L, %L)::text', p_org, p_target
@@ -165,15 +166,13 @@ BEGIN
   END LOOP;
 
   -- The reader's second row, while the transfer waits on its first.
-  IF extensions.dblink_exec('sq1087_reader', format(
-       'SELECT 1 FROM public.organization_members
-         WHERE organization_id = %L AND user_id = %L FOR SHARE NOWAIT',
-       p_org, v_higher
-     ), false) = 'ERROR' THEN
-    reader_took_higher := extensions.dblink_error_message('sq1087_reader');
-  ELSE
-    reader_took_higher := 'OK';
-  END IF;
+  PERFORM 1
+  FROM extensions.dblink('sq1087_reader', format(
+    'SELECT 1 FROM public.organization_members
+      WHERE organization_id = %L AND user_id = %L FOR SHARE NOWAIT',
+    p_org, v_higher
+  ), false) AS remote(one integer);
+  reader_took_higher := extensions.dblink_error_message('sq1087_reader');
   PERFORM extensions.dblink_exec('sq1087_reader', 'ROLLBACK');
 
   PERFORM 1
