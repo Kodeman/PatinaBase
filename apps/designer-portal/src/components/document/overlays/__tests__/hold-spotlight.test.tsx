@@ -391,4 +391,36 @@ describe("HoldSpotlight bar dock", () => {
     );
     await waitFor(() => expect(inset()).toBe("24px"));
   });
+
+  it("does not dock above the fixed overlay that holds the frame (the PO preview)", async () => {
+    function OverlayHarness() {
+      const frame = useRef<HTMLDivElement>(null);
+      const target = useRef<HTMLButtonElement>(null);
+      const holds = useRef<SpotlightHold[]>([
+        { ...CLIENT, target: () => target.current },
+      ]).current;
+      return (
+        <div style={{ position: "fixed", inset: 0 }}>
+          <button
+            type="button"
+            data-testid="backdrop"
+            aria-label="Close"
+            style={{ position: "absolute", inset: 0 }}
+          />
+          <div ref={frame} style={{ position: "absolute", top: "4vh" }}>
+            <button ref={target} type="button">
+              Link a client
+            </button>
+          </div>
+          <HoldSpotlight frame={frame} holds={holds} open onClose={jest.fn()} />
+        </div>
+      );
+    }
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: () => screen.queryByTestId("backdrop"),
+    });
+    render(<OverlayHarness />);
+    await waitFor(() => expect(inset()).toBe("0px"));
+  });
 });
