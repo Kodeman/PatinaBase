@@ -11477,4 +11477,14 @@ F5: the count is the number of hours whose `rate_source` this call moved off 'no
 
 **Open, inherited and outside US-36 (F4).** P-4 is not whole for priced hours. Suppose a rate is later backdated over a priced hour's `started_at`. The hour's next watched edit then re-prices it, and a duration correction is enough. SQ-1079 measured a K8 price of 15000 becoming 7000 this way. The cause is 00618's delta 5, which keeps a snapshot only when the chain answers 'none' or the row is pre-00600 legacy. It applies to every hour priced at a studio member rate, not only K8's. 00797 does not change it. The K8 test claims only that an edit keeps the K8 price while `started_at` still answers 'none'. Owed: a ruling on whether a backdated rate may ever reach an hour that is already priced.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · last id = R177*
+### R178 · US-37 #6 — who presents an approval: the firm's public email first; a lead keeps her name and phone — oracle ruling on SQ-1120, 2026-10-17, pending Kody
+
+**US-37 #6: a lead's sign-in email is never preferred over the firm's public email. Kody may overturn by adding a client-facing contact email.** `get_client_presentation_identity` (00812) shows the client `organizations.email` when the firm has one, and the lead's `profiles.email` only when it has none. `profiles.email` is the address she signs in with (00013 copies it from `auth.users`), not one she chose to show. Her phone is different: she types it on her account page for clients, so her phone wins over the firm's. Her name is always hers.
+
+**A departed lead stays the lead.** The lead is `projects.designer_id` (contract: Lead = designer_id). When she has left the project's studio, the presentation still prints her name and phone, and the firm is still the project's studio. No team-seat override is invented.
+
+**No firm is guessed.** With no `projects.studio_id` (a NULL-studio project, or a paper with no project), the firm is the lead's studio only when she holds exactly one: an active non-guest seat in an active design studio (the 00563 candidate rule). With two or more, the firm's name, mark, website and email/phone fallbacks are all left out. `_primary_studio_for` is never asked.
+
+**Who may read it.** The project's or paper's own client (never through an unsent paper). With a studio on the project, `can_buy_for_project`, the FFE team predicate: the lead or an active member of that studio, never a member of another studio she shares. Without one, the lead or an active member of her one studio; when none resolves, only the lead.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · last id = R178*

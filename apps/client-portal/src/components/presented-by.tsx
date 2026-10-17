@@ -3,8 +3,9 @@ import type { PresentationIdentity } from '@patina/supabase';
 
 /* ── PRESENTED BY (US-37 #6, contract D8) ────────────────────────────────────
    Who presents an approval to the client: the studio's mark and name, and the
-   lead designer's name and contact, with the studio's email and phone where
-   the lead left hers blank (the server resolves that, 00812). It is a quiet
+   lead designer's name and contact. The server resolves each field (00812):
+   the studio's public email before the lead's sign-in email, the lead's
+   phone before the studio's (R178). It is a quiet
    typographic footer line on every approval surface, never a banner: no
    fill, no shadow, no box.
 
@@ -74,14 +75,17 @@ export function PresentedBy({ identity, className }: PresentedByProps) {
   }
   if (phone) {
     const href = telHref(phone);
+    // A phone number reads as one figure: it never wraps inside itself.
     contact.push({
       key: 'phone',
       node: href ? (
-        <a className={LINK_CLASS} href={href} data-testid="presented-by-phone">
+        <a className={`${LINK_CLASS} whitespace-nowrap`} href={href} data-testid="presented-by-phone">
           {phone}
         </a>
       ) : (
-        <span data-testid="presented-by-phone">{phone}</span>
+        <span className="whitespace-nowrap" data-testid="presented-by-phone">
+          {phone}
+        </span>
       ),
     });
   }
@@ -140,7 +144,8 @@ export function PresentedBy({ identity, className }: PresentedByProps) {
               {/* Each part is one unit, so a narrow screen wraps between the
                   name, the email, the phone and the website, never inside a
                   phone number. The separator rides at the end of the part
-                  before it, so no line opens on a dot. */}
+                  before it behind a no-break space (U+00A0), so no line opens
+                  on a dot. */}
               {contact.map((part, index) => (
                 <Fragment key={part.key}>
                   {index > 0 && ' '}
@@ -148,7 +153,7 @@ export function PresentedBy({ identity, className }: PresentedByProps) {
                     {part.node}
                     {index < contact.length - 1 && (
                       <span aria-hidden="true" data-testid="presented-by-separator">
-                        {' ·'}
+                        {' ·'}
                       </span>
                     )}
                   </span>

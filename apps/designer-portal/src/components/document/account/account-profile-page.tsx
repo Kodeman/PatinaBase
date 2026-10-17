@@ -178,8 +178,8 @@ export function AccountProfilePage() {
             className={FIELD}
           />
           <p className={HELP}>
-            Shown to clients with your name and email on the papers they
-            approve. Leave it blank and they see the studio&apos;s phone.
+            Shown to clients with your name on the papers they approve.
+            Leave it blank and they see the studio&apos;s phone.
           </p>
         </div>
 

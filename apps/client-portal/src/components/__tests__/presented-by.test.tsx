@@ -2,9 +2,10 @@ import { render, screen, within } from '@testing-library/react';
 import { toPresentationIdentity } from '@patina/supabase';
 import { PresentedBy, hasPresentation } from '../presented-by';
 
-// US-37 #6 (contract D8). The server (00812) resolves the lead's fields before
-// the firm's and omits blanks; `toPresentationIdentity` is the client's
-// allowlist over that payload; `PresentedBy` draws only what is present.
+// US-37 #6 (contract D8). The server (00812) resolves each field (the firm's
+// public email before the lead's, the lead's phone before the firm's, R178)
+// and omits blanks; `toPresentationIdentity` is the client's allowlist over
+// that payload; `PresentedBy` draws only what is present.
 
 const FULL = {
   firmName: 'Hart Studio',
@@ -32,6 +33,27 @@ describe('PresentedBy', () => {
     expect(within(block).getByTestId('presented-by-phone')).toHaveAttribute('href', 'tel:+15550101');
     expect(within(block).getByTestId('presented-by-website')).toHaveAttribute('href', 'https://www.hart.test/');
     expect(within(block).getAllByTestId('presented-by-separator')).toHaveLength(3);
+  });
+
+  it('a separator never opens a line, and a phone number never wraps inside itself', () => {
+    const { rerender } = render(<PresentedBy identity={FULL} />);
+
+    // A no-break space (U+00A0), never an ordinary space, binds each dot to
+    // the part before it.
+    const separators = screen.getAllByTestId('presented-by-separator');
+    expect(separators.map((separator) => separator.textContent)).toEqual([
+      ' ·',
+      ' ·',
+      ' ·',
+    ]);
+    expect(screen.getByTestId('presented-by-phone')).toHaveClass('whitespace-nowrap');
+
+    // The unlinked phone (no dialable digits) holds together too.
+    rerender(<PresentedBy identity={{ designerName: 'Leah Hart', phone: 'ask the studio' }} />);
+    const unlinked = screen.getByTestId('presented-by-phone');
+    expect(unlinked.tagName).toBe('SPAN');
+    expect(unlinked).toHaveClass('whitespace-nowrap');
+    expect(screen.getByTestId('presented-by-separator').textContent).toBe(' ·');
   });
 
   it('designer fields empty → the firm’s email and phone, as the server falls back', () => {

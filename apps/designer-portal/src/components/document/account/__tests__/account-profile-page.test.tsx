@@ -67,4 +67,15 @@ describe('AccountProfilePage · phone (US-37 #6)', () => {
 
     expect(mutate).toHaveBeenCalledWith({ full_name: 'Leah Hart', bio: '', phone: null });
   });
+
+  it('the phone help never promises clients her sign-in email (R178)', () => {
+    profile = { full_name: 'Leah Hart', bio: '', phone: '' };
+    render(<AccountProfilePage />);
+
+    const help = screen.getByText(/Shown to clients with your name/);
+    expect(help).toHaveTextContent(
+      "Shown to clients with your name on the papers they approve. Leave it blank and they see the studio's phone.",
+    );
+    expect(help).not.toHaveTextContent(/email/i);
+  });
 });

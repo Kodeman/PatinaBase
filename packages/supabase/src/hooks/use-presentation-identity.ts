@@ -6,8 +6,9 @@ import { createBrowserClient } from '../client';
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Who presents an approval to the client: the firm's mark and name, its
-// website, and the lead designer's name, email and phone, with the firm's
-// email and phone answering when the lead's are blank. One curated reader,
+// website, and the lead designer's name, email and phone. The firm's public
+// email answers before the lead's sign-in email; the lead's phone answers
+// before the firm's (R178). One curated reader,
 // `get_client_presentation_identity(p_project_id | p_proposal_id)` (00812),
 // returns only those six keys and omits each one that has no value — so an
 // absent field is `undefined` here, never an empty string.
