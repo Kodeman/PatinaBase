@@ -195,6 +195,31 @@ describe('AskMakerSheet', () => {
     expect(labels).toEqual(['Hold for review', 'Discard']);
   });
 
+  it('opens a window per missing note field and lifts each as it is filled', async () => {
+    renderWithQuery(
+      <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />,
+    );
+    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Hold for review' }));
+
+    await waitFor(() =>
+      expect(
+        Array.from(document.querySelectorAll('[data-hold-spotlight-window]')).map((el) =>
+          el.getAttribute('data-hold-spotlight-window'),
+        ),
+      ).toEqual(['ask-maker-subject', 'ask-maker-body']),
+    );
+    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Arrival date' } });
+    await waitFor(() =>
+      expect(
+        Array.from(document.querySelectorAll('[data-hold-spotlight-window]')).map((el) =>
+          el.getAttribute('data-hold-spotlight-window'),
+        ),
+      ).toEqual(['ask-maker-body']),
+    );
+  });
+
   it('Hold for review POSTs only the line and the note; the maker is read server-side', async () => {
     const onHeld = jest.fn();
     renderWithQuery(

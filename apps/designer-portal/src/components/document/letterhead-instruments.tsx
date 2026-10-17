@@ -732,6 +732,7 @@ export function LetterheadInstruments({
               }
               disabled={messageHeld}
               held={messageHeld}
+              holdFix={messageHeld && withheld.repair && !noLogin ? `${messageReasonId}-fix` : undefined}
               aria-describedby={messageHeld ? messageReasonId : undefined}
               onClick={toggleComposer}
             >
@@ -948,7 +949,7 @@ function MessageCluster({
         </span>
       </span>
       {repair && (
-        <DocumentAction actionKey="link-client" variant="secondary" onClick={onRepair}>
+        <DocumentAction id={`${reasonId}-fix`} actionKey="link-client" variant="secondary" onClick={onRepair}>
           {repair}
         </DocumentAction>
       )}

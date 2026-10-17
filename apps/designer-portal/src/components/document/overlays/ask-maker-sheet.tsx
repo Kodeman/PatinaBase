@@ -258,7 +258,7 @@ export function AskMakerSheet({
               <span className="mr-2 font-mono text-[12px] uppercase tracking-[0.1em]">To</span>
               {draft.to ?? NO_MAKER}
             </p>
-            <div>
+            <div id="ask-maker-subject-fix">
               <label
                 htmlFor="ask-maker-subject"
                 className="mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
@@ -273,7 +273,7 @@ export function AskMakerSheet({
                 onChange={(event) => setSubject(event.target.value)}
               />
             </div>
-            <div>
+            <div id="ask-maker-body-fix">
               <label
                 htmlFor="ask-maker-body"
                 className="mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
@@ -323,6 +323,24 @@ export function AskMakerSheet({
                 variant="primary"
                 disabled={!canHold}
                 held={!canHold}
+                holds={[
+                  ...(subject.trim()
+                    ? []
+                    : [{
+                        id: 'ask-maker-subject',
+                        target: () => document.getElementById('ask-maker-subject-fix') as HTMLElement | null,
+                        label: 'Subject',
+                        reason: 'Add a subject to continue.',
+                      }]),
+                  ...(body.trim()
+                    ? []
+                    : [{
+                        id: 'ask-maker-body',
+                        target: () => document.getElementById('ask-maker-body-fix') as HTMLElement | null,
+                        label: 'Note',
+                        reason: 'Add a note to continue.',
+                      }]),
+                ]}
                 aria-describedby={canHold ? undefined : 'ask-maker-hold-reason'}
                 loading={hold.isPending}
                 loadingLabel="Holding…"
@@ -399,6 +417,7 @@ function InstallReadingLive({
   // the sheet settles the review there instead of flipping it back to a compose.
   const [sheet, setSheet] = useState<{ held: ProcurementDraftRow | null } | null>(null);
   const actRef = useRef<HTMLButtonElement | null>(null);
+  const makerFixId = useId();
   const reasonId = useId();
   // US-19 F2-12 (one-voice, V9) — a named act is scored, never the flooded ink.
   const oneVoice = useFeatureFlag('one-voice').value === true;
@@ -535,6 +554,7 @@ function InstallReadingLive({
               variant={oneVoice ? 'primary' : 'inked'}
               disabled={heldReason !== null}
               held={heldReason !== null}
+              holdFix={heldReason === NO_MAKER ? makerFixId : undefined}
               aria-describedby={heldReason ? reasonId : undefined}
               onClick={press}
             >
@@ -542,6 +562,7 @@ function InstallReadingLive({
             </DocumentAction>
             {heldReason === NO_MAKER && (
               <DocumentAction
+                id={makerFixId}
                 ref={addMakerRef}
                 actionKey="install-reading-add-maker"
                 surfaceKey="project"
