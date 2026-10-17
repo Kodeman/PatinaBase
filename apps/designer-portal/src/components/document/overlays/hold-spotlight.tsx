@@ -349,12 +349,12 @@ export function HoldSpotlight({
         ? (barRef.current?.offsetHeight ?? 0) + (narrow ? 0 : 32)
         : 0;
       const height = Math.max(host.clientHeight, bottom + reserve);
-      // A taught frame that scrolls with the page docks its bar to the
-      // viewport's foot, above the fixed chrome there.
-      const dock =
-        lesson && !/auto|scroll/.test(hostStyle.overflowY)
-          ? -footChrome(host)
-          : inset;
+      // A frame that scrolls with the page docks its bar to the viewport's
+      // foot, above the fixed chrome there: its padding (the paper's landing
+      // reserve) is no edge the bar sticks to.
+      const dock = /auto|scroll/.test(hostStyle.overflowY)
+        ? inset
+        : -footChrome(host);
       const ids = found.map((entry) => entry.hold.id);
       const key = JSON.stringify([ids, windows, width, height, dock]);
       if (key !== geoKey) {
