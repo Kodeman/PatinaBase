@@ -1718,7 +1718,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     ];
     rerender(composer(context));
     fireEvent.click(act());
-    expect(screen.getByRole("status")).toHaveTextContent("These hours are waiting for a rate.");
+    expect(screen.getByText("These hours are waiting for a rate.")).toHaveAttribute("role", "status");
     const row = screen.getByText("Site visit").closest("[data-rate-pending]");
     expect(row).toHaveAttribute("data-focus-key", "rate-pending:designer-1");
     await waitFor(() => expect(row).toHaveFocus());
