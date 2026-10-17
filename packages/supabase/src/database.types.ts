@@ -37072,6 +37072,28 @@ export type Database = {
         Args: { p_actor_id: string; p_owner_id: string }
         Returns: boolean
       }
+      _ffe_item_images_require_image: {
+        Args: { p_image_id: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_primary: boolean
+          item_id: string
+          position: number
+          project_id: string
+          source: string
+          source_product_id: string | null
+          storage_path: string | null
+          url: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_item_images"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       _ffe_item_images_require_team: {
         Args: { p_item_id: string }
         Returns: {
