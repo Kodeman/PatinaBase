@@ -1135,6 +1135,7 @@ export {
   useOrganizations,
   useOrganization,
   useOrganizationMembers,
+  useStudiosEmployingMember,
   usePendingInvitations,
   useCreateOrganization,
   useUpdateOrganization,

@@ -56,6 +56,24 @@ jest.mock("@patina/supabase", () => ({
   useOrganizationMembers: (orgId: string) => ({
     data: orgId ? mockStudioMembers : undefined,
   }),
+  // Faithful to use-organizations: the studios whose seat for this member
+  // employs them (active, neither guest nor owner). A seat that names no
+  // studio sits in studio-1.
+  useStudiosEmployingMember: (studioIds: string[], userId: string | null) => ({
+    data:
+      studioIds.length > 0 && userId
+        ? studioIds.filter((id) =>
+            mockStudioMembers.some(
+              (seat) =>
+                (seat.organization_id ?? "studio-1") === id &&
+                seat.user_id === userId &&
+                seat.status === "active" &&
+                seat.role !== "guest" &&
+                seat.role !== "owner",
+            ),
+          )
+        : undefined,
+  }),
   useCreateDraftInvoice: () => ({
     mutateAsync: mockCreateDraft,
     isPending: false,
@@ -1466,6 +1484,68 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
       { projectId: "project-1", studioId: "studio-1" },
       expect.objectContaining({ onError: expect.any(Function) }),
     );
+  });
+
+  describe("SQ-1091: an owner of two studios names the one that employs the lead", () => {
+    // Her own 00295 workspace sorts first, so it is the studio she answers for.
+    const twoStudios = () => [
+      {
+        id: "studio-0",
+        name: "Leah Hartwell",
+        type: "design_studio",
+        status: "active",
+        membership: { role: "owner", status: "active" },
+      },
+      ...studioWith("owner"),
+    ];
+    beforeEach(() => {
+      selectViewerStudioId(null);
+      mockProjectStudioId = null;
+      mockViewerId = "owner-1";
+      mockOrganizations = twoStudios();
+    });
+
+    it("offers Name studio for the second studio, confirms it by name and stamps its id", () => {
+      mockStudioMembers = [
+        { organization_id: "studio-0", user_id: "owner-1", role: "owner", status: "active" },
+        { organization_id: "studio-1", user_id: "owner-1", role: "owner", status: "active" },
+        { organization_id: "studio-1", user_id: "designer-1", role: "member", status: "active" },
+      ];
+      render(composer());
+      expect(screen.getByText("Hollis House isn't tied to your studio yet.")).toBeInTheDocument();
+      expect(
+        screen.getByText("Naming a studio stamps it on every invoice this project sends."),
+      ).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Name studio" }));
+      const confirm = screen.getByRole("group", { name: "Confirm naming the studio" });
+      expect(confirm).toHaveTextContent("Name Middle West Studio? This can't be undone.");
+      fireEvent.click(within(confirm).getByRole("button", { name: "Name" }));
+      expect(mockStampStudio).toHaveBeenCalledWith(
+        { projectId: "project-1", studioId: "studio-1" },
+        expect.objectContaining({ onError: expect.any(Function) }),
+      );
+    });
+
+    it.each([
+      ["only an owner seat", "owner"],
+      ["only a guest seat", "guest"],
+    ])("offers no Name studio when the lead holds %s in each", (_label, role) => {
+      mockStudioMembers = [
+        { organization_id: "studio-0", user_id: "designer-1", role, status: "active" },
+        { organization_id: "studio-1", user_id: "designer-1", role, status: "active" },
+      ];
+      render(composer());
+      expect(screen.queryByRole("button", { name: "Name studio" })).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Naming a studio stamps it on every invoice this project sends."),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Hollis House isn't tied to a studio yet. Only a studio that employs its designer can name one.",
+        ),
+      ).toBeInTheDocument();
+    });
   });
 
   it("R173: a solo owner on a project opened before her studio had one gets the support path, never Name studio or 'ask an owner'", async () => {
