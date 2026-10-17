@@ -105,6 +105,12 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  // US-36 R2 — the folio's K10 recipient read and the band's milestone readiness.
+  useSessionUserId: () => null,
+  useDesignerClientForClientUser: () => ({ data: null, isLoading: false }),
+  useClient: () => ({ data: null, isLoading: false }),
+  useProjects: () => ({ data: [] }),
+  useDocumentClientLinkHold: () => ({ data: null }),
   useEmailDelivery: () => ({
     byRef: mockEmailDeliveryByRef,
     isLoading: false,

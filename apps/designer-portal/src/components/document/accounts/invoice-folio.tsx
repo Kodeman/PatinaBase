@@ -17,10 +17,12 @@
  * visibility only for `.proposal-print-area`, which the folio never carried.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   invoiceLinkIsLive,
+  useClient,
+  useDesignerClientForClientUser,
   useEmailDelivery,
   useInvoice,
   useInvoiceLink,
@@ -28,6 +30,7 @@ import {
   useRecordPayment,
   useRegenerateInvoiceLink,
   useSendInvoice,
+  useSessionUserId,
   useVoidInvoice,
   RegenerateInvoiceLinkError,
   type Invoice,
@@ -52,8 +55,15 @@ import { InvoiceStateWord, MoneyWord } from './money-state-word';
 import { fmtDay, todayYmd } from '@/lib/document/format';
 import { voiceFirstName } from '@/lib/document/document-guide';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { needActLabel } from '@/lib/document/act-names';
-import { billingRefusal, dollarsToCents } from '@/lib/document/invoice-composer';
+import { MESSAGE_WITHHELD, needActLabel } from '@/lib/document/act-names';
+import {
+  billingRefusal,
+  dollarsToCents,
+  sendNoRecipientHold,
+  type InvoiceHold,
+} from '@/lib/document/invoice-composer';
+import type { SpotlightHold } from '@/lib/document/spotlight/use-hold-spotlight';
+import { HouseholdSheet } from '../overlays/household-sheet';
 import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
 import { useReconcileInvoiceCheckout } from '@/hooks/use-invoice-checkout-reconciliation';
 import { AccountsQueryFailure } from './accounts-query-failure';
@@ -104,6 +114,56 @@ export function InvoiceFolio({
     'invoice',
     invoice && invoice.status !== 'draft' ? [invoice.id] : [],
   );
+  // K10 — Send is held BEFORE issue when invoice-send would find no address.
+  // Its order (invoice-send/index.ts): the invoice client's profile email, else
+  // the project client's (only when the invoice names none), else that client's
+  // designer_clients address in the invoice designer's book. That last read is
+  // the viewer's own book, so it answers only when she drew the invoice.
+  const viewerId = useSessionUserId();
+  const clientUserId = invoice?.client_id ?? invoice?.project?.client_id ?? null;
+  const { data: relationship, isLoading: relationshipLoading } =
+    useDesignerClientForClientUser(invoice?.status === 'draft' ? clientUserId : null);
+  const { data: household, isLoading: householdLoading } = useClient(relationship?.id ?? '');
+  const [householdOpen, setHouseholdOpen] = useState(false);
+  const sendReasonId = useId();
+  const sendHoldRef = useRef<HTMLDivElement | null>(null);
+  // The profile that invoice-send reads first. When the folio cannot see it
+  // (null with a client named), the answer is unknown — never a hold.
+  const profile = invoice?.client_id ? invoice.client : invoice?.project?.client;
+  const sendHold: InvoiceHold | null =
+    invoice?.status !== 'draft' || invoice.client?.email || profile?.email
+      ? null
+      : !clientUserId
+        ? {
+            kind: 'send-no-recipient',
+            reason: 'Link a client to send this.',
+            repair: MESSAGE_WITHHELD.repair,
+            fixer: 'link-client',
+            focusKey: 'add-email',
+          }
+        : profile &&
+            viewerId === invoice.designer_id &&
+            !relationshipLoading &&
+            !householdLoading &&
+            !household?.client_email?.trim()
+          ? sendNoRecipientHold(
+              voiceFirstName(
+                invoice.client?.full_name ??
+                  invoice.project?.client?.full_name ??
+                  household?.client_name,
+              ),
+            )
+          : null;
+  const sendHolds: SpotlightHold[] = sendHold
+    ? [
+        {
+          id: sendHold.focusKey,
+          label: sendHold.repair,
+          reason: sendHold.reason,
+          target: () => sendHoldRef.current,
+        },
+      ]
+    : [];
 
   const [act, setAct] = useState<ActPanel>(null);
   /** R51's quiet confirmation grammar — sage when it landed, terracotta when not. */
@@ -674,7 +734,10 @@ export function InvoiceFolio({
             <DocumentAction
               actionKey="issue-and-send-invoice"
               variant="primary"
-              disabled={busy}
+              disabled={busy || !!sendHold}
+              held={!!sendHold}
+              aria-describedby={sendHold ? sendReasonId : undefined}
+              holds={sendHolds}
               onClick={() => openPanel('send')}
             >
               {oneVoice ? 'Send the invoice' : 'Issue & send'}
@@ -766,6 +829,27 @@ export function InvoiceFolio({
             </DocumentAction>
           )}
         </DocumentActionGroup>
+
+        {/* K10 — why Send is held and its fix, visible before the press (K3);
+            the press lights this one window. */}
+        {sendHold && (
+          <div
+            ref={sendHoldRef}
+            data-hold-region={sendHold.focusKey}
+            className="mt-2 flex flex-wrap items-baseline gap-x-3 text-[11.5px] text-[var(--color-charcoal)]"
+          >
+            <p id={sendReasonId}>{sendHold.reason}</p>
+            <DocumentAction
+              actionKey="add-invoice-recipient"
+              surfaceKey="accounts"
+              regionKey="invoice-actions"
+              variant="tertiary"
+              onClick={() => setHouseholdOpen(true)}
+            >
+              {sendHold.repair}
+            </DocumentAction>
+          </div>
+        )}
 
         {/* THE ADDRESS IS SHOWN ONCE — the paperwork mint's own sentence
             (`paperworkMintedSentence`), because this is the same bargain:
@@ -890,7 +974,10 @@ export function InvoiceFolio({
               <DocumentAction
                 actionKey={act === 'send' ? 'confirm-issue-and-send' : 'confirm-resend'}
                 variant={oneVoice && act === 'send' ? 'terminal' : 'primary'}
-                disabled={busy}
+                disabled={busy || (act === 'send' && !!sendHold)}
+                held={act === 'send' && !!sendHold}
+                aria-describedby={act === 'send' && sendHold ? sendReasonId : undefined}
+                holds={act === 'send' ? sendHolds : undefined}
                 loading={busy}
                 loadingLabel="Sending…"
                 onClick={() => void (act === 'send' ? doIssueAndSend() : doResend())}
@@ -1088,6 +1175,26 @@ export function InvoiceFolio({
           </div>
         )}
       </div>
+      {/* K10 — "Add their email" lays the household sheet above the folio,
+          on its email field. A client linked there reaches this invoice
+          through its project, so the folio re-reads when it closes. */}
+      {householdOpen && (
+        <HouseholdSheet
+          open
+          onClose={() => {
+            setHouseholdOpen(false);
+            void refetch();
+          }}
+          engagementKind={invoice.project_id ? 'project' : 'relationship'}
+          projectId={invoice.project_id}
+          proposalId={null}
+          clientProfileId={clientUserId}
+          designerClientId={relationship?.id ?? null}
+          clientName={invoice.client?.full_name ?? invoice.project?.client?.full_name ?? ''}
+          aboveFolio
+          landOnEmail={!!clientUserId}
+        />
+      )}
     </div>
   );
 }

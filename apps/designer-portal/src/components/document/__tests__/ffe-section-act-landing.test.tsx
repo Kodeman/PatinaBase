@@ -86,6 +86,12 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManifest: () => null }));
 jest.mock('@patina/supabase', () => ({
+  // US-36 R2 — the folio's K10 recipient read and the band's milestone readiness.
+  useSessionUserId: () => null,
+  useDesignerClientForClientUser: () => ({ data: null, isLoading: false }),
+  useClient: () => ({ data: null, isLoading: false }),
+  useProjects: () => ({ data: [] }),
+  useDocumentClientLinkHold: () => ({ data: null }),
   inboxKeys: { unreadCount: () => ['inbox', 'unread-count'] },
   procurementUnreadCountKey: () => ['procurement-unread-count'],
   useProjectRoomPlacements: () => ({ data: [] }),
