@@ -78,6 +78,18 @@ describe('trade pricing', () => {
     expect(result.blendedMarkupPct).toBeNull();
   });
 
+  it('keeps an uncosted line\'s client price out of the blend and the gap', () => {
+    const result = summarizeJob([
+      { kind: 'product', quantity: 1, unitCostCents: 10_000, unitClientCents: 13_500, retailUnitCents: null },
+      { kind: 'labor', quantity: 1, unitCostCents: null, unitClientCents: 50_000, retailUnitCents: null },
+      { kind: 'product', quantity: 1, unitCostCents: 5_000, unitClientCents: null, retailUnitCents: null },
+    ], { targetMarkupPct: 35, salesTaxRate: null });
+    expect(result.totalClientCents).toBe(63_500);
+    expect(result.blendedMarkupPct).toBe(35);
+    expect(result.gapPct).toBe(0);
+    expect(result.gapCents).toBe(0);
+  });
+
   it('warns when client price exceeds retail, with optional tolerance', () => {
     const line: PricingLine = {
       kind: 'product', quantity: 1, unitCostCents: 8_000, unitClientCents: 10_001, retailUnitCents: 10_000,

@@ -42,6 +42,10 @@ export function lineTotal(unitCents: number, quantity: number): number {
   return unitCents * quantity;
 }
 
+/**
+ * Totals use extended (unit × qty) amounts. Lines without a cost (labor
+ * included) count toward the client total and `unpricedCount`, never the blend.
+ */
 export function summarizeJob(
   lines: readonly PricingLine[],
   options: { targetMarkupPct: number; salesTaxRate: number | null },
@@ -49,6 +53,10 @@ export function summarizeJob(
   let totalCostCents = 0;
   let totalClientCents = 0;
   let unpricedCount = 0;
+  // The blend reads only lines carrying both a cost and a client price, so an
+  // uncosted line's client price never inflates the blended markup.
+  let blendCostCents = 0;
+  let blendClientCents = 0;
 
   for (const line of lines) {
     if (line.unitClientCents !== null) {
@@ -59,12 +67,16 @@ export function summarizeJob(
       continue;
     }
     totalCostCents += lineTotal(line.unitCostCents, line.quantity);
+    if (line.unitClientCents !== null) {
+      blendCostCents += lineTotal(line.unitCostCents, line.quantity);
+      blendClientCents += lineTotal(line.unitClientCents, line.quantity);
+    }
   }
 
-  const blendedMarkupPct = markupFromClient(totalCostCents, totalClientCents);
-  const blendedMarginPct = marginFromClient(totalCostCents, totalClientCents);
+  const blendedMarkupPct = markupFromClient(blendCostCents, blendClientCents);
+  const blendedMarginPct = blendCostCents === 0 ? null : marginFromClient(blendCostCents, blendClientCents);
   const gapPct = blendedMarkupPct === null ? null : blendedMarkupPct - options.targetMarkupPct;
-  const targetClientCents = totalCostCents * (1 + options.targetMarkupPct / 100);
+  const targetClientCents = Math.round(blendCostCents * (1 + options.targetMarkupPct / 100));
   const taxCents = options.salesTaxRate === null ? 0 : Math.round(totalClientCents * options.salesTaxRate);
 
   return {
@@ -73,14 +85,13 @@ export function summarizeJob(
     blendedMarkupPct,
     blendedMarginPct,
     gapPct,
-    gapCents: totalClientCents - targetClientCents,
+    gapCents: blendClientCents - targetClientCents,
     taxCents,
     totalWithTaxCents: totalClientCents + taxCents,
     unpricedCount,
   };
 }
 
-/** Labor without a known cost is excluded from the blend and counted unpriced. */
 export function retailWarning(line: PricingLine, tolerancePct = 0): boolean {
   if (line.unitClientCents === null || line.retailUnitCents === null) return false;
   return line.unitClientCents > line.retailUnitCents * (1 + tolerancePct / 100);
