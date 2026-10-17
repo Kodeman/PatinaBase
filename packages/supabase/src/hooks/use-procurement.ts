@@ -9,6 +9,7 @@ import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { pricingApprovalKeys } from '../query-keys/pricing';
 import { invalidateProjectWorkflow } from './use-project-workflow';
 
 // Lazy client getter to avoid module-level initialization during SSR
@@ -305,6 +306,9 @@ export function invalidateFfeCaches(queryClient: QueryClient, projectId: string)
   // Authoritative readiness is keyed by a sorted selection-id list rather than
   // the project id, so only a prefix sweep can reach it.
   queryClient.invalidateQueries({ queryKey: ['project-ffe-readiness'] });
+  // 00810: a line write can move it off its approved price and logs a change.
+  queryClient.invalidateQueries({ queryKey: pricingApprovalKeys.approval(projectId) });
+  queryClient.invalidateQueries({ queryKey: pricingApprovalKeys.eventsForProject(projectId) });
   void invalidateProjectWorkflow(queryClient, projectId);
 }
 

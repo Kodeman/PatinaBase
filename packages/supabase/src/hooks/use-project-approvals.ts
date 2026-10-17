@@ -7,6 +7,7 @@ import {
 
 import { createBrowserClient } from '../client';
 import { invalidateProjectWorkflow } from './use-project-workflow';
+import { pricingApprovalKeys } from '../query-keys/pricing';
 
 export const PROJECT_APPROVAL_CONTRACT = 'project_artifact_v1' as const;
 
@@ -173,7 +174,7 @@ const APPROVAL_FOREGROUND_REFRESH_MS = 30_000;
 // Tracked migrations do not publish the approval/evidence/candidate tables to
 // Realtime. Every client-safe and studio-authoring read therefore self-heals
 // while foregrounded without polling a backgrounded tab.
-const approvalForegroundRefresh = {
+export const approvalForegroundRefresh = {
   refetchOnWindowFocus: true,
   refetchInterval: APPROVAL_FOREGROUND_REFRESH_MS,
   refetchIntervalInBackground: false,
@@ -206,6 +207,9 @@ export async function invalidateProjectApprovalQueries(
     ['project-ffe', scope.projectId],
     ['margin-items'],
     ['document-state'],
+    // 00810: an approved answer may record what the client approved.
+    pricingApprovalKeys.approval(scope.projectId),
+    pricingApprovalKeys.eventsForProject(scope.projectId),
   ];
 
   if (scope.decisionId) {
