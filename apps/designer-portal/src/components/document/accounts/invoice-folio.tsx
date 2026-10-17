@@ -20,6 +20,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
+  designerClientForClientUserQuery,
+  designerClientQuery,
   invoiceLinkIsLive,
   useClient,
   useDesignerClientForClientUser,
@@ -86,6 +88,79 @@ const INPUT =
 type ActPanel = 'send' | 'resend' | 'payment' | 'void' | 'regenerate-link' | null;
 type CopyStatus = 'idle' | 'copied' | 'failed';
 
+/** A null repair has no fix in the folio: the window is the reason alone. */
+type SendHold = Pick<InvoiceHold, 'reason' | 'focusKey'> & { repair: string | null };
+
+/** A recipient read counts only once it has answered and is neither
+ *  re-reading nor failed; cached data alone establishes nothing. */
+type RecipientRead<T> = { data: T | null | undefined; pending: boolean; failed: boolean };
+
+function recipientFirstName(invoice: Invoice | null | undefined, householdName?: string | null) {
+  return voiceFirstName(
+    invoice?.client?.full_name ?? invoice?.project?.client?.full_name ?? householdName,
+  );
+}
+
+function recipientUncheckedHold(clientFirst: string | null): SendHold {
+  return {
+    reason: `${clientFirst ? `${clientFirst}'s` : "The client's"} email couldn't be checked. Reload the folio to send this.`,
+    repair: null,
+    focusKey: 'send-recipient',
+  };
+}
+
+/**
+ * K10 — what holds Send before issue. invoice-send's order
+ * (invoice-send/index.ts): the invoice client's profile email, else the
+ * project client's (only when the invoice names none), else the client's
+ * newest designer_clients row in the INVOICE DESIGNER's book. Unknown is held:
+ * an unreadable profile, a pending or failed read, never ready.
+ */
+function sendRecipientHold(
+  invoice: Invoice | null | undefined,
+  relationship: RecipientRead<{ id: string }>,
+  household: RecipientRead<{ client_name?: string | null; client_email?: string | null }>,
+  viewerId: string | null | undefined,
+): SendHold | null {
+  if (invoice?.status !== 'draft') return null;
+  const clientUserId = invoice.client_id ?? invoice.project?.client_id ?? null;
+  const profile = invoice.client_id ? invoice.client : invoice.project?.client;
+  const householdSettled =
+    !relationship.pending && !relationship.failed && !household.pending && !household.failed;
+  if (
+    invoice.client?.email ||
+    profile?.email ||
+    (householdSettled && household.data?.client_email?.trim())
+  ) {
+    return null;
+  }
+  if (!clientUserId) {
+    return { reason: 'Link a client to send this.', repair: MESSAGE_WITHHELD.repair, focusKey: 'add-email' };
+  }
+  const clientFirst = recipientFirstName(invoice, household.data?.client_name);
+  if (relationship.pending || household.pending) {
+    return {
+      reason: `Checking ${clientFirst ?? 'the client'}'s email before this sends.`,
+      repair: null,
+      focusKey: 'send-recipient',
+    };
+  }
+  if (relationship.failed || household.failed) return recipientUncheckedHold(clientFirst);
+  if (relationship.data?.id) return sendNoRecipientHold(clientFirst);
+  if (viewerId === invoice.designer_id) {
+    return { reason: sendNoRecipientHold(clientFirst).reason, repair: null, focusKey: 'send-recipient' };
+  }
+  const designerName =
+    invoice.designer?.full_name?.trim() ||
+    invoice.designer?.business_name?.trim() ||
+    'the designer who drew it';
+  return {
+    reason: `Only ${designerName} can see ${clientFirst ?? 'this client'}'s email. Ask them to send this invoice.`,
+    repair: null,
+    focusKey: 'send-recipient',
+  };
+}
+
 export function InvoiceFolio({
   invoiceId,
   onOpenDocument,
@@ -114,16 +189,15 @@ export function InvoiceFolio({
     'invoice',
     invoice && invoice.status !== 'draft' ? [invoice.id] : [],
   );
-  // K10 — Send is held BEFORE issue until invoice-send's address is known.
-  // Its order (invoice-send/index.ts): the invoice client's profile email, else
-  // the project client's (only when the invoice names none), else the client's
-  // newest designer_clients row in the INVOICE DESIGNER's book — read here by
-  // that designer, which studio RLS (00316) lets a co-member read too.
+  // K10 — Send is held BEFORE issue until invoice-send's address is known,
+  // read here in the INVOICE DESIGNER's book, which studio RLS (00316) lets a
+  // co-member read too.
   const viewerId = useSessionUserId();
   const clientUserId = invoice?.client_id ?? invoice?.project?.client_id ?? null;
   const {
     data: relationship,
     isLoading: relationshipLoading,
+    isFetching: relationshipFetching,
     isError: relationshipFailed,
   } = useDesignerClientForClientUser(
     invoice?.status === 'draft' ? clientUserId : null,
@@ -132,62 +206,31 @@ export function InvoiceFolio({
   const {
     data: household,
     isLoading: householdLoading,
+    isFetching: householdFetching,
     isError: householdFailed,
   } = useClient(relationship?.id ?? '');
   const [householdOpen, setHouseholdOpen] = useState(false);
+  // The fresh recipient read before issue is under way (doIssueAndSend).
+  const [confirmingRecipient, setConfirmingRecipient] = useState(false);
   const sendReasonId = useId();
   const sendHoldRef = useRef<HTMLDivElement | null>(null);
   const sendActRef = useRef<HTMLButtonElement | null>(null);
-  // The profile that invoice-send reads first. When the folio cannot see it
-  // (null with a client named), the answer is unknown — never a hold.
-  const profile = invoice?.client_id ? invoice.client : invoice?.project?.client;
-  const clientFirst = voiceFirstName(
-    invoice?.client?.full_name ?? invoice?.project?.client?.full_name ?? household?.client_name,
+  // R2 — a re-read after an invalidation, or a failed one, establishes
+  // nothing, even with its earlier answer still cached.
+  const sendHold = sendRecipientHold(
+    invoice,
+    {
+      data: relationship,
+      pending: !!(relationshipLoading || relationshipFetching),
+      failed: !!relationshipFailed,
+    },
+    {
+      data: household,
+      pending: !!(householdLoading || householdFetching),
+      failed: !!householdFailed,
+    },
+    viewerId,
   );
-  const designerName =
-    invoice?.designer?.full_name?.trim() ||
-    invoice?.designer?.business_name?.trim() ||
-    'the designer who drew it';
-  // A null repair has no fix in the folio: the window is the reason alone.
-  const sendHold: (Pick<InvoiceHold, 'reason' | 'focusKey'> & { repair: string | null }) | null =
-    invoice?.status !== 'draft' ||
-    invoice.client?.email ||
-    profile?.email ||
-    household?.client_email?.trim()
-      ? null
-      : !clientUserId
-        ? {
-            reason: 'Link a client to send this.',
-            repair: MESSAGE_WITHHELD.repair,
-            focusKey: 'add-email',
-          }
-        : !profile
-          ? null
-          : relationshipLoading || householdLoading
-            ? {
-                reason: `Checking ${clientFirst ?? 'the client'}'s email before this sends.`,
-                repair: null,
-                focusKey: 'send-recipient',
-              }
-            : (relationshipFailed && !relationship) || (householdFailed && !household)
-              ? {
-                  reason: `${clientFirst ? `${clientFirst}'s` : "The client's"} email couldn't be checked. Reload the folio to send this.`,
-                  repair: null,
-                  focusKey: 'send-recipient',
-                }
-              : relationship?.id
-                ? sendNoRecipientHold(clientFirst)
-                : viewerId === invoice.designer_id
-                  ? {
-                      reason: sendNoRecipientHold(clientFirst).reason,
-                      repair: null,
-                      focusKey: 'send-recipient',
-                    }
-                  : {
-                      reason: `Only ${designerName} can see ${clientFirst ?? 'this client'}'s email. Ask them to send this invoice.`,
-                      repair: null,
-                      focusKey: 'send-recipient',
-                    };
   // US-19 (one-voice): `Send the invoice` and `Record the payment` are their
   // acts' one names (D1), and each commit is filled (`terminal`, R162) beneath
   // the consequence sentence its panel already states (R141).
@@ -333,6 +376,7 @@ export function InvoiceFolio({
   // A studio invoice has no house, so there is no document to walk into.
   const documentProjectId = invoice.project_id;
   const busy =
+    confirmingRecipient ||
     issue.isPending ||
     send.isPending ||
     recordPayment.isPending ||
@@ -351,6 +395,44 @@ export function InvoiceFolio({
   // Issue & send: issue_invoice RPC first (number, totals, milestone flips),
   // then the invoice-send edge fn. A send failure does NOT roll back the issue
   // — the folio re-reads as issued and Resend carries the retry (old page 1:1).
+  // R2 — the one fresh, uncached read of the recipient immediately before
+  // issue: the invoice (its profiles), then the newest relationship and its
+  // household. A read that fails, or answers no address, holds.
+  const readSendHoldFresh = async (): Promise<SendHold | null> => {
+    const fresh = await refetch();
+    const draft = fresh.isError ? undefined : fresh.data;
+    if (!draft) return recipientUncheckedHold(recipientFirstName(invoice, household?.client_name));
+    // invoice-send reads the profile first: an address there, or no client to
+    // look up, is the whole answer.
+    const unasked = { data: null, pending: false, failed: false };
+    const profileAnswer = sendRecipientHold(draft, unasked, unasked, viewerId);
+    const freshClientId = draft.client_id ?? draft.project?.client_id ?? null;
+    if (!profileAnswer || !freshClientId) return profileAnswer;
+    try {
+      const freshRelationship = await qc.fetchQuery({
+        ...designerClientForClientUserQuery(freshClientId, draft.designer_id),
+        staleTime: 0,
+        retry: false,
+      });
+      const freshHousehold = freshRelationship?.id
+        ? await qc.fetchQuery({
+            ...designerClientQuery(freshRelationship.id),
+            staleTime: 0,
+            retry: false,
+          })
+        : null;
+      return sendRecipientHold(
+        draft,
+        { data: freshRelationship, pending: false, failed: false },
+        { data: freshHousehold, pending: false, failed: false },
+        viewerId,
+      );
+    } catch {
+      const failed = { data: null, pending: false, failed: true };
+      return sendRecipientHold(draft, failed, failed, viewerId);
+    }
+  };
+
   const doIssueAndSend = async () => {
     // K10 — issuing is irreversible, so nothing issues until its recipient is
     // established, whatever state the press came from.
@@ -359,6 +441,17 @@ export function InvoiceFolio({
       return;
     }
     setNote(null);
+    setConfirmingRecipient(true);
+    let freshHold: SendHold | null;
+    try {
+      freshHold = await readSendHoldFresh();
+    } finally {
+      setConfirmingRecipient(false);
+    }
+    if (freshHold) {
+      setNote(`Could not issue — ${freshHold.reason}`);
+      return;
+    }
     setShowClientFallback(false);
     setToolbarCopyStatus('idle');
     setBandCopyStatus('idle');

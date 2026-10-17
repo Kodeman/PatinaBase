@@ -171,10 +171,11 @@ export function useClients(filters?: ClientFilters) {
 }
 
 /**
- * Fetch a single client relationship by ID
+ * The single-relationship read behind useClient, shared with a caller that must
+ * re-read it fresh before an irreversible act (queryClient.fetchQuery).
  */
-export function useClient(clientId: string) {
-  return useQuery({
+export function designerClientQuery(clientId: string) {
+  return {
     queryKey: ['designer-client', clientId],
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -200,8 +201,14 @@ export function useClient(clientId: string) {
       if (error) throw error;
       return data as DesignerClient | null;
     },
-    enabled: !!clientId,
-  });
+  };
+}
+
+/**
+ * Fetch a single client relationship by ID
+ */
+export function useClient(clientId: string) {
+  return useQuery({ ...designerClientQuery(clientId), enabled: !!clientId });
 }
 
 /**
@@ -217,11 +224,11 @@ export function useClient(clientId: string) {
  * reads for an invoice that designer drew. Studio RLS (00316) admits a
  * co-member; anyone else reads null.
  */
-export function useDesignerClientForClientUser(
+export function designerClientForClientUserQuery(
   clientUserId: string | null | undefined,
   designerId?: string | null,
 ) {
-  return useQuery({
+  return {
     queryKey: designerId
       ? ['designer-client-for-user', clientUserId, designerId]
       : ['designer-client-for-user', clientUserId],
@@ -251,10 +258,19 @@ export function useDesignerClientForClientUser(
         lead_id: string | null;
       } | null) ?? null;
     },
-    enabled: !!clientUserId,
     // This is secondary document context. Consumers already render without it;
     // a failure must not masquerade as failure of the foreground lifecycle act.
-    meta: { errorSurface: 'silent' },
+    meta: { errorSurface: 'silent' as const },
+  };
+}
+
+export function useDesignerClientForClientUser(
+  clientUserId: string | null | undefined,
+  designerId?: string | null,
+) {
+  return useQuery({
+    ...designerClientForClientUserQuery(clientUserId, designerId),
+    enabled: !!clientUserId,
   });
 }
 
@@ -338,6 +354,8 @@ export function useUpdateClientStatus() {
       queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
       queryClient.invalidateQueries({ queryKey: ['designer-client', clientId] });
       queryClient.invalidateQueries({ queryKey: ['client-stats'] });
+      // The newest-row selector orders by updated_at, which this write moves.
+      queryClient.invalidateQueries({ queryKey: ['designer-client-for-user'] });
     },
   });
 }
@@ -372,6 +390,8 @@ export function useUpdateClientNotes() {
     onSuccess: (_, { clientId }) => {
       queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
       queryClient.invalidateQueries({ queryKey: ['designer-client', clientId] });
+      // The newest-row selector orders by updated_at, which this write moves.
+      queryClient.invalidateQueries({ queryKey: ['designer-client-for-user'] });
     },
   });
 }
@@ -437,6 +457,9 @@ export function useUpdateClientContact() {
       // (the client branch) — without this, the profile head and Directory row
       // keep showing the pre-edit name/email/phone after a successful save.
       queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      // The newest-row selector orders by updated_at, which this write moves:
+      // an edit to an older row makes it the one invoice-send reads.
+      queryClient.invalidateQueries({ queryKey: ['designer-client-for-user'] });
     },
   });
 }
@@ -731,6 +754,8 @@ export function useAddClient() {
       // The consent clause reads its record through this key, exactly as the
       // trade path invalidates it after recording an invite.
       queryClient.invalidateQueries({ queryKey: consentKeys.all });
+      // The row this writes is the newest one the selector would choose.
+      queryClient.invalidateQueries({ queryKey: ['designer-client-for-user'] });
     },
   });
 }

@@ -1473,6 +1473,10 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "pick household" }));
     expect(status.textContent).toBe("");
+    // SQ-1204: a fixed hold's window lingers while focus stays on its fix.
+    // The press on Draft moves focus there, and the household window drops.
+    act().focus();
+    await waitFor(() => expect(spotWindows()).not.toContain("household"));
     fireEvent.click(act());
     expect(status).toHaveTextContent("Add what this invoice is regarding first.");
     await waitFor(() =>
@@ -1482,12 +1486,14 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     fireEvent.change(screen.getByPlaceholderText("Design consultation · Sept 2026"), {
       target: { value: "Design consultation" },
     });
+    act().focus();
+    await waitFor(() => expect(spotWindows()).not.toContain("regarding"));
     fireEvent.click(act());
     expect(status).toHaveTextContent("Add at least one line first.");
     await waitFor(() => expect(screen.getByLabelText("Line description")).toHaveFocus());
   });
 
-  it("K1: in studio mode the press lights every missing field; each fix takes its window away, the last hands focus back to Draft", async () => {
+  it("K1: in studio mode the press lights every missing field; each fix takes its window away, the last frees Draft and leaves focus in the field being typed", async () => {
     mockFlag = { value: true, isLoading: false };
     render(composer({}));
     pickStudio();
@@ -1497,16 +1503,24 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "pick household" })).toHaveFocus());
 
     fireEvent.click(screen.getByRole("button", { name: "pick household" }));
+    // SQ-1204: a fixed hold's window lingers while focus stays on its fix.
+    // Focus moves on to the next field, and the household window drops.
+    screen.getByPlaceholderText("Design consultation · Sept 2026").focus();
     await waitFor(() => expect(spotWindows()).toEqual(["regarding", "lines"]));
     fireEvent.change(screen.getByPlaceholderText("Design consultation · Sept 2026"), {
       target: { value: "Design consultation" },
     });
+    screen.getByLabelText("Line description").focus();
     await waitFor(() => expect(spotWindows()).toEqual(["lines"]));
     fireEvent.change(screen.getByLabelText("Line description"), { target: { value: "Design fee" } });
-    fireEvent.change(screen.getByLabelText("Unit price (dollars)"), { target: { value: "450" } });
+    const price = screen.getByLabelText("Unit price (dollars)");
+    price.focus();
+    fireEvent.change(price, { target: { value: "450" } });
     await waitFor(() => expect(spotWindows()).toEqual([]));
     expect(document.querySelector("[data-hold-spotlight]")).toBeNull();
-    await waitFor(() => expect(act()).toHaveFocus());
+    // SQ-1204: the spotlight never takes focus out of a field being typed in.
+    expect(price).toHaveFocus();
+    expect(act()).not.toHaveAttribute("aria-disabled");
     expect(act()).toBeEnabled();
   });
 
@@ -1834,6 +1848,9 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     mockUnbilledEntries = [sketching];
     mockRatePendingEntries = [siteVisit];
     rerender(composer(context));
+    // SQ-1204: the lines window lingers while focus stays inside it. Focus
+    // moves on to Draft, and the window drops.
+    act().focus();
     await waitFor(() => expect(spotWindows()).toEqual(["rate-pending:designer-1"]));
     expect(act()).toHaveAttribute("aria-disabled", "true");
     expect(mockCreateDraft).not.toHaveBeenCalled();

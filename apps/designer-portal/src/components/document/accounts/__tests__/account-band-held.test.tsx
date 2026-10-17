@@ -50,7 +50,9 @@ jest.mock('@patina/supabase', () => ({
         mockProjectListeners.delete(bump);
       };
     }, []);
-    return mockProjectsRead ?? { data: [mockProject] };
+    // SQ-1223 R4: Generate re-reads the projects before it drafts.
+    const refetch = async () => ({ data: [mockProject], isError: false });
+    return mockProjectsRead ? { ...mockProjectsRead, refetch } : { data: [mockProject], refetch };
   },
   useSessionUserId: () => mockViewer,
   useDocumentClientLinkHold: (projectId: string | null) => ({
@@ -233,7 +235,7 @@ it('R2: with no studio the press lights the studio window, whose fix walks to th
   expect(mockGenerate).not.toHaveBeenCalled();
 });
 
-it('R2 control: a project with its client and studio generates the milestone invoice', () => {
+it('R2 control: a project with its client and studio generates the milestone invoice', async () => {
   mockProject = { ...baseProject, client_id: 'client-1' };
   renderBand();
   const generate = generateAct();
@@ -241,6 +243,7 @@ it('R2 control: a project with its client and studio generates the milestone inv
 
   fireEvent.click(generate);
 
-  expect(mockGenerate).toHaveBeenCalledWith('milestone-1', expect.anything());
+  // SQ-1223 R4: the draft waits on Generate's fresh project read.
+  await waitFor(() => expect(mockGenerate).toHaveBeenCalledWith('milestone-1', expect.anything()));
   expect(spotWindows()).toEqual([]);
 });

@@ -69,20 +69,32 @@ const SUPPORT_ADDRESS = 'hello@patina.cloud';
 /** The window of a Generate held until its project reads; it has no fix. */
 const PROJECT_READ = 'project-read';
 
+const PROJECT_UNREAD = "This project couldn't be read. Reload the page to draft its invoice.";
+
 /** US-36 R2 — the milestone draft runs the composer's readiness first: the
  *  RPC drafts a client-less invoice the folio would then offer to send, so a
  *  project with no client (or no studio) holds Generate before anything is
  *  written. Same sentences and the same K5-gated fixes as the composer. */
 function useMilestoneDraftHold(projectId: string, wanted: boolean) {
-  const { data: projects, isLoading: projectsLoading } = useProjects();
+  const {
+    data: projects,
+    isLoading: projectsLoading,
+    isFetching: projectsFetching,
+    isError: projectsFailed,
+    refetch: refetchProjects,
+  } = useProjects();
   const viewerId = useSessionUserId();
-  const project = wanted ? (projects?.find((p) => p.id === projectId) ?? null) : null;
-  // Readiness needs the project; without it the RPC would draft unchecked.
+  const cachedProject = wanted ? (projects?.find((p) => p.id === projectId) ?? null) : null;
+  // Readiness needs the project as it stands; without it the RPC would draft
+  // unchecked. A re-read in flight, or a failed one, establishes nothing even
+  // with an earlier answer cached (unknown = held).
+  const projectPending = !!(projectsLoading || projectsFetching);
+  const project = projectPending || projectsFailed ? null : cachedProject;
   const wait =
     wanted && !project
-      ? projectsLoading
+      ? projectPending
         ? 'Checking this project before drafting its invoice.'
-        : "This project couldn't be read. Reload the page to draft its invoice."
+        : PROJECT_UNREAD
       : null;
   const noClient = !!project && !project.client_id;
   const isLead = !!viewerId && project?.designer_id === viewerId;
@@ -112,7 +124,18 @@ function useMilestoneDraftHold(projectId: string, wanted: boolean) {
         noStudioReason: `${projectName} isn't tied to your studio yet.`,
       }).holds
     : [];
-  return { holds, wait, projectName, canLinkClient, leadLeftStudio };
+  /** R4 — the one fresh read Generate makes before it drafts: the refusal
+   *  sentence, or null when the client and studio are still there. */
+  const confirmFresh = async (): Promise<string | null> => {
+    const fresh = await refetchProjects();
+    const current = fresh.isError ? undefined : fresh.data?.find((p) => p.id === projectId);
+    if (!current) return PROJECT_UNREAD;
+    const name = current.name ?? 'This project';
+    if (!current.client_id) return `${name} has no client yet.`;
+    if (current.studio_id == null) return `${name} isn't tied to your studio yet.`;
+    return null;
+  };
+  return { holds, wait, projectName, canLinkClient, leadLeftStudio, confirmFresh };
 }
 
 type MilestoneDraftHold = ReturnType<typeof useMilestoneDraftHold>;
@@ -235,12 +258,15 @@ function MilestoneRow({
   headless,
   draftHolds,
   draftReasonIds,
+  confirmDraft,
 }: {
   m: AccountMilestone;
   projectId: string;
   /** US-36 R2 — what holds Generate, one spotlight window per hold. */
   draftHolds: SpotlightHold[];
   draftReasonIds?: string;
+  /** R4 — the fresh project read before the draft; a sentence refuses it. */
+  confirmDraft: () => Promise<string | null>;
   /** Inside the Money region the head already carries the inked leader, so a
    *  per-milestone primary would stand a second leader beside it. */
   headless: boolean;
@@ -358,10 +384,16 @@ function MilestoneRow({
           loadingLabel="Generating…"
           onClick={() => {
             setInvoiceNote(null);
-            generate.mutate(m.id, {
-              onSuccess: (invoiceId) => openInvoiceFolio(invoiceId),
-              onError: (error) =>
-                setInvoiceNote(billingRefusal('milestone', error).sentence),
+            void confirmDraft().then((refusal) => {
+              if (refusal) {
+                setInvoiceNote(refusal);
+                return;
+              }
+              generate.mutate(m.id, {
+                onSuccess: (invoiceId) => openInvoiceFolio(invoiceId),
+                onError: (error) =>
+                  setInvoiceNote(billingRefusal('milestone', error).sentence),
+              });
             });
           }}
           className="text-left"
@@ -647,6 +679,7 @@ export function AccountBand({
                   headless={headless}
                   draftHolds={draftHolds}
                   draftReasonIds={draftReasonIds}
+                  confirmDraft={draftHold.confirmFresh}
                 />
               ))}
               <MilestoneDraftHoldLines

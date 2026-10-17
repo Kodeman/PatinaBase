@@ -376,9 +376,29 @@ it('SQ-1203 F6: once the saved email takes Add their email away, putting the she
   expect(mockIssue).not.toHaveBeenCalled();
 });
 
-it('K10: a folio that cannot see the client account holds nothing (the answer is unknown)', () => {
+// SQ-1223 R1 reverses the old fail-open on purpose: unknown is held. An
+// unreadable profile with no household address to fall back on is no recipient.
+it('SQ-1223 R1: a folio that cannot see the client account, with no address on file, holds Send', async () => {
   mockInvoice = { ...baseInvoice, client: undefined };
   renderFolio();
+  const send = sendAct();
+  expect(send).toHaveAttribute('aria-disabled', 'true');
+  expect(document.getElementById(send.getAttribute('aria-describedby') ?? '')).toHaveTextContent(
+    "Add Elena's email to send this.",
+  );
+
+  fireEvent.click(send);
+
+  await waitFor(() => expect(spotWindows()).toEqual(['add-email']));
+  expect(screen.getByRole('button', { name: 'Add their email' }).closest('[inert]')).toBeNull();
+  expect(mockIssue).not.toHaveBeenCalled();
+  expect(mockSend).not.toHaveBeenCalled();
+});
+
+it('SQ-1223 R1 control: an unreadable account with a household address on file sends', () => {
+  mockInvoice = { ...baseInvoice, client: undefined };
+  mockHousehold = { ...emptyHousehold, client_email: 'elena@example.com' };
+  renderFolio();
   expect(sendAct()).not.toHaveAttribute('aria-disabled');
-  expect(screen.queryByRole('button', { name: 'Add their email' })).not.toBeInTheDocument();
+  expect(screen.queryByText("Add Elena's email to send this.")).not.toBeInTheDocument();
 });

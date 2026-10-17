@@ -287,7 +287,9 @@ export type {
 export {
   useClients,
   useClient,
+  designerClientQuery,
   useDesignerClientForClientUser,
+  designerClientForClientUserQuery,
   useClientStats,
   useUpdateClientStatus,
   useUpdateClientNotes,
