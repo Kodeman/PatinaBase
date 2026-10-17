@@ -458,7 +458,7 @@ describe('a hold that clears while its field is being typed in (SQ-1201 F4)', ()
     }
   }
 
-  it('keeps every key in the first of two fields, its window lingering until focus leaves it', async () => {
+  it('keeps every key in the first of two fields, live until focus leaves it though its window goes at once (SQ-1311 F5)', async () => {
     const user = userEvent.setup();
     render(<Fields ids={['arrival', 'notes']} />);
     fireEvent.click(saveAct());
@@ -469,14 +469,14 @@ describe('a hold that clears while its field is being typed in (SQ-1201 F4)', ()
     await typeKeyByKey(user, first, 'Arrival date');
 
     expect(first).toHaveValue('Arrival date');
-    expect(windows().sort()).toEqual(['arrival', 'notes']);
+    expect(windows()).toEqual(['notes']);
     expect(first.closest('[inert]')).toBeNull();
     expect(layer()).not.toBeNull();
 
     await user.tab();
     expect(field('notes')).toHaveFocus();
-    await waitFor(() => expect(windows()).toEqual(['notes']));
-    expect(first.closest('[inert]')).not.toBeNull();
+    await waitFor(() => expect(first.closest('[inert]')).not.toBeNull());
+    expect(windows()).toEqual(['notes']);
   });
 
   it('lifts on the last field’s first key, keeps focus in it and never presses the act', async () => {

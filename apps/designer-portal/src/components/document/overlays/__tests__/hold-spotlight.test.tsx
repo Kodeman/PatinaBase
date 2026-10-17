@@ -8,7 +8,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { useEffect, useRef } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { HoldSpotlight } from "../hold-spotlight";
 import { topActiveModalDialog } from "../active-dialog";
 import { focusableWithin } from "@/lib/full-screen-boundary";
@@ -211,7 +211,7 @@ describe("HoldSpotlight", () => {
     view.rerender(<Harness items={[CLIENT, PRICE]} fixed={["client"]} />);
     await waitFor(() => expect(windows()).toHaveLength(1));
     expect(windows()[0]).toHaveAttribute("data-hold-spotlight-window", "price");
-    expect(status()).toHaveTextContent(`1 thing left. 1 of 1: ${PRICE.reason}`);
+    expect(status()).toHaveTextContent(`1 thing needs attention: ${PRICE.reason}`);
 
     view.rerender(
       <Harness items={[CLIENT, PRICE]} fixed={["client", "price"]} />,
@@ -321,11 +321,15 @@ describe("HoldSpotlight when its frame unmounts while open", () => {
   });
 });
 
-// jsdom lays nothing out, so these read the inset the bar's sticky `bottom`
-// subtracts: the frame's padding in a frame that scrolls itself, minus the
-// fixed foot chrome's height in one that scrolls with the page.
-describe("HoldSpotlight bar dock", () => {
+// jsdom lays nothing out, so these mock the frame's rect and the bar's
+// height, and read the top the spotlight writes on the bar (in the layer's
+// own coordinates, which start at the frame's top).
+describe("HoldSpotlight bar placement", () => {
   const CHROME = 72;
+  const BAR = 60;
+  const VIEW = window.innerHeight;
+  let frameRect = { top: 0, bottom: 0 };
+  let hit: () => Element | null = () => null;
 
   function DockHarness({ frameStyle }: { frameStyle: CSSProperties }) {
     const frame = useRef<HTMLDivElement>(null);
@@ -348,23 +352,73 @@ describe("HoldSpotlight bar dock", () => {
     );
   }
 
+  /** A folio sheet: a page-high overlay that scrolls, its fixed backdrop beside the panel. */
+  function FolioHarness() {
+    const frame = useRef<HTMLDivElement>(null);
+    const target = useRef<HTMLButtonElement>(null);
+    const holds = useRef<SpotlightHold[]>([
+      { ...CLIENT, target: () => target.current },
+    ]).current;
+    return (
+      <div style={{ position: "fixed", inset: 0, overflowY: "auto" }}>
+        <button
+          type="button"
+          data-testid="backdrop"
+          aria-label="Close sheet"
+          style={{ position: "fixed", inset: 0 }}
+        />
+        <div ref={frame} data-testid="frame" style={{ position: "relative" }}>
+          <button ref={target} type="button">
+            Link a client
+          </button>
+        </div>
+        <HoldSpotlight frame={frame} holds={holds} open onClose={jest.fn()} />
+      </div>
+    );
+  }
+
+  const mockNarrow = (narrow: boolean) => {
+    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: narrow && query.includes("max-width: 640px"),
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    }));
+  };
+
   beforeEach(() => {
+    frameRect = { top: 0, bottom: 0 };
+    hit = () => screen.queryByTestId("drawer");
     Object.defineProperty(document, "elementFromPoint", {
       configurable: true,
-      value: () => screen.queryByTestId("drawer"),
+      value: () => hit(),
+    });
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.hasAttribute("data-hold-spotlight-bar") ? BAR : 0;
+      },
     });
     jest
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")
       .mockImplementation(function (this: HTMLElement) {
-        const top =
-          this.dataset.testid === "drawer" ? window.innerHeight - CHROME : 0;
+        const { top, bottom } =
+          this.dataset.testid === "frame"
+            ? frameRect
+            : this.dataset.testid === "drawer"
+              ? { top: VIEW - CHROME, bottom: VIEW }
+              : { top: 0, bottom: 0 };
         return {
           top,
-          bottom: top,
+          bottom,
           left: 0,
           right: 0,
           width: 0,
-          height: 0,
+          height: bottom - top,
           x: 0,
           y: top,
           toJSON: () => ({}),
@@ -375,21 +429,64 @@ describe("HoldSpotlight bar dock", () => {
   afterEach(() => {
     jest.restoreAllMocks();
     delete (document as { elementFromPoint?: unknown }).elementFromPoint;
+    delete (HTMLElement.prototype as { offsetHeight?: unknown }).offsetHeight;
   });
 
-  const inset = () =>
-    layer()?.style.getPropertyValue("--hold-spotlight-inset") ?? null;
+  const barTop = () => {
+    const bar = document.querySelector<HTMLElement>("[data-hold-spotlight-bar]");
+    return bar?.style.top ? Number.parseFloat(bar.style.top) : null;
+  };
+
+  it("keeps the bar on screen in a folio sheet taller than the viewport, scrolled past its top", async () => {
+    // The panel runs from 1200px above the viewport to 900px below it; the
+    // point at the viewport's foot lands on the sheet's own fixed backdrop.
+    frameRect = { top: -1200, bottom: VIEW + 900 };
+    hit = () => screen.queryByTestId("backdrop");
+    render(<FolioHarness />);
+    // At the viewport's foot, less the gap: (VIEW - 16 - BAR) on screen,
+    // written from the frame's top.
+    await waitFor(() => expect(barTop()).toBe(VIEW - 16 - BAR + 1200));
+  });
+
+  it("clamps the bar to the frame's visible foot when the frame ends on screen", async () => {
+    frameRect = { top: -1200, bottom: 500 };
+    hit = () => screen.queryByTestId("backdrop");
+    render(<FolioHarness />);
+    await waitFor(() => expect(barTop()).toBe(500 - 16 - BAR + 1200));
+  });
+
+  it("re-places the bar as the page scrolls", async () => {
+    frameRect = { top: -1200, bottom: VIEW + 900 };
+    hit = () => screen.queryByTestId("backdrop");
+    render(<FolioHarness />);
+    await waitFor(() => expect(barTop()).toBe(VIEW - 16 - BAR + 1200));
+    frameRect = { top: -300, bottom: VIEW + 1800 };
+    fireEvent.scroll(window);
+    await waitFor(() => expect(barTop()).toBe(VIEW - 16 - BAR + 300));
+  });
+
+  it("docks the bar to the viewport's foot on a phone (≤640px), though the frame ends higher", async () => {
+    mockNarrow(true);
+    frameRect = { top: 40, bottom: 400 };
+    hit = () => screen.queryByTestId("backdrop");
+    render(<FolioHarness />);
+    await waitFor(() => expect(barTop()).toBe(VIEW - BAR - 40));
+  });
 
   it("docks above the fixed foot chrome on a frame that scrolls with the page, ignoring its landing reserve", async () => {
+    frameRect = { top: -400, bottom: VIEW + 2000 };
     render(<DockHarness frameStyle={{ paddingBottom: "640px" }} />);
-    await waitFor(() => expect(inset()).toBe(`${-CHROME}px`));
+    await waitFor(() => expect(barTop()).toBe(VIEW - CHROME - 16 - BAR + 400));
   });
 
-  it("docks to the frame's own foot inside a scrolling sheet panel", async () => {
+  it("docks to the frame's own foot inside a scrolling sheet panel, on a phone too", async () => {
+    mockNarrow(true);
+    frameRect = { top: 24, bottom: VIEW - 24 };
+    hit = () => null;
     render(
       <DockHarness frameStyle={{ paddingBottom: "24px", overflowY: "auto" }} />,
     );
-    await waitFor(() => expect(inset()).toBe("24px"));
+    await waitFor(() => expect(barTop()).toBe(VIEW - 24 - BAR - 24));
   });
 
   it("does not dock above the fixed overlay that holds the frame (the PO preview)", async () => {
@@ -407,7 +504,11 @@ describe("HoldSpotlight bar dock", () => {
             aria-label="Close"
             style={{ position: "absolute", inset: 0 }}
           />
-          <div ref={frame} style={{ position: "absolute", top: "4vh" }}>
+          <div
+            ref={frame}
+            data-testid="frame"
+            style={{ position: "absolute", top: "4vh" }}
+          >
             <button ref={target} type="button">
               Link a client
             </button>
@@ -416,11 +517,102 @@ describe("HoldSpotlight bar dock", () => {
         </div>
       );
     }
-    Object.defineProperty(document, "elementFromPoint", {
-      configurable: true,
-      value: () => screen.queryByTestId("backdrop"),
-    });
+    frameRect = { top: 30, bottom: VIEW + 500 };
+    hit = () => screen.queryByTestId("backdrop");
     render(<OverlayHarness />);
-    await waitFor(() => expect(inset()).toBe("0px"));
+    await waitFor(() => expect(barTop()).toBe(VIEW - 16 - BAR - 30));
+  });
+});
+
+describe("HoldSpotlight as its holds are fixed and stepped", () => {
+  /**
+   * Each hold's window is a region with a one-shot fix button. A `cleared`
+   * hold leaves the list and its fix button goes, as a fix that takes its own
+   * control away does, while its region stays on the page. `nested` puts the
+   * second hold's region inside the third's.
+   */
+  function StepHarness({
+    items,
+    cleared = [],
+    nested = false,
+  }: {
+    items: Item[];
+    cleared?: string[];
+    nested?: boolean;
+  }) {
+    const frame = useRef<HTMLDivElement>(null);
+    const holds: SpotlightHold[] = items
+      .filter((item) => !cleared.includes(item.id))
+      .map((item) => ({
+        ...item,
+        target: () => document.querySelector<HTMLElement>(`[data-region="${item.id}"]`),
+      }));
+    const spotlight = useHoldSpotlight(holds);
+    const region = (item: Item, inner?: ReactNode) => (
+      <div key={item.id} data-region={item.id}>
+        {inner}
+        {!cleared.includes(item.id) && <button type="button">Fix {item.id}</button>}
+      </div>
+    );
+    const [a, b, c] = items;
+    return (
+      <div>
+        <div ref={frame} data-testid="frame">
+          {nested && a && b && c
+            ? [region(a), region(c, region(b))]
+            : items.map((item) => region(item))}
+          <button
+            type="button"
+            onClick={(event) => spotlight.open(event.currentTarget)}
+          >
+            Draft the invoice
+          </button>
+        </div>
+        <HoldSpotlight frame={frame} {...spotlight.props} />
+      </div>
+    );
+  }
+
+  const activeWindow = () =>
+    document
+      .querySelector("[data-hold-spotlight-window][data-active]")
+      ?.getAttribute("data-hold-spotlight-window") ?? null;
+
+  it("stays open after one of two holds is fixed from its window, and moves on to the other", async () => {
+    const view = render(<StepHarness items={[CLIENT, PRICE]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    expect(windows()).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Fix client" })).toHaveFocus();
+
+    // The fix lands, taking the focused button with it.
+    view.rerender(<StepHarness items={[CLIENT, PRICE]} cleared={["client"]} />);
+    await waitFor(() =>
+      expect(
+        windows().map((el) => el.getAttribute("data-hold-spotlight-window")),
+      ).toEqual(["price"]),
+    );
+    expect(layer()).not.toBeNull();
+    expect(activeWindow()).toBe("price");
+    expect(status()).toHaveTextContent(`1 thing needs attention: ${PRICE.reason}`);
+    expect(screen.getByRole("button", { name: "Fix price" })).toHaveFocus();
+  });
+
+  it("steps Next through all three holds, though the third's window holds the second's", () => {
+    render(<StepHarness items={[CLIENT, PRICE, STUDIO]} nested />);
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    // As a pointer or keyboard press does, focus is on Next when it acts.
+    const pressNext = () => {
+      const next = screen.getByRole("button", { name: "Next" });
+      act(() => next.focus());
+      fireEvent.click(next);
+    };
+    const seen = [activeWindow()];
+    pressNext();
+    seen.push(activeWindow());
+    expect(status()).toHaveTextContent(`2 of 3: ${PRICE.reason}`);
+    pressNext();
+    seen.push(activeWindow());
+    expect(status()).toHaveTextContent(`3 of 3: ${STUDIO.reason}`);
+    expect(seen).toEqual(["client", "price", "studio"]);
   });
 });
