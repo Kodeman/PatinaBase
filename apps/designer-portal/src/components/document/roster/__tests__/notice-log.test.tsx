@@ -211,4 +211,39 @@ describe('NoticeLog — pressing the held save', () => {
     expect(document.activeElement).toBe(first);
     expect(logToldMutate).not.toHaveBeenCalled();
   });
+
+  it('reveals the focused first name inside a picker scrolled to its bottom', () => {
+    const manySeats = Array.from({ length: 24 }, (_, index) => ({
+      seatId: `seat-${index}`,
+      name: `Person ${index}`,
+    }));
+    render(
+      <div data-spotlight-frame>
+        <NoticeLog projectId="okonkwo" seats={manySeats} told={[]} panelId="notice-panel" />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Log who was told/ }));
+    const first = screen.getByRole('checkbox', { name: 'Person 0' });
+    const picker = first.closest('ul')!;
+    picker.style.overflowY = 'auto';
+    Object.defineProperties(picker, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, value: 1056 },
+    });
+    picker.scrollTop = 856;
+    jest.spyOn(picker, 'getBoundingClientRect').mockReturnValue({
+      top: 100, bottom: 300, left: 0, right: 200, width: 200, height: 200, x: 0, y: 100,
+      toJSON: () => ({}),
+    });
+    jest.spyOn(first, 'getBoundingClientRect').mockReturnValue({
+      top: -756, bottom: -712, left: 0, right: 200, width: 200, height: 44, x: 0, y: -756,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Save this note/ }));
+
+    expect(document.activeElement).toBe(first);
+    expect(picker.scrollTop).toBe(0);
+    expect(logToldMutate).not.toHaveBeenCalled();
+  });
 });
