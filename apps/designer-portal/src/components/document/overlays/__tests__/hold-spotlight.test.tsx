@@ -598,6 +598,71 @@ describe("HoldSpotlight bar placement", () => {
     expect(scroller.style.paddingBottom).toBe("16px");
   });
 
+  it.each([
+    ["close A then B", [[false, false], [true, false], [true, true], [false, true], [false, false]]],
+    ["close B then A", [[false, false], [true, false], [true, true], [true, false], [false, false]]],
+  ])("reference-counts concurrent phone scroll reservations (%s)", async (_order, steps) => {
+    function ReservationLayer({ id, open }: { id: string; open: boolean }) {
+      const frame = useRef<HTMLDivElement>(null);
+      const target = useRef<HTMLButtonElement>(null);
+      const holds = useRef<SpotlightHold[]>([
+        { ...CLIENT, id, target: () => target.current },
+      ]).current;
+      return (
+        <div data-testid={`frame-${id}`} ref={frame}>
+          <button ref={target} type="button">{id}</button>
+          <HoldSpotlight frame={frame} holds={holds} open={open} onClose={jest.fn()} />
+        </div>
+      );
+    }
+    mockNarrow(true);
+    frameRect = { top: 40, bottom: VIEW };
+    hit = () => null;
+    function Both({ a, b }: { a: boolean; b: boolean }) {
+      return (
+        <div data-testid="scroller" style={{ overflowY: "auto", paddingBottom: "16px" }}>
+          <ReservationLayer id="a" open={a} />
+          <ReservationLayer id="b" open={b} />
+        </div>
+      );
+    }
+    const view = render(<Both a={false} b={false} />);
+    const scroller = screen.getByTestId("scroller");
+    for (const [a, b] of steps as boolean[][]) {
+      view.rerender(<Both a={a!} b={b!} />);
+      if (a || b)
+        await waitFor(() => expect(scroller.style.paddingBottom).toBe(`${16 + BAR}px`));
+      else expect(scroller.style.paddingBottom).toBe("16px");
+    }
+  });
+
+  it("does not stack phone scroll room after closing and reopening", async () => {
+    function ReopenHarness({ open }: { open: boolean }) {
+      const frame = useRef<HTMLDivElement>(null);
+      const target = useRef<HTMLButtonElement>(null);
+      const holds = useRef<SpotlightHold[]>([
+        { ...CLIENT, target: () => target.current },
+      ]).current;
+      return (
+        <div data-testid="scroller" style={{ overflowY: "auto", paddingBottom: "16px" }}>
+          <div ref={frame}><button ref={target} type="button">Link a client</button></div>
+          <HoldSpotlight frame={frame} holds={holds} open={open} onClose={jest.fn()} />
+        </div>
+      );
+    }
+    mockNarrow(true);
+    frameRect = { top: 40, bottom: VIEW };
+    hit = () => null;
+    const view = render(<ReopenHarness open={false} />);
+    const scroller = screen.getByTestId("scroller");
+    for (let i = 0; i < 2; i += 1) {
+      view.rerender(<ReopenHarness open />);
+      await waitFor(() => expect(scroller.style.paddingBottom).toBe(`${16 + BAR}px`));
+      view.rerender(<ReopenHarness open={false} />);
+      expect(scroller.style.paddingBottom).toBe("16px");
+    }
+  });
+
   it("does not dock above the fixed overlay that holds the frame (the PO preview)", async () => {
     function OverlayHarness() {
       const frame = useRef<HTMLDivElement>(null);

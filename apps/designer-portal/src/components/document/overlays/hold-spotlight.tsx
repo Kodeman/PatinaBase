@@ -90,6 +90,41 @@ const footChrome = (host: HTMLElement) => {
 // The bar's clearance from the active window, past the window's label.
 const BAR_CLEAR = LABEL_ROOM + 8;
 
+type ScrollReservation = {
+  prior: string;
+  base: number;
+  holders: Map<symbol, number>;
+};
+const scrollReservations = new WeakMap<HTMLElement, ScrollReservation>();
+
+function reserveScrollRoom(scroller: HTMLElement, holder: symbol, height: number) {
+  let reservation = scrollReservations.get(scroller);
+  if (!reservation) {
+    reservation = {
+      prior: scroller.style.paddingBottom,
+      base: Number.parseFloat(window.getComputedStyle(scroller).paddingBottom) || 0,
+      holders: new Map(),
+    };
+    scrollReservations.set(scroller, reservation);
+  }
+  reservation.holders.set(holder, height);
+  const maxHeight = Math.max(...reservation.holders.values());
+  scroller.style.paddingBottom = `${reservation.base + maxHeight}px`;
+}
+
+function releaseScrollRoom(scroller: HTMLElement, holder: symbol) {
+  const reservation = scrollReservations.get(scroller);
+  if (!reservation) return;
+  reservation.holders.delete(holder);
+  if (reservation.holders.size === 0) {
+    scroller.style.paddingBottom = reservation.prior;
+    scrollReservations.delete(scroller);
+    return;
+  }
+  const maxHeight = Math.max(...reservation.holders.values());
+  scroller.style.paddingBottom = `${reservation.base + maxHeight}px`;
+}
+
 /**
  * The bar's top, in viewport coordinates: at the foot of the frame's visible
  * part (a phone: of the viewport, unless the frame clips it), and never off
@@ -239,10 +274,10 @@ export function HoldSpotlight({
     // typing that clears a hold on its first key keeps going. Its window goes
     // at once, so a filled field never reads as still wanted.
     let linger: { id: string; el: HTMLElement } | null = null;
-    let reserved: { el: HTMLElement; prior: string; height: number } | null =
-      null;
+    let reserved: { el: HTMLElement; height: number } | null = null;
+    const reservationHolder = Symbol("hold-spotlight");
     const unreserve = () => {
-      if (reserved) reserved.el.style.paddingBottom = reserved.prior;
+      if (reserved) releaseScrollRoom(reserved.el, reservationHolder);
       reserved = null;
     };
     const staticHost = window.getComputedStyle(host).position === "static";
@@ -446,13 +481,9 @@ export function HoldSpotlight({
       const scroller = narrow && !scrolls ? scrollParent(host) : null;
       if (reserved && (reserved.el !== scroller || reserved.height !== barHeight))
         unreserve();
-      if (scroller && barHeight && !reserved) {
-        const prior = scroller.style.paddingBottom;
-        const base =
-          Number.parseFloat(window.getComputedStyle(scroller).paddingBottom) ||
-          0;
-        scroller.style.paddingBottom = `${base + barHeight}px`;
-        reserved = { el: scroller, prior, height: barHeight };
+      if (scroller && barHeight) {
+        reserveScrollRoom(scroller, reservationHolder, barHeight);
+        reserved = { el: scroller, height: barHeight };
       }
       const activeWindow = windows.find((win) => win.id === active?.hold.id);
       // Placed on every sync (scroll, resize, a new active window), above the
