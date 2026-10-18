@@ -158,11 +158,17 @@ export function ApprovedTotalRow({
     );
   }
   // A budget approval records the event with no lines (R188).
-  if (parts.length === 0)
-    parts.push(
-      "Approved without line prices",
-      `Current ${money(currentTotals.get("USD") ?? 0)}`,
-    );
+  if (parts.length === 0) {
+    parts.push("Approved without line prices");
+    const currentOrdered = [
+      ...[...currentTotals].filter(([currency]) => currency === "USD"),
+      ...[...currentTotals].filter(([currency]) => currency !== "USD"),
+    ];
+    for (const [currency, cents] of currentOrdered) {
+      parts.push(`Current ${approvedMoney(cents, currency)}`);
+    }
+    if (currentOrdered.length === 0) parts.push("Current $0");
+  }
   return (
     <p
       data-approved-total=""

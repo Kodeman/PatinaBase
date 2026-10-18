@@ -347,6 +347,24 @@ describe("Price lens after approval (US-37 #4, acceptance 7)", () => {
     );
   });
 
+  it("an approval without line prices shows the EUR-only current total, not a USD zero", () => {
+    mockItems.data = [
+      {
+        ...base,
+        id: "eur-1",
+        name: "Murano pendant",
+        currency: "EUR",
+        trade_price_cents: 250000,
+        unit_price_cents: 320000,
+      },
+    ];
+    mockApproval.data = { ...approvalOf([]), approvedTotals: [], lines: [] };
+    renderLens();
+
+    expect(approvedTotalRow()).toHaveTextContent("Approved without line prices · Current €3,200");
+    expect(approvedTotalRow()).not.toHaveTextContent("Current $0");
+  });
+
   it("no approval: no flag, no approved value, no approved total, no change log", () => {
     mockApproval.data = null;
     renderLens();
