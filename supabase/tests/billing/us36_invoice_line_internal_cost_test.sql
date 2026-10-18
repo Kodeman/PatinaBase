@@ -233,4 +233,65 @@ BEGIN
 END $$;
 ALTER TABLE public.invoice_line_items ADD CONSTRAINT invoice_line_items_public_metadata_ck
   CHECK (metadata = public._invoice_line_public_metadata(metadata));
+
+-- The exact metadata shape emitted by issue_trade_draw_invoice (00511) and
+-- both authorized execution paths (00578) remains usable by the document reader.
+INSERT INTO public.invoice_line_items (id, invoice_id, kind, description, quantity,
+                                       unit_amount_cents, amount_cents, metadata)
+VALUES ('82200000-0000-4000-8000-000000000080', '82200000-0000-4000-8000-000000000030',
+        'adhoc', 'Trade draw', 1, 3000, 3000,
+        '{"tradeScopeId":"82200000-0000-4000-8000-000000000020",
+          "tradeScopeDocumentId":"82200000-0000-4000-8000-000000000071",
+          "drawId":"82200000-0000-4000-8000-000000000080","kind":"trade_draw"}'::jsonb);
+SELECT public._move_invoice_line_internal_metadata();
+DO $$
+DECLARE v_metadata jsonb;
+BEGIN
+  SELECT metadata INTO v_metadata FROM public.invoice_line_items
+   WHERE id = '82200000-0000-4000-8000-000000000080';
+  ASSERT v_metadata = '{"tradeScopeId":"82200000-0000-4000-8000-000000000020",
+                        "tradeScopeDocumentId":"82200000-0000-4000-8000-000000000071",
+                        "drawId":"82200000-0000-4000-8000-000000000080","kind":"trade_draw"}'::jsonb,
+    'trade references: CHECK accepts both UUID ids and scrub preserves writer payload';
+END $$;
+
+DO $$
+BEGIN
+  ASSERT public._invoice_line_public_metadata(
+    '{"tradeScopeId":"not-a-uuid","nested":[{"retail_item_id":7300,"tradeScopeDocumentId":"nope"}]}'::jsonb)
+    = '{"nested":[{}]}'::jsonb,
+    'non-UUID economic ids: references cannot bypass private-key classification';
+END $$;
+
+-- Stage one models 00822's fresh archive; stage two reruns 00823 over a legacy
+-- update whose newly classified keys share the original nested array object.
+ALTER TABLE public.invoice_line_items DROP CONSTRAINT invoice_line_items_public_metadata_ck;
+INSERT INTO public.invoice_line_items (id, invoice_id, kind, description, quantity,
+                                       unit_amount_cents, amount_cents, metadata)
+VALUES ('82200000-0000-4000-8000-000000000081', '82200000-0000-4000-8000-000000000030',
+        'adhoc', 'Two-stage archive', 1, 8000, 8000,
+        '{"nested":[{"costCents":7300,"unitPriceCents":8000},{"costCents":10}]}'::jsonb);
+SELECT public._move_invoice_line_internal_metadata();
+UPDATE public.invoice_line_items
+   SET metadata = '{"nested":[{"WHOLESALEprice":8000,"unitPriceCents":8000},
+                              {"retailAmount":20},{"marginCents":30}]}'::jsonb
+ WHERE id = '82200000-0000-4000-8000-000000000081';
+SELECT public._move_invoice_line_internal_metadata();
+DO $$
+DECLARE v_public jsonb; v_archive jsonb;
+BEGIN
+  SELECT line.metadata, internal.internal_metadata INTO v_public, v_archive
+    FROM public.invoice_line_items AS line
+    JOIN public.invoice_line_item_internals AS internal ON internal.line_item_id = line.id
+   WHERE line.id = '82200000-0000-4000-8000-000000000081';
+  ASSERT v_public = '{"nested":[{"unitPriceCents":8000},{},{}]}'::jsonb
+     AND v_archive #>> '{nested,0,costCents}' = '7300'
+     AND v_archive #>> '{nested,0,WHOLESALEprice}' = '8000'
+     AND v_archive #>> '{nested,1,costCents}' = '10'
+     AND v_archive #>> '{nested,1,retailAmount}' = '20'
+     AND v_archive #>> '{nested,2,marginCents}' = '30',
+    'two-stage archive: prior and new nested array economics survive both scrubs';
+END $$;
+ALTER TABLE public.invoice_line_items ADD CONSTRAINT invoice_line_items_public_metadata_ck
+  CHECK (metadata = public._invoice_line_public_metadata(metadata));
 ROLLBACK;

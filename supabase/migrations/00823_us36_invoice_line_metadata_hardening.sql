@@ -230,14 +230,14 @@ BEGIN
 END;
 $$;
 
--- poCostLineId is a public UUID reference emitted by add_invoice_billing_lines,
--- not a price. Preserve only that exact identifier with a UUID value.
+-- UUID-valued *Id and *_id keys are references, not economic amounts.
+-- Non-UUID values retain the ordinary private-key classification.
 CREATE OR REPLACE FUNCTION public._invoice_line_private_key(p_key text)
 RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path = public AS $$
   SELECT lower(p_key) ~ '(cost|msrp|wholesale|trade|markup|margin|retail)'
 $$;
 
--- The latest body is 00822; the sole change is the UUID-only identifier arm.
+-- The latest body is 00822; preserve UUID-valued identifier references.
 CREATE OR REPLACE FUNCTION public._invoice_line_public_metadata(p_metadata jsonb)
 RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path = public AS $$
 DECLARE v_public jsonb;
@@ -246,7 +246,7 @@ BEGIN
     SELECT COALESCE(jsonb_object_agg(key, public._invoice_line_public_metadata(value)), '{}'::jsonb)
       INTO v_public FROM jsonb_each(p_metadata)
      WHERE NOT public._invoice_line_private_key(key)
-        OR (lower(key) = 'pocostlineid' AND jsonb_typeof(value) = 'string'
+        OR (key ~ '(Id|_id)$' AND jsonb_typeof(value) = 'string'
             AND value #>> '{}' ~* '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$');
     RETURN v_public;
   ELSIF jsonb_typeof(p_metadata) = 'array' THEN
@@ -255,6 +255,54 @@ BEGIN
     RETURN v_public;
   END IF;
   RETURN p_metadata;
+END;
+$$;
+
+-- 00822 archived complete metadata objects. Merge new private paths recursively
+-- so a later scrub cannot replace previously archived object or array entries.
+CREATE OR REPLACE FUNCTION public._invoice_line_merge_archived_metadata(p_existing jsonb, p_new jsonb)
+RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path = public AS $$
+DECLARE
+  v_result jsonb;
+  v_key text;
+  v_value jsonb;
+  v_index bigint;
+BEGIN
+  IF p_existing IS NULL THEN RETURN p_new; END IF;
+  IF p_new IS NULL THEN RETURN p_existing; END IF;
+  IF jsonb_typeof(p_existing) = 'object' AND jsonb_typeof(p_new) = 'object' THEN
+    v_result := p_existing;
+    FOR v_key, v_value IN SELECT key, value FROM jsonb_each(p_new) LOOP
+      v_result := jsonb_set(v_result, ARRAY[v_key],
+        public._invoice_line_merge_archived_metadata(p_existing->v_key, v_value), true);
+    END LOOP;
+    RETURN v_result;
+  ELSIF jsonb_typeof(p_existing) = 'array' AND jsonb_typeof(p_new) = 'array' THEN
+    v_result := p_existing;
+    FOR v_value, v_index IN SELECT value, ord - 1 FROM jsonb_array_elements(p_new) WITH ORDINALITY AS item(value, ord) LOOP
+      v_result := jsonb_set(v_result, ARRAY[v_index::text],
+        public._invoice_line_merge_archived_metadata(p_existing->(v_index::integer), v_value), true);
+    END LOOP;
+    RETURN v_result;
+  END IF;
+  RETURN p_existing;
+END;
+$$;
+
+-- Keep 00822's fresh-line INSERT unchanged; only existing archives need a merge.
+CREATE OR REPLACE FUNCTION public._move_invoice_line_internal_metadata()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  INSERT INTO public.invoice_line_item_internals (line_item_id, internal_metadata)
+  SELECT id, metadata FROM public.invoice_line_items
+   WHERE metadata <> public._invoice_line_public_metadata(metadata)
+  ON CONFLICT (line_item_id) DO UPDATE
+    SET internal_metadata = public._invoice_line_merge_archived_metadata(
+      invoice_line_item_internals.internal_metadata, EXCLUDED.internal_metadata);
+
+  UPDATE public.invoice_line_items
+     SET metadata = public._invoice_line_public_metadata(metadata)
+   WHERE metadata <> public._invoice_line_public_metadata(metadata);
 END;
 $$;
 
