@@ -226,6 +226,8 @@ describe("the paperwork mint act", () => {
       </div>,
     );
     fireEvent.click(screen.getByText("Mint a paperwork link"));
+    const thirtyDays = screen.getByRole("radio", { name: "Thirty days — 15 October 2026" });
+    expect(thirtyDays.closest("[inert]")).toBeNull();
     fireEvent.click(screen.getByLabelText("Their next window — a day I name"));
     fireEvent.click(screen.getByText("Open the door").closest("button")!);
     expect(
@@ -236,7 +238,7 @@ describe("the paperwork mint act", () => {
     ).toEqual(["paperwork-link-firm-twin-cities-day"]);
     const day = screen.getByLabelText("The day it closes");
     expect(day).toHaveAttribute("aria-labelledby", "paperwork-link-firm-twin-cities-day-label");
-    expect(screen.queryByLabelText("Thirty days")).not.toBeInTheDocument();
+    expect(thirtyDays.closest("[inert]")).not.toBeNull();
     expect(day.closest("[inert]")).toBeNull();
     expect(document.activeElement).toBe(day);
     fireEvent.change(day, { target: { value: "2026-11-21" } });
