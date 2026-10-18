@@ -1,7 +1,7 @@
 -- 00821 — Compose a project invoice in one transaction (US-36 K13).
 -- Calls the 00511 draft writer and the 00817 studio-scoped billing writer. The
--- 00617 claim is INVOKER/RLS, so this DEFINER repeats its UPDATE and the
--- authenticated UPDATE + SELECT policy predicates (00316/00484/00605/00606).
+-- 00617 claim is INVOKER/RLS, so this DEFINER mirrors the project-hour
+-- UPDATE and SELECT policy union (00177/00316/00484/00605/00606).
 CREATE OR REPLACE FUNCTION public.compose_project_invoice(
   p_project_id uuid,
   p_expected_designer_id uuid,
@@ -24,6 +24,38 @@ DECLARE
   v_invoice public.invoices%ROWTYPE;
   v_claimed integer;
 BEGIN
+  -- Commercial-hour edits lock the entry before their classifier locks its
+  -- project. Take the same order before create_draft_invoice's project SHARE.
+  PERFORM entry.id
+  FROM public.project_time_entries AS entry
+  WHERE entry.id = ANY(p_entry_ids)
+  ORDER BY entry.id
+  FOR UPDATE OF entry;
+
+  SELECT count(*) INTO v_claimed
+  FROM public.project_time_entries AS entry
+  JOIN public.projects AS project ON project.id = entry.project_id
+  WHERE entry.id = ANY(p_entry_ids)
+    AND project.id = p_project_id
+    AND entry.invoice_id IS NULL
+    AND entry.billable
+    AND entry.duration_minutes IS NOT NULL
+    AND (entry.billing_state = 'authorized' OR entry.billing_state IS NULL)
+    AND entry.rate_source IS DISTINCT FROM 'none'
+    AND (
+      -- Permissive UPDATE union from pg_policies: project lead (00177 ALL),
+      -- own project-team hour, own studio-comember hour, studio owner/admin.
+      project.designer_id = auth.uid()
+      OR (entry.user_id = auth.uid() AND (
+        public.is_project_team_member(entry.project_id)
+        OR public.is_studio_comember(project.designer_id)
+      ))
+      OR public.is_org_admin_or_owner(public.project_pricing_studio_id(entry.project_id))
+    );
+  IF v_claimed <> COALESCE(cardinality(p_entry_ids), 0) THEN
+    RAISE EXCEPTION 'compose_project_invoice: claim_short' USING ERRCODE = 'check_violation';
+  END IF;
+
   BEGIN
     v_invoice := public.create_draft_invoice(
       p_project_id, p_expected_designer_id, p_expected_client_id,
@@ -47,7 +79,8 @@ BEGIN
        AND (entry.billing_state = 'authorized' OR entry.billing_state IS NULL)
        AND entry.rate_source IS DISTINCT FROM 'none'
        AND (
-         (entry.user_id = auth.uid() AND (
+         project.designer_id = auth.uid()
+         OR (entry.user_id = auth.uid() AND (
            public.is_project_team_member(entry.project_id)
            OR public.is_studio_comember(project.designer_id)
          ))
