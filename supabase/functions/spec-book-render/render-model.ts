@@ -194,6 +194,7 @@ const CLIENT_MONEY_KEY_PARTS = [
   "cost",
   "price",
   "retail",
+  "msrp",
   "margin",
   "markup",
   "amount",
@@ -226,26 +227,6 @@ const FORBIDDEN_NON_INTERNAL_KEY_PARTS = [
   "internal_contact",
   "procurement",
 ];
-
-function isUnsafeDimensionKey(key: string): boolean {
-  const compact = key.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return isClientMoneyKey(key) || FORBIDDEN_NON_INTERNAL_KEY_PARTS.some(
-    (part) =>
-      part === "trade"
-        ? compact.startsWith("trade")
-        : compact.includes(part.replace(/[^a-z0-9]/g, "")),
-  );
-}
-
-function stripUnsafeDimensionKeys(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stripUnsafeDimensionKeys);
-  if (!isRecord(value)) return value;
-  const safe: JsonRecord = {};
-  for (const [key, child] of Object.entries(value)) {
-    if (!isUnsafeDimensionKey(key)) safe[key] = stripUnsafeDimensionKeys(child);
-  }
-  return safe;
-}
 
 const DEFAULT_AUDIENCE_ALLOW: Record<SpecBookAudience, string[]> = {
   client: [
@@ -526,10 +507,13 @@ function safeDimensionEntries(value: unknown): unknown {
   const safe: JsonRecord = {};
   for (const [key, child] of Object.entries(value)) {
     const normalized = normalizeDimensionKey(key);
-    if (isUnsafeDimensionKey(key)) continue;
     if (DIMENSION_METADATA.has(normalized)) {
       if (typeof child === "string") safe[key] = child;
-    } else if (numericDimensionValue(child)) {
+    } else if (
+      (DIMENSION_AXES.includes(normalized) ||
+        Object.hasOwn(DIMENSION_LABELS, normalized)) &&
+      numericDimensionValue(child)
+    ) {
       safe[key] = child;
     }
   }
@@ -571,10 +555,6 @@ export function dimensionText(value: unknown): string {
     ...Object.keys(DIMENSION_LABELS)
       .filter((name) => !DIMENSION_PRIORITY.includes(name))
       .flatMap((name) => entries.filter((entry) => entry.normalized === name)),
-    ...entries.filter((entry) =>
-      !DIMENSION_AXES.includes(entry.normalized) &&
-      !Object.hasOwn(DIMENSION_LABELS, entry.normalized)
-    ),
   ].filter((entry) => {
     if (
       DIMENSION_METADATA.has(entry.normalized) || seen.has(entry.normalized)
@@ -594,19 +574,9 @@ export function dimensionText(value: unknown): string {
     `${entry.normalized[0].toUpperCase()} ${String(entry.value).trim()}`
   );
   const extraText = extras.map((entry) => {
-    const label = (Object.hasOwn(DIMENSION_LABELS, entry.normalized)
-      ? DIMENSION_LABELS[entry.normalized]
-      : null) ??
-      entry.key.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-        .replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim()
-        .replace(/\b\w/g, (letter) =>
-          letter.toUpperCase());
+    const label = DIMENSION_LABELS[entry.normalized];
     return `${label} ${String(entry.value).trim()}${
-      entry.normalized === "weight"
-        ? suffix(weightUnit)
-        : Object.hasOwn(DIMENSION_LABELS, entry.normalized)
-        ? suffix(unit)
-        : ""
+      entry.normalized === "weight" ? suffix(weightUnit) : suffix(unit)
     }`;
   });
   return [
@@ -614,6 +584,30 @@ export function dimensionText(value: unknown): string {
     ...extraText,
   ]
     .filter(Boolean).join(" · ");
+}
+
+/** The single dimension line printed for an external item. */
+export function printedDimensionLine(
+  item: Pick<AudienceItem, "selection" | "configuration">,
+): string {
+  const dimensions = item.selection.dimensions;
+  let selected = typeof dimensions === "string" ? dimensions.trim() : "";
+  if (isRecord(dimensions)) {
+    const nested = dimensions.value;
+    const unavailable = dimensions.na === true
+      ? dimensions
+      : isRecord(nested) && nested.na === true
+      ? nested
+      : null;
+    selected = unavailable
+      ? `N/A${
+        stringValue(unavailable.naReason) ? ` — ${unavailable.naReason}` : ""
+      }`
+      : typeof nested === "string"
+      ? nested.trim()
+      : dimensionText(nested);
+  }
+  return selected || dimensionText(item.configuration?.dimensions);
 }
 
 /**
@@ -725,9 +719,33 @@ function buildSafeItem(
         includeProvenance,
         audience === "client",
       );
-      selection[field] = field === "dimensions" && audience !== "internal"
-        ? stripUnsafeDimensionKeys(resolved)
-        : resolved;
+      if (field !== "dimensions" || audience === "internal") {
+        selection[field] = resolved;
+      } else if (typeof resolved === "string") {
+        if (resolved.trim()) selection[field] = resolved.trim();
+      } else if (isRecord(resolved)) {
+        const nested = resolved.value;
+        if (resolved.na === true) {
+          selection[field] = {
+            na: true,
+            ...(resolved.naReason ? { naReason: resolved.naReason } : {}),
+          };
+        } else if (isRecord(nested) && nested.na === true) {
+          selection[field] = {
+            value: {
+              na: true,
+              ...(stringValue(nested.naReason)
+                ? { naReason: nested.naReason }
+                : {}),
+            },
+          };
+        } else if (typeof nested === "string") {
+          if (nested.trim()) selection[field] = { value: nested.trim() };
+        } else {
+          const dimensions = safeDimensionEntries(nested);
+          if (dimensions) selection[field] = { value: dimensions };
+        }
+      }
     }
   }
 
@@ -975,34 +993,17 @@ async function audienceItemHash(
   const safeItem = buildSafeItem(item, audience, chapters, allow);
   safeItem.chapterId = null;
   safeItem.contentHash = "";
-  const dimensions = safeItem.selection.dimensions;
-  if (isRecord(dimensions) && dimensions.na !== true) {
-    const printed = isRecord(dimensions.value) && dimensions.value.na === true
-      ? `N/A${
-        typeof dimensions.value.naReason === "string" &&
-          dimensions.value.naReason.trim()
-          ? ` — ${dimensions.value.naReason}`
-          : ""
-      }`
-      : typeof dimensions.value === "string"
-      ? dimensions.value
-      : dimensionText(dimensions.value);
-    if (printed) safeItem.selection.dimensions = printed;
-    else delete safeItem.selection.dimensions;
-  }
-  if (safeItem.configuration?.dimensions) {
+  const printed = printedDimensionLine(safeItem);
+  if (printed) safeItem.selection.dimensions = printed;
+  else delete safeItem.selection.dimensions;
+  if (safeItem.configuration) {
+    delete safeItem.configuration.dimensions;
     if (
-      (typeof safeItem.selection.dimensions === "string" &&
-        safeItem.selection.dimensions.trim() !== "") ||
-      (isRecord(safeItem.selection.dimensions) &&
-        safeItem.selection.dimensions.na === true)
-    ) {
-      delete safeItem.configuration.dimensions;
-    } else {
-      safeItem.configuration.dimensions = dimensionText(
-        safeItem.configuration.dimensions,
-      );
-    }
+      !safeItem.configuration.selections.length &&
+      !safeItem.configuration.variantName &&
+      !safeItem.configuration.components?.length &&
+      !safeItem.configuration.comFabric
+    ) delete safeItem.configuration;
   }
   return await sha256Hex(canonicalStringify(safeItem));
 }

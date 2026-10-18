@@ -208,7 +208,7 @@ Deno.test("extracted external PDFs contain no private cost contact or procuremen
   }
 });
 
-Deno.test("client PDF strips money keys and humanises numeric own extras", async () => {
+Deno.test("client PDF strips money keys and omits unknown dimensions", async () => {
   const source = frozenSnapshot();
   const model = await buildAudienceRenderModel(
     frozenSnapshot({
@@ -239,8 +239,7 @@ Deno.test("client PDF strips money keys and humanises numeric own extras", async
     );
   }
   assert(text.includes("W 60 in"));
-  assert(text.includes("Mystery 999"));
-  assertEquals(text.includes("Mystery 999 in"), false);
+  assertEquals(text.includes("Mystery 999"), false);
 });
 
 Deno.test("client PDF omits boolean selection values", async () => {
@@ -373,6 +372,92 @@ Deno.test("R1: vendor installer and client PDFs omit money-like dimension extras
   }
 });
 
+Deno.test("F1: compound MSRP dimensions print only W 60 in in every edition and client fallback", async () => {
+  const source = frozenSnapshot();
+  const dimensions = {
+    width: 60,
+    unit: "in",
+    suggestedMSRP: "912345",
+    MSRP_CENTS: 987654,
+  };
+  for (const audience of ["client", "vendor", "installer"] as const) {
+    const model = await buildAudienceRenderModel(
+      frozenSnapshot({
+        items: [{
+          ...source.items[0],
+          selection: { dimensions: { value: [dimensions] } },
+        }],
+      }),
+      audience,
+      context,
+    );
+    const text = await extractedText(await renderSpecBookPdf(model));
+    assertEquals(
+      selectionRows(model.items[0].selection).find(([key]) =>
+        key === "dimensions"
+      )?.[1],
+      "W 60 in",
+    );
+    assertEquals(text.includes("912345"), false, audience);
+    assertEquals(text.includes("987654"), false, audience);
+  }
+  const fallback = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: {},
+        configuration: {
+          snapshot: { dimensions: [dimensions] },
+        },
+      }],
+    }),
+    "client",
+    context,
+  );
+  const text = await extractedText(await renderSpecBookPdf(fallback));
+  assertEquals(/Dimensions\s+W 60 in/.test(text), true, text);
+  assertEquals(text.includes("912345"), false);
+  assertEquals(text.includes("987654"), false);
+});
+
+Deno.test("F3: extraDepth and Extra Depth never enter the model or PDF", async () => {
+  const source = frozenSnapshot();
+  for (
+    const [selection, configuration] of [
+      [{}, { snapshot: { dimensions: { extraDepth: 9, unit: "in" } } }],
+      [{ dimensions: { value: { extraDepth: 9, unit: "in" } } }, undefined],
+      [{ dimensions: { value: { "Extra Depth": 9, unit: "in" } } }, undefined],
+    ] as const
+  ) {
+    let model: Awaited<ReturnType<typeof buildAudienceRenderModel>> | undefined;
+    let failure: unknown = null;
+    try {
+      model = await buildAudienceRenderModel(
+        frozenSnapshot({
+          items: [{
+            ...source.items[0],
+            selection,
+            ...(configuration ? { configuration } : {}),
+          }],
+        }),
+        "client",
+        context,
+      );
+    } catch (error) {
+      failure = error;
+    }
+    assertEquals(failure, null, "unknown dimension cannot block Issue");
+    assert(model);
+    const text = await extractedText(await renderSpecBookPdf(model));
+    assertEquals(
+      JSON.stringify(model).toLowerCase().includes("extradepth"),
+      false,
+    );
+    assertEquals(text.includes("Extra Depth"), false);
+    assertEquals(text.includes("Dimensions 9"), false);
+  }
+});
+
 Deno.test("R2: client Issue drops forbidden configuration dimension keys", async () => {
   const source = frozenSnapshot();
   const base = configuredFurniture();
@@ -424,7 +509,7 @@ Deno.test("R3: bare selection dimension strings print verbatim in the PDF", asyn
   );
 });
 
-Deno.test("R5: numeric unknown dimensions print without length units", async () => {
+Deno.test("R5: numeric unknown dimensions are omitted", async () => {
   const source = frozenSnapshot();
   const model = await buildAudienceRenderModel(
     frozenSnapshot({
@@ -439,9 +524,9 @@ Deno.test("R5: numeric unknown dimensions print without length units", async () 
     context,
   );
   const text = await extractedText(await renderSpecBookPdf(model));
-  assert(text.includes("Count 4 · Angle 90"));
-  assertEquals(text.includes("Count 4 in"), false);
-  assertEquals(text.includes("Angle 90 in"), false);
+  assertEquals(text.includes("Count 4"), false);
+  assertEquals(text.includes("Angle 90"), false);
+  assertEquals(JSON.stringify(model).includes('"count"'), false);
 });
 
 Deno.test("R6: PDF prints weight before other known lengths", async () => {
@@ -662,24 +747,50 @@ async function clientDimensionPage(
   return await extractedText(await renderSpecBookPdf(model));
 }
 
-Deno.test("F1: PDF orders axes then known and own numeric dimensions", async () => {
+Deno.test("F2: whitespace selection falls back to config PDF line and hashes printed change", async () => {
+  const source = frozenSnapshot();
+  const item = {
+    ...source.items[0],
+    selection: { dimensions: " " },
+    configuration: { snapshot: { dimensions: { width: 70, unit: "in" } } },
+  };
+  const before = await buildAudienceRenderModel(
+    frozenSnapshot({ items: [item] }),
+    "client",
+    context,
+  );
+  const text = await extractedText(await renderSpecBookPdf(before));
+  assertEquals(/Dimensions\s+W 70 in/.test(text), true, text);
+  const after = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...item,
+        configuration: { snapshot: { dimensions: { width: 71, unit: "in" } } },
+      }],
+    }),
+    "client",
+    context,
+  );
+  assertEquals(
+    before.items[0].contentHash === after.items[0].contentHash,
+    false,
+  );
+});
+
+Deno.test("F4: PDF dimension row is exactly the known measurements", async () => {
   const text = await clientDimensionPage({
     extra_depth: "9",
-    legHeight: 17,
-    diameter: 42,
-    height: 31,
+    seatHeight: 18,
+    height: 34,
     width: 60,
-    depth: 40,
+    depth: 30,
     unit: "in",
     ignored: true,
   });
-  assert(
-    text.replace(/\s+/g, " ").includes(
-      "W 60 × D 40 × H 31 in · Dia 42 in · Leg H 17 in · Extra Depth 9",
-    ),
-    text,
-  );
-  assertEquals(text.includes("Ignored"), false);
+  const row = text.match(/\bDIMENSIONS\s+(.*?)\s+CARE\b/)?.[1]
+    ?.replace(/\s+/g, " ").trim();
+  assert(row !== undefined, text);
+  assertEquals(row, "W 60 × D 30 × H 34 in · Seat H 18 in");
 });
 
 Deno.test("F2: PDF strips configuration dimension cost before privacy scan", async () => {
@@ -744,7 +855,7 @@ Deno.test("F5: inherited constructor is not a PDF dimension", async () => {
   assertEquals(rows[0]?.[1], "H 31");
   assertEquals(
     selectionRows({ dimensions: { value: { constructor: 7 } } })[0]?.[1],
-    "Constructor 7",
+    undefined,
   );
   const text = await clientDimensionPage(dimensions);
   assertEquals(text.includes("Constructor 9"), false);

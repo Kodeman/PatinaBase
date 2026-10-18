@@ -23,6 +23,7 @@ import type {
 import {
   alsoInText,
   dimensionText,
+  printedDimensionLine,
   quantityText,
   renderMediaIdentity,
 } from "./render-model.ts";
@@ -376,21 +377,7 @@ export function selectionRows(
       text = sku.na === true ? valueText(sku) : valueText(sku.value);
     }
     if (key === "dimensions") {
-      const dimensions = value && typeof value === "object" &&
-          !Array.isArray(value)
-        ? value as Record<string, unknown>
-        : null;
-      const nested = dimensions?.value;
-      text = typeof value === "string"
-        ? value
-        : dimensions?.na === true
-        ? valueText(dimensions)
-        : nested && typeof nested === "object" && !Array.isArray(nested) &&
-            (nested as Record<string, unknown>).na === true
-        ? valueText(nested)
-        : typeof nested === "string"
-        ? valueText(nested)
-        : dimensionText(nested);
+      text = printedDimensionLine({ selection: { dimensions: value } });
     }
     return text ? [[key, text] as const] : [];
   });
@@ -437,7 +424,7 @@ function configurationBlock(item: AudienceItem) {
   // repeating them would read as a contradiction waiting to happen.
   const rows = configurationRows(
     item.configuration,
-    selectionRows(item.selection).some(([key]) => key === "dimensions"),
+    printedDimensionLine({ selection: item.selection }) !== "",
   );
   if (!rows.length) return null;
   return h(

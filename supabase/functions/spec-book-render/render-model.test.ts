@@ -67,6 +67,27 @@ Deno.test("client selection values strip nested money keys and privacy scan reje
     context,
   );
   assertEquals(simple.items[0].selection.dimensions, { value: { width: 60 } });
+  const elsewhere = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: {
+          material: {
+            value: {
+              name: "Oak",
+              suggestedMSRP: "912345",
+              MSRP_CENTS: 987654,
+            },
+          },
+        },
+      }],
+    }),
+    "client",
+    context,
+  );
+  assertEquals(elsewhere.items[0].selection.material, {
+    value: { name: "Oak" },
+  });
   const dimensions = {
     width: 60,
     unit: "in",
@@ -90,7 +111,7 @@ Deno.test("client selection values strip nested money keys and privacy scan reje
   });
   const client = await buildAudienceRenderModel(snapshot, "client", context);
   assertEquals(client.items[0].selection.dimensions, {
-    value: { width: 60, unit: "in", nested: { height: 30 } },
+    value: { width: 60, unit: "in" },
   });
   const internal = await buildAudienceRenderModel(
     snapshot,
@@ -882,6 +903,39 @@ Deno.test("default-valued piece keys leave every edition exactly as before", asy
     if (audience === "internal") continue; // internal keeps the raw item
     assertEquals(canonicalStringify(after), canonicalStringify(before));
   }
+});
+
+Deno.test("F2: clearing suppressed dimension-only configuration leaves client hash and addendum unchanged", async () => {
+  const source = frozenSnapshot();
+  const item = {
+    ...source.items[0],
+    selection: { dimensions: { value: { width: 60, unit: "in" } } },
+    configuration: { snapshot: { dimensions: { width: 70, unit: "in" } } },
+  };
+  const base = frozenSnapshot({ items: [item] });
+  const cleared = { ...item, configuration: { snapshot: {} } };
+  const current = frozenSnapshot({
+    issue: {
+      type: "addendum",
+      reason: "Unprinted dimensions removed",
+      baseRevisionId: "30000000-0000-4000-8000-000000000001",
+    },
+    items: [cleared],
+  });
+  const before = await buildAudienceRenderModel(base, "client", context);
+  const after = await buildAudienceRenderModel(
+    frozenSnapshot({ items: [cleared] }),
+    "client",
+    context,
+  );
+  assertEquals(after.items[0].contentHash, before.items[0].contentHash);
+  const addendum = await buildAudienceRenderModel(current, "client", {
+    ...context,
+    revisionNumber: 2,
+    issueType: "addendum",
+  }, base);
+  assertEquals(addendum.items, []);
+  assertEquals(addendum.changes, []);
 });
 
 Deno.test("R4: suppressed configuration measurements do not change client hash", async () => {
