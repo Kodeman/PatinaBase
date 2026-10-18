@@ -65,7 +65,7 @@ export interface AudienceConfigurationSummary {
   selections: AudienceConfigurationSelection[];
   variantName?: string;
   components?: AudienceConfigurationComponent[];
-  dimensions?: Record<string, string | number | boolean>;
+  dimensions?: unknown;
   comFabric?: string;
 }
 
@@ -190,6 +190,34 @@ const FIELD_ALIASES: Record<string, string[]> = {
   leadTime: ["leadTime", "lead_time", "leadTimeWeeks", "lead_time_weeks"],
 };
 
+const CLIENT_MONEY_KEY_PARTS = [
+  "cost",
+  "price",
+  "retail",
+  "msrp",
+  "margin",
+  "markup",
+  "amount",
+  "total",
+];
+const CLIENT_MONEY_KEYS = new Set(["msrp", "trade", "wholesale", "net"]);
+
+function isClientMoneyKey(key: string): boolean {
+  const compact = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return CLIENT_MONEY_KEYS.has(compact) ||
+    CLIENT_MONEY_KEY_PARTS.some((part) => compact.includes(part));
+}
+
+function stripClientMoneyKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripClientMoneyKeys);
+  if (!isRecord(value)) return canonicalClone(value);
+  const safe: JsonRecord = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (!isClientMoneyKey(key)) safe[key] = stripClientMoneyKeys(child);
+  }
+  return safe;
+}
+
 const FORBIDDEN_NON_INTERNAL_KEY_PARTS = [
   "trade",
   "markup",
@@ -272,10 +300,12 @@ function nestedField(item: JsonRecord, aliases: string[]): unknown {
 function safeResolvedValue(
   value: unknown,
   includeProvenance: boolean,
+  clientAudience: boolean,
 ): unknown {
-  if (!isRecord(value)) return canonicalClone(value);
+  const safeClone = clientAudience ? stripClientMoneyKeys : canonicalClone;
+  if (!isRecord(value)) return safeClone(value);
   const out: JsonRecord = {};
-  if ("value" in value) out.value = canonicalClone(value.value);
+  if ("value" in value) out.value = safeClone(value.value);
   if (typeof value.na === "boolean") out.na = value.na;
   const naReason = stringValue(value.naReason ?? value.na_reason);
   if (naReason) out.naReason = naReason;
@@ -432,29 +462,152 @@ function configurationSnapshot(value: unknown): JsonRecord | null {
   return isRecord(snapshot) ? snapshot : null;
 }
 
-function safeDimensionEntries(
-  value: unknown,
-): Record<string, string | number | boolean> | null {
+const DIMENSION_LABELS: Record<string, string> = {
+  diameter: "Dia",
+  seatheight: "Seat H",
+  armheight: "Arm H",
+  legheight: "Leg H",
+  length: "L",
+  seatdepth: "Seat Depth",
+  seatwidth: "Seat Width",
+  armdepth: "Arm Depth",
+  armwidth: "Arm Width",
+  overallwidth: "Overall Width",
+  overalldepth: "Overall Depth",
+  overallheight: "Overall Height",
+  backheight: "Back Height",
+  thickness: "Thickness",
+  clearance: "Clearance",
+  weight: "Weight",
+};
+const DIMENSION_AXES = ["width", "depth", "height"];
+const DIMENSION_PRIORITY = [
+  "diameter",
+  "seatheight",
+  "armheight",
+  "legheight",
+  "length",
+  "weight",
+];
+const DIMENSION_METADATA = new Set(["unit", "units", "weightunit"]);
+const normalizeDimensionKey = (key: string) =>
+  key.toLowerCase().replace(/[^a-z0-9]/g, "");
+const numericDimensionValue = (candidate: unknown) =>
+  typeof candidate === "number"
+    ? Number.isFinite(candidate)
+    : typeof candidate === "string" && candidate.trim() !== "" &&
+      Number.isFinite(Number(candidate));
+
+function safeDimensionEntries(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const entries = value.map(safeDimensionEntries).filter(Boolean);
+    return entries.length ? entries : null;
+  }
   if (!isRecord(value)) return null;
-  const out: Record<string, string | number | boolean> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    // Defence in depth: a stray dimension key carrying a forbidden part would
-    // otherwise fail the whole render closed in assertAudienceModelPrivacy.
-    const compact = key.toLowerCase().replace(/[-\s_]/g, "");
-    if (
-      FORBIDDEN_NON_INTERNAL_KEY_PARTS.some((part) => compact.includes(part))
+  const safe: JsonRecord = {};
+  for (const [key, child] of Object.entries(value)) {
+    const normalized = normalizeDimensionKey(key);
+    if (DIMENSION_METADATA.has(normalized)) {
+      if (typeof child === "string") safe[key] = child;
+    } else if (
+      (DIMENSION_AXES.includes(normalized) ||
+        Object.hasOwn(DIMENSION_LABELS, normalized)) &&
+      numericDimensionValue(child)
     ) {
-      continue;
-    }
-    if (
-      typeof entry === "string" || typeof entry === "number" ||
-      typeof entry === "boolean"
-    ) {
-      if (typeof entry === "string" && !entry.trim()) continue;
-      out[key] = typeof entry === "string" ? entry.trim() : entry;
+      safe[key] = child;
     }
   }
-  return Object.keys(out).length ? out : null;
+  return Object.keys(safe).some((key) =>
+      !DIMENSION_METADATA.has(normalizeDimensionKey(key))
+    )
+    ? safe
+    : null;
+}
+
+/** The sole printed projection for selection, configuration and audience hash. */
+export function dimensionText(value: unknown): string {
+  const safe = safeDimensionEntries(value);
+  if (Array.isArray(safe)) {
+    return safe.map(dimensionText).filter(Boolean).join(" / ");
+  }
+  if (!isRecord(safe)) return "";
+  const entries = Object.keys(safe).map((key) => ({
+    key,
+    normalized: normalizeDimensionKey(key),
+    value: safe[key],
+  }));
+  const metadata = (name: string) =>
+    entries.find((entry) => entry.normalized === name)?.value;
+  const unit = metadata("unit") ?? metadata("units");
+  const weightUnit = metadata("weightunit");
+  const suffix = (candidate: unknown) =>
+    typeof candidate === "string" && candidate.trim()
+      ? ` ${candidate.trim()}`
+      : "";
+  const seen = new Set<string>();
+  const ordered = [
+    ...DIMENSION_AXES.flatMap((axis) =>
+      entries.filter((entry) => entry.normalized === axis)
+    ),
+    ...DIMENSION_PRIORITY.flatMap((name) =>
+      entries.filter((entry) => entry.normalized === name)
+    ),
+    ...Object.keys(DIMENSION_LABELS)
+      .filter((name) => !DIMENSION_PRIORITY.includes(name))
+      .flatMap((name) => entries.filter((entry) => entry.normalized === name)),
+  ].filter((entry) => {
+    if (
+      DIMENSION_METADATA.has(entry.normalized) || seen.has(entry.normalized)
+    ) {
+      return false;
+    }
+    seen.add(entry.normalized);
+    return true;
+  });
+  const axes = ordered.filter((entry) =>
+    DIMENSION_AXES.includes(entry.normalized)
+  );
+  const extras = ordered.filter((entry) =>
+    !DIMENSION_AXES.includes(entry.normalized)
+  );
+  const axisText = axes.map((entry) =>
+    `${entry.normalized[0].toUpperCase()} ${String(entry.value).trim()}`
+  );
+  const extraText = extras.map((entry) => {
+    const label = DIMENSION_LABELS[entry.normalized];
+    return `${label} ${String(entry.value).trim()}${
+      entry.normalized === "weight" ? suffix(weightUnit) : suffix(unit)
+    }`;
+  });
+  return [
+    axisText.length ? `${axisText.join(" × ")}${suffix(unit)}` : "",
+    ...extraText,
+  ]
+    .filter(Boolean).join(" · ");
+}
+
+/** The single dimension line printed for an external item. */
+export function printedDimensionLine(
+  item: Pick<AudienceItem, "selection" | "configuration">,
+): string {
+  const dimensions = item.selection.dimensions;
+  let selected = typeof dimensions === "string" ? dimensions.trim() : "";
+  if (isRecord(dimensions)) {
+    const nested = dimensions.value;
+    const unavailable = dimensions.na === true
+      ? dimensions
+      : isRecord(nested) && nested.na === true
+      ? nested
+      : null;
+    selected = unavailable
+      ? `N/A${
+        stringValue(unavailable.naReason) ? ` — ${unavailable.naReason}` : ""
+      }`
+      : typeof nested === "string"
+      ? nested.trim()
+      : dimensionText(nested);
+  }
+  return selected || dimensionText(item.configuration?.dimensions);
 }
 
 /**
@@ -561,7 +714,38 @@ function buildSafeItem(
     if (!allows(token)) continue;
     const value = nestedField(item, aliases);
     if (value !== undefined && value !== null && value !== "") {
-      selection[field] = safeResolvedValue(value, includeProvenance);
+      const resolved = safeResolvedValue(
+        value,
+        includeProvenance,
+        audience === "client",
+      );
+      if (field !== "dimensions" || audience === "internal") {
+        selection[field] = resolved;
+      } else if (typeof resolved === "string") {
+        if (resolved.trim()) selection[field] = resolved.trim();
+      } else if (isRecord(resolved)) {
+        const nested = resolved.value;
+        if (resolved.na === true) {
+          selection[field] = {
+            na: true,
+            ...(resolved.naReason ? { naReason: resolved.naReason } : {}),
+          };
+        } else if (isRecord(nested) && nested.na === true) {
+          selection[field] = {
+            value: {
+              na: true,
+              ...(stringValue(nested.naReason)
+                ? { naReason: nested.naReason }
+                : {}),
+            },
+          };
+        } else if (typeof nested === "string") {
+          if (nested.trim()) selection[field] = { value: nested.trim() };
+        } else {
+          const dimensions = safeDimensionEntries(nested);
+          if (dimensions) selection[field] = { value: dimensions };
+        }
+      }
     }
   }
 
@@ -809,6 +993,18 @@ async function audienceItemHash(
   const safeItem = buildSafeItem(item, audience, chapters, allow);
   safeItem.chapterId = null;
   safeItem.contentHash = "";
+  const printed = printedDimensionLine(safeItem);
+  if (printed) safeItem.selection.dimensions = printed;
+  else delete safeItem.selection.dimensions;
+  if (safeItem.configuration) {
+    delete safeItem.configuration.dimensions;
+    if (
+      !safeItem.configuration.selections.length &&
+      !safeItem.configuration.variantName &&
+      !safeItem.configuration.components?.length &&
+      !safeItem.configuration.comFabric
+    ) delete safeItem.configuration;
+  }
   return await sha256Hex(canonicalStringify(safeItem));
 }
 
@@ -1276,9 +1472,15 @@ export function assertAudienceModelPrivacy(model: AudienceRenderModel): void {
       const compact = key.toLowerCase().replace(/[-\s]/g, "");
       const layoutMargin = path === "model.template.page" &&
         compact === "margin";
+      const allowedClientPrice = model.audience === "client" &&
+        path.endsWith(".commercial") && key === "clientPriceCents";
       if (
         !layoutMargin &&
-        FORBIDDEN_NON_INTERNAL_KEY_PARTS.some((part) => compact.includes(part))
+        (FORBIDDEN_NON_INTERNAL_KEY_PARTS.some((part) =>
+          compact.includes(part)
+        ) ||
+          (model.audience === "client" && !allowedClientPrice &&
+            isClientMoneyKey(key)))
       ) {
         throw new RenderModelError(
           "privacy_violation",

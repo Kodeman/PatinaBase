@@ -22,10 +22,15 @@ import type {
 } from "./render-model.ts";
 import {
   alsoInText,
+  dimensionText,
+  printedDimensionLine,
   quantityText,
   renderMediaIdentity,
 } from "./render-model.ts";
-import { DEFAULT_CURRENCY, formatMinorUnits } from "../_shared/currency-totals.ts";
+import {
+  DEFAULT_CURRENCY,
+  formatMinorUnits,
+} from "../_shared/currency-totals.ts";
 
 const h = React.createElement;
 const CONTENTS_ROWS_PER_PAGE = 34;
@@ -155,7 +160,9 @@ export function buildPagePlan(model: AudienceRenderModel): PagePlanEntry[] {
       pageNumber: cursor++,
       chapterId: chapter.id,
       name: chapter.name,
-      eyebrow: CHAPTER_EYEBROW[chapter.kind],
+      eyebrow: model.audience === "client" && chapter.kind === "trade"
+        ? "Category"
+        : CHAPTER_EYEBROW[chapter.kind],
     });
     for (const item of items) {
       plan.push({ kind: "item", pageNumber: cursor++, item });
@@ -334,10 +341,7 @@ const styles = StyleSheet.create({
 
 function valueText(value: unknown): string {
   if (value === null || value === undefined) return "";
-  if (
-    typeof value === "string" || typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
+  if (typeof value === "string" || typeof value === "number") {
     return String(value);
   }
   if (Array.isArray(value)) {
@@ -346,37 +350,37 @@ function valueText(value: unknown): string {
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
     if (record.na === true) {
-      return `N/A${record.naReason ? ` — ${record.naReason}` : ""}`;
+      return `N/A${
+        typeof record.naReason === "string" && record.naReason.trim()
+          ? ` — ${record.naReason}`
+          : ""
+      }`;
     }
     if ("value" in record) return valueText(record.value);
+    if (record.na === false) return "";
     return Object.values(record).map(valueText).filter(Boolean).join(", ");
   }
   return "";
 }
 
-const DIMENSION_AXES = ["width", "depth", "height"] as const;
-
-function configurationDimensionsText(
-  dimensions: Record<string, string | number | boolean>,
-): string {
-  const axes = DIMENSION_AXES
-    .map((key) => dimensions[key])
-    .filter((value) => value !== undefined && value !== "")
-    .map(String);
-  const unit = dimensions.unit ?? dimensions.units;
-  const rest = Object.entries(dimensions)
-    .filter(([key]) =>
-      !DIMENSION_AXES.includes(key as typeof DIMENSION_AXES[number]) &&
-      key !== "unit" && key !== "units"
-    )
-    .map(([key, value]) =>
-      `${key.replace(/([A-Z])/g, " $1").toLowerCase()} ${value}`
-    );
-  const primary = axes.length
-    ? [axes.join(" × "), unit === undefined ? "" : String(unit)]
-      .filter(Boolean).join(" ")
-    : "";
-  return [primary, ...rest].filter(Boolean).join(" · ");
+/** Text printed for frozen item selections; the snapshot itself is unchanged. */
+export function selectionRows(
+  selection: Record<string, unknown>,
+): Array<readonly [string, string]> {
+  return Object.entries(selection).flatMap(([key, value]) => {
+    let text = valueText(value);
+    if (
+      key === "sku" && value && typeof value === "object" &&
+      !Array.isArray(value)
+    ) {
+      const sku = value as Record<string, unknown>;
+      text = sku.na === true ? valueText(sku) : valueText(sku.value);
+    }
+    if (key === "dimensions") {
+      text = printedDimensionLine({ selection: { dimensions: value } });
+    }
+    return text ? [[key, text] as const] : [];
+  });
 }
 
 /** Client-edition selection summary rows: labels, never pricing. */
@@ -404,7 +408,7 @@ function configurationRows(
     ]);
   }
   const dimensions = configuration.dimensions && !skipDimensions
-    ? configurationDimensionsText(configuration.dimensions)
+    ? dimensionText(configuration.dimensions)
     : "";
   if (dimensions) rows.push(["Dimensions", dimensions]);
   if (configuration.comFabric) {
@@ -420,7 +424,7 @@ function configurationBlock(item: AudienceItem) {
   // repeating them would read as a contradiction waiting to happen.
   const rows = configurationRows(
     item.configuration,
-    Boolean(valueText(item.selection.dimensions).trim()),
+    printedDimensionLine({ selection: item.selection }) !== "",
   );
   if (!rows.length) return null;
   return h(
@@ -472,7 +476,7 @@ function itemPage(
   // The client price prints in its own currency; `currency` is not a row.
   const { currency = DEFAULT_CURRENCY, ...commercial } = item.commercial;
   const fields = [
-    ...Object.entries(item.selection),
+    ...selectionRows(item.selection),
     ...Object.entries(item.vendor).map(([key, value]) =>
       [`Vendor ${key}`, value] as const
     ),
