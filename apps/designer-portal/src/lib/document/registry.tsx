@@ -22,6 +22,14 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ParkedInvoiceComposer } from './invoice-composer';
 import {
+  clearParked,
+  invoiceParkingKey,
+  park,
+  parkedState,
+  subscribeParked,
+  unpark,
+} from './spotlight/parking';
+import {
   BookMarked,
   BookOpen,
   Images,
@@ -772,44 +780,25 @@ export const focusFfeLinePending: { request: FocusFfeLineRequest | null } = {
 
 // ── The parked invoice composer (US-36 K7, K13) ─────────────────────────────
 
-/**
- * A composer that left for a fix it cannot make in place (Price it) keeps its
- * work here, per project, in memory only: never storage, so a reload or
- * another tab starts clean. Reopening the composer on the project takes it
- * back, so drafting or discarding that composer leaves nothing parked.
- */
-const parkedComposers = new Map<string, ParkedInvoiceComposer>();
-const parkedListeners = new Set<() => void>();
-
-function parkedChanged(): void {
-  for (const listener of parkedListeners) listener();
-}
-
-export function parkInvoiceComposer(projectId: string, parked: ParkedInvoiceComposer): void {
-  parkedComposers.set(projectId, parked);
-  parkedChanged();
+/** Compatibility for the existing landing and session-boundary callers. */
+export function parkInvoiceComposer(projectId: string, state: ParkedInvoiceComposer): void {
+  park(invoiceParkingKey(projectId), state);
 }
 
 export function parkedInvoiceComposer(projectId: string): ParkedInvoiceComposer | null {
-  return parkedComposers.get(projectId) ?? null;
+  return parkedState<ParkedInvoiceComposer>(invoiceParkingKey(projectId));
 }
 
 export function unparkInvoiceComposer(projectId: string): void {
-  if (parkedComposers.delete(projectId)) parkedChanged();
+  unpark(invoiceParkingKey(projectId));
 }
 
 export function clearParkedInvoiceComposers(): void {
-  if (parkedComposers.size === 0) return;
-  parkedComposers.clear();
-  parkedChanged();
+  clearParked();
 }
 
-/** For `useSyncExternalStore`: the Price lens's `Back to the invoice`. */
 export function subscribeParkedInvoiceComposers(listener: () => void): () => void {
-  parkedListeners.add(listener);
-  return () => {
-    parkedListeners.delete(listener);
-  };
+  return subscribeParked(listener);
 }
 
 // ── Record the payment lands (US-19 F2-3, P-1) ──────────────────────────────

@@ -35,7 +35,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
@@ -138,10 +137,9 @@ import { UndoToast } from "./undo-toast";
 import {
   FOCUS_FFE_LINE_EVENT,
   focusFfeLinePending,
-  parkedInvoiceComposer,
-  subscribeParkedInvoiceComposers,
   type FocusFfeLineRequest,
 } from "@/lib/document/registry";
+import { invoiceParkingKey, useParked } from "@/lib/document/spotlight/parking";
 import { openInvoiceComposer } from "../accounts/invoice-overlays";
 
 export interface PriceLensProps {
@@ -640,11 +638,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
   // `Back to the invoice` stands while this job's composer is parked. A
   // composer put away from it un-parks, and the act goes; focus it held
   // falls to the room's heading, never to the page.
-  const composerParked = useSyncExternalStore(
-    subscribeParkedInvoiceComposers,
-    () => parkedInvoiceComposer(projectId) !== null,
-    () => false,
-  );
+  const composerParked = useParked(invoiceParkingKey(projectId)) !== null;
   const backHeldFocus = useRef(false);
   useEffect(() => {
     if (composerParked) return;

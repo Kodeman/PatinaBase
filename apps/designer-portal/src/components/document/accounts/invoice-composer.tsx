@@ -95,11 +95,9 @@ import {
   FOCUS_FFE_LINE_EVENT,
   OPEN_HOUSEHOLD_SHEET_EVENT,
   focusFfeLinePending,
-  parkInvoiceComposer,
-  parkedInvoiceComposer,
-  unparkInvoiceComposer,
   type FocusFfeLineRequest,
 } from "@/lib/document/registry";
+import { invoiceParkingKey, park, parkedState, unpark } from "@/lib/document/spotlight/parking";
 import { buildRoomHref } from "@/lib/document/pieces/build-room-url";
 import { parseRough } from "@/lib/document/pieces/rough-in-keys";
 import { isLaborLine } from "@/lib/document/stamp-derivation";
@@ -313,7 +311,7 @@ export function InvoiceComposer({
   // back as it left. An opener that asks for lines of its own starts fresh.
   const [parked] = useState<ParkedInvoiceComposer | null>(() =>
     context.projectId && !asksForLines(context)
-      ? parkedInvoiceComposer(context.projectId)
+      ? parkedState<ParkedInvoiceComposer>(invoiceParkingKey(context.projectId))
       : null,
   );
   const [tickedMilestoneIds, setTickedMilestoneIds] = useState<Set<string>>(
@@ -361,13 +359,13 @@ export function InvoiceComposer({
   // (drafting, discarding) clears it.
   const parkingRef = useRef(false);
   useEffect(() => {
-    const parkedFor = context.projectId;
+    const parkedFor = context.projectId && invoiceParkingKey(context.projectId);
     if (!parkedFor) return;
     // Re-asserted for a remount that reran the cleanup below.
-    if (parked) parkInvoiceComposer(parkedFor, parked);
-    else unparkInvoiceComposer(parkedFor);
+    if (parked) park(parkedFor, parked);
+    else unpark(parkedFor);
     return () => {
-      if (!parkingRef.current) unparkInvoiceComposer(parkedFor);
+      if (!parkingRef.current) unpark(parkedFor);
     };
   }, [context.projectId, parked]);
   // F2 — a Draft press is one act; closing the composer retires it. Retired
@@ -1370,7 +1368,10 @@ export function InvoiceComposer({
       }
     }
 
-    if (live()) onDrafted(invoice.id as string, projectId);
+    if (live()) {
+      unpark(invoiceParkingKey(projectId));
+      onDrafted(invoice.id as string, projectId);
+    }
   };
 
   const skippedFfe = useMemo(() => {
@@ -1415,7 +1416,7 @@ export function InvoiceComposer({
     ? buildRoomHref(projectId, { lens: "price", room: null })
     : "";
   const priceInPriceLens = (item: ComposerFfeItem) => {
-    parkInvoiceComposer(projectId, {
+    park(invoiceParkingKey(projectId), {
       milestoneIds: [...tickedMilestoneIds],
       timeEntryIds: [...tickedTimeIds],
       ffeItemIds: [...tickedFfeIds],
