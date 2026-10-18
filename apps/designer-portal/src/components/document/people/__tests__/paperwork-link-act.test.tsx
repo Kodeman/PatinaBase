@@ -235,6 +235,8 @@ describe("the paperwork mint act", () => {
       ),
     ).toEqual(["paperwork-link-firm-twin-cities-day"]);
     const day = screen.getByLabelText("The day it closes");
+    expect(day).toHaveAttribute("aria-labelledby", "paperwork-link-firm-twin-cities-day-label");
+    expect(screen.queryByLabelText("Thirty days")).not.toBeInTheDocument();
     expect(day.closest("[inert]")).toBeNull();
     expect(document.activeElement).toBe(day);
     fireEvent.change(day, { target: { value: "2026-11-21" } });

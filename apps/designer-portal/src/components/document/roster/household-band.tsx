@@ -867,11 +867,12 @@ export function HouseholdBand({
 
       {adding && (
         <div className="mt-2 border-l-2 border-[var(--color-pearl)] bg-white/40 px-3 py-2.5">
-          <label className={`mb-1 block ${META}`} htmlFor="household-person">
+          <label id="household-person-label" className={`mb-1 block ${META}`} htmlFor="household-person">
             Who else is in this household
           </label>
           <select
             id="household-person"
+            aria-labelledby="household-person-label"
             value={personId}
             onChange={(e) => setPersonId(e.target.value)}
             className={FIELD}

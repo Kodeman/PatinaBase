@@ -279,7 +279,7 @@ function VitalDate({
         aria-label={`Clear ${label.toLowerCase()}`}
         onClick={clear}
         disabled={state === 'saving'}
-        className="font-mono text-[11px] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)] disabled:opacity-50"
+        className="inline-flex min-h-6 min-w-6 items-center justify-center font-mono text-[11px] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)] disabled:opacity-50"
       >
         ×
       </button>

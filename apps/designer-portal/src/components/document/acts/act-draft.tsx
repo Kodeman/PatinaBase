@@ -344,11 +344,12 @@ export function ActDraft({
       )}
       {initial && (
         <div>
-          <label htmlFor={`${regionKey}-body`} className={LABEL_CLS}>
+          <label id={`${regionKey}-body-label`} htmlFor={`${regionKey}-body`} className={LABEL_CLS}>
             {bodyLabel}
           </label>
           <Textarea
             id={`${regionKey}-body`}
+            aria-labelledby={`${regionKey}-body-label`}
             rows={8}
             value={body}
             aria-describedby={missingBody && reasonsShown ? `${regionKey}-body-reason` : undefined}

@@ -919,7 +919,9 @@ describe("HouseholdBand — pressing a held act", () => {
     fireEvent.click(act);
 
     expect(windows()).toEqual(["household-person-held"]);
-    const fixer = screen.getByLabelText("Who else is in this household");
+    const fixer = screen.getByRole("combobox", { name: "Who else is in this household" });
+    expect(fixer).toHaveAttribute("aria-labelledby", "household-person-label");
+    expect(screen.queryByRole("combobox", { name: "What they do here" })).not.toBeInTheDocument();
     expect(fixer.closest("[inert]")).toBeNull();
     expect(act.closest("[inert]")).not.toBeNull();
     expect(document.activeElement).toBe(fixer);

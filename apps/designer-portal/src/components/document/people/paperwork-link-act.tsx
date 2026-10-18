@@ -239,11 +239,12 @@ export function PaperworkLinkAct({
 
             {choice === "named" && (
               <>
-                <label className={`mt-2 block ${LABEL}`} htmlFor={`${bandId}-day`}>
+                <label id={`${bandId}-day-label`} className={`mt-2 block ${LABEL}`} htmlFor={`${bandId}-day`}>
                   The day it closes
                 </label>
                 <input
                   id={`${bandId}-day`}
+                  aria-labelledby={`${bandId}-day-label`}
                   type="date"
                   value={namedDay}
                   onChange={(e) => setNamedDay(e.target.value)}

@@ -680,6 +680,16 @@ describe('Follow up this proposal', () => {
     expect(mockSendNote).not.toHaveBeenCalled();
   });
 
+  it('names the follow-up note from its visible label inside the lit window', () => {
+    openSheet(PROPOSAL_NEED);
+    const note = screen.getByRole('textbox', { name: 'Note' });
+    fireEvent.change(note, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send the follow-up to Mara Olsen' }));
+    expect(screen.getByRole('textbox', { name: 'Note' })).toBe(note);
+    expect(note).toHaveAttribute('aria-labelledby', 'act-follow-up-proposal-body-label');
+    expect(screen.queryByRole('textbox', { name: 'Subject' })).not.toBeInTheDocument();
+  });
+
   it('sends through the composer path from its named control, then marks acted', async () => {
     openSheet(PROPOSAL_NEED);
     fireEvent.click(screen.getByRole('button', { name: 'Send the follow-up to Mara Olsen' }));
