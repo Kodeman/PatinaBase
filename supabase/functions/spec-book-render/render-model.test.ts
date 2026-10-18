@@ -3,9 +3,11 @@
 import {
   assertEquals,
   assertRejects,
+  assertThrows,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   alsoInText,
+  assertAudienceModelPrivacy,
   buildAudienceRenderModel,
   canonicalStringify,
   MAX_RENDER_ITEMS,
@@ -49,6 +51,61 @@ function furnitureConfiguration(
     lockedAt: "2026-07-30T15:05:00.000Z",
   };
 }
+
+Deno.test("client selection values strip nested money keys and privacy scan rejects reintroduction", async () => {
+  const source = frozenSnapshot();
+  const simple = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: {
+          dimensions: { value: { width: 60, cost: 850, retail: 1200 } },
+        },
+      }],
+    }),
+    "client",
+    context,
+  );
+  assertEquals(simple.items[0].selection.dimensions, { value: { width: 60 } });
+  const dimensions = {
+    width: 60,
+    unit: "in",
+    cost: 850,
+    retail: 1200,
+    MSRP: 1300,
+    trade: 700,
+    wholesale: 600,
+    net: 500,
+    unit_cost: 400,
+    listPrice: 300,
+    grossMargin: 200,
+    mark_up: 100,
+    nested: { shippingRetail: 90, height: 30 },
+  };
+  const snapshot = frozenSnapshot({
+    items: [{
+      ...source.items[0],
+      selection: { dimensions: { value: dimensions } },
+    }],
+  });
+  const client = await buildAudienceRenderModel(snapshot, "client", context);
+  assertEquals(client.items[0].selection.dimensions, {
+    value: { width: 60, unit: "in", nested: { height: 30 } },
+  });
+  const internal = await buildAudienceRenderModel(
+    snapshot,
+    "internal",
+    context,
+  );
+  assertEquals(internal.items[0].selection.dimensions, { value: dimensions });
+  (client.items[0].selection.dimensions as { value: Record<string, unknown> })
+    .value.unit_cost = 850;
+  assertThrows(
+    () => assertAudienceModelPrivacy(client),
+    RenderModelError,
+    "Forbidden field",
+  );
+});
 
 Deno.test("audience allow-lists remove private procurement and cost fields", async () => {
   const forbiddenKeys = [
@@ -825,6 +882,54 @@ Deno.test("default-valued piece keys leave every edition exactly as before", asy
     if (audience === "internal") continue; // internal keeps the raw item
     assertEquals(canonicalStringify(after), canonicalStringify(before));
   }
+});
+
+Deno.test("R4: suppressed configuration measurements do not change client hash", async () => {
+  const source = frozenSnapshot();
+  const configured = configuredFurniture();
+  const item = {
+    ...source.items[0],
+    selection: { dimensions: { value: { width: 60, unit: "in" } } },
+    configuration: {
+      ...configured,
+      snapshot: {
+        ...configured.snapshot,
+        dimensions: { width: 70, unit: "in" },
+      },
+    },
+  };
+  const base = frozenSnapshot({ items: [item] });
+  const current = frozenSnapshot({
+    issue: {
+      type: "addendum",
+      reason: "Unprinted configuration update",
+      baseRevisionId: "30000000-0000-4000-8000-000000000001",
+    },
+    items: [{
+      ...item,
+      configuration: {
+        ...item.configuration,
+        snapshot: {
+          ...item.configuration.snapshot,
+          dimensions: { width: 71, unit: "in" },
+        },
+      },
+    }],
+  });
+  const addendum = await buildAudienceRenderModel(current, "client", {
+    ...context,
+    revisionNumber: 2,
+    issueType: "addendum",
+  }, base);
+  assertEquals(addendum.items, []);
+  assertEquals(addendum.changes, []);
+  const full = await buildAudienceRenderModel(
+    frozenSnapshot({ items: current.items }),
+    "client",
+    context,
+  );
+  const before = await buildAudienceRenderModel(base, "client", context);
+  assertEquals(full.items[0].contentHash, before.items[0].contentHash);
 });
 
 Deno.test("F6: unprinted dimension change is not a client addendum", async () => {

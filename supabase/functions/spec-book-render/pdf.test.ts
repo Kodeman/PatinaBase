@@ -68,7 +68,7 @@ Deno.test("page plan paginates contents and assigns stable chapter page numbers"
   assertEquals(lastChapter?.pageNumber, 82);
 });
 
-Deno.test("chapter dividers say Trade, Room or Chapter (00767, SQ-842 F9)", async () => {
+Deno.test("client chapter dividers say Category, Room or Chapter (00767, SQ-842 F9)", async () => {
   // As _prepare_spec_book_issue_00403 freezes them (00380:1558): a trade
   // chapter has no room and the 'trade' page template; a room chapter has a
   // room; a chapter the studio made by hand has neither.
@@ -129,16 +129,19 @@ Deno.test("chapter dividers say Trade, Room or Chapter (00767, SQ-842 F9)", asyn
     entry.kind === "chapter" ? [[entry.eyebrow, entry.name]] : []
   );
   assertEquals(dividers, [
-    ["Trade", "Lighting"],
+    ["Category", "Lighting"],
     ["Room", "Hall"],
     ["Chapter", "Owners selections"],
     ["Chapter", "Unassigned"],
   ]);
 
-  // The eyebrow prints upper case and letter-spaced ("T R A D E").
+  // The eyebrow prints upper case and letter-spaced ("C A T E G O R Y").
   const text = (await extractedText(await renderSpecBookPdf(model)))
     .replace(/\s+/g, "");
-  assert(text.includes("TRADELighting"), "a trade divider prints Trade");
+  assert(
+    text.includes("CATEGORYLighting"),
+    "a client trade divider prints Category",
+  );
   assert(text.includes("ROOMHall"), "a room divider keeps Room");
   assert(
     text.includes("CHAPTEROwnersselections"),
@@ -236,7 +239,8 @@ Deno.test("client PDF strips money keys and humanises numeric own extras", async
     );
   }
   assert(text.includes("W 60 in"));
-  assert(text.includes("Mystery 999 in"));
+  assert(text.includes("Mystery 999"));
+  assertEquals(text.includes("Mystery 999 in"), false);
 });
 
 Deno.test("client PDF omits boolean selection values", async () => {
@@ -331,6 +335,135 @@ Deno.test("client PDF configuration fallback formats diameter and seat height wi
   assert(text.includes("Seat H 18 in"));
 });
 
+Deno.test("R1: vendor installer and client PDFs omit money-like dimension extras", async () => {
+  const source = frozenSnapshot();
+  const snapshot = frozenSnapshot({
+    items: [{
+      ...source.items[0],
+      selection: {
+        dimensions: {
+          value: {
+            width: 60,
+            cost: 850,
+            retail: 1200,
+            unit_cost: 750,
+            totalAmount: 1950,
+            privateNotes: 4321,
+            unit: "in",
+          },
+        },
+      },
+    }],
+  });
+  for (const audience of ["vendor", "installer", "client"] as const) {
+    const model = await buildAudienceRenderModel(snapshot, audience, context);
+    const text = await extractedText(await renderSpecBookPdf(model));
+    assert(text.includes("W 60 in"), `${audience} lost its width`);
+    for (
+      const money of [
+        "Cost 850",
+        "Retail 1200",
+        "Unit Cost 750",
+        "Total Amount 1950",
+        "Private Notes 4321",
+      ]
+    ) {
+      assertEquals(text.includes(money), false, `${audience} printed ${money}`);
+    }
+  }
+});
+
+Deno.test("R2: client Issue drops forbidden configuration dimension keys", async () => {
+  const source = frozenSnapshot();
+  const base = configuredFurniture();
+  const model = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[1],
+        configuration: {
+          ...base,
+          snapshot: {
+            ...base.snapshot,
+            dimensions: {
+              width: 60,
+              unit: "in",
+              privateNotes: "internal instruction",
+            },
+          },
+        },
+      }],
+    }),
+    "client",
+    context,
+  );
+  const text = await extractedText(await renderSpecBookPdf(model));
+  assert(text.includes("W 60 in"));
+  assertEquals(text.includes("internal instruction"), false);
+  assertEquals(JSON.stringify(model).includes("privateNotes"), false);
+});
+
+Deno.test("R3: bare selection dimension strings print verbatim in the PDF", async () => {
+  const source = frozenSnapshot();
+  const model = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: { dimensions: "60 × 18 × 30 in" },
+      }],
+    }),
+    "client",
+    context,
+  );
+  const text = await extractedText(await renderSpecBookPdf(model));
+  assert(text.replace(/\s+/g, " ").includes("60 × 18 × 30 in"), text);
+  assertEquals(
+    selectionRows(model.items[0].selection).find(([key]) =>
+      key === "dimensions"
+    ),
+    ["dimensions", "60 × 18 × 30 in"],
+  );
+});
+
+Deno.test("R5: numeric unknown dimensions print without length units", async () => {
+  const source = frozenSnapshot();
+  const model = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: {
+          dimensions: { value: { count: 4, angle: 90, unit: "in" } },
+        },
+      }],
+    }),
+    "client",
+    context,
+  );
+  const text = await extractedText(await renderSpecBookPdf(model));
+  assert(text.includes("Count 4 · Angle 90"));
+  assertEquals(text.includes("Count 4 in"), false);
+  assertEquals(text.includes("Angle 90 in"), false);
+});
+
+Deno.test("R6: PDF prints weight before other known lengths", async () => {
+  const source = frozenSnapshot();
+  const model = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: {
+          dimensions: {
+            value: { thickness: 2, weight: 30, unit: "in", weightUnit: "lb" },
+          },
+        },
+      }],
+    }),
+    "client",
+    context,
+  );
+  const text = await extractedText(await renderSpecBookPdf(model));
+  assert(text.includes("Weight 30 lb · Thickness 2 in"));
+});
+
 Deno.test("client PDF prints the configuration selections without any pricing", async () => {
   const source = frozenSnapshot();
   const configured = frozenSnapshot({
@@ -370,7 +503,7 @@ Deno.test("client PDF prints the configuration selections without any pricing", 
   // …and a sheet without one falls back to the configuration's dimensions.
   const loungePage = text.split("\n").find((page) => page.includes("LR-101"))!;
   assert(loungePage.includes("Dimensions"));
-  assert(loungePage.includes("96 × 40 × 31"));
+  assert(loungePage.includes("W 96 × D 40 × H 31 in"));
   for (
     const marker of [
       "1240000",
@@ -542,7 +675,7 @@ Deno.test("F1: PDF orders axes then known and own numeric dimensions", async () 
   });
   assert(
     text.replace(/\s+/g, " ").includes(
-      "W 60 × D 40 × H 31 in · Dia 42 in · Leg H 17 in · Extra Depth 9 in",
+      "W 60 × D 40 × H 31 in · Dia 42 in · Leg H 17 in · Extra Depth 9",
     ),
     text,
   );

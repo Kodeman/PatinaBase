@@ -190,6 +190,33 @@ const FIELD_ALIASES: Record<string, string[]> = {
   leadTime: ["leadTime", "lead_time", "leadTimeWeeks", "lead_time_weeks"],
 };
 
+const CLIENT_MONEY_KEY_PARTS = [
+  "cost",
+  "price",
+  "retail",
+  "margin",
+  "markup",
+  "amount",
+  "total",
+];
+const CLIENT_MONEY_KEYS = new Set(["msrp", "trade", "wholesale", "net"]);
+
+function isClientMoneyKey(key: string): boolean {
+  const compact = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return CLIENT_MONEY_KEYS.has(compact) ||
+    CLIENT_MONEY_KEY_PARTS.some((part) => compact.includes(part));
+}
+
+function stripClientMoneyKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripClientMoneyKeys);
+  if (!isRecord(value)) return canonicalClone(value);
+  const safe: JsonRecord = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (!isClientMoneyKey(key)) safe[key] = stripClientMoneyKeys(child);
+  }
+  return safe;
+}
+
 const FORBIDDEN_NON_INTERNAL_KEY_PARTS = [
   "trade",
   "markup",
@@ -199,6 +226,26 @@ const FORBIDDEN_NON_INTERNAL_KEY_PARTS = [
   "internal_contact",
   "procurement",
 ];
+
+function isUnsafeDimensionKey(key: string): boolean {
+  const compact = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return isClientMoneyKey(key) || FORBIDDEN_NON_INTERNAL_KEY_PARTS.some(
+    (part) =>
+      part === "trade"
+        ? compact.startsWith("trade")
+        : compact.includes(part.replace(/[^a-z0-9]/g, "")),
+  );
+}
+
+function stripUnsafeDimensionKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripUnsafeDimensionKeys);
+  if (!isRecord(value)) return value;
+  const safe: JsonRecord = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (!isUnsafeDimensionKey(key)) safe[key] = stripUnsafeDimensionKeys(child);
+  }
+  return safe;
+}
 
 const DEFAULT_AUDIENCE_ALLOW: Record<SpecBookAudience, string[]> = {
   client: [
@@ -272,10 +319,12 @@ function nestedField(item: JsonRecord, aliases: string[]): unknown {
 function safeResolvedValue(
   value: unknown,
   includeProvenance: boolean,
+  clientAudience: boolean,
 ): unknown {
-  if (!isRecord(value)) return canonicalClone(value);
+  const safeClone = clientAudience ? stripClientMoneyKeys : canonicalClone;
+  if (!isRecord(value)) return safeClone(value);
   const out: JsonRecord = {};
-  if ("value" in value) out.value = canonicalClone(value.value);
+  if ("value" in value) out.value = safeClone(value.value);
   if (typeof value.na === "boolean") out.na = value.na;
   const naReason = stringValue(value.naReason ?? value.na_reason);
   if (naReason) out.naReason = naReason;
@@ -451,22 +500,57 @@ const DIMENSION_LABELS: Record<string, string> = {
   weight: "Weight",
 };
 const DIMENSION_AXES = ["width", "depth", "height"];
+const DIMENSION_PRIORITY = [
+  "diameter",
+  "seatheight",
+  "armheight",
+  "legheight",
+  "length",
+  "weight",
+];
 const DIMENSION_METADATA = new Set(["unit", "units", "weightunit"]);
 const normalizeDimensionKey = (key: string) =>
   key.toLowerCase().replace(/[^a-z0-9]/g, "");
+const numericDimensionValue = (candidate: unknown) =>
+  typeof candidate === "number"
+    ? Number.isFinite(candidate)
+    : typeof candidate === "string" && candidate.trim() !== "" &&
+      Number.isFinite(Number(candidate));
+
+function safeDimensionEntries(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const entries = value.map(safeDimensionEntries).filter(Boolean);
+    return entries.length ? entries : null;
+  }
+  if (!isRecord(value)) return null;
+  const safe: JsonRecord = {};
+  for (const [key, child] of Object.entries(value)) {
+    const normalized = normalizeDimensionKey(key);
+    if (isUnsafeDimensionKey(key)) continue;
+    if (DIMENSION_METADATA.has(normalized)) {
+      if (typeof child === "string") safe[key] = child;
+    } else if (numericDimensionValue(child)) {
+      safe[key] = child;
+    }
+  }
+  return Object.keys(safe).some((key) =>
+      !DIMENSION_METADATA.has(normalizeDimensionKey(key))
+    )
+    ? safe
+    : null;
+}
 
 /** The sole printed projection for selection, configuration and audience hash. */
 export function dimensionText(value: unknown): string {
-  if (Array.isArray(value)) {
-    return value.filter(isRecord).map(dimensionText).filter(Boolean).join(
-      " / ",
-    );
+  const safe = safeDimensionEntries(value);
+  if (Array.isArray(safe)) {
+    return safe.map(dimensionText).filter(Boolean).join(" / ");
   }
-  if (!isRecord(value)) return "";
-  const entries = Object.keys(value).map((key) => ({
+  if (!isRecord(safe)) return "";
+  const entries = Object.keys(safe).map((key) => ({
     key,
     normalized: normalizeDimensionKey(key),
-    value: value[key],
+    value: safe[key],
   }));
   const metadata = (name: string) =>
     entries.find((entry) => entry.normalized === name)?.value;
@@ -476,28 +560,27 @@ export function dimensionText(value: unknown): string {
     typeof candidate === "string" && candidate.trim()
       ? ` ${candidate.trim()}`
       : "";
-  const numeric = (candidate: unknown) =>
-    typeof candidate === "number"
-      ? Number.isFinite(candidate)
-      : typeof candidate === "string" && candidate.trim() !== "" &&
-        Number.isFinite(Number(candidate));
   const seen = new Set<string>();
   const ordered = [
     ...DIMENSION_AXES.flatMap((axis) =>
       entries.filter((entry) => entry.normalized === axis)
     ),
-    ...Object.keys(DIMENSION_LABELS).flatMap((name) =>
+    ...DIMENSION_PRIORITY.flatMap((name) =>
       entries.filter((entry) => entry.normalized === name)
     ),
+    ...Object.keys(DIMENSION_LABELS)
+      .filter((name) => !DIMENSION_PRIORITY.includes(name))
+      .flatMap((name) => entries.filter((entry) => entry.normalized === name)),
     ...entries.filter((entry) =>
       !DIMENSION_AXES.includes(entry.normalized) &&
       !Object.hasOwn(DIMENSION_LABELS, entry.normalized)
     ),
   ].filter((entry) => {
     if (
-      DIMENSION_METADATA.has(entry.normalized) || !numeric(entry.value) ||
-      seen.has(entry.normalized)
-    ) return false;
+      DIMENSION_METADATA.has(entry.normalized) || seen.has(entry.normalized)
+    ) {
+      return false;
+    }
     seen.add(entry.normalized);
     return true;
   });
@@ -519,7 +602,11 @@ export function dimensionText(value: unknown): string {
         .replace(/\b\w/g, (letter) =>
           letter.toUpperCase());
     return `${label} ${String(entry.value).trim()}${
-      entry.normalized === "weight" ? suffix(weightUnit) : suffix(unit)
+      entry.normalized === "weight"
+        ? suffix(weightUnit)
+        : Object.hasOwn(DIMENSION_LABELS, entry.normalized)
+        ? suffix(unit)
+        : ""
     }`;
   });
   return [
@@ -527,11 +614,6 @@ export function dimensionText(value: unknown): string {
     ...extraText,
   ]
     .filter(Boolean).join(" · ");
-}
-
-function safeDimensionEntries(value: unknown): unknown {
-  const safe = stripClientMoneyKeys(value);
-  return dimensionText(safe) ? safe : null;
 }
 
 /**
@@ -638,7 +720,14 @@ function buildSafeItem(
     if (!allows(token)) continue;
     const value = nestedField(item, aliases);
     if (value !== undefined && value !== null && value !== "") {
-      selection[field] = safeResolvedValue(value, includeProvenance);
+      const resolved = safeResolvedValue(
+        value,
+        includeProvenance,
+        audience === "client",
+      );
+      selection[field] = field === "dimensions" && audience !== "internal"
+        ? stripUnsafeDimensionKeys(resolved)
+        : resolved;
     }
   }
 
@@ -902,9 +991,18 @@ async function audienceItemHash(
     else delete safeItem.selection.dimensions;
   }
   if (safeItem.configuration?.dimensions) {
-    safeItem.configuration.dimensions = dimensionText(
-      safeItem.configuration.dimensions,
-    );
+    if (
+      (typeof safeItem.selection.dimensions === "string" &&
+        safeItem.selection.dimensions.trim() !== "") ||
+      (isRecord(safeItem.selection.dimensions) &&
+        safeItem.selection.dimensions.na === true)
+    ) {
+      delete safeItem.configuration.dimensions;
+    } else {
+      safeItem.configuration.dimensions = dimensionText(
+        safeItem.configuration.dimensions,
+      );
+    }
   }
   return await sha256Hex(canonicalStringify(safeItem));
 }
@@ -1373,9 +1471,15 @@ export function assertAudienceModelPrivacy(model: AudienceRenderModel): void {
       const compact = key.toLowerCase().replace(/[-\s]/g, "");
       const layoutMargin = path === "model.template.page" &&
         compact === "margin";
+      const allowedClientPrice = model.audience === "client" &&
+        path.endsWith(".commercial") && key === "clientPriceCents";
       if (
         !layoutMargin &&
-        FORBIDDEN_NON_INTERNAL_KEY_PARTS.some((part) => compact.includes(part))
+        (FORBIDDEN_NON_INTERNAL_KEY_PARTS.some((part) =>
+          compact.includes(part)
+        ) ||
+          (model.audience === "client" && !allowedClientPrice &&
+            isClientMoneyKey(key)))
       ) {
         throw new RenderModelError(
           "privacy_violation",

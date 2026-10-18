@@ -13,10 +13,12 @@ import {
   type SpecBookRenderRepository,
 } from "./core.ts";
 import {
+  buildAudienceRenderModel,
   canonicalStringify,
   type RenderMedia,
   sha256Hex,
 } from "./render-model.ts";
+import { buildPagePlan, selectionRows } from "./pdf.ts";
 import { frozenSnapshot } from "./test-fixtures.ts";
 
 const ARTIFACT_ID = "40000000-0000-4000-8000-000000000001";
@@ -342,6 +344,123 @@ Deno.test("addendum rejects a base snapshot checksum mismatch before rendering",
   );
   assertEquals(repo.uploads, []);
   assertEquals(repo.failed[0].code, "base_snapshot_checksum_mismatch");
+});
+
+Deno.test("SKU without value and na false has no printed row", () => {
+  assertEquals(selectionRows({ sku: { na: false } }), []);
+});
+
+Deno.test("SKU value prints instead of the na boolean", () => {
+  assertEquals(selectionRows({ sku: { na: false, value: "EW-600" } }), [
+    ["sku", "EW-600"],
+  ]);
+});
+
+Deno.test("SKU marked na true prints N/A", () => {
+  assertEquals(selectionRows({ sku: { na: true, value: "EW-600" } }), [
+    ["sku", "N/A"],
+  ]);
+});
+
+Deno.test("object dimensions print labeled W D H and one unit", () => {
+  assertEquals(
+    selectionRows({
+      dimensions: { value: { depth: 68, height: 82, unit: "in", width: 22 } },
+    }),
+    [["dimensions", "W 22 × D 68 × H 82 in"]],
+  );
+});
+
+Deno.test("partial object dimensions print only present axes", () => {
+  assertEquals(
+    selectionRows({
+      dimensions: { value: { height: 82, unit: "in", width: 22 } },
+    }),
+    [["dimensions", "W 22 × H 82 in"]],
+  );
+});
+
+Deno.test("diameter and seat height dimensions retain both measurements", () => {
+  assertEquals(
+    selectionRows({
+      dimensions: { value: { diameter: 42, seatHeight: 18, unit: "in" } },
+    }),
+    [["dimensions", "Dia 42 in · Seat H 18 in"]],
+  );
+});
+
+Deno.test("W D H dimensions retain additional measurements in stable order", () => {
+  assertEquals(
+    selectionRows({
+      dimensions: {
+        value: {
+          seatDepth: 19,
+          diameter: 42,
+          height: 82,
+          depth: 68,
+          width: 22,
+          unit: "in",
+        },
+      },
+    }),
+    [["dimensions", "W 22 × D 68 × H 82 in · Dia 42 in · Seat Depth 19 in"]],
+  );
+});
+
+Deno.test("dimensions accept the units alias", () => {
+  assertEquals(
+    selectionRows({
+      dimensions: { value: { width: 60, depth: 40, units: "cm" } },
+    }),
+    [["dimensions", "W 60 × D 40 cm"]],
+  );
+});
+
+Deno.test("N/A selection retains its reason", () => {
+  assertEquals(
+    selectionRows({ sku: { na: true, naReason: "By approved drawing" } }),
+    [["sku", "N/A — By approved drawing"]],
+  );
+});
+
+Deno.test("N/A selection without a reason remains bare", () => {
+  assertEquals(
+    selectionRows({ sku: { na: true, value: "EW-600" } }),
+    [["sku", "N/A"]],
+  );
+  assertEquals(selectionRows({ dimensions: { na: true } }), [[
+    "dimensions",
+    "N/A",
+  ]]);
+});
+
+Deno.test("unresolved dimensions finish and material omit empty na false envelopes", () => {
+  assertEquals(
+    selectionRows({
+      dimensions: { na: false },
+      finish: { na: false },
+      material: { na: false },
+    }),
+    [],
+  );
+});
+
+Deno.test("client trade chapter is labeled Category; internal remains Trade", async () => {
+  for (const audience of ["client", "internal"] as const) {
+    const model = await buildAudienceRenderModel(frozenSnapshot(), audience, {
+      revisionNumber: 1,
+      createdAt: "2026-07-30T15:05:00.000Z",
+      issueType: "full",
+    });
+    model.chapters[0].kind = "trade";
+    const divider = buildPagePlan(model).find((page) =>
+      page.kind === "chapter" && page.chapterId === model.chapters[0].id
+    );
+    assertEquals(
+      divider?.kind === "chapter" && divider.eyebrow,
+      audience === "client" ? "Category" : "Trade",
+    );
+  }
 });
 
 Deno.test("non-claimable ready or concurrently claimed artifact does not mutate failure state", async () => {

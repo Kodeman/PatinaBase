@@ -26,7 +26,10 @@ import {
   quantityText,
   renderMediaIdentity,
 } from "./render-model.ts";
-import { DEFAULT_CURRENCY, formatMinorUnits } from "../_shared/currency-totals.ts";
+import {
+  DEFAULT_CURRENCY,
+  formatMinorUnits,
+} from "../_shared/currency-totals.ts";
 
 const h = React.createElement;
 const CONTENTS_ROWS_PER_PAGE = 34;
@@ -156,7 +159,9 @@ export function buildPagePlan(model: AudienceRenderModel): PagePlanEntry[] {
       pageNumber: cursor++,
       chapterId: chapter.id,
       name: chapter.name,
-      eyebrow: CHAPTER_EYEBROW[chapter.kind],
+      eyebrow: model.audience === "client" && chapter.kind === "trade"
+        ? "Category"
+        : CHAPTER_EYEBROW[chapter.kind],
     });
     for (const item of items) {
       plan.push({ kind: "item", pageNumber: cursor++, item });
@@ -335,10 +340,7 @@ const styles = StyleSheet.create({
 
 function valueText(value: unknown): string {
   if (value === null || value === undefined) return "";
-  if (
-    typeof value === "string" || typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
+  if (typeof value === "string" || typeof value === "number") {
     return String(value);
   }
   if (Array.isArray(value)) {
@@ -354,6 +356,7 @@ function valueText(value: unknown): string {
       }`;
     }
     if ("value" in record) return valueText(record.value);
+    if (record.na === false) return "";
     return Object.values(record).map(valueText).filter(Boolean).join(", ");
   }
   return "";
@@ -378,7 +381,9 @@ export function selectionRows(
         ? value as Record<string, unknown>
         : null;
       const nested = dimensions?.value;
-      text = dimensions?.na === true
+      text = typeof value === "string"
+        ? value
+        : dimensions?.na === true
         ? valueText(dimensions)
         : nested && typeof nested === "object" && !Array.isArray(nested) &&
             (nested as Record<string, unknown>).na === true
@@ -484,7 +489,7 @@ function itemPage(
   // The client price prints in its own currency; `currency` is not a row.
   const { currency = DEFAULT_CURRENCY, ...commercial } = item.commercial;
   const fields = [
-    ...Object.entries(item.selection),
+    ...selectionRows(item.selection),
     ...Object.entries(item.vendor).map(([key, value]) =>
       [`Vendor ${key}`, value] as const
     ),
