@@ -1,11 +1,13 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
+import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight";
 import {
   agreementConsequenceSentence,
   type AgreementPart,
 } from "@patina/types";
 import { DocSheet } from "../overlays/doc-sheet";
+import { CopyAct } from "../copy-act";
 import { Button, Textarea } from "@/components/ui/controls";
 import { useSendServiceAgreement } from "@/hooks/use-commercial-documents";
 import {
@@ -44,6 +46,9 @@ export function ServiceAgreementSendSheet({
   recipientName,
   parts,
   readinessOverride,
+  onFixPart,
+  onFixClient,
+  ownerName,
 }: {
   open: boolean;
   onClose: () => void;
@@ -70,9 +75,12 @@ export function ServiceAgreementSendSheet({
    *  entitled to (R4). Omitted on the flag-off path, where nothing moves. */
   readinessOverride?: {
     ready: boolean;
-    blockers: string[];
+    blockers: Array<string | { message: string; partId?: string; partTitle?: string; code?: string }>;
     notes: string[];
   };
+  onFixPart?: (partId: string) => void;
+  onFixClient?: () => void;
+  ownerName?: string;
 }) {
   const send = useSendServiceAgreement(document.id);
   /* W3R2-05 — THE SHEET DESCRIBES THE PAPER IT IS SENDING. The class is named
@@ -83,6 +91,8 @@ export function ServiceAgreementSendSheet({
   const [result, setResult] = useState<string | null>(null);
   const blockerListId = useId();
   const noteHintId = useId();
+  const askNoteRef = useRef<HTMLSpanElement>(null);
+  const askNote = `Could you link a client to ${document.title}? I'm preparing its agreement.`;
   const readiness =
     readinessOverride ??
     assessServiceAgreementReadiness({
@@ -91,6 +101,28 @@ export function ServiceAgreementSendSheet({
       rates,
       recipientEmail,
     });
+  const blockerRows = readiness.blockers.map((entry) => {
+    const blocker = typeof entry === "string" ? { message: entry, code: undefined } : entry;
+    const isClient = blocker.message === "Link a client with an email address.";
+    const partId = blocker.partId;
+    return {
+      ...blocker,
+      id: `${blockerListId}-${partId ? `part-${partId}${blocker.code ? `-${blocker.code}` : ""}` : blocker.code ?? (isClient ? "client" : `reason-${encodeURIComponent(blocker.message)}`)}`,
+      label: blocker.partTitle ?? (isClient ? "Client account" : "Finish before sending"),
+      fix: partId && onFixPart
+        ? { label: `Fix ${blocker.partTitle?.trim() || "this part"}`, run: () => onFixPart(partId) }
+        : isClient && onFixClient
+          ? { label: "Link a client", run: onFixClient }
+          : null,
+      ask: isClient && !onFixClient,
+    };
+  });
+  const holds: SpotlightHold[] = blockerRows.map((row) => ({
+    id: row.id,
+    target: () => window.document.getElementById(row.id),
+    label: row.label,
+    reason: row.message,
+  }));
   const currency = terms?.currency ?? "USD";
   const consequence = agreementConsequenceSentence({
     recipientName,
@@ -161,8 +193,28 @@ export function ServiceAgreementSendSheet({
               Finish before sending
             </p>
             <ul className="mt-2 space-y-1 text-[12px] text-[var(--color-mocha)]">
-              {readiness.blockers.map((blocker) => (
-                <li key={blocker}>{blocker}</li>
+              {blockerRows.map((row) => (
+                <li key={row.id} id={row.id} className="space-y-1">
+                  <span>{row.message}</span>
+                  {row.fix && (
+                    <button
+                      type="button"
+                      onClick={row.fix.run}
+                      className="ml-2 text-[var(--color-terracotta-ink)] underline underline-offset-4"
+                    >
+                      {row.fix.label}
+                    </button>
+                  )}
+                  {row.ask && (
+                    <div className="mt-1">
+                      <p>Ask {ownerName || "the proposal's owner"} to link a client.</p>
+                      <p className="text-[var(--color-aged-oak)]">“<span ref={askNoteRef}>{askNote}</span>”</p>
+                      <CopyAct text={askNote} selectRef={askNoteRef} actionKey="copy-agreement-client-note" surfaceKey="commercial" regionKey="agreement-send-sheet">
+                        Copy a note
+                      </CopyAct>
+                    </div>
+                  )}
+                </li>
               ))}
             </ul>
           </div>
@@ -220,21 +272,7 @@ export function ServiceAgreementSendSheet({
                in flight, marking the act `aria-disabled` with no reason
                attached and announcing that a ready agreement was not ready. */
             held={!readiness.ready}
-            holds={
-              readiness.ready
-                ? undefined
-                : [
-                    {
-                      id: blockerListId,
-                      target: () =>
-                        window.document.getElementById(blockerListId),
-                      label: "Finish before sending",
-                      reason:
-                        readiness.blockers[0] ??
-                        "This agreement is not ready to send yet.",
-                    },
-                  ]
-            }
+            holds={readiness.ready ? undefined : holds}
             onHeldActivate={() => setResult(null)}
             aria-describedby={readiness.ready ? undefined : blockerListId}
             loading={send.isPending}

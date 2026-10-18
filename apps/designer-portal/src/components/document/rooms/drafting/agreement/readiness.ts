@@ -49,6 +49,8 @@ export interface AgreementBlocker {
    *  for a blocker about the document as a whole (its kind, its state, its
    *  client, the class floor). */
   partId: string | null;
+  /** Stable check identity, independent of the displayed sentence. */
+  code?: string;
   message: string;
   /**
    * The imperative phrase the readiness voice counts with — "name a fee",
@@ -236,7 +238,8 @@ export function assessAgreementReadiness({
     partId: string | null,
     message: string,
     voice?: { ask: string; cleared?: string; quiet?: boolean },
-  ) => blockers.push({ partId, message, ...voice });
+    code?: string,
+  ) => blockers.push({ partId, message, code, ...voice });
 
   // R-1 / R-2 — the document itself, unchanged from the flag-off wording.
   if (
@@ -247,10 +250,12 @@ export function assessAgreementReadiness({
     add(
       null,
       "Only a design services agreement or addendum can use this send review.",
+      undefined,
+      "document-kind",
     );
   }
   if (document.state !== "draft") {
-    add(null, "Only a draft agreement can be sent.");
+    add(null, "Only a draft agreement can be sent.", undefined, "document-state");
   }
 
   // R-11 — the DB's UNIQUE (proposal_id, part_key) would raise 23505 at save.
@@ -261,7 +266,7 @@ export function assessAgreementReadiness({
     if (seenKeys.has(part.partKey)) {
       if (!reportedDuplicates.has(part.partKey)) {
         reportedDuplicates.add(part.partKey);
-        add(part.id, `Two parts share the key ${part.partKey}. Rename one.`);
+        add(part.id, `Two parts share the key ${part.partKey}. Rename one.`, undefined, "duplicate-key");
       }
     }
     seenKeys.add(part.partKey);
@@ -274,7 +279,7 @@ export function assessAgreementReadiness({
   // arrives any other way, in the RPC's own words.
   for (const duplicate of duplicateMoneyVariants(parts)) {
     for (const partId of duplicate.partIds.slice(1)) {
-      add(partId, duplicateMoneyBlocker(duplicate.label));
+      add(partId, duplicateMoneyBlocker(duplicate.label), undefined, `duplicate-${duplicate.variant}`);
     }
   }
 
@@ -284,7 +289,7 @@ export function assessAgreementReadiness({
   // (check_violation, 00577) at Save. The picker no longer offers the second;
   // this catches one that arrives from a template or a Library part.
   for (const extra of feeBasisParts(parts).slice(1)) {
-    add(extra.id, FEE_BASIS_BLOCKER);
+    add(extra.id, FEE_BASIS_BLOCKER, undefined, "fee-basis");
   }
 
   for (const part of parts) {
@@ -292,7 +297,7 @@ export function assessAgreementReadiness({
 
     // R-12 — the table CHECKs a non-blank title.
     if (!part.title.trim()) {
-      add(part.id, "Name this part.");
+      add(part.id, "Name this part.", undefined, "title");
     }
 
     // R-4 — `required` is per part, and what "complete" means depends on the
@@ -300,7 +305,7 @@ export function assessAgreementReadiness({
     // optional and empty is a choice, not a defect.
     if (part.required) {
       if (part.kind === "clause" && !readBody(payload).trim()) {
-        add(part.id, `Write ${part.title.trim() || "this part"}.`);
+        add(part.id, `Write ${part.title.trim() || "this part"}.`, undefined, "body");
       }
       if (
         part.kind === "list" &&
@@ -309,10 +314,12 @@ export function assessAgreementReadiness({
         add(
           part.id,
           `Add at least one item to ${part.title.trim() || "this part"}.`,
+          undefined,
+          "items",
         );
       }
       if (part.kind === "schedule" && !scheduleValueIsSet(part)) {
-        add(part.id, `Complete ${part.title.trim() || "this part"}.`);
+        add(part.id, `Complete ${part.title.trim() || "this part"}.`, undefined, "required-schedule");
       }
     }
 
@@ -326,23 +333,23 @@ export function assessAgreementReadiness({
           (role) => role.roleName.trim().length > 0 && role.hourlyRateCents > 0,
         )
       ) {
-        add(part.id, "Add at least one role with an hourly rate.");
+        add(part.id, "Add at least one role with an hourly rate.", undefined, "role-rate");
       } else if (roles.some((role) => !(role.hourlyRateCents > 0))) {
         // Only where R-7 above is silent: a card that already carries one real
         // rate is the case a seeded $0 row rides in on unremarked.
-        add(part.id, ZERO_RATE_BLOCKER);
+        add(part.id, ZERO_RATE_BLOCKER, undefined, "zero-rate");
       }
       // Every role, not just one of them: the RPC walks the whole array and
       // refuses on the first blank name, so a named role standing beside a
       // blank one is a save the server will not take.
       if (roles.some((role) => role.roleName.trim().length === 0)) {
-        add(part.id, BLANK_ROLE_BLOCKER);
+        add(part.id, BLANK_ROLE_BLOCKER, undefined, "blank-role");
       }
       // HT-4 — and every rate binds to a roster role, or the hours it was
       // written to price strand at `rate_source='none'` the moment the
       // agreement is countersigned.
       if (roles.length > 0 && roles.some((role) => !role.rosterRole)) {
-        add(part.id, UNBOUND_ROLE_BLOCKER);
+        add(part.id, UNBOUND_ROLE_BLOCKER, undefined, "unbound-role");
       }
     }
 
@@ -352,19 +359,21 @@ export function assessAgreementReadiness({
         add(
           part.id,
           "Set a valid retainer amount, including zero when none is due.",
+          undefined,
+          "retainer-amount",
         );
       }
       if (
         typeof payload.activationPolicy !== "string" ||
         payload.activationPolicy.length === 0
       ) {
-        add(part.id, "Choose when the agreement becomes active.");
+        add(part.id, "Choose when the agreement becomes active.", undefined, "retainer-activation");
       }
     }
 
     if (part.kind === "schedule" && part.variant === "cadence") {
       if (typeof payload.cadence !== "string" || payload.cadence.length === 0) {
-        add(part.id, "Choose a billing cadence.");
+        add(part.id, "Choose a billing cadence.", undefined, "cadence");
       }
     }
 
@@ -379,7 +388,7 @@ export function assessAgreementReadiness({
       (part.variant === "flat" || part.variant === "per_phase") &&
       !scheduleValueIsSet(part)
     ) {
-      add(part.id, `Set the amount for ${part.title.trim() || "this part"}.`);
+      add(part.id, `Set the amount for ${part.title.trim() || "this part"}.`, undefined, "fee-amount");
     }
 
     // R-10 keeps the soft behavior the seven-facet room has today: an unset
@@ -395,6 +404,8 @@ export function assessAgreementReadiness({
         add(
           part.id,
           "Set the furnishings deposit percent, including zero when none is due.",
+          undefined,
+          "deposit-percent",
         );
       }
     }
@@ -423,7 +434,7 @@ export function assessAgreementReadiness({
       scheduleValueIsSet(part),
   );
   for (const part of hiddenFees) {
-    add(part.id, HIDDEN_FEE_BLOCKER);
+    add(part.id, HIDDEN_FEE_BLOCKER, undefined, "hidden-fee");
   }
 
   // R48 — and the turnkey class's own money parts, asked on the document's
@@ -434,7 +445,7 @@ export function assessAgreementReadiness({
     for (const part of parts) {
       if (part.clientVisible === false && part.kind === "schedule") {
         if (part.variant === "pricing_basis" || part.variant === "draws") {
-          add(part.id, HIDDEN_TURNKEY_MONEY_BLOCKER);
+          add(part.id, HIDDEN_TURNKEY_MONEY_BLOCKER, undefined, "hidden-turnkey-money");
         }
       }
     }
@@ -471,25 +482,25 @@ export function assessAgreementReadiness({
         (part) => part.kind === "schedule" && part.variant === "allowances",
       ) ?? null;
 
-    if (!pricingBasisPart) add(null, TURNKEY_PRICING_BASIS_BLOCKER);
-    if (!drawsPart) add(null, TURNKEY_DRAWS_BLOCKER);
+    if (!pricingBasisPart) add(null, TURNKEY_PRICING_BASIS_BLOCKER, undefined, "missing-pricing-basis");
+    if (!drawsPart) add(null, TURNKEY_DRAWS_BLOCKER, undefined, "missing-draws");
 
     const basis = readPricingBasis(pricingBasisPart?.payload ?? {});
     if (pricingBasisPart) {
       const refusal = validatePricingBasis(basis);
-      if (refusal) add(pricingBasisPart.id, refusal);
+      if (refusal) add(pricingBasisPart.id, refusal, undefined, "pricing-basis");
     }
     if (drawsPart) {
       const refusal = validateDrawSet(
         pricingBasisPart ? contractSumCents(basis) : null,
         readDraws(drawsPart.payload ?? {}),
       );
-      if (refusal) add(drawsPart.id, refusal);
+      if (refusal) add(drawsPart.id, refusal, undefined, "draws");
     }
     if (allowancesPart) {
       const allowances = readAllowances(allowancesPart.payload ?? {});
       const refusal = validateAllowances(allowances, basis);
-      if (refusal) add(allowancesPart.id, refusal);
+      if (refusal) add(allowancesPart.id, refusal, undefined, "allowances");
       // Advisory, never a blocker — the database asks allowance → line only,
       // and the room does not refuse a send the server would accept.
       const orphan = unbackedAllowanceLine(allowances, basis);
@@ -525,16 +536,16 @@ export function assessAgreementReadiness({
     });
     if (doubleCount) {
       // The rail's own line, so the panel says it without an editor open…
-      add(null, doubleCount);
+      add(null, doubleCount, undefined, "double-count");
       // …and the row marks on both parts that have to change for it to go.
-      if (pricingBasisPart) add(pricingBasisPart.id, doubleCount);
-      for (const part of supervisionParts) add(part.id, doubleCount);
+      if (pricingBasisPart) add(pricingBasisPart.id, doubleCount, undefined, "double-count");
+      for (const part of supervisionParts) add(part.id, doubleCount, undefined, "double-count");
     }
 
     // R10 — the gate holds at send too. An attestation that expired between
     // composing and sending locks the agreement, and the room says so rather
     // than letting the send fail with a database sentence.
-    if (!turnkeyFloor.attestationLive) add(null, TURNKEY_ATTESTATION_BLOCKER);
+    if (!turnkeyFloor.attestationLive) add(null, TURNKEY_ATTESTATION_BLOCKER, undefined, "attestation");
 
     // R11 — a notice counsel has not cleared must not reach a client.
     const cleared = new Set(turnkeyFloor.enabledJurisdictions);
@@ -543,7 +554,7 @@ export function assessAgreementReadiness({
       const jurisdiction = (part.payload ?? {}).jurisdiction;
       if (typeof jurisdiction !== "string" || !jurisdiction) continue;
       if (!cleared.has(jurisdiction)) {
-        add(part.id, heldNoticeBlocker(jurisdiction));
+        add(part.id, heldNoticeBlocker(jurisdiction), undefined, "held-notice");
       }
     }
   }
@@ -584,6 +595,7 @@ export function assessAgreementReadiness({
       rateCardPart?.id ?? null,
       NO_FEE_BLOCKER,
       { ask: "name a fee", cleared: "Role rates name the fee" },
+      "no-fee",
     );
   }
 
@@ -624,12 +636,13 @@ export function assessAgreementReadiness({
       ceilingPart?.id ?? null,
       NO_CEILING_BLOCKER,
       { ask: "name a ceiling" },
+      "no-ceiling",
     );
   }
 
   // R-3 — last, as it is today.
   if (!recipientEmail?.trim()) {
-    add(null, CLIENT_LINK_BLOCKER, { ask: "link a client", quiet: true });
+    add(null, CLIENT_LINK_BLOCKER, { ask: "link a client", quiet: true }, "client");
   }
 
   return { ready: blockers.length === 0, blockers, notes };

@@ -4,11 +4,20 @@
  * on the seam where a missing part is added; one on the agreement's own
  * reason while anything else still holds it.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { AgreementPart } from "@patina/types";
 import { AgreementComposer } from "../agreement-composer";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
 
+jest.mock("../turnkey/draw-ledger", () => ({
+  DrawLedger: () => null,
+}));
+jest.mock("../turnkey/lien-waiver-attachments", () => ({
+  LienWaiverAttachments: () => null,
+}));
+jest.mock("../../../../commercial/trade-agreements", () => ({
+  TradeAgreementsStrip: () => null,
+}));
 jest.mock("@/hooks/use-teaching-note", () => ({
   useTeachingNoteFor: () => ({ note: null, bind: null }),
 }));
@@ -27,13 +36,14 @@ jest.mock("@/lib/analytics/document-events", () => ({
 }));
 jest.mock("@/lib/help-system/open-help", () => ({ openHelp: jest.fn() }));
 jest.mock("@/components/portal/client-picker", () => ({
-  ClientPicker: () => <div data-testid="client-picker" />,
+  ClientPicker: ({ ariaLabel }: { ariaLabel: string }) => <input aria-label={ariaLabel} />,
 }));
 jest.mock("@/hooks/use-attach-client", () => ({
   useAttachDocumentClient: () => ({ mutate: jest.fn(), isPending: false }),
 }));
+let mockAuth = { user: { id: "designer-1" } as { id: string } | null, status: "authenticated" };
 jest.mock("@/hooks/use-auth", () => ({
-  useAuth: () => ({ user: { id: "designer-1" }, status: "authenticated" }),
+  useAuth: () => mockAuth,
 }));
 jest.mock("@/hooks/use-clients", () => ({
   useClients: () => ({ isLoading: false, data: [] }),
@@ -55,14 +65,24 @@ jest.mock("@patina/supabase", () => ({
   useSaveAgreementPart: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useAgreementPartEvents: () => ({ data: [], isLoading: false }),
 }));
+let mockFlags = { library: { value: false, isLoading: false }, designBuild: { value: false, isLoading: false } };
 jest.mock("@/hooks/use-feature-flag", () => ({
-  useFeatureFlag: () => ({ value: false, isLoading: false }),
+  useFeatureFlag: (name: string) => name === "agreement-library" ? mockFlags.library
+    : name === "design-build" ? mockFlags.designBuild : { value: false, isLoading: false },
 }));
 jest.mock("../../../../commercial/service-agreement-preview", () => ({
   ServiceAgreementPreview: () => <div>Agreement preview</div>,
 }));
+let mockSendSheetProps: {
+  open: boolean;
+  readinessOverride: { blockers: Array<{ message: string; partId?: string }> };
+  onFixPart: (partId: string) => void;
+} | null = null;
 jest.mock("../../../../commercial/service-agreement-send-sheet", () => ({
-  ServiceAgreementSendSheet: () => null,
+  ServiceAgreementSendSheet: (props: typeof mockSendSheetProps) => {
+    mockSendSheetProps = props;
+    return null;
+  },
 }));
 jest.mock("@/lib/document/room-origin", () => ({
   readRoomOrigin: () => "/desk",
@@ -158,6 +178,109 @@ const section = (key: string, nth = 0) =>
 
 beforeEach(() => {
   seq = 0;
+  mockSendSheetProps = null;
+  mockAuth = { user: { id: "designer-1" }, status: "authenticated" };
+  mockFlags = { library: { value: false, isLoading: false }, designBuild: { value: false, isLoading: false } };
+});
+
+test("a part repair leaves Send and lands in the existing fold's first field", async () => {
+  renderFramed([services("Interior design services."), terms("Payment terms."), flatFee()]);
+  pressSend();
+  await waitFor(() => expect(mockSendSheetProps?.open).toBe(true));
+
+  fireEvent.click(screen.getByRole("button", { name: "Services Write", hidden: true }));
+  const body = section("patina.services").querySelector("textarea")!;
+  fireEvent.change(body, { target: { value: "" } });
+  expect(mockSendSheetProps?.readinessOverride.blockers).toContainEqual(
+    expect.objectContaining({ message: "Write Services.", partId: "part-1" }),
+  );
+
+  act(() => mockSendSheetProps!.onFixPart("part-1"));
+  expect(mockSendSheetProps?.open).toBe(false);
+  await waitFor(() => expect(section("patina.services").querySelector("textarea")).toHaveFocus());
+  expect(document.getElementById("fold-patina-services")).not.toHaveAttribute("hidden");
+});
+
+test("arrival with a part ID opens that part's existing fold", async () => {
+  const previous = window.location.href;
+  window.history.replaceState({}, "", "/drafting/agreement-1?repairPartId=part-2");
+  try {
+    renderFramed([services("Design services."), terms("Payment terms."), flatFee()]);
+    await waitFor(() => expect(section("patina.terms").querySelector("textarea")).toHaveFocus());
+    expect(document.getElementById("fold-patina-terms")).not.toHaveAttribute("hidden");
+    expect(document.getElementById("fold-patina-services")).toHaveAttribute("hidden");
+  } finally {
+    window.history.replaceState({}, "", previous);
+  }
+});
+
+test("client repair waits for authenticated proposal owner before opening and focusing picker", async () => {
+  const previous = window.location.href;
+  window.history.replaceState({}, "", "/drafting/agreement-1?repairClient=1");
+  mockAuth = { user: null, status: "loading" };
+  try {
+    const parts = [services("Design services."), flatFee()];
+    const view = renderFramed(parts);
+    expect(screen.queryByRole("textbox", { name: "Client account" })).not.toBeInTheDocument();
+    mockAuth = { user: { id: "designer-1" }, status: "authenticated" };
+    view.rerender(<div data-spotlight-frame=""><AgreementComposer proposal={noClient} bundle={bundleWith(parts)} /></div>);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Client account" })).toHaveFocus());
+  } finally {
+    window.history.replaceState({}, "", previous);
+  }
+});
+
+test("client repair does not open the picker for a non-owner after auth resolves", async () => {
+  const previous = window.location.href;
+  window.history.replaceState({}, "", "/drafting/agreement-1?repairClient=1");
+  mockAuth = { user: null, status: "loading" };
+  try {
+    const parts = [services("Design services."), flatFee()];
+    const view = renderFramed(parts, noClient);
+    mockAuth = { user: { id: "other-designer" }, status: "authenticated" };
+    view.rerender(<div data-spotlight-frame=""><AgreementComposer proposal={noClient} bundle={bundleWith(parts)} /></div>);
+    expect(screen.queryByRole("textbox", { name: "Client account" })).not.toBeInTheDocument();
+    expect(screen.getByText("Only the agreement owner can change the client account.")).toBeInTheDocument();
+  } finally {
+    window.history.replaceState({}, "", previous);
+  }
+});
+
+test("uncapped ceiling repair focuses its enabled checkbox instead of disabled amount", async () => {
+  const previous = window.location.href;
+  window.history.replaceState({}, "", "/drafting/agreement-1?repairPartId=ceiling-1");
+  try {
+    const rateCard = part({ partKey: "patina.role_rates", kind: "schedule", variant: "rate_card", title: "Role rates", payload: { roles: [{ roleName: "Lead", hourlyRateCents: 10000 }] } });
+    const ceiling = part({ id: "ceiling-1", partKey: "patina.ceiling", kind: "schedule", variant: "ceiling", title: "Fee ceiling", payload: { cents: null } });
+    renderFramed([services("Design services."), rateCard, ceiling]);
+    const amount = screen.getByRole("textbox", { name: /Design authorization ceiling/ });
+    const checkbox = screen.getByRole("checkbox", { name: /No ceiling/ });
+    expect(amount).toBeDisabled();
+    expect(checkbox).toBeEnabled();
+    await waitFor(() => expect(checkbox).toHaveFocus());
+  } finally {
+    window.history.replaceState({}, "", previous);
+  }
+});
+
+test("design-build part arrival waits for flags to make the draft editable", async () => {
+  const previous = window.location.href;
+  window.history.replaceState({}, "", "/drafting/agreement-1?repairPartId=part-1");
+  mockFlags = { library: { value: false, isLoading: true }, designBuild: { value: false, isLoading: true } };
+  try {
+    const parts = [services("Design services."), flatFee()];
+    const bundle = bundleWith(parts);
+    bundle.document.kind = "design_build";
+    const view = render(<div data-spotlight-frame=""><AgreementComposer proposal={withClient} bundle={bundle} /></div>);
+    const body = section("patina.services").querySelector("textarea")!;
+    expect(body).toBeDisabled();
+    mockFlags = { library: { value: true, isLoading: false }, designBuild: { value: true, isLoading: false } };
+    view.rerender(<div data-spotlight-frame=""><AgreementComposer proposal={withClient} bundle={bundle} /></div>);
+    await waitFor(() => expect(body).toBeEnabled());
+    await waitFor(() => expect(body).toHaveFocus());
+  } finally {
+    window.history.replaceState({}, "", previous);
+  }
 });
 
 const strip = (key: string) =>

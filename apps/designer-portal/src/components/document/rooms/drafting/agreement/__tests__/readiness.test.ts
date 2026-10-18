@@ -224,6 +224,7 @@ describe("assessAgreementReadiness — R-4, required parts", () => {
     const readiness = assess(parts);
     expect(readiness.blockers).toContainEqual({
       partId: blank.id,
+      code: "body",
       message: "Write Terms.",
     });
     expect(readiness.ready).toBe(false);
@@ -609,6 +610,7 @@ describe("assessAgreementReadiness — keys, titles, and the document", () => {
     });
     expect(readiness.blockers).toContainEqual({
       partId: null,
+      code: "document-state",
       message: "Only a draft agreement can be sent.",
     });
   });
@@ -621,6 +623,7 @@ describe("assessAgreementReadiness — keys, titles, and the document", () => {
     });
     expect(readiness.blockers).toContainEqual({
       partId: null,
+      code: "document-kind",
       message:
         "Only a design services agreement or addendum can use this send review.",
     });
@@ -631,6 +634,7 @@ describe("assessAgreementReadiness — keys, titles, and the document", () => {
     expect(readiness.blockers).toEqual([
       {
         partId: null,
+        code: "client",
         message: "Link a client with an email address.",
         // §A10 — the imperative phrase the readiness voice counts with.
         ask: "link a client",
@@ -700,6 +704,7 @@ describe("assessAgreementReadiness — R18, one part per money variant", () => {
     expect(readiness.ready).toBe(false);
     expect(readiness.blockers).toContainEqual({
       partId: second.id,
+      code: "duplicate-ceiling",
       message: "An agreement carries only one ceiling.",
     });
   });
@@ -738,6 +743,7 @@ describe("assessAgreementReadiness — R18, one part per money variant", () => {
     expect(readiness.ready).toBe(false);
     expect(readiness.blockers).toContainEqual({
       partId: second.id,
+      code: "fee-basis",
       message: "An agreement carries one fee basis.",
     });
   });
@@ -760,6 +766,7 @@ describe("assessAgreementReadiness — R21, an unwritten amount", () => {
     expect(readiness.ready).toBe(false);
     expect(readiness.blockers).toContainEqual({
       partId: blank.id,
+      code: "fee-amount",
       message: "Set the amount for Flat fee.",
     });
   });
@@ -775,6 +782,7 @@ describe("assessAgreementReadiness — R21, an unwritten amount", () => {
     const readiness = assess([...nine(), blank]);
     expect(readiness.blockers).toContainEqual({
       partId: blank.id,
+      code: "fee-amount",
       message: "Set the amount for Fee by phase.",
     });
   });
@@ -793,6 +801,7 @@ describe("assessAgreementReadiness — R21, an unwritten amount", () => {
     expect(readiness.ready).toBe(false);
     expect(readiness.blockers).toContainEqual({
       partId: blank.id,
+      code: "retainer-amount",
       message: "Set a valid retainer amount, including zero when none is due.",
     });
   });
@@ -837,6 +846,7 @@ describe("assessAgreementReadiness — the floor is client-facing", () => {
     ).toBe(false);
     expect(readiness.blockers).toContainEqual({
       partId: hiddenFee.id,
+      code: "hidden-fee",
       message: HIDDEN_FEE_BLOCKER,
     });
   });
