@@ -23202,6 +23202,36 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00822_us36_invoice_line_internal_cost.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.invoice_line_item_internals FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00822_us36_invoice_line_internal_cost.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.invoice_line_item_internals TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00822_us36_invoice_line_internal_cost.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.invoice_line_item_internals TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00822_us36_invoice_line_internal_cost.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._move_invoice_line_internal_metadata() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00822_us36_invoice_line_internal_cost.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._move_invoice_line_internal_metadata() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

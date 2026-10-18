@@ -462,6 +462,10 @@ function invalidateInvoiceLinkFact(queryClient: QueryClient, invoiceId?: string 
 // QUERY HOOKS
 // ═══════════════════════════════════════════════════════════════════════════
 
+// These hooks serve both studio and household. Keep line columns explicit;
+// metadata is scrubbed at the database boundary by 00822.
+const INVOICE_LINE_COLUMNS = 'id, invoice_id, kind, milestone_id, ffe_item_id, description, quantity, unit_amount_cents, amount_cents, metadata, sort_order, created_at';
+
 /**
  * Fetches invoices for the authenticated designer (RLS-scoped). Joins project
  * and client names for the list page. Optional status/project filters.
@@ -512,7 +516,7 @@ export function useInvoice(invoiceId: string | null | undefined) {
           ),
           client:profiles!invoices_client_id_fkey(id, full_name, email),
           designer:profiles!invoices_designer_id_fkey(id, full_name, business_name),
-          line_items:invoice_line_items(*),
+          line_items:invoice_line_items(${INVOICE_LINE_COLUMNS}),
           payments:invoice_payments(*)
         `
         )
@@ -544,7 +548,7 @@ export function useProjectInvoices(projectId: string | null | undefined) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('invoices')
-        .select('*, line_items:invoice_line_items(*), payments:invoice_payments(*)')
+        .select(`*, line_items:invoice_line_items(${INVOICE_LINE_COLUMNS}), payments:invoice_payments(*)`)
         .eq('project_id', projectId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -567,7 +571,7 @@ export function useClientInvoices() {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('invoices')
-        .select('*, line_items:invoice_line_items(*)')
+        .select(`*, line_items:invoice_line_items(${INVOICE_LINE_COLUMNS})`)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as Invoice[];

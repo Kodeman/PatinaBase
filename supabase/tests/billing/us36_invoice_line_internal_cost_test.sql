@@ -1,0 +1,138 @@
+-- 00822: household invoice line reads never expose internal economics.
+-- Run with psql -v ON_ERROR_STOP=1; transaction keeps fixtures local.
+BEGIN;
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+ ('82200000-0000-4000-8000-000000000001', 'private-lead@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+ ('82200000-0000-4000-8000-000000000002', 'private-home@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+ ('82200000-0000-4000-8000-000000000001', 'private-lead@test.invalid', 'Private Lead', true, now(), now()),
+ ('82200000-0000-4000-8000-000000000002', 'private-home@test.invalid', 'Private Home', false, now(), now())
+ON CONFLICT (id) DO UPDATE SET is_designer = EXCLUDED.is_designer;
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('82200000-0000-4000-8000-000000000010', 'design_studio', 'Private Studio', 'private-822-test', 'active');
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+VALUES ('82200000-0000-4000-8000-000000000001', '82200000-0000-4000-8000-000000000010', 'owner', 'active', now());
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT '82200000-0000-4000-8000-000000000001', id, '82200000-0000-4000-8000-000000000001'
+FROM public.roles WHERE name = 'studio_owner';
+INSERT INTO public.projects (id, name, designer_id, created_by, client_id, studio_id, status)
+VALUES ('82200000-0000-4000-8000-000000000020', 'Private Job', '82200000-0000-4000-8000-000000000001',
+ '82200000-0000-4000-8000-000000000001', '82200000-0000-4000-8000-000000000002',
+ '82200000-0000-4000-8000-000000000010', 'active');
+INSERT INTO public.invoices (id, project_id, designer_id, client_id, studio_id, status, currency, subtotal_cents, tax_cents, total_cents)
+VALUES ('82200000-0000-4000-8000-000000000030', '82200000-0000-4000-8000-000000000020',
+ '82200000-0000-4000-8000-000000000001', '82200000-0000-4000-8000-000000000002',
+ '82200000-0000-4000-8000-000000000010', 'draft', 'USD', 0, 0, 0);
+INSERT INTO public.studio_purchases (id, organization_id, project_id, kind, payee_name, purchased_on, amount_cents, tax_cents, buyer_premium_cents, shipping_cents)
+VALUES
+ ('82200000-0000-4000-8000-000000000040', '82200000-0000-4000-8000-000000000010', '82200000-0000-4000-8000-000000000020', 'expense', 'Fixture', current_date, 5000, 500, 200, 300),
+ ('82200000-0000-4000-8000-000000000041', '82200000-0000-4000-8000-000000000010', '82200000-0000-4000-8000-000000000020', 'expense', 'Compose fixture', current_date, 8000, 0, 0, 0);
+INSERT INTO public.vendors (id, name) VALUES ('82200000-0000-4000-8000-000000000050', 'Fixture vendor');
+INSERT INTO public.purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern)
+VALUES ('82200000-0000-4000-8000-000000000051', '82200000-0000-4000-8000-000000000001',
+ '82200000-0000-4000-8000-000000000020', '82200000-0000-4000-8000-000000000050', 'net_30');
+INSERT INTO public.po_cost_lines (id, organization_id, purchase_order_id, kind, estimate_cents)
+VALUES ('82200000-0000-4000-8000-000000000052', '82200000-0000-4000-8000-000000000010',
+ '82200000-0000-4000-8000-000000000051', 'freight', 4200);
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"82200000-0000-4000-8000-000000000001","role":"authenticated"}';
+SELECT count(*) FROM public.add_invoice_billing_lines('82200000-0000-4000-8000-000000000030',
+ '[{"purchaseId":"82200000-0000-4000-8000-000000000040"},{"costLineId":"82200000-0000-4000-8000-000000000052","amountCents":9000}]'::jsonb);
+RESET ROLE;
+UPDATE public.invoices SET status = 'sent', invoice_number = 'PRIVATE-822' WHERE id = '82200000-0000-4000-8000-000000000030';
+
+-- (a) The negative control on main 6988df3 fails THIS assertion: the old
+-- writer places costCents on these household-readable issued rows.
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"82200000-0000-4000-8000-000000000002","role":"authenticated"}';
+DO $$
+DECLARE v_row public.invoice_line_items%ROWTYPE; v_count integer;
+BEGIN
+  SELECT * INTO v_row FROM public.invoice_line_items
+   WHERE invoice_id = '82200000-0000-4000-8000-000000000030' AND metadata ? 'studioPurchaseId';
+  ASSERT FOUND, 'privacy: household sees issued line through SELECT *';
+  ASSERT v_row.metadata = '{"studioPurchaseId":"82200000-0000-4000-8000-000000000040","billingRule":"at_cost"}'::jsonb,
+    'privacy: household SELECT * has no cost/markup/margin/retail metadata key';
+  SELECT count(*) INTO v_count FROM public.invoice_line_items
+   WHERE invoice_id = '82200000-0000-4000-8000-000000000030'
+     AND (metadata::text ~* '"(costCents|markup|margin|retail|tradePrice)"');
+  ASSERT v_count = 0, 'privacy: explicit metadata SELECT has no internal economics';
+END $$;
+DO $$
+DECLARE v_count integer;
+BEGIN
+  SELECT count(*) INTO v_count FROM public.invoice_line_item_internals;
+  ASSERT v_count = 0, 'privacy: household cannot read internals';
+END $$;
+RESET ROLE;
+
+-- (b) The studio lead reads the exact billed costs, not overridden client amounts.
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"82200000-0000-4000-8000-000000000001","role":"authenticated"}';
+DO $$
+DECLARE v_cost bigint; v_amount integer;
+BEGIN
+  SELECT (internal.internal_metadata->>'costCents')::bigint, line.amount_cents
+    INTO v_cost, v_amount
+    FROM public.invoice_line_item_internals AS internal
+    JOIN public.invoice_line_items AS line ON line.id = internal.line_item_id
+   WHERE line.metadata ? 'studioPurchaseId' AND line.invoice_id = '82200000-0000-4000-8000-000000000030';
+  ASSERT v_cost = 6000 AND v_amount = 6000, 'studio: purchase cost matches billed amount';
+  SELECT (internal.internal_metadata->>'costCents')::bigint, line.amount_cents
+    INTO v_cost, v_amount
+    FROM public.invoice_line_item_internals AS internal
+    JOIN public.invoice_line_items AS line ON line.id = internal.line_item_id
+   WHERE line.metadata ? 'poCostLineId' AND line.invoice_id = '82200000-0000-4000-8000-000000000030';
+  ASSERT v_cost = 4200 AND v_amount = 9000, 'studio: rider override does not change internal cost';
+END $$;
+RESET ROLE;
+
+-- (c) Simulate an existing pre-00822 row, then call the same migration
+-- backfill routine. No trigger toggles; this transaction restores the CHECK.
+ALTER TABLE public.invoice_line_items DROP CONSTRAINT invoice_line_items_public_metadata_ck;
+INSERT INTO public.invoice_line_items (id, invoice_id, kind, description, quantity, unit_amount_cents, amount_cents, metadata)
+VALUES ('82200000-0000-4000-8000-000000000060', '82200000-0000-4000-8000-000000000030',
+ 'adhoc', 'Legacy purchase', 1, 10000, 10000,
+ '{"costCents":7300,"markupPercent":20,"nested":{"suggestedRetailPriceCents":12000},"billingRule":"at_cost"}'::jsonb);
+SELECT public._move_invoice_line_internal_metadata();
+SELECT public._move_invoice_line_internal_metadata();
+DO $$
+DECLARE v_public jsonb; v_private jsonb;
+BEGIN
+  SELECT metadata INTO v_public FROM public.invoice_line_items WHERE id = '82200000-0000-4000-8000-000000000060';
+  SELECT internal_metadata INTO v_private FROM public.invoice_line_item_internals WHERE line_item_id = '82200000-0000-4000-8000-000000000060';
+  ASSERT v_public = '{"nested":{},"billingRule":"at_cost"}'::jsonb,
+    'backfill: private keys removed recursively';
+  ASSERT v_private->>'costCents' = '7300' AND v_private->>'markupPercent' = '20'
+     AND v_private #>> '{nested,suggestedRetailPriceCents}' = '12000',
+    'backfill: original internal values copied intact on rerun';
+END $$;
+ALTER TABLE public.invoice_line_items ADD CONSTRAINT invoice_line_items_public_metadata_ck
+  CHECK (metadata = public._invoice_line_public_metadata(metadata));
+
+-- (d) The 00821 compose path calls the current billing writer with an override.
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"82200000-0000-4000-8000-000000000001","role":"authenticated"}';
+SELECT public.compose_project_invoice(
+ '82200000-0000-4000-8000-000000000020', '82200000-0000-4000-8000-000000000001',
+ '82200000-0000-4000-8000-000000000002', '82200000-0000-4000-8000-000000000010',
+ 0, 15, 'privacy-compose', NULL,
+ '[{"kind":"adhoc","description":"Design","quantity":1,"unit_amount_cents":10000,"sort_order":0}]'::jsonb,
+ '{}'::uuid[], '[{"purchaseId":"82200000-0000-4000-8000-000000000041","amountCents":11000}]'::jsonb);
+RESET ROLE;
+DO $$
+DECLARE v_cost bigint; v_amount integer; v_meta jsonb;
+BEGIN
+  SELECT (internal.internal_metadata->>'costCents')::bigint, line.amount_cents, line.metadata
+    INTO v_cost, v_amount, v_meta
+    FROM public.invoice_line_item_internals AS internal
+    JOIN public.invoice_line_items AS line ON line.id = internal.line_item_id
+    JOIN public.invoices AS invoice ON invoice.id = line.invoice_id
+   WHERE invoice.memo = 'privacy-compose' AND line.metadata ? 'studioPurchaseId';
+  ASSERT v_cost = 8000 AND v_amount = 11000 AND NOT v_meta ? 'costCents',
+    'compose: override bills client 11000, retains private cost 8000';
+END $$;
+ROLLBACK;

@@ -9713,6 +9713,29 @@ export type Database = {
           },
         ]
       }
+      invoice_line_item_internals: {
+        Row: {
+          internal_metadata: Json
+          line_item_id: string
+        }
+        Insert: {
+          internal_metadata?: Json
+          line_item_id: string
+        }
+        Update: {
+          internal_metadata?: Json
+          line_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_line_item_internals_line_item_id_fkey"
+            columns: ["line_item_id"]
+            isOneToOne: true
+            referencedRelation: "invoice_line_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_line_items: {
         Row: {
           amount_cents: number
@@ -37464,6 +37487,11 @@ export type Database = {
         }
         Returns: Json
       }
+      _invoice_line_private_key: { Args: { p_key: string }; Returns: boolean }
+      _invoice_line_public_metadata: {
+        Args: { p_metadata: Json }
+        Returns: Json
+      }
       _is_design_services_project: {
         Args: { p_project_id: string }
         Returns: boolean
@@ -37719,6 +37747,7 @@ export type Database = {
         Args: { p_id: string; p_lock?: boolean; p_table: string }
         Returns: Json
       }
+      _move_invoice_line_internal_metadata: { Args: never; Returns: undefined }
       _paper_signature_metadata: {
         Args: {
           p_paper_signed_on: string

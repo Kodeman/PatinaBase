@@ -719,8 +719,9 @@ FROM public.studio_purchases WHERE ffe_item_id = ${q(FIND_ID)}`),
       .poll(
         () =>
           psqlScalar(`
-SELECT li.amount_cents || '|' || (li.metadata->>'costCents')
+SELECT li.amount_cents || '|' || (internal.internal_metadata->>'costCents')
 FROM public.studio_purchases p JOIN public.invoice_line_items li ON li.id = p.invoice_line_id
+JOIN public.invoice_line_item_internals internal ON internal.line_item_id = li.id
 WHERE p.ffe_item_id = ${q(FIND_ID)}`),
         { timeout: 30_000 },
       )
@@ -740,8 +741,9 @@ WHERE p.ffe_item_id = ${q(FIND_ID)}`),
       .poll(
         () =>
           psqlScalar(`
-SELECT li.amount_cents || '|' || (li.metadata->>'costCents')
+SELECT li.amount_cents || '|' || (internal.internal_metadata->>'costCents')
 FROM public.po_cost_lines c JOIN public.invoice_line_items li ON li.id = c.invoice_line_id
+JOIN public.invoice_line_item_internals internal ON internal.line_item_id = li.id
 WHERE c.purchase_order_id = ${q(poId)}`),
         { timeout: 30_000 },
       )
