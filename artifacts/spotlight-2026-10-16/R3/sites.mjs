@@ -56,19 +56,21 @@ export const SITES = {
     user: LEAH,
     run: (c) => standard(c, {
       async open(c) {
-        await c.land('/desk');
-        // Seed reach: the Desk's PO chase line ("Follow up with the maker") navigates to the project, so the
-        // walk uses the proposal follow-up ActDraft, which has only a Note → its body hold alone.
-        await tx(c.page, /^follow up$/i).click(); await c.page.waitForTimeout(2000);
+        await c.land('/doc/f1900000-0000-4000-8000-000000000001');
+        if (c.vp !== 'phone') { await tx(c.page, /^pieces/i).click(); await c.page.waitForTimeout(900); }
+        await tx(c.page, /^follow up with the maker$/i).click(); await c.page.waitForTimeout(1400);
         const subj = dlg(c.page).locator('input[type=text],input:not([type])').filter({ visible: true });
         if (await subj.count()) await clear(subj.first()); else c.note('no Subject field on this sheet');
         await clear(dlg(c.page).locator('textarea').first());
         await c.page.waitForTimeout(600);
       },
-      act: (c) => dlg(c.page).locator('button', { hasText: /^(send|save)/i }).last(),
-      windows: 1, sheetRe: /./, actRe: /send|save/i,
-      async fix(c) { await c.fixByTyping(dlg(c.page).locator('textarea').first(), 'Checking in on the proposal.'); },
-      afterFix: 0,
+      act: (c) => tx(dlg(c.page), /^send the chase/i),
+      windows: 2, sheetRe: /follow up on this purchase order/i, actRe: /send the chase/i,
+      async fix(c) {
+        if (c.vp === 'phone') { await bar(c, /^next$/i).click(); await c.page.waitForTimeout(500); }
+        await c.fixByTyping(dlg(c.page).locator('textarea').first(), 'Checking in on the purchase order.');
+      },
+      afterFix: 1,
     }),
   },
   // Shard 1 · record-payment-sheet.tsx — Desk "RECORD PAYMENT" (Chen, WS-188) → clear the amount → holdFix window.
@@ -128,6 +130,18 @@ export const SITES = {
         await c.page.waitForTimeout(1200);
       },
       afterFix: 0,
+    }),
+  },
+  // Shard 5 · roster-row.tsx — Tom Marrow has a number but no recorded text consent.
+  's5-roster-text': {
+    user: LEAH,
+    run: (c) => standard(c, {
+      async open(c) {
+        await c.land(`/doc/${OKONKWO}?sheet=call`);
+        await tx(dlg(c.page), /tom marrow/i).click(); await c.page.waitForTimeout(900);
+      },
+      act: (c) => tx(dlg(c.page), /^text$/i),
+      windows: 1, sheetRe: /project directory/i, actRe: /^text$/i,
     }),
   },
   // Default one-window (SQ-1048) · person-profile.tsx — /people → Adaeze Okonkwo → SEND TEXT MESSAGE held (no consent). RoomShell frame.
@@ -191,9 +205,9 @@ export const SITES = {
   's2-agreement': {
     user: LEAH,
     run: (c) => standard(c, {
-      async open(c) { await c.land('/drafting/f1900000-0000-4000-8000-0000000000a2'); await c.page.waitForTimeout(3000); },
+      async open(c) { await c.land('/drafting/f30e065c-1402-4e0b-886f-186266e945b4'); await c.page.waitForTimeout(3000); },
       act: (c) => tx(c.page, /^send the (agreement|proposal)/i),
-      windows: 1, sheetRe: null, actRe: /send the/i,
+      windows: 3, sheetRe: null, actRe: /send the/i,
     }),
   },
   // Shard 2 · ack-check.tsx — Purchase orders register → first "no ack" PO → Log order acknowledgment → two bad numbers → 2 holds.
@@ -203,15 +217,28 @@ export const SITES = {
       async open(c) {
         await c.land('/desk');
         await tx(c.page, /^purchase orders/i).click(); await c.page.waitForTimeout(2500);
-        await c.page.locator('[role=dialog] tr, [role=dialog] [role=row]', { hasText: /no ack|not acknowledged|awaiting ack/i }).filter({ visible: true }).first().click().catch(() => {});
-        await c.page.waitForTimeout(2500);
-        await tx(c.page, /log order acknowledg/i).click(); await c.page.waitForTimeout(1800);
-        const inputs = c.page.locator('[data-spotlight-frame] input[inputmode=decimal], [data-spotlight-frame] input[inputmode=numeric]').filter({ visible: true });
-        for (let i = 0; i < 2; i++) { const el = inputs.nth(i); await el.click(); await el.press('ControlOrMeta+a'); await c.page.keyboard.type('abc'); }
+        // Halloran House is a sent, unacknowledged PO in the local register.
+        await c.page.locator('[role=dialog] button', { hasText: /^log ack/i }).filter({ visible: true }).last().click();
+        await c.page.waitForTimeout(1200);
+        const inputs = c.page.locator('[role=dialog] input[inputmode=decimal]').filter({ visible: true });
+        for (let i = 0; i < 2; i++) { const el = inputs.nth(i); await el.fill('abc'); }
         await c.page.keyboard.press('Tab'); await c.page.waitForTimeout(800);
       },
       act: (c) => tx(c.page, /^(everything agrees|log it)/i),
       windows: 2, sheetRe: /./, actRe: /log it|everything agrees/i,
+    }),
+  },
+  // Shard 2 · po-preview.tsx — sent Apparatus order has no ship-to; resend remains held.
+  's2-po-preview': {
+    user: LEAH,
+    run: (c) => standard(c, {
+      async open(c) {
+        await c.land('/desk'); await tx(c.page, /^purchase orders/i).click();
+        await c.page.waitForTimeout(1800);
+        await tx(dlg(c.page), /^resend$/i).click(); await c.page.waitForTimeout(1200);
+      },
+      act: (c) => tx(dlg(c.page), /^resend to vendor$/i),
+      windows: 1, sheetRe: /purchase order preview/i, actRe: /resend to vendor/i,
     }),
   },
   // Desk tour (SQ-1054) — /desk?tour=desk-walkthrough, six steps in teach mode.

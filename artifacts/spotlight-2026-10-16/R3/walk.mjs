@@ -63,9 +63,17 @@ const ctx = {
     const veilBefore = await veils(page);
     await act.scrollIntoViewIfNeeded().catch(() => {});
     if (kbd) { await act.focus(); await page.keyboard.press('Enter'); } else {
-      // A held act is aria-disabled, not disabled, so a real click works; it lets Playwright scroll the act clear of fixed foot chrome.
-      const ok = await act.click({ timeout: 8000 }).then(() => true).catch(() => false);
-      if (!ok) { note(`${what}: plain click refused (act covered); forced`); await act.click({ force: true }); }
+      // Playwright's locator click treats aria-disabled as disabled. A real pointer
+      // press at the centre tests whether fixed chrome covers the held act.
+      const box = await act.boundingBox();
+      if (!box) throw new Error(`${what}: held act has no pointer box`);
+      const x = box.x + box.width / 2, y = box.y + box.height / 2;
+      const hitAct = await act.evaluate((el, point) => {
+        const hit = document.elementFromPoint(point.x, point.y);
+        return hit === el || !!hit && el.contains(hit);
+      }, { x, y });
+      check(`${what}: pointer reaches the held act`, hitAct);
+      await page.mouse.click(x, y);
     }
     await page.waitForTimeout(1600);
     const sp = await spot(page);
