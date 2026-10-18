@@ -278,7 +278,10 @@ describe("ServiceAgreementSendSheet · synthesis §5", () => {
     const windowEl = window.document.querySelector(
       "[data-hold-spotlight-window]",
     );
-    expect(windowEl).toHaveAttribute("data-hold-spotlight-window", described);
+    expect(windowEl).toHaveAttribute(
+      "data-hold-spotlight-window",
+      blockerList?.querySelector("li")?.id,
+    );
     expect(
       window.document.querySelector("[data-hold-spotlight-bar]"),
     ).toHaveTextContent("This agreement names no fee.");
