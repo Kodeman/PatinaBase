@@ -135,4 +135,102 @@ BEGIN
   ASSERT v_cost = 8000 AND v_amount = 11000 AND NOT v_meta ? 'costCents',
     'compose: override bills client 11000, retains private cost 8000';
 END $$;
+-- 00823: compound economics keys disappear at any depth; client-facing money
+-- fields and the PO cost-line identifier remain legible.
+DO $$
+DECLARE v_public jsonb;
+BEGIN
+  v_public := public._invoice_line_public_metadata(
+    '{"lines":[{"suggestedMSRP_Cents":12000,"WHOLESALEprice":8000,"tradeAmountCents":3000,
+                "marginNote":"internal","unitPriceCents":15000,"amountCents":15000,
+                "grossCents":15000,"retainageCents":500,"depositPercent":20,
+                "contractSumCents":15000,"poCostLineId":"82200000-0000-4000-8000-000000000052",
+                "nested":{"poCostLineId":7300}}]}'::jsonb);
+  ASSERT v_public =
+    '{"lines":[{"unitPriceCents":15000,"amountCents":15000,"grossCents":15000,
+                "retainageCents":500,"depositPercent":20,"contractSumCents":15000,
+                "poCostLineId":"82200000-0000-4000-8000-000000000052","nested":{}}]}'::jsonb,
+    'metadata alias: nested economics stripped while client-facing keys survive';
+END $$;
+
+-- The installed constraint itself, not just the helper, must refuse a nested alias.
+DO $$
+DECLARE v_state text;
+BEGIN
+  BEGIN
+    UPDATE public.invoice_line_items
+       SET metadata = '{"details":[{"suggestedMSRP_Cents":12000}]}'::jsonb
+     WHERE id = '82200000-0000-4000-8000-000000000060';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT v_state = '23514', 'metadata alias: CHECK refuses nested economics';
+END $$;
+
+-- An issued milestone line is not re-latched or rewritten for metadata-only
+-- writes; this also lets the 00823 scrub touch legacy issued milestones.
+INSERT INTO public.invoices (id, project_id, designer_id, client_id, studio_id, status,
+                             currency, subtotal_cents, tax_cents, total_cents)
+VALUES ('82200000-0000-4000-8000-000000000070', '82200000-0000-4000-8000-000000000020',
+        '82200000-0000-4000-8000-000000000001', '82200000-0000-4000-8000-000000000002',
+        '82200000-0000-4000-8000-000000000010', 'draft', 'USD', 15000, 0, 15000);
+INSERT INTO public.project_payment_milestones (id, project_id, label, percentage, amount_cents, status, sort_order)
+VALUES ('82200000-0000-4000-8000-000000000071', '82200000-0000-4000-8000-000000000020',
+        'Issued metadata fixture', 10, 15000, 'pending', 1);
+INSERT INTO public.invoice_line_items (id, invoice_id, milestone_id, kind, description, quantity,
+                                       unit_amount_cents, amount_cents, metadata)
+VALUES ('82200000-0000-4000-8000-000000000072', '82200000-0000-4000-8000-000000000070',
+        '82200000-0000-4000-8000-000000000071', 'milestone', 'Issued metadata fixture',
+        1, 15000, 15000, '{}'::jsonb);
+UPDATE public.invoices SET status = 'sent', invoice_number = 'PRIVATE-MILESTONE-823'
+ WHERE id = '82200000-0000-4000-8000-000000000070';
+UPDATE public.project_payment_milestones SET status = 'outstanding'
+ WHERE id = '82200000-0000-4000-8000-000000000071';
+DO $$
+DECLARE v_state text; v_before text; v_after text;
+BEGIN
+  SELECT status INTO v_before FROM public.project_payment_milestones
+   WHERE id = '82200000-0000-4000-8000-000000000071';
+  BEGIN
+    UPDATE public.invoice_line_items SET metadata = '{"unitPriceCents":15000}'::jsonb
+     WHERE id = '82200000-0000-4000-8000-000000000072';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  SELECT status INTO v_after FROM public.project_payment_milestones
+   WHERE id = '82200000-0000-4000-8000-000000000071';
+  ASSERT v_state IS NULL AND v_after = v_before AND v_after = 'outstanding'
+    AND (SELECT metadata ? 'unitPriceCents' FROM public.invoice_line_items
+         WHERE id = '82200000-0000-4000-8000-000000000072'),
+    'milestone metadata: issued line updates without re-latching its status';
+END $$;
+
+-- Simulate a pre-00823 issued milestone with private metadata, retaining
+-- triggers. The same backfill must scrub it without touching latch status.
+ALTER TABLE public.invoice_line_items DROP CONSTRAINT invoice_line_items_public_metadata_ck;
+DO $$
+DECLARE v_state text;
+BEGIN
+  BEGIN
+    UPDATE public.invoice_line_items
+       SET metadata = '{"WHOLESALEprice":8000,"unitPriceCents":15000}'::jsonb
+     WHERE id = '82200000-0000-4000-8000-000000000072';
+    PERFORM public._move_invoice_line_internal_metadata();
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT v_state IS NULL
+     AND (SELECT metadata = '{"unitPriceCents":15000}'::jsonb
+          FROM public.invoice_line_items
+         WHERE id = '82200000-0000-4000-8000-000000000072')
+     AND (SELECT internal_metadata->>'WHOLESALEprice' = '8000'
+          FROM public.invoice_line_item_internals
+         WHERE line_item_id = '82200000-0000-4000-8000-000000000072')
+     AND (SELECT status = 'outstanding'
+          FROM public.project_payment_milestones
+         WHERE id = '82200000-0000-4000-8000-000000000071'),
+    'milestone scrub: issued private metadata moves without status rewrite';
+END $$;
+ALTER TABLE public.invoice_line_items ADD CONSTRAINT invoice_line_items_public_metadata_ck
+  CHECK (metadata = public._invoice_line_public_metadata(metadata));
 ROLLBACK;
