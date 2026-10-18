@@ -712,7 +712,7 @@ describe("billingRefusal", () => {
     notOpen: "Only an open invoice can receive a reminder.",
     checkFailed: "The invoice's payment status couldn't be checked. Try sending it again.",
     inFlight: "The client is paying this invoice now. Send the note after the payment finishes.",
-    sendFailed: "The email couldn't be sent. Check the recipient and try again.",
+    sendFailed: "The email couldn't be sent. Check the recipient.",
     notFound: "This invoice couldn't be found. Reload the accounts page and try again.",
     lookup: "The invoice couldn't be loaded. Reload the folio and try again.",
     signIn: "Your sign-in couldn't be confirmed. Sign in again, then send the invoice.",
@@ -785,6 +785,23 @@ describe("billingRefusal", () => {
     );
   });
 
+  it.each([
+    ["issue_invoice: invoice 5b1f0c7e-0000-4000-8000-000000000001 has no line items", "Add a line to the invoice, then issue it."],
+    ["issue_invoice: a linked milestone is already paid or billed on another invoice", "Remove the milestone that's already paid or on another invoice, then issue this invoice."],
+    ["issue_invoice: linked time includes entries pending authorization or nonbillable", "Remove the time entries that aren't approved and billable, then issue this invoice."],
+    ["issue_invoice: signed retainer invoice must be paid first", "Pay the signed retainer invoice before issuing this invoice."],
+  ])("maps a real issue_invoice refusal: %s", (message, sentence) => {
+    expect(billingRefusal("issue", { code: "issue_failed", message }).sentence).toBe(sentence);
+    expect(billingRefusal("send", { code: "issue_failed", message }).sentence).toBe(sentence);
+    expect(sentence).not.toMatch(/Reload/i);
+  });
+
+  it("keeps an unmapped issue_failed detail on the generic issue sentence", () => {
+    const error = { code: "issue_failed", message: "a future server detail" };
+    expect(billingRefusal("issue", error).sentence).toBe(GENERIC);
+    expect(billingRefusal("send", error).sentence).toBe(GENERIC);
+  });
+
   it("maps every code and every literal detail invoice-send returns", () => {
     const source = readFileSync(
       // F2 (SQ-1249): the flow moved to handler.ts, which also issues a draft.
@@ -828,11 +845,27 @@ describe("billingRefusal", () => {
     ["send", "invoice_not_issued, then something else"],
     ["milestone", `draft_invoice_from_milestone: milestone ${MILESTONE_ID} has an unsafe line owner ${MILESTONE_ID}`],
     // issue_invoice has no table: every refusal of it is the one generic sentence.
-    ["issue", "issue_invoice: signed retainer invoice must be paid first"],
+    ["issue", "issue_invoice: a future refusal not in the copy table"],
   ] as const)("never prints the unknown %s refusal %s", (source, raw) => {
     const result = billingRefusal(source, new Error(raw)).sentence;
     expect(result).toBe(GENERIC);
     expect(result).not.toContain(raw);
+  });
+
+  it("keeps a mapped issue detail ahead of its transport code", () => {
+    const copy = "The invoice has no lines. Check the invoice and try again.";
+    expect(
+      billingRefusal("send", { code: "P0001", message: "Invoice has no lines" }).sentence,
+    ).toBe(copy);
+    expect(
+      billingRefusal("send", { code: "issue_failed", message: "Invoice has no lines" }).sentence,
+    ).toBe(copy);
+  });
+
+  it("uses the send code when an unmapped transport detail masks it", () => {
+    expect(
+      billingRefusal("send", { message: "Temporary delivery failure", code: "send_failed" }).sentence,
+    ).toBe(SENT.sendFailed);
   });
 
   it("says the generic sentence when there are no words at all", () => {

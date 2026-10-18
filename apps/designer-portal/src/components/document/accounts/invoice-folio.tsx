@@ -697,8 +697,21 @@ export function InvoiceFolio({
             delivery={delivery}
             recipient={invoice.client?.email}
             mode="all"
+            failedInvoiceCue
+            quietFailedInvoiceCue={invoice.status === 'paid' || invoice.status === 'void'}
+            failedInvoiceCanResend={canResend}
             action={
-              delivery && (delivery.state === 'bounced' || delivery.state === 'suppressed') ? (
+              delivery?.state === 'failed' && canResend ? (
+                <button
+                  type="button"
+                  aria-label="Resend invoice email"
+                  disabled={busy}
+                  className="underline underline-offset-4"
+                  onClick={() => openPanel('resend')}
+                >
+                  Resend
+                </button>
+              ) : delivery && (delivery.state === 'bounced' || delivery.state === 'suppressed') ? (
                 <Link href="/people" className="underline underline-offset-4">
                   Fix the address in People
                 </Link>
