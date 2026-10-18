@@ -1105,7 +1105,8 @@ const SEND_REFUSALS: Array<[RegExp, string]> = [
     "The client is paying this invoice now. Send the note after the payment finishes.",
   ],
   [/^no_recipient$/, "This invoice has no client email yet. Add their email, then send it."],
-  [/^send_failed$/, "The email couldn't be sent. Check the recipient and try again."],
+  [/^Invoice has no lines$/, "The invoice has no lines. Check the invoice and try again."],
+  [/^send_failed$/, "The email couldn't be sent. Check the recipient."],
 ];
 
 /** The words of a refusal: a thrown string, or an Error's or PostgrestError's message. */
@@ -1130,7 +1131,18 @@ export function billingRefusal(
   if (source === "lines") return { sentence: billingLinesRefusal(raw, nameOf) };
   const table = source === "milestone" ? MILESTONE_REFUSALS : source === "send" ? SEND_REFUSALS : [];
   const reason = typeof raw === "string" ? raw.trim() : "";
-  return { sentence: table.find(([pattern]) => pattern.test(reason))?.[1] ?? BILLING_GENERIC };
+  const detailSentence = table.find(([pattern]) => pattern.test(reason))?.[1];
+  if (detailSentence) return { sentence: detailSentence };
+
+  if (source === "send" && err && typeof err === "object" && "code" in err) {
+    const code = typeof (err as { code?: unknown }).code === "string"
+      ? (err as { code: string }).code.trim()
+      : "";
+    const codeSentence = table.find(([pattern]) => pattern.test(code))?.[1];
+    if (codeSentence) return { sentence: codeSentence };
+  }
+
+  return { sentence: BILLING_GENERIC };
 }
 
 /**

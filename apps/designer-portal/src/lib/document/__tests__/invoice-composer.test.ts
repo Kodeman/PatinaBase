@@ -712,7 +712,7 @@ describe("billingRefusal", () => {
     notOpen: "Only an open invoice can receive a reminder.",
     checkFailed: "The invoice's payment status couldn't be checked. Try sending it again.",
     inFlight: "The client is paying this invoice now. Send the note after the payment finishes.",
-    sendFailed: "The email couldn't be sent. Check the recipient and try again.",
+    sendFailed: "The email couldn't be sent. Check the recipient.",
     notFound: "This invoice couldn't be found. Reload the accounts page and try again.",
     lookup: "The invoice couldn't be loaded. Reload the folio and try again.",
     signIn: "Your sign-in couldn't be confirmed. Sign in again, then send the invoice.",
@@ -833,6 +833,26 @@ describe("billingRefusal", () => {
     const result = billingRefusal(source, new Error(raw)).sentence;
     expect(result).toBe(GENERIC);
     expect(result).not.toContain(raw);
+  });
+
+  it("keeps a mapped issue detail ahead of its transport code", () => {
+    const copy = "The invoice has no lines. Check the invoice and try again.";
+    expect(
+      billingRefusal("send", { code: "P0001", message: "Invoice has no lines" }).sentence,
+    ).toBe(copy);
+    expect(
+      billingRefusal("send", { code: "issue_failed", message: "Invoice has no lines" }).sentence,
+    ).toBe(copy);
+  });
+
+  it("uses the send code when an unmapped transport detail masks it", () => {
+    expect(
+      billingRefusal("send", { message: "Temporary delivery failure", code: "send_failed" }).sentence,
+    ).toBe(SENT.sendFailed);
+  });
+
+  it("does not repeat a retry instruction after the issue step", () => {
+    expect(billingRefusal("send", "send_failed").sentence).toBe(SENT.sendFailed);
   });
 
   it("says the generic sentence when there are no words at all", () => {

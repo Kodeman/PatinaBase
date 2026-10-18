@@ -28,8 +28,8 @@ function shortDate(iso: string | null | undefined): string {
 }
 
 /**
- * `failed` is deliberately absent: the send never left Patina, so the word
- * would describe an ambiguity as a fact. deliveryWord returns null for it.
+ * `failed` stays out of the shared default; only the invoice folio opts into
+ * its dated, hedged cue.
  */
 const ATTENTION: ReadonlySet<EmailDeliveryState> = new Set<EmailDeliveryState>([
   'delayed',
@@ -53,6 +53,7 @@ export interface DeliveryWordCopy {
 export function deliveryWord(
   delivery: EmailDelivery | null | undefined,
   recipient?: string | null,
+  options: { invoiceFolio?: boolean } = {},
 ): DeliveryWordCopy | null {
   if (!delivery) return null;
   const known = delivery.recipient ?? recipient ?? null;
@@ -98,10 +99,13 @@ export function deliveryWord(
           : dated('Marked as spam'),
         register: 'attention',
       };
-    // A send that never left Patina is ambiguous — it may yet have gone out —
-    // so the surface says nothing rather than reporting "Didn't send".
     case 'failed':
-      return null;
+      return options.invoiceFolio && trouble
+        ? {
+            text: `Email may not have gone — ${trouble}`,
+            register: 'attention',
+          }
+        : null;
     case 'suppressed':
       return {
         text: known

@@ -21,12 +21,15 @@ export function DeliveryWord({
   recipient = null,
   mode = 'all',
   action,
+  failedInvoiceCue = false,
   className = '',
 }: {
   delivery: EmailDelivery | null | undefined;
   /** Fallback address when the log row carries none. */
   recipient?: string | null;
   mode?: 'all' | 'attention';
+  /** Only the invoice folio owns the ambiguous-send hedge. */
+  failedInvoiceCue?: boolean;
   /** A remedy, printed after an en-space. */
   action?: ReactNode;
   className?: string;
@@ -34,7 +37,7 @@ export function DeliveryWord({
   if (!delivery) return null;
   if (mode === 'attention' && !isAttentionState(delivery.state)) return null;
 
-  const word = deliveryWord(delivery, recipient);
+  const word = deliveryWord(delivery, recipient, { invoiceFolio: failedInvoiceCue });
   if (!word) return null;
 
   const attention = word.register === 'attention';

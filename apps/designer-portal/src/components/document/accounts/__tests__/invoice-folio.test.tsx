@@ -832,6 +832,45 @@ describe('InvoiceFolio · what became of the mail', () => {
     ).toHaveAttribute('href', '/people');
   });
 
+  it('shows the dated failed-send hedge and opens the existing resend flow', async () => {
+    mockEmailDeliveryByRef = {
+      'invoice-1': log({
+        state: 'failed',
+        status: 'failed',
+        bouncedAt: null,
+        lastEvent: 'email.failed',
+        lastEventAt: '2026-10-17T09:00:00.000Z',
+      }),
+    };
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    expect(screen.queryByTestId('delivery-word')).toHaveTextContent('Email may not have gone — 17 Oct');
+    fireEvent.click(screen.getByRole('button', { name: 'Resend invoice email' }));
+    expect(await screen.findByRole('button', { name: 'Resend email' })).toBeInTheDocument();
+  });
+
+  it.each(['paid', 'void'] as const)(
+    'keeps the dated failed-send hedge without a resend action on a %s invoice',
+    (status) => {
+      mockInvoice = { ...sentInvoice, status };
+      mockEmailDeliveryByRef = {
+        'invoice-1': log({
+          state: 'failed',
+          status: 'failed',
+          bouncedAt: null,
+          lastEvent: 'email.failed',
+          lastEventAt: '2026-10-17T09:00:00.000Z',
+        }),
+      };
+
+      render(<InvoiceFolio invoiceId="invoice-1" />);
+
+      expect(screen.queryByTestId('delivery-word')).toHaveTextContent('Email may not have gone — 17 Oct');
+      expect(screen.queryByRole('button', { name: 'Resend invoice email' })).not.toBeInTheDocument();
+    },
+  );
+
   it('offers the same remedy for an opted-out address', () => {
     mockEmailDeliveryByRef = {
       'invoice-1': log({
