@@ -262,6 +262,18 @@ describe('Chase this PO', () => {
     expect(mockSendDraft).not.toHaveBeenCalled();
   });
 
+  it('keeps Subject named from its visible label in the active chase window', async () => {
+    openSheet(PO_NEED);
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+    const subject = screen.getByRole('textbox', { name: 'Subject' });
+    fireEvent.change(subject, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
+    await waitFor(() => expect(document.querySelector('[data-hold-spotlight-window="act-chase-po-subject"]')).not.toBeNull());
+    expect(subject.closest('[inert]')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toBe(subject);
+    expect(subject).toHaveAttribute('aria-labelledby', 'act-chase-po-subject-label');
+  });
+
   it('opens one spotlight window per missing draft field, then removes the fixed field', async () => {
     openSheet(PO_NEED);
     // The sheet takes focus on its first frame; a person presses after that.
@@ -678,6 +690,18 @@ describe('Follow up this proposal', () => {
     expect(screen.getByText('Mara Olsen declined the proposal: “The sofa is over budget”')).toBeInTheDocument();
     expect(textbox('Note').value).toMatch(/^Mara,/);
     expect(mockSendNote).not.toHaveBeenCalled();
+  });
+
+  it('names the follow-up note from its visible label inside the lit window', () => {
+    openSheet(PROPOSAL_NEED);
+    const note = screen.getByRole('textbox', { name: 'Note' });
+    const send = screen.getByRole('button', { name: 'Send the follow-up to Mara Olsen' });
+    expect(send.closest('[inert]')).toBeNull();
+    fireEvent.change(note, { target: { value: '' } });
+    fireEvent.click(send);
+    expect(screen.getByRole('textbox', { name: 'Note' })).toBe(note);
+    expect(note).toHaveAttribute('aria-labelledby', 'act-follow-up-proposal-body-label');
+    expect(send.closest('[inert]')).not.toBeNull();
   });
 
   it('sends through the composer path from its named control, then marks acted', async () => {

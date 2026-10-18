@@ -324,11 +324,12 @@ export function ActDraft({
       )}
       {initial && initial.subject !== null && (
         <div>
-          <label htmlFor={`${regionKey}-subject`} className={LABEL_CLS}>
+          <label id={`${regionKey}-subject-label`} htmlFor={`${regionKey}-subject`} className={LABEL_CLS}>
             Subject
           </label>
           <Input
             id={`${regionKey}-subject`}
+            aria-labelledby={`${regionKey}-subject-label`}
             value={subject}
             aria-describedby={missingSubject && reasonsShown ? `${regionKey}-subject-reason` : undefined}
             maxLength={300}
@@ -344,11 +345,12 @@ export function ActDraft({
       )}
       {initial && (
         <div>
-          <label htmlFor={`${regionKey}-body`} className={LABEL_CLS}>
+          <label id={`${regionKey}-body-label`} htmlFor={`${regionKey}-body`} className={LABEL_CLS}>
             {bodyLabel}
           </label>
           <Textarea
             id={`${regionKey}-body`}
+            aria-labelledby={`${regionKey}-body-label`}
             rows={8}
             value={body}
             aria-describedby={missingBody && reasonsShown ? `${regionKey}-body-reason` : undefined}

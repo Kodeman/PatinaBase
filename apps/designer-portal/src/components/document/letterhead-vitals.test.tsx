@@ -310,6 +310,17 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     expect(screen.queryByLabelText('Clear target')).not.toBeInTheDocument();
   });
 
+  it('gives both named clear controls a 24px hit area without changing their type', () => {
+    mockProject = { ...baseProject, start_date: '2026-01-15', target_end_date: '2026-03-01' };
+    render(<LetterheadVitals projectId="project-1" />);
+
+    for (const name of ['Clear start', 'Clear target']) {
+      const clear = screen.getByRole('button', { name });
+      expect(clear).toHaveClass('min-h-6', 'min-w-6', 'text-[11px]');
+    }
+    expect(screen.queryByRole('button', { name: 'Clear finish' })).not.toBeInTheDocument();
+  });
+
   it('clicking the clear affordance saves null for the field it belongs to', async () => {
     mockProject = { ...baseProject, start_date: '2026-01-15', target_end_date: '2026-03-01' };
     render(<LetterheadVitals projectId="project-1" />);
