@@ -1105,7 +1105,6 @@ const SEND_REFUSALS: Array<[RegExp, string]> = [
     "The client is paying this invoice now. Send the note after the payment finishes.",
   ],
   [/^no_recipient$/, "This invoice has no client email yet. Add their email, then send it."],
-  [/^Invoice has no lines$/, "The invoice has no lines. Check the invoice and try again."],
   [/^send_failed$/, "The email couldn't be sent. Check the recipient."],
 ];
 
@@ -1124,7 +1123,7 @@ const ISSUE_REFUSALS: Array<[RegExp, string]> = [
   ],
   [
     /^issue_invoice: signed retainer invoice must be paid first$/,
-    "Pay the signed retainer invoice before issuing this invoice.",
+    "The signed retainer invoice must be paid before this invoice can be issued.",
   ],
 ];
 
@@ -1137,7 +1136,7 @@ function refusalText(err: unknown): unknown {
 /**
  * One designer-facing copy table for every billing refusal: what happened and
  * what to do, never a code, an id or cents. Anything unrecognised gets its
- * source's one generic sentence. `issue` (issue_invoice) has no table yet.
+ * source's one generic sentence.
  */
 export function billingRefusal(
   source: "draft" | "claim" | "lines" | "milestone" | "send" | "issue",

@@ -885,7 +885,7 @@ describe('InvoiceFolio · what became of the mail', () => {
     render(<InvoiceFolio invoiceId="invoice-1" />);
 
     expect(screen.queryByTestId('delivery-word')).toHaveTextContent(
-      'Email may not have gone 17 Oct — resend it below',
+      'Email may not have gone 17 Oct — resend it',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Resend invoice email' }));
     expect(await screen.findByRole('button', { name: 'Resend email' })).toBeInTheDocument();

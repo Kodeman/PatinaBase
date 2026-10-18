@@ -789,7 +789,7 @@ describe("billingRefusal", () => {
     ["issue_invoice: invoice 5b1f0c7e-0000-4000-8000-000000000001 has no line items", "Add a line to the invoice, then issue it."],
     ["issue_invoice: a linked milestone is already paid or billed on another invoice", "Remove the milestone that's already paid or on another invoice, then issue this invoice."],
     ["issue_invoice: linked time includes entries pending authorization or nonbillable", "Remove the time entries that aren't approved and billable, then issue this invoice."],
-    ["issue_invoice: signed retainer invoice must be paid first", "Pay the signed retainer invoice before issuing this invoice."],
+    ["issue_invoice: signed retainer invoice must be paid first", "The signed retainer invoice must be paid before this invoice can be issued."],
   ])("maps a real issue_invoice refusal: %s", (message, sentence) => {
     expect(billingRefusal("issue", { code: "issue_failed", message }).sentence).toBe(sentence);
     expect(billingRefusal("send", { code: "issue_failed", message }).sentence).toBe(sentence);
@@ -844,7 +844,7 @@ describe("billingRefusal", () => {
     ["send", "Edge Function returned a non-2xx status code"],
     ["send", "invoice_not_issued, then something else"],
     ["milestone", `draft_invoice_from_milestone: milestone ${MILESTONE_ID} has an unsafe line owner ${MILESTONE_ID}`],
-    // issue_invoice has no table: every refusal of it is the one generic sentence.
+    // An issue_invoice refusal outside the copy table is the one generic sentence.
     ["issue", "issue_invoice: a future refusal not in the copy table"],
   ] as const)("never prints the unknown %s refusal %s", (source, raw) => {
     const result = billingRefusal(source, new Error(raw)).sentence;
@@ -853,13 +853,10 @@ describe("billingRefusal", () => {
   });
 
   it("keeps a mapped issue detail ahead of its transport code", () => {
-    const copy = "The invoice has no lines. Check the invoice and try again.";
-    expect(
-      billingRefusal("send", { code: "P0001", message: "Invoice has no lines" }).sentence,
-    ).toBe(copy);
-    expect(
-      billingRefusal("send", { code: "issue_failed", message: "Invoice has no lines" }).sentence,
-    ).toBe(copy);
+    const copy = "Add a line to the invoice, then issue it.";
+    const message = "issue_invoice: invoice 5b1f0c7e-0000-4000-8000-000000000001 has no line items";
+    expect(billingRefusal("send", { code: "P0001", message }).sentence).toBe(copy);
+    expect(billingRefusal("send", { code: "issue_failed", message }).sentence).toBe(copy);
   });
 
   it("uses the send code when an unmapped transport detail masks it", () => {

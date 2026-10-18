@@ -11634,4 +11634,12 @@ With no studio on the invoice or its project, only the designer is admitted. Not
 - **Two spotlights open on one phone scroller** can strand one bar's room until reload. The follow-up is SQ-1324, which reference-counts the room per scroller (SQ-1322 F2).
 - **After a hand-off to the invoice-lines hold**, focus lands on the window's first control (a rate link), not a line checkbox. The hold's focusKey marks the ad-hoc row, and re-targeting it is composer work (SQ-1317 F2).
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R191 · R192 · R193 · R194 · last id = R194*
+### R195 · The invoice folio alone says an email may not have gone — US-36 R2 — SQ-1326 2026-10-18 (SQ-1312 F7, SQ-1325 R6)
+
+**The rule.** A failed delivery has no word anywhere in the Document; 'failed' is not an attention state. The invoice folio is the one exception. When an issued invoice's latest email failed, the folio prints a dated cue: "Email may not have gone 17 Oct". When the invoice can still be resent, the cue adds "— resend it", with an inline Resend act beside it. On a paid or void invoice, the cue is quiet. The exception is opt-in (`failedInvoiceCue`), so every other delivery word is unchanged.
+
+**Why.** Issuing commits the invoice before the email goes out, and a failed send does not roll that back (R193 F7). Without the cue, the folio shows a sent invoice that the client may never have received, and no surface says otherwise.
+
+**Copy.** issue_invoice's real refusals now have plain sentences: no line items, milestone already billed, pending or nonbillable time, and retainer first. An `issue_failed` code never outranks a detail it cannot map. The dead "Invoice has no lines" row was removed, since no server emits that text.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R191 · R192 · R193 · R194 · R195 · last id = R195*

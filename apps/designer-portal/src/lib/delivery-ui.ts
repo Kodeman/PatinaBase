@@ -107,7 +107,7 @@ export function deliveryWord(
       return options.invoiceFolio && trouble
         ? {
             text: `${dated('Email may not have gone')}${
-              options.failedInvoiceCanResend ? ' — resend it below' : ''
+              options.failedInvoiceCanResend ? ' — resend it' : ''
             }`,
             register: options.quietFailedInvoiceCue ? 'quiet' : 'attention',
           }
