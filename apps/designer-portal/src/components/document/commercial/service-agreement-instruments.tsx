@@ -403,6 +403,7 @@ export function ServiceAgreementInstruments({
             rates={rates}
             recipientEmail={clientEmail}
             recipientName={clientName}
+            ownerName={proposal.designer?.display_name || proposal.designer?.full_name || proposal.designer?.name}
             parts={parts}
             readinessOverride={
               composedReadiness

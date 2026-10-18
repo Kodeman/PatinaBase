@@ -1,12 +1,13 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight";
 import {
   agreementConsequenceSentence,
   type AgreementPart,
 } from "@patina/types";
 import { DocSheet } from "../overlays/doc-sheet";
+import { CopyAct } from "../copy-act";
 import { Button, Textarea } from "@/components/ui/controls";
 import { useSendServiceAgreement } from "@/hooks/use-commercial-documents";
 import {
@@ -47,6 +48,7 @@ export function ServiceAgreementSendSheet({
   readinessOverride,
   onFixPart,
   onFixClient,
+  ownerName,
 }: {
   open: boolean;
   onClose: () => void;
@@ -78,6 +80,7 @@ export function ServiceAgreementSendSheet({
   };
   onFixPart?: (partId: string) => void;
   onFixClient?: () => void;
+  ownerName?: string;
 }) {
   const send = useSendServiceAgreement(document.id);
   /* W3R2-05 — THE SHEET DESCRIBES THE PAPER IT IS SENDING. The class is named
@@ -88,6 +91,8 @@ export function ServiceAgreementSendSheet({
   const [result, setResult] = useState<string | null>(null);
   const blockerListId = useId();
   const noteHintId = useId();
+  const askNoteRef = useRef<HTMLSpanElement>(null);
+  const askNote = `Could you link a client to ${document.title}? I'm preparing its agreement.`;
   const readiness =
     readinessOverride ??
     assessServiceAgreementReadiness({
@@ -96,19 +101,20 @@ export function ServiceAgreementSendSheet({
       rates,
       recipientEmail,
     });
-  const blockerRows = readiness.blockers.map((entry, index) => {
+  const blockerRows = readiness.blockers.map((entry) => {
     const blocker = typeof entry === "string" ? { message: entry } : entry;
     const isClient = blocker.message === "Link a client with an email address.";
     const partId = blocker.partId;
     return {
       ...blocker,
-      id: `${blockerListId}-${index}`,
+      id: `${blockerListId}-${partId ? `part-${partId}` : isClient ? "client" : `reason-${encodeURIComponent(blocker.message)}`}`,
       label: blocker.partTitle ?? (isClient ? "Client account" : "Finish before sending"),
       fix: partId && onFixPart
         ? { label: `Fix ${blocker.partTitle?.trim() || "this part"}`, run: () => onFixPart(partId) }
         : isClient && onFixClient
           ? { label: "Link a client", run: onFixClient }
           : null,
+      ask: isClient && !onFixClient,
     };
   });
   const holds: SpotlightHold[] = blockerRows.map((row) => ({
@@ -198,6 +204,15 @@ export function ServiceAgreementSendSheet({
                     >
                       {row.fix.label}
                     </button>
+                  )}
+                  {row.ask && (
+                    <div className="mt-1">
+                      <p>Ask {ownerName || "the proposal's owner"} to link a client.</p>
+                      <p className="text-[var(--color-aged-oak)]">“<span ref={askNoteRef}>{askNote}</span>”</p>
+                      <CopyAct text={askNote} selectRef={askNoteRef} actionKey="copy-agreement-client-note" surfaceKey="commercial" regionKey="agreement-send-sheet">
+                        Copy a note
+                      </CopyAct>
+                    </div>
                   )}
                 </li>
               ))}

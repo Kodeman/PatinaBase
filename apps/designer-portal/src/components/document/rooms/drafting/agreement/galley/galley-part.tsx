@@ -32,9 +32,9 @@ export interface GalleyPartIds {
 export function firstFoldField(fold: HTMLElement | null): HTMLElement | null {
   return (
     fold?.querySelector<HTMLElement>(
-      "textarea:not([data-fold-rename]), input:not([data-fold-rename]), select",
+      "textarea:not([data-fold-rename]):not(:disabled), input:not([data-fold-rename]):not(:disabled), select:not(:disabled)",
     ) ??
-    fold?.querySelector<HTMLElement>("textarea, input, select") ??
+    fold?.querySelector<HTMLElement>("textarea:not(:disabled), input:not(:disabled), select:not(:disabled)") ??
     null
   );
 }

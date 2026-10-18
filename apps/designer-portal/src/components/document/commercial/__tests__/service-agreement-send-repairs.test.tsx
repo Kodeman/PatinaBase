@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { ServiceAgreementSendSheet } from "../service-agreement-send-sheet";
@@ -22,6 +22,58 @@ const blockers = [
 ];
 
 const mockFixPart = jest.fn();
+let mockRemoveServices: (() => void) | null = null;
+
+function SheetWithPartRefetch() {
+  const [remaining, setRemaining] = useState([
+    { message: "Write Services.", partId: "services-1", partTitle: "Services" },
+    { message: "Write Terms.", partId: "terms-1", partTitle: "Terms" },
+    { message: "Write Fee.", partId: "fee-1", partTitle: "Fee" },
+  ]);
+  mockRemoveServices = () => setRemaining((rows) => rows.filter((row) => row.partId !== "services-1"));
+  return (
+    <ServiceAgreementSendSheet
+      open onClose={jest.fn()} document={agreement} terms={null} rates={[]}
+      recipientEmail="client@example.com"
+      readinessOverride={{ ready: false, blockers: remaining, notes: [] }}
+      onFixPart={mockFixPart}
+    />
+  );
+}
+
+test("active Terms hold stays Terms when a refetch removes preceding Services", async () => {
+  const user = userEvent.setup();
+  render(<SheetWithPartRefetch />);
+  await user.click(screen.getByRole("button", { name: "Send the agreement" }));
+  await waitFor(() => expect(screen.getByRole("group", { name: "What needs attention" })).toHaveTextContent("Write Services."));
+  await user.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(screen.getByRole("group", { name: "What needs attention" })).toHaveTextContent("Write Terms."));
+  act(() => mockRemoveServices?.());
+  await waitFor(() => expect(windows()).toHaveLength(2));
+  expect(screen.getByRole("group", { name: "What needs attention" })).toHaveTextContent("Write Terms.");
+  await user.click(screen.getByRole("button", { name: "Fix Terms" }));
+  expect(mockFixPart).toHaveBeenCalledWith("terms-1");
+});
+
+test("non-owner gets an Ask note and Copy a note, with generic owner fallback", async () => {
+  const user = userEvent.setup();
+  const writeText = jest.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const props = {
+    open: true, onClose: jest.fn(), document: agreement, terms: null, rates: [],
+    recipientEmail: null,
+    readinessOverride: { ready: false, blockers: [blockers[0]], notes: [] },
+  };
+  const view = render(<ServiceAgreementSendSheet {...props} ownerName="Leah Hart" />);
+  expect(screen.getByText("Ask Leah Hart to link a client.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Link a client" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Send the agreement" }));
+  expect(screen.getByRole("button", { name: "Copy a note" })).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Copy a note" }));
+  expect(writeText).toHaveBeenCalledWith("Could you link a client to Design agreement? I'm preparing its agreement.");
+  view.rerender(<ServiceAgreementSendSheet {...props} />);
+  expect(screen.getByText("Ask the proposal's owner to link a client.")).toBeInTheDocument();
+});
 
 function SheetWithClientRepair() {
   const [remaining, setRemaining] = useState(blockers);

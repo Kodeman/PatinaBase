@@ -327,9 +327,9 @@ export function AgreementComposer({
     newestUpdate(bundle.parts),
   );
   const [saveNote, setSaveNote] = useState<string | null>(null);
-  const [clientOpen, setClientOpen] = useState(
-    () => document.state === "draft" && ownsProposal && repairFromDoor?.client === true,
-  );
+  const [clientOpen, setClientOpen] = useState(false);
+  const pendingDoorRepair = useRef(repairFromDoor?.client || repairFromDoor?.partId
+    ? repairFromDoor : null);
   const [clientNote, setClientNote] = useState<string | null>(null);
   const [clientError, setClientError] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
@@ -382,21 +382,32 @@ export function AgreementComposer({
   const turnkeyFrozen = document.kind === "design_build" && !designBuildOn;
   const readOnly = document.state !== "draft" || turnkeyFrozen;
   useEffect(() => {
-    if (readOnly || (!openKey && !clientOpen) || !repairFromDoor) return;
+    const repair = pendingDoorRepair.current;
+    if (!repair) return;
+    if (repair.client && authStatus === "loading") return;
+    if (repair.client && (authStatus !== "authenticated" || !ownsProposal)) {
+      pendingDoorRepair.current = null;
+      return;
+    }
+    if (readOnly) return;
+    if (repair.client && !clientOpen) {
+      setClientOpen(true);
+      return;
+    }
+    if (repair.partId && !openKey) return;
     const first = window.requestAnimationFrame(() => {
-      const target = openKey
+      const target = repair.partId && openKey
         ? partRepairField(openKey, bundle.parts.filter((part) => part.partKey === openKey)
-          .findIndex((part) => part.id === repairFromDoor.partId))
-        : clientOpen
+          .findIndex((part) => part.id === repair.partId))
+        : repair.client
           ? window.document.querySelector<HTMLElement>('[aria-label="Client account"]')
           : null;
       target?.scrollIntoView?.({ block: "center" });
       target?.focus({ preventScroll: true });
+      pendingDoorRepair.current = null;
     });
     return () => window.cancelAnimationFrame(first);
-    // This landing belongs only to the first arrival from the send sheet.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authStatus, ownsProposal, readOnly, openKey, clientOpen, bundle.parts]);
 
   // Seed the nine standard parts from the terms row this agreement already
   // has. The ref is React 18 StrictMode's double-effect, not correctness.
@@ -1797,6 +1808,7 @@ export function AgreementComposer({
         rates={bundle.rates}
         recipientEmail={recipientEmail}
         recipientName={recipientName}
+        ownerName={proposal.designer?.display_name || proposal.designer?.full_name || proposal.designer?.name}
         parts={parts}
         readinessOverride={{
           ready: readiness.ready,
