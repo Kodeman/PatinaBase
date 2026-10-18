@@ -98,6 +98,43 @@ export const SITES = {
       windows: 1, sheetRe: null, actRe: /message the client/i,
     }),
   },
+  // Shard 3 · amendment-sheet.tsx — Halloran has no linked client, so Send to the client is held.
+  's3-amendment': {
+    user: LEAH,
+    run: (c) => standard(c, {
+      async open(c) {
+        await c.land('/doc/f1900000-0000-4000-8000-000000000001');
+        if (c.vp !== 'phone') await tx(c.page, /^pieces/i).click();
+        await tx(c.page, /^record a change$/i).click();
+        await c.page.getByLabel(/on the agreement/i).check();
+        await tx(dlg(c.page), /^continue$/i).click();
+        await c.page.waitForTimeout(1400);
+      },
+      act: (c) => tx(dlg(c.page), /^send to the client$/i),
+      windows: 1, sheetRe: /amendment/i, actRe: /send to the client/i,
+    }),
+  },
+  // Shard 3 · ask-maker-sheet.tsx — Wren install reading opens the maker note; empty subject + body hold it.
+  's3-ask-maker': {
+    user: LEAH,
+    run: (c) => standard(c, {
+      async open(c) {
+        await c.land('/doc/f1900000-0000-4000-8000-000000000003');
+        await tx(c.page, /^ask the maker for a date$/i).click();
+        await clear(dlg(c.page).getByLabel(/^subject$/i));
+        await clear(dlg(c.page).getByLabel(/^note$/i));
+        await c.page.waitForTimeout(500);
+      },
+      act: (c) => tx(dlg(c.page), /^hold for review$/i),
+      windows: 2, sheetRe: /ask the maker for a date/i, actRe: /hold for review/i,
+      targets: ['[data-overlay-ask-maker] input', '[data-overlay-ask-maker] textarea'],
+      async fix(c) {
+        if (c.vp === 'phone') { await bar(c, /^next$/i).click(); await c.page.waitForTimeout(500); }
+        await c.fixByTyping(dlg(c.page).getByLabel(/^note$/i), 'Could you confirm an arrival date for the library ladder?');
+      },
+      afterFix: 1,
+    }),
+  },
   // Shard 5 · household-band.tsx — Okonkwo call sheet → OPEN A HOUSEHOLD / Add a household member → "Add to the household" held (no person).
   's5-household': {
     user: LEAH,
@@ -166,8 +203,12 @@ export const SITES = {
   'd-purchauth': {
     user: LEAH,
     run: (c) => standard(c, {
-      // The section rail is hidden at 390; the act is reached by scrolling the paper there.
-      async open(c) { await c.land(`/doc/${OLSEN}`); await tx(c.page, /^pieces/i).click({ timeout: 5000 }).catch(() => c.note('no Pieces rail link (phone)')); await c.page.waitForTimeout(2000); },
+      async open(c) {
+        await c.land(`/doc/${OLSEN}`);
+        if (c.vp === 'phone') await c.page.getByRole('button', { name: /open project contents/i }).click();
+        await tx(c.page, /^pieces/i).click();
+        await c.page.waitForTimeout(2000);
+      },
       act: (c) => tx(c.page, /^prepare purchasing authorization$/i),
       windows: 1, sheetRe: null, actRe: /purchasing authorization/i,
     }),

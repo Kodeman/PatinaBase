@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const WT = '/Users/kody/.claude/sidequest/worktrees/patina-merged-5f06cee3/agent-aeb91f558608b9840';
+export const WT = '/Users/kody/.claude/sidequest/worktrees/patina-merged-5f06cee3/agent-a1962bb001289c8d8';
 export const OUT = path.join(WT, 'artifacts/spotlight-2026-10-16/R3');
 export const PROBE = '/Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-1055';
 export const BASE = 'http://localhost:3040';
