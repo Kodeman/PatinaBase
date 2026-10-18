@@ -205,7 +205,7 @@ export function RoomShell({
       </div>
 
       {/* The paper itself. Bottom padding follows the shell's measured foot chrome. */}
-      <div data-spotlight-frame className="relative z-10 flex-1 pb-[calc(var(--doc-shell-bottom-inset)+1.5rem)]">
+      <div data-spotlight-frame className="relative z-10 flex-1 pb-[var(--doc-shell-floating-bottom)]">
         {children}
       </div>
 

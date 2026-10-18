@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { RoomShell } from '../../rooms/room-shell';
 
@@ -16,5 +18,17 @@ it('reserves the measured drawer height beneath the firm card instead of a fixed
   expect(frame).toContainElement(act);
   // jsdom has no layout: the CSS reserve is the testable contract. It follows
   // the shell's measured inset at both widths, plus the existing 24px gap.
-  expect(frame).toHaveClass('pb-[calc(var(--doc-shell-bottom-inset)+1.5rem)]');
+  expect(frame).toHaveClass('pb-[var(--doc-shell-floating-bottom)]');
+});
+
+it('gives the window scroller dock clearance in every Room at both widths', () => {
+  // RoomShell and its document-route parent have min-height, not constrained
+  // overflow: the window scrolls, so the CSS contract belongs on html.
+  const css = readFileSync(resolve(process.cwd(), 'src/app/globals.css'), 'utf8');
+  const rules = [...css.matchAll(/html:has\(\.document-route-shell\)\s*\{([^}]*)\}/g)]
+    .map((match) => match[1]);
+  expect(rules).toEqual(expect.arrayContaining([
+    expect.stringContaining('scroll-padding-bottom: max(\n    var(--doc-mobile-bar-height, 72px),'),
+    expect.stringContaining('scroll-padding-bottom: max(72px, var(--doc-drawer-height, 0px))'),
+  ]));
 });
