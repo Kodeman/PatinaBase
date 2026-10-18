@@ -99,7 +99,7 @@ export function NoticeLog({
                 – Everyone on the job has been told.
               </p>
             ) : (
-              <ul id={pickId} className="flex flex-col">
+              <ul id={pickId} className="flex max-h-[40dvh] flex-col overflow-y-auto">
                 {untold.map((seat) => (
                   <li key={seat.seatId}>
                     <button

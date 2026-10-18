@@ -185,24 +185,30 @@ describe('NoticeLog', () => {
 
 /** US-36 R3 / R186 — the held save's window is the list that fixes it. */
 describe('NoticeLog — pressing the held save', () => {
-  it('opens a spotlight on the names, live and focused', () => {
+  it('opens a bounded picker window, not the tall list band', () => {
+    const manySeats = Array.from({ length: 24 }, (_, index) => ({
+      seatId: `seat-${index}`,
+      name: `Person ${index}`,
+    }));
     render(
       <div data-spotlight-frame>
-        <NoticeLog projectId="okonkwo" seats={SEATS} told={[]} panelId="notice-panel" />
+        <NoticeLog projectId="okonkwo" seats={manySeats} told={[]} panelId="notice-panel" />
       </div>,
     );
     fireEvent.click(screen.getByRole('button', { name: /Log who was told/ }));
     const save = screen.getByRole('button', { name: /Save this note/ });
     fireEvent.click(save);
 
-    const luis = screen.getByRole('checkbox', { name: 'Luis Ochoa' });
+    const first = screen.getByRole('checkbox', { name: 'Person 0' });
+    const picker = first.closest('ul')!;
     const windows = Array.from(document.querySelectorAll('[data-hold-spotlight-window]'));
     expect(windows.map((el) => el.getAttribute('data-hold-spotlight-window'))).toEqual([
-      luis.closest('ul')!.id,
+      picker.id,
     ]);
+    expect(picker).toHaveClass('max-h-[40dvh]', 'overflow-y-auto');
     expect(save.closest('[inert]')).not.toBeNull();
-    expect(luis.closest('[inert]')).toBeNull();
-    expect(document.activeElement).toBe(luis);
+    expect(first.closest('[inert]')).toBeNull();
+    expect(document.activeElement).toBe(first);
     expect(logToldMutate).not.toHaveBeenCalled();
   });
 });
