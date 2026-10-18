@@ -437,4 +437,87 @@ BEGIN
     'issued metadata: authenticated studio member cannot update milestone';
 END $$;
 RESET ROLE;
+
+-- 00825: archived root shapes are whole snapshots, never positional merges.
+-- Exercise the existing-row ON CONFLICT path, including JSON null as a root.
+ALTER TABLE public.invoice_line_items DROP CONSTRAINT invoice_line_items_public_metadata_ck;
+INSERT INTO public.invoice_line_items (id, invoice_id, kind, description, quantity,
+                                       unit_amount_cents, amount_cents, metadata)
+VALUES ('82200000-0000-4000-8000-000000000084', '82200000-0000-4000-8000-000000000030',
+        'adhoc', 'Array archive', 1, 8000, 8000,
+        '[{"WHOLESALEprice":8000,"unitPriceCents":8000}]'::jsonb),
+       ('82200000-0000-4000-8000-000000000085', '82200000-0000-4000-8000-000000000030',
+        'adhoc', 'Mixed archive', 1, 8000, 8000,
+        '[{"costCents":7300}]'::jsonb),
+       ('82200000-0000-4000-8000-000000000086', '82200000-0000-4000-8000-000000000030',
+        'adhoc', 'Legacy snapshot key', 1, 8000, 8000,
+        '{"wholesalePrice":8000}'::jsonb);
+INSERT INTO public.invoice_line_item_internals (line_item_id, internal_metadata)
+VALUES ('82200000-0000-4000-8000-000000000084', '[{"costCents":7300}]'::jsonb),
+       ('82200000-0000-4000-8000-000000000085', '{"costCents":7300}'::jsonb),
+       ('82200000-0000-4000-8000-000000000086',
+        '{"costCents":7300,"archiveSnapshots":"legacy note",
+          "archiveSnapshotsLegacy":{"older":"occupied"},
+          "archiveSnapshotsLegacy2":{"older":"also occupied"}}'::jsonb);
+SELECT public._move_invoice_line_internal_metadata();
+DO $$
+DECLARE v_archive jsonb;
+BEGIN
+  SELECT internal_metadata INTO v_archive FROM public.invoice_line_item_internals
+   WHERE line_item_id = '82200000-0000-4000-8000-000000000084';
+  ASSERT v_archive = '{"archiveSnapshots":[[{"costCents":7300}],
+                       [{"WHOLESALEprice":8000,"unitPriceCents":8000}]]}'::jsonb,
+    'root arrays: existing and incoming roots survive whole on conflict';
+  SELECT internal_metadata INTO v_archive FROM public.invoice_line_item_internals
+   WHERE line_item_id = '82200000-0000-4000-8000-000000000085';
+  ASSERT v_archive = '{"costCents":7300,"archiveSnapshots":[[{"costCents":7300}]]}'::jsonb,
+    'mixed roots: incoming array survives whole beside existing object';
+  SELECT internal_metadata INTO v_archive FROM public.invoice_line_item_internals
+   WHERE line_item_id = '82200000-0000-4000-8000-000000000086';
+  ASSERT v_archive->'archiveSnapshotsLegacy' = '{"older":"occupied"}'::jsonb
+     AND v_archive->'archiveSnapshotsLegacy2' = '{"older":"also occupied"}'::jsonb
+     AND v_archive->'archiveSnapshotsLegacy3' = '"legacy note"'::jsonb
+     AND v_archive->'archiveSnapshots' = '[{"wholesalePrice":8000}]'::jsonb,
+    'legacy archiveSnapshots: relocate without overwriting occupied keys';
+END $$;
+-- A mixed shape in the other direction and JSON null cannot be represented
+-- by jsonb_each. Equal replay must neither duplicate nor recast snapshots.
+DO $$
+DECLARE v_archive jsonb;
+BEGIN
+  v_archive := public._invoice_line_append_archive_snapshot(
+    '[{"costCents":7300}]'::jsonb, '{"wholesalePrice":8000}'::jsonb);
+  ASSERT v_archive = '{"archiveSnapshots":[[{"costCents":7300}],
+                       {"wholesalePrice":8000}]}'::jsonb,
+    'mixed roots: existing array and incoming object survive whole';
+  ASSERT public._invoice_line_append_archive_snapshot(v_archive, '{"wholesalePrice":8000}'::jsonb)
+       = v_archive, 'mixed roots: exact-equality replay is stable';
+  v_archive := public._invoice_line_append_archive_snapshot('null'::jsonb, '[{"costCents":1}]'::jsonb);
+  ASSERT v_archive = '{"archiveSnapshots":[null,[{"costCents":1}]]}'::jsonb,
+    'JSON null: existing null root survives whole';
+  v_archive := public._invoice_line_append_archive_snapshot('{"costCents":1}'::jsonb, 'null'::jsonb);
+  ASSERT v_archive = '{"costCents":1,"archiveSnapshots":[null]}'::jsonb,
+    'JSON null: incoming null root survives whole';
+  ASSERT public._invoice_line_append_archive_snapshot(v_archive, 'null'::jsonb) = v_archive,
+    'JSON null: repeated identical snapshot is stable';
+  v_archive := public._invoice_line_append_archive_snapshot(
+    '{"archiveSnapshots":[{"legacy":1}],"costCents":1}'::jsonb,
+    '{"costCents":2}'::jsonb);
+  ASSERT v_archive->'archiveSnapshots' = '[{"legacy":1},{"costCents":2}]'::jsonb,
+    'legacy array: existing snapshot values remain intact';
+  ASSERT public._invoice_line_append_archive_snapshot(v_archive, '{"costCents":2}'::jsonb) = v_archive,
+    'legacy array: replay does not duplicate exact snapshot';
+  v_archive := public._invoice_line_append_archive_snapshot(
+    '{"archiveSnapshots":"old","archiveSnapshotsLegacy":"occupied"}'::jsonb,
+    '{"archiveSnapshotsLegacy2":"incoming","costCents":1}'::jsonb);
+  ASSERT v_archive->'archiveSnapshotsLegacy' = '"occupied"'::jsonb
+     AND v_archive->'archiveSnapshotsLegacy2' = '"incoming"'::jsonb
+     AND v_archive->'archiveSnapshotsLegacy3' = '"old"'::jsonb
+     AND v_archive->'archiveSnapshots' = '[{"archiveSnapshotsLegacy2":"incoming","costCents":1}]'::jsonb
+     AND v_archive->>'costCents' = '1',
+    'relocation collision: incoming key is not overwritten';
+END $$;
+SELECT public._move_invoice_line_internal_metadata();
+ALTER TABLE public.invoice_line_items ADD CONSTRAINT invoice_line_items_public_metadata_ck
+  CHECK (metadata = public._invoice_line_public_metadata(metadata));
 ROLLBACK;
