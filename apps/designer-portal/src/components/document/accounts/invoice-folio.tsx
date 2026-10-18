@@ -70,6 +70,7 @@ import { HouseholdSheet } from '../overlays/household-sheet';
 import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
 import { useReconcileInvoiceCheckout } from '@/hooks/use-invoice-checkout-reconciliation';
 import { AccountsQueryFailure } from './accounts-query-failure';
+import { openInvoiceComposer } from './invoice-overlays';
 
 const SAGE_INK = 'var(--color-sage-ink)';
 const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
@@ -920,6 +921,16 @@ export function InvoiceFolio({
               onClick={() => openPanel('send')}
             >
               {oneVoice ? 'Send the invoice' : 'Issue & send'}
+            </DocumentAction>
+          )}
+          {isDraft && (
+            <DocumentAction
+              actionKey="edit-invoice"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => openInvoiceComposer({ mode: 'edit', invoiceId })}
+            >
+              Edit
             </DocumentAction>
           )}
           {canRecordPayment && (

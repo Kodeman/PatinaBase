@@ -11647,3 +11647,22 @@ With no studio on the invoice or its project, only the designer is admitted. Not
 **The rule.** One `compose_project_invoice` call drafts the project invoice, claims every selected eligible hour, and attaches selected billing lines. A short claim or a billing-line refusal rolls the entire call back: no header, hour claim, purchase link, or partial line remains. The writer keeps the 00817 invoice-studio authority and the draft writer's exact project tuple; the claim stage honors the hour writer's caller-equivalent eligibility. A refusal names its stage without printing raw database detail in the composer. No compensating delete and no stranded-draft state remain. A lost answer may still leave a complete draft, so the unconfirmed hold directs the designer to inspect invoices before trying again.
 
 *Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R191 · R192 · R193 · R194 · R195 · R196 · last id = R196*
+
+
+### R197 · A draft invoice can be edited in place — US-38 — SQ-1382 2026-10-18
+
+**The rule.** A draft's folio offers Edit after Send. The composer reopens its lines, claimed hours, billing selections, tax, terms, memo and internal notes; Save the draft updates the same invoice, keeping its number and creation date. One transaction releases dropped claims and links, keeps selected hours, and attaches the replacement lines. A refusal leaves the entire draft unchanged. An out-of-date draft must be reopened; an issued invoice cannot be edited.
+
+**Locked parties.** The house, household and billing studio stay as drawn, including a studio invoice's no-house target. To change those, void and recompose. No feature flag, new control system or shadow treatment is introduced.
+
+**Retained snapshots and serialization (US-38 repair).** An untouched draft line retains its own description, quantity, price and deposit percentage, including zero-dollar hand lines; only an explicit removal or pricing act replaces that snapshot. Other invoices never hide this draft’s own slot. Claimed hours are read by invoice, not a capped project history. Edit locks the sorted union of old/new FF&E slots before releasing any; the latest billing writer (00822) is grafted only to share edit/void’s per-invoice advisory lock before its invoice row lock, serializing direct adds to the same draft.
+
+
+### US-38 — Canonical billing lock order (2026-10-18)
+
+Draft editing, composing, direct billing-line additions and voiding share one internal prelock: milestones, purchases, PO cost riders, then FF&E slots, each sorted by id. Existing invoices serialize first; hours remain entry-first. Edits prelock old and new resources before releasing lines. This also fixes the pre-existing compose/direct-add and reversed-array direct-add lock cycles. Deposits restore before their balances without changing display order. Concurrent lock refusals ask the designer to save again; nothing is partially saved. House/client stay locked; void and recompose to change them.
+
+
+### R200 — Invoice lifecycle lock order (US-38 repair 3, 2026-10-18)
+
+Existing-invoice writers lock authorized hours first where applicable, then the invoice row, then the canonical milestone → purchase → rider → FF&E resource set. The invoice-before-billing order matches issue/send; issue does not row-lock hours. New-invoice roots (compose and the directly callable create-draft RPC) prelock their full payload before creating their invoice. Payload prelocks use PostgreSQL's native UUID validation after trimming, matching accepted writer inputs rather than a narrower spelling regex. Concurrent SQLSTATE 40P01/55P03 always displays the save-again refusal, even without a stage prefix. Other out-of-set writers remain a residual liveness risk, not a change to draft-edit authority or atomic rollback.

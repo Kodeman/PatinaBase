@@ -48,6 +48,8 @@ export interface InvoiceLineItem {
   id: string;
   invoice_id: string;
   kind: InvoiceLineKind;
+  billing_stage?: 'full' | 'deposit' | 'balance';
+  billing_stage_pct?: number | null;
   milestone_id: string | null;
   ffe_item_id: string | null;
   description: string;
@@ -300,19 +302,9 @@ function refuseRetiredDraft(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw new Error('This draft was abandoned before it was written.');
 }
 
-export interface UpdateDraftInvoiceInput {
+export interface UpdateDraftInvoiceInput extends Omit<CreateDraftInvoiceInput, 'projectId' | 'clientId'> {
   invoiceId: string;
-  patch: Partial<
-    Pick<
-      Invoice,
-      | 'client_id'
-      | 'tax_rate'
-      | 'payment_terms_days'
-      | 'memo'
-      | 'internal_notes'
-      | 'due_date'
-    >
-  >;
+  expectedUpdatedAt: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -464,7 +456,7 @@ function invalidateInvoiceLinkFact(queryClient: QueryClient, invoiceId?: string 
 
 // These hooks serve both studio and household. Keep line columns explicit;
 // metadata is scrubbed at the database boundary by 00822.
-const INVOICE_LINE_COLUMNS = 'id, invoice_id, kind, milestone_id, ffe_item_id, description, quantity, unit_amount_cents, amount_cents, metadata, sort_order, created_at';
+const INVOICE_LINE_COLUMNS = 'id, invoice_id, kind, milestone_id, ffe_item_id, billing_stage, billing_stage_pct, description, quantity, unit_amount_cents, amount_cents, metadata, sort_order, created_at';
 
 /**
  * Fetches invoices for the authenticated designer (RLS-scoped). Joins project
@@ -838,7 +830,7 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
         // The write went out: a lost answer may hide a draft that landed, and
         // no idempotency key stops a second one, so the invoice lists re-read.
         void queryClient.invalidateQueries({ queryKey: ['invoices'] });
-        throw new Error(`Failed to create draft invoice: ${invErr.message ?? String(invErr)}`);
+        throw Object.assign(new Error(`Failed to create draft invoice: ${invErr.message ?? String(invErr)}`), { code: invErr.code });
       }
 
       return invoice as Invoice;
@@ -932,29 +924,64 @@ export function useCreateDraftStudioInvoice(options?: { errorSurface?: 'inline' 
   });
 }
 
-/**
- * Updates header fields on a draft (RLS restricts to status='draft').
- * Re-stamps draft totals when tax_rate changes.
- */
-export function useUpdateDraftInvoice() {
+/** Replaces a draft atomically; its billing target and identity never change. */
+export function useUpdateDraftInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ invoiceId, patch }: UpdateDraftInvoiceInput): Promise<Invoice> => {
+    meta: { act: 'money', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
+    retry: false,
+    mutationFn: async (input: UpdateDraftInvoiceInput): Promise<Invoice> => {
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('invoices')
-        .update(patch)
-        .eq('id', invoiceId)
-        .select()
-        .single();
-      if (error) throw error;
-      if (patch.tax_rate !== undefined) {
-        await recomputeDraftTotals(supabase, invoiceId);
+      if (!await getSessionUserId()) throw new Error('Not authenticated');
+      const lines = input.lines.map((line, index) => {
+        const row = buildLineRow('', line, index);
+        return {
+          kind: row.kind,
+          milestone_id: row.milestone_id,
+          ffe_item_id: row.ffe_item_id,
+          description: row.description,
+          quantity: row.quantity,
+          unit_amount_cents: row.unit_amount_cents,
+          metadata: row.metadata,
+          sort_order: row.sort_order,
+        };
+      });
+      refuseRetiredDraft(input.signal);
+      const { data, error } = await supabase.rpc('update_draft_invoice', {
+        p_invoice_id: input.invoiceId,
+        p_expected_updated_at: input.expectedUpdatedAt,
+        p_tax_rate: input.taxRate ?? 0,
+        p_payment_terms_days: input.paymentTermsDays ?? 15,
+        p_memo: input.memo ?? null,
+        p_internal_notes: input.internalNotes ?? null,
+        p_lines: lines,
+        p_entry_ids: input.entryIds ?? [],
+        p_billing_lines: input.billingLines ?? [],
+      });
+      if (error) {
+        // A lost response can hide a committed save; never leave its folio stale.
+        void queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        throw Object.assign(new Error(error.message ?? String(error)), { code: error.code });
       }
       return data as Invoice;
     },
     onSuccess: (invoice) => {
-      invalidateInvoiceEffects(queryClient, invoice.project_id);
+      const projectId = invoice.project_id;
+      invalidateInvoiceEffects(queryClient, projectId);
+      queryClient.invalidateQueries({ queryKey: ['invoices', invoice.id] });
+      // Invalidate even for an empty selection: its last hour or purchase may
+      // have been dropped by this edit.
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'time-entries'] });
+        queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'time-tracking'] });
+        queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'unbilled-time'] });
+        queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'key-metrics'] });
+        queryClient.invalidateQueries({ queryKey: ['buying-phase2', 'purchases', `project:${projectId}`] });
+        queryClient.invalidateQueries({ queryKey: ['buying-phase2', 'cost-lines'] });
+        queryClient.invalidateQueries({ queryKey: ['time'] });
+        queryClient.invalidateQueries({ queryKey: ['desk-contents-unbilled-time'] });
+        queryClient.invalidateQueries({ queryKey: ['document-hours-week'] });
+      }
     },
   });
 }

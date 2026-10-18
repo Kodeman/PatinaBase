@@ -1017,3 +1017,25 @@ describe('InvoiceFolio · a refused send, in the folio’s words (US-36 R1)', ()
     expect(alert).not.toHaveTextContent(/held the letter|checkout_in_flight/);
   });
 });
+
+
+describe('US-38 draft Edit act', () => {
+  beforeEach(() => { mockInvoice = invoice; mockSendPending = false; });
+  it('opens the draft composer after Send and disables Edit while busy', () => {
+    const opened = jest.fn(); window.addEventListener('document:open-invoice-composer', opened);
+    const view = render(<InvoiceFolio invoiceId="invoice-1" />);
+    const edit = screen.getByRole('button', { name: 'Edit' });
+    const send = screen.getByRole('button', { name: 'Issue & send' });
+    expect(send.compareDocumentPosition(edit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(edit);
+    expect(opened.mock.calls[0][0].detail).toEqual({ mode: 'edit', invoiceId: 'invoice-1' });
+    mockSendPending = true; view.rerender(<InvoiceFolio invoiceId="invoice-1" />);
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
+    window.removeEventListener('document:open-invoice-composer', opened);
+  });
+  it('does not offer Edit for an issued invoice', () => {
+    mockInvoice = { ...invoice, status: 'sent' };
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  });
+});

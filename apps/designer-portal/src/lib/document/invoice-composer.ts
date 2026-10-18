@@ -32,7 +32,7 @@
  * name (LEAH-15, REP-15: the homeowner gets no staffing detail).
  */
 
-import type { DraftLineInput, InvoiceBillingLineRequest } from "@patina/supabase";
+import type { DraftLineInput, InvoiceBillingLineRequest, Invoice } from "@patina/supabase";
 import {
   buildTimeLineDraft,
   type TimeLineDateRow,
@@ -106,6 +106,60 @@ export interface ParkedInvoiceComposer {
   taxRatePercent: string;
   termsDays: string;
   memo: string;
+  internalNotes?: string;
+  expectedUpdatedAt?: string;
+  retainedLines?: NonNullable<Invoice["line_items"]>;
+  changedBillingIds?: string[];
+}
+
+/** Seed the existing controls from persisted draft lines, not a second composer. */
+export function draftComposerSeed(invoice: Invoice): ParkedInvoiceComposer {
+  const lines = invoice.line_items ?? [];
+  const ids = (key: "milestone_id" | "ffe_item_id") => lines.flatMap((line) => line[key] ? [line[key]!] : []);
+  const deposits = lines.filter((line) => line.billing_stage === "deposit");
+  return {
+    retainedLines: lines,
+    milestoneIds: ids("milestone_id"),
+    timeEntryIds: lines.flatMap((line) => Array.isArray(line.metadata?.time_entry_ids) ? line.metadata.time_entry_ids as string[] : []),
+    ffeItemIds: lines.filter((line) => line.ffe_item_id && line.billing_stage !== "balance").map((line) => line.ffe_item_id!),
+    ffeStage: deposits.length ? "deposit" : "full",
+    depositPctText: String(deposits[0]?.billing_stage_pct ?? 50),
+    balanceItemIds: lines.filter((line) => line.billing_stage === "balance" && line.ffe_item_id).map((line) => line.ffe_item_id!),
+    purchaseIds: lines.flatMap((line) => typeof line.metadata?.studioPurchaseId === "string" ? [line.metadata.studioPurchaseId] : []),
+    riderIds: lines.flatMap((line) => typeof line.metadata?.poCostLineId === "string" ? [line.metadata.poCostLineId] : []),
+    overrides: lines.flatMap((line) => {
+      const id = line.metadata?.studioPurchaseId ?? line.metadata?.poCostLineId;
+      return typeof id === "string" ? [[id, centsToDollarText(line.amount_cents)] as [string, string]] : [];
+    }),
+    adhoc: lines.filter((line) => line.kind === "adhoc" && !line.metadata?.studioPurchaseId && !line.metadata?.poCostLineId).map((line) => ({
+      description: line.description, quantity: String(line.quantity), unitDollars: centsToDollarText(line.unit_amount_cents),
+    })),
+    taxRatePercent: String(invoice.tax_rate * 100), termsDays: String(invoice.payment_terms_days),
+    memo: invoice.memo ?? "", internalNotes: invoice.internal_notes ?? "", expectedUpdatedAt: invoice.updated_at,
+  };
+}
+
+/** Retained billing rows keep the opened invoice's money, not today's schedule. */
+export function snapshotComposerLines(stored: NonNullable<Invoice["line_items"]>): { lines: DraftLineInput[]; billingLines: BillingLineDraft[] } {
+  const lines: DraftLineInput[] = [];
+  const billingLines: BillingLineDraft[] = [];
+  for (const line of stored) {
+    const overrides = { amountCents: line.amount_cents, description: line.description, sortOrder: line.sort_order };
+    const purchaseId = line.metadata?.studioPurchaseId;
+    const costLineId = line.metadata?.poCostLineId;
+    const request: InvoiceBillingLineRequest | null = typeof purchaseId === "string"
+      ? { purchaseId, ...overrides }
+      : typeof costLineId === "string"
+        ? { costLineId, ...overrides }
+        : line.ffe_item_id && line.billing_stage === "deposit"
+          ? { ffeItemId: line.ffe_item_id, stage: "deposit", depositPct: line.billing_stage_pct!, ...overrides }
+          : line.ffe_item_id && line.billing_stage === "balance"
+            ? { ffeItemId: line.ffe_item_id, stage: "balance", ...overrides }
+            : null;
+    if (request) billingLines.push({ request, description: line.description, amountCents: line.amount_cents });
+    else lines.push({ kind: line.kind, milestoneId: line.milestone_id ?? undefined, ffeItemId: line.ffe_item_id ?? undefined, description: line.description, quantity: line.quantity, unitAmountCents: line.unit_amount_cents, sortOrder: line.sort_order, metadata: line.metadata });
+  }
+  return { lines, billingLines };
 }
 
 export const EMPTY_ADHOC: ComposerAdhocRow = {
@@ -610,6 +664,7 @@ export interface ComposerSelection {
  */
 export function buildComposerLines(
   selection: ComposerSelection,
+  editing = false,
 ): DraftLineInput[] {
   const milestoneLines: DraftLineInput[] = selection.milestones.map((m, i) => ({
     kind: "milestone" as const,
@@ -658,10 +713,10 @@ export function buildComposerLines(
     : [];
 
   const adhocLines: DraftLineInput[] = selection.adhoc
-    .filter((l) => l.description.trim() && dollarsToCents(l.unitDollars) > 0)
+    .filter((l) => editing || (l.description.trim() && dollarsToCents(l.unitDollars) > 0))
     .map((l, i) => ({
       kind: "adhoc" as const,
-      description: l.description.trim(),
+      description: editing ? l.description : l.description.trim(),
       quantity: parseFloat(l.quantity) > 0 ? parseFloat(l.quantity) : 1,
       unitAmountCents: dollarsToCents(l.unitDollars),
       sortOrder: milestoneLines.length + ffeLines.length + timeLines.length + i,
@@ -868,7 +923,7 @@ export function refusedBillingLines<T extends { request: InvoiceBillingLineReque
 ): T[] {
   const raw = refusalText(err);
   const reason = typeof raw === "string"
-    ? /^add_invoice_billing_lines:\s*(.+)$/.exec(raw.trim().replace(/^Failed to create draft invoice:\s*compose_project_invoice: lines:\s*/, ""))?.[1]
+    ? /^add_invoice_billing_lines:\s*(.+)$/.exec(raw.trim().replace(/^(?:Failed to create draft invoice:\s*)?(?:compose_project_invoice|update_draft_invoice): lines:\s*/, ""))?.[1]
     : undefined;
   if (!reason) return [];
   const scoped = /^(purchase|rider|line) (\S+) /.exec(reason);
@@ -1144,9 +1199,14 @@ export function billingRefusal(
   err: unknown,
   nameOf?: (id: string) => string | null | undefined,
 ): { sentence: string; fixer?: InvoiceHold["fixer"] } {
+  if ((source === "draft" || source === "claim" || source === "lines") &&
+      err && typeof err === "object" && "code" in err &&
+      (err.code === "40P01" || err.code === "55P03")) {
+    return { sentence: "Another change to these lines was saving at the same moment. Save again." };
+  }
   const raw = refusalText(err);
   const composed = typeof raw === "string"
-    ? /^(?:Failed to create draft invoice:\s*)?compose_project_invoice: (draft|claim|lines):\s*(.*)$/.exec(raw.trim())
+    ? /^(?:Failed to create draft invoice:\s*)?(?:compose_project_invoice|update_draft_invoice): (draft|claim|lines):\s*(.*)$/.exec(raw.trim())
     : null;
   if (composed) {
     if (composed[1] === "draft") {
@@ -1155,7 +1215,9 @@ export function billingRefusal(
     if (composed[1] === "claim") return { sentence: claimTimeRefusal(composed[2]) };
     return { sentence: billingLinesRefusal(composed[2], nameOf) };
   }
-  if (raw === "Failed to create draft invoice: compose_project_invoice: claim_short" ||
+  if (raw === "update_draft_invoice: stale") return { sentence: "This draft changed since you opened it. Reopen it to edit." };
+  if (raw === "update_draft_invoice: not_draft") return { sentence: "This invoice has been sent, so it can't be edited." };
+  if (raw === "update_draft_invoice: claim_short" || raw === "Failed to create draft invoice: compose_project_invoice: claim_short" ||
       raw === "compose_project_invoice: claim_short") {
     return { sentence: claimTimeRefusal("compose_project_invoice: claim_short") };
   }

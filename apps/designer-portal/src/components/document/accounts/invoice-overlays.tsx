@@ -21,7 +21,7 @@ import { InvoiceComposer } from "./invoice-composer";
 
 // ── One-act openers ─────────────────────────────────────────────────────────
 
-export interface InvoiceComposerContext {
+interface InvoiceComposerPrefill {
   /** Bill this project; omitted = the composer asks (project picker). */
   projectId?: string;
   /** R136 — open straight into the houseless choice (ruling S1). Honoured only
@@ -37,6 +37,8 @@ export interface InvoiceComposerContext {
   /** C-31 — "Bill N unbilled riders": these PO riders arrive ticked. */
   initialCostLineIds?: string[];
 }
+
+export type InvoiceComposerContext = InvoiceComposerPrefill | (Omit<InvoiceComposerPrefill, "mode"> & { mode: "edit"; invoiceId: string });
 
 /** Where the folio puts focus when it opens (US-19 F3-3). `record` opens the
  *  payment panel with focus on its filled `Record the payment · $X`. */
@@ -119,11 +121,12 @@ export function InvoiceOverlays() {
       <PaperFolioSheet
         open={overlay?.kind === "composer"}
         onClose={close}
-        title="Draw an invoice"
+        title={overlay?.kind === "composer" && overlay.context.mode === "edit" ? "Edit the draft" : "Draw an invoice"}
         wide
       >
         {overlay?.kind === "composer" && (
           <InvoiceComposer
+            key={overlay.context.mode === "edit" ? overlay.context.invoiceId : "new"}
             context={overlay.context}
             // The handoff: the fresh draft opens as the folio — issue & send
             // live there (review-then-send, R74).
