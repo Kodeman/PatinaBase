@@ -1816,6 +1816,7 @@ export function AgreementComposer({
             const part = parts.find((entry) => entry.id === blocker.partId);
             return {
               message: blocker.message,
+              code: blocker.code,
               partId: part?.id,
               partTitle: part?.title,
             };

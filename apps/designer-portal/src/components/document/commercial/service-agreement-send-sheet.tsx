@@ -75,7 +75,7 @@ export function ServiceAgreementSendSheet({
    *  entitled to (R4). Omitted on the flag-off path, where nothing moves. */
   readinessOverride?: {
     ready: boolean;
-    blockers: Array<string | { message: string; partId?: string; partTitle?: string }>;
+    blockers: Array<string | { message: string; partId?: string; partTitle?: string; code?: string }>;
     notes: string[];
   };
   onFixPart?: (partId: string) => void;
@@ -102,12 +102,12 @@ export function ServiceAgreementSendSheet({
       recipientEmail,
     });
   const blockerRows = readiness.blockers.map((entry) => {
-    const blocker = typeof entry === "string" ? { message: entry } : entry;
+    const blocker = typeof entry === "string" ? { message: entry, code: undefined } : entry;
     const isClient = blocker.message === "Link a client with an email address.";
     const partId = blocker.partId;
     return {
       ...blocker,
-      id: `${blockerListId}-${partId ? `part-${partId}` : isClient ? "client" : `reason-${encodeURIComponent(blocker.message)}`}`,
+      id: `${blockerListId}-${partId ? `part-${partId}${blocker.code ? `-${blocker.code}` : ""}` : blocker.code ?? (isClient ? "client" : `reason-${encodeURIComponent(blocker.message)}`)}`,
       label: blocker.partTitle ?? (isClient ? "Client account" : "Finish before sending"),
       fix: partId && onFixPart
         ? { label: `Fix ${blocker.partTitle?.trim() || "this part"}`, run: () => onFixPart(partId) }

@@ -8,6 +8,7 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
 
 import type { AgreementPart } from "@patina/types";
 import { ServiceAgreementSendSheet } from "./service-agreement-send-sheet";
+import { assessAgreementReadiness } from "../rooms/drafting/agreement/readiness";
 import type {
   CommercialDocument,
   ServiceAgreementTerms,
@@ -425,5 +426,92 @@ describe("ServiceAgreementSendSheet · synthesis §5", () => {
         "A short personal note to accompany the agreement.",
       ),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("native agreement blockers with multiple errors on one part", () => {
+  const flatFee = () => part({
+    partKey: "fee-1", title: "Flat fee", kind: "schedule", variant: "flat",
+    payload: { cents: 100_000 },
+  });
+  const retainer = (cents: number | null) => part({
+    partKey: "retainer-1", title: "Retainer", kind: "schedule", variant: "retainer",
+    payload: { cents },
+  });
+  const roleRate = () => part({
+    partKey: "rates-1", title: "Role rates", kind: "schedule", variant: "rate_card",
+    payload: { roles: [{ roleName: "", hourlyRateCents: 0, rosterRole: "lead_designer" }] },
+  });
+  const prepared = (agreementParts: AgreementPart[]) => {
+    const verdict = assessAgreementReadiness({ document, parts: agreementParts, recipientEmail: null });
+    return {
+      ready: verdict.ready,
+      blockers: verdict.blockers.map((blocker) => ({
+        message: blocker.message,
+        code: blocker.code,
+        partId: blocker.partId ?? undefined,
+        partTitle: agreementParts.find((entry) => entry.id === blocker.partId)?.title,
+      })),
+      notes: verdict.notes,
+    };
+  };
+  const rowId = (message: string) => [...window.document.querySelectorAll("li[id]")]
+    .find((row) => row.querySelector("span")?.textContent === message)!.id;
+  const active = () => window.document.querySelector("[data-hold-spotlight-window][data-active]")?.getAttribute("data-hold-spotlight-window");
+  const expectActive = (message: string) => {
+    expect(active()).toBe(rowId(message));
+    expect(screen.getByRole("group", { name: "What needs attention" })).toHaveTextContent(message);
+  };
+  const renderHeld = (agreementParts: AgreementPart[]) => (
+    <ServiceAgreementSendSheet open onClose={jest.fn()} document={document} terms={terms}
+      rates={rates} recipientEmail={null} parts={agreementParts}
+      readinessOverride={prepared(agreementParts)} />
+  );
+
+  it("visits amount, activation, then client with distinct retainer hold identities", async () => {
+    const user = userEvent.setup();
+    render(renderHeld([flatFee(), retainer(null)]));
+    const amount = "Set a valid retainer amount, including zero when none is due.";
+    const activation = "Choose when the agreement becomes active.";
+    const client = "Link a client with an email address.";
+    expect(new Set([rowId(amount), rowId(activation), rowId(client)]).size).toBe(3);
+    await user.click(screen.getByRole("button", { name: /Send the agreement/ }));
+    expectActive(amount);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expectActive(activation);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expectActive(client);
+  });
+
+  it("keeps activation's identity after amount is fixed and still reaches client", async () => {
+    const user = userEvent.setup();
+    const view = render(renderHeld([flatFee(), retainer(null)]));
+    const amount = "Set a valid retainer amount, including zero when none is due.";
+    const activation = "Choose when the agreement becomes active.";
+    const client = "Link a client with an email address.";
+    const priorId = rowId(activation);
+    expect(priorId).not.toBe(rowId(amount));
+    view.rerender(renderHeld([flatFee(), retainer(50_000)]));
+    expect(rowId(activation)).toBe(priorId);
+    expect(new Set([rowId(activation), rowId(client)]).size).toBe(2);
+    await user.click(screen.getByRole("button", { name: /Send the agreement/ }));
+    expectActive(activation);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expectActive(client);
+  });
+
+  it("visits zero rate, blank role, then client with distinct role-rate identities", async () => {
+    const user = userEvent.setup();
+    render(renderHeld([flatFee(), roleRate()]));
+    const rate = "Add at least one role with an hourly rate.";
+    const role = "Every role on the rate card needs a name.";
+    const client = "Link a client with an email address.";
+    expect(new Set([rowId(rate), rowId(role), rowId(client)]).size).toBe(3);
+    await user.click(screen.getByRole("button", { name: /Send the agreement/ }));
+    expectActive(rate);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expectActive(role);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expectActive(client);
   });
 });
