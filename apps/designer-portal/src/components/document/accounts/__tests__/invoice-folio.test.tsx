@@ -8,6 +8,7 @@ const { InvoiceSendError } = jest.requireActual('@patina/supabase');
 
 const mockIssue = jest.fn();
 const mockSend = jest.fn();
+let mockSendPending = false;
 const mockRecordPayment = jest.fn();
 const mockVoid = jest.fn();
 const mockReconcileCheckout = jest.fn();
@@ -127,7 +128,7 @@ jest.mock('@patina/supabase', () => ({
     refetch: mockRefetch,
   }),
   useIssueInvoice: () => ({ mutateAsync: mockIssue, isPending: false }),
-  useSendInvoice: () => ({ mutateAsync: mockSend, isPending: false }),
+  useSendInvoice: () => ({ mutateAsync: mockSend, isPending: mockSendPending }),
   InvoiceSendError: jest.requireActual('@patina/supabase').InvoiceSendError,
   useRecordPayment: () => ({
     mutateAsync: mockRecordPayment,
@@ -184,6 +185,7 @@ jest.mock('@tanstack/react-query', () => ({
 describe('InvoiceFolio delivery recovery', () => {
   beforeEach(() => {
     mockInvoice = invoice;
+    mockSendPending = false;
     mockEmailDeliveryByRef = {};
     mockInvoiceLink = null;
     jest.clearAllMocks();
@@ -627,6 +629,25 @@ describe('InvoiceFolio delivery recovery', () => {
     expect(copy).toBeEnabled();
   });
 
+  it('composes one retry instruction after an issue succeeds but sending fails', async () => {
+    mockSend.mockRejectedValue(
+      new InvoiceSendError('temporary provider failure', {
+        error: 'send_failed',
+        issued: true,
+        invoiceNumber: 'INV-1061',
+      }),
+    );
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    const note = await screen.findByRole('alert');
+    expect(note).toHaveTextContent('Could not send — issued as INV-1061. The email couldn\'t be sent. Check the recipient. Resend to retry.');
+    expect((note.textContent?.match(/Resend to retry/g) ?? [])).toHaveLength(1);
+  });
+
   it('points the recovery band at Regenerate, never at a resend that cannot mint', async () => {
     // F2: invoice-send issued the draft, then its letter failed.
     mockSend.mockImplementation(async () => {
@@ -813,10 +834,28 @@ describe('InvoiceFolio · what became of the mail', () => {
 
   beforeEach(() => {
     mockInvoice = sentInvoice;
+    mockSendPending = false;
     mockInvoiceLink = { token: null, status: 'active' };
     mockEmailDeliveryByRef = {};
     jest.clearAllMocks();
     mockRefetch.mockResolvedValue({ data: sentInvoice });
+  });
+
+  it('disables the inline resend while sending is busy', () => {
+    mockSendPending = true;
+    mockEmailDeliveryByRef = {
+      'invoice-1': log({
+        state: 'failed',
+        status: 'failed',
+        bouncedAt: null,
+        lastEvent: 'email.failed',
+        lastEventAt: '2026-10-17T09:00:00.000Z',
+      }),
+    };
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    expect(screen.getByRole('button', { name: 'Resend invoice email' })).toBeDisabled();
   });
 
   it('names the bounce and offers the one remedy that can fix it', () => {
@@ -845,7 +884,9 @@ describe('InvoiceFolio · what became of the mail', () => {
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
 
-    expect(screen.queryByTestId('delivery-word')).toHaveTextContent('Email may not have gone — 17 Oct');
+    expect(screen.queryByTestId('delivery-word')).toHaveTextContent(
+      'Email may not have gone 17 Oct — resend it below',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Resend invoice email' }));
     expect(await screen.findByRole('button', { name: 'Resend email' })).toBeInTheDocument();
   });
@@ -866,7 +907,11 @@ describe('InvoiceFolio · what became of the mail', () => {
 
       render(<InvoiceFolio invoiceId="invoice-1" />);
 
-      expect(screen.queryByTestId('delivery-word')).toHaveTextContent('Email may not have gone — 17 Oct');
+      expect(screen.queryByTestId('delivery-word')).toHaveTextContent(
+        'Email may not have gone 17 Oct',
+      );
+      expect(screen.getByTestId('delivery-word')).not.toHaveAttribute('role');
+      expect(screen.getByTestId('delivery-word').className).toContain('text-[var(--text-muted)]');
       expect(screen.queryByRole('button', { name: 'Resend invoice email' })).not.toBeInTheDocument();
     },
   );
@@ -927,6 +972,7 @@ describe('InvoiceFolio · what became of the mail', () => {
 describe('InvoiceFolio · a refused send, in the folio’s words (US-36 R1)', () => {
   beforeEach(() => {
     mockInvoice = invoice;
+    mockSendPending = false;
     mockEmailDeliveryByRef = {};
     mockInvoiceLink = null;
     jest.clearAllMocks();

@@ -53,7 +53,11 @@ export interface DeliveryWordCopy {
 export function deliveryWord(
   delivery: EmailDelivery | null | undefined,
   recipient?: string | null,
-  options: { invoiceFolio?: boolean } = {},
+  options: {
+    invoiceFolio?: boolean;
+    quietFailedInvoiceCue?: boolean;
+    failedInvoiceCanResend?: boolean;
+  } = {},
 ): DeliveryWordCopy | null {
   if (!delivery) return null;
   const known = delivery.recipient ?? recipient ?? null;
@@ -102,8 +106,10 @@ export function deliveryWord(
     case 'failed':
       return options.invoiceFolio && trouble
         ? {
-            text: `Email may not have gone — ${trouble}`,
-            register: 'attention',
+            text: `${dated('Email may not have gone')}${
+              options.failedInvoiceCanResend ? ' — resend it below' : ''
+            }`,
+            register: options.quietFailedInvoiceCue ? 'quiet' : 'attention',
           }
         : null;
     case 'suppressed':

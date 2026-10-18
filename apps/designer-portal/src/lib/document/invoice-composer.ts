@@ -1109,6 +1109,25 @@ const SEND_REFUSALS: Array<[RegExp, string]> = [
   [/^send_failed$/, "The email couldn't be sent. Check the recipient."],
 ];
 
+const ISSUE_REFUSALS: Array<[RegExp, string]> = [
+  [
+    /^issue_invoice: invoice .+ has no line items$/,
+    "Add a line to the invoice, then issue it.",
+  ],
+  [
+    /^issue_invoice: a linked milestone is already paid or billed on another invoice$/,
+    "Remove the milestone that's already paid or on another invoice, then issue this invoice.",
+  ],
+  [
+    /^issue_invoice: linked time includes entries pending authorization or nonbillable$/,
+    "Remove the time entries that aren't approved and billable, then issue this invoice.",
+  ],
+  [
+    /^issue_invoice: signed retainer invoice must be paid first$/,
+    "Pay the signed retainer invoice before issuing this invoice.",
+  ],
+];
+
 /** The words of a refusal: a thrown string, or an Error's or PostgrestError's message. */
 function refusalText(err: unknown): unknown {
   if (typeof err === "string") return err;
@@ -1129,7 +1148,14 @@ export function billingRefusal(
   if (source === "draft") return { sentence: draftInvoiceRefusal(raw).message };
   if (source === "claim") return { sentence: claimTimeRefusal(raw) };
   if (source === "lines") return { sentence: billingLinesRefusal(raw, nameOf) };
-  const table = source === "milestone" ? MILESTONE_REFUSALS : source === "send" ? SEND_REFUSALS : [];
+  const table =
+    source === "milestone"
+      ? MILESTONE_REFUSALS
+      : source === "issue"
+        ? ISSUE_REFUSALS
+        : source === "send"
+          ? [...ISSUE_REFUSALS, ...SEND_REFUSALS]
+          : [];
   const reason = typeof raw === "string" ? raw.trim() : "";
   const detailSentence = table.find(([pattern]) => pattern.test(reason))?.[1];
   if (detailSentence) return { sentence: detailSentence };
@@ -1138,7 +1164,10 @@ export function billingRefusal(
     const code = typeof (err as { code?: unknown }).code === "string"
       ? (err as { code: string }).code.trim()
       : "";
-    const codeSentence = table.find(([pattern]) => pattern.test(code))?.[1];
+    const codeSentence =
+      code === "issue_failed"
+        ? undefined
+        : table.find(([pattern]) => pattern.test(code))?.[1];
     if (codeSentence) return { sentence: codeSentence };
   }
 

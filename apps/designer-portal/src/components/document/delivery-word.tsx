@@ -22,6 +22,8 @@ export function DeliveryWord({
   mode = 'all',
   action,
   failedInvoiceCue = false,
+  quietFailedInvoiceCue = false,
+  failedInvoiceCanResend = false,
   className = '',
 }: {
   delivery: EmailDelivery | null | undefined;
@@ -30,6 +32,10 @@ export function DeliveryWord({
   mode?: 'all' | 'attention';
   /** Only the invoice folio owns the ambiguous-send hedge. */
   failedInvoiceCue?: boolean;
+  /** Settled invoices retain the hedge without attention styling. */
+  quietFailedInvoiceCue?: boolean;
+  /** Whether an inline resend act is available below the cue. */
+  failedInvoiceCanResend?: boolean;
   /** A remedy, printed after an en-space. */
   action?: ReactNode;
   className?: string;
@@ -37,7 +43,11 @@ export function DeliveryWord({
   if (!delivery) return null;
   if (mode === 'attention' && !isAttentionState(delivery.state)) return null;
 
-  const word = deliveryWord(delivery, recipient, { invoiceFolio: failedInvoiceCue });
+  const word = deliveryWord(delivery, recipient, {
+    invoiceFolio: failedInvoiceCue,
+    quietFailedInvoiceCue,
+    failedInvoiceCanResend,
+  });
   if (!word) return null;
 
   const attention = word.register === 'attention';

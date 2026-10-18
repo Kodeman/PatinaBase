@@ -698,11 +698,14 @@ export function InvoiceFolio({
             recipient={invoice.client?.email}
             mode="all"
             failedInvoiceCue
+            quietFailedInvoiceCue={invoice.status === 'paid' || invoice.status === 'void'}
+            failedInvoiceCanResend={canResend}
             action={
               delivery?.state === 'failed' && canResend ? (
                 <button
                   type="button"
                   aria-label="Resend invoice email"
+                  disabled={busy}
                   className="underline underline-offset-4"
                   onClick={() => openPanel('resend')}
                 >
