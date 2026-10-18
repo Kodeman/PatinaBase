@@ -123,6 +123,7 @@ export function ChangedSinceApproval({
  * The summary's approval row: `Approved total $X · Current $Y (+$Z)`. Totals
  * are never summed across currencies (R188): each approved total is compared
  * with the current lines' client total in that same currency, dollars first.
+ * A currency with current lines but no approved lines prints its current total.
  */
 export function ApprovedTotalRow({
   totals,
@@ -140,35 +141,32 @@ export function ApprovedTotalRow({
   /** Whether the job's change log is open. */
   changeLogOpen?: boolean;
 }) {
+  const approvedByCurrency = new Map(totals.map((t) => [t.currency, t.cents]));
+  const currencies = [...new Set([...approvedByCurrency.keys(), ...currentTotals.keys()])];
   const ordered = [
-    ...totals.filter((t) => t.currency === "USD"),
-    ...totals.filter((t) => t.currency !== "USD"),
+    ...currencies.filter((currency) => currency === "USD"),
+    ...currencies.filter((currency) => currency !== "USD"),
   ];
-  const parts: string[] = [];
-  for (const t of ordered) {
-    const current = currentTotals.get(t.currency) ?? 0;
-    const delta = current - t.cents;
+  // A budget approval records the event with no lines (R188).
+  const parts: string[] = totals.length === 0 ? ["Approved without line prices"] : [];
+  for (const currency of ordered) {
+    const approved = approvedByCurrency.get(currency);
+    const current = currentTotals.get(currency) ?? 0;
+    if (approved === undefined) {
+      parts.push(`Current ${approvedMoney(current, currency)}`);
+      continue;
+    }
+    const delta = current - approved;
     const moved =
       delta === 0
         ? "no change"
-        : `${delta < 0 ? MINUS : "+"}${approvedMoney(Math.abs(delta), t.currency)}`;
+        : `${delta < 0 ? MINUS : "+"}${approvedMoney(Math.abs(delta), currency)}`;
     parts.push(
-      `Approved total ${approvedMoney(t.cents, t.currency)}`,
-      `Current ${approvedMoney(current, t.currency)} (${moved})`,
+      `Approved total ${approvedMoney(approved, currency)}`,
+      `Current ${approvedMoney(current, currency)} (${moved})`,
     );
   }
-  // A budget approval records the event with no lines (R188).
-  if (parts.length === 0) {
-    parts.push("Approved without line prices");
-    const currentOrdered = [
-      ...[...currentTotals].filter(([currency]) => currency === "USD"),
-      ...[...currentTotals].filter(([currency]) => currency !== "USD"),
-    ];
-    for (const [currency, cents] of currentOrdered) {
-      parts.push(`Current ${approvedMoney(cents, currency)}`);
-    }
-    if (currentOrdered.length === 0) parts.push("Current $0");
-  }
+  if (ordered.length === 0) parts.push("Current $0");
   return (
     <p
       data-approved-total=""
