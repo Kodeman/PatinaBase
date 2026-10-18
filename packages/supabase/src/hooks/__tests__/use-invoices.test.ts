@@ -224,10 +224,23 @@ describe('buildLineRow', () => {
 describe('ffe-invoice-coverage invalidation', () => {
   it('useCreateDraftInvoice onSuccess invalidates the project-scoped coverage key', () => {
     const config = useCreateDraftInvoice() as unknown as {
-      onSuccess: (invoice: { project_id: string }) => void;
+      onSuccess: (invoice: { project_id: string }, input: { projectId: string }) => void;
     };
-    config.onSuccess({ project_id: 'proj-1' });
+    config.onSuccess({ project_id: 'proj-1' }, { projectId: 'proj-1' });
     expect(invalidatedKeys()).toContainEqual(['ffe-invoice-coverage', 'proj-1']);
+  });
+
+  it('useCreateDraftInvoice refreshes selected hours and billing purchases after one composed write', () => {
+    const config = useCreateDraftInvoice() as unknown as {
+      onSuccess: (invoice: { project_id: string }, input: CreateDraftInvoiceInput) => void;
+    };
+    config.onSuccess({ project_id: 'proj-1' }, {
+      projectId: 'proj-1', lines: [], entryIds: ['entry-1'], billingLines: [{ purchaseId: 'purchase-1' }],
+    });
+    expect(invalidatedKeys()).toContainEqual(['projects', 'proj-1', 'time-entries']);
+    expect(invalidatedKeys()).toContainEqual(['projects', 'proj-1', 'unbilled-time']);
+    expect(invalidatedKeys()).toContainEqual(['buying-phase2', 'purchases', 'project:proj-1']);
+    expect(invalidatedKeys()).toContainEqual(['buying-phase2', 'cost-lines']);
   });
 
   it('useIssueInvoice onSuccess invalidates the project-scoped coverage key', () => {
@@ -372,11 +385,11 @@ describe('useCreateDraftInvoice', () => {
     });
 
     const config = useCreateDraftInvoice() as unknown as CreateConfig;
-    await config.mutationFn(input);
+    await config.mutationFn({ ...input, entryIds: ['entry-a'], billingLines: [{ purchaseId: 'purchase-a' }] });
 
     expect(project.select).toHaveBeenCalledWith('id, designer_id, client_id, studio_id');
     expect(project.eq).toHaveBeenCalledWith('id', 'project-a');
-    expect(supabaseClient.rpc).toHaveBeenCalledWith('create_draft_invoice', {
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('compose_project_invoice', {
       p_project_id: 'project-a',
       p_expected_studio_id: 'studio-a',
       p_expected_designer_id: 'project-lead-a',
@@ -386,6 +399,8 @@ describe('useCreateDraftInvoice', () => {
       p_memo: null,
       p_internal_notes: null,
       p_lines: [],
+      p_entry_ids: ['entry-a'],
+      p_billing_lines: [{ purchaseId: 'purchase-a' }],
     });
   });
 
@@ -494,7 +509,7 @@ describe('useCreateDraftInvoice', () => {
     ).rejects.toThrow('Failed to create draft invoice: invalid draft invoice payload');
 
     expect(supabaseClient.rpc).toHaveBeenCalledWith(
-      'create_draft_invoice',
+      'compose_project_invoice',
       expect.objectContaining({
         p_lines: [
           {

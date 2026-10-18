@@ -58,13 +58,11 @@ import {
   type RefObject,
 } from "react";
 import {
-  useAddInvoiceBillingLines,
   useDocumentClientLinkHold,
   InvoiceBillingGapError,
   useCreateDraftInvoice,
   useCreateDraftStudioInvoice,
   useStampProjectPricingStudio,
-  useDeleteDraftInvoice,
   useFfeInvoiceCoverage,
   useFfeInvoiceStageCoverage,
   useProjectPoCostLines,
@@ -77,7 +75,6 @@ import {
   useProjectInvoices,
   useProjectPaymentMilestones,
   useProjects,
-  useClaimTimeEntries,
   useSetLaborLinePrice,
   useStudioPurchases,
   useUnbilledTime,
@@ -302,9 +299,6 @@ export function InvoiceComposer({
   const createStudioDraft = useCreateDraftStudioInvoice({
     errorSurface: "inline",
   });
-  const deleteDraft = useDeleteDraftInvoice({ errorSurface: "inline" });
-  const claimTime = useClaimTimeEntries({ errorSurface: "inline" });
-  const addBilling = useAddInvoiceBillingLines({ errorSurface: "inline" });
 
   // ── Selections ────────────────────────────────────────────────────────────
   // K13 — reopened on a project it parked from (Price it), the composer comes
@@ -377,20 +371,15 @@ export function InvoiceComposer({
   // failure before anything was written may be tried again (act-fail-line.tsx
   // §money writes). `gap` marks a billing-gap refusal, which clears itself once
   // the gap does.
-  // `unconfirmed` marks a draft write whose answer was lost: it may have
-  // landed, so the act routes to the invoices instead of retrying, and Draft
-  // holds until the composer closes: create_draft_invoice takes no idempotency
-  // key, so no read of the invoices can prove what the write did (SQ-1284).
-  // `stranded` marks a draft known to be written and incomplete, whose
-  // rollback failed: it holds Draft the same way (SQ-1289 F3).
+  // `unconfirmed` marks a lost answer to the one transaction: it may have
+  // landed, so the act routes to invoices instead of retrying (SQ-1284).
   const [error, setError] = useState<{
     message: string;
     retryable: boolean;
     gap?: InvoiceBillingGap;
     unconfirmed?: true;
-    stranded?: true;
   } | null>(null);
-  const keptDraft = error?.unconfirmed || error?.stranded ? error : null;
+  const keptDraft = error?.unconfirmed ? error : null;
   // The billing writer's refusal of one named line, by its subject id: shown
   // beside that line, which the refusal unticked.
   const [refusedLines, setRefusedLines] = useState<ReadonlyMap<string, string>>(
@@ -653,8 +642,8 @@ export function InvoiceComposer({
     setTickedRiderIds(new Set());
     setOverrides(new Map());
     setSeededFor(null);
-    // An unconfirmed or stranded draft still holds: only closing the composer clears it.
-    setError((prev) => (prev?.unconfirmed || prev?.stranded ? prev : null));
+    // An unconfirmed draft still holds: only closing the composer clears it.
+    setError((prev) => (prev?.unconfirmed ? prev : null));
     setRefusedLines(new Map());
   };
 
@@ -788,12 +777,7 @@ export function InvoiceComposer({
   );
   const lineCount = lines.length + billingLines.length;
 
-  const creating =
-    createDraft.isPending ||
-    createStudioDraft.isPending ||
-    claimTime.isPending ||
-    addBilling.isPending ||
-    deleteDraft.isPending;
+  const creating = createDraft.isPending || createStudioDraft.isPending;
   // Block drafting while a prefilled section is still resolving — otherwise a
   // draft could land moments before its prefill arrives, silently dropping it.
   const prefillPending =
@@ -1245,6 +1229,8 @@ export function InvoiceComposer({
     }
 
     const timeLine = lines.find((l) => l.kind === "time");
+    const entryIds =
+      (timeLine?.metadata as { time_entry_ids?: string[] } | undefined)?.time_entry_ids ?? [];
     let invoice: AnyRecord;
     try {
       invoice = await createDraft.mutateAsync({
@@ -1255,89 +1241,19 @@ export function InvoiceComposer({
           parseInt(termsDays, 10) >= 0 ? parseInt(termsDays, 10) : 15,
         memo: memo.trim() || undefined,
         lines,
+        entryIds,
+        billingLines: billingLines.map((l) => l.request),
         signal: act.signal,
       });
     } catch (e) {
       if (!live()) return;
-      // create_draft_invoice refuses in its own words; say it in the composer's.
-      const failure: ReturnType<typeof preWriteFailure> & { unconfirmed?: true } =
-        e instanceof InvoiceBillingGapError
-          ? preWriteFailure(e)
-          : e instanceof OfflineRefusal
-            ? { message: e.message, retryable: true }
-            : draftInvoiceRefusal((e as { message?: unknown } | null)?.message);
-      if (failure.gap) {
-        setBillingGapOverride({
-          projectId,
-          gap: failure.gap,
-          seenAt: projectsUpdatedAt,
-        });
-      }
-      setError(failure);
-      return;
-    }
-
-    if (timeLine) {
-      const entryIds =
-        (timeLine.metadata as { time_entry_ids?: string[] })?.time_entry_ids ??
-        [];
-      try {
-        await claimTime.mutateAsync({
-          invoiceId: invoice.id,
-          projectId,
-          entryIds,
-        });
-      } catch (e) {
-        // claim_time_entries commits in its own transaction (PostgREST), so a
-        // partial claim has ALREADY stamped invoice_id on the rows it matched.
-        // Deleting the draft releases them through fk_time_entries_invoice's
-        // ON DELETE SET NULL. If that delete also fails the hours stay attached
-        // to an abandoned draft and vanish from project_unbilled_time — say so,
-        // with the id, instead of swallowing it.
-        let stranded = false;
-        try {
-          await deleteDraft.mutateAsync({ invoiceId: invoice.id, projectId });
-        } catch {
-          stranded = true;
-        }
-        const reason = billingRefusal("claim", e).sentence;
-        // A money write already ran: never offered again from here.
-        setError({
-          message: stranded
-            ? `${reason} Nothing was billed; the draft still holds those hours. Void it to release them.`
-            : `${reason} Nothing was billed.`,
-          retryable: false,
-          ...(stranded ? { stranded: true as const } : {}),
-        });
-        return;
-      }
-    }
-
-    // C-31 — deposits, balances, purchases and riders, through the writer
-    // that stamps each subject in the same transaction. One refusal adds
-    // nothing; the draft is then deleted (which also releases any claimed
-    // hours), so a half-composed invoice never lingers.
-    if (billingLines.length > 0) {
-      try {
-        await addBilling.mutateAsync({
-          invoiceId: invoice.id,
-          projectId,
-          lines: billingLines.map((l) => l.request),
-        });
-      } catch (e) {
-        let stranded = false;
-        try {
-          await deleteDraft.mutateAsync({ invoiceId: invoice.id, projectId });
-        } catch {
-          stranded = true;
-        }
-        // The writer's refusal arrives as a PostgrestError, not an Error, and in
-        // the RPC's own words; say it in the composer's, naming the subject.
-        const reason = billingRefusal("lines", e, billingSubjectName).sentence;
-        // With the draft gone, a refusal that names its line unticks just that
-        // line and says why beside it; Draft again bills the rest. A kept draft
-        // must be cleared first, so its refusal stays at the act.
-        const refused = stranded ? [] : refusedBillingLines(e, billingLines);
+      const raw = (e as { message?: unknown } | null)?.message;
+      const stage = typeof raw === "string"
+        ? /compose_project_invoice: (draft|claim(?:_short)?|lines)(?::|$)/.exec(raw)?.[1]
+        : undefined;
+      const reason = billingRefusal("draft", e, billingSubjectName).sentence;
+      if (stage === "lines") {
+        const refused = refusedBillingLines(e, billingLines);
         if (refused.length > 0) {
           const notes = new Map<string, string>();
           for (const { request } of refused) {
@@ -1347,7 +1263,7 @@ export function InvoiceComposer({
                 : "costLineId" in request
                   ? request.costLineId
                   : request.ffeItemId;
-            notes.set(id, `${reason} Nothing was billed.`);
+            notes.set(id, reason + " Nothing was billed.");
             const untick = (prev: Set<string>) => toggled(prev, id, false);
             if ("purchaseId" in request) setTickedPurchaseIds(untick);
             else if ("costLineId" in request) setTickedRiderIds(untick);
@@ -1357,15 +1273,24 @@ export function InvoiceComposer({
           setRefusedLines(notes);
           return;
         }
-        setError({
-          message: stranded
-            ? `${reason} Nothing was billed; the draft was kept. Delete or void it.`
-            : `${reason} Nothing was billed.`,
-          retryable: false,
-          ...(stranded ? { stranded: true as const } : {}),
-        });
-        return;
       }
+      const failure: ReturnType<typeof preWriteFailure> & { unconfirmed?: true } =
+        e instanceof InvoiceBillingGapError
+          ? preWriteFailure(e)
+          : e instanceof OfflineRefusal
+            ? { message: e.message, retryable: true }
+            : stage
+              ? { message: reason + " Nothing was billed.", retryable: false }
+              : draftInvoiceRefusal(raw);
+      if (failure.gap) {
+        setBillingGapOverride({
+          projectId,
+          gap: failure.gap,
+          seenAt: projectsUpdatedAt,
+        });
+      }
+      setError(failure);
+      return;
     }
 
     if (live()) {

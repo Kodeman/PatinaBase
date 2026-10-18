@@ -14,6 +14,7 @@ import { createBrowserClient } from '../client';
 import type { OnlinePaymentMethod } from '@patina/shared/invoice';
 import { isLikelyInvoiceLinkToken } from '@patina/utils';
 import { emailDeliveryKeys } from './use-email-delivery';
+import type { InvoiceBillingLineRequest } from './use-buying-phase2';
 
 export type { OnlinePaymentMethod };
 
@@ -272,7 +273,9 @@ export interface CreateDraftInvoiceInput {
   memo?: string;
   internalNotes?: string;
   lines: DraftLineInput[];
-  /** The act's lifetime: aborted before create_draft_invoice runs, nothing is written. */
+  entryIds?: string[];
+  billingLines?: InvoiceBillingLineRequest[];
+  /** The act's lifetime: aborted before compose_project_invoice runs, nothing is written. */
   signal?: AbortSignal;
 }
 
@@ -759,8 +762,8 @@ export class InvoiceBillingGapError extends Error {
 }
 
 /**
- * Creates a draft invoice header and its initial lines atomically after
- * resolving the canonical project billing tuple under caller RLS.
+ * Composes a project invoice atomically (draft, selected hours, billing lines)
+ * after resolving the canonical project billing tuple under caller RLS.
  *
  * `{ errorSurface: 'inline' }` — see useSendInvoice (R83). The Document's
  * invoice composer renders failures inline; legacy callers keep the toast.
@@ -812,7 +815,7 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
       });
       refuseRetiredDraft(input.signal);
       const { data: invoice, error: invErr } = await supabase.rpc(
-        'create_draft_invoice',
+        'compose_project_invoice',
         {
           p_project_id: project.id,
           p_expected_designer_id: project.designer_id,
@@ -823,6 +826,8 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
           p_memo: input.memo ?? null,
           p_internal_notes: input.internalNotes ?? null,
           p_lines: lines,
+          p_entry_ids: input.entryIds ?? [],
+          p_billing_lines: input.billingLines ?? [],
         }
       );
       if (invErr) {
@@ -834,8 +839,21 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
 
       return invoice as Invoice;
     },
-    onSuccess: (invoice) => {
+    onSuccess: (invoice, input) => {
       invalidateInvoiceEffects(queryClient, invoice.project_id);
+      if (input.entryIds?.length) {
+        queryClient.invalidateQueries({ queryKey: ['projects', input.projectId, 'time-entries'] });
+        queryClient.invalidateQueries({ queryKey: ['projects', input.projectId, 'time-tracking'] });
+        queryClient.invalidateQueries({ queryKey: ['projects', input.projectId, 'unbilled-time'] });
+        queryClient.invalidateQueries({ queryKey: ['projects', input.projectId, 'key-metrics'] });
+        queryClient.invalidateQueries({ queryKey: ['time'] });
+        queryClient.invalidateQueries({ queryKey: ['desk-contents-unbilled-time'] });
+        queryClient.invalidateQueries({ queryKey: ['document-hours-week'] });
+      }
+      if (input.billingLines?.length) {
+        queryClient.invalidateQueries({ queryKey: ['buying-phase2', 'purchases', `project:${input.projectId}`] });
+        queryClient.invalidateQueries({ queryKey: ['buying-phase2', 'cost-lines'] });
+      }
     },
     onError: (error) => {
       // The server's tuple disagreed with the cached project: refetch it so the
