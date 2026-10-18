@@ -286,12 +286,155 @@ BEGIN
    WHERE line.id = '82200000-0000-4000-8000-000000000081';
   ASSERT v_public = '{"nested":[{"unitPriceCents":8000},{},{}]}'::jsonb
      AND v_archive #>> '{nested,0,costCents}' = '7300'
-     AND v_archive #>> '{nested,0,WHOLESALEprice}' = '8000'
      AND v_archive #>> '{nested,1,costCents}' = '10'
-     AND v_archive #>> '{nested,1,retailAmount}' = '20'
-     AND v_archive #>> '{nested,2,marginCents}' = '30',
+     AND v_archive #>> '{archiveSnapshots,0,nested,0,WHOLESALEprice}' = '8000'
+     AND v_archive #>> '{archiveSnapshots,0,nested,1,retailAmount}' = '20'
+     AND v_archive #>> '{archiveSnapshots,0,nested,2,marginCents}' = '30',
     'two-stage archive: prior and new nested array economics survive both scrubs';
 END $$;
 ALTER TABLE public.invoice_line_items ADD CONSTRAINT invoice_line_items_public_metadata_ck
   CHECK (metadata = public._invoice_line_public_metadata(metadata));
+
+-- A conflicting top-level value is never descended into or overwritten. The
+-- full incoming object stays associated with its own private values.
+ALTER TABLE public.invoice_line_items DROP CONSTRAINT invoice_line_items_public_metadata_ck;
+INSERT INTO public.invoice_line_items (id, invoice_id, kind, description, quantity,
+                                       unit_amount_cents, amount_cents, metadata)
+VALUES ('82200000-0000-4000-8000-000000000082', '82200000-0000-4000-8000-000000000030',
+        'adhoc', 'Type-conflict archive', 1, 8000, 8000,
+        '{"nested":{"wholesalePrice":8000},"markupCents":55}'::jsonb),
+       ('82200000-0000-4000-8000-000000000083', '82200000-0000-4000-8000-000000000030',
+        'adhoc', 'Reordered archive', 1, 8000, 8000,
+        '{"nested":[{"id":"B","WHOLESALEprice":8000},{"id":"A","costCents":7300}]}'::jsonb);
+INSERT INTO public.invoice_line_item_internals (line_item_id, internal_metadata)
+VALUES ('82200000-0000-4000-8000-000000000082', '{"nested":null,"costCents":7300}'::jsonb),
+       ('82200000-0000-4000-8000-000000000083',
+        '{"nested":[{"id":"A","costCents":7300},{"id":"B","WHOLESALEprice":8000}]}'::jsonb);
+SELECT public._move_invoice_line_internal_metadata();
+DO $$
+DECLARE v_public jsonb; v_archive jsonb;
+BEGIN
+  SELECT line.metadata, internal.internal_metadata INTO v_public, v_archive
+    FROM public.invoice_line_items line JOIN public.invoice_line_item_internals internal
+      ON internal.line_item_id = line.id WHERE line.id = '82200000-0000-4000-8000-000000000082';
+  ASSERT v_public = '{"nested":{}}'::jsonb
+     AND v_archive->>'costCents' = '7300'
+     AND v_archive->'nested' = 'null'::jsonb
+     AND v_archive->>'markupCents' = '55'
+     AND v_archive #>> '{archiveSnapshots,0,nested,wholesalePrice}' = '8000',
+    'type-conflict archive: old cost and new wholesale survive without nested merge';
+END $$;
+DO $$
+DECLARE v_public jsonb; v_archive jsonb;
+BEGIN
+  SELECT line.metadata, internal.internal_metadata INTO v_public, v_archive
+    FROM public.invoice_line_items line JOIN public.invoice_line_item_internals internal
+      ON internal.line_item_id = line.id WHERE line.id = '82200000-0000-4000-8000-000000000083';
+  ASSERT v_public = '{"nested":[{"id":"B"},{"id":"A"}]}'::jsonb
+     AND v_archive->'nested' =
+       '[{"id":"A","costCents":7300},{"id":"B","WHOLESALEprice":8000}]'::jsonb
+     AND v_archive #> '{archiveSnapshots,0,nested}' =
+       '[{"id":"B","WHOLESALEprice":8000},{"id":"A","costCents":7300}]'::jsonb,
+    'reordered archive: B wholesale never attaches to A';
+END $$;
+-- Replay the identical incoming extract, not merely the now-public row.
+UPDATE public.invoice_line_items
+   SET metadata = '{"nested":{"wholesalePrice":8000},"markupCents":55}'::jsonb
+ WHERE id = '82200000-0000-4000-8000-000000000082';
+SELECT public._move_invoice_line_internal_metadata();
+DO $$
+BEGIN
+  ASSERT (SELECT jsonb_array_length(internal_metadata->'archiveSnapshots') = 1
+          FROM public.invoice_line_item_internals
+         WHERE line_item_id = '82200000-0000-4000-8000-000000000082'),
+    'archive rerun: identical incoming extract adds no second snapshot';
+END $$;
+ALTER TABLE public.invoice_line_items ADD CONSTRAINT invoice_line_items_public_metadata_ck
+  CHECK (metadata = public._invoice_line_public_metadata(metadata));
+
+-- Draft RLS accepts any active co-member, but the latch must still require a
+-- design-studio seat. Issued rows remain immutable to authenticated callers.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+ ('82200000-0000-4000-8000-000000000003', 'foreign-member@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+ ('82200000-0000-4000-8000-000000000004', 'studio-member@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+ ('82200000-0000-4000-8000-000000000003', 'foreign-member@test.invalid', 'Foreign Member', true, now(), now()),
+ ('82200000-0000-4000-8000-000000000004', 'studio-member@test.invalid', 'Studio Member', true, now(), now())
+ON CONFLICT (id) DO UPDATE SET is_designer = EXCLUDED.is_designer;
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('82200000-0000-4000-8000-000000000011', 'manufacturer', 'Other Organization', 'other-822-test', 'active');
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+VALUES ('82200000-0000-4000-8000-000000000001', '82200000-0000-4000-8000-000000000011', 'owner', 'active', now()),
+       ('82200000-0000-4000-8000-000000000003', '82200000-0000-4000-8000-000000000011', 'member', 'active', now()),
+       ('82200000-0000-4000-8000-000000000004', '82200000-0000-4000-8000-000000000010', 'member', 'active', now());
+INSERT INTO public.invoices (id, project_id, designer_id, client_id, studio_id, status,
+                             currency, subtotal_cents, tax_cents, total_cents)
+VALUES ('82200000-0000-4000-8000-000000000090', '82200000-0000-4000-8000-000000000020',
+        '82200000-0000-4000-8000-000000000001', '82200000-0000-4000-8000-000000000002',
+        '82200000-0000-4000-8000-000000000010', 'draft', 'USD', 15000, 0, 15000);
+INSERT INTO public.project_payment_milestones (id, project_id, label, percentage, amount_cents, status, sort_order)
+VALUES ('82200000-0000-4000-8000-000000000091', '82200000-0000-4000-8000-000000000020',
+        'Draft authority fixture', 10, 15000, 'pending', 2);
+INSERT INTO public.invoice_line_items (id, invoice_id, milestone_id, kind, description, quantity,
+                                       unit_amount_cents, amount_cents, metadata)
+VALUES ('82200000-0000-4000-8000-000000000092', '82200000-0000-4000-8000-000000000090',
+        '82200000-0000-4000-8000-000000000091', 'milestone', 'Draft authority fixture',
+        1, 15000, 15000, '{}'::jsonb);
+-- Expose this fixture's referenced rows only, so the trigger authority check
+-- (rather than an unrelated project/milestone visibility policy) is exercised.
+CREATE POLICY test_foreign_milestone_read ON public.project_payment_milestones
+  FOR ALL TO authenticated
+  USING (id = '82200000-0000-4000-8000-000000000091')
+  WITH CHECK (id = '82200000-0000-4000-8000-000000000091');
+CREATE POLICY test_foreign_project_read ON public.projects
+  FOR SELECT TO authenticated
+  USING (id = '82200000-0000-4000-8000-000000000020');
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"82200000-0000-4000-8000-000000000003","role":"authenticated"}';
+DO $$
+DECLARE v_state text;
+BEGIN
+  BEGIN
+    UPDATE public.invoice_line_items SET metadata = '{"note":"foreign"}'::jsonb
+     WHERE id = '82200000-0000-4000-8000-000000000092';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT v_state = '42501', 'draft metadata: non-design co-member refused by latch';
+END $$;
+SET LOCAL request.jwt.claims = '{"sub":"82200000-0000-4000-8000-000000000004","role":"authenticated"}';
+DO $$
+DECLARE v_rows integer;
+BEGIN
+  UPDATE public.invoice_line_items SET metadata = '{"note":"studio"}'::jsonb
+   WHERE id = '82200000-0000-4000-8000-000000000092';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 1 AND (SELECT metadata->>'note' = 'studio'
+                         FROM public.invoice_line_items
+                        WHERE id = '82200000-0000-4000-8000-000000000092'),
+    'draft metadata: design-studio member can update milestone';
+END $$;
+RESET ROLE;
+UPDATE public.invoices SET status = 'sent', invoice_number = 'PRIVATE-AUTH-823'
+ WHERE id = '82200000-0000-4000-8000-000000000090';
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"82200000-0000-4000-8000-000000000004","role":"authenticated"}';
+DO $$
+DECLARE v_rows integer := 0; v_state text;
+BEGIN
+  BEGIN
+    UPDATE public.invoice_line_items SET metadata = '{"note":"issued edit"}'::jsonb
+     WHERE id = '82200000-0000-4000-8000-000000000092';
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT (v_rows = 0 OR v_state IS NOT NULL)
+     AND (SELECT metadata->>'note' = 'studio' FROM public.invoice_line_items
+          WHERE id = '82200000-0000-4000-8000-000000000092'),
+    'issued metadata: authenticated studio member cannot update milestone';
+END $$;
+RESET ROLE;
 ROLLBACK;

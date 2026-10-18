@@ -14,12 +14,12 @@ DECLARE
   v_milestone        project_payment_milestones%ROWTYPE;
   v_project          projects%ROWTYPE;
   v_detach           boolean := false;
+  v_metadata_only     boolean := false;
 BEGIN
-  -- Nothing about the invoice/milestone identity or amount changed. In
-  -- particular, an issued line's metadata scrub must not re-latch it.
-  IF TG_OP = 'UPDATE'
-     AND (to_jsonb(NEW) - 'metadata') = (to_jsonb(OLD) - 'metadata') THEN
-    RETURN NEW;
+  -- An issued line's metadata scrub must still prove milestone authority,
+  -- but must not re-latch the milestone afterward.
+  IF TG_OP = 'UPDATE' THEN
+    v_metadata_only := (to_jsonb(NEW) - 'metadata') = (to_jsonb(OLD) - 'metadata');
   END IF;
 
   IF TG_OP = 'DELETE' THEN
@@ -68,15 +68,6 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT * INTO v_invoice
-  FROM invoices
-  WHERE id = NEW.invoice_id;
-  IF NOT FOUND OR v_invoice.status <> 'draft' THEN
-    RAISE EXCEPTION
-      'invoice milestone latch: invoice % is missing or not draft', NEW.invoice_id
-      USING ERRCODE = '23514';
-  END IF;
-
   SELECT * INTO v_milestone
   FROM project_payment_milestones
   WHERE id = NEW.milestone_id
@@ -123,6 +114,19 @@ BEGIN
     RAISE EXCEPTION
       'invoice milestone latch: milestone % not found or access denied', NEW.milestone_id
       USING ERRCODE = '42501';
+  END IF;
+
+  IF v_metadata_only THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT * INTO v_invoice
+  FROM invoices
+  WHERE id = NEW.invoice_id;
+  IF NOT FOUND OR v_invoice.status <> 'draft' THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: invoice % is missing or not draft', NEW.invoice_id
+      USING ERRCODE = '23514';
   END IF;
 
   IF v_invoice.project_id IS DISTINCT FROM v_milestone.project_id
@@ -258,38 +262,40 @@ BEGIN
 END;
 $$;
 
--- 00822 archived complete metadata objects. Merge new private paths recursively
--- so a later scrub cannot replace previously archived object or array entries.
-CREATE OR REPLACE FUNCTION public._invoice_line_merge_archived_metadata(p_existing jsonb, p_new jsonb)
+DROP FUNCTION IF EXISTS public._invoice_line_merge_archived_metadata(jsonb, jsonb);
+
+-- 00822 archived complete metadata objects. An existing archive is append-only:
+-- fill absent top-level keys, and snapshot the full incoming value on conflict.
+CREATE OR REPLACE FUNCTION public._invoice_line_append_archive_snapshot(p_existing jsonb, p_new jsonb)
 RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path = public AS $$
 DECLARE
-  v_result jsonb;
+  v_result jsonb := p_existing;
+  v_snapshots jsonb := COALESCE(p_existing->'archiveSnapshots', '[]'::jsonb);
   v_key text;
   v_value jsonb;
-  v_index bigint;
+  v_conflict boolean := false;
 BEGIN
-  IF p_existing IS NULL THEN RETURN p_new; END IF;
-  IF p_new IS NULL THEN RETURN p_existing; END IF;
-  IF jsonb_typeof(p_existing) = 'object' AND jsonb_typeof(p_new) = 'object' THEN
-    v_result := p_existing;
-    FOR v_key, v_value IN SELECT key, value FROM jsonb_each(p_new) LOOP
-      v_result := jsonb_set(v_result, ARRAY[v_key],
-        public._invoice_line_merge_archived_metadata(p_existing->v_key, v_value), true);
-    END LOOP;
-    RETURN v_result;
-  ELSIF jsonb_typeof(p_existing) = 'array' AND jsonb_typeof(p_new) = 'array' THEN
-    v_result := p_existing;
-    FOR v_value, v_index IN SELECT value, ord - 1 FROM jsonb_array_elements(p_new) WITH ORDINALITY AS item(value, ord) LOOP
-      v_result := jsonb_set(v_result, ARRAY[v_index::text],
-        public._invoice_line_merge_archived_metadata(p_existing->(v_index::integer), v_value), true);
-    END LOOP;
-    RETURN v_result;
+  IF jsonb_typeof(v_snapshots) <> 'array' THEN
+    RAISE EXCEPTION 'invoice line archiveSnapshots must be an array' USING ERRCODE = '23514';
   END IF;
-  RETURN p_existing;
+  FOR v_key, v_value IN SELECT key, value FROM jsonb_each(p_new) LOOP
+    IF NOT p_existing ? v_key THEN
+      v_result := v_result || jsonb_build_object(v_key, v_value);
+    ELSIF p_existing->v_key IS DISTINCT FROM v_value THEN
+      v_conflict := true;
+    END IF;
+  END LOOP;
+  IF v_conflict AND NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_snapshots) AS snapshot(value)
+    WHERE snapshot.value = p_new
+  ) THEN
+    v_result := jsonb_set(v_result, '{archiveSnapshots}', v_snapshots || jsonb_build_array(p_new));
+  END IF;
+  RETURN v_result;
 END;
 $$;
 
--- Keep 00822's fresh-line INSERT unchanged; only existing archives need a merge.
+-- Keep 00822's fresh-line INSERT unchanged; only existing archives append.
 CREATE OR REPLACE FUNCTION public._move_invoice_line_internal_metadata()
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
@@ -297,7 +303,7 @@ BEGIN
   SELECT id, metadata FROM public.invoice_line_items
    WHERE metadata <> public._invoice_line_public_metadata(metadata)
   ON CONFLICT (line_item_id) DO UPDATE
-    SET internal_metadata = public._invoice_line_merge_archived_metadata(
+    SET internal_metadata = public._invoice_line_append_archive_snapshot(
       invoice_line_item_internals.internal_metadata, EXCLUDED.internal_metadata);
 
   UPDATE public.invoice_line_items
