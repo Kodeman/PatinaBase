@@ -33,6 +33,8 @@ import {
   useCreateDraftInvoice,
   useCreateDraftStudioInvoice,
   useClientInvoices,
+  useInvoice,
+  useProjectInvoices,
   useUpdateDraftInvoice,
   useUpsertLineItems,
   useDeleteLineItem,
@@ -647,7 +649,7 @@ describe('useClientInvoices', () => {
       data: [{ id: 'studio-invoice-a', project_id: null, title: 'Consultation' }],
       error: null,
     });
-    const select = vi.fn(() => ({ order }));
+    const select = vi.fn((_selection: string) => ({ order }));
     supabaseClient.from.mockReturnValue({ select });
 
     const config = useClientInvoices() as unknown as {
@@ -658,10 +660,36 @@ describe('useClientInvoices', () => {
 
     const rows = await config.queryFn();
     expect(supabaseClient.from).toHaveBeenCalledWith('invoices');
-    expect(select).toHaveBeenCalledWith('*, line_items:invoice_line_items(*)');
+    const selection = select.mock.calls[0][0];
+    expect(selection).toContain('line_items:invoice_line_items(id, invoice_id, kind,');
+    expect(selection).toContain('amount_cents, metadata, sort_order, created_at)');
+    expect(selection).not.toContain('invoice_line_items(*)');
+    expect(selection).not.toContain('invoice_line_item_internals');
     expect(rows).toEqual([
       { id: 'studio-invoice-a', project_id: null, title: 'Consultation' },
     ]);
+  });
+});
+
+describe('useInvoice line selections', () => {
+  it('allowlists detail and project line columns for shared household/studio reads', async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'invoice-a', line_items: [], payments: [] }, error: null });
+    const eq = vi.fn(() => ({ maybeSingle, order: vi.fn().mockResolvedValue({ data: [], error: null }) }));
+    const select = vi.fn((_selection: string) => ({ eq }));
+    supabaseClient.from.mockReturnValue({ select });
+
+    const detail = useInvoice('invoice-a') as unknown as { queryFn: () => Promise<unknown> };
+    await detail.queryFn();
+    const project = useProjectInvoices('project-a') as unknown as { queryFn: () => Promise<unknown> };
+    await project.queryFn();
+
+    for (const [selection] of select.mock.calls) {
+      expect(selection).toContain('line_items:invoice_line_items(id, invoice_id, kind,');
+      expect(selection).toContain('amount_cents, metadata, sort_order, created_at)');
+      expect(selection).not.toContain('invoice_line_items(*)');
+      expect(selection).not.toContain('invoice_line_item_internals');
+    }
+    expect(select).toHaveBeenCalledTimes(2);
   });
 });
 
