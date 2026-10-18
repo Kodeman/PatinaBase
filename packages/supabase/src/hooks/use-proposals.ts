@@ -270,6 +270,7 @@ export interface Proposal {
     email: string;
     full_name: string | null;
   };
+  designer?: { display_name: string | null } | null;
   items?: ProposalItem[];
   /** Client-safe list DTO embeds the signed schedule for the budget surface. */
   payment_milestones?: ProposalPaymentMilestone[];
@@ -335,7 +336,8 @@ export function useProposals(filters?: ProposalFilters) {
         .select(`
           *,
           project:projects!proposals_project_id_fkey(id, name),
-          client:profiles!client_id(id, email, full_name)
+          client:profiles!client_id(id, email, full_name),
+          designer:profiles!proposals_designer_id_fkey(display_name)
         `)
         .order('updated_at', { ascending: false });
 
@@ -380,6 +382,7 @@ export function useProposal(proposalId: string) {
           *,
           project:projects!proposals_project_id_fkey(id, name),
           client:profiles!client_id(id, email, full_name),
+          designer:profiles!proposals_designer_id_fkey(display_name),
           items:proposal_items(
             *,
             product:products(
