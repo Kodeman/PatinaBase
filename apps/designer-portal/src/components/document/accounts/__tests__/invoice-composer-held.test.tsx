@@ -373,7 +373,7 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
     ]);
   });
 
-  it("deletes the draft when the writer refuses a line, unticks just that line, and says why beside it", async () => {
+  it("rolls back a refused billing line, unticks only that line, and says why beside it", async () => {
     // The PostgrestError's own words: the RPC's name and the purchase's id.
     mockAddBilling.mockRejectedValueOnce({
       message: "add_invoice_billing_lines: purchase p1 is already billed",
