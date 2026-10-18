@@ -151,6 +151,14 @@ function idsFor(partKey: string): GalleyPartIds {
   };
 }
 
+function partRepairField(partKey: string, nth: number): HTMLElement | null {
+  const section = Array.from(window.document.querySelectorAll<HTMLElement>("section.g-part[data-part-key]"))
+    .filter((element) => element.dataset.partKey === partKey)[nth];
+  return firstFoldField(section?.querySelector<HTMLElement>(`#${idsFor(partKey).foldPanel}`) ?? null)
+    ?? section?.querySelector<HTMLElement>(`#${idsFor(partKey).foldAct}`)
+    ?? null;
+}
+
 function newestUpdate(parts: AgreementPart[]): string | null {
   let newest: string | null = null;
   for (const part of parts) {
@@ -298,7 +306,19 @@ export function AgreementComposer({
    * open editor keyed on `id` would remount mid-typing after every save
    * (N-8/ED-5). One open at a time; the paper resting is the default.
    */
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [repairFromDoor] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    return {
+      partId: params.get("repairPartId"),
+      client: params.get("repairClient") === "1",
+    };
+  });
+  const [openKey, setOpenKey] = useState<string | null>(() =>
+    document.state === "draft"
+      ? bundle.parts.find((part) => part.id === repairFromDoor?.partId)?.partKey ?? null
+      : null,
+  );
   const [dirty, setDirty] = useState(false);
   // Return-teaching §2 (finding 12) — the composer holds unsaved composition
   // state; no teaching note may render while it does.
@@ -307,10 +327,34 @@ export function AgreementComposer({
     newestUpdate(bundle.parts),
   );
   const [saveNote, setSaveNote] = useState<string | null>(null);
-  const [clientOpen, setClientOpen] = useState(false);
+  const [clientOpen, setClientOpen] = useState(
+    () => document.state === "draft" && ownsProposal && repairFromDoor?.client === true,
+  );
   const [clientNote, setClientNote] = useState<string | null>(null);
   const [clientError, setClientError] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const sendRepair = useRef<{ partKey?: string; nth?: number; client?: boolean } | null>(null);
+  useEffect(() => {
+    if (sendOpen || !sendRepair.current) return;
+    let landing = 0;
+    const leaveSheet = window.requestAnimationFrame(() => {
+      landing = window.requestAnimationFrame(() => {
+        const repair = sendRepair.current;
+        sendRepair.current = null;
+        const target = repair?.partKey
+          ? partRepairField(repair.partKey, repair.nth ?? 0)
+          : repair?.client
+            ? window.document.querySelector<HTMLElement>('[aria-label="Client account"]')
+            : null;
+        target?.scrollIntoView?.({ block: "center" });
+        target?.focus({ preventScroll: true });
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(leaveSheet);
+      window.cancelAnimationFrame(landing);
+    };
+  }, [sendOpen, openKey, clientOpen]);
   const [recordOnPaperOpen, setRecordOnPaperOpen] = useState(false);
   const [wholePaperOpen, setWholePaperOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -337,6 +381,22 @@ export function AgreementComposer({
   // not mounted.
   const turnkeyFrozen = document.kind === "design_build" && !designBuildOn;
   const readOnly = document.state !== "draft" || turnkeyFrozen;
+  useEffect(() => {
+    if (readOnly || (!openKey && !clientOpen) || !repairFromDoor) return;
+    const first = window.requestAnimationFrame(() => {
+      const target = openKey
+        ? partRepairField(openKey, bundle.parts.filter((part) => part.partKey === openKey)
+          .findIndex((part) => part.id === repairFromDoor.partId))
+        : clientOpen
+          ? window.document.querySelector<HTMLElement>('[aria-label="Client account"]')
+          : null;
+      target?.scrollIntoView?.({ block: "center" });
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(first);
+    // This landing belongs only to the first arrival from the send sheet.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Seed the nine standard parts from the terms row this agreement already
   // has. The ref is React 18 StrictMode's double-effect, not correctness.
@@ -1740,14 +1800,30 @@ export function AgreementComposer({
         parts={parts}
         readinessOverride={{
           ready: readiness.ready,
-          // R49 — a blocker about a PAIR is filed against the room and both
-          // parts, so the sheet would otherwise print one sentence three
-          // times. The sheet lists reasons, not rows.
-          blockers: [
-            ...new Set(readiness.blockers.map((blocker) => blocker.message)),
-          ],
+          blockers: readiness.blockers.map((blocker) => {
+            const part = parts.find((entry) => entry.id === blocker.partId);
+            return {
+              message: blocker.message,
+              partId: part?.id,
+              partTitle: part?.title,
+            };
+          }),
           notes: readiness.notes,
         }}
+        onFixPart={!readOnly ? (partId) => {
+          const part = parts.find((entry) => entry.id === partId);
+          if (!part) return;
+          const nth = parts.filter((entry) => entry.partKey === part.partKey)
+            .findIndex((entry) => entry.id === partId);
+          sendRepair.current = { partKey: part.partKey, nth };
+          setOpenKey(part.partKey);
+          setSendOpen(false);
+        } : undefined}
+        onFixClient={ownsProposal && !readOnly ? () => {
+          sendRepair.current = { client: true };
+          setClientOpen(true);
+          setSendOpen(false);
+        } : undefined}
         // 00477 — a signature taken at a kitchen table is findable from the
         // place it is needed. The seven-facet room was this act's other
         // caller; the galley is what replaced it.

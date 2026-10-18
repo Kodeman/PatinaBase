@@ -237,7 +237,7 @@ describe("ServiceAgreementSendSheet · synthesis §5", () => {
     ).toBeVisible();
   });
 
-  it("opens one spotlight window on the blocker list for an unready Send", async () => {
+  it("opens one spotlight window on the blocker row for an unready Send", async () => {
     const user = userEvent.setup();
     render(
       <ServiceAgreementSendSheet

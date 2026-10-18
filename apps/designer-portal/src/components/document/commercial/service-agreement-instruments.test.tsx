@@ -32,6 +32,9 @@ const READY_RATES = [
 ];
 
 const mockPush = jest.fn();
+jest.mock("@/hooks/use-auth", () => ({
+  useAuth: () => ({ user: { id: "designer-1" } }),
+}));
 jest.mock("next/navigation", () => ({
   usePathname: () => "/doc/agreement-1",
   useRouter: () => ({ push: mockPush }),
@@ -290,6 +293,57 @@ describe("ServiceAgreementInstruments notification recovery", () => {
     expect(
       await screen.findByText(/paper signature recorded/i),
     ).toBeVisible();
+  });
+});
+
+describe("ServiceAgreementInstruments client repair", () => {
+  beforeEach(() => {
+    mockDocumentState = "draft";
+    mockTerms = READY_TERMS;
+    mockRates = READY_RATES;
+    mockParts = [{
+      id: "services-1", partKey: "patina.services", title: "Services",
+      kind: "clause", variant: null, payload: { body: "Design services." },
+      required: true, clientVisible: true, position: 1,
+    }];
+    mockDocumentKind = "design_services";
+    mockPush.mockClear();
+  });
+
+  it("offers Link a client only to the proposal owner and routes her to the inline picker", () => {
+    const view = render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", designer_id: "other-designer", client: {} }}
+        clientName="Avery Client"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Review & send" }));
+    expect(screen.queryByRole("button", { name: "Link a client" })).not.toBeInTheDocument();
+    view.rerender(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", designer_id: "designer-1", client: {} }}
+        clientName="Avery Client"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Link a client" }));
+    expect(mockPush).toHaveBeenCalledWith("/drafting/agreement-1?repairClient=1");
+  });
+
+  it("routes a part repair by its part ID instead of its reusable key", () => {
+    mockParts = [{
+      id: "services-1", partKey: "patina.services", title: "Services",
+      kind: "clause", variant: null, payload: { body: "" },
+      required: true, clientVisible: true, position: 1,
+    }];
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", designer_id: "designer-1", client: { email: "avery@example.com" } }}
+        clientName="Avery Client"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Review & send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fix Services" }));
+    expect(mockPush).toHaveBeenCalledWith("/drafting/agreement-1?repairPartId=services-1");
   });
 });
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button, Input } from "@/components/ui/controls";
+import { useAuth } from "@/hooks/use-auth";
 import {
   useCommercialDocument,
   useCountersignDesignServicesAgreement,
@@ -114,6 +115,7 @@ export function ServiceAgreementInstruments({
 }) {
   const proposalId = String(proposal.id);
   const router = useRouter();
+  const { user } = useAuth();
   const pathname = usePathname();
   const bundle = useCommercialDocument(proposalId);
   const countersign = useCountersignDesignServicesAgreement(proposalId);
@@ -176,9 +178,12 @@ export function ServiceAgreementInstruments({
   const neverSent = document.state === "draft";
   const paperReady = Boolean(terms) && rates.length > 0;
 
-  const enterDrafting = () => {
+  const enterDrafting = (repair?: { partId?: string; client?: boolean }) => {
     rememberRoomOrigin(pathname);
-    router.push(`/drafting/${proposalId}`);
+    const query = repair?.partId
+      ? `?repairPartId=${encodeURIComponent(repair.partId)}`
+      : repair?.client ? "?repairClient=1" : "";
+    router.push(`/drafting/${proposalId}${query}`);
   };
   // W3R1-01 — THE DOOR TO THE LEDGER. A turnkey prime's draw ledger, its
   // lien-waiver exchange and its Trade Agreements strip are mounted in the
@@ -247,7 +252,7 @@ export function ServiceAgreementInstruments({
                   actionKey="edit-design-agreement"
                   variant={roomPosture === "ledger" ? "secondary" : "primary"}
                   trailing="→"
-                  onClick={enterDrafting}
+                  onClick={() => enterDrafting()}
                 >
                   Open the Contract Room
                 </DocumentAction>
@@ -403,13 +408,26 @@ export function ServiceAgreementInstruments({
               composedReadiness
                 ? {
                     ready: composedReadiness.ready,
-                    blockers: composedReadiness.blockers.map(
-                      (blocker) => blocker.message,
-                    ),
+                    blockers: composedReadiness.blockers.map((blocker) => {
+                      const part = parts.find((entry) => entry.id === blocker.partId);
+                      return {
+                        message: blocker.message,
+                        partId: part?.id,
+                        partTitle: part?.title,
+                      };
+                    }),
                     notes: composedReadiness.notes,
                   }
                 : undefined
             }
+            onFixPart={(partId) => {
+              setSendOpen(false);
+              enterDrafting({ partId });
+            }}
+            onFixClient={user?.id === proposal.designer_id ? () => {
+              setSendOpen(false);
+              enterDrafting({ client: true });
+            } : undefined}
             // The send sheet is where a studio meets the wall — two buttons,
             // both of which assume an email. The third path belongs there, not
             // only in the sibling block below it, so a signature taken at a

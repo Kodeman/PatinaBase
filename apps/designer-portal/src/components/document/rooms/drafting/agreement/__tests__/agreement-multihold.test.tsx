@@ -4,7 +4,7 @@
  * on the seam where a missing part is added; one on the agreement's own
  * reason while anything else still holds it.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { AgreementPart } from "@patina/types";
 import { AgreementComposer } from "../agreement-composer";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
@@ -61,8 +61,16 @@ jest.mock("@/hooks/use-feature-flag", () => ({
 jest.mock("../../../../commercial/service-agreement-preview", () => ({
   ServiceAgreementPreview: () => <div>Agreement preview</div>,
 }));
+let mockSendSheetProps: {
+  open: boolean;
+  readinessOverride: { blockers: Array<{ message: string; partId?: string }> };
+  onFixPart: (partId: string) => void;
+} | null = null;
 jest.mock("../../../../commercial/service-agreement-send-sheet", () => ({
-  ServiceAgreementSendSheet: () => null,
+  ServiceAgreementSendSheet: (props: typeof mockSendSheetProps) => {
+    mockSendSheetProps = props;
+    return null;
+  },
 }));
 jest.mock("@/lib/document/room-origin", () => ({
   readRoomOrigin: () => "/desk",
@@ -158,6 +166,38 @@ const section = (key: string, nth = 0) =>
 
 beforeEach(() => {
   seq = 0;
+  mockSendSheetProps = null;
+});
+
+test("a part repair leaves Send and lands in the existing fold's first field", async () => {
+  renderFramed([services("Interior design services."), terms("Payment terms."), flatFee()]);
+  pressSend();
+  await waitFor(() => expect(mockSendSheetProps?.open).toBe(true));
+
+  fireEvent.click(screen.getByRole("button", { name: "Services Write", hidden: true }));
+  const body = section("patina.services").querySelector("textarea")!;
+  fireEvent.change(body, { target: { value: "" } });
+  expect(mockSendSheetProps?.readinessOverride.blockers).toContainEqual(
+    expect.objectContaining({ message: "Write Services.", partId: "part-1" }),
+  );
+
+  act(() => mockSendSheetProps!.onFixPart("part-1"));
+  expect(mockSendSheetProps?.open).toBe(false);
+  await waitFor(() => expect(section("patina.services").querySelector("textarea")).toHaveFocus());
+  expect(document.getElementById("fold-patina-services")).not.toHaveAttribute("hidden");
+});
+
+test("arrival with a part ID opens that part's existing fold", async () => {
+  const previous = window.location.href;
+  window.history.replaceState({}, "", "/drafting/agreement-1?repairPartId=part-2");
+  try {
+    renderFramed([services("Design services."), terms("Payment terms."), flatFee()]);
+    await waitFor(() => expect(section("patina.terms").querySelector("textarea")).toHaveFocus());
+    expect(document.getElementById("fold-patina-terms")).not.toHaveAttribute("hidden");
+    expect(document.getElementById("fold-patina-services")).toHaveAttribute("hidden");
+  } finally {
+    window.history.replaceState({}, "", previous);
+  }
 });
 
 const strip = (key: string) =>
