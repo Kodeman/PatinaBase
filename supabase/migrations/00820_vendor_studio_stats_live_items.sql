@@ -10,14 +10,12 @@ WITH studio_items AS (
   SELECT
     p.vendor_id,
     p.studio_id,
-    COUNT(*)::INTEGER AS item_count,
+    COUNT(*) FILTER (WHERE p.deleted_at IS NULL AND p.merged_into_id IS NULL)::INTEGER AS item_count,
     array_agg(p.id) AS product_ids
   FROM products p
   WHERE p.layer = 'studio'
     AND p.vendor_id IS NOT NULL
     AND p.studio_id IS NOT NULL
-    AND p.deleted_at IS NULL
-    AND p.merged_into_id IS NULL
   GROUP BY p.vendor_id, p.studio_id
 ),
 projects_used AS (
