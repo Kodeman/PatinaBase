@@ -826,3 +826,34 @@ Deno.test("default-valued piece keys leave every edition exactly as before", asy
     assertEquals(canonicalStringify(after), canonicalStringify(before));
   }
 });
+
+Deno.test("F6: unprinted dimension change is not a client addendum", async () => {
+  const source = frozenSnapshot();
+  const original = {
+    ...source.items[0],
+    selection: {
+      dimensions: { value: { width: 60, unit: "in", comment: "first" } },
+    },
+  };
+  const base = frozenSnapshot({ items: [original, source.items[1]] });
+  const current = frozenSnapshot({
+    issue: {
+      type: "addendum",
+      reason: "Invisible annotation",
+      baseRevisionId: "30000000-0000-4000-8000-000000000001",
+    },
+    items: [{
+      ...original,
+      selection: {
+        dimensions: { value: { width: 60, unit: "in", comment: "second" } },
+      },
+    }, source.items[1]],
+  });
+  const addendum = await buildAudienceRenderModel(current, "client", {
+    ...context,
+    revisionNumber: 2,
+    issueType: "addendum",
+  }, base);
+  assertEquals(addendum.changes, []);
+  assertEquals(addendum.items, []);
+});

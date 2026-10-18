@@ -22,6 +22,7 @@ import type {
 } from "./render-model.ts";
 import {
   alsoInText,
+  dimensionText,
   quantityText,
   renderMediaIdentity,
 } from "./render-model.ts";
@@ -346,7 +347,11 @@ function valueText(value: unknown): string {
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
     if (record.na === true) {
-      return `N/A${record.naReason ? ` — ${record.naReason}` : ""}`;
+      return `N/A${
+        typeof record.naReason === "string" && record.naReason.trim()
+          ? ` — ${record.naReason}`
+          : ""
+      }`;
     }
     if ("value" in record) return valueText(record.value);
     return Object.values(record).map(valueText).filter(Boolean).join(", ");
@@ -354,29 +359,36 @@ function valueText(value: unknown): string {
   return "";
 }
 
-const DIMENSION_AXES = ["width", "depth", "height"] as const;
-
-function configurationDimensionsText(
-  dimensions: Record<string, string | number | boolean>,
-): string {
-  const axes = DIMENSION_AXES
-    .map((key) => dimensions[key])
-    .filter((value) => value !== undefined && value !== "")
-    .map(String);
-  const unit = dimensions.unit ?? dimensions.units;
-  const rest = Object.entries(dimensions)
-    .filter(([key]) =>
-      !DIMENSION_AXES.includes(key as typeof DIMENSION_AXES[number]) &&
-      key !== "unit" && key !== "units"
-    )
-    .map(([key, value]) =>
-      `${key.replace(/([A-Z])/g, " $1").toLowerCase()} ${value}`
-    );
-  const primary = axes.length
-    ? [axes.join(" × "), unit === undefined ? "" : String(unit)]
-      .filter(Boolean).join(" ")
-    : "";
-  return [primary, ...rest].filter(Boolean).join(" · ");
+/** Text printed for frozen item selections; the snapshot itself is unchanged. */
+export function selectionRows(
+  selection: Record<string, unknown>,
+): Array<readonly [string, string]> {
+  return Object.entries(selection).flatMap(([key, value]) => {
+    let text = valueText(value);
+    if (
+      key === "sku" && value && typeof value === "object" &&
+      !Array.isArray(value)
+    ) {
+      const sku = value as Record<string, unknown>;
+      text = sku.na === true ? valueText(sku) : valueText(sku.value);
+    }
+    if (key === "dimensions") {
+      const dimensions = value && typeof value === "object" &&
+          !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : null;
+      const nested = dimensions?.value;
+      text = dimensions?.na === true
+        ? valueText(dimensions)
+        : nested && typeof nested === "object" && !Array.isArray(nested) &&
+            (nested as Record<string, unknown>).na === true
+        ? valueText(nested)
+        : typeof nested === "string"
+        ? valueText(nested)
+        : dimensionText(nested);
+    }
+    return text ? [[key, text] as const] : [];
+  });
 }
 
 /** Client-edition selection summary rows: labels, never pricing. */
@@ -404,7 +416,7 @@ function configurationRows(
     ]);
   }
   const dimensions = configuration.dimensions && !skipDimensions
-    ? configurationDimensionsText(configuration.dimensions)
+    ? dimensionText(configuration.dimensions)
     : "";
   if (dimensions) rows.push(["Dimensions", dimensions]);
   if (configuration.comFabric) {
@@ -420,7 +432,7 @@ function configurationBlock(item: AudienceItem) {
   // repeating them would read as a contradiction waiting to happen.
   const rows = configurationRows(
     item.configuration,
-    Boolean(valueText(item.selection.dimensions).trim()),
+    selectionRows(item.selection).some(([key]) => key === "dimensions"),
   );
   if (!rows.length) return null;
   return h(

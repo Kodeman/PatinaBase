@@ -6,7 +6,7 @@ import {
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import { getDocument } from "npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
 import { buildAudienceRenderModel, sha256Hex } from "./render-model.ts";
-import { buildPagePlan, renderSpecBookPdf } from "./pdf.ts";
+import { buildPagePlan, renderSpecBookPdf, selectionRows } from "./pdf.ts";
 import {
   configuredFurniture,
   frozenSnapshot,
@@ -205,6 +205,132 @@ Deno.test("extracted external PDFs contain no private cost contact or procuremen
   }
 });
 
+Deno.test("client PDF strips money keys and humanises numeric own extras", async () => {
+  const source = frozenSnapshot();
+  const model = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: {
+          dimensions: {
+            value: {
+              width: 60,
+              unit: "in",
+              cost: 850,
+              retail: 1200,
+              mystery: 999,
+            },
+          },
+        },
+      }],
+    }),
+    "client",
+    context,
+  );
+  const text = await extractedText(await renderSpecBookPdf(model));
+  for (const forbidden of ["Cost", "Retail", "850", "1200"]) {
+    assertEquals(
+      text.includes(forbidden),
+      false,
+      `client PDF exposed ${forbidden}`,
+    );
+  }
+  assert(text.includes("W 60 in"));
+  assert(text.includes("Mystery 999 in"));
+});
+
+Deno.test("client PDF omits boolean selection values", async () => {
+  const source = frozenSnapshot();
+  const model = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: {
+          sku: { na: false, value: false },
+          dimensions: { na: false, value: false },
+          material: { na: false, value: false },
+          finish: { na: false, value: true },
+        },
+      }],
+    }),
+    "client",
+    context,
+  );
+  const text = await extractedText(await renderSpecBookPdf(model));
+  for (
+    const forbidden of [
+      "false",
+      "true",
+      "sku",
+      "dimensions",
+      "material",
+      "finish",
+    ]
+  ) {
+    assertEquals(
+      text.toLowerCase().includes(forbidden),
+      false,
+      `boolean row ${forbidden}`,
+    );
+  }
+});
+
+Deno.test("client PDF uses weight units separately from length units", async () => {
+  const source = frozenSnapshot();
+  const dimensions = { width: 60, weight: 75, unit: "in", weight_unit: "lb" };
+  const model = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: { dimensions: { value: dimensions } },
+      }],
+    }),
+    "client",
+    context,
+  );
+  const text = await extractedText(await renderSpecBookPdf(model));
+  assert(text.includes("Weight 75 lb"), "weight uses its own unit");
+  assertEquals(text.includes("Weight 75 in"), false);
+  assert(text.includes("W 60 in"));
+  const bareModel = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: {
+          dimensions: { value: { width: 60, weight: 75, unit: "in" } },
+        },
+      }],
+    }),
+    "client",
+    context,
+  );
+  const bareText = await extractedText(await renderSpecBookPdf(bareModel));
+  assert(bareText.includes("Weight 75"));
+  assertEquals(bareText.includes("Weight 75 in"), false);
+});
+
+Deno.test("client PDF configuration fallback formats diameter and seat height with units", async () => {
+  const source = frozenSnapshot();
+  const baseConfiguration = configuredFurniture();
+  const configuration = {
+    ...baseConfiguration,
+    snapshot: {
+      ...baseConfiguration.snapshot,
+      dimensions: { diameter: 42, seatHeight: 18, unit: "in" },
+    },
+  };
+  const model = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{ ...source.items[1], configuration }],
+    }),
+    "client",
+    context,
+  );
+  const text = await extractedText(await renderSpecBookPdf(model));
+  assert(text.includes("Dia 42 in"));
+  assert(text.includes("Seat H 18 in"));
+});
+
 Deno.test("client PDF prints the configuration selections without any pricing", async () => {
   const source = frozenSnapshot();
   const configured = frozenSnapshot({
@@ -382,4 +508,129 @@ Deno.test("T-60g: a prime in an item name reaches the PDF as feet and inches, no
   assert(page, "the runner has its page");
   assert(page.includes(`Runner, 2'6" × 10'`), page);
   assertEquals(page.includes("Runner, 2263"), false);
+});
+
+async function clientDimensionPage(
+  dimensions: unknown,
+  configuration: unknown = undefined,
+): Promise<string> {
+  const source = frozenSnapshot();
+  const model = await buildAudienceRenderModel(
+    frozenSnapshot({
+      items: [{
+        ...source.items[0],
+        selection: { dimensions: { value: dimensions } },
+        ...(configuration ? { configuration } : {}),
+      }],
+    }),
+    "client",
+    context,
+  );
+  return await extractedText(await renderSpecBookPdf(model));
+}
+
+Deno.test("F1: PDF orders axes then known and own numeric dimensions", async () => {
+  const text = await clientDimensionPage({
+    extra_depth: "9",
+    legHeight: 17,
+    diameter: 42,
+    height: 31,
+    width: 60,
+    depth: 40,
+    unit: "in",
+    ignored: true,
+  });
+  assert(
+    text.replace(/\s+/g, " ").includes(
+      "W 60 × D 40 × H 31 in · Dia 42 in · Leg H 17 in · Extra Depth 9 in",
+    ),
+    text,
+  );
+  assertEquals(text.includes("Ignored"), false);
+});
+
+Deno.test("F2: PDF strips configuration dimension cost before privacy scan", async () => {
+  const config = configuredFurniture();
+  let text = "";
+  let failure: unknown = null;
+  try {
+    text = await clientDimensionPage(null, {
+      ...config,
+      snapshot: {
+        ...config.snapshot,
+        dimensions: { width: 60, unit: "in", cost: 850 },
+      },
+    });
+  } catch (error) {
+    failure = error;
+  }
+  assertEquals(
+    failure,
+    null,
+    "client Issue accepts stripped configuration money",
+  );
+  assert(text.includes("W 60 in"), text);
+  assertEquals(text.includes("850"), false);
+  assertEquals(text.includes("Cost"), false);
+});
+
+Deno.test("F3: unit-only selection does not suppress configuration dimensions", async () => {
+  const config = configuredFurniture();
+  const text = await clientDimensionPage({ unit: "cm" }, {
+    ...config,
+    snapshot: {
+      ...config.snapshot,
+      dimensions: { width: 60, unit: "in" },
+    },
+  });
+  assert(text.includes("W 60 in"), text);
+  assertEquals(text.includes("cm"), false);
+});
+
+Deno.test("F4: PDF accepts uppercase and separator variants of axes", async () => {
+  const text = await clientDimensionPage({
+    Width: 60,
+    width: 65,
+    DEPTH: 40,
+    seat_height: 18,
+    seatHeight: 19,
+    unit: "in",
+  });
+  assert(text.includes("W 60 × D 40 in · Seat H 18 in"), text);
+  assertEquals(text.includes("W 65"), false);
+  assertEquals(text.includes("Seat H 19"), false);
+});
+
+Deno.test("F5: inherited constructor is not a PDF dimension", async () => {
+  const dimensions = Object.create({ constructor: 9, width: 999 }) as Record<
+    string,
+    unknown
+  >;
+  dimensions.height = 31;
+  const rows = selectionRows({ dimensions: { value: dimensions } });
+  assertEquals(rows[0]?.[1], "H 31");
+  assertEquals(
+    selectionRows({ dimensions: { value: { constructor: 7 } } })[0]?.[1],
+    "Constructor 7",
+  );
+  const text = await clientDimensionPage(dimensions);
+  assertEquals(text.includes("Constructor 9"), false);
+  assertEquals(text.includes("W 999"), false);
+});
+
+Deno.test("F7: nested non-string N/A reason prints plain N/A", async () => {
+  const text = await clientDimensionPage({ na: true, naReason: true });
+  assert(text.includes("N/A"), text);
+  assertEquals(text.includes("true"), false);
+});
+
+Deno.test("F8: dimension arrays join only object measurements", async () => {
+  const text = await clientDimensionPage([
+    { width: 60, unit: "in" },
+    false,
+    { diameter: "42", unit: "cm" },
+    "other",
+  ]);
+  assert(text.includes("W 60 in / Dia 42 cm"), text);
+  assertEquals(text.includes("other"), false);
 });

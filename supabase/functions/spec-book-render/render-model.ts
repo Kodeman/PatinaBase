@@ -65,7 +65,7 @@ export interface AudienceConfigurationSummary {
   selections: AudienceConfigurationSelection[];
   variantName?: string;
   components?: AudienceConfigurationComponent[];
-  dimensions?: Record<string, string | number | boolean>;
+  dimensions?: unknown;
   comFabric?: string;
 }
 
@@ -432,29 +432,106 @@ function configurationSnapshot(value: unknown): JsonRecord | null {
   return isRecord(snapshot) ? snapshot : null;
 }
 
-function safeDimensionEntries(
-  value: unknown,
-): Record<string, string | number | boolean> | null {
-  if (!isRecord(value)) return null;
-  const out: Record<string, string | number | boolean> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    // Defence in depth: a stray dimension key carrying a forbidden part would
-    // otherwise fail the whole render closed in assertAudienceModelPrivacy.
-    const compact = key.toLowerCase().replace(/[-\s_]/g, "");
-    if (
-      FORBIDDEN_NON_INTERNAL_KEY_PARTS.some((part) => compact.includes(part))
-    ) {
-      continue;
-    }
-    if (
-      typeof entry === "string" || typeof entry === "number" ||
-      typeof entry === "boolean"
-    ) {
-      if (typeof entry === "string" && !entry.trim()) continue;
-      out[key] = typeof entry === "string" ? entry.trim() : entry;
-    }
+const DIMENSION_LABELS: Record<string, string> = {
+  diameter: "Dia",
+  seatheight: "Seat H",
+  armheight: "Arm H",
+  legheight: "Leg H",
+  length: "L",
+  seatdepth: "Seat Depth",
+  seatwidth: "Seat Width",
+  armdepth: "Arm Depth",
+  armwidth: "Arm Width",
+  overallwidth: "Overall Width",
+  overalldepth: "Overall Depth",
+  overallheight: "Overall Height",
+  backheight: "Back Height",
+  thickness: "Thickness",
+  clearance: "Clearance",
+  weight: "Weight",
+};
+const DIMENSION_AXES = ["width", "depth", "height"];
+const DIMENSION_METADATA = new Set(["unit", "units", "weightunit"]);
+const normalizeDimensionKey = (key: string) =>
+  key.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** The sole printed projection for selection, configuration and audience hash. */
+export function dimensionText(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.filter(isRecord).map(dimensionText).filter(Boolean).join(
+      " / ",
+    );
   }
-  return Object.keys(out).length ? out : null;
+  if (!isRecord(value)) return "";
+  const entries = Object.keys(value).map((key) => ({
+    key,
+    normalized: normalizeDimensionKey(key),
+    value: value[key],
+  }));
+  const metadata = (name: string) =>
+    entries.find((entry) => entry.normalized === name)?.value;
+  const unit = metadata("unit") ?? metadata("units");
+  const weightUnit = metadata("weightunit");
+  const suffix = (candidate: unknown) =>
+    typeof candidate === "string" && candidate.trim()
+      ? ` ${candidate.trim()}`
+      : "";
+  const numeric = (candidate: unknown) =>
+    typeof candidate === "number"
+      ? Number.isFinite(candidate)
+      : typeof candidate === "string" && candidate.trim() !== "" &&
+        Number.isFinite(Number(candidate));
+  const seen = new Set<string>();
+  const ordered = [
+    ...DIMENSION_AXES.flatMap((axis) =>
+      entries.filter((entry) => entry.normalized === axis)
+    ),
+    ...Object.keys(DIMENSION_LABELS).flatMap((name) =>
+      entries.filter((entry) => entry.normalized === name)
+    ),
+    ...entries.filter((entry) =>
+      !DIMENSION_AXES.includes(entry.normalized) &&
+      !Object.hasOwn(DIMENSION_LABELS, entry.normalized)
+    ),
+  ].filter((entry) => {
+    if (
+      DIMENSION_METADATA.has(entry.normalized) || !numeric(entry.value) ||
+      seen.has(entry.normalized)
+    ) return false;
+    seen.add(entry.normalized);
+    return true;
+  });
+  const axes = ordered.filter((entry) =>
+    DIMENSION_AXES.includes(entry.normalized)
+  );
+  const extras = ordered.filter((entry) =>
+    !DIMENSION_AXES.includes(entry.normalized)
+  );
+  const axisText = axes.map((entry) =>
+    `${entry.normalized[0].toUpperCase()} ${String(entry.value).trim()}`
+  );
+  const extraText = extras.map((entry) => {
+    const label = (Object.hasOwn(DIMENSION_LABELS, entry.normalized)
+      ? DIMENSION_LABELS[entry.normalized]
+      : null) ??
+      entry.key.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim()
+        .replace(/\b\w/g, (letter) =>
+          letter.toUpperCase());
+    return `${label} ${String(entry.value).trim()}${
+      entry.normalized === "weight" ? suffix(weightUnit) : suffix(unit)
+    }`;
+  });
+  return [
+    axisText.length ? `${axisText.join(" × ")}${suffix(unit)}` : "",
+    ...extraText,
+  ]
+    .filter(Boolean).join(" · ");
+}
+
+function safeDimensionEntries(value: unknown): unknown {
+  const safe = stripClientMoneyKeys(value);
+  return dimensionText(safe) ? safe : null;
 }
 
 /**
@@ -809,6 +886,26 @@ async function audienceItemHash(
   const safeItem = buildSafeItem(item, audience, chapters, allow);
   safeItem.chapterId = null;
   safeItem.contentHash = "";
+  const dimensions = safeItem.selection.dimensions;
+  if (isRecord(dimensions) && dimensions.na !== true) {
+    const printed = isRecord(dimensions.value) && dimensions.value.na === true
+      ? `N/A${
+        typeof dimensions.value.naReason === "string" &&
+          dimensions.value.naReason.trim()
+          ? ` — ${dimensions.value.naReason}`
+          : ""
+      }`
+      : typeof dimensions.value === "string"
+      ? dimensions.value
+      : dimensionText(dimensions.value);
+    if (printed) safeItem.selection.dimensions = printed;
+    else delete safeItem.selection.dimensions;
+  }
+  if (safeItem.configuration?.dimensions) {
+    safeItem.configuration.dimensions = dimensionText(
+      safeItem.configuration.dimensions,
+    );
+  }
   return await sha256Hex(canonicalStringify(safeItem));
 }
 
