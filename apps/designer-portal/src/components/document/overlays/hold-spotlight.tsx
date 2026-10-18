@@ -325,7 +325,21 @@ export function HoldSpotlight({
       const into =
         firstFocusable(el) ??
         (barRef.current ? focusableWithin(barRef.current)[0] : undefined);
-      into?.focus({ preventScroll: true });
+      if (!into) return;
+      // Reveal has already positioned the window. Only scroll its own content
+      // when the chosen control is clipped; keep page focus from scrolling.
+      for (let up = into.parentElement; up && el.contains(up); up = up.parentElement) {
+        if (!/auto|scroll/.test(window.getComputedStyle(up).overflowY) ||
+            up.scrollHeight <= up.clientHeight) continue;
+        const viewportTop = up.getBoundingClientRect().top + up.clientTop;
+        const viewportBottom = viewportTop + up.clientHeight;
+        const control = into.getBoundingClientRect();
+        if (control.top < viewportTop) up.scrollTop += control.top - viewportTop;
+        else if (control.bottom > viewportBottom)
+          up.scrollTop += control.bottom - viewportBottom;
+        break;
+      }
+      into.focus({ preventScroll: true });
     };
 
     const reveal = (el: HTMLElement) =>
@@ -556,7 +570,7 @@ export function HoldSpotlight({
       if (done) return;
       reveal(next.el);
       setMessage(`${index + 1} of ${found.length}: ${next.hold.reason}`);
-      firstFocusable(next.el)?.focus({ preventScroll: true });
+      focusInto(next.el);
       onNextRef.current?.(next.hold);
     };
 

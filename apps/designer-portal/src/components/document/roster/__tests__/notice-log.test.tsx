@@ -185,24 +185,65 @@ describe('NoticeLog', () => {
 
 /** US-36 R3 / R186 — the held save's window is the list that fixes it. */
 describe('NoticeLog — pressing the held save', () => {
-  it('opens a spotlight on the names, live and focused', () => {
+  it('opens a bounded picker window, not the tall list band', () => {
+    const manySeats = Array.from({ length: 24 }, (_, index) => ({
+      seatId: `seat-${index}`,
+      name: `Person ${index}`,
+    }));
     render(
       <div data-spotlight-frame>
-        <NoticeLog projectId="okonkwo" seats={SEATS} told={[]} panelId="notice-panel" />
+        <NoticeLog projectId="okonkwo" seats={manySeats} told={[]} panelId="notice-panel" />
       </div>,
     );
     fireEvent.click(screen.getByRole('button', { name: /Log who was told/ }));
     const save = screen.getByRole('button', { name: /Save this note/ });
     fireEvent.click(save);
 
-    const luis = screen.getByRole('checkbox', { name: 'Luis Ochoa' });
+    const first = screen.getByRole('checkbox', { name: 'Person 0' });
+    const picker = first.closest('ul')!;
     const windows = Array.from(document.querySelectorAll('[data-hold-spotlight-window]'));
     expect(windows.map((el) => el.getAttribute('data-hold-spotlight-window'))).toEqual([
-      luis.closest('ul')!.id,
+      picker.id,
     ]);
+    expect(picker).toHaveClass('max-h-[40dvh]', 'overflow-y-auto');
     expect(save.closest('[inert]')).not.toBeNull();
-    expect(luis.closest('[inert]')).toBeNull();
-    expect(document.activeElement).toBe(luis);
+    expect(first.closest('[inert]')).toBeNull();
+    expect(document.activeElement).toBe(first);
+    expect(logToldMutate).not.toHaveBeenCalled();
+  });
+
+  it('reveals the focused first name inside a picker scrolled to its bottom', () => {
+    const manySeats = Array.from({ length: 24 }, (_, index) => ({
+      seatId: `seat-${index}`,
+      name: `Person ${index}`,
+    }));
+    render(
+      <div data-spotlight-frame>
+        <NoticeLog projectId="okonkwo" seats={manySeats} told={[]} panelId="notice-panel" />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Log who was told/ }));
+    const first = screen.getByRole('checkbox', { name: 'Person 0' });
+    const picker = first.closest('ul')!;
+    picker.style.overflowY = 'auto';
+    Object.defineProperties(picker, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, value: 1056 },
+    });
+    picker.scrollTop = 856;
+    jest.spyOn(picker, 'getBoundingClientRect').mockReturnValue({
+      top: 100, bottom: 300, left: 0, right: 200, width: 200, height: 200, x: 0, y: 100,
+      toJSON: () => ({}),
+    });
+    jest.spyOn(first, 'getBoundingClientRect').mockReturnValue({
+      top: -756, bottom: -712, left: 0, right: 200, width: 200, height: 44, x: 0, y: -756,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Save this note/ }));
+
+    expect(document.activeElement).toBe(first);
+    expect(picker.scrollTop).toBe(0);
     expect(logToldMutate).not.toHaveBeenCalled();
   });
 });

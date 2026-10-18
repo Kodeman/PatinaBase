@@ -204,8 +204,8 @@ export function RoomShell({
         <div className="rule-strong" role="presentation" />
       </div>
 
-      {/* The paper itself. Bottom padding clears the fixed Drawer + log strip. */}
-      <div data-spotlight-frame className="relative z-10 flex-1 pb-[96px] min-[1180px]:pb-[84px]">
+      {/* The paper itself. Bottom padding follows the shell's measured foot chrome. */}
+      <div data-spotlight-frame className="relative z-10 flex-1 pb-[calc(var(--doc-shell-bottom-inset)+1.5rem)]">
         {children}
       </div>
 
