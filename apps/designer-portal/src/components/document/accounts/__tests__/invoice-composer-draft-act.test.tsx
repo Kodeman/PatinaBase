@@ -20,6 +20,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { QueryClientProvider, onlineManager, type QueryClient } from "@tanstack/react-query";
 import { OFFLINE_NOT_SENT, nextSubjectQueryClient } from "@/lib/react-query";
 import { InvoiceComposer } from "../invoice-composer";
+import { invoiceParkingKey, park, parkedState, unpark } from "@/lib/document/spotlight/parking";
 
 /** The project's invoices as the composer holds them, and a re-read it must never make. */
 let mockProjectInvoices: Array<{ id: string; status: string }> = [];
@@ -203,6 +204,7 @@ beforeEach(() => {
     ),
   );
   browser.__supabaseBrowserClient = { from, rpc, auth };
+  unpark(invoiceParkingKey("project-1"));
 });
 afterEach(() => {
   act(() => onlineManager.setOnline(true));
@@ -219,6 +221,18 @@ describe("SQ-1262 control: a ready Draft online", () => {
 
     await waitFor(() => expect(onDrafted).toHaveBeenCalledWith("invoice-1", "project-1"));
     expect(draftWrites("create_draft_invoice")).toBe(1);
+  });
+
+  it("restores a parked invoice, then clears it after a successful Draft", async () => {
+    const key = invoiceParkingKey("project-1");
+    park(key, { memo: "Spring visit" });
+    renderComposer();
+    expect(screen.getByLabelText("memo · shown to the client")).toHaveValue("Spring visit");
+    await readyToDraft();
+
+    fireEvent.click(draftAct());
+    await waitFor(() => expect(onDrafted).toHaveBeenCalledWith("invoice-1", "project-1"));
+    expect(parkedState(key)).toBeNull();
   });
 });
 
