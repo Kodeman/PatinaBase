@@ -11624,4 +11624,14 @@ With no studio on the invoice or its project, only the designer is admitted. Not
 
 **Also from the walk (F7, SQ-1312).** An invoice's 'sent' means issued; this predates R2 (00178 state machine; folio comment "A send failure does NOT roll back the issue"). A failed email is recorded in `notification_log`. The folio's missing cue for a failed email, and the dead `send_failed` copy row, are SQ-1313.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R191 · R192 · R193 · last id = R193*
+### R194 · The spotlight bar steps aside from the active window; what it still cannot clear is accepted — US-36 R2 — SQ-1320/SQ-1322/SQ-1323 2026-10-18
+
+**The bar never covers the active window's fix (SQ-1317 F1).** When the docked bar would overlap the lit window, it moves above the window if there is room inside the frame's visible part, and below it otherwise. At ≤640px, the scrolling container behind the frame gains the bar's height as bottom room while the spotlight is open, so a window at the foot of a sheet (the folio's add-email) can scroll clear. The room is removed exactly on close.
+
+**Accepted residuals:**
+- **A window taller than the visible viewport** keeps the docked bar over its lower edge. No placement can clear it, and the window scrolls under the bar, so its fix stays reachable (SQ-1322 F1).
+- **At 1400 in the folio, the lifted bar clips the top of the held act's own label** (SEND THE INVOICE) while it is held. This is cosmetic; the fix and the return to Send both work (SQ-1323 finding 1).
+- **Two spotlights open on one phone scroller** can strand one bar's room until reload. The follow-up is SQ-1324, which reference-counts the room per scroller (SQ-1322 F2).
+- **After a hand-off to the invoice-lines hold**, focus lands on the window's first control (a rate link), not a line checkbox. The hold's focusKey marks the ad-hoc row, and re-targeting it is composer work (SQ-1317 F2).
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R191 · R192 · R193 · R194 · last id = R194*
