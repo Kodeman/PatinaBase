@@ -293,11 +293,7 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
     await waitFor(() => expect(onDrafted).toHaveBeenCalledWith("inv-1", "project-1"));
     expect(mockCreateDraft.mock.calls[0][0].lines).toEqual([]);
-    expect(mockAddBilling).toHaveBeenCalledWith({
-      invoiceId: "inv-1",
-      projectId: "project-1",
-      lines: [{ purchaseId: "p1" }],
-    });
+    expect(mockCreateDraft.mock.calls[0][0].billingLines).toEqual([{ purchaseId: "p1" }]);
   });
 
   it("SQ-448: warns when a ticked purchase's line is already billed on another invoice", () => {
@@ -367,17 +363,15 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
     // The running total follows the billed figure, not the cost.
     expect(screen.getAllByText("$1,500.00").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
-    await waitFor(() => expect(mockAddBilling).toHaveBeenCalledTimes(1));
-    expect(mockAddBilling.mock.calls[0][0].lines).toEqual([
+    await waitFor(() => expect(mockCreateDraft).toHaveBeenCalledTimes(1));
+    expect(mockCreateDraft.mock.calls[0][0].billingLines).toEqual([
       { purchaseId: "p1", amountCents: 150_000 },
     ]);
   });
 
   it("rolls back a refused billing line, unticks only that line, and says why beside it", async () => {
     // The PostgrestError's own words: the RPC's name and the purchase's id.
-    mockAddBilling.mockRejectedValueOnce({
-      message: "add_invoice_billing_lines: purchase p1 is already billed",
-    });
+    mockCreateDraft.mockRejectedValueOnce(new Error("Failed to create draft invoice: compose_project_invoice: lines: add_invoice_billing_lines: purchase p1 is already billed"));
     const onDrafted = jest.fn();
     render(
       <InvoiceComposer
@@ -395,8 +389,8 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
     expect(alert).not.toHaveTextContent(/add_invoice_billing_lines|\bp1\b/);
     const refusedRow = screen.getByLabelText("Bill Pair of table lamps").closest("[data-at-cost-row]");
     expect(refusedRow?.nextElementSibling).toBe(alert);
-    // The draft is gone and never handed on as if it had gone through.
-    expect(mockDeleteDraft).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1" });
+    // The failed transaction left no draft to delete.
+    expect(mockDeleteDraft).not.toHaveBeenCalled();
     expect(onDrafted).not.toHaveBeenCalled();
     // Only the refused line is unticked; the rest stays for the next draft.
     expect(screen.getByLabelText("Bill Pair of table lamps")).not.toBeChecked();
@@ -404,85 +398,25 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
 
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
     await waitFor(() => expect(onDrafted).toHaveBeenCalledWith("inv-1", "project-1"));
-    expect(mockAddBilling.mock.calls[1][0].lines).toEqual([{ purchaseId: "p2" }]);
+    expect(mockCreateDraft.mock.calls[1][0].billingLines).toEqual([{ purchaseId: "p2" }]);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("unticks nothing when the draft it refused could not be deleted, and says so at the act", async () => {
-    mockAddBilling.mockRejectedValue({
-      message: "add_invoice_billing_lines: purchase p1 is already billed",
-    });
-    mockDeleteDraft.mockRejectedValue(new Error("network error"));
-    render(
-      <InvoiceComposer
-        context={{ projectId: "project-1", initialPurchaseIds: ["p1", "p2"] }}
-        onDrafted={jest.fn()}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Pair of table lamps is already on another invoice. Nothing was billed; the draft was kept. Delete or void it.",
-    );
-    expect(screen.getByLabelText("Bill Pair of table lamps")).toBeChecked();
-    expect(screen.getByLabelText("Bill Estate sale")).toBeChecked();
+  it("an unconfirmed response holds Draft until the composer closes", async () => {
+    mockCreateDraft.mockRejectedValue(new Error("Failed to create draft invoice: network error"));
+    const onDrafted = jest.fn();
+    render(<InvoiceComposer context={{ projectId: "project-1", initialPurchaseIds: ["p1"] }} onDrafted={onDrafted} />);
+    const act = () => screen.getByRole("button", { name: "Draft the invoice" });
+    fireEvent.click(act());
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't confirm the draft. Check the invoices before drafting again.");
+    expect(act()).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Check the invoices" })).toBeInTheDocument();
+    fireEvent.click(act());
+    await waitFor(() => expect(spotWindows()).toContain("draft-unconfirmed"));
+    expect(mockCreateDraft).toHaveBeenCalledTimes(1);
+    expect(mockDeleteDraft).not.toHaveBeenCalled();
+    expect(onDrafted).not.toHaveBeenCalled();
   });
-
-  // SQ-1289 F3 — the kept draft is known and incomplete: Draft holds for the
-  // composer's life, as an unconfirmed one does, and routes to the invoices.
-  it.each([
-    [
-      "claim",
-      "Some of these hours were just billed on another invoice. Nothing was billed; the draft still holds those hours. Void it to release them.",
-    ],
-    ["lines", "Pair of table lamps is already on another invoice. Nothing was billed; the draft was kept. Delete or void it."],
-  ] as const)(
-    "a stranded %s rollback holds the primary Draft: pressing it creates nothing and lights Check the invoices",
-    async (step, stranded) => {
-      if (step === "claim") {
-        mockUnbilledEntries = [
-          { id: "te-1", user_id: "designer-1", duration_minutes: 120, amount_cents: 30000, started_at: "2026-10-01T15:00:00Z" },
-        ];
-        mockClaimTime.mockRejectedValue(
-          new Error(
-            "Time entry 5b1f0c7e-0000-4000-8000-000000000001 is attached to invoice 9a2e4d10-0000-4000-8000-000000000003; only notes (and detaching the invoice) may change.",
-          ),
-        );
-      } else {
-        mockAddBilling.mockRejectedValue({
-          message: "add_invoice_billing_lines: purchase p1 is already billed",
-        });
-      }
-      mockDeleteDraft.mockRejectedValue(new Error("network error"));
-      const onDrafted = jest.fn();
-      render(
-        <InvoiceComposer
-          context={
-            step === "claim"
-              ? { projectId: "project-1", initialTimeEntryIds: ["te-1"] }
-              : { projectId: "project-1", initialPurchaseIds: ["p1", "p2"] }
-          }
-          onDrafted={onDrafted}
-        />,
-      );
-      const act = () => screen.getByRole("button", { name: "Draft the invoice" });
-      await waitFor(() => expect(act()).not.toHaveAttribute("aria-disabled"));
-      fireEvent.click(act());
-      expect(await screen.findByRole("alert")).toHaveTextContent(stranded);
-      expect(mockCreateDraft).toHaveBeenCalledTimes(1);
-
-      // Held before the press, its fix in view; hiding Try again is not the gate.
-      expect(act()).toHaveAttribute("aria-disabled", "true");
-      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Check the invoices" })).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /^Delete/ })).not.toBeInTheDocument();
-
-      fireEvent.click(act());
-      await waitFor(() => expect(spotWindows()).toContain("draft-unconfirmed"));
-      expect(reasonLine()).toHaveTextContent(stranded);
-      expect(mockCreateDraft).toHaveBeenCalledTimes(1);
-      expect(onDrafted).not.toHaveBeenCalled();
-    },
-  );
 });
 
 describe("InvoiceComposer · riders at cost (C-31)", () => {
@@ -524,8 +458,8 @@ describe("InvoiceComposer · riders at cost (C-31)", () => {
     expect(screen.getByLabelText("Bill White Glove")).toBeChecked();
 
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
-    await waitFor(() => expect(mockAddBilling).toHaveBeenCalledTimes(1));
-    expect(mockAddBilling.mock.calls[0][0].lines).toEqual([{ costLineId: "r1" }]);
+    await waitFor(() => expect(mockCreateDraft).toHaveBeenCalledTimes(1));
+    expect(mockCreateDraft.mock.calls[0][0].billingLines).toEqual([{ costLineId: "r1" }]);
   });
 
   it("holds the draft until a rider with no figure is given one", async () => {
@@ -543,8 +477,8 @@ describe("InvoiceComposer · riders at cost (C-31)", () => {
     });
     expect(act).toBeEnabled();
     fireEvent.click(act);
-    await waitFor(() => expect(mockAddBilling).toHaveBeenCalledTimes(1));
-    expect(mockAddBilling.mock.calls[0][0].lines).toEqual([
+    await waitFor(() => expect(mockCreateDraft).toHaveBeenCalledTimes(1));
+    expect(mockCreateDraft.mock.calls[0][0].billingLines).toEqual([
       { costLineId: "r2", amountCents: 17_500 },
     ]);
   });
@@ -578,9 +512,9 @@ describe("InvoiceComposer · deposit, then balance (C-31)", () => {
     });
     expect(screen.getByText(/deposit \$800\.00\s+of/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
-    await waitFor(() => expect(mockAddBilling).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockCreateDraft).toHaveBeenCalledTimes(1));
     expect(mockCreateDraft.mock.calls[0][0].lines).toEqual([]);
-    expect(mockAddBilling.mock.calls[0][0].lines).toEqual([
+    expect(mockCreateDraft.mock.calls[0][0].billingLines).toEqual([
       { ffeItemId: "f1", stage: "deposit", depositPct: 40 },
     ]);
   });
@@ -635,8 +569,8 @@ describe("InvoiceComposer · deposit, then balance (C-31)", () => {
     expect(block).toHaveTextContent("$1,000.00");
     expect(within(block).getByRole("checkbox")).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
-    await waitFor(() => expect(mockAddBilling).toHaveBeenCalledTimes(1));
-    expect(mockAddBilling.mock.calls[0][0].lines).toEqual([
+    await waitFor(() => expect(mockCreateDraft).toHaveBeenCalledTimes(1));
+    expect(mockCreateDraft.mock.calls[0][0].billingLines).toEqual([
       { ffeItemId: "f1", stage: "balance" },
     ]);
   });
@@ -1273,7 +1207,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
 
   it("F4/F5: never offers Try again after a money write, and never prints an unknown refusal", async () => {
     mockPurchases = [LAMPS];
-    mockAddBilling.mockRejectedValue({ message: "network error" });
+    mockCreateDraft.mockRejectedValue(new Error("Failed to create draft invoice: compose_project_invoice: lines: network error"));
     render(composer({ projectId: "project-1", initialPurchaseIds: ["p1"] }));
     fireEvent.click(act());
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -1295,7 +1229,7 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     [
       "one it doesn't",
       'Failed to create draft invoice: duplicate key value violates unique constraint "invoices_pkey" (12000 cents)',
-      "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.",
+      "We couldn't confirm the draft. Check the invoices before drafting again.",
       false,
     ],
   ])("F13: says create_draft_invoice's %s in the composer's words", async (_label, raw, sentence, retryable) => {
@@ -1313,42 +1247,18 @@ describe("InvoiceComposer · held, said and landed (US-35)", () => {
     }
   });
 
-  // useClaimTimeEntries rethrows supabase-js's PostgrestError, an Error.
-  const postgrestError = (message: string) =>
-    Object.assign(new Error(message), { name: "PostgrestError", code: "P0001", details: "", hint: "" });
-
-  it.each([
-    [
-      "a refusal it knows",
-      postgrestError(
-        "Time entry 5b1f0c7e-0000-4000-8000-000000000001 is attached to invoice 9a2e4d10-0000-4000-8000-000000000003; only notes (and detaching the invoice) may change.",
-      ),
-      "Some of these hours were just billed on another invoice. Nothing was billed.",
-    ],
-    [
-      "one it doesn't",
-      postgrestError("claim_time_entries: 30000 cents on entry 5b1f0c7e-0000-4000-8000-000000000001 refused"),
-      "The hours couldn't be attached to the draft. Nothing was billed.",
-    ],
-  ])("F13: says claim_time_entries' %s in the composer's words, with no Try again", async (_label, refusal, sentence) => {
-    mockUnbilledEntries = [
-      {
-        id: "te-1",
-        user_id: "designer-1",
-        duration_minutes: 120,
-        amount_cents: 30000,
-        started_at: "2026-10-01T15:00:00Z",
-      },
-    ];
-    mockClaimTime.mockRejectedValue(refusal);
+  it("maps the atomic claim-short refusal without leaking ids or offering a retry", async () => {
+    mockUnbilledEntries = [{ id: "te-1", user_id: "designer-1", duration_minutes: 120,
+      amount_cents: 30000, started_at: "2026-10-01T15:00:00Z" }];
+    mockCreateDraft.mockRejectedValue(new Error("Failed to create draft invoice: compose_project_invoice: claim_short"));
     render(composer({ projectId: "project-1", initialTimeEntryIds: ["te-1"] }));
     await waitFor(() => expect(act()).toBeEnabled());
     fireEvent.click(act());
     const alert = await screen.findByRole("alert");
-    expect(mockClaimTime).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1", entryIds: ["te-1"] });
-    expect(mockDeleteDraft).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1" });
-    expect(alert).toHaveTextContent(sentence);
-    expect(alert).not.toHaveTextContent(/claim_time_entries|Time entry|5b1f0c7e|9a2e4d10|cents/);
+    expect(mockCreateDraft.mock.calls[0][0].entryIds).toEqual(["te-1"]);
+    expect(alert).toHaveTextContent("Some of these hours were just billed on another invoice. Nothing was billed.");
+    expect(alert).not.toHaveTextContent(/claim_short|te-1/);
+    expect(mockDeleteDraft).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });
 

@@ -11642,4 +11642,8 @@ With no studio on the invoice or its project, only the designer is admitted. Not
 
 **Copy.** issue_invoice's real refusals now have plain sentences: no line items, milestone already billed, pending or nonbillable time, and retainer first. An `issue_failed` code never outranks a detail it cannot map. The dead "Invoice has no lines" row was removed, since no server emits that text.
 
-*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R191 · R192 · R193 · R194 · R195 · last id = R195*
+### R196 · Project invoice composition is one database transaction — US-36 K13 — SQ-1056 2026-10-18
+
+**The rule.** One `compose_project_invoice` call drafts the project invoice, claims every selected eligible hour, and attaches selected billing lines. A short claim or a billing-line refusal rolls the entire call back: no header, hour claim, purchase link, or partial line remains. The writer keeps the 00817 invoice-studio authority and the draft writer's exact project tuple; the claim stage honors the hour writer's caller-equivalent eligibility. A refusal names its stage without printing raw database detail in the composer. No compensating delete and no stranded-draft state remain. A lost answer may still leave a complete draft, so the unconfirmed hold directs the designer to inspect invoices before trying again.
+
+*Entries add: R167 · R168 · R169 · R170 · R171 · R172 · R173 · R174 · R175 · R176 · R177 · R178 · R179 · R180 · R181 · R182 · R183 · R184 · R185 · R186 · R187 · R188 · R189 · R190 · R191 · R192 · R193 · R194 · R195 · R196 · last id = R196*

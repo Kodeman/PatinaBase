@@ -23184,6 +23184,24 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00820_vendor_studio_stats_live_items.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.v_promotion_candidates, public.v_vendor_studio_stats FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00821_us36_compose_project_invoice.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.compose_project_invoice( uuid, uuid, uuid, uuid, numeric, integer, text, text, jsonb, uuid[], jsonb ) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00821_us36_compose_project_invoice.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.compose_project_invoice( uuid, uuid, uuid, uuid, numeric, integer, text, text, jsonb, uuid[], jsonb ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

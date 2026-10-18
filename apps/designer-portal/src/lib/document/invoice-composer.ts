@@ -867,7 +867,9 @@ export function refusedBillingLines<T extends { request: InvoiceBillingLineReque
   lines: readonly T[],
 ): T[] {
   const raw = refusalText(err);
-  const reason = typeof raw === "string" ? /^add_invoice_billing_lines:\s*(.+)$/.exec(raw.trim())?.[1] : undefined;
+  const reason = typeof raw === "string"
+    ? /^add_invoice_billing_lines:\s*(.+)$/.exec(raw.trim().replace(/^Failed to create draft invoice:\s*compose_project_invoice: lines:\s*/, ""))?.[1]
+    : undefined;
   if (!reason) return [];
   const scoped = /^(purchase|rider|line) (\S+) /.exec(reason);
   const staged = /^a (?:deposit|balance) of \S+ cents is more than the \S+ cents left (?:to bill )?on line (\S+)/.exec(
@@ -949,10 +951,9 @@ const DRAFT_REFUSALS: Array<[RegExp, string, boolean]> = [
   ],
 ];
 
-// SQ-1286 F1 — a draft that landed may be missing its hours (claim_time_entries
-// never ran) or its other lines, so the designer is told not to send it.
+// A lost response to a draft write may conceal a committed transaction.
 export const DRAFT_UNCONFIRMED =
-  "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.";
+  "We couldn't confirm the draft. Check the invoices before drafting again.";
 
 const DRAFT_WRITE_SENT = /^Failed to create draft (?:studio )?invoice:\s*/;
 
@@ -1144,6 +1145,20 @@ export function billingRefusal(
   nameOf?: (id: string) => string | null | undefined,
 ): { sentence: string; fixer?: InvoiceHold["fixer"] } {
   const raw = refusalText(err);
+  const composed = typeof raw === "string"
+    ? /^(?:Failed to create draft invoice:\s*)?compose_project_invoice: (draft|claim|lines):\s*(.*)$/.exec(raw.trim())
+    : null;
+  if (composed) {
+    if (composed[1] === "draft") {
+      return { sentence: draftInvoiceRefusal(`Failed to create draft invoice: ${composed[2]}`).message };
+    }
+    if (composed[1] === "claim") return { sentence: claimTimeRefusal(composed[2]) };
+    return { sentence: billingLinesRefusal(composed[2], nameOf) };
+  }
+  if (raw === "Failed to create draft invoice: compose_project_invoice: claim_short" ||
+      raw === "compose_project_invoice: claim_short") {
+    return { sentence: claimTimeRefusal("compose_project_invoice: claim_short") };
+  }
   if (source === "draft") return { sentence: draftInvoiceRefusal(raw).message };
   if (source === "claim") return { sentence: claimTimeRefusal(raw) };
   if (source === "lines") return { sentence: billingLinesRefusal(raw, nameOf) };
@@ -1184,6 +1199,7 @@ export function claimTimeRefusal(message: unknown): string {
   // The hook's short-claim refusal, or the 00177 guard on an entry another
   // invoice already holds.
   if (
+    /^compose_project_invoice: claim_short$/.test(reason) ||
     /^Some of the selected time entries were just billed on another invoice\b/.test(reason) ||
     /^Time entry \S+ is attached to invoice \S+/.test(reason)
   ) {

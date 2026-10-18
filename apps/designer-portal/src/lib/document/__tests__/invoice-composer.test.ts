@@ -644,7 +644,7 @@ describe("draftInvoiceRefusal", () => {
   ])("says %s is unconfirmed, with no retry", (_label, message) => {
     const said = draftInvoiceRefusal(message);
     expect(said).toEqual({
-      message: "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.",
+      message: "We couldn't confirm the draft. Check the invoices before drafting again.",
       retryable: false,
       unconfirmed: true,
     });
@@ -785,6 +785,15 @@ describe("billingRefusal", () => {
     );
   });
 
+  it("routes wrapped composition refusals by their transaction stage", () => {
+    expect(billingRefusal("draft", new Error("Failed to create draft invoice: compose_project_invoice: draft: invalid draft invoice payload")).sentence)
+      .toBe(draftInvoiceRefusal("invalid draft invoice payload").message);
+    expect(billingRefusal("draft", new Error("Failed to create draft invoice: compose_project_invoice: claim_short")).sentence)
+      .toBe(claimTimeRefusal("compose_project_invoice: claim_short"));
+    expect(billingRefusal("draft", new Error("Failed to create draft invoice: compose_project_invoice: lines: add_invoice_billing_lines: purchase p1 is already billed"), () => "Pair of lamps").sentence)
+      .toBe("Pair of lamps is already on another invoice.");
+  });
+
   it.each([
     ["issue_invoice: invoice 5b1f0c7e-0000-4000-8000-000000000001 has no line items", "Add a line to the invoice, then issue it."],
     ["issue_invoice: a linked milestone is already paid or billed on another invoice", "Remove the milestone that's already paid or on another invoice, then issue this invoice."],
@@ -900,6 +909,11 @@ describe("refusedBillingLines", () => {
     "purchase p9 is already billed",
   ])("names no line for %s", (reason) => {
     expect(refusedBillingLines(refusal(reason), LINES)).toEqual([]);
+  });
+
+  it("identifies the same refused purchase through a wrapped composer lines error", () => {
+    expect(refusedBillingLines(new Error("Failed to create draft invoice: compose_project_invoice: lines: add_invoice_billing_lines: purchase p1 is already billed"), LINES))
+      .toEqual([LINES[2]]);
   });
 
   it("names no line for a refusal that is not the billing writer's", () => {

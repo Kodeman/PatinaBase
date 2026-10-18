@@ -220,7 +220,7 @@ describe("SQ-1262 control: a ready Draft online", () => {
     fireEvent.click(draftAct());
 
     await waitFor(() => expect(onDrafted).toHaveBeenCalledWith("invoice-1", "project-1"));
-    expect(draftWrites("create_draft_invoice")).toBe(1);
+    expect(draftWrites("compose_project_invoice")).toBe(1);
   });
 
   it("restores a parked invoice, then clears it after a successful Draft", async () => {
@@ -299,13 +299,13 @@ describe("SQ-1262 F2: closing the composer retires its Draft", () => {
     rpcMode = "deferred";
 
     fireEvent.click(draftAct());
-    await waitFor(() => expect(draftWrites("create_draft_invoice")).toBe(1));
+    await waitFor(() => expect(draftWrites("compose_project_invoice")).toBe(1));
     unmount();
 
     act(() => release());
     await settle();
     await settle();
-    expect(draftWrites("create_draft_invoice")).toBe(1);
+    expect(draftWrites("compose_project_invoice")).toBe(1);
     expect(onDrafted).not.toHaveBeenCalled();
   });
 
@@ -336,7 +336,7 @@ describe("SQ-1262 F4: Try again answers to the same readiness as Draft", () => {
     expect(
       await screen.findByText("We couldn't open this project to bill it. Reload and try again."),
     ).toBeInTheDocument();
-    expect(draftWrites("create_draft_invoice")).toBe(0);
+    expect(draftWrites("compose_project_invoice")).toBe(0);
     projectReadMode = "answer";
   }
 
@@ -346,7 +346,7 @@ describe("SQ-1262 F4: Try again answers to the same readiness as Draft", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
     await waitFor(() => expect(onDrafted).toHaveBeenCalledWith("invoice-1", "project-1"));
-    expect(draftWrites("create_draft_invoice")).toBe(1);
+    expect(draftWrites("compose_project_invoice")).toBe(1);
   });
 
   it("while the projects re-read is out, Try again drafts nothing and says why", async () => {
@@ -364,7 +364,7 @@ describe("SQ-1262 F4: Try again answers to the same readiness as Draft", () => {
     await settle();
 
     expect(projectReads).toBe(readsBefore);
-    expect(draftWrites("create_draft_invoice")).toBe(0);
+    expect(draftWrites("compose_project_invoice")).toBe(0);
     expect(onDrafted).not.toHaveBeenCalled();
     await waitFor(() =>
       expect(reasonLine()).toHaveTextContent("Checking this project before drafting its invoice."),
@@ -373,11 +373,11 @@ describe("SQ-1262 F4: Try again answers to the same readiness as Draft", () => {
 });
 
 describe("SQ-1272 F4: a draft write whose answer is lost is never tried blind", () => {
-  const UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.";
+  const UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
   const listKey = ["invoices", "list", {}];
 
   it.each([
-    ["project", "create_draft_invoice", { projectId: "project-1" }, () => readyToDraft()],
+    ["project", "compose_project_invoice", { projectId: "project-1" }, () => readyToDraft()],
     ["studio", "create_draft_studio_invoice", {}, () => readyToDraftForStudio()],
   ] as const)(
     "%s: no Try again, the invoice lists re-read, and Check the invoices opens them",
@@ -407,14 +407,14 @@ describe("SQ-1272 F4: a draft write whose answer is lost is never tried blind", 
 });
 
 describe("SQ-1282 F1: an unconfirmed draft holds the primary Draft until the composer closes", () => {
-  const UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again. If it landed, it may be missing hours or lines, so don't send it.";
+  const UNCONFIRMED = "We couldn't confirm the draft. Check the invoices before drafting again.";
   const spotWindows = () =>
     Array.from(document.querySelectorAll("[data-hold-spotlight-window]")).map((el) =>
       el.getAttribute("data-hold-spotlight-window"),
     );
 
   it.each([
-    ["project", "create_draft_invoice", { projectId: "project-1" }, () => readyToDraft()],
+    ["project", "compose_project_invoice", { projectId: "project-1" }, () => readyToDraft()],
     ["studio", "create_draft_studio_invoice", {}, () => readyToDraftForStudio()],
   ] as const)(
     "%s: held on why before the press; pressing it writes nothing and lights Check the invoices",
@@ -468,7 +468,7 @@ describe("SQ-1282 F1: an unconfirmed draft holds the primary Draft until the com
       // (b) the press writes nothing more and lights Check the invoices.
       fireEvent.click(draftAct());
       await settle();
-      expect(draftWrites("create_draft_invoice")).toBe(1);
+      expect(draftWrites("compose_project_invoice")).toBe(1);
       await waitFor(() => expect(spotWindows()).toContain("draft-unconfirmed"));
       expect(reasonLine()).toHaveTextContent(UNCONFIRMED);
       expect(screen.getByRole("button", { name: "Check the invoices" }).closest("[inert]")).toBeNull();
