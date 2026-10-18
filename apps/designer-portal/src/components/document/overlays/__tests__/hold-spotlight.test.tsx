@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { useEffect, useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { HoldSpotlight } from "../hold-spotlight";
+import { HoldSpotlight, spotlightBarTop } from "../hold-spotlight";
 import { topActiveModalDialog } from "../active-dialog";
 import { focusableWithin } from "@/lib/full-screen-boundary";
 import { useHoldSpotlight } from "@/lib/document/spotlight/use-hold-spotlight";
@@ -324,6 +324,72 @@ describe("HoldSpotlight when its frame unmounts while open", () => {
 // jsdom lays nothing out, so these mock the frame's rect and the bar's
 // height, and read the top the spotlight writes on the bar (in the layer's
 // own coordinates, which start at the frame's top).
+describe("spotlightBarTop beside a window at the frame's foot (SQ-1317 F1)", () => {
+  const overlaps = (top: number, height: number, win: { top: number; bottom: number }) =>
+    top < win.bottom && top + height > win.top;
+
+  it("lifts the bar above the folio's last window at a desk (1400×900)", () => {
+    const active = { top: 709, bottom: 765 };
+    const top = spotlightBarTop({
+      frameTop: 48,
+      frameBottom: 798,
+      floor: 900,
+      barHeight: 62,
+      narrow: false,
+      clips: false,
+      active,
+    });
+    expect(overlaps(top, 62, active)).toBe(false);
+    expect(top).toBeGreaterThanOrEqual(48);
+    expect(top + 62).toBeLessThanOrEqual(798);
+  });
+
+  it("keeps the docked bar off the window at a phone (390×844)", () => {
+    const active = { top: 739, bottom: 795 };
+    const top = spotlightBarTop({
+      frameTop: 16,
+      frameBottom: 828,
+      floor: 844,
+      barHeight: 79,
+      narrow: true,
+      clips: false,
+      active,
+    });
+    expect(overlaps(top, 79, active)).toBe(false);
+    expect(top).toBeGreaterThanOrEqual(0);
+    expect(top + 79).toBeLessThanOrEqual(844);
+  });
+
+  it("goes below the window when the frame's visible part has no room above it", () => {
+    const active = { top: 620, bottom: 700 };
+    const top = spotlightBarTop({
+      frameTop: 600,
+      frameBottom: 760,
+      floor: 900,
+      barHeight: 62,
+      narrow: false,
+      clips: false,
+      active,
+    });
+    expect(overlaps(top, 62, active)).toBe(false);
+    expect(top + 62).toBeLessThanOrEqual(900);
+  });
+
+  it("stays docked at the foot when that already clears the window", () => {
+    expect(
+      spotlightBarTop({
+        frameTop: 48,
+        frameBottom: 798,
+        floor: 900,
+        barHeight: 62,
+        narrow: false,
+        clips: false,
+        active: { top: 300, bottom: 360 },
+      }),
+    ).toBe(798 - 16 - 62);
+  });
+});
+
 describe("HoldSpotlight bar placement", () => {
   const CHROME = 72;
   const BAR = 60;
@@ -487,6 +553,49 @@ describe("HoldSpotlight bar placement", () => {
       <DockHarness frameStyle={{ paddingBottom: "24px", overflowY: "auto" }} />,
     );
     await waitFor(() => expect(barTop()).toBe(VIEW - 24 - BAR - 24));
+  });
+
+  it("reserves the bar's height on a phone as scroll room past a folio, only while open (SQ-1317 F1)", async () => {
+    function ReserveHarness({ open }: { open: boolean }) {
+      const frame = useRef<HTMLDivElement>(null);
+      const target = useRef<HTMLButtonElement>(null);
+      const holds = useRef<SpotlightHold[]>([
+        { ...CLIENT, target: () => target.current },
+      ]).current;
+      return (
+        <div
+          data-testid="scroller"
+          style={{
+            position: "fixed",
+            inset: 0,
+            overflowY: "auto",
+            paddingBottom: "16px",
+          }}
+        >
+          <div ref={frame} data-testid="frame" style={{ position: "relative" }}>
+            <button ref={target} type="button">
+              Add their email
+            </button>
+          </div>
+          <HoldSpotlight
+            frame={frame}
+            holds={holds}
+            open={open}
+            onClose={jest.fn()}
+          />
+        </div>
+      );
+    }
+    mockNarrow(true);
+    frameRect = { top: 40, bottom: VIEW };
+    hit = () => null;
+    const view = render(<ReserveHarness open={false} />);
+    const scroller = screen.getByTestId("scroller");
+    expect(scroller.style.paddingBottom).toBe("16px");
+    view.rerender(<ReserveHarness open />);
+    await waitFor(() => expect(scroller.style.paddingBottom).toBe(`${16 + BAR}px`));
+    view.rerender(<ReserveHarness open={false} />);
+    expect(scroller.style.paddingBottom).toBe("16px");
   });
 
   it("does not dock above the fixed overlay that holds the frame (the PO preview)", async () => {
