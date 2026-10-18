@@ -347,6 +347,20 @@ describe("Price lens after approval (US-37 #4, acceptance 7)", () => {
     );
   });
 
+  it("approved USD with a new EUR line shows the current EUR amount without an approved EUR figure", () => {
+    mockItems.data = [
+      { ...base, id: "usd-1", name: "Sofa", currency: "USD", trade_price_cents: 7000, unit_price_cents: 10000 },
+      { ...base, id: "eur-1", name: "Murano pendant", currency: "EUR", trade_price_cents: 250000, unit_price_cents: 320000 },
+    ];
+    mockApproval.data = approvalOf([mockItems.data[0]]);
+    renderLens();
+
+    expect(approvedTotalRow()).toHaveTextContent(
+      "Approved total $100 · Current $100 (no change) · Current €3,200",
+    );
+    expect(approvedTotalRow()).not.toHaveTextContent("Approved total €");
+  });
+
   it("an approval without line prices shows the EUR-only current total, not a USD zero", () => {
     mockItems.data = [
       {
