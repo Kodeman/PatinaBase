@@ -950,6 +950,8 @@ export interface TimeEntryLedgerRow {
 }
 
 export interface TimeEntryLedgerParams {
+  /** Claimed hours for one invoice, independent of capped project history. */
+  invoiceId?: string | null;
   /** The studio scope. Omit for "every studio this caller can read". */
   studioId?: string | null;
   /** The member scope. */
@@ -972,14 +974,14 @@ export interface TimeEntryLedgerParams {
 
 /** Rows for any of the four scopes (00604). RLS decides what comes back. */
 export function useTimeEntryLedger(params: TimeEntryLedgerParams = {}) {
-  const { studioId, userId, projectId, from, to, includeRunning = true, limit } = params;
+  const { invoiceId, studioId, userId, projectId, from, to, includeRunning = true, limit } = params;
 
   return useQuery({
     queryKey: timeKeys.ledger(params),
     // With no filter at all this selects the whole fact view for the window —
     // every row RLS lets the caller read. A scope always names at least one of
     // the three; nothing else may ask.
-    enabled: Boolean(studioId || userId || projectId),
+    enabled: Boolean(invoiceId || studioId || userId || projectId),
     queryFn: async (): Promise<TimeEntryLedgerRow[]> => {
       const supabase = getSupabase();
       let query = supabase
@@ -987,6 +989,7 @@ export function useTimeEntryLedger(params: TimeEntryLedgerParams = {}) {
         .select('*')
         .order('started_at', { ascending: false });
 
+      if (invoiceId) query = query.eq('invoice_id', invoiceId);
       if (studioId) query = query.eq('studio_id', studioId);
       if (userId) query = query.eq('user_id', userId);
       if (projectId) query = query.eq('project_id', projectId);

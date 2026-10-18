@@ -48054,6 +48054,57 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_draft_invoice: {
+        Args: {
+          p_billing_lines: Json
+          p_entry_ids: string[]
+          p_expected_updated_at: string
+          p_internal_notes: string
+          p_invoice_id: string
+          p_lines: Json
+          p_memo: string
+          p_payment_terms_days: number
+          p_tax_rate: number
+        }
+        Returns: {
+          amount_paid_cents: number
+          ar_flagged_at: string | null
+          ar_last_chased_at: string | null
+          client_id: string | null
+          created_at: string
+          currency: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          internal_notes: string | null
+          invoice_number: string | null
+          issue_date: string | null
+          last_reminder_at: string | null
+          memo: string | null
+          paid_at: string | null
+          payment_terms_days: number
+          project_id: string | null
+          reminder_count: number
+          sent_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          studio_id: string | null
+          subtotal_cents: number
+          tax_cents: number
+          tax_rate: number
+          title: string | null
+          total_cents: number
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
       update_outbound_draft: {
         Args: { p_body: string; p_id: string; p_subject: string }

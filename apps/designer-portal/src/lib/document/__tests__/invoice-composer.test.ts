@@ -1019,3 +1019,28 @@ describe("assessInvoiceReadiness", () => {
     expect(assessInvoiceReadiness({ ...common, sendNoRecipient: true }).holds[0]?.reason).toBe("Add the client's email to send this.");
   });
 });
+
+
+describe('US-38 atomic edit refusals', () => {
+  it('maps stale and issued draft edits to their reopen sentences', () => {
+    expect(billingRefusal('draft', new Error('update_draft_invoice: stale')).sentence).toBe('This draft changed since you opened it. Reopen it to edit.');
+    expect(billingRefusal('draft', new Error('update_draft_invoice: not_draft')).sentence).toBe("This invoice has been sent, so it can't be edited.");
+  });
+  it('routes edit draft, short-claim and line stages through the existing copy tables', () => {
+    expect(billingRefusal('draft', new Error('update_draft_invoice: draft: tax rate must be between 0 and 1'))).toEqual(billingRefusal('draft', new Error('compose_project_invoice: draft: tax rate must be between 0 and 1')));
+    expect(billingRefusal('draft', new Error('update_draft_invoice: claim_short'))).toEqual(billingRefusal('draft', new Error('compose_project_invoice: claim_short')));
+    expect(billingRefusal('draft', new Error('update_draft_invoice: lines: add_invoice_billing_lines: purchase p-1 is already billed'), () => 'Oak sample').sentence).toBe(billingRefusal('draft', new Error('compose_project_invoice: lines: add_invoice_billing_lines: purchase p-1 is already billed'), () => 'Oak sample').sentence);
+    const lines = [{ request: { purchaseId: 'p-1' } }];
+    expect(refusedBillingLines(new Error('update_draft_invoice: lines: add_invoice_billing_lines: purchase p-1 is already billed'), lines)).toEqual(lines);
+  });
+});
+
+
+describe('US-38 concurrent billing refusals', () => {
+  it.each(['40P01', '55P03'])('maps SQLSTATE %s in compose, edit and direct-add refusals', (code) => {
+    for (const message of ['compose_project_invoice: draft: deadlock detected', 'update_draft_invoice: lines: lock not available', 'add_invoice_billing_lines: lock not available']) {
+      expect(billingRefusal(message.startsWith('add_') ? 'lines' : 'draft', Object.assign(new Error(message), { code })).sentence)
+        .toBe('Another change to these lines was saving at the same moment. Save again.');
+    }
+  });
+});

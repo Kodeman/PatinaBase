@@ -33,6 +33,7 @@ import {
   useDeleteTimeEntry,
   useStampProjectPricingStudio,
   useUpdateTimeEntry,
+  useTimeEntryLedger,
 } from '../use-time-tracking';
 
 beforeEach(() => {
@@ -41,6 +42,19 @@ beforeEach(() => {
 });
 
 const invalidatedKeys = () => invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+
+describe('useTimeEntryLedger invoice scope', () => {
+  it('filters claimed hours at the server before the REST row cap', async () => {
+    const query = { select: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [{ id: 'old-hour' }], error: null }).then(resolve) };
+    supabaseClient.from.mockReturnValue(query);
+    const read = useTimeEntryLedger({ invoiceId: 'invoice-1', includeRunning: false }) as unknown as { enabled: boolean; queryFn: () => Promise<unknown> };
+    expect(read.enabled).toBe(true);
+    await expect(read.queryFn()).resolves.toEqual([{ id: 'old-hour' }]);
+    expect(supabaseClient.from).toHaveBeenCalledWith('time_entry_ledger');
+    expect(query.eq).toHaveBeenCalledWith('invoice_id', 'invoice-1');
+    expect(query.eq).not.toHaveBeenCalledWith('project_id', expect.anything());
+  });
+});
 
 describe('useStampProjectPricingStudio', () => {
   it('names the studio through the server act and returns its verdict', async () => {

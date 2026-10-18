@@ -49,6 +49,7 @@ import {
   useInvoiceLink,
   useRegenerateInvoiceLink,
   type CreateDraftInvoiceInput,
+  type UpdateDraftInvoiceInput,
   type CreateDraftStudioInvoiceInput,
   type DraftLineInput,
   type FfeInvoiceCoverageMap,
@@ -370,6 +371,13 @@ describe('useCreateDraftInvoice', () => {
     });
   });
 
+  it.each(['40P01', '55P03'])('preserves compose SQLSTATE %s for the composer refusal', async (code) => {
+    supabaseClient.from.mockReturnValue(projectRead({ data: { id: 'project-a', designer_id: 'lead-a', client_id: 'client-a', studio_id: 'studio-a' }, error: null }));
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: { code, message: 'compose_project_invoice: lines: concurrent save' } });
+    const config = useCreateDraftInvoice() as unknown as CreateConfig;
+    await expect(config.mutationFn(input)).rejects.toMatchObject({ code });
+  });
+
   it('reads the project under caller RLS and writes its canonical billing tuple for a co-member', async () => {
     const project = projectRead({
       data: {
@@ -689,6 +697,7 @@ describe('useInvoice line selections', () => {
       expect(selection).not.toContain('invoice_line_items(*)');
       expect(selection).not.toContain('invoice_line_item_internals');
     }
+    expect(select.mock.calls[0][0]).toContain('billing_stage, billing_stage_pct');
     expect(select).toHaveBeenCalledTimes(2);
   });
 });
@@ -1397,5 +1406,85 @@ describe('SQ-1262 F3: a send-on-draft whose answer is lost', () => {
     expect(invalidatedKeys()).toContainEqual(['invoices']);
     expect(invalidatedKeys()).toContainEqual(['project-financials', 'proj-1']);
     expect(invalidatedKeys()).toContainEqual(['project-payment-milestones', 'proj-1']);
+  });
+});
+
+
+describe('useUpdateDraftInvoice atomic edit', () => {
+  type Config = {
+    mutationFn: (input: UpdateDraftInvoiceInput) => Promise<unknown>;
+    onSuccess: (invoice: { id: string; project_id: string | null }) => void;
+    meta: { act: string; errorSurface?: string };
+    retry: boolean;
+  };
+  const input: UpdateDraftInvoiceInput = {
+    invoiceId: 'draft-a', expectedUpdatedAt: '2026-10-18T12:00:00Z',
+    taxRate: 0.075, paymentTermsDays: 30, memo: 'Edited', internalNotes: 'Private',
+    lines: [{ description: 'Design', quantity: 1.25, unitAmountCents: 10001 }],
+    entryIds: ['kept-hour', 'new-hour'], billingLines: [{ purchaseId: 'purchase-a' }],
+  };
+  beforeEach(() => {
+    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'designer-a' } } });
+  });
+
+  it('saves the complete draft through one RPC with optimistic timestamp, never a client or project override', async () => {
+    const invoice = { id: 'draft-a', project_id: 'project-a' };
+    supabaseClient.rpc.mockResolvedValue({ data: invoice, error: null });
+    const config = useUpdateDraftInvoice({ errorSurface: 'inline' }) as unknown as Config;
+    await expect(config.mutationFn(input)).resolves.toEqual(invoice);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('update_draft_invoice', {
+      p_invoice_id: 'draft-a', p_expected_updated_at: input.expectedUpdatedAt,
+      p_tax_rate: 0.075, p_payment_terms_days: 30, p_memo: 'Edited', p_internal_notes: 'Private',
+      p_lines: [{ kind: 'adhoc', milestone_id: null, ffe_item_id: null, description: 'Design',
+        quantity: 1.25, unit_amount_cents: 10001, metadata: {}, sort_order: 0 }],
+      p_entry_ids: ['kept-hour', 'new-hour'], p_billing_lines: [{ purchaseId: 'purchase-a' }],
+    });
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+    expect(config.meta).toEqual({ act: 'money', errorSurface: 'inline' });
+    expect(config.retry).toBe(false);
+  });
+
+  it('refuses a retired edit before the write', async () => {
+    const act = new AbortController();
+    act.abort();
+    const config = useUpdateDraftInvoice() as unknown as Config;
+    await expect(config.mutationFn({ ...input, signal: act.signal })).rejects.toThrow('abandoned');
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each(['40P01', '55P03'])('preserves billing SQLSTATE %s for the composer refusal', async (code) => {
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: { code, message: 'update_draft_invoice: lines: concurrent save' } });
+    const config = useUpdateDraftInvoice() as unknown as Config;
+    await expect(config.mutationFn(input)).rejects.toMatchObject({ code });
+  });
+
+  it('preserves a stale refusal and refreshes invoices after an uncertain answer', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: { message: 'update_draft_invoice: stale' } });
+    const config = useUpdateDraftInvoice() as unknown as Config;
+    await expect(config.mutationFn(input)).rejects.toThrow('update_draft_invoice: stale');
+    expect(invalidatedKeys()).toContainEqual(['invoices']);
+  });
+
+  it('refreshes folio, hours and purchase readers even when the last selection was dropped', () => {
+    const config = useUpdateDraftInvoice() as unknown as Config;
+    config.onSuccess({ id: 'draft-a', project_id: 'project-a' });
+    for (const key of [
+      ['invoices', 'draft-a'], ['projects', 'project-a', 'unbilled-time'],
+      ['projects', 'project-a', 'time-entries'], ['projects', 'project-a', 'time-tracking'],
+      ['projects', 'project-a', 'key-metrics'], ['time'], ['desk-contents-unbilled-time'],
+      ['document-hours-week'], ['buying-phase2', 'purchases', 'project:project-a'],
+      ['buying-phase2', 'cost-lines'], ['project-payment-milestones', 'project-a'],
+      ['ffe-invoice-coverage', 'project-a'],
+    ]) expect(invalidatedKeys()).toContainEqual(key);
+  });
+
+  it('saves studio hand lines without synthesizing a project and invalidates its folio', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { id: 'studio-draft', project_id: null }, error: null });
+    const config = useUpdateDraftInvoice() as unknown as Config;
+    await expect(config.mutationFn({ invoiceId: 'studio-draft', expectedUpdatedAt: 'stamp', lines: [] }))
+      .resolves.toEqual({ id: 'studio-draft', project_id: null });
+    expect(supabaseClient.rpc.mock.calls[0][1]).toMatchObject({ p_entry_ids: [], p_billing_lines: [] });
+    config.onSuccess({ id: 'studio-draft', project_id: null });
+    expect(invalidatedKeys()).toContainEqual(['invoices', 'studio-draft']);
   });
 });

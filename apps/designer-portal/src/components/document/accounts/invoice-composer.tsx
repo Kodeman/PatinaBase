@@ -61,6 +61,12 @@ import {
   useDocumentClientLinkHold,
   InvoiceBillingGapError,
   useCreateDraftInvoice,
+  useUpdateDraftInvoice,
+  useInvoice,
+  useTimeEntryLedger,
+  type Invoice,
+  type TimeEntryLedgerRow,
+  type UpdateDraftInvoiceInput,
   useCreateDraftStudioInvoice,
   useStampProjectPricingStudio,
   useFfeInvoiceCoverage,
@@ -109,6 +115,8 @@ import { AppError } from "@/lib/error-handler";
 import { OfflineRefusal } from "@/lib/react-query";
 import {
   EMPTY_ADHOC,
+  draftComposerSeed,
+  snapshotComposerLines,
   STUDIO_TARGET,
   activeDesignStudios,
   balanceCents,
@@ -178,12 +186,49 @@ const STUDIO_CHOICE_EVENT = {
   presentation: "inline",
 } as const;
 
-export function InvoiceComposer({
+type ComposerProps = {
+  context: InvoiceComposerContext;
+  onClose?: () => void;
+  onDrafted: (invoiceId: string, projectId: string | null) => void;
+};
+
+export function InvoiceComposer(props: ComposerProps) {
+  return props.context.mode === "edit"
+    ? <EditInvoiceComposer {...props} invoiceId={props.context.invoiceId} />
+    : <InvoiceComposerSheet {...props} />;
+}
+
+function EditInvoiceComposer(props: ComposerProps & { invoiceId: string }) {
+  const read = useInvoice(props.invoiceId);
+  const hours = useTimeEntryLedger({ invoiceId: props.invoiceId, includeRunning: false });
+  const save = useUpdateDraftInvoice({ errorSurface: "inline" });
+  const [opened, setOpened] = useState<{ invoice: Invoice; hours: TimeEntryLedgerRow[] } | null>(null);
+  useEffect(() => {
+    if (!opened && read.data && !read.isFetching && (!read.data.project_id || (hours.data && !hours.isFetching && !hours.isError))) {
+      setOpened({ invoice: read.data, hours: (hours.data ?? []).filter((entry) => entry.invoice_id === props.invoiceId) });
+    }
+  }, [opened, read.data, read.isFetching, hours.data, hours.isFetching, hours.isError, props.invoiceId]);
+  if (!opened) return <div role="status">{read.isError || hours.isError || (read.isSuccess && !read.data)
+    ? <><p>The draft could not be opened.</p><DocumentAction actionKey="retry-edit-invoice" variant="secondary" onClick={() => { void read.refetch(); void hours.refetch(); }}>Try again</DocumentAction></>
+    : "Opening the draft…"}</div>;
+  const heldIds = draftComposerSeed(opened.invoice).timeEntryIds;
+  if (heldIds.some((id) => !opened.hours.some((entry) => entry.id === id))) return <p>The draft’s attached hours could not be read. Reopen it to edit.</p>;
+  if (opened.invoice.status !== "draft") return <p>This invoice has been sent, so it can't be edited.</p>;
+  return <InvoiceComposerSheet {...props} context={{ mode: "edit", invoiceId: props.invoiceId, projectId: opened.invoice.project_id ?? undefined }} editDraft={opened.invoice} claimedHours={opened.hours} saveDraft={save} />;
+}
+
+function InvoiceComposerSheet({
   context,
   onDrafted,
   onClose,
+  editDraft,
+  claimedHours = [],
+  saveDraft,
 }: {
   context: InvoiceComposerContext;
+  editDraft?: Invoice;
+  claimedHours?: TimeEntryLedgerRow[];
+  saveDraft?: { isPending: boolean; mutateAsync: (input: UpdateDraftInvoiceInput) => Promise<Invoice> };
   /** Puts the composer away; Price it parks it first (K7). */
   onClose?: () => void;
   /** The handoff: the draft opens as the folio (issue + send live there).
@@ -192,7 +237,7 @@ export function InvoiceComposer({
 }) {
   // One select, two kinds of target: a project id, or the studio sentinel.
   const [target, setTarget] = useState(
-    context.mode === "studio" ? STUDIO_TARGET : (context.projectId ?? ""),
+    context.mode === "studio" || (editDraft && !editDraft.project_id) ? STUDIO_TARGET : (context.projectId ?? ""),
   );
   const projectId = target === STUDIO_TARGET ? "" : target;
 
@@ -202,8 +247,9 @@ export function InvoiceComposer({
   const { value: studioInvoiceOn, isLoading: flagLoading } =
     useFeatureFlag("studio-invoice");
   const studioChoiceAvailable =
-    studioInvoiceOn && !flagLoading && !context.projectId;
-  const studioMode = studioChoiceAvailable && target === STUDIO_TARGET;
+    !editDraft && studioInvoiceOn && !flagLoading && !context.projectId;
+  const studioMode = (!!editDraft || studioChoiceAvailable) && target === STUDIO_TARGET;
+  const ownLineIds = useMemo(() => new Set(editDraft?.line_items?.map((line) => line.id)), [editDraft]);
 
   const {
     data: projects,
@@ -259,12 +305,12 @@ export function InvoiceComposer({
     refetch: refetchRiders,
   } = useProjectPoCostLines(projectId || null);
   const offerablePurchases = useMemo(
-    () => unbilledPurchases(purchases as ComposerPurchase[] | undefined),
-    [purchases],
+    () => unbilledPurchases((purchases as ComposerPurchase[] | undefined)?.map((p) => ownLineIds.has(p.invoice_line_id ?? "") ? { ...p, status: "recorded", invoice_line_id: null } : p)),
+    [purchases, ownLineIds],
   );
   const offerableRiders = useMemo(
-    () => unbilledRiders(riders as ComposerRider[] | undefined),
-    [riders],
+    () => unbilledRiders((riders as ComposerRider[] | undefined)?.map((r) => ownLineIds.has(r.invoice_line_id ?? "") ? { ...r, invoice_line_id: null } : r)),
+    [riders, ownLineIds],
   );
   const {
     data: ffeItems,
@@ -291,8 +337,8 @@ export function InvoiceComposer({
     refetch: refetchStages,
   } = useFfeInvoiceStageCoverage(projectId || null);
   const billing = useMemo(
-    () => lineBillingByItem(stageRows as ComposerStageSlot[] | undefined),
-    [stageRows],
+    () => lineBillingByItem((stageRows as ComposerStageSlot[] | undefined)?.filter((row) => !editDraft || row.invoice_id !== editDraft.id)),
+    [stageRows, editDraft],
   );
 
   const createDraft = useCreateDraftInvoice({ errorSurface: "inline" });
@@ -303,11 +349,16 @@ export function InvoiceComposer({
   // ── Selections ────────────────────────────────────────────────────────────
   // K13 — reopened on a project it parked from (Price it), the composer comes
   // back as it left. An opener that asks for lines of its own starts fresh.
+  const parkingKey = editDraft ? invoiceParkingKey("edit:" + editDraft.id) : context.projectId ? invoiceParkingKey(context.projectId) : null;
   const [parked] = useState<ParkedInvoiceComposer | null>(() =>
-    context.projectId && !asksForLines(context)
-      ? parkedState<ParkedInvoiceComposer>(invoiceParkingKey(context.projectId))
+    parkingKey && !asksForLines(context)
+      ? parkedState<ParkedInvoiceComposer>(parkingKey) ?? (editDraft ? { ...draftComposerSeed(editDraft), timeEntryIds: claimedHours.map((entry) => entry.id) } : null)
       : null,
   );
+  const [changedBillingIds, setChangedBillingIds] = useState<Set<string>>(() => new Set(parked?.changedBillingIds));
+  const retainedLines = parked?.retainedLines ?? editDraft?.line_items ?? [];
+  const retainedFfeIds = new Set(retainedLines.filter((line) => line.ffe_item_id && line.billing_stage !== "balance").map((line) => line.ffe_item_id!));
+  const changeFfePricing = () => setChangedBillingIds((prev) => new Set([...prev, ...tickedFfeIds]));
   const [tickedMilestoneIds, setTickedMilestoneIds] = useState<Set<string>>(
     () => new Set(parked?.milestoneIds),
   );
@@ -341,19 +392,20 @@ export function InvoiceComposer({
     () => parked?.adhoc ?? [{ ...EMPTY_ADHOC }],
   );
   // Studio mode's own three fields (S4 · S12 · S8).
-  const [studioClientId, setStudioClientId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [chosenStudioId, setChosenStudioId] = useState("");
+  const [studioClientId, setStudioClientId] = useState<string | null>(editDraft?.client_id ?? null);
+  const [title, setTitle] = useState(editDraft?.title ?? "");
+  const [chosenStudioId, setChosenStudioId] = useState(editDraft?.studio_id ?? "");
   const [taxRatePercent, setTaxRatePercent] = useState(
     parked?.taxRatePercent ?? "0",
   );
   const [termsDays, setTermsDays] = useState(parked?.termsDays ?? "15");
   const [memo, setMemo] = useState(parked?.memo ?? "");
+  const [internalNotes, setInternalNotes] = useState(parked?.internalNotes ?? "");
   // Set by Price it, so leaving keeps the parked work; any other way out
   // (drafting, discarding) clears it.
   const parkingRef = useRef(false);
   useEffect(() => {
-    const parkedFor = context.projectId && invoiceParkingKey(context.projectId);
+    const parkedFor = parkingKey;
     if (!parkedFor) return;
     // Re-asserted for a remount that reran the cleanup below.
     if (parked) park(parkedFor, parked);
@@ -361,7 +413,7 @@ export function InvoiceComposer({
     return () => {
       if (!parkingRef.current) unpark(parkedFor);
     };
-  }, [context.projectId, parked]);
+  }, [parkingKey, parked]);
   // F2 — a Draft press is one act; closing the composer retires it. Retired
   // before the draft is written, nothing is written; after, its own steps
   // still finish or clean up, but it never opens the folio.
@@ -450,27 +502,38 @@ export function InvoiceComposer({
   const offerableMilestones = useMemo(
     () =>
       unbilledMilestones(
-        (milestones ?? []) as ComposerMilestone[],
-        (projectInvoices ?? []) as AnyRecord[],
+        ((milestones ?? []) as ComposerMilestone[]).map((m) => editDraft?.line_items?.some((line) => line.milestone_id === m.id) ? { ...m, status: "pending" } : m),
+        ((projectInvoices ?? []) as AnyRecord[]).filter((invoice) => !editDraft || invoice.id !== editDraft.id),
       ),
-    [milestones, projectInvoices],
+    [milestones, projectInvoices, editDraft],
   );
 
   // ── FF&E: every billable line of the project, coverage-partitioned ────────
   const ffeSettled =
     !!projectId && !ffeLoading && !coverageLoading && !stagesLoading;
   const ffePartition = useMemo(
-    () =>
-      partitionFfeBillable(
+    () => {
+      const partition = partitionFfeBillable(
         (ffeItems ?? []) as Array<ComposerFfeItem & AnyRecord>,
-        ffeSettled ? coverage : undefined,
-      ),
-    [ffeItems, coverage, ffeSettled],
+        ffeSettled ? Object.fromEntries(Object.entries(coverage ?? {}).filter(([id, row]) =>
+          !retainedFfeIds.has(id) && (!editDraft || row.invoiceId !== editDraft.id),
+        )) : undefined,
+      );
+      const heldItems = ((ffeItems ?? []) as Array<ComposerFfeItem & AnyRecord>).filter((item) => retainedFfeIds.has(item.id));
+      return {
+        ...partition,
+        billable: [...partition.billable.filter((item) => !retainedFfeIds.has(item.id)), ...heldItems],
+        covered: partition.covered.filter((item) => !retainedFfeIds.has(item.id)),
+        unpriced: partition.unpriced.filter((item) => !retainedFfeIds.has(item.id)),
+        unfilled: partition.unfilled.filter((item) => !retainedFfeIds.has(item.id)),
+      };
+    },
+    [ffeItems, coverage, ffeSettled, stageRows, editDraft, retainedLines],
   );
   // C-31 — a line with a live deposit and no balance yet: offered its balance.
   const balanceOwed = useMemo(
-    () => (ffeSettled ? balanceOwedItems(ffePartition.covered, billing) : []),
-    [ffeSettled, ffePartition, billing],
+    () => (ffeSettled ? [...balanceOwedItems(ffePartition.covered, billing), ...((ffeItems ?? []) as ComposerFfeItem[]).filter((item) => retainedLines.some((line) => line.ffe_item_id === item.id && line.billing_stage === "balance") && !balanceOwedItems(ffePartition.covered, billing).some((owed) => owed.id === item.id))] : []),
+    [ffeSettled, ffePartition, billing, ffeItems, retainedLines],
   );
   // Every other covered line, with what it has had billed and at which stage.
   const alreadyBilled = useMemo(() => {
@@ -495,11 +558,11 @@ export function InvoiceComposer({
   );
   const unbilledEntries = useMemo(
     () =>
-      (unbilledTime?.entries ?? []).map((entry) => ({
+      [...(unbilledTime?.entries ?? []), ...claimedHours.filter((entry) => !(unbilledTime?.entries ?? []).some((fresh) => fresh.id === entry.id)).map((entry) => ({ ...entry, duration_minutes: entry.duration_minutes ?? 0, notes: null }))].map((entry) => ({
         ...entry,
         member_name: memberNames.get(entry.user_id) ?? null,
       })),
-    [unbilledTime, memberNames],
+    [unbilledTime, memberNames, claimedHours],
   );
   // MS-01 — hours that are unbilled and authorized but that NOTHING PRICED
   // (rate_source = 'none'). `useUnbilledTime` holds them out of `entries`, so
@@ -667,23 +730,31 @@ export function InvoiceComposer({
 
   // S6 — a studio invoice carries ad-hoc lines and nothing else. Milestones,
   // time and FF&E all belong to a house; the RPC refuses their kinds outright.
+  const retained = retainedLines.filter((line) => {
+    if (line.milestone_id) return tickedMilestoneIds.has(line.milestone_id);
+    const purchaseId = line.metadata?.studioPurchaseId;
+    const riderId = line.metadata?.poCostLineId;
+    if (typeof purchaseId === "string") return tickedPurchaseIds.has(purchaseId) && !changedBillingIds.has(purchaseId);
+    if (typeof riderId === "string") return tickedRiderIds.has(riderId) && !changedBillingIds.has(riderId);
+    return !!line.ffe_item_id && !changedBillingIds.has(line.ffe_item_id) && (line.billing_stage === "balance" ? tickedBalanceIds : tickedFfeIds).has(line.ffe_item_id);
+  });
+  const snapshots = snapshotComposerLines(retained);
+  const retainedSubjectIds = new Set(retained.flatMap((line) => [line.milestone_id, line.ffe_item_id, line.metadata?.studioPurchaseId, line.metadata?.poCostLineId].filter((id): id is string => typeof id === "string")));
   const selection = useMemo(
     () =>
       studioMode
         ? { milestones: [], ffeItems: [], timeEntries: [], adhoc }
         : {
             milestones: offerableMilestones.filter((m) =>
-              tickedMilestoneIds.has(m.id),
+              tickedMilestoneIds.has(m.id) && !retainedSubjectIds.has(m.id),
             ),
-            ffeItems:
-              ffeStage === "full"
-                ? ffePartition.billable.filter((i) => tickedFfeIds.has(i.id))
-                : [],
+            ffeItems: ffePartition.billable.filter((i) => tickedFfeIds.has(i.id) && ffeStage === "full" && !retainedSubjectIds.has(i.id)),
             timeEntries: unbilledEntries.filter((e) => tickedTimeIds.has(e.id)),
             adhoc,
           },
     [
       studioMode,
+      retainedSubjectIds,
       offerableMilestones,
       tickedMilestoneIds,
       ffePartition,
@@ -694,43 +765,27 @@ export function InvoiceComposer({
       adhoc,
     ],
   );
-  const lines = useMemo(() => buildComposerLines(selection), [selection]);
+  const lines = [...buildComposerLines(selection, !!editDraft), ...snapshots.lines];
   // C-31 — the lines add_invoice_billing_lines adds once the draft exists.
-  const billingLines = useMemo(
-    () =>
+  const billingLines = [...snapshots.billingLines, ...(() =>
       studioMode
         ? []
         : buildBillingLines({
             depositItems:
               ffeStage === "deposit"
-                ? ffePartition.billable.filter((i) => tickedFfeIds.has(i.id))
+                ? ffePartition.billable.filter((i) => tickedFfeIds.has(i.id) && !retainedSubjectIds.has(i.id))
                 : [],
             depositPct,
-            balanceItems: balanceOwed.filter((i) => tickedBalanceIds.has(i.id)),
+            balanceItems: balanceOwed.filter((i) => tickedBalanceIds.has(i.id) && !retainedSubjectIds.has(i.id)),
             billing,
             purchases: offerablePurchases
-              .filter((p) => tickedPurchaseIds.has(p.id))
+              .filter((p) => tickedPurchaseIds.has(p.id) && !retainedSubjectIds.has(p.id))
               .map((p) => ({ subject: p, overrideText: overrides.get(p.id) })),
             riders: offerableRiders
-              .filter((r) => tickedRiderIds.has(r.id))
+              .filter((r) => tickedRiderIds.has(r.id) && !retainedSubjectIds.has(r.id))
               .map((r) => ({ subject: r, overrideText: overrides.get(r.id) })),
-          }),
-    [
-      studioMode,
-      ffeStage,
-      ffePartition,
-      tickedFfeIds,
-      depositPct,
-      balanceOwed,
-      tickedBalanceIds,
-      billing,
-      offerablePurchases,
-      tickedPurchaseIds,
-      offerableRiders,
-      tickedRiderIds,
-      overrides,
-    ],
-  );
+          })
+  )()];
   const billingFiguresMissing = billingLines.some(
     (l) => l.amountCents === null,
   );
@@ -777,7 +832,7 @@ export function InvoiceComposer({
   );
   const lineCount = lines.length + billingLines.length;
 
-  const creating = createDraft.isPending || createStudioDraft.isPending;
+  const creating = createDraft.isPending || createStudioDraft.isPending || !!saveDraft?.isPending;
   // Block drafting while a prefilled section is still resolving — otherwise a
   // draft could land moments before its prefill arrives, silently dropping it.
   const prefillPending =
@@ -1202,7 +1257,7 @@ export function InvoiceComposer({
     setError(null);
     setRefusedLines(new Map());
 
-    if (studioMode) {
+    if (studioMode && !editDraft) {
       // No project, no milestones, no time to claim — one call, then the folio.
       try {
         const studioInvoiceId = await createStudioDraft.mutateAsync({
@@ -1233,7 +1288,14 @@ export function InvoiceComposer({
       (timeLine?.metadata as { time_entry_ids?: string[] } | undefined)?.time_entry_ids ?? [];
     let invoice: AnyRecord;
     try {
-      invoice = await createDraft.mutateAsync({
+      invoice = editDraft && saveDraft
+        ? await saveDraft.mutateAsync({
+            invoiceId: editDraft.id, expectedUpdatedAt: parked?.expectedUpdatedAt ?? editDraft.updated_at,
+            taxRate, paymentTermsDays: parseInt(termsDays, 10) >= 0 ? parseInt(termsDays, 10) : 15,
+            memo: memo.trim() || undefined, internalNotes: internalNotes.trim() || undefined,
+            lines, entryIds, billingLines: billingLines.map((line) => line.request), signal: act.signal,
+          })
+        : await createDraft.mutateAsync({
         projectId,
         clientId: selectedProject?.client_id ?? null,
         taxRate,
@@ -1249,9 +1311,11 @@ export function InvoiceComposer({
       if (!live()) return;
       const raw = (e as { message?: unknown } | null)?.message;
       const stage = typeof raw === "string"
-        ? /compose_project_invoice: (draft|claim(?:_short)?|lines)(?::|$)/.exec(raw)?.[1]
+        ? /(?:compose_project_invoice|update_draft_invoice): (draft|claim(?:_short)?|lines|stale|not_draft)(?::|$)/.exec(raw)?.[1]
         : undefined;
       const reason = billingRefusal("draft", e, billingSubjectName).sentence;
+      const code = (e as { code?: unknown } | null)?.code;
+      const concurrent = code === "40P01" || code === "55P03";
       if (stage === "lines") {
         const refused = refusedBillingLines(e, billingLines);
         if (refused.length > 0) {
@@ -1279,9 +1343,11 @@ export function InvoiceComposer({
           ? preWriteFailure(e)
           : e instanceof OfflineRefusal
             ? { message: e.message, retryable: true }
-            : stage
-              ? { message: reason + " Nothing was billed.", retryable: false }
-              : draftInvoiceRefusal(raw);
+            : stage || concurrent
+              ? { message: reason + (editDraft ? "" : " Nothing was billed."), retryable: false }
+              : editDraft
+                ? { message: "The draft’s save could not be confirmed. Check the invoices before editing again.", retryable: false, unconfirmed: true }
+                : draftInvoiceRefusal(raw);
       if (failure.gap) {
         setBillingGapOverride({
           projectId,
@@ -1294,8 +1360,8 @@ export function InvoiceComposer({
     }
 
     if (live()) {
-      unpark(invoiceParkingKey(projectId));
-      onDrafted(invoice.id as string, projectId);
+      unpark(parkingKey ?? invoiceParkingKey(projectId));
+      onDrafted(invoice.id as string, editDraft ? invoice.project_id : projectId);
     }
   };
 
@@ -1341,7 +1407,7 @@ export function InvoiceComposer({
     ? buildRoomHref(projectId, { lens: "price", room: null })
     : "";
   const priceInPriceLens = (item: ComposerFfeItem) => {
-    park(invoiceParkingKey(projectId), {
+    park(parkingKey ?? invoiceParkingKey(projectId), {
       milestoneIds: [...tickedMilestoneIds],
       timeEntryIds: [...tickedTimeIds],
       ffeItemIds: [...tickedFfeIds],
@@ -1354,7 +1420,8 @@ export function InvoiceComposer({
       adhoc,
       taxRatePercent,
       termsDays,
-      memo,
+      memo, internalNotes, expectedUpdatedAt: parked?.expectedUpdatedAt ?? editDraft?.updated_at,
+      retainedLines, changedBillingIds: [...changedBillingIds],
     });
     parkingRef.current = true;
     const request: FocusFfeLineRequest = { itemId: item.id, cell: "price" };
@@ -1376,7 +1443,7 @@ export function InvoiceComposer({
     <div ref={containerRef}>
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="font-heading text-[20px] font-medium text-[var(--color-charcoal)]">
-          Draw an invoice
+          {editDraft ? "Edit the draft" : "Draw an invoice"}
         </h2>
         <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak,#8B7355)]">
           Studio eyes only
@@ -1392,7 +1459,9 @@ export function InvoiceComposer({
         <p className={`${LABEL} mb-1`}>
           {studioChoiceAvailable ? "for" : "the document"}
         </p>
-        {context.projectId && selectedProject ? (
+        {editDraft ? (
+          <p className="text-[12.5px] font-medium">{studioMode ? "the studio · no house" : editDraft.project?.name ?? selectedProject?.name ?? "This project"}</p>
+        ) : context.projectId && selectedProject ? (
           <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
             {selectedProject.name}
           </p>
@@ -1421,7 +1490,7 @@ export function InvoiceComposer({
       {/* ── The studio's own three fields (S8 · S4 · S12) ───────────────── */}
       {studioMode && (
         <>
-          {multiStudio && (
+          {multiStudio && !editDraft && (
             <div className="mt-4">
               <p className={`${LABEL} mb-1`}>studio</p>
               <select
@@ -1443,13 +1512,13 @@ export function InvoiceComposer({
             <p className={`${LABEL} mb-1`}>household</p>
             {/* The picker portals to <body>; this sheet is z-[60], so the panel
                 is lifted clear of it (client-picker.tsx popoverClassName). */}
-            <ClientPicker
+            {editDraft ? <p>{editDraft.client?.full_name ?? "The linked household"}</p> : <ClientPicker
               value={studioClientId}
               onChange={setStudioClientId}
               ariaLabel="Household"
               placeholder="Search or add a household…"
               popoverClassName="z-[70]"
-            />
+            />}
           </div>
 
           <label className="mt-4 flex max-w-[420px] flex-col gap-0.5">
@@ -1457,6 +1526,7 @@ export function InvoiceComposer({
             <input
               ref={regardingRef}
               value={title}
+              readOnly={!!editDraft}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Design consultation · Sept 2026"
               // 00571 bounds the regarding line at 200 characters.
@@ -1712,7 +1782,7 @@ export function InvoiceComposer({
                         name="ffe-stage"
                         className={CHECK}
                         checked={ffeStage === "full"}
-                        onChange={() => setFfeStage("full")}
+                        onChange={() => { changeFfePricing(); setFfeStage("full"); }}
                       />
                       in full
                     </label>
@@ -1722,7 +1792,7 @@ export function InvoiceComposer({
                         name="ffe-stage"
                         className={CHECK}
                         checked={ffeStage === "deposit"}
-                        onChange={() => setFfeStage("deposit")}
+                        onChange={() => { changeFfePricing(); setFfeStage("deposit"); }}
                       />
                       as a deposit of
                     </label>
@@ -1733,7 +1803,7 @@ export function InvoiceComposer({
                         inputMode="decimal"
                         value={depositPctText}
                         disabled={ffeStage !== "deposit"}
-                        onChange={(e) => setDepositPctText(e.target.value)}
+                        onChange={(e) => { changeFfePricing(); setDepositPctText(e.target.value); }}
                         className={`${INPUT} w-[56px] text-right disabled:opacity-50`}
                       />
                       %
@@ -1782,7 +1852,7 @@ export function InvoiceComposer({
                           ×{it.quantity ?? 1}
                         </span>
                         <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
-                          {ffeStage === "deposit" && depositPctValid && (
+                          {!retainedSubjectIds.has(it.id) && ffeStage === "deposit" && depositPctValid && (
                             <span className="mr-1.5 text-[var(--text-muted)]">
                               deposit{" "}
                               {formatCurrency(
@@ -1796,7 +1866,7 @@ export function InvoiceComposer({
                             </span>
                           )}
                           {formatCurrency(
-                            (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
+                            retained.find((line) => line.ffe_item_id === it.id)?.amount_cents ?? (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
                           )}
                         </span>
                       </label>
@@ -2012,7 +2082,7 @@ export function InvoiceComposer({
                       costCents={purchaseAtCostCents(p)}
                       override={overrides.get(p.id)}
                       onOverride={(text) =>
-                        setOverrides((prev) => new Map(prev).set(p.id, text))
+                        { setChangedBillingIds((prev) => new Set(prev).add(p.id)); setOverrides((prev) => new Map(prev).set(p.id, text)); }
                       }
                       label={p.description?.trim() || p.payee_name}
                       detail={`${p.description?.trim() ? `${p.payee_name} · ` : ""}${fmtDay(p.purchased_on)}`}
@@ -2047,7 +2117,7 @@ export function InvoiceComposer({
                       costCents={riderAtCostCents(r)}
                       override={overrides.get(r.id)}
                       onOverride={(text) =>
-                        setOverrides((prev) => new Map(prev).set(r.id, text))
+                        { setChangedBillingIds((prev) => new Set(prev).add(r.id)); setOverrides((prev) => new Map(prev).set(r.id, text)); }
                       }
                       label={riderLabel(r)}
                       detail={[
@@ -2180,6 +2250,11 @@ export function InvoiceComposer({
               className={`${INPUT} w-full resize-none`}
             />
           </label>
+
+          {editDraft && <label className="mt-2.5 flex flex-col gap-0.5">
+            <span className={LABEL}>internal notes · studio eyes only</span>
+            <textarea rows={2} value={internalNotes} onChange={(event) => setInternalNotes(event.target.value)} className={INPUT} />
+          </label>}
 
           {/* ── Running totals + the act ───────────────────────────────── */}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3">
@@ -2420,7 +2495,7 @@ export function InvoiceComposer({
               loadingLabel="Drafting…"
               onClick={() => void draft()}
             >
-              Draft the invoice
+              {editDraft ? "Save the draft" : "Draft the invoice"}
             </DocumentAction>
           </div>
 
