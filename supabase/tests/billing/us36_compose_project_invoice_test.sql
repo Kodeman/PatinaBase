@@ -2,7 +2,7 @@
 -- Run with psql -X -v ON_ERROR_STOP=1 -f supabase/tests/billing/us36_compose_project_invoice_test.sql.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(25);
+SELECT plan(27);
 
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
@@ -124,6 +124,21 @@ SELECT is((SELECT count(*)::integer FROM public.invoices WHERE memo = 'member-le
 SELECT ok((SELECT invoice_id = (SELECT id FROM public.invoices WHERE memo = 'member-lead-colleague-hour')
   FROM public.project_time_entries WHERE id = '82100000-0000-4000-8000-000000000034'),
   'plain member lead claimed colleague hour');
+
+-- A project lead cannot compose with an hour from a different project, even
+-- when she can claim that hour for its own project. The concurrent lock-scope
+-- probe separately checks that this refusal never locks the foreign hour.
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"82100000-0000-4000-8000-000000000002","role":"authenticated"}';
+SELECT is(pg_temp.try_compose('foreign-hour',
+  ARRAY['82100000-0000-4000-8000-000000000032']::uuid[], '[]'::jsonb,
+  '82100000-0000-4000-8000-000000000002',
+  '82100000-0000-4000-8000-000000000021'),
+  '23514 compose_project_invoice: claim_short',
+  'cross-project hour refuses at claim_short without leaking entry ids');
+RESET ROLE;
+SELECT is((SELECT count(*)::integer FROM public.invoices WHERE memo = 'foreign-hour'), 0,
+  'cross-project claim leaves no invoice');
 
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"82100000-0000-4000-8000-000000000001","role":"authenticated"}';

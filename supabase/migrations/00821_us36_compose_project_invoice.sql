@@ -23,14 +23,31 @@ AS $$
 DECLARE
   v_invoice public.invoices%ROWTYPE;
   v_claimed integer;
+  v_locked integer;
 BEGIN
   -- Commercial-hour edits lock the entry before their classifier locks its
-  -- project. Take the same order before create_draft_invoice's project SHARE.
+  -- project. Scope and authorize the ordered lock before taking any row lock;
+  -- the precheck below rechecks eligibility on the locked rows.
   PERFORM entry.id
   FROM public.project_time_entries AS entry
+  JOIN public.projects AS project ON project.id = entry.project_id
   WHERE entry.id = ANY(p_entry_ids)
+    AND project.id = p_project_id
+    AND entry.invoice_id IS NULL
+    AND (
+      project.designer_id = auth.uid()
+      OR (entry.user_id = auth.uid() AND (
+        public.is_project_team_member(entry.project_id)
+        OR public.is_studio_comember(project.designer_id)
+      ))
+      OR public.is_org_admin_or_owner(public.project_pricing_studio_id(entry.project_id))
+    )
   ORDER BY entry.id
   FOR UPDATE OF entry;
+  GET DIAGNOSTICS v_locked = ROW_COUNT;
+  IF v_locked <> COALESCE(cardinality(p_entry_ids), 0) THEN
+    RAISE EXCEPTION 'compose_project_invoice: claim_short' USING ERRCODE = 'check_violation';
+  END IF;
 
   SELECT count(*) INTO v_claimed
   FROM public.project_time_entries AS entry
