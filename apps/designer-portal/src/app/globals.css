@@ -1501,15 +1501,12 @@ html:has([data-lens-band]) [data-saving-band] {
   scroll-margin-top: var(--doc-landing-clear);
 }
 
-/* R127 — the paper's scrolling root is the WINDOW: `[data-document-shell]` is
-   a `min-h-screen` grid with no overflow of its own, so the scroll padding
-   belongs on `html`, scoped by the shell so no other portal surface inherits
-   it. The value is the shell's own `--doc-shell-bottom-inset` arithmetic
-   restated: below 1180 the persistent edge is the 72px MobileBar, above it the
-   60px Studio Drawer, and a 60px padding leaves a stop resting 12px behind the
-   bar at the very width the clearance rule exists for. The token itself is
-   declared on `.document-route-shell` and cannot be read from `html`. */
-html:has([data-document-shell]) {
+/* R127 — the document and its Rooms scroll on the WINDOW: their shells have
+   min-height but no overflow of their own. The scroll padding belongs on
+   `html`, scoped to the document route so no other portal surface inherits it.
+   The shell's `--doc-shell-bottom-inset` arithmetic is restated here because
+   that token is declared on a descendant and cannot be read from `html`. */
+html:has(.document-route-shell) {
   scroll-padding-bottom: max(
     var(--doc-mobile-bar-height, 72px),
     calc(60px + env(safe-area-inset-bottom))
@@ -3232,7 +3229,7 @@ html:has([data-document-shell]) {
   .document-route-shell {
     --doc-shell-bottom-inset: var(--doc-drawer-height, 60px);
   }
-  html:has([data-document-shell]) {
+  html:has(.document-route-shell) {
     /* The base rule resolves to 72px here (no bar is published above 1180);
        it only grows when the drawer wraps taller than that. */
     scroll-padding-bottom: max(72px, var(--doc-drawer-height, 0px));
