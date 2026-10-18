@@ -1,6 +1,8 @@
 -- 00820 — v_vendor_studio_stats counts only live studio catalog items.
 -- Run after 00820_vendor_studio_stats_live_items.sql with psql -v ON_ERROR_STOP=1.
 BEGIN;
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+SELECT plan(3);
 
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES ('82000000-0000-4000-8000-000000000001', 'us37-stats-live@test.invalid', '', now(), now(), now(),
@@ -57,33 +59,35 @@ WHERE id = '82000000-0000-4000-8000-000000000032';
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"82000000-0000-4000-8000-000000000001","role":"authenticated"}';
 
-DO $$
-BEGIN
-  IF (SELECT studio_item_count FROM public.v_vendor_studio_stats
-      WHERE vendor_id = '82000000-0000-4000-8000-000000000020'
-        AND studio_id = '82000000-0000-4000-8000-000000000010') IS DISTINCT FROM 1 THEN
-    RAISE EXCEPTION 'live plus tombstoned pair must count one live item';
-  END IF;
+SELECT is(
+  (SELECT studio_item_count FROM public.v_vendor_studio_stats
+   WHERE vendor_id = '82000000-0000-4000-8000-000000000020'
+     AND studio_id = '82000000-0000-4000-8000-000000000010'),
+  1::integer,
+  'live plus tombstoned pair counts one live item'
+);
 
-  IF NOT EXISTS (
+SELECT ok(
+  EXISTS (
     SELECT 1 FROM public.v_vendor_studio_stats
     WHERE vendor_id = '82000000-0000-4000-8000-000000000021'
       AND studio_id = '82000000-0000-4000-8000-000000000010'
       AND studio_item_count = 0
-  ) THEN
-    RAISE EXCEPTION 'merged-only pair must remain present with zero live items';
-  END IF;
+  ),
+  'merged-only pair remains present with zero live items'
+);
 
-  IF NOT EXISTS (
+SELECT ok(
+  EXISTS (
     SELECT 1 FROM public.v_vendor_studio_stats
     WHERE vendor_id = '82000000-0000-4000-8000-000000000022'
       AND studio_id = '82000000-0000-4000-8000-000000000010'
       AND studio_item_count = 0
       AND lifetime_value_cents = 125000
-  ) THEN
-    RAISE EXCEPTION 'zero-live pair must retain its non-cancelled PO lifetime value';
-  END IF;
-END $$;
+  ),
+  'zero-live pair retains its non-cancelled PO lifetime value'
+);
 
 RESET ROLE;
+SELECT * FROM finish(true);
 ROLLBACK;
