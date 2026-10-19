@@ -112,7 +112,7 @@ export type DesignServicesTerms = Omit<
 };
 
 /** One room a line is in, and that room's share of it (00745 `rooms`). */
-export type ClientLineRoom = NonNullable<CanonicalFurnishingsAuthorizationItem['rooms']>[number];
+export type ClientLineRoom = NonNullable<ClientFurnishingsAuthorizationItem['rooms']>[number];
 
 export type FurnishingsAuthorizationItem = ClientFurnishingsAuthorizationItem;
 
