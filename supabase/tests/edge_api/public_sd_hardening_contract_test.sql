@@ -2012,7 +2012,7 @@ VALUES
     'p_spec_book_id uuid, p_audiences text[], p_issue_type text, p_reason text, p_base_revision_id uuid, p_idempotency_key text, p_warning_acknowledgements jsonb DEFAULT ''[]''::jsonb',
     'jsonb',
     ARRAY['search_path=pg_catalog, public, extensions, pg_temp']::text[],
-    '8a06f30204b11f3f3e2551b74944988031d6b776edde0423fcb176f6d963586b'
+    '1fa31157cdf1b9e92d0d8a2d5fdcb60c15ad63b8f850daaa9237c2ea4d2c1018'
   ),
   (
     'public._publish_project_review_00448_impl(jsonb)',
@@ -2225,9 +2225,9 @@ BEGIN
        AND encode(
              extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
              'hex'
-           ) = '600c435c99acbb850b3b6a0f7f190aa62aa330e8281659b803abd38ef6c347c6'
+           ) = '170b96022a6115217ade19cf26919a67bd12b0a9e2084ff6fb3967858f23c90d'
        AND octet_length(convert_to(routine.prosrc, 'UTF8')) =
-             11492
+             11764
     FROM pg_proc AS routine
     JOIN pg_roles AS owner ON owner.oid = routine.proowner
     JOIN pg_language AS language ON language.oid = routine.prolang
@@ -2268,15 +2268,29 @@ BEGIN
   ), 'atomic draft direct ACL tuple drifted';
 
   ASSERT NOT EXISTS (
+    WITH expected(caller_signature) AS (
+      -- 00821 introduced this composer; 00824 retains its draft-writer call.
+      VALUES (to_regprocedure(
+        'public.compose_project_invoice(uuid,uuid,uuid,uuid,numeric,integer,text,text,jsonb,uuid[],jsonb)'
+      )::oid)
+    ),
+    actual AS (
+      SELECT caller.oid AS caller_signature
+      FROM pg_proc AS caller
+      JOIN pg_namespace AS namespace ON namespace.oid = caller.pronamespace
+      WHERE namespace.nspname <> 'information_schema'
+        AND namespace.nspname NOT LIKE 'pg_%'
+        AND pg_temp._00511_references_routine(
+          caller.prosrc, 'public', 'create_draft_invoice'
+        )
+    )
     SELECT 1
-    FROM pg_proc AS caller
-    JOIN pg_namespace AS namespace ON namespace.oid = caller.pronamespace
-    WHERE namespace.nspname <> 'information_schema'
-      AND namespace.nspname NOT LIKE 'pg_%'
-      AND pg_temp._00511_references_routine(
-        caller.prosrc, 'public', 'create_draft_invoice'
-      )
-  ), 'atomic draft database caller universe is not empty';
+    FROM (
+      (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)
+      UNION ALL
+      (SELECT * FROM actual EXCEPT ALL SELECT * FROM expected)
+    ) AS drift
+  ), 'atomic draft database caller universe drifted';
 END
 $atomic_draft_catalog_contract$;
 
