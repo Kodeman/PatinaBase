@@ -258,3 +258,8 @@ describe('SP-19/F57 — the unfolded FF&E line links to its spec-book entry', ()
     );
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

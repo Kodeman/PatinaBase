@@ -169,3 +169,8 @@ describe('Add the maker in install mode (511-R1)', () => {
     expect(screen.queryByRole('textbox', { name: 'Trade cost' })).toBeNull();
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

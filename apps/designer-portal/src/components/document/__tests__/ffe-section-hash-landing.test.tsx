@@ -275,3 +275,8 @@ describe('Pieces — #line-<id> landing (US-21 fix-now #8)', () => {
     expect(rowToggle('ffe-1')).toBeNull();
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

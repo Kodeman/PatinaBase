@@ -477,3 +477,8 @@ describe('US-21 T-32 — the unit and the also-in line on the shelf', () => {
     );
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

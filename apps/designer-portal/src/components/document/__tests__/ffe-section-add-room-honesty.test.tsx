@@ -210,3 +210,8 @@ describe('F15a — adding a room never loses the typed words', () => {
     expect(screen.getByRole('button', { name: 'Add a room' })).toBeInTheDocument();
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

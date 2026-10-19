@@ -288,3 +288,8 @@ describe('FF&E section · mark several installed (C-04)', () => {
     expect(chooser()).toBeInTheDocument();
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

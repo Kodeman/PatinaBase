@@ -259,3 +259,8 @@ describe('trade presence lines on the schedule', () => {
     expect(screen.queryByText('In progress')).not.toBeInTheDocument();
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

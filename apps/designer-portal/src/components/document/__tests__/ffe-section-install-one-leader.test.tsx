@@ -225,3 +225,8 @@ describe('Flag off, the Install region prints as it did', () => {
     expect(variantOf('+ File')).toBe('da-primary');
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

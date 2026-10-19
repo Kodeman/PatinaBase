@@ -296,3 +296,8 @@ describe('the release lift — the schedule’s half', () => {
     ).not.toHaveAttribute('aria-disabled', 'true');
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));
