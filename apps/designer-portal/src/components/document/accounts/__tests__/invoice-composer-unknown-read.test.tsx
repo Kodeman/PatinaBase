@@ -437,6 +437,92 @@ describe("SQ-1289 F5: a parked purchase holds Draft until the purchases read suc
   });
 });
 
+describe("SQ-1305: cached purchase and rider seeds wait for settled successful reads", () => {
+  const seeds = [
+    {
+      section: "purchase",
+      key: ["buying-phase2", "purchases", "project:project-1"],
+      context: { initialPurchaseIds: ["p1"] },
+      label: "Bill Pair of table lamps",
+      setMode: (mode: "answer" | "hang" | "fail") => (purchasesMode = mode),
+      setRows: () => {
+        purchaseRows = [{
+          id: "p1", status: "recorded", billable_to_client: true, invoice_line_id: null,
+          payee_name: "CB2", description: "Pair of table lamps", purchased_on: "2026-10-03",
+          amount_cents: 120050, tax_cents: 0, buyer_premium_cents: 0, shipping_cents: 0,
+        }];
+      },
+    },
+    {
+      section: "rider",
+      key: ["buying-phase2", "cost-lines", "project", "project-1"],
+      context: { initialCostLineIds: ["r1"] },
+      label: "Bill White Glove",
+      setMode: (mode: "answer" | "hang" | "fail") => (ridersMode = mode),
+      setRows: () => {
+        riderRows = [{
+          id: "r1", kind: "white_glove", note: null, billable_to_client: true,
+          invoice_line_id: null, estimate_cents: 45_000, actual_cents: 52_000,
+          purchase_order: { id: "po-1", po_number: "1042", project_id: "project-1" },
+        }];
+      },
+    },
+  ];
+
+  it.each(seeds)("a cached answer without the requested $section stays held through fetching and failure, then retry seeds it", async ({ key, context, label, setMode, setRows }) => {
+    qc.setQueryData(key, []);
+    setRows();
+    setMode("hang");
+    render(
+      <InvoiceComposer context={{ projectId: "project-1", ...context }} onDrafted={jest.fn()} />,
+      { wrapper: Frame },
+    );
+    addLine();
+    await waitFor(() => expect(qc.getQueryState(key)?.fetchStatus).toBe("fetching"));
+    await heldOn("Checking this project before drafting its invoice.");
+    expect(qc.getQueryData(key)).toEqual([]);
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    setMode("fail");
+    await act(async () => {
+      await qc.refetchQueries({ queryKey: key, exact: true });
+    });
+    await waitFor(() => expect(qc.getQueryState(key)?.status).toBe("error"));
+    expect(qc.getQueryData(key)).toEqual([]);
+    const unread = "This project couldn't be read. Reload the page to draft its invoice.";
+    await heldOn(unread);
+    expect(screen.getByRole("alert")).toHaveTextContent(unread);
+    expect(tryAgain()).toBeInTheDocument();
+
+    setMode("answer");
+    fireEvent.click(tryAgain());
+    await waitFor(() => expect(qc.getQueryState(key)?.status).toBe("success"));
+    await waitFor(() => expect(screen.getByLabelText(label)).toBeChecked());
+    await waitFor(() => expect(draftAct()).not.toHaveAttribute("aria-disabled"));
+    expect(mockCreateDraft).not.toHaveBeenCalled();
+  });
+
+  it.each(seeds)("a successful empty $section answer settles once without selecting a later arrival or writing", async ({ key, context, label, setRows }) => {
+    render(
+      <InvoiceComposer context={{ projectId: "project-1", ...context }} onDrafted={jest.fn()} />,
+      { wrapper: Frame },
+    );
+    addLine();
+    await waitFor(() => expect(qc.getQueryState(key)?.status).toBe("success"));
+    expect(qc.getQueryData(key)).toEqual([]);
+    await waitFor(() => expect(draftAct()).not.toHaveAttribute("aria-disabled"));
+
+    setRows();
+    await act(async () => {
+      await qc.refetchQueries({ queryKey: key, exact: true });
+    });
+    await waitFor(() => expect(screen.getByLabelText(label)).not.toBeChecked());
+    expect(draftAct()).not.toHaveAttribute("aria-disabled");
+    expect(mockCreateDraft).not.toHaveBeenCalled();
+  });
+});
+
 describe("SQ-1295 R2: an asked-for purchase or rider holds Draft on a failed read, with Try again", () => {
   const unread = "This project couldn't be read. Reload the page to draft its invoice.";
 

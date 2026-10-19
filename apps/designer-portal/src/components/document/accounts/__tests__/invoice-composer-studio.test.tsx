@@ -59,6 +59,10 @@ jest.mock("@patina/supabase", () => ({
   useProjectPoCostLines: (projectId: unknown) => ({
     data: projectId ? mockRiders : undefined,
     isLoading: false,
+    isPending: !projectId,
+    isFetching: false,
+    isError: false,
+    isSuccess: !!projectId,
   }),
   useOrganizations: () => ({
     data: mockOrganizations,
@@ -90,6 +94,10 @@ jest.mock("@patina/supabase", () => ({
   useStudioPurchases: (filter: unknown) => ({
     data: filter ? mockPurchases : undefined,
     isLoading: false,
+    isPending: !filter,
+    isFetching: false,
+    isError: false,
+    isSuccess: !!filter,
   }),
 }));
 let mockPurchases: Array<Record<string, unknown>> = [];

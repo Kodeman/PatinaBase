@@ -18,7 +18,7 @@ const milestone = { id: "milestone-1", label: "Design retainer", amount_cents: 2
 const piece = { id: "piece-1", name: "Lounge chair", quantity: 1, unit_price_cents: 80000, item_type: "product", product_id: "product-1" };
 const purchase = { id: "purchase-1", status: "billed", billable_to_client: true, invoice_line_id: "purchase-line", payee_name: "Maker", description: "Sample purchase", amount_cents: 3000, purchased_on: "2026-10-01" };
 const rider = { id: "rider-1", kind: "freight", note: "Delivery freight", billable_to_client: true, invoice_line_id: "rider-line", actual_cents: 4000, estimate_cents: 4000 };
-const read = (data: any) => ({ data, isLoading: false, isPending: false, isFetching: false, isError: false, refetch: jest.fn() });
+const read = (data: any) => ({ data, isLoading: false, isPending: false, isFetching: false, isError: false, isSuccess: data !== undefined, refetch: jest.fn() });
 
 jest.mock("@patina/supabase", () => ({
   InvoiceBillingGapError: jest.requireActual("@patina/supabase").InvoiceBillingGapError,
