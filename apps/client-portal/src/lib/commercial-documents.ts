@@ -12,7 +12,7 @@ import {
   type DesignServiceTerms,
   type FFEStageKey,
   type FfeLineUnit,
-  type FurnishingsAuthorizationItem as CanonicalFurnishingsAuthorizationItem,
+  type ClientFurnishingsAuthorizationItem,
   type ProjectBillingAuthoritySummary,
   type TradeScopeProgressState,
   type WorkingBudgetCheckpoint as CanonicalWorkingBudgetCheckpoint,
@@ -114,32 +114,7 @@ export type DesignServicesTerms = Omit<
 /** One room a line is in, and that room's share of it (00745 `rooms`). */
 export type ClientLineRoom = NonNullable<CanonicalFurnishingsAuthorizationItem['rooms']>[number];
 
-export type FurnishingsAuthorizationItem = Pick<
-  CanonicalFurnishingsAuthorizationItem,
-  'description' | 'quantity' | 'clientUnitPriceCents' | 'currency' | 'unit' | 'rooms'
-> & {
-  /**
-   * The room the line files under. The RPC has always projected it
-   * (`furnishing_authorization_items.room_name`); the portal was throwing it
-   * away, which is why the client's authorization read as one flat list of
-   * furniture with no idea which room anything went in.
-   */
-  roomName: string;
-  /**
-   * The authoritative per-line figure — NOT `quantity × clientUnitPriceCents`.
-   * An allowance is snapshotted at its ceiling and the unit price is that
-   * ceiling divided by quantity with integer truncation, so the product can
-   * fall up to (quantity − 1) cents short of what the client actually signed
-   * for. Σ clientLineTotalCents reconciles exactly to the document's
-   * totalAmountCents; the product does not.
-   */
-  clientLineTotalCents: number;
-  /**
-   * An allowance line (the RPC's `itemType`): its line total is a ceiling, so
-   * it prints as `Up to $X` (US-21 T-55b, F8). Absent on a legacy payload.
-   */
-  allowance?: boolean;
-};
+export type FurnishingsAuthorizationItem = ClientFurnishingsAuthorizationItem;
 
 export interface FurnishingsAuthorization {
   checkpointId: string | null;

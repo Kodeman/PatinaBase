@@ -1,0 +1,1 @@
+export { FurnishingsAuthorizationBody } from './FurnishingsAuthorizationBody';

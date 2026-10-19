@@ -25,7 +25,7 @@
  * which checkpoint was current when it was signed.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { FileSignature } from 'lucide-react';
 import {
   checkpointCoverage,
@@ -48,12 +48,12 @@ import {
   useProjectBillingAuthority,
   usePublishBudgetCheckpoint,
   useReleaseForAuthorization,
-  useSendFurnishingsAuthorization,
   useWorkingBudget,
 } from '@/hooks/use-commercial-documents';
 import { useProjectPurchasingAgreement } from '@/hooks/use-project-purchasing-agreement';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocSheet } from '../overlays/doc-sheet';
+import { PurchasingAuthorizationPreviewSheet } from '../overlays/purchasing-authorization-preview-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const CHIPS = [0, 25, 50, 100] as const;
@@ -123,7 +123,11 @@ function Figure({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function ReviewReleaseSheet({
+export function ReviewReleaseSheet(props: ComponentProps<typeof ReviewReleaseSheetContent>) {
+  return <ReviewReleaseSheetContent key={props.projectId} {...props} />;
+}
+
+function ReviewReleaseSheetContent({
   open,
   projectId,
   projectName,
@@ -153,13 +157,17 @@ export function ReviewReleaseSheet({
   const purchasingAgreement = useProjectPurchasingAgreement(projectId);
   const budget = useWorkingBudget(projectId);
   const release = useReleaseForAuthorization(projectId);
-  const send = useSendFurnishingsAuthorization(projectId);
   const publishCheckpoint = usePublishBudgetCheckpoint(projectId);
   const overrideCheckpoint = useOverrideBudgetCheckpoint(projectId);
   // US-19 D3 (one-voice, R162): a paper sent for signature is the filled tier,
   // beneath the consequence sentence the sheet already states (R141).
   const oneVoice = useFeatureFlag('one-voice').value === true;
 
+  const active = useRef(true);
+  const saving = useRef(false);
+  const previewTrigger = useRef<HTMLButtonElement>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const agreementPercent = furnishingsDepositPercent(authority.data);
   const [chosenPercent, setChosenPercent] = useState<number | null>(null);
   const [otherOpen, setOtherOpen] = useState(false);
@@ -167,8 +175,7 @@ export function ReviewReleaseSheet({
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
-  // Stashed the instant release succeeds, so a send that fails afterward can
-  // retry the send alone — re-clicking must never mint a second instrument.
+  // Retain the saved identity through read failures, closing and reopening.
   const [releasedProposalId, setReleasedProposalId] = useState<string | null>(
     null,
   );
@@ -231,7 +238,7 @@ export function ReviewReleaseSheet({
   const clientLabel = clientName?.trim() || 'the client';
 
   const versionId = budget.data?.version?.id ?? null;
-  const busy = release.isPending || send.isPending;
+  const busy = release.isPending;
   const name = `Furnishings authorization № ${instrumentNumber}`;
 
   const runRelease = async () => {
@@ -243,46 +250,20 @@ export function ReviewReleaseSheet({
     });
   };
 
-  const saveDraft = async () => {
+  const save = async (preview: boolean) => {
+    if (saving.current || busy || (blocked && !releasedProposalId)) return;
+    if (releasedProposalId) { setPreviewOpen(preview); return; }
+    saving.current = true;
     try {
-      await runRelease();
-      onReleased();
+      const created = await runRelease();
+      if (!active.current) return;
+      if (!created?.proposalId) throw new Error('The draft was saved but its identity is unavailable. Open it from the authorization ledger; do not save again.');
+      setReleasedProposalId(created.proposalId);
+      if (preview) setPreviewOpen(true);
+      else onReleased();
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : 'The authorization could not be drafted.',
-      );
-    }
-  };
-
-  const sendForSignature = async () => {
-    setError(null);
-    try {
-      let proposalId = releasedProposalId;
-      if (!proposalId) {
-        const created = await runRelease();
-        const createdId =
-          (created as { proposalId?: string } | null)?.proposalId ?? null;
-        if (!createdId) {
-          throw new Error(
-            'The authorization was drafted but its record came back incomplete. Open it from the ledger to send.',
-          );
-        }
-        proposalId = createdId;
-        // Stashed before the send is attempted — if the send throws, this
-        // survives to guard the retry against minting a second instrument.
-        setReleasedProposalId(createdId);
-      }
-      await send.mutateAsync(proposalId);
-      onReleased();
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : 'The authorization could not be sent.',
-      );
-    }
+      if (active.current) setError(cause instanceof Error ? cause.message : 'The authorization could not be drafted.');
+    } finally { saving.current = false; }
   };
 
   const submitOverride = async () => {
@@ -324,6 +305,15 @@ export function ReviewReleaseSheet({
       );
     }
   };
+
+  if (releasedProposalId) return (
+    <DocSheet open={open} onClose={onClose} wide icon={FileSignature} title="Purchasing authorization" pageLabel={`№ ${instrumentNumber}`}>
+      <p role="status">Draft saved. Nothing has been sent to the client. The saved lines and deposit are frozen; closing leaves their reservations intact.</p>
+      <p className="mt-3">To revise, use the existing Void action with a reason, then prepare a new draft.</p>
+      <DocumentAction ref={previewTrigger} actionKey="reopen-saved-purchasing-preview" surfaceKey="project" regionKey="release-review" onClick={() => setPreviewOpen(true)}>Preview</DocumentAction>
+      {previewOpen && <PurchasingAuthorizationPreviewSheet projectId={projectId} proposalId={releasedProposalId} clientName={clientName} fallbackFocusRef={previewTrigger} onClose={() => setPreviewOpen(false)} onSent={() => { if (active.current) onReleased(); }} />}
+    </DocSheet>
+  );
 
   return (
     <DocSheet
@@ -619,13 +609,12 @@ export function ReviewReleaseSheet({
       )}
       {error && releasedProposalId && (
         <p className="mb-3 text-[11px] text-[var(--text-muted)]">
-          The authorization exists — retrying the send.
+          The saved authorization is retained. Reopen its preview without creating another.
         </p>
       )}
 
       <p className="mb-2 text-[11px] text-[var(--text-muted)]">
-        Prices lock on release. To change one afterwards, void this
-        authorization and supersede it.
+        Saving creates a draft and reserves these items. Nothing is sent to the client.
       </p>
 
       <DocumentActionGroup
@@ -637,9 +626,9 @@ export function ReviewReleaseSheet({
           actionKey="save-authorization-draft"
           variant="secondary"
           disabled={busy || blocked || lineCount === 0 || Boolean(releasedProposalId)}
-          loading={release.isPending && !send.isPending}
+          loading={release.isPending}
           loadingLabel="Drafting…"
-          onClick={saveDraft}
+          onClick={() => save(false)}
         >
           Save authorization draft
         </DocumentAction>
@@ -647,8 +636,8 @@ export function ReviewReleaseSheet({
           actionKey="send-authorization-for-signature"
           variant={oneVoice ? 'terminal' : 'primary'}
           disabled={busy || blocked || lineCount === 0}
-          loading={send.isPending}
-          loadingLabel="Sending…"
+          loading={release.isPending}
+          loadingLabel="Saving…"
           title={
             blocked
               ? awaitingAcknowledgment
@@ -656,9 +645,9 @@ export function ReviewReleaseSheet({
                 : 'Publish a checkpoint covering these rooms before sending.'
               : undefined
           }
-          onClick={sendForSignature}
+          onClick={() => save(true)}
         >
-          {oneVoice ? 'Issue for purchasing authorization' : 'Send for signature'}
+          Save draft &amp; preview
         </DocumentAction>
       </DocumentActionGroup>
     </DocSheet>
