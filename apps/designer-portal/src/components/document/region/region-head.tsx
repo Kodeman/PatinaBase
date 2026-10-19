@@ -51,6 +51,7 @@ export interface RegionLedgerEntry {
    * prints beneath the ledger, linked by `aria-describedby`.
    */
   reason?: ReactNode;
+  holds?: import('@/lib/document/spotlight/use-hold-spotlight').SpotlightHold[];
   loading?: boolean;
   loadingLabel?: ReactNode;
   trailing?: ReactNode;
@@ -285,6 +286,7 @@ export function RegionHead({
               variant,
               disabled: entry.disabled,
               held: isHeld(entry),
+              holds: entry.holds,
               'aria-describedby': isHeld(entry) ? reasonId(entry) : undefined,
               loading: entry.loading,
               loadingLabel: entry.loadingLabel,

@@ -26,6 +26,7 @@ export function DocFileViewer({
   onClose,
   /** Pre-resolved URL (the scan card passes its public image directly). */
   url: directUrl,
+  bucket = 'project-documents',
 }: {
   file: {
     title: string;
@@ -36,6 +37,7 @@ export function DocFileViewer({
   };
   onClose: () => void;
   url?: string | null;
+  bucket?: 'project-documents' | 'project-agreements';
 }) {
   const [url, setUrl] = useState<string | null>(directUrl ?? null);
   const [settled, setSettled] = useState(Boolean(directUrl));
@@ -55,7 +57,7 @@ export function DocFileViewer({
       return;
     }
 
-    void folioSignedUrl(file.storage_path)
+    void folioSignedUrl(file.storage_path, bucket)
       .then((signedUrl) => {
         if (!live) return;
         setUrl(signedUrl);
@@ -67,7 +69,7 @@ export function DocFileViewer({
     return () => {
       live = false;
     };
-  }, [file.storage_path, directUrl]);
+  }, [file.storage_path, directUrl, bucket]);
 
   const isImage =
     (file.doc_type ?? '') === 'img' ||

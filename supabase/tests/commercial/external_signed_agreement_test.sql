@@ -54,9 +54,17 @@ INSERT INTO project_budget_lines(budget_version_id,project_room_id,room_name,cat
  ('83500000-0000-4000-8000-000000000500','83500000-0000-4000-8000-000000000200','Living','Uncategorized',10000,20000,30000);
 -- Simulate hostile generic policies; restrictive bucket boundaries must win.
 CREATE POLICY us39_generic_storage ON storage.objects FOR ALL TO authenticated,anon USING (true) WITH CHECK (true);
+CREATE POLICY us39_generic_buckets ON storage.buckets FOR ALL TO authenticated,anon USING (true) WITH CHECK (true);
 SELECT pg_temp.as_actor('83500000-0000-4000-8000-000000000001');
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
+ UPDATE storage.buckets SET public=true WHERE id='project-agreements';
+ ASSERT NOT FOUND,'private bucket cannot be made public under generic policy';
+ DELETE FROM storage.buckets WHERE id='project-agreements';
+ ASSERT NOT FOUND,'private bucket cannot be deleted under generic policy';
+ PERFORM pg_temp.refuses($q$insert into storage.objects(bucket_id,name,owner_id) values ('project-agreements','83500000-0000-4000-8000-000000000101/83500000-0000-4000-8000-000000000699.pdf','83500000-0000-4000-8000-000000000001')$q$,'row-level security');
+ PERFORM pg_temp.refuses($q$insert into storage.objects(bucket_id,name,owner_id) values ('project-agreements','83500000-0000-4000-8000-000000000100/83500000-0000-4000-8000-000000000699.pdf','83500000-0000-4000-8000-000000000003')$q$,'row-level security');
+ PERFORM pg_temp.refuses($q$insert into project_external_agreement_evidence(project_id,storage_object_id,storage_key,signed_on,covers_project,attested_by) values ('83500000-0000-4000-8000-000000000100',extensions.gen_random_uuid(),'fake',current_date,true,'83500000-0000-4000-8000-000000000001')$q$,'permission denied');
  ASSERT public.get_project_purchasing_agreement('83500000-0000-4000-8000-000000000100')->>'state'='missing','missing stays closed';
  PERFORM pg_temp.refuses($q$select public.create_furnishings_authorization_from_schedule('83500000-0000-4000-8000-000000000100','Missing agreement',array['83500000-0000-4000-8000-000000000401'::uuid],0)$q$,'no executed design-services origin');
 END $$;

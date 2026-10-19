@@ -322,9 +322,12 @@ export function useSetProposalFolioVisibility(proposalId: string | null) {
 }
 
 /** Signed read URL for the paper viewer (the bucket is private). */
-export async function folioSignedUrl(storagePath: string): Promise<string | null> {
+export async function folioSignedUrl(
+  storagePath: string,
+  bucket: 'project-documents' | 'project-agreements' = 'project-documents',
+): Promise<string | null> {
   const { data, error } = await getSupabase()
-    .storage.from('project-documents')
+    .storage.from(bucket)
     .createSignedUrl(storagePath, 3600);
   if (error) return null;
   return data?.signedUrl ?? null;

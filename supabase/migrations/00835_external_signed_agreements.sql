@@ -40,6 +40,12 @@ VALUES ('project-agreements', 'project-agreements', false, 20971520, ARRAY['appl
 ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = 20971520,
   allowed_mime_types = ARRAY['application/pdf'];
 
+-- Generic bucket policies must not allow a client to make signed PDFs public.
+DROP POLICY IF EXISTS project_agreements_bucket_boundary ON storage.buckets;
+CREATE POLICY project_agreements_bucket_boundary ON storage.buckets AS RESTRICTIVE
+  FOR ALL TO authenticated, anon USING (id <> 'project-agreements')
+  WITH CHECK (id <> 'project-agreements');
+
 CREATE OR REPLACE FUNCTION public._can_access_project_agreement_object(p_key text)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT auth.uid() IS NOT NULL AND p_key ~
