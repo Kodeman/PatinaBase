@@ -1,0 +1,422 @@
+{
+  "status": "proposed",
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "synthetic-hours-001",
+      "body": "6.5 hours today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "decimal",
+      "proposedExpected": { "kind": "hours", "hours": 6.5, "promptCode": "42" },
+      "rationale": "An explicit decimal duration for the asked day."
+    },
+    {
+      "id": "synthetic-hours-002",
+      "body": "7,25 horas hoy",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "decimal/spanish",
+      "proposedExpected": { "kind": "hours", "hours": 7.25, "promptCode": "42" },
+      "rationale": "Spanish duration with a decimal comma; the existing candidate grammar supports that numeric form."
+    },
+    {
+      "id": "synthetic-hours-003",
+      "body": "0.75 hours on the cabinets today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "decimal",
+      "proposedExpected": { "kind": "hours", "hours": 0.75, "promptCode": "42" },
+      "rationale": "A positive sub-hour decimal, not a zero-hours report."
+    },
+    {
+      "id": "synthetic-hours-004",
+      "body": "Worked 2.25 hrs today.",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "decimal",
+      "proposedExpected": { "kind": "hours", "hours": 2.25, "promptCode": "42" },
+      "rationale": "The abbreviated unit still identifies a duration."
+    },
+    {
+      "id": "synthetic-hours-005",
+      "body": "six hours today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "number-word",
+      "proposedExpected": { "kind": "hours", "hours": 6, "promptCode": "42" },
+      "rationale": "A supported English number word explicitly reports hours."
+    },
+    {
+      "id": "synthetic-hours-006",
+      "body": "six and a half hours today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "number-word/half",
+      "proposedExpected": { "kind": "hours", "hours": 6.5, "promptCode": "42" },
+      "rationale": "The compound duration is six and a half, not six."
+    },
+    {
+      "id": "synthetic-hours-007",
+      "body": "6 1/2 hours today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "fraction",
+      "proposedExpected": { "kind": "hours", "hours": 6.5, "promptCode": "42" },
+      "rationale": "The mixed fraction denotes a single duration."
+    },
+    {
+      "id": "synthetic-hours-008",
+      "body": "Only 1/2 hour today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "fraction",
+      "proposedExpected": { "kind": "hours", "hours": 0.5, "promptCode": "42" },
+      "rationale": "The standalone fraction is half an hour, not one or two hours."
+    },
+    {
+      "id": "synthetic-hours-009",
+      "body": "half an hour on cabinets today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "half",
+      "proposedExpected": { "kind": "hours", "hours": 0.5, "promptCode": "42" },
+      "rationale": "The word half has an explicit hour unit."
+    },
+    {
+      "id": "synthetic-hours-010",
+      "body": "sixteen hours today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "number-word/boundary",
+      "proposedExpected": { "kind": "hours", "hours": 16, "promptCode": "42" },
+      "rationale": "An explicit duration at the existing upper bound; reviewer should confirm plausibility policy."
+    },
+    {
+      "id": "synthetic-hours-011",
+      "body": "about 6.5 hours today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "hedge/estimate",
+      "proposedExpected": { "kind": "hours", "hours": 6.5, "promptCode": "42" },
+      "rationale": "Proposes accepting one stated estimate; accepting approximations needs human approval."
+    },
+    {
+      "id": "synthetic-hours-012",
+      "body": "I think seven hours today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "hedge/estimate",
+      "proposedExpected": { "kind": "hours", "hours": 7, "promptCode": "42" },
+      "rationale": "One duration is asserted tentatively; reviewer may instead require clarification."
+    },
+    {
+      "id": "synthetic-hours-013",
+      "body": "six or seven hours, not sure",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "hedge/alternatives",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Two alternative durations do not authorize selecting either one."
+    },
+    {
+      "id": "synthetic-hours-014",
+      "body": "at least six hours, maybe more",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "hedge/lower-bound",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "A lower bound is not a single settled duration."
+    },
+    {
+      "id": "synthetic-hours-015",
+      "body": "driving now, will send hours later",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "noise/driving",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Promises a later report but supplies no duration now."
+    },
+    {
+      "id": "synthetic-hours-016",
+      "body": "driving, there in 6 minutes",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "noise/driving",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "The numeral is a travel ETA in minutes, not hours worked."
+    },
+    {
+      "id": "synthetic-hours-017",
+      "body": "driving now but worked 4.5 hours on cabinets today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "noise/driving-with-report",
+      "proposedExpected": { "kind": "hours", "hours": 4.5, "promptCode": "42" },
+      "rationale": "Contains an explicit work duration despite driving context; not authorization to send a response."
+    },
+    {
+      "id": "synthetic-hours-018",
+      "body": "uhh cabinets done, 5.5 hrs todya, signal bad",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "noise/typo",
+      "proposedExpected": { "kind": "hours", "hours": 5.5, "promptCode": "42" },
+      "rationale": "Filler and a day-word typo leave an explicit hours report."
+    },
+    {
+      "id": "synthetic-hours-019",
+      "body": "finished 2 rooms, worked 6 hours today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "two-numbers/non-hours-count",
+      "proposedExpected": { "kind": "hours", "hours": 6, "promptCode": "42" },
+      "rationale": "Two counts rooms; six explicitly counts hours worked."
+    },
+    {
+      "id": "synthetic-hours-020",
+      "body": "unit 7 cabinets took 4 hours today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "two-numbers/non-hours-unit",
+      "proposedExpected": { "kind": "hours", "hours": 4, "promptCode": "42" },
+      "rationale": "Seven is a wholly fictional unit identifier; four is the duration."
+    },
+    {
+      "id": "synthetic-hours-021",
+      "body": "arrived at 9 and left at 5 today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "two-numbers/clock-times",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Clock times require assumptions and subtraction; neither is a stated duration span."
+    },
+    {
+      "id": "synthetic-hours-022",
+      "body": "worked 3 hours today and received 2 deliveries",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "two-numbers/non-hours-count",
+      "proposedExpected": { "kind": "hours", "hours": 3, "promptCode": "42" },
+      "rationale": "The hours precede a separate delivery count; order should not select the count."
+    },
+    {
+      "id": "synthetic-hours-023",
+      "body": "4 hours yesterday and 6 today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "multi-day",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Reports work on two days; the existing judgment contract defers rather than splitting it."
+    },
+    {
+      "id": "synthetic-hours-024",
+      "body": "6 hours each of the past 2 days",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "multi-day/per-day",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "A per-day figure still reports more than one day."
+    },
+    {
+      "id": "synthetic-hours-025",
+      "body": "12 hours total across yesterday and today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "multi-day/total",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "The aggregate cannot be assigned to the asked day without inventing a split."
+    },
+    {
+      "id": "synthetic-hours-026",
+      "body": "worked 6 hours today; planning 8 tomorrow",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "multi-day/future-plan-contrast",
+      "proposedExpected": { "kind": "hours", "hours": 6, "promptCode": "42" },
+      "rationale": "Only today reports completed work; tomorrow is a plan. Reviewer must approve this distinction."
+    },
+    {
+      "id": "synthetic-hours-027",
+      "body": "didn't work today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "did-not-work",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Non-work intent is not a positive hours verdict; do not invent a zero-hours action."
+    },
+    {
+      "id": "synthetic-hours-028",
+      "body": "0 hours today, job cancelled",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "did-not-work/zero",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Explicit zero still falls outside the shared judgment's positive-hours action range."
+    },
+    {
+      "id": "synthetic-hours-029",
+      "body": "rained off today, room 4 never started",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "did-not-work/non-hours-number",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "A fictional room number must not turn a cancellation into worked hours."
+    },
+    {
+      "id": "synthetic-hours-030",
+      "body": "Can I log 6 hours if I haven't finished?",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "question",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "A permission question is not a statement of hours actually worked."
+    },
+    {
+      "id": "synthetic-hours-031",
+      "body": "need 8 screws for the cabinets",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "off-topic/materials",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "A materials count is unrelated to time worked."
+    },
+    {
+      "id": "synthetic-hours-032",
+      "body": "who is this?",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "question/confused",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Confusion without a duration should not produce an hours reading."
+    },
+    {
+      "id": "synthetic-hours-033",
+      "body": "Hoy trabajé 6.5 horas en los gabinetes",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "spanish/numeric",
+      "proposedExpected": { "kind": "hours", "hours": 6.5, "promptCode": "42" },
+      "rationale": "Spanish explicitly reports today's work with a supported numeric duration; language review is pending."
+    },
+    {
+      "id": "synthetic-hours-034",
+      "body": "Hoy trabajé seis horas",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "spanish/unsupported-number-word",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Semantically six hours, but seis yields no candidate in the current English-word grammar; approve this constrained label explicitly."
+    },
+    {
+      "id": "synthetic-hours-035",
+      "body": "Ref 43, about 6.5 hours on the wall finish today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [
+        { "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" },
+        { "code": "43", "label": "SYNTHETIC B — wall finishing, 2026-09-21" }
+      ],
+      "category": "two-open-prompts/explicit-reference",
+      "proposedExpected": { "kind": "hours", "hours": 6.5, "promptCode": "43" },
+      "rationale": "The explicit reference and task both identify the non-framing prompt; 43 is not the duration."
+    },
+    {
+      "id": "synthetic-hours-036",
+      "body": "six hours on the cabinets today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [
+        { "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" },
+        { "code": "43", "label": "SYNTHETIC B — wall finishing, 2026-09-21" }
+      ],
+      "category": "two-open-prompts/task-match",
+      "proposedExpected": { "kind": "hours", "hours": 6, "promptCode": "42" },
+      "rationale": "The task wording distinguishes cabinet hanging from wall finishing without a code."
+    },
+    {
+      "id": "synthetic-hours-037",
+      "body": "about 6.5 hours today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [
+        { "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" },
+        { "code": "43", "label": "SYNTHETIC B — wall finishing, 2026-09-21" }
+      ],
+      "category": "two-open-prompts/unclear-target",
+      "proposedExpected": { "kind": "hours", "hours": 6.5, "promptCode": null },
+      "rationale": "Duration is stated but neither task is identified; null preserves caller clarification, not automatic assignment."
+    },
+    {
+      "id": "synthetic-hours-038",
+      "body": "4 hours on cabinets and 3 on wall finishing today",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [
+        { "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" },
+        { "code": "43", "label": "SYNTHETIC B — wall finishing, 2026-09-21" }
+      ],
+      "category": "two-open-prompts/multiple-durations",
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Two task-duration pairs cannot fit one hours verdict without dropping part of the report."
+    },
+    {
+      "id": "synthetic-hours-039",
+      "body": "STOP",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "pipeline-gated/stop",
+      "pipelineGated": true,
+      "modelInput": false,
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Pipeline compliance handling must consume STOP before hours judgment; defer here means no hours action, not a model verdict."
+    },
+    {
+      "id": "synthetic-hours-040",
+      "body": "HELP",
+      "askDay": "2026-09-21",
+      "taskTitle": "SYNTHETIC A — cabinet hanging",
+      "openPrompts": [{ "code": "42", "label": "SYNTHETIC A — cabinet hanging, 2026-09-21" }],
+      "category": "pipeline-gated/help",
+      "pipelineGated": true,
+      "modelInput": false,
+      "proposedExpected": { "kind": "defer" },
+      "rationale": "Pipeline help handling must consume HELP before hours judgment; never submit this body as model input."
+    }
+  ]
+}
