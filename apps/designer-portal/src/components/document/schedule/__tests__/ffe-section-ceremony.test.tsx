@@ -91,6 +91,10 @@ jest.mock('@/hooks/use-document-rooms', () => ({
   useAddDocumentRoom: () => ({ mutate: jest.fn() }),
 }));
 
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));
 jest.mock('@/hooks/use-commercial-documents', () => ({
   commercialDocumentKeys: { budget: (id: string) => ['working-budget', id] },
   useProjectInstruments: () => ({ data: mockInstruments }),

@@ -1,10 +1,15 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
+let mockAgreement: { data: any; isPending?: boolean; isError?: boolean } = { data: { state: 'missing', evidence: null } };
+const mockSend = jest.fn();
+const mockRecord = jest.fn();
+const mockRecordHook = jest.fn();
 let mockItems: Record<string, unknown>[] = [];
 let mockRooms: Record<string, unknown>[] = [];
 let mockInstruments: Record<string, unknown>[] = [];
 let mockTradeScopes: Record<string, unknown>[] = [];
-let mockAuthority: { data: unknown } = { data: null };
+let mockAuthority: { data: unknown; isPending?: boolean; isError?: boolean } = { data: null };
 let mockCoverage: Record<string, { coverage: string }> = {};
 let mockReadinessLoading = false;
 
@@ -18,6 +23,9 @@ let mockReadinessLoading = false;
 // suite; C-8 asks for exactly that guard.
 beforeEach(() => {
   __setDensityForTest('full');
+  mockAgreement = { data: { state: 'missing', evidence: null } };
+  mockRecord.mockReset().mockResolvedValue({});
+  mockRecordHook.mockClear();
 });
 afterEach(() => {
   __setDensityForTest(undefined);
@@ -91,6 +99,10 @@ jest.mock('@/hooks/use-document-rooms', () => ({
   useAddDocumentRoom: () => ({ mutate: jest.fn() }),
 }));
 
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => mockAgreement,
+  useRecordProjectSignedAgreement: (id: string) => { mockRecordHook(id); return { mutateAsync: mockRecord, isPending: false }; },
+}));
 jest.mock('@/hooks/use-commercial-documents', () => ({
   commercialDocumentKeys: { budget: (id: string) => ['working-budget', id] },
   useProjectInstruments: () => ({ data: mockInstruments }),
@@ -99,7 +111,7 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
   useWorkingBudget: () => ({ isLoading: false, data: null }),
   useReleaseForAuthorization: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSendFurnishingsAuthorization: () => ({
-    mutateAsync: jest.fn(),
+    mutateAsync: mockSend,
     isPending: false,
   }),
   usePublishBudgetCheckpoint: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -736,4 +748,95 @@ describe('D-B49 — the FF&E region root owns the work reads at every density', 
     expect(sectionWorkCalls.gates).toBeGreaterThan(0);
     expect(sectionWorkCalls.logged).toBeGreaterThan(0);
   });
+});
+
+
+const renderRecovery = (id = 'project-1') => render(<div data-spotlight-frame><FFESection projectId={id} projectName="Ellsworth" mode="project" /></div>);
+
+describe('US-39 purchasing recovery in the real FF&E head', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    mockItems = [line({ product_id: 'product-1' })];
+    mockRooms = [{ id: 'room-1', name: 'Primary bedroom' }];
+    mockInstruments = []; mockTradeScopes = []; mockReadinessLoading = false;
+    mockAuthority = { data: null }; mockSend.mockClear();
+  });
+  it.each(['inline', 'Spotlight'])('%s opens the same project-bound sheet with focus, cancels without sending', async (door) => {
+    renderRecovery('project-recovery');
+    const prepare = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
+    if (door === 'Spotlight') {
+      fireEvent.click(prepare);
+      expect(document.querySelector('[data-hold-spotlight]')).not.toBeNull();
+      const bar = document.querySelector<HTMLElement>('[data-hold-spotlight-bar]')!;
+      fireEvent.click(within(bar).getByRole('button', { name: 'Record signed agreement' }));
+    } else fireEvent.click(screen.getByRole('button', { name: 'Record signed agreement' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Record signed agreement' });
+    expect(mockRecordHook).toHaveBeenCalledWith('project-recovery');
+    expect(within(sheet).getByText(/covers Ellsworth/)).toBeInTheDocument();
+    await waitFor(() => expect(within(sheet).getByLabelText('Signed PDF (up to 20 MiB)')).toHaveFocus());
+    await waitFor(() => expect(document.querySelector('[data-hold-spotlight]')).toBeNull());
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect([prepare, screen.getByRole('button', { name: 'Record signed agreement' })]).toContain(document.activeElement));
+    expect(mockRecord).not.toHaveBeenCalled(); expect(mockSend).not.toHaveBeenCalled();
+  });
+  it.each(['loading', 'error', 'billing loading', 'billing error', 'suspended'])('%s remains closed without an external bypass', (state) => {
+    mockAgreement = { data: { state: 'external_recorded', evidence: { id: 'evidence' } },
+      isPending: state === 'loading', isError: state === 'error' };
+    mockAuthority = { data: state === 'suspended' ? { state: 'suspended' } : null,
+      isPending: state === 'billing loading', isError: state === 'billing error' };
+    renderProject();
+    expect(screen.getByRole('button', { name: 'Prepare purchasing authorization' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByRole('button', { name: 'Record signed agreement' })).toBeNull();
+    expect(screen.queryByText('Signed outside Patina')).toBeNull();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+  it('successful recording shows external provenance and leaves prepare/send deliberate', async () => {
+    const view = renderProject();
+    fireEvent.click(screen.getByRole('button', { name: 'Record signed agreement' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Record signed agreement' });
+    fireEvent.change(within(sheet).getByLabelText('Signed PDF (up to 20 MiB)'), { target: { files: [new File(['%PDF-1.4'], 'signed.pdf', { type: 'application/pdf' })] } });
+    fireEvent.change(within(sheet).getByLabelText('Signed date'), { target: { value: '2020-01-01' } });
+    fireEvent.click(within(sheet).getByRole('checkbox'));
+    expect(mockRecord).not.toHaveBeenCalled();
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Record' }));
+    await waitFor(() => expect(mockRecord).toHaveBeenCalledWith(expect.objectContaining({ signedOn: '2020-01-01', coversProject: true })));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    mockAgreement = { data: { state: 'external_recorded', evidence: { id: 'evidence', project_id: 'project-1', storage_key: 'project-1/signed.pdf' } } };
+    view.rerender(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
+    expect(screen.getByText('Signed outside Patina')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View signed agreement' })).toBeInTheDocument();
+    const prepare = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
+    expect(prepare).not.toHaveAttribute('aria-disabled', 'true');
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Prepare [0-9]/ })).toBeNull();
+    fireEvent.click(prepare);
+    expect(screen.getByText('Choose what to release')).toBeInTheDocument();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+});
+
+
+test.each(['cancel', 'success'])('keyboard Spotlight record %s restores focus to durable Prepare purchasing authorization', async (outcome) => {
+  window.localStorage.clear();
+  mockItems = [line({ product_id: 'product-1' })]; mockRooms = [{ id: 'room-1', name: 'Primary bedroom' }];
+  mockInstruments = []; mockTradeScopes = []; mockReadinessLoading = false; mockAuthority = { data: null };
+  const user = userEvent.setup(); renderRecovery();
+  const prepare = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
+  prepare.focus(); await user.keyboard('{Enter}');
+  const bar = document.querySelector<HTMLElement>('[data-hold-spotlight-bar]')!;
+  const fixer = within(bar).getByRole('button', { name: 'Record signed agreement' });
+  fixer.focus(); await user.keyboard('{Enter}');
+  const sheet = await screen.findByRole('dialog', { name: 'Record signed agreement' });
+  await waitFor(() => expect(document.querySelector('[data-hold-spotlight]')).toBeNull());
+  if (outcome === 'cancel') {
+    await user.click(within(sheet).getByRole('button', { name: 'Cancel' }));
+  } else {
+  await user.upload(within(sheet).getByLabelText('Signed PDF (up to 20 MiB)'), new File(['%PDF-1.4'], 'signed.pdf', { type: 'application/pdf' }));
+  fireEvent.change(within(sheet).getByLabelText('Signed date'), { target: { value: '2020-01-01' } });
+  await user.click(within(sheet).getByRole('checkbox'));
+  within(sheet).getByRole('button', { name: 'Record' }).focus(); await user.keyboard('{Enter}');
+  }
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() => expect(prepare).toHaveFocus());
 });

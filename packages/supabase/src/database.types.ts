@@ -18308,6 +18308,54 @@ export type Database = {
           },
         ]
       }
+      project_external_agreement_evidence: {
+        Row: {
+          attested_at: string
+          attested_by: string
+          covers_project: boolean
+          id: string
+          project_id: string
+          signed_on: string
+          storage_key: string
+          storage_object_id: string
+        }
+        Insert: {
+          attested_at?: string
+          attested_by: string
+          covers_project: boolean
+          id?: string
+          project_id: string
+          signed_on: string
+          storage_key: string
+          storage_object_id: string
+        }
+        Update: {
+          attested_at?: string
+          attested_by?: string
+          covers_project?: boolean
+          id?: string
+          project_id?: string
+          signed_on?: string
+          storage_key?: string
+          storage_object_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_external_agreement_evidence_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_external_agreement_evidence_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_ffe_allowance_fills: {
         Row: {
           authorization_item_id: string
@@ -36661,6 +36709,10 @@ export type Database = {
         Args: { p_configuration_id: string }
         Returns: boolean
       }
+      _can_access_project_agreement_object: {
+        Args: { p_key: string }
+        Returns: boolean
+      }
       _can_author_proposal: { Args: { p_owner: string }; Returns: boolean }
       _can_manage_configurable_product: {
         Args: { p_product_id: string }
@@ -37485,6 +37537,19 @@ export type Database = {
           p_project_id: string
           p_template_configuration_id: string
         }
+        Returns: Json
+      }
+      _invoice_billing_prelock: {
+        Args: {
+          p_ffe_item_ids: string[]
+          p_milestone_ids: string[]
+          p_purchase_ids: string[]
+          p_rider_ids: string[]
+        }
+        Returns: undefined
+      }
+      _invoice_line_append_archive_snapshot: {
+        Args: { p_existing: Json; p_new: Json }
         Returns: Json
       }
       _invoice_line_private_key: { Args: { p_key: string }; Returns: boolean }
@@ -42279,6 +42344,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      get_project_purchasing_agreement: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       get_project_review_media_manifest: {
         Args: { p_client_id: string; p_edition_id: string }
         Returns: Json
@@ -43805,6 +43874,10 @@ export type Database = {
       }
       project_consent_org: { Args: { p_project_id: string }; Returns: string }
       project_designer: { Args: { p_project_id: string }; Returns: string }
+      project_has_design_agreement_eligibility: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
       project_hours_total: {
         Args: { p_project_id: string }
         Returns: {
@@ -44500,6 +44573,15 @@ export type Database = {
           p_size_bytes: number
         }
         Returns: boolean
+      }
+      record_project_external_agreement_evidence: {
+        Args: {
+          p_covers_project: boolean
+          p_project_id: string
+          p_signed_on: string
+          p_storage_key: string
+        }
+        Returns: Json
       }
       record_project_ffe_inspection: {
         Args: {

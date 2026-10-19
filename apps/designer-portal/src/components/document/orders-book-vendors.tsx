@@ -55,6 +55,7 @@ import {
   commercialDocumentKeys,
   fetchProjectBillingAuthority,
 } from '@/hooks/use-commercial-documents';
+import { projectPurchasingAgreementQueryOptions } from '@/hooks/use-project-purchasing-agreement';
 import { mapProjectInstruments } from '@/lib/document/project-commerce';
 import { VendorRecordQuoteAct } from './line-unfold/record-quote';
 import {
@@ -549,10 +550,13 @@ function useProjectOrderContexts(
       queryFn: () => fetchProjectBillingAuthority(projectId),
     })),
   });
+  const agreements = useQueries({
+    queries: projectIds.map(projectPurchasingAgreementQueryOptions),
+  });
   const instruments = useQueries({
     queries: projectIds.map((projectId, i) => ({
       queryKey: commercialDocumentKeys.instruments(projectId),
-      enabled: Boolean(authorities[i]?.data),
+      enabled: Boolean(authorities[i]?.data) || agreements[i]?.data?.state === 'external_recorded',
       queryFn: async () => {
         const { data, error } = await getSupabase().rpc(
           'list_furnishings_authorizations',
@@ -567,8 +571,9 @@ function useProjectOrderContexts(
   const contexts = new Map<string, ProjectOrderContext>();
   projectIds.forEach((projectId, i) => {
     const authority = authorities[i];
-    if (!authority?.isSuccess) return contexts.set(projectId, null);
-    if (!authority.data) {
+    const agreement = agreements[i];
+    if (!authority?.isSuccess || !agreement?.isSuccess) return contexts.set(projectId, null);
+    if (!authority.data && agreement.data?.state !== 'external_recorded' && !agreement.data?.evidence) {
       return contexts.set(projectId, {
         isCommercialOrigin: false,
         index: new Map(),

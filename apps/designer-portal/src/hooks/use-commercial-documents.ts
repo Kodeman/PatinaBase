@@ -1048,11 +1048,8 @@ export function usePublishBudgetCheckpoint(projectId: string) {
       agreementId,
     }: {
       versionId: string;
-      agreementId: string;
+      agreementId: string | null;
     }) => {
-      if (!agreementId) {
-        throw new Error("The executed agreement link is unavailable.");
-      }
       const supabase = getSupabase();
       const { data, error } = await supabase.rpc("publish_budget_checkpoint", {
         p_project_id: projectId,
@@ -1062,7 +1059,7 @@ export function usePublishBudgetCheckpoint(projectId: string) {
       const checkpointId = data?.checkpointId ?? data?.checkpoint_id;
       let notificationDelivery: CommercialNotificationDelivery =
         "not_requested";
-      if (checkpointId) {
+      if (checkpointId && agreementId) {
         notificationDelivery = await invokeCommercialNotification(supabase, {
           documentId: agreementId,
           transition: "budget_published",

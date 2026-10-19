@@ -51,6 +51,7 @@ import {
   useSendFurnishingsAuthorization,
   useWorkingBudget,
 } from '@/hooks/use-commercial-documents';
+import { useProjectPurchasingAgreement } from '@/hooks/use-project-purchasing-agreement';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
@@ -149,6 +150,7 @@ export function ReviewReleaseSheet({
   onReleased: () => void;
 }) {
   const authority = useProjectBillingAuthority(projectId);
+  const purchasingAgreement = useProjectPurchasingAgreement(projectId);
   const budget = useWorkingBudget(projectId);
   const release = useReleaseForAuthorization(projectId);
   const send = useSendFurnishingsAuthorization(projectId);
@@ -162,6 +164,7 @@ export function ReviewReleaseSheet({
   const [chosenPercent, setChosenPercent] = useState<number | null>(null);
   const [otherOpen, setOtherOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
   // Stashed the instant release succeeds, so a send that fails afterward can
@@ -209,8 +212,13 @@ export function ReviewReleaseSheet({
     !coverageGap &&
     checkpoint?.state !== 'acknowledged' &&
     checkpoint?.state !== 'overridden';
-  const blocked =
-    !budget.isLoading && (!hasCheckpoint || coverageGap || awaitingAcknowledgment);
+  const agreementKnown = !authority.isPending && !authority.isError &&
+    !purchasingAgreement.isPending && !purchasingAgreement.isError;
+  const agreementId = authority.data?.agreementId ?? null;
+  const canPublish = agreementKnown && (Boolean(agreementId) ||
+    (!authority.data && purchasingAgreement.data?.state === 'external_recorded'));
+  const blocked = !canPublish || budget.isLoading || Boolean(budget.error) ||
+    !hasCheckpoint || coverageGap || awaitingAcknowledgment;
   const drift = scheduleDrift({
     stampedCents: stampedScheduledCents(budget.data?.version),
     currentCents: currentScheduledCents,
@@ -223,7 +231,6 @@ export function ReviewReleaseSheet({
   const clientLabel = clientName?.trim() || 'the client';
 
   const versionId = budget.data?.version?.id ?? null;
-  const agreementId = authority.data?.agreementId ?? null;
   const busy = release.isPending || send.isPending;
   const name = `Furnishings authorization № ${instrumentNumber}`;
 
@@ -299,7 +306,8 @@ export function ReviewReleaseSheet({
 
   const publishFresh = async () => {
     setError(null);
-    if (!versionId || !agreementId) {
+    setPublishMessage(null);
+    if (!versionId || !canPublish || budget.isLoading || budget.error) {
       setError(
         'A budget version and an executed agreement are needed before a checkpoint can be published.',
       );
@@ -307,6 +315,7 @@ export function ReviewReleaseSheet({
     }
     try {
       await publishCheckpoint.mutateAsync({ versionId, agreementId });
+      if (!agreementId) setPublishMessage('Checkpoint published. No client notification sent.');
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -508,7 +517,7 @@ export function ReviewReleaseSheet({
               variant="primary"
               loading={publishCheckpoint.isPending}
               loadingLabel="Publishing…"
-              disabled={publishCheckpoint.isPending}
+              disabled={publishCheckpoint.isPending || !canPublish || !versionId || Boolean(budget.error)}
               onClick={publishFresh}
             >
               Issue updated budget checkpoint
@@ -602,6 +611,7 @@ export function ReviewReleaseSheet({
         )}
       </div>
 
+      {publishMessage && <p role="status" className="mb-2 text-[11px]">{publishMessage}</p>}
       {error && (
         <p role="alert" className="mb-1 text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
@@ -626,7 +636,7 @@ export function ReviewReleaseSheet({
         <DocumentAction
           actionKey="save-authorization-draft"
           variant="secondary"
-          disabled={busy || lineCount === 0 || Boolean(releasedProposalId)}
+          disabled={busy || blocked || lineCount === 0 || Boolean(releasedProposalId)}
           loading={release.isPending && !send.isPending}
           loadingLabel="Drafting…"
           onClick={saveDraft}

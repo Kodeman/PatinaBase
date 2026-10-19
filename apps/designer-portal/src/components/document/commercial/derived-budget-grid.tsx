@@ -36,6 +36,7 @@ import {
   when,
   type WorkingBudgetLineView,
 } from "@/lib/document/project-commerce";
+import { useProjectPurchasingAgreement } from "@/hooks/use-project-purchasing-agreement";
 import { SectionLoadingLine } from "../section-loading-line";
 
 function TargetCell({
@@ -107,6 +108,7 @@ function TargetCell({
 export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
   const budgetQuery = useWorkingBudget(projectId);
   const authorityQuery = useProjectBillingAuthority(projectId);
+  const purchasingAgreement = useProjectPurchasingAgreement(projectId);
   const deriveBudget = useDeriveWorkingBudget(projectId);
   const publish = usePublishBudgetCheckpoint(projectId);
   const override = useOverrideBudgetCheckpoint(projectId);
@@ -123,6 +125,10 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
   const version = budget?.version ?? null;
   const checkpoint = budget?.checkpoint ?? null;
   const agreementId = authorityQuery.data?.agreementId ?? null;
+  const agreementKnown = !authorityQuery.isPending && !authorityQuery.isError &&
+    !purchasingAgreement.isPending && !purchasingAgreement.isError;
+  const canPublish = agreementKnown && (Boolean(agreementId) ||
+    (!authorityQuery.data && purchasingAgreement.data?.state === "external_recorded"));
   const editable = version?.state === "draft";
 
   if (budgetQuery.isLoading) {
@@ -151,7 +157,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
   };
 
   const publishCheckpoint = async () => {
-    if (!version || version.state !== "draft" || !agreementId) return;
+    if (!version || version.state !== "draft" || !canPublish) return;
     setActionError(null);
     setNotificationMessage(null);
     try {
@@ -159,7 +165,9 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
         versionId: version.id,
         agreementId,
       });
-      if (result.notificationDelivery === "pending_retry") {
+      if (!agreementId) {
+        setNotificationMessage("Checkpoint published. No client notification sent.");
+      } else if (result.notificationDelivery === "pending_retry") {
         setNotificationMessage(
           "The checkpoint is published, but its client notice is pending. Retry it from the published checkpoint below.",
         );
@@ -245,7 +253,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
             <DocumentAction
               actionKey="working-budget-publish"
               variant="secondary"
-              disabled={publish.isPending || !agreementId || !version}
+              disabled={publish.isPending || !canPublish || !version}
               loading={publish.isPending}
               onClick={publishCheckpoint}
             >
@@ -255,7 +263,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
         </DocumentActionGroup>
       </div>
 
-      {editable && !agreementId && (
+      {editable && !canPublish && (
         <p className="mt-2 text-[11px] text-[var(--text-muted)]">
           An executed design agreement is required before publishing.
         </p>

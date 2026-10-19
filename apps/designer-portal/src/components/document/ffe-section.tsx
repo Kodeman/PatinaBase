@@ -138,6 +138,9 @@ import {
   useProjectInstruments,
   useTradeScopes,
 } from '@/hooks/use-commercial-documents';
+import { useProjectPurchasingAgreement } from '@/hooks/use-project-purchasing-agreement';
+import { RecordSignedAgreementSheet } from './overlays/record-signed-agreement-sheet';
+import { DocFileViewer } from './overlays/doc-file-viewer';
 import { AuthorizationStamp } from './schedule/authorization-stamp';
 import { AddLineSheet } from './schedule/add-line-sheet';
 import { AddToProjectSheet, openAddToProject } from './schedule/add-to-project-sheet';
@@ -1310,6 +1313,16 @@ function FFESectionBody({
   // reads "Claim open" in the next-act grouping rather than its PO status.
   const { data: procurementExceptions } = useUnresolvedProcurementExceptions(projectId);
   const authority = useProjectBillingAuthority(projectId);
+  const purchasingAgreement = useProjectPurchasingAgreement(projectId);
+  const [recordAgreementOpen, setRecordAgreementOpen] = useState(false);
+  const agreementReturnRef = useRef<HTMLButtonElement>(null);
+  const [viewAgreementOpen, setViewAgreementOpen] = useState(false);
+  const agreementKnown = !purchasingAgreement.isPending && !purchasingAgreement.isError;
+  const authorityKnown = !authority.isPending && !authority.isError;
+  const externalAgreement = authorityKnown && !authority.data && agreementKnown &&
+    purchasingAgreement.data?.state === 'external_recorded' ? purchasingAgreement.data.evidence : null;
+  const canRecordAgreement = mode === 'project' && authorityKnown && !authority.data &&
+    agreementKnown && purchasingAgreement.data?.state === 'missing';
   const { data: tradeScopes, isPending: tradeScopesPending } = useTradeScopes(
     projectId,
     mode === 'project',
@@ -1354,13 +1367,12 @@ function FFESectionBody({
 
   // A commercial job is one with an executed agreement behind it. Only there
   // does authorization gate a purchase order.
-  const isCommercialOrigin = Boolean(authority.data);
+  const isCommercialOrigin = Boolean(authority.data) || Boolean(externalAgreement);
   const showAuthorization =
     mode === 'project' && (isCommercialOrigin || instruments.length > 0);
-  const canRelease =
-    mode === 'project' &&
-    Boolean(authority.data) &&
-    RELEASING_AUTHORITY.has(String(authority.data?.state ?? ''));
+  const canRelease = mode === 'project' && authorityKnown && (authority.data
+    ? RELEASING_AUTHORITY.has(String(authority.data.state))
+    : Boolean(externalAgreement));
   const selecting = ceremony?.phase === 'selecting';
   // C-04: choosing what is installed — its own ticks, never mixed with a
   // release's. A release begun from the head takes the table back.
@@ -1973,16 +1985,32 @@ function FFESectionBody({
     !readinessQuery.isLoading &&
     !readinessQuery.isError &&
     !anyEligible;
+  const agreementHoldId = `project-agreement-hold-${projectId}`;
+  const agreementHoldReason = !authorityKnown || (!authority.data && !agreementKnown)
+    ? 'Purchasing eligibility could not be confirmed. Wait or reload to try again.'
+    : authority.data
+      ? 'The existing agreement billing hold must be resolved before purchasing authorization.'
+      : 'A signed agreement is required before purchasing authorization.';
+  const recordAgreementFix = canRecordAgreement ? (
+    <button type="button" className="ml-2 underline underline-offset-4"
+      onClick={() => setRecordAgreementOpen(true)}>Record signed agreement</button>
+  ) : null;
   const ffeReleaseEntry: RegionLedgerEntry = {
     key: 'release-for-authorization',
+    actionRef: agreementReturnRef,
     label: 'Prepare purchasing authorization',
     onClick: () => ceremony?.begin(),
     disabled: nothingReady || !canRelease,
     reason: nothingReady
       ? 'No selections are ready for purchasing authorization yet.'
       : !canRelease && ffeItemsSettled
-        ? 'A signed agreement is required before purchasing authorization.'
+        ? <span id={agreementHoldId}>{agreementHoldReason}{recordAgreementFix}</span>
         : undefined,
+    holds: !nothingReady && canRecordAgreement ? [{
+      id: agreementHoldId,
+      target: () => recordAgreementOpen ? null : document.getElementById(agreementHoldId),
+      label: 'Signed agreement', reason: agreementHoldReason, fix: recordAgreementFix,
+    }] : undefined,
   };
   // US-19 F3-2 / FR4 (P-2) — every Pieces act lands with focus on Pieces' own
   // control: the claim, the send and the spec on their line, `Follow up with
@@ -2774,6 +2802,21 @@ function FFESectionBody({
         />
       )}
 
+      {mode === 'project' && externalAgreement && (
+        <p className="text-sm text-[var(--text-muted)]">Signed outside Patina
+          <button type="button" className="ml-2 underline underline-offset-4"
+            onClick={() => setViewAgreementOpen(true)}>View signed agreement</button>
+        </p>
+      )}
+      {recordAgreementOpen && (
+        <RecordSignedAgreementSheet key={projectId} projectId={projectId} projectName={projectName}
+          fallbackFocusRef={agreementReturnRef} onClose={() => setRecordAgreementOpen(false)} />
+      )}
+      {viewAgreementOpen && externalAgreement && (
+        <DocFileViewer bucket="project-agreements" file={{ title: 'Signed outside Patina',
+          doc_type: 'pdf', storage_path: externalAgreement.storage_key }}
+          onClose={() => setViewAgreementOpen(false)} />
+      )}
       <FlagProbe flag="ask-the-paper" onValue={setAskThePaper} />
       <FlagProbe flag="one-voice" onValue={setOneVoice} />
       {changeOrderLine?.item.purchase_order && (

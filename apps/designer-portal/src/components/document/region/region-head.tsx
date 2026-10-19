@@ -39,6 +39,7 @@ export interface RegionLedgerEntry {
   key: string;
   label: ReactNode;
   onClick?: () => void;
+  actionRef?: React.Ref<HTMLButtonElement>;
   /** Link-form entries render as an anchor rather than a button. */
   href?: string;
   /** Ignored at index 0, which is the inked leader unless the head is `leaderless`. */
@@ -51,6 +52,7 @@ export interface RegionLedgerEntry {
    * prints beneath the ledger, linked by `aria-describedby`.
    */
   reason?: ReactNode;
+  holds?: import('@/lib/document/spotlight/use-hold-spotlight').SpotlightHold[];
   loading?: boolean;
   loadingLabel?: ReactNode;
   trailing?: ReactNode;
@@ -285,6 +287,7 @@ export function RegionHead({
               variant,
               disabled: entry.disabled,
               held: isHeld(entry),
+              holds: entry.holds,
               'aria-describedby': isHeld(entry) ? reasonId(entry) : undefined,
               loading: entry.loading,
               loadingLabel: entry.loadingLabel,
@@ -297,7 +300,7 @@ export function RegionHead({
                 {entry.label}
               </DocumentAction>
             ) : (
-              <DocumentAction key={entry.key} {...shared} onClick={entry.onClick}>
+              <DocumentAction key={entry.key} ref={entry.actionRef} {...shared} onClick={entry.onClick}>
                 {entry.label}
               </DocumentAction>
             );

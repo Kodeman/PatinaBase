@@ -23262,6 +23262,72 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_external_agreement_evidence FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_external_agreement_evidence TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_external_agreement_evidence() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._can_access_project_agreement_object(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._can_access_project_agreement_object(text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_recorded_agreement_object() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.project_has_design_agreement_eligibility(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_project_external_agreement_evidence(uuid,text,date,boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_project_external_agreement_evidence(uuid,text,date,boolean) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_purchasing_agreement(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00835_external_signed_agreements.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_purchasing_agreement(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

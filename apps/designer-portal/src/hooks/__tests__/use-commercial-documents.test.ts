@@ -1300,3 +1300,30 @@ describe('fetchCommercialDocumentBundle — the parts read and the ceiling', () 
     });
   });
 });
+
+
+describe('external-only checkpoint publication', () => {
+  beforeEach(() => { rpc.mockReset(); invoke.mockReset(); });
+  it('publishes the real project/version RPC without email, override, acknowledgement or send', async () => {
+    rpc.mockResolvedValue({ data: { checkpointId: 'external-checkpoint', status: 'open' }, error: null });
+    const publish = usePublishBudgetCheckpoint('external-project') as unknown as {
+      mutationFn: (input: { versionId: string; agreementId: null }) => Promise<unknown>;
+    };
+    await expect(publish.mutationFn({ versionId: 'external-version', agreementId: null })).resolves.toEqual({
+      checkpointId: 'external-checkpoint', status: 'open', notificationDelivery: 'not_requested',
+    });
+    expect(rpc.mock.calls).toEqual([['publish_budget_checkpoint', {
+      p_project_id: 'external-project', p_version_id: 'external-version',
+    }]]);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+  it('preserves real publish failures without notification or override', async () => {
+    rpc.mockResolvedValue({ data: null, error: new Error('checkpoint refused') });
+    const publish = usePublishBudgetCheckpoint('external-project') as unknown as {
+      mutationFn: (input: { versionId: string; agreementId: null }) => Promise<unknown>;
+    };
+    await expect(publish.mutationFn({ versionId: 'external-version', agreementId: null })).rejects.toThrow('checkpoint refused');
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});

@@ -44,6 +44,10 @@ let mockBudget: { isLoading: boolean; data: unknown } = {
   },
 };
 
+let mockPurchasing = { data: { state: 'patina_signed' }, isPending: false, isError: false };
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => mockPurchasing,
+}));
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
@@ -119,6 +123,7 @@ const renderSheet = (
 
 describe('ReviewReleaseSheet', () => {
   beforeEach(() => {
+    mockPurchasing = { data: { state: 'patina_signed' }, isPending: false, isError: false };
     calls.length = 0;
     releaseMutate.mockClear();
     sendMutate.mockClear();
@@ -475,5 +480,41 @@ describe('ReviewReleaseSheet', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('The RPC said no.'),
     );
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+
+describe('external checkpoint review gate', () => {
+  beforeEach(() => {
+    jest.clearAllMocks(); calls.length = 0;
+    mockAuthority = { data: null };
+    mockPurchasing = { data: { state: 'external_recorded' }, isPending: false, isError: false };
+    mockBudget = { isLoading: false, data: { version: { id: 'version-1', lines: [{ roomId: 'r1' }, { roomId: 'r2' }] }, checkpoint: null } };
+  });
+  it('publishes external-only explicitly, reports no notification and keeps open checkpoint held until deliberate override', async () => {
+    const view = renderSheet();
+    fireEvent.click(screen.getByRole('button', { name: 'Issue updated budget checkpoint' }));
+    await waitFor(() => expect(publishMutate).toHaveBeenCalledWith({ versionId: 'version-1', agreementId: null }));
+    expect(await screen.findByText('Checkpoint published. No client notification sent.')).toBeInTheDocument();
+    expect(overrideMutate).not.toHaveBeenCalled(); expect(sendMutate).not.toHaveBeenCalled(); expect(releaseMutate).not.toHaveBeenCalled();
+    mockBudget = { isLoading: false, data: { version: { id: 'version-1', lines: [{ roomId: 'r1' }, { roomId: 'r2' }] }, checkpoint: { id: 'checkpoint-2', state: 'open' } } };
+    view.rerender(<ReviewReleaseSheet open projectId="project-1" projectName="Ellsworth" instrumentNumber={3} lines={lines} onClose={jest.fn()} onReleased={jest.fn()} />);
+    expect(screen.getByRole('button', { name: 'Send for signature' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save authorization draft' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Record audited override' }));
+    fireEvent.change(screen.getByLabelText('Override reason'), { target: { value: '  no  ' } });
+    expect(screen.getByRole('button', { name: 'Record override' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Override reason'), { target: { value: 'Reviewed budget with the client by phone.' } });
+    expect(overrideMutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Record override' }));
+    await waitFor(() => expect(overrideMutate).toHaveBeenCalledWith({ checkpointId: 'checkpoint-2', reason: 'Reviewed budget with the client by phone.' }));
+    expect(sendMutate).not.toHaveBeenCalled(); expect(releaseMutate).not.toHaveBeenCalled();
+  });
+  it.each(['loading', 'error'])('holds external publication and release while eligibility is %s', (state) => {
+    mockPurchasing = { ...mockPurchasing, isPending: state === 'loading', isError: state === 'error' };
+    renderSheet();
+    expect(screen.getByRole('button', { name: 'Issue updated budget checkpoint' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send for signature' })).toBeDisabled();
+    expect(publishMutate).not.toHaveBeenCalled();
   });
 });
