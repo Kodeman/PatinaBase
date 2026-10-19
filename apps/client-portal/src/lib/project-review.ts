@@ -9,6 +9,7 @@ export type ClientReviewVerdict = 'approved' | 'rejected' | 'comment';
 export interface ClientProjectReviewItem {
   id: string;
   name: string;
+  docCode?: string | null;
   roomName: string;
   imageUrl: string | null;
   clientPriceCents: number | null;
@@ -73,6 +74,7 @@ export function adaptClientProjectReviewBundle(value: unknown): ClientProjectRev
     return {
       id,
       name: text(first(snapshot, 'name'), 'Selection'),
+      docCode: nullableText(first(snapshot, 'docCode', 'doc_code')),
       roomName: text(first(room, 'name'), text(first(snapshot, 'assignmentScope', 'assignment_scope'), 'Throughout')),
       imageUrl: null,
       clientPriceCents: nullableNumber(first(snapshot, 'clientLineTotalCents', 'client_line_total_cents', 'clientUnitPriceCents', 'client_unit_price_cents')),
