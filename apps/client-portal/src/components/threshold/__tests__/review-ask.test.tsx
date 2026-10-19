@@ -321,6 +321,38 @@ describe("SubmittedReviewsPrevious — sent reviews, read in the Previously area
 });
 
 describe("SelectionEditionAsk — the edition review, absorbed from /projects/[id]/reviews/[editionId]", () => {
+  it.each([
+    ["LR-01", "LR-01 · Wingback chair · Library · $2,400.00"],
+    [undefined, "Wingback chair · Library · $2,400.00"],
+    [null, "Wingback chair · Library · $2,400.00"],
+    ["", "Wingback chair · Library · $2,400.00"],
+  ])("renders the frozen label only when present (%p)", (docCode, expected) => {
+    window.history.pushState({}, "", `/projects/${PROJECT_ID}?review=ed-1`);
+    bundleMock.mockReturnValue({
+      data: {
+        projectId: PROJECT_ID, editionId: "ed-1", status: "published",
+        items: [{
+          id: "item-1", name: "Wingback chair", docCode, roomName: "Library",
+          imageUrl: null, clientPriceCents: 240000, currency: "USD",
+          verdict: null, comment: null, mediaAssetIds: [],
+          retail_unit_cents: 999999, trade_price_cents: 888888, markup_percent: 35, margin: 0.3,
+        }],
+      },
+      isLoading: false, isError: false,
+    });
+
+    wrap(<SelectionEditionAsk projectId={PROJECT_ID} />);
+
+    const line = screen.getByTestId("review-edition-item").querySelector("p");
+    expect(line?.textContent).toBe(expected);
+    expect(screen.getByTestId("review-edition-ask").textContent).not.toMatch(
+      /retail|trade_price|markup|margin|999999|888888/i,
+    );
+    expect(screen.getByText(
+      "Your response does not authorize a purchase or change an authorization.",
+    )).toBeInTheDocument();
+  });
+
   it("renders nothing without a ?review= edition id on the URL", () => {
     const { container } = wrap(<SelectionEditionAsk projectId={PROJECT_ID} />);
     expect(container).toBeEmptyDOMElement();

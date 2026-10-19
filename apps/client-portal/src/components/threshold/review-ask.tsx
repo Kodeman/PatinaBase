@@ -508,7 +508,7 @@ export function SelectionEditionAsk({ projectId }: { projectId: string }) {
             )}
             <div className="min-w-0 flex-1">
               <p className="text-[15px] text-[var(--text-primary)]">
-                {item.name}
+                {[item.docCode, item.name].filter(Boolean).join(" · ")}
                 {` · ${item.roomName}`}
                 {item.clientPriceCents
                   ? ` · ${formatCurrency(item.clientPriceCents, item.currency)}`
