@@ -217,3 +217,8 @@ describe('The punch list heading (R40)', () => {
     expect(screen.getByTestId('work-block')).toHaveAttribute('data-heading', '');
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

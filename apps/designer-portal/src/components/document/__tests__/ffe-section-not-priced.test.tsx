@@ -199,3 +199,8 @@ describe('T-7a — the Pieces row prints Not priced, never $0', () => {
     expect(row).not.toHaveTextContent(/\$0(?![\d,])/);
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

@@ -318,3 +318,8 @@ describe('The punch list counts what is open (508-4)', () => {
     expect(block).toHaveAttribute('data-tally', '');
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

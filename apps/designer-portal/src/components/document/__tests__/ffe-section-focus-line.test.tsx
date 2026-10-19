@@ -386,3 +386,8 @@ describe('Record the payment lands on the PO line’s control (F2-3, 2-5)', () =
     await expectLanded(container);
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

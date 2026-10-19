@@ -268,3 +268,8 @@ describe('FF&E install/care head — SP-01/F03, F48', () => {
     expect(container.querySelector('#ffe-movement-project-1')).toBeNull();
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));

@@ -393,3 +393,8 @@ describe('FF&E stamp — filled variant + tone', () => {
     expect(stampCalls[0].color).toBeTruthy();
   });
 });
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
+  useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));
