@@ -15,12 +15,6 @@ CREATE TABLE IF NOT EXISTS public.project_external_agreement_evidence (
 ALTER TABLE public.project_external_agreement_evidence ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.project_external_agreement_evidence FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.project_external_agreement_evidence TO authenticated;
-DROP POLICY IF EXISTS external_agreement_studio_read ON public.project_external_agreement_evidence;
-CREATE POLICY external_agreement_studio_read ON public.project_external_agreement_evidence
-  FOR SELECT TO authenticated USING (EXISTS (
-    SELECT 1 FROM public.projects p WHERE p.id = project_id
-      AND public._can_author_proposal(p.designer_id)
-  ));
 
 CREATE OR REPLACE FUNCTION public._guard_external_agreement_evidence()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -56,6 +50,9 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, p
 $$;
 REVOKE ALL ON FUNCTION public._can_access_project_agreement_object(text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public._can_access_project_agreement_object(text) TO authenticated;
+DROP POLICY IF EXISTS external_agreement_studio_read ON public.project_external_agreement_evidence;
+CREATE POLICY external_agreement_studio_read ON public.project_external_agreement_evidence
+  FOR SELECT TO authenticated USING (public._can_access_project_agreement_object(storage_key));
 
 -- Restrictive policies are required: unrelated permissive storage policies
 -- must never turn this bucket into a shared folio or permit object replacement.

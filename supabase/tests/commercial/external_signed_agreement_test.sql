@@ -133,6 +133,26 @@ DO $$ BEGIN
  PERFORM pg_temp.refuses($q$update public.project_external_agreement_evidence set signed_on=current_date-1$q$,'cannot be changed');
  PERFORM pg_temp.refuses($q$delete from storage.objects where name like '%601.pdf'$q$,'cannot be changed');
 END $$;
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ ASSERT (SELECT count(*) FROM project_external_agreement_evidence WHERE project_id='83500000-0000-4000-8000-000000000100')=1,
+   'studio author can read immutable evidence directly';
+ ASSERT public.get_project_authority_summary('83500000-0000-4000-8000-000000000100') IS NULL,
+   'external-only billing authority summary stays NULL';
+END $$;
+RESET ROLE;
+SELECT pg_temp.as_actor('83500000-0000-4000-8000-000000000002');
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ ASSERT NOT EXISTS (SELECT 1 FROM project_external_agreement_evidence), 'client cannot read evidence';
+ PERFORM pg_temp.refuses($q$insert into storage.objects(bucket_id,name,owner_id) values ('project-agreements','83500000-0000-4000-8000-000000000100/83500000-0000-4000-8000-000000000699.pdf','83500000-0000-4000-8000-000000000002')$q$,'row-level security');
+END $$;
+RESET ROLE;
+SET LOCAL ROLE anon;
+SELECT pg_temp.refuses($q$select * from project_external_agreement_evidence$q$,'permission denied');
+SELECT pg_temp.refuses($q$insert into storage.objects(bucket_id,name,owner_id) values ('project-agreements','83500000-0000-4000-8000-000000000100/83500000-0000-4000-8000-000000000699.pdf',null)$q$,'row-level security|permission denied');
+RESET ROLE;
+SELECT pg_temp.as_actor('83500000-0000-4000-8000-000000000001');
 -- Publish a REAL checkpoint after recording; do not seed a bypass checkpoint.
 SET LOCAL ROLE authenticated;
 DO $$

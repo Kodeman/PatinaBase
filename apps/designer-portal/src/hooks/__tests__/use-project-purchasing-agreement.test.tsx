@@ -91,6 +91,9 @@ test('record failure keeps the completed upload for an identical retry, never re
 });
 
 test.each([
+  ['empty PDF', new File([], 'empty.pdf', { type: 'application/pdf' }), '2020-01-01', true],
+  ['oversized PDF', new File([new Uint8Array(20 * 1024 * 1024 + 1)], 'large.pdf', { type: 'application/pdf' }), '2020-01-01', true],
+  ['malformed date', file, '2020-02-31', true],
   ['not PDF', new File(['x'], 'x.txt', { type: 'text/plain' }), '2020-01-01', true],
   ['future date', file, '2999-01-01', true],
   ['missing date', file, '', true],

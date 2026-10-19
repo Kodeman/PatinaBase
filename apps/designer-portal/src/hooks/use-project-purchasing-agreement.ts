@@ -53,7 +53,8 @@ export function useRecordProjectSignedAgreement(projectId: string) {
       const today = new Date();
       const localDay = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       if (!coversProject || !/^\d{4}-\d{2}-\d{2}$/.test(signedOn) ||
-        !Number.isFinite(Date.parse(signedOn)) || signedOn > localDay) {
+        !Number.isFinite(Date.parse(signedOn)) ||
+        new Date(signedOn).toISOString().slice(0, 10) !== signedOn || signedOn > localDay) {
         throw new Error('Provide a nonfuture signed date and confirm this agreement covers this project.');
       }
       const supabase = createBrowserClient();
