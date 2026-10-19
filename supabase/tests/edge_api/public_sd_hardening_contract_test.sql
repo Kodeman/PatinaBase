@@ -2268,15 +2268,29 @@ BEGIN
   ), 'atomic draft direct ACL tuple drifted';
 
   ASSERT NOT EXISTS (
+    WITH expected(caller_signature) AS (
+      -- 00821 introduced this composer; 00824 retains its draft-writer call.
+      VALUES (to_regprocedure(
+        'public.compose_project_invoice(uuid,uuid,uuid,uuid,numeric,integer,text,text,jsonb,uuid[],jsonb)'
+      )::oid)
+    ),
+    actual AS (
+      SELECT caller.oid AS caller_signature
+      FROM pg_proc AS caller
+      JOIN pg_namespace AS namespace ON namespace.oid = caller.pronamespace
+      WHERE namespace.nspname <> 'information_schema'
+        AND namespace.nspname NOT LIKE 'pg_%'
+        AND pg_temp._00511_references_routine(
+          caller.prosrc, 'public', 'create_draft_invoice'
+        )
+    )
     SELECT 1
-    FROM pg_proc AS caller
-    JOIN pg_namespace AS namespace ON namespace.oid = caller.pronamespace
-    WHERE namespace.nspname <> 'information_schema'
-      AND namespace.nspname NOT LIKE 'pg_%'
-      AND pg_temp._00511_references_routine(
-        caller.prosrc, 'public', 'create_draft_invoice'
-      )
-  ), 'atomic draft database caller universe is not empty';
+    FROM (
+      (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)
+      UNION ALL
+      (SELECT * FROM actual EXCEPT ALL SELECT * FROM expected)
+    ) AS drift
+  ), 'atomic draft database caller universe drifted';
 END
 $atomic_draft_catalog_contract$;
 
