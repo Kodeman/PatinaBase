@@ -194,4 +194,55 @@ DO $$ BEGIN
  ASSERT (SELECT count(*) FROM project_ffe_items WHERE project_id='83500000-0000-4000-8000-000000000100' AND status='approved')=2,'ordinary digital and paper approvals execute';
  ASSERT NOT EXISTS(SELECT 1 FROM project_billing_authorities WHERE project_id='83500000-0000-4000-8000-000000000100'),'purchasing never grants billing authority';
 END $$;
+-- A later existing authority must close the external-only path, not be replaced.
+INSERT INTO proposals(id,designer_id,designer_client_id,client_id,project_id,title,document_kind,commercial_state,status)
+VALUES ('83500000-0000-4000-8000-000000000700','83500000-0000-4000-8000-000000000001',
+ '83500000-0000-4000-8000-000000000020','83500000-0000-4000-8000-000000000002',
+ '83500000-0000-4000-8000-000000000100','Existing authority fixture','service_addendum','executed','accepted');
+INSERT INTO project_commercial_documents(id,project_id,proposal_id,document_kind,created_by)
+VALUES ('83500000-0000-4000-8000-000000000701','83500000-0000-4000-8000-000000000100',
+ '83500000-0000-4000-8000-000000000700','service_addendum','83500000-0000-4000-8000-000000000001');
+INSERT INTO project_billing_authorities(project_id,commercial_document_id,source_proposal_id,
+ billing_ceiling_cents,retainer_activation_policy,billing_cadence,status)
+VALUES ('83500000-0000-4000-8000-000000000100','83500000-0000-4000-8000-000000000701',
+ '83500000-0000-4000-8000-000000000700',0,'immediate','monthly','exhausted');
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ ASSERT public.get_project_authority_summary('83500000-0000-4000-8000-000000000100')->>'state'='exhausted',
+   'existing exhausted authority remains exhausted';
+ ASSERT public.get_project_purchasing_agreement('83500000-0000-4000-8000-000000000100')->>'state'='missing',
+   'external evidence cannot bypass an existing authority';
+ PERFORM pg_temp.refuses($q$select public.record_project_external_agreement_evidence('83500000-0000-4000-8000-000000000100','83500000-0000-4000-8000-000000000100/83500000-0000-4000-8000-000000000601.pdf',current_date,true)$q$,'existing hold');
+END $$;
+RESET ROLE;
+UPDATE project_billing_authorities SET status='superseded' WHERE project_id='83500000-0000-4000-8000-000000000100';
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ ASSERT public.get_project_authority_summary('83500000-0000-4000-8000-000000000100')->>'state'='superseded',
+   'existing superseded billing hold remains unchanged';
+ PERFORM pg_temp.refuses($q$select public.record_project_external_agreement_evidence('83500000-0000-4000-8000-000000000100','83500000-0000-4000-8000-000000000100/83500000-0000-4000-8000-000000000601.pdf',current_date,true)$q$,'existing hold');
+END $$;
+RESET ROLE;
+-- Patina-origin reads/eligibility remain distinct from imported evidence.
+INSERT INTO projects(id,name,designer_id,client_id,created_by,studio_id) VALUES
+ ('83500000-0000-4000-8000-000000000102','Patina origin fixture','83500000-0000-4000-8000-000000000001',
+ '83500000-0000-4000-8000-000000000002','83500000-0000-4000-8000-000000000001','83500000-0000-4000-8000-000000000010');
+INSERT INTO proposals(id,designer_id,designer_client_id,client_id,project_id,title,document_kind,commercial_state,status)
+VALUES ('83500000-0000-4000-8000-000000000710','83500000-0000-4000-8000-000000000001',
+ '83500000-0000-4000-8000-000000000020','83500000-0000-4000-8000-000000000002',
+ '83500000-0000-4000-8000-000000000102','Patina origin fixture','design_services','executed','accepted');
+INSERT INTO project_commercial_documents(project_id,proposal_id,document_kind,is_origin,created_by,executed_at)
+VALUES ('83500000-0000-4000-8000-000000000102','83500000-0000-4000-8000-000000000710',
+ 'design_services',true,'83500000-0000-4000-8000-000000000001',now());
+DO $$ BEGIN
+ ASSERT public.project_has_design_agreement_eligibility('83500000-0000-4000-8000-000000000102'),
+   'executed Patina origin retains purchasing eligibility';
+END $$;
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ ASSERT public.get_project_purchasing_agreement('83500000-0000-4000-8000-000000000102')=
+   '{"state":"patina_signed","evidence":null}'::jsonb,'Patina origin is not relabeled external';
+ PERFORM pg_temp.refuses($q$select public.record_project_external_agreement_evidence('83500000-0000-4000-8000-000000000102','83500000-0000-4000-8000-000000000100/83500000-0000-4000-8000-000000000601.pdf',current_date,true)$q$,'existing hold');
+END $$;
+RESET ROLE;
 ROLLBACK;
