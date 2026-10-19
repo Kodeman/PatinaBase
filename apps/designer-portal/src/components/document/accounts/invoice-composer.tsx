@@ -290,7 +290,7 @@ function InvoiceComposerSheet({
   // line; each bills at cost on its own line (R-PB7).
   const {
     data: purchases,
-    isLoading: purchasesLoading,
+    isSuccess: purchasesRead,
     isPending: purchasesPending,
     isFetching: purchasesFetching,
     isError: purchasesFailed,
@@ -298,7 +298,7 @@ function InvoiceComposerSheet({
   } = useStudioPurchases(projectId ? { projectId } : null);
   const {
     data: riders,
-    isLoading: ridersLoading,
+    isSuccess: ridersRead,
     isPending: ridersPending,
     isFetching: ridersFetching,
     isError: ridersFailed,
@@ -616,8 +616,8 @@ function InvoiceComposerSheet({
     )
       return;
     if (wantsTime && (timeLoading || !unbilledTime)) return;
-    if (wantsPurchases && (purchasesLoading || !purchases)) return;
-    if (wantsRiders && (ridersLoading || !riders)) return;
+    if (wantsPurchases && (!purchasesRead || purchasesFetching)) return;
+    if (wantsRiders && (!ridersRead || ridersFetching)) return;
 
     if (wantsFfe) {
       // K7 — an asked-for unpriced piece arrives ticked and holds the draft.
@@ -678,11 +678,11 @@ function InvoiceComposerSheet({
     timeLoading,
     unbilledTime,
     unbilledEntries,
-    purchasesLoading,
-    purchases,
+    purchasesRead,
+    purchasesFetching,
     offerablePurchases,
-    ridersLoading,
-    riders,
+    ridersRead,
+    ridersFetching,
     offerableRiders,
   ]);
 

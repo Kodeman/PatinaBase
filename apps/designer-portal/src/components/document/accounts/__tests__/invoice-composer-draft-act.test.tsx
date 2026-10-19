@@ -45,7 +45,7 @@ jest.mock("@patina/supabase", () => ({
   useFfeInvoiceCoverage: () => ({ data: undefined, isLoading: false }),
   useFfeInvoiceStageCoverage: () => ({ data: undefined, isLoading: false }),
   useAddInvoiceBillingLines: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useProjectPoCostLines: () => ({ data: [], isLoading: false }),
+  useProjectPoCostLines: () => ({ data: [], isLoading: false, isPending: false, isFetching: false, isError: false, isSuccess: true }),
   useOrganizations: () => ({
     data: [{ id: "studio-1", name: "Middle West Studio", type: "design_studio", status: "active" }],
     isLoading: false,
@@ -56,7 +56,7 @@ jest.mock("@patina/supabase", () => ({
   useClaimTimeEntries: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetLaborLinePrice: () => ({ mutate: jest.fn(), isPending: false }),
   useProjectRoster: () => ({ data: [] }),
-  useStudioPurchases: () => ({ data: [], isLoading: false }),
+  useStudioPurchases: () => ({ data: [], isLoading: false, isPending: false, isFetching: false, isError: false, isSuccess: true }),
 }));
 
 jest.mock("next/navigation", () => ({
