@@ -15,6 +15,10 @@ let mockBillingAuthority: Record<string, unknown> | null = {
   agreementId: "agreement-1",
 };
 
+let mockPurchasing = { data: { state: 'patina_signed' }, isPending: false, isError: false };
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => mockPurchasing,
+}));
 jest.mock("@/hooks/use-commercial-documents", () => ({
   useWorkingBudget: () => mockWorkingBudget,
   useProjectBillingAuthority: () => ({ data: mockBillingAuthority }),
@@ -56,6 +60,7 @@ const draftBudget = {
 
 describe("DerivedBudgetGrid", () => {
   beforeEach(() => {
+    mockPurchasing = { data: { state: 'patina_signed' }, isPending: false, isError: false };
     deriveBudget.mockReset();
     publish.mockReset();
     override.mockReset();
@@ -204,5 +209,29 @@ describe("DerivedBudgetGrid", () => {
     expect(
       await screen.findByText("The working-budget notice is confirmed."),
     ).toBeVisible();
+  });
+});
+
+
+describe('external-only working budget', () => {
+  beforeEach(() => {
+    jest.clearAllMocks(); mockBillingAuthority = null;
+    mockPurchasing = { data: { state: 'external_recorded' }, isPending: false, isError: false };
+    mockWorkingBudget = { isLoading: false, error: null, data: draftBudget };
+  });
+  it('publishes external checkpoint explicitly without a notice or implicit override', async () => {
+    publish.mockResolvedValue({ checkpointId: 'external', notificationDelivery: 'not_requested' });
+    render(<DerivedBudgetGrid projectId="project-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Publish checkpoint' }));
+    await waitFor(() => expect(publish).toHaveBeenCalledWith({ versionId: 'version-1', agreementId: null }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Checkpoint published. No client notification sent.');
+    expect(override).not.toHaveBeenCalled(); expect(replayNotification).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Resend budget notice' })).toBeNull();
+  });
+  it.each(['loading', 'error'])('holds publish during external eligibility %s', (state) => {
+    mockPurchasing = { ...mockPurchasing, isPending: state === 'loading', isError: state === 'error' };
+    render(<DerivedBudgetGrid projectId="project-1" />);
+    expect(screen.getByRole('button', { name: 'Publish checkpoint' })).toBeDisabled();
+    expect(publish).not.toHaveBeenCalled();
   });
 });

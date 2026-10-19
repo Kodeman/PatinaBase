@@ -1315,6 +1315,7 @@ function FFESectionBody({
   const authority = useProjectBillingAuthority(projectId);
   const purchasingAgreement = useProjectPurchasingAgreement(projectId);
   const [recordAgreementOpen, setRecordAgreementOpen] = useState(false);
+  const agreementReturnRef = useRef<HTMLButtonElement>(null);
   const [viewAgreementOpen, setViewAgreementOpen] = useState(false);
   const agreementKnown = !purchasingAgreement.isPending && !purchasingAgreement.isError;
   const authorityKnown = !authority.isPending && !authority.isError;
@@ -1996,6 +1997,7 @@ function FFESectionBody({
   ) : null;
   const ffeReleaseEntry: RegionLedgerEntry = {
     key: 'release-for-authorization',
+    actionRef: agreementReturnRef,
     label: 'Prepare purchasing authorization',
     onClick: () => ceremony?.begin(),
     disabled: nothingReady || !canRelease,
@@ -2808,7 +2810,7 @@ function FFESectionBody({
       )}
       {recordAgreementOpen && (
         <RecordSignedAgreementSheet key={projectId} projectId={projectId} projectName={projectName}
-          onClose={() => setRecordAgreementOpen(false)} />
+          fallbackFocusRef={agreementReturnRef} onClose={() => setRecordAgreementOpen(false)} />
       )}
       {viewAgreementOpen && externalAgreement && (
         <DocFileViewer bucket="project-agreements" file={{ title: 'Signed outside Patina',

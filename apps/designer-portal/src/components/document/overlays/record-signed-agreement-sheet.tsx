@@ -7,8 +7,9 @@ import { useRecordProjectSignedAgreement } from '@/hooks/use-project-purchasing-
 import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
-export function RecordSignedAgreementSheet({ projectId, projectName, onClose }: {
+export function RecordSignedAgreementSheet({ projectId, projectName, onClose, fallbackFocusRef }: {
   projectId: string; projectName: string; onClose: () => void;
+  fallbackFocusRef?: React.RefObject<HTMLElement | null>;
 }) {
   const record = useRecordProjectSignedAgreement(projectId);
   const [file, setFile] = useState<File | null>(null);
@@ -20,7 +21,7 @@ export function RecordSignedAgreementSheet({ projectId, projectName, onClose }: 
 
   return (
     <DocSheet open onClose={close} title="Record signed agreement" icon={FileCheck}
-      pageLabel={projectName} initialFocusRef={firstField} kind="record-signed-agreement">
+      pageLabel={projectName} fallbackFocusRef={fallbackFocusRef} initialFocusRef={firstField} kind="record-signed-agreement">
       <p className="mb-4 text-sm text-[var(--text-muted)]">
         Record the agreement signed outside Patina for {projectName}. The PDF stays private to the studio.
         This does not approve purchases or grant billing authority. It cannot be replaced once recorded.

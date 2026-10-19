@@ -39,6 +39,7 @@ export interface RegionLedgerEntry {
   key: string;
   label: ReactNode;
   onClick?: () => void;
+  actionRef?: React.Ref<HTMLButtonElement>;
   /** Link-form entries render as an anchor rather than a button. */
   href?: string;
   /** Ignored at index 0, which is the inked leader unless the head is `leaderless`. */
@@ -299,7 +300,7 @@ export function RegionHead({
                 {entry.label}
               </DocumentAction>
             ) : (
-              <DocumentAction key={entry.key} {...shared} onClick={entry.onClick}>
+              <DocumentAction key={entry.key} ref={entry.actionRef} {...shared} onClick={entry.onClick}>
                 {entry.label}
               </DocumentAction>
             );

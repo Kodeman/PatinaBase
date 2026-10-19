@@ -1527,3 +1527,102 @@ EXCEPTION WHEN OTHERS THEN
   RAISE;
 END;
 $$;
+
+
+-- Purchase guard lineage: 00423 -> 00578. Only the legacy classification
+-- changes: immutable external evidence remains managed even when eligibility closes.
+CREATE OR REPLACE FUNCTION public.guard_project_ffe_purchase_authority()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_document public.project_commercial_documents%ROWTYPE;
+  v_snapshot public.furnishing_authorization_items%ROWTYPE;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF OLD.source_commercial_document_id IS NOT NULL AND (
+      NEW.source_commercial_document_id IS DISTINCT FROM OLD.source_commercial_document_id
+      OR NEW.source_authorization_item_id IS DISTINCT FROM OLD.source_authorization_item_id
+    ) THEN
+      RAISE EXCEPTION 'furnishing authorization provenance is immutable'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    -- 00423 (a)
+    IF OLD.trade_scope_document_id IS NOT NULL
+       AND NEW.trade_scope_document_id IS DISTINCT FROM OLD.trade_scope_document_id
+    THEN
+      RAISE EXCEPTION 'trade scope provenance is immutable'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  -- 00423 (b) — evaluated on INSERT and UPDATE alike, before any early return.
+  IF NEW.trade_scope_document_id IS NOT NULL AND NEW.purchase_order_id IS NOT NULL THEN
+    RAISE EXCEPTION 'trade scope lines are not purchase-orderable'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'UPDATE'
+     AND NEW.purchase_order_id IS NOT DISTINCT FROM OLD.purchase_order_id THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.purchase_order_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+  -- Legacy-origin projects retain the existing 00186 behavior.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.project_commercial_documents d
+    WHERE d.project_id = NEW.project_id AND d.is_origin
+      AND d.document_kind IN ('design_services', 'design_build')
+  ) AND NOT EXISTS (
+    SELECT 1 FROM public.project_external_agreement_evidence e
+    WHERE e.project_id = NEW.project_id
+  ) THEN RETURN NEW; END IF;
+
+  SELECT * INTO v_document FROM public.project_commercial_documents
+  WHERE id = NEW.source_commercial_document_id
+    AND project_id = NEW.project_id
+    AND document_kind = 'furnishings_authorization';
+  SELECT * INTO v_snapshot FROM public.furnishing_authorization_items
+  WHERE id = NEW.source_authorization_item_id
+    AND commercial_document_id = v_document.id;
+  IF v_document.id IS NULL OR v_snapshot.id IS NULL
+     OR v_document.executed_at IS NULL
+     OR NOT EXISTS (
+       SELECT 1 FROM public.proposals p WHERE p.id = v_document.proposal_id
+         AND p.commercial_state = 'executed'
+     )
+  THEN
+    RAISE EXCEPTION 'FF&E item is not covered by an executed furnishing authorization'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_snapshot.item_type = 'allowance' THEN
+    IF NEW.quantity IS DISTINCT FROM v_snapshot.quantity THEN
+      RAISE EXCEPTION 'FF&E quantity or client price differs from its signed snapshot'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.line_total_cents IS NULL
+       OR NEW.line_total_cents > v_snapshot.client_line_total_cents
+       OR NEW.line_total_cents IS DISTINCT FROM
+          (NEW.quantity * COALESCE(NEW.unit_price_cents, -1))
+    THEN
+      RAISE EXCEPTION 'FF&E allowance resolves above its signed ceiling or is internally inconsistent'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSIF NEW.quantity IS DISTINCT FROM v_snapshot.quantity
+     OR NEW.unit_price_cents IS DISTINCT FROM v_snapshot.client_unit_price_cents
+     OR NEW.line_total_cents IS DISTINCT FROM v_snapshot.client_line_total_cents
+  THEN
+    RAISE EXCEPTION 'FF&E quantity or client price differs from its signed snapshot'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_document.deposit_invoice_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.invoices i WHERE i.id = v_document.deposit_invoice_id
+      AND i.status = 'paid' AND i.amount_paid_cents >= i.total_cents
+  ) THEN
+    RAISE EXCEPTION 'furnishings deposit invoice must be paid before purchase ordering'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;

@@ -4,14 +4,29 @@
  * the studio's margin, and a NULL from the read is hidden, never "0".
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { VendorAccountTerms, accountRequestFromForm } from './orders-book-vendors';
+import { VendorsBookPage, VendorAccountTerms, accountRequestFromForm } from './orders-book-vendors';
 
 const mockUpsert = jest.fn();
 let mockCanSeeMargin: boolean | null | undefined = false;
 let mockAccount: Record<string, unknown> | null = null;
 
+let mockOrderItems: Record<string, unknown>[] = [];
+let mockOrderAuthority: Record<string, unknown> = { isSuccess: true, data: null };
+let mockOrderAgreement: Record<string, unknown> = { isSuccess: true, data: { state: 'missing', evidence: null } };
+let mockOrderInstruments: Record<string, unknown> = { isSuccess: true, data: [] };
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+  useQuery: () => ({ data: [] }),
+  useQueries: ({ queries }: { queries: { queryKey: string[] }[] }) => queries.map(q =>
+    q.queryKey[0] === 'project-purchasing-agreement' ? mockOrderAgreement :
+    q.queryKey[0] === 'authority' ? mockOrderAuthority : mockOrderInstruments),
+}));
+jest.mock('./line-unfold/record-quote', () => ({ VendorRecordQuoteAct: () => null }));
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: jest.fn(),
+  useProcurementItems: () => ({ data: mockOrderItems }),
+  useStudioVendorAccounts: () => ({ data: [] }),
   useCanSeeStudioMargin: () => ({ data: mockCanSeeMargin }),
   useStudioVendorAccount: () => ({ data: mockAccount, isLoading: false }),
   useStudioContacts: () => ({
@@ -35,7 +50,7 @@ jest.mock('@/components/portal/procurement/order-paper', () => ({
 }));
 
 jest.mock('@/hooks/use-commercial-documents', () => ({
-  commercialDocumentKeys: {},
+  commercialDocumentKeys: { authority: (id: string) => ['authority', id], instruments: (id: string) => ['instruments', id] },
   fetchProjectBillingAuthority: jest.fn(),
 }));
 
@@ -189,5 +204,32 @@ describe('accountRequestFromForm', () => {
     expect(accountRequestFromForm({ ...blank, netDays: 'thirty' }, null, false)).toEqual({
       error: 'Net days must be a number.',
     });
+  });
+});
+
+
+describe('Orders book external agreement purchase gate', () => {
+  beforeEach(() => {
+    mockOrderAuthority = { isSuccess: true, data: null };
+    mockOrderAgreement = { isSuccess: true, data: { state: 'external_recorded', evidence: { id: 'evidence' } } };
+    mockOrderInstruments = { isSuccess: true, data: [] };
+    mockOrderItems = [{ id: 'line-1', project_id: 'project-1', name: 'Chair', status: 'specified', design_disposition: 'selected', quantity: 1,
+      unit_price_cents: 10000, trade_price_cents: 7000, line_total_cents: 10000, vendor_id: vendor.id, vendor_name: vendor.name }];
+  });
+  const openOrders = () => render(<VendorsBookPage vendors={[vendor]} orders={[]} initialVendorId={vendor.id}
+    initialVendorPage="orders" briefProjectId={null} canSeePoMoney={() => true} onOpenDocument={jest.fn()} />);
+  it('never offers a legacy direct PO for an external-recorded unauthorized line', () => {
+    openOrders();
+    expect(screen.queryByRole('button', { name: /Order all/ })).toBeNull();
+    expect(screen.queryByText(/You can still order/)).toBeNull();
+  });
+  it.each(['loading', 'error'])('holds Orders during purchasing agreement %s', (state) => {
+    mockOrderAgreement = { ...mockOrderAgreement, isSuccess: false, isPending: state === 'loading', isError: state === 'error' };
+    openOrders(); expect(screen.queryByRole('button', { name: /Order all/ })).toBeNull();
+  });
+  it('retains the truly legacy direct PO control', () => {
+    mockOrderAgreement = { isSuccess: true, data: { state: 'missing', evidence: null } };
+    openOrders(); expect(screen.getByRole('button', { name: /Order all/ })).toBeInTheDocument();
+    expect(screen.getByText(/You can still order/)).toBeInTheDocument();
   });
 });

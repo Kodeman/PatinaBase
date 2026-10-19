@@ -1,7 +1,7 @@
 # External signed agreement implementation
 
 ## Goal
-Implement approved US-39, story execution contract revision 2 (SQ-1420; SHA `695144f59098c0f8d46cf4357f96d63a7bfb07eca41f981983d594ad67412c7f`): “Upload the actual signed PDF, record its signed date, require explicit designer confirmation it covers this project, then permit the ordinary purchasing-authorization lifecycle.” Implementation does not deploy or touch production.
+Implement approved US-39, story execution contract revision 3 (SQ-1423; full inherited SQ-1420 candidate `b373bd3512c340bb2522f49757ea298af7ffa80d`): “Upload the actual signed PDF, record its signed date, require explicit designer confirmation it covers this project, then permit the ordinary purchasing-authorization lifecycle.” Implementation does not deploy or touch production.
 
 ## Architecture
 One immutable project evidence row references a private `project-agreements` PDF. Authenticated studio-author RPCs validate the project, stored object and attestation. An internal eligibility helper replaces only the existing design-origin prerequisite in the four current furnishings/checkpoint implementations (revision 2 includes `_publish_budget_checkpoint_00661_impl`). Billing authority and each authorization's own approval requirements remain unchanged. One project-bound sheet serves both the inline warning and existing Spotlight fix slot; a focused React Query hook handles upload, recording, eligibility and private viewing.
@@ -28,3 +28,9 @@ Existing PostgreSQL/Supabase RLS, Storage and RPCs; generated Supabase types; Re
 
 ## Independent review focus
 Tenant/project boundary; restrictive private storage read/upload and immutable identity; unchanged own signatures and billing holds; all three current prerequisite consumers; exact latest-body grafts; realistic SQL and UI failure/lifecycle coverage. Independent cross-provider review and combined integration gate belong to the parent before any production change.
+
+## Revision 3 bounded repair
+- F2: real project/version checkpoint RPC supports external-only publication without proposal-rooted notification; both consumers use purchasing eligibility, report no notification, and retain explicit acknowledgement/audited override before release.
+- F1: graft only immutable-evidence existence into the latest 00578 purchase guard classification; align Orders with the existing purchasing query. No transient eligibility fallback to legacy. Preserve signed snapshot, deposit, provenance and trade checks.
+- F5: reproduce the actual keyboard Spotlight door and restore focus through DocSheet's existing fallback to the durable Prepare action on cancel/success.
+- Focused SQL/Jest assertion controls on inherited source, then restored clean-candidate pinned capture, existing commercial SQL regressions and designer type-check. Prior unchanged storage/PDF evidence remains context; no production, reset or deployment. Existing quality scorer unavailable/owner retired, not rediscovered. No F3/F4/orphan cleanup.

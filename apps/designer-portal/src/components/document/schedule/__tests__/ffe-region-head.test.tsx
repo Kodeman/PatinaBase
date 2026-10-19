@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 let mockAgreement: { data: any; isPending?: boolean; isError?: boolean } = { data: { state: 'missing', evidence: null } };
@@ -776,6 +777,7 @@ describe('US-39 purchasing recovery in the real FF&E head', () => {
     await waitFor(() => expect(document.querySelector('[data-hold-spotlight]')).toBeNull());
     fireEvent.click(within(sheet).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect([prepare, screen.getByRole('button', { name: 'Record signed agreement' })]).toContain(document.activeElement));
     expect(mockRecord).not.toHaveBeenCalled(); expect(mockSend).not.toHaveBeenCalled();
   });
   it.each(['loading', 'error', 'billing loading', 'billing error', 'suspended'])('%s remains closed without an external bypass', (state) => {
@@ -812,4 +814,29 @@ describe('US-39 purchasing recovery in the real FF&E head', () => {
     expect(screen.getByText('Choose what to release')).toBeInTheDocument();
     expect(mockSend).not.toHaveBeenCalled();
   });
+});
+
+
+test.each(['cancel', 'success'])('keyboard Spotlight record %s restores focus to durable Prepare purchasing authorization', async (outcome) => {
+  window.localStorage.clear();
+  mockItems = [line({ product_id: 'product-1' })]; mockRooms = [{ id: 'room-1', name: 'Primary bedroom' }];
+  mockInstruments = []; mockTradeScopes = []; mockReadinessLoading = false; mockAuthority = { data: null };
+  const user = userEvent.setup(); renderRecovery();
+  const prepare = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
+  prepare.focus(); await user.keyboard('{Enter}');
+  const bar = document.querySelector<HTMLElement>('[data-hold-spotlight-bar]')!;
+  const fixer = within(bar).getByRole('button', { name: 'Record signed agreement' });
+  fixer.focus(); await user.keyboard('{Enter}');
+  const sheet = await screen.findByRole('dialog', { name: 'Record signed agreement' });
+  await waitFor(() => expect(document.querySelector('[data-hold-spotlight]')).toBeNull());
+  if (outcome === 'cancel') {
+    await user.click(within(sheet).getByRole('button', { name: 'Cancel' }));
+  } else {
+  await user.upload(within(sheet).getByLabelText('Signed PDF (up to 20 MiB)'), new File(['%PDF-1.4'], 'signed.pdf', { type: 'application/pdf' }));
+  fireEvent.change(within(sheet).getByLabelText('Signed date'), { target: { value: '2020-01-01' } });
+  await user.click(within(sheet).getByRole('checkbox'));
+  within(sheet).getByRole('button', { name: 'Record' }).focus(); await user.keyboard('{Enter}');
+  }
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() => expect(prepare).toHaveFocus());
 });

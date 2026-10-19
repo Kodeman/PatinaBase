@@ -25,8 +25,8 @@ function readAgreement(data: unknown, projectId: string): PurchasingAgreement {
   return value;
 }
 
-export function useProjectPurchasingAgreement(projectId: string) {
-  return useQuery({
+export function projectPurchasingAgreementQueryOptions(projectId: string) {
+  return {
     queryKey: agreementKey(projectId),
     enabled: Boolean(projectId),
     queryFn: async () => {
@@ -36,7 +36,11 @@ export function useProjectPurchasingAgreement(projectId: string) {
       if (error) throw error;
       return readAgreement(data, projectId);
     },
-  });
+  };
+}
+
+export function useProjectPurchasingAgreement(projectId: string) {
+  return useQuery(projectPurchasingAgreementQueryOptions(projectId));
 }
 
 export function useRecordProjectSignedAgreement(projectId: string) {
