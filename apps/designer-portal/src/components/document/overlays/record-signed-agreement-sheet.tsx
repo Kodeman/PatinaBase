@@ -55,7 +55,7 @@ export function RecordSignedAgreementSheet({ projectId, projectName, onClose, fa
             onChange={(event) => { setCoversProject(event.target.checked); setError(null); }} />
           I confirm this signed agreement covers {projectName}.
         </label>
-        {error && <p role="alert" className="text-sm text-[var(--color-clay)]">{error}</p>}
+        {error && <p role="alert" className="text-sm text-[var(--color-clay-ink)]">{error}</p>}
         {record.isPending && <p role="status" className="text-sm">
           {record.stage === 'uploading' ? 'Uploading private PDF…' : 'Recording signed agreement…'}
         </p>}
