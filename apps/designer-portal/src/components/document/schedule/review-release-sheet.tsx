@@ -167,6 +167,7 @@ function ReviewReleaseSheetContent({
   const saving = useRef(false);
   const previewTrigger = useRef<HTMLButtonElement>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [identityUnavailable, setIdentityUnavailable] = useState(false);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const agreementPercent = furnishingsDepositPercent(authority.data);
   const [chosenPercent, setChosenPercent] = useState<number | null>(null);
@@ -251,13 +252,16 @@ function ReviewReleaseSheetContent({
   };
 
   const save = async (preview: boolean) => {
-    if (saving.current || busy || (blocked && !releasedProposalId)) return;
+    if (saving.current || busy || identityUnavailable || (blocked && !releasedProposalId)) return;
     if (releasedProposalId) { setPreviewOpen(preview); return; }
     saving.current = true;
     try {
       const created = await runRelease();
       if (!active.current) return;
-      if (!created?.proposalId) throw new Error('The draft was saved but its identity is unavailable. Open it from the authorization ledger; do not save again.');
+      if (!created?.proposalId) {
+        setIdentityUnavailable(true);
+        throw new Error('The draft was saved but its identity is unavailable. Open it from the authorization ledger; do not save again.');
+      }
       setReleasedProposalId(created.proposalId);
       if (preview) setPreviewOpen(true);
       else onReleased();
@@ -625,7 +629,7 @@ function ReviewReleaseSheetContent({
         <DocumentAction
           actionKey="save-authorization-draft"
           variant="secondary"
-          disabled={busy || blocked || lineCount === 0 || Boolean(releasedProposalId)}
+          disabled={busy || blocked || identityUnavailable || lineCount === 0 || Boolean(releasedProposalId)}
           loading={release.isPending}
           loadingLabel="Drafting…"
           onClick={() => save(false)}
@@ -635,7 +639,7 @@ function ReviewReleaseSheetContent({
         <DocumentAction
           actionKey="send-authorization-for-signature"
           variant={oneVoice ? 'terminal' : 'primary'}
-          disabled={busy || blocked || lineCount === 0}
+          disabled={busy || blocked || identityUnavailable || lineCount === 0}
           loading={release.isPending}
           loadingLabel="Saving…"
           title={

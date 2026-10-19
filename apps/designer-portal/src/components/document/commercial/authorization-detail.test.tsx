@@ -66,6 +66,10 @@ jest.mock("./void-supersede-act", () => ({
   ),
 }));
 
+jest.mock('../overlays/purchasing-authorization-preview-sheet', () => ({
+  PurchasingAuthorizationPreviewSheet: ({ proposalId, projectId, onClose }: any) => <div role="dialog" aria-label="Saved preview"><p>{projectId}:{proposalId}</p><button onClick={onClose}>Back from preview</button></div>,
+}));
+
 import { AuthorizationDetail } from "./authorization-detail";
 
 const baseInstrument: ProjectInstrumentView = {
@@ -360,7 +364,7 @@ describe("AuthorizationDetail", () => {
     expect(screen.queryByLabelText(/schedule now reads/i)).not.toBeInTheDocument();
   });
 
-  it("offers Send for signature only while the authorization is a draft", () => {
+  it("offers Preview only while the authorization is a draft", () => {
     const { rerender } = render(
       <AuthorizationDetail
         projectId="project-1"
@@ -369,7 +373,7 @@ describe("AuthorizationDetail", () => {
         onClose={jest.fn()}
       />,
     );
-    expect(screen.getByRole("button", { name: "Send for signature" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Preview" })).toBeVisible();
 
     rerender(
       <AuthorizationDetail
@@ -380,7 +384,7 @@ describe("AuthorizationDetail", () => {
       />,
     );
     expect(
-      screen.queryByRole("button", { name: "Send for signature" }),
+      screen.queryByRole("button", { name: "Preview" }),
     ).not.toBeInTheDocument();
   });
 
@@ -542,4 +546,20 @@ describe("AuthorizationDetail \u00b7 the dispatch band's delivery word", () => {
 
     expect(screen.queryByTestId("delivery-word")).toBeNull();
   });
+});
+
+
+it('opens and closes an existing draft preview read-only and isolates a replacement document', () => {
+  const draft = { ...baseInstrument, state: 'draft' as const };
+  const { rerender } = render(<AuthorizationDetail projectId="project-1" instrument={draft} open onClose={jest.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  expect(screen.getByRole('dialog', { name: 'Saved preview' })).toHaveTextContent(draft.proposalId);
+  fireEvent.click(screen.getByRole('button', { name: 'Back from preview' }));
+  expect(sendAuthorization).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  rerender(<AuthorizationDetail projectId="project-2" instrument={{ ...draft, proposalId: 'replacement' }} open onClose={jest.fn()} />);
+  expect(screen.queryByRole('dialog', { name: 'Saved preview' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  expect(screen.getByRole('dialog', { name: 'Saved preview' })).toHaveTextContent('project-2:replacement');
+  expect(sendAuthorization).not.toHaveBeenCalled();
 });

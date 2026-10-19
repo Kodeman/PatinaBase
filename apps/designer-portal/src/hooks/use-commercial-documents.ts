@@ -1334,6 +1334,8 @@ export function useFurnishingsAuthorizationPreview(proposalId: string | null, pr
     enabled: Boolean(proposalId),
     retry: false,
     staleTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async (): Promise<FurnishingsAuthorizationPreview> => {
       if (!proposalId) throw new Error("Choose a saved authorization to preview.");
       const { data, error } = await getSupabase().rpc("get_commercial_document_send_snapshot", { p_proposal_id: proposalId });

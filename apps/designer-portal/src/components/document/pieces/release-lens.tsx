@@ -26,7 +26,7 @@
  * Nothing here edits a spec or a price.
  */
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useDraftRelease,
@@ -114,7 +114,11 @@ const COLUMNS = [
 const NO_CLIENT = "Link a client to this job before releasing.";
 const VOID_REASON = "Voided in the Build room to release again.";
 
-export function ReleaseLens({
+export function ReleaseLens(props: ReleaseLensProps) {
+  return <ReleaseLensContent key={props.projectId} {...props} />;
+}
+
+function ReleaseLensContent({
   projectId,
   room,
   canSeeMoney,
@@ -161,7 +165,7 @@ export function ReleaseLens({
       </p>
     );
   }
-  if (rawLines && model.groups.length === 0) {
+  if (rawLines && model.groups.length === 0 && !canSeeMoney) {
     return (
       <p className="max-w-[56ch] py-6 font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
         No selections yet. Add them in Preliminary selections, then return for purchasing authorization.
@@ -503,6 +507,9 @@ function Ceremony({
   const voidDraft = useVoidAuthorization(projectId);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [identityUnavailable, setIdentityUnavailable] = useState(false);
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -516,7 +523,7 @@ function Ceremony({
   const settled = project != null && draft.data !== undefined;
   const noClient = project != null && project.client_id == null;
   const pending = draft.data ?? null;
-  const previewSheet = previewOpen && previewId ? <PurchasingAuthorizationPreviewSheet projectId={projectId} proposalId={previewId} clientName={project?.client_name ?? undefined} fallbackFocusRef={previewReturn} onClose={() => setPreviewOpen(false)} onSent={() => { setPreviewOpen(false); setDone("Authorization sent. Email delivery is tracked on the saved authorization."); }} /> : null;
+  const previewSheet = previewOpen && previewId ? <PurchasingAuthorizationPreviewSheet projectId={projectId} proposalId={previewId} fallbackFocusRef={previewReturn} onClose={() => setPreviewOpen(false)} onSent={() => { setPreviewOpen(false); setDone("Authorization sent. Email delivery is tracked on the saved authorization."); }} /> : null;
 
   const attempt = async (act: () => Promise<string>) => {
     if (busy || acting.current) return;
@@ -525,9 +532,10 @@ function Ceremony({
     setError(null);
     setDone(null);
     try {
-      setDone(await act());
+      const message = await act();
+      if (active.current) setDone(message);
     } catch (cause) {
-      setError(releaseRefusalMessage(cause));
+      if (active.current) setError(releaseRefusalMessage(cause));
     } finally {
       // Every read the lens draws from: the lines (their stage and their
       // authorization), the server gate, and the draft. A draft made before a
@@ -540,13 +548,13 @@ function Ceremony({
         draft.refetch(),
       ]);
       acting.current = false;
-      setRereading(false);
+      if (active.current) setRereading(false);
     }
   };
 
   const errorNote = error && (
     <p role="alert" className="font-sans text-[14px] text-[var(--sheet-ink)]">
-      {error}
+      {identityUnavailable ? "The draft was saved but its identity is unavailable. Open the authorization ledger; do not save again." : error}
     </p>
   );
   const doneNote = done && (
@@ -556,6 +564,7 @@ function Ceremony({
   );
   const noClientNote = <p className={CONSEQUENCE_CLS}>{NO_CLIENT}</p>;
 
+  const content = () => {
   if (draft.isError) {
     return (
       <p
@@ -581,7 +590,6 @@ function Ceremony({
         aria-label="This release"
         className="ml-auto flex max-w-[640px] flex-col items-end gap-3 text-right"
       >
-        {previewSheet}
         <p className={CONSEQUENCE_CLS}>{draftReleaseHead(shown)}</p>
         <CeremonyLines set={shown} />
         <p className={CONSEQUENCE_CLS}>
@@ -629,7 +637,7 @@ function Ceremony({
     );
   }
 
-  if (set.rows.length === 0) {
+  if (set.rows.length === 0 && !previewId && !identityUnavailable) {
     return (
       <div className="flex flex-col items-end gap-3 text-right">
         {done && (
@@ -646,7 +654,7 @@ function Ceremony({
   }
 
   const run = () => {
-    if (!settled || noClient) return;
+    if (!settled || noClient || identityUnavailable) return;
     if (previewId) { setPreviewOpen(true); return; }
     const ids = set.rows.map((r) => r.line.id);
     void attempt(async () => {
@@ -655,6 +663,11 @@ function Ceremony({
         name: `Furnishings authorization № ${number}`,
         ffeItemIds: ids,
       });
+      if (!active.current) return "";
+      if (!created?.proposalId) {
+        setIdentityUnavailable(true);
+        throw new Error("The draft was saved but its identity is unavailable. Open the authorization ledger; do not save again.");
+      }
       setPreviewId(created.proposalId);
       setPreviewOpen(true);
       return "Draft saved. Nothing has been sent to the client.";
@@ -666,7 +679,6 @@ function Ceremony({
       aria-label="This release"
       className="ml-auto flex max-w-[640px] flex-col items-end gap-3 text-right"
     >
-      {previewSheet}
       <p className={CONSEQUENCE_CLS}>{releaseSetHead(set)}</p>
       <CeremonyLines set={set} />
       <LeftOut omitted={omitted} />
@@ -679,12 +691,14 @@ function Ceremony({
         <button
           type="button"
           className={TERMINAL_CLS}
-          aria-disabled={busy || !settled || undefined}
+          aria-disabled={busy || !settled || identityUnavailable || undefined}
           onClick={run}
         >
-          Save draft &amp; preview
+          {previewId ? "Preview" : "Save draft & preview"}
         </button>
       )}
     </section>
   );
+  };
+  return <>{previewSheet}{content()}</>;
 }
