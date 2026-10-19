@@ -1,7 +1,7 @@
 -- US-40: saved preview is an atomic, client-safe, read-only author snapshot.
 -- Local only; rollback fixtures and never invoke external delivery.
 BEGIN;
-SET LOCAL statement_timeout = '60s';
+SET LOCAL statement_timeout = '5s';
 SET LOCAL timezone = 'UTC';
 CREATE FUNCTION pg_temp.preview_as(actor uuid) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
@@ -132,18 +132,34 @@ CREATE TEMP TABLE reviewed AS SELECT public.get_commercial_document_send_snapsho
 -- Draft metadata may change, frozen item rows may not. The existing comparator
 -- must refuse the displayed old token BEFORE any transition or delivery work.
 UPDATE proposals SET description='Changed after review' WHERE id='83614260-0000-4000-8000-000000000030';
+CREATE TEMP TABLE before_stale_send AS
+SELECT to_jsonb(p) proposal,
+       (SELECT COALESCE(jsonb_agg(to_jsonb(d) ORDER BY d.id), '[]'::jsonb)
+        FROM proposal_send_dispatches d WHERE d.proposal_id = p.id) dispatches
+FROM proposals p WHERE p.id='83614260-0000-4000-8000-000000000030';
 GRANT SELECT ON reviewed TO authenticated;
 SET LOCAL ROLE authenticated;
-DO $$ BEGIN
+DO $$
+DECLARE refusal text;
+BEGIN
   BEGIN
     PERFORM public.send_commercial_document('83614260-0000-4000-8000-000000000030',(SELECT fingerprint FROM reviewed));
-    RAISE EXCEPTION 'P13 stale reviewed fingerprint must refuse';
-  EXCEPTION WHEN serialization_failure THEN NULL; END;
+    RAISE EXCEPTION 'P13 stale reviewed fingerprint must refuse with PT409';
+  EXCEPTION WHEN SQLSTATE 'PT409' OR serialization_failure THEN
+    GET STACKED DIAGNOSTICS refusal = RETURNED_SQLSTATE;
+    IF refusal IS DISTINCT FROM 'PT409' THEN
+      RAISE EXCEPTION 'P13 stale reviewed fingerprint must refuse with PT409, got %', refusal;
+    END IF;
+  END;
 END $$;
 RESET ROLE;
 DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM proposals WHERE id='83614260-0000-4000-8000-000000000030' AND (sent_at IS NOT NULL OR status <> 'draft' OR commercial_state <> 'draft')) THEN
-    RAISE EXCEPTION 'P14 stale refusal leaves unsent draft';
+  IF (SELECT proposal FROM before_stale_send) IS DISTINCT FROM
+       (SELECT to_jsonb(p) FROM proposals p WHERE p.id='83614260-0000-4000-8000-000000000030')
+     OR (SELECT dispatches FROM before_stale_send) IS DISTINCT FROM
+       (SELECT COALESCE(jsonb_agg(to_jsonb(d) ORDER BY d.id), '[]'::jsonb) FROM proposal_send_dispatches d
+        WHERE d.proposal_id='83614260-0000-4000-8000-000000000030') THEN
+    RAISE EXCEPTION 'P14 stale PT409 refusal leaves exact proposal and dispatches unchanged';
   END IF;
   RAISE NOTICE 'P6-P14 access, no mutation, STABLE and stale refusal passed; no external delivery invoked';
 END $$;

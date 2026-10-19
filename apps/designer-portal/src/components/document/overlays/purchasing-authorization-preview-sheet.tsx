@@ -63,7 +63,7 @@ function SavedPreview({ projectId, proposalId, clientName, onClose, onSent, fall
     } catch (cause) {
       if (!active.current) return;
       const code = (cause as { code?: string })?.code;
-      if (code === '40001' || code === 'serialization_failure') {
+      if (code === 'PT409' || code === '40001' || code === 'serialization_failure') {
         setHeld(true);
         setError('This authorization changed. Reload and review the saved preview before sending.');
       } else if (code === '42501' || code === 'insufficient_privilege') {

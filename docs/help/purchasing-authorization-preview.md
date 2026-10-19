@@ -23,7 +23,7 @@ Saved authorization items cannot be edited in place. To change them, explicitly 
 
 - **Saving fails:** review the error and retry the save when appropriate.
 - **Preview fails to load:** retry reading the saved preview. Do not create a replacement draft. If the save succeeded but its identity could not be recovered, open the authorization ledger rather than saving again.
-- **Content changed after review:** reload the preview, review it again, then choose Send. Reloading never sends automatically.
+- **Content changed after review:** reload the preview, review it again, then choose Send. Reloading never sends automatically. Both the current conflict response (`PT409`, HTTP 409) and the older `40001` response keep Send held until that explicit reload.
 - **Draft is no longer available:** Send remains held. Check the saved authorization’s current state; do not recreate it automatically.
 - **Authorization sent but email is pending or failed:** follow the saved authorization’s delivery status and existing email retry action. Do not create or send another authorization to retry notification.
 

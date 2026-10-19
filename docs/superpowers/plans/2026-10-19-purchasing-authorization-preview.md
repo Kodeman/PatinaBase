@@ -116,7 +116,7 @@ Both portals already import the design-system typography classes. Scope the desi
 - [ ] Replace create-and-send forward action with **Save draft & preview** and the explicit reservation/no-send explanation. Retain the saved ID through preview-load failure and close/reopen.
 - [ ] Add **Preview** for existing drafts and route BOTH release-lens send sites through it: pending-draft Send at line 618 and create-and-send at line 657. Together with review-release-sheet and authorization-detail, that is four send sites in three production callers. Never expose a fallback direct-send action that silently obtains an unreviewed fingerprint.
 - [ ] Render the persisted shared body with **Preview · Not sent**, existing recipient information, Close/Back and distinct **Send to client**. Hide non-applicable live signing/payment controls.
-- [ ] Bind Send to the displayed ID/fingerprint. Hold on both `serialization_failure` (content changed) and `insufficient_privilege` (already sent, voided or unavailable); never recreate automatically. Offer reload/re-review where applicable, but never auto-send after reload. A successful transition with pending email uses its existing dispatch identity, not a second send transition.
+- [ ] Bind Send to the displayed ID/fingerprint. Hold on `PT409` (HTTP 409 domain conflict), legacy `40001`/`serialization_failure` (content changed) and `42501`/`insufficient_privilege` (already sent, voided or unavailable); never recreate or retry automatically. Offer reload/re-review where applicable, but never auto-send after reload. A successful transition with pending email uses its existing dispatch identity, not a second send transition.
 - [ ] Test save once/no send, preview retry without recreate, existing-draft read-only open/close, successful send, stale refusal, notification pending, no duplicate retry, project switch/out-of-order data, keyboard return focus and cancellation.
 - [ ] Run the hook test plus the four focused designer UI test files with `pnpm --filter @patina/designer-portal exec jest --runInBand <the exact paths above>`; freeze the expanded concrete command on the implementation ticket before dispatch.
 
@@ -145,6 +145,14 @@ Independent review binds the entire submitted candidate and reports every findin
 - [ ] Production smoke may open the real project's existing UI/read-only preview if available. Do not save test authorizations, upload fake agreements or Send to client. Report honestly if real draft data prevents a full production walk.
 - [ ] Record migration, commits, deployment IDs, test evidence and remaining manual steps; retire only this team's owned worktrees/tabs safely.
 
+
+## Repair evidence — 2026-10-19 (not acceptance)
+
+SQ-1435 preserves the original feature and lifecycle/null-room checkpoint ancestry. Local provisional `00837_commercial_send_conflict_status.sql` copies the latest complete `00578` send body and changes only its two deliberate fingerprint-conflict SQLSTATEs to `PT409`; genuine serialization errors, locking, author checks and cleanup remain unchanged. PostgREST v14.5 retries custom `40001` indefinitely ([Supabase troubleshooting](https://supabase.com/docs/guides/troubleshooting/high-cpu-and-infinite-transaction-retries-when-using-custom-error-codes-in-rpc-functions-77326b)); no runtime/config upgrade is part of this repair.
+
+Direct SQL negative control failed P13 with expected PT409 / actual 40001. Repaired preview P1–P14 passed, including exact proposal/dispatch equality; existing `authorized_schedule_test.sql` passed transactional valid sends and execution with rollback and no outbound invocation. The PT409 overlay control failed its hold assertion; restored hook/overlay tests passed 2 suites / 69 tests. Eight normal dependency builds and DS/designer/client type checks passed. Pinned type generation produced no diff; grant replay regenerated. Evidence lives in board-owned `verification/SQ-1435/pt409-*` and `continuation-*` logs, not this repository.
+
+These are focused producer checks, not final acceptance. A fresh committed pinned capture, the single bounded authenticated stale HTTP proof (only with precisely owned backend cleanup), and independent review remain pending. No HTTP Send or delivery was invoked by this continuation. Complexity/coverage remains UNVERIFIED because the configured scorer is unavailable; no installation attempted.
 
 ## Settled deposit correction — 2026-10-19
 

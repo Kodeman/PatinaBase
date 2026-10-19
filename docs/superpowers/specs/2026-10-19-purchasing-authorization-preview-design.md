@@ -47,7 +47,7 @@ An existing saved draft also has a **Preview** action in its authorization detai
 - Show the existing recipient information beside the final action; this feature does not add recipient editing or an email composer.
 - Send the persisted authorization and the content version actually reviewed. A freshly fetched fingerprint must not silently authorize a changed, unreviewed document.
 - Reuse the existing send transition, agreement/checkpoint checks and notification path. Loading, invalid data, changed content and failed checks keep Send held.
-- If data changed, explain what needs review and require the designer to load and inspect the updated preview.
+- If data changed, explain what needs review and require the designer to load and inspect the updated preview. The send RPC reports deliberate fingerprint conflicts as `PT409` (HTTP 409); the preview also holds legacy `40001`/`serialization_failure` and unavailable `42501` responses during rollout. No automatic retry, replacement review token or delivery follows a refused transition.
 - Preserve retry identity: a failed send never creates another authorization. Distinguish a failed document transition from a notification failure after the transition, and follow the existing retry behavior rather than inventing a second sender.
 
 ## Privacy and authority

@@ -66,7 +66,7 @@ describe('saved purchasing authorization preview', () => {
     expect(sendButton()).not.toHaveAttribute('aria-disabled', 'true'); expect(mockSend).not.toHaveBeenCalled();
   });
 
-  it.each(['40001', 'serialization_failure', '42501', 'insufficient_privilege'])('holds transition failure %s until explicit reload and re-review', async (code) => {
+  it.each(['PT409', '40001', 'serialization_failure', '42501', 'insufficient_privilege'])('holds transition failure %s until explicit reload and re-review', async (code) => {
     mockSend.mockRejectedValueOnce({ code });
     const { rerender } = render(<PurchasingAuthorizationPreviewSheet {...props} />);
     await act(async () => { fireEvent.click(sendButton()); });
@@ -74,7 +74,9 @@ describe('saved purchasing authorization preview', () => {
     mockRead.data = saved({ documentFingerprint: 'reviewed-v2' }); rerender(<PurchasingAuthorizationPreviewSheet {...props} />);
     expect(sendButton()).toHaveAttribute('aria-disabled', 'true');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Reload preview' })); });
-    expect(mockSend).toHaveBeenCalledTimes(1); expect(sendButton()).not.toHaveAttribute('aria-disabled', 'true');
+    expect(mockSend).toHaveBeenCalledTimes(1); expect(mockRetry).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Retry email delivery' })).not.toBeInTheDocument();
+    expect(sendButton()).not.toHaveAttribute('aria-disabled', 'true');
     await act(async () => { fireEvent.click(sendButton()); });
     expect(mockSend).toHaveBeenLastCalledWith({ proposalId: 'saved-1', expectedFingerprint: 'reviewed-v2' });
   });

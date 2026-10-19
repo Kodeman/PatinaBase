@@ -1382,6 +1382,17 @@ describe('saved purchasing authorization preview', () => {
     expect(rpc.mock.calls.every(call => call[0] === 'get_commercial_document_send_snapshot')).toBe(true);
   });
 
+  it.each(['PT409', '40001', '42501'])('preserves conflict %s without retry, replacement token or delivery', async (code) => {
+    const failure = { code, message: 'Saved review no longer sendable' };
+    rpc.mockResolvedValueOnce({ data: null, error: failure });
+    const mutation = useSendFurnishingsAuthorization('project-1') as unknown as { retry: boolean; mutationFn: (input: any) => Promise<any> };
+    expect(mutation.retry).toBe(false);
+    await expect(mutation.mutationFn({ proposalId: 'proposal-1', expectedFingerprint: 'reviewed-1' })).rejects.toBe(failure);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('send_commercial_document', { p_proposal_id: 'proposal-1', p_expected_fingerprint: 'reviewed-1', p_personal_message: null, p_valid_until: null });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it('requires a reviewed token and invalidates the displayed proposal identity after send', async () => {
     const mutation = useSendFurnishingsAuthorization('project-1') as unknown as { mutationFn: (input: any) => Promise<any>; onSuccess: (data: unknown, variables: any) => Promise<void> };
     await expect(mutation.mutationFn({ proposalId: 'proposal-1', expectedFingerprint: '' })).rejects.toThrow('Review the saved authorization');
