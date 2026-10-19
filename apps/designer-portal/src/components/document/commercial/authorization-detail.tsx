@@ -10,7 +10,7 @@
  *   VoidAct            the terracotta scored act (void-supersede-act.tsx)
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type ComponentProps } from "react";
 import {
   useEmailDelivery,
   useProposalSendDispatchStatus,
@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/controls";
 import {
   useAuthorizationLineDrift,
   useCommercialDocument,
-  useSendFurnishingsAuthorization,
 } from "@/hooks/use-commercial-documents";
 import { signedOnPaperNote } from "@/lib/document/commercial-documents";
 import {
@@ -32,6 +31,7 @@ import {
 } from "@/lib/document/project-commerce";
 import { DeliveryWord } from "../delivery-word";
 import { DocSheet } from "../overlays/doc-sheet";
+import { PurchasingAuthorizationPreviewSheet } from "../overlays/purchasing-authorization-preview-sheet";
 import {
   RECORD_ON_PAPER_ACT_LABEL,
   RecordOnPaperSheet,
@@ -192,7 +192,11 @@ function DispatchRetryBand({
   );
 }
 
-export function AuthorizationDetail({
+export function AuthorizationDetail(props: ComponentProps<typeof AuthorizationDetailContent>) {
+  return <AuthorizationDetailContent key={`${props.projectId}:${props.instrument?.proposalId ?? ''}`} {...props} />;
+}
+
+function AuthorizationDetailContent({
   projectId,
   instrument,
   clientName = "",
@@ -209,8 +213,8 @@ export function AuthorizationDetail({
   open: boolean;
   onClose: () => void;
 }) {
-  const sendAuthorization = useSendFurnishingsAuthorization(projectId);
-  const [sendError, setSendError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const previewTrigger = useRef<HTMLButtonElement>(null);
   const [recordOnPaperOpen, setRecordOnPaperOpen] = useState(false);
 
   const items = useMemo(
@@ -261,17 +265,6 @@ export function AuthorizationDetail({
         : items.length
       : 0;
 
-  const send = async () => {
-    setSendError(null);
-    try {
-      await sendAuthorization.mutateAsync(instrument.proposalId);
-    } catch (error) {
-      setSendError(
-        error instanceof Error ? error.message : "The authorization could not be sent.",
-      );
-    }
-  };
-
   return (
     <DocSheet
       open={open}
@@ -291,10 +284,10 @@ export function AuthorizationDetail({
           <Button
             className="mt-3"
             size="sm"
-            loading={sendAuthorization.isPending}
-            onClick={send}
+            ref={previewTrigger}
+            onClick={() => setPreviewOpen(true)}
           >
-            Send for signature
+            Preview
           </Button>
         )}
         {instrument.state === "sent" && (
@@ -307,11 +300,7 @@ export function AuthorizationDetail({
             {RECORD_ON_PAPER_ACT_LABEL.furnishings}
           </Button>
         )}
-        {sendError && (
-          <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">
-            {sendError}
-          </p>
-        )}
+
 
         <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-[var(--doc-ink-border)] py-4 sm:grid-cols-4">
           <Figure label="authorized" value={money(instrument.totalAmountCents)} />
@@ -406,6 +395,8 @@ export function AuthorizationDetail({
           </div>
         )}
       </div>
+
+      {previewOpen && <PurchasingAuthorizationPreviewSheet projectId={projectId} proposalId={instrument.proposalId} clientName={clientName} fallbackFocusRef={previewTrigger} onClose={() => setPreviewOpen(false)} />}
 
       <RecordOnPaperSheet
         kind="furnishings"

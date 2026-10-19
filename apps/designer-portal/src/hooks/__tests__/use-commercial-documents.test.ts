@@ -5,6 +5,7 @@ const fromMock = jest.fn();
 const fetchMock = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
+  emailDeliveryKeys: { all: ['email-delivery'] },
   commercialKeys: {
     all: ['commercial-documents'],
     document: (id: string) => ['commercial-documents', id],
@@ -48,6 +49,7 @@ import {
   useReleaseForAuthorization,
   useReplayCommercialNotification,
   useSendFurnishingsAuthorization,
+  useFurnishingsAuthorizationPreview,
   useSendTradeRfq,
   useSetBudgetTargets,
   useVoidAuthorization,
@@ -542,10 +544,6 @@ describe('designer commercial document hooks', () => {
   it('uses proposal-send as the single client delivery for a sent wave', async () => {
     rpc
       .mockResolvedValueOnce({
-        data: { documentFingerprint: 'fingerprint-1' },
-        error: null,
-      })
-      .mockResolvedValueOnce({
         data: {
           sentAt: '2026-08-03T12:00:00Z',
           proposalSendDispatchId: 'dispatch-1',
@@ -557,11 +555,13 @@ describe('designer commercial document hooks', () => {
       error: null,
     });
     const mutation = useSendFurnishingsAuthorization('project-1') as unknown as {
-      mutationFn: (proposalId: string) => Promise<unknown>;
+      mutationFn: (input: { proposalId: string; expectedFingerprint: string }) => Promise<unknown>;
     };
 
-    const result = (await mutation.mutationFn('wave-proposal-1')) as Record<string, unknown>;
+    const result = (await mutation.mutationFn({ proposalId: 'wave-proposal-1', expectedFingerprint: 'reviewed-fingerprint' })) as Record<string, unknown>;
 
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('send_commercial_document', { p_proposal_id: 'wave-proposal-1', p_expected_fingerprint: 'reviewed-fingerprint', p_personal_message: null, p_valid_until: null });
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith('proposal-send', {
       body: {
@@ -582,10 +582,6 @@ describe('designer commercial document hooks', () => {
   it('does not repeat the durable FF&E send when edge delivery is pending', async () => {
     rpc
       .mockResolvedValueOnce({
-        data: { documentFingerprint: 'fingerprint-1' },
-        error: null,
-      })
-      .mockResolvedValueOnce({
         data: {
           sentAt: '2026-08-03T12:00:00Z',
           proposalSendDispatchId: 'dispatch-1',
@@ -597,12 +593,12 @@ describe('designer commercial document hooks', () => {
       error: { message: 'edge unavailable' },
     });
     const mutation = useSendFurnishingsAuthorization('project-1') as unknown as {
-      mutationFn: (proposalId: string) => Promise<Record<string, unknown>>;
+      mutationFn: (input: { proposalId: string; expectedFingerprint: string }) => Promise<Record<string, unknown>>;
     };
 
-    const result = await mutation.mutationFn('wave-proposal-1');
+    const result = await mutation.mutationFn({ proposalId: 'wave-proposal-1', expectedFingerprint: 'reviewed-fingerprint' });
 
-    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(result).toEqual(
       expect.objectContaining({
@@ -1326,4 +1322,94 @@ describe('external-only checkpoint publication', () => {
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(invoke).not.toHaveBeenCalled();
   });
+});
+
+
+describe('saved purchasing authorization preview', () => {
+  const snapshot = () => ({
+    proposalId: 'proposal-1', documentFingerprint: 'reviewed-1', updatedAt: '2026-10-19',
+    furnishingsPreview: { proposalId: 'proposal-1', projectId: 'project-1', title: 'Saved authorization', state: 'draft', body: {
+      totalAmountCents: 200000, depositPercent: 50,
+      items: [{ description: 'Frozen flooring', roomName: 'Hall', quantity: 913, unit: 'sq_ft', rooms: [{ name: 'Hall', quantity: 913, unit: 'sq_ft' }], clientUnitPriceCents: 219, clientLineTotalCents: 200000, currency: 'USD', allowance: true }],
+    } },
+  });
+  type PreviewQuery = { queryKey: unknown; enabled: boolean; queryFn: () => Promise<any> };
+  const query = (id: string | null = 'proposal-1', projectId = 'project-1') => useFurnishingsAuthorizationPreview(id, projectId) as unknown as PreviewQuery;
+  beforeEach(() => { rpc.mockReset(); invoke.mockReset(); invalidateQueries.mockReset(); });
+
+  it('reads a saved body and its reviewed fingerprint atomically without mutations or invoice data', async () => {
+    const payload = snapshot();
+    Object.assign(payload.furnishingsPreview.body, { depositPaidCents: 90000, depositRequiredCents: 123400 });
+    Object.assign(payload.furnishingsPreview.body.items[0], { tradeUnitPriceCents: 777, notes: 'private' });
+    rpc.mockResolvedValue({ data: payload, error: null });
+    const preview = await query().queryFn();
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('get_commercial_document_send_snapshot', { p_proposal_id: 'proposal-1' });
+    expect(preview.documentFingerprint).toBe('reviewed-1');
+    expect(preview.body.items[0]).toMatchObject({ clientLineTotalCents: 200000, quantity: 913, unit: 'sq_ft' });
+    expect(JSON.stringify(preview)).not.toMatch(/depositPaidCents|depositRequiredCents|tradeUnitPriceCents|private/);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('keys reads by project and document and disables reads without a saved identity', async () => {
+    expect(query().queryKey).toEqual(['furnishings-authorization-preview', 'project-1', 'proposal-1']);
+    expect(query('proposal-2', 'project-2').queryKey).toEqual(['furnishings-authorization-preview', 'project-2', 'proposal-2']);
+    expect(query(null).enabled).toBe(false);
+    await expect(query(null).queryFn()).rejects.toThrow('Choose a saved authorization');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('rejects mismatched document, project, malformed prices and missing reviewed tokens', async () => {
+    for (const change of [
+      (p: any) => { p.proposalId = 'other'; },
+      (p: any) => { p.furnishingsPreview.proposalId = 'other'; },
+      (p: any) => { p.furnishingsPreview.projectId = 'other'; },
+      (p: any) => { p.documentFingerprint = ''; },
+      (p: any) => { p.furnishingsPreview.body.items[0].clientLineTotalCents = '200000'; },
+      (p: any) => { p.furnishingsPreview.body.items = []; },
+    ]) {
+      const p = snapshot(); change(p); rpc.mockResolvedValue({ data: p, error: null });
+      await expect(query().queryFn()).rejects.toThrow();
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on read errors without creating or sending an authorization', async () => {
+    const error = { code: '42501', message: 'unavailable' };
+    rpc.mockResolvedValue({ data: null, error });
+    await expect(query().queryFn()).rejects.toEqual(error);
+    expect(invoke).not.toHaveBeenCalled();
+    expect(rpc.mock.calls.every(call => call[0] === 'get_commercial_document_send_snapshot')).toBe(true);
+  });
+
+  it('requires a reviewed token and invalidates the displayed proposal identity after send', async () => {
+    const mutation = useSendFurnishingsAuthorization('project-1') as unknown as { mutationFn: (input: any) => Promise<any>; onSuccess: (data: unknown, variables: any) => Promise<void> };
+    await expect(mutation.mutationFn({ proposalId: 'proposal-1', expectedFingerprint: '' })).rejects.toThrow('Review the saved authorization');
+    expect(rpc).not.toHaveBeenCalled();
+    await mutation.onSuccess({}, { proposalId: 'proposal-1', expectedFingerprint: 'reviewed-1' });
+    expect(invalidatedKeys()).toContain(JSON.stringify(['furnishings-authorization-preview']));
+    expect(invalidatedKeys()).toContain(JSON.stringify(['commercial-documents', 'proposal-1']));
+    expect(invalidatedKeys()).not.toContain(JSON.stringify(['commercial-documents', { proposalId: 'proposal-1', expectedFingerprint: 'reviewed-1' }]));
+  });
+});
+
+
+it('normalizes SQL nullable room names to the actual client projection while retaining the reviewed Send token', async () => {
+  const { adaptCommercialDocumentBundle } = require('../../../../client-portal/src/lib/commercial-documents');
+  const item = { description: 'Frozen floor', roomName: null, quantity: 913, unit: 'sq_ft', rooms: [{ name: null, quantity: 1, unit: 'sq_ft' }, { name: 'Hall', quantity: 400, unit: 'sq_ft' }, { name: 'Living', quantity: 513, unit: 'sq_ft' }], clientUnitPriceCents: 219, clientLineTotalCents: 200000, currency: 'USD', allowance: true, itemType: 'allowance' };
+  rpc.mockReset(); invoke.mockReset();
+  rpc.mockResolvedValueOnce({ data: { proposalId: 'proposal-1', documentFingerprint: 'reviewed-null-rooms', furnishingsPreview: { proposalId: 'proposal-1', projectId: 'project-1', title: 'Frozen', state: 'draft', body: { items: [item], totalAmountCents: 200000, depositPercent: 50 } } }, error: null });
+  const query = useFurnishingsAuthorizationPreview('proposal-1', 'project-1') as unknown as { queryFn: () => Promise<any> };
+  const reading = query.queryFn();
+  await expect(reading).resolves.toMatchObject({ documentFingerprint: 'reviewed-null-rooms' });
+  const preview = await reading;
+  const actualClient = adaptCommercialDocumentBundle({ document: { id: 'proposal-1', kind: 'furnishings_authorization', totalAmountCents: 200000, depositPercent: 50 }, furnishings: { items: [item] } });
+  expect(preview.body.items).toEqual(actualClient.furnishings.items);
+  expect(preview.body.items[0]).toMatchObject({ roomName: 'General', unit: 'sq_ft', rooms: [{ name: 'Hall', quantity: 400, unit: 'sq_ft' }, { name: 'Living', quantity: 513, unit: 'sq_ft' }] });
+  expect(rpc).toHaveBeenCalledTimes(1); expect(invoke).not.toHaveBeenCalled();
+  rpc.mockResolvedValueOnce({ data: {}, error: null });
+  const send = useSendFurnishingsAuthorization('project-1') as unknown as { mutationFn: (input: any) => Promise<any> };
+  await send.mutationFn({ proposalId: preview.proposalId, expectedFingerprint: preview.documentFingerprint });
+  expect(rpc).toHaveBeenLastCalledWith('send_commercial_document', expect.objectContaining({ p_proposal_id: 'proposal-1', p_expected_fingerprint: 'reviewed-null-rooms' }));
+  expect(rpc).toHaveBeenCalledTimes(2); expect(invoke).not.toHaveBeenCalled();
 });

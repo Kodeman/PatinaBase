@@ -11,13 +11,13 @@
  * - **READY FOR LEAH** on each room heading records a hand-back (00742) and
  *   writes nothing else: no disposition, no select, no release.
  * - **The ceremony** names its whole set, labor included, then the consequence
- *   sentence, then the one terminal act. It drafts the authorization through
- *   `create_furnishings_authorization_from_schedule` and sends it, so the lines
- *   read RELEASED. A seat without money sees the table, never the ceremony.
+ *   sentence, then the explicit save. It drafts the authorization through
+ *   `create_furnishings_authorization_from_schedule` and opens the saved preview.
+ *   Sending is a separate act there. A seat without money sees only the table.
  * - **A drafted release** is read from the server (00755
- *   `draft_release_for_project`), never kept in React state. While one exists
- *   the ceremony shows its lines with SEND THE DRAFT and VOID THE DRAFT, and
- *   offers no new release.
+ *   `draft_release_for_project`). While one exists the ceremony shows its lines
+ *   with Preview and Void authorization draft, and offers no new release.
+ *   A newly saved preview retains its ID even if the draft reread fails.
  * - **No client linked:** the send would be refused, so the act is replaced
  *   by a sentence and nothing is drafted.
  * - **Refusals** read as sentences (`releaseRefusalMessage`), never SQL text,
@@ -26,7 +26,7 @@
  * Nothing here edits a spec or a price.
  */
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useDraftRelease,
@@ -41,7 +41,6 @@ import type { FfeAssignmentScope } from "@patina/types";
 import {
   useProjectInstruments,
   useReleaseForAuthorization,
-  useSendFurnishingsAuthorization,
   useVoidAuthorization,
 } from "@/hooks/use-commercial-documents";
 import { useDocumentRooms } from "@/hooks/use-document-rooms";
@@ -58,9 +57,7 @@ import {
   draftReleaseHead,
   draftReleaseSet,
   readyLineIds,
-  releaseActLabel,
   releaseAmountText,
-  releaseConsequence,
   releaseSetHead,
   type ReleaseGroup,
   type ReleaseLensLine,
@@ -80,6 +77,7 @@ import {
   lineStampLabel,
 } from "@/lib/document/stamp-derivation";
 import { cn } from "@/lib/utils";
+import { PurchasingAuthorizationPreviewSheet } from "../overlays/purchasing-authorization-preview-sheet";
 
 export interface ReleaseLensProps {
   docId: string;
@@ -116,14 +114,16 @@ const COLUMNS = [
 const NO_CLIENT = "Link a client to this job before releasing.";
 const VOID_REASON = "Voided in the Build room to release again.";
 
-const releasedWords = (count: number) =>
-  `Released ${count} ${count === 1 ? "line" : "lines"} to the client for authorization.`;
+export function ReleaseLens(props: ReleaseLensProps) {
+  return <ReleaseLensContent key={props.projectId} {...props} />;
+}
 
-export function ReleaseLens({
+function ReleaseLensContent({
   projectId,
   room,
   canSeeMoney,
 }: ReleaseLensProps) {
+  const previewReturn = useRef<HTMLDivElement>(null);
   const { data: rawLines } = useProjectFFEItems(projectId);
   const { data: roomRows } = useDocumentRooms(projectId);
   const lines = useMemo(
@@ -165,7 +165,7 @@ export function ReleaseLens({
       </p>
     );
   }
-  if (rawLines && model.groups.length === 0) {
+  if (rawLines && model.groups.length === 0 && !canSeeMoney) {
     return (
       <p className="max-w-[56ch] py-6 font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
         No selections yet. Add them in Preliminary selections, then return for purchasing authorization.
@@ -174,7 +174,7 @@ export function ReleaseLens({
   }
 
   return (
-    <div data-testid="release-lens" className="flex flex-col gap-6 py-6">
+    <div ref={previewReturn} tabIndex={-1} data-testid="release-lens" className="flex flex-col gap-6 py-6">
       {readiness.isError && (
         <p
           role="alert"
@@ -230,6 +230,8 @@ export function ReleaseLens({
       </div>
       {canSeeMoney && (
         <Ceremony
+          key={projectId}
+          previewReturn={previewReturn}
           projectId={projectId}
           set={model.set}
           omitted={model.omitted}
@@ -485,6 +487,7 @@ function LeftOut({ omitted }: { omitted: readonly ReleaseOmission[] }) {
 }
 
 function Ceremony({
+  previewReturn,
   projectId,
   set,
   omitted,
@@ -496,12 +499,19 @@ function Ceremony({
   omitted: readonly ReleaseOmission[];
   lines: readonly ReleaseLensLine[];
   draft: ReturnType<typeof useDraftRelease>;
+  previewReturn: React.RefObject<HTMLDivElement | null>;
 }) {
   const { data: instruments } = useProjectInstruments(projectId);
   const { data: project } = useProject(projectId);
   const release = useReleaseForAuthorization(projectId);
-  const send = useSendFurnishingsAuthorization(projectId);
   const voidDraft = useVoidAuthorization(projectId);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [retiredId, setRetiredId] = useState<string | null>(null);
+  const retired = useRef<string | null>(null);
+  const [identityUnavailable, setIdentityUnavailable] = useState(false);
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -510,11 +520,33 @@ function Ceremony({
   const acting = useRef(false);
   const [rereading, setRereading] = useState(false);
   const busy =
-    rereading || release.isPending || send.isPending || voidDraft.isPending;
+    rereading || release.isPending || voidDraft.isPending;
   // Unknown while either read loads: nothing is drafted on a guess.
   const settled = project != null && draft.data !== undefined;
   const noClient = project != null && project.client_id == null;
-  const pending = draft.data ?? null;
+  const pending = draft.data?.proposalId === retiredId ? null : draft.data ?? null;
+  const refresh = () => Promise.allSettled([
+    queryClient.invalidateQueries({ queryKey: ["project-ffe-items", projectId] }),
+    queryClient.invalidateQueries({ queryKey: ["project-ffe-readiness"] }),
+    draft.refetch(),
+  ]);
+  const retirePreview = (proposalId: string) => {
+    retired.current = proposalId;
+    setRetiredId(proposalId);
+    setPreviewId(null);
+    setPreviewOpen(false);
+  };
+  const sent = async () => {
+    if (!previewId || retired.current === previewId) return;
+    retirePreview(previewId);
+    acting.current = true;
+    setRereading(true);
+    setDone("Authorization sent. Email delivery is tracked on the saved authorization.");
+    await refresh();
+    acting.current = false;
+    if (active.current) setRereading(false);
+  };
+  const previewSheet = previewOpen && previewId ? <PurchasingAuthorizationPreviewSheet projectId={projectId} proposalId={previewId} fallbackFocusRef={previewReturn} onClose={() => setPreviewOpen(false)} onSent={() => void sent()} /> : null;
 
   const attempt = async (act: () => Promise<string>) => {
     if (busy || acting.current) return;
@@ -523,28 +555,20 @@ function Ceremony({
     setError(null);
     setDone(null);
     try {
-      setDone(await act());
+      const message = await act();
+      if (active.current) setDone(message);
     } catch (cause) {
-      setError(releaseRefusalMessage(cause));
+      if (active.current) setError(releaseRefusalMessage(cause));
     } finally {
-      // Every read the lens draws from: the lines (their stage and their
-      // authorization), the server gate, and the draft. A draft made before a
-      // failed send is found here, never held in state.
-      await Promise.allSettled([
-        queryClient.invalidateQueries({
-          queryKey: ["project-ffe-items", projectId],
-        }),
-        queryClient.invalidateQueries({ queryKey: ["project-ffe-readiness"] }),
-        draft.refetch(),
-      ]);
+      await refresh();
       acting.current = false;
-      setRereading(false);
+      if (active.current) setRereading(false);
     }
   };
 
   const errorNote = error && (
     <p role="alert" className="font-sans text-[14px] text-[var(--sheet-ink)]">
-      {error}
+      {identityUnavailable ? "The draft was saved but its identity is unavailable. Open the authorization ledger; do not save again." : error}
     </p>
   );
   const doneNote = done && (
@@ -554,6 +578,7 @@ function Ceremony({
   );
   const noClientNote = <p className={CONSEQUENCE_CLS}>{NO_CLIENT}</p>;
 
+  const content = () => {
   if (draft.isError) {
     return (
       <p
@@ -568,13 +593,21 @@ function Ceremony({
         >
           TRY AGAIN
         </button>
+        {previewId && (
+          <button
+            type="button"
+            className={ACT_CLS}
+            onClick={() => setPreviewOpen(true)}
+          >
+            Preview
+          </button>
+        )}
       </p>
     );
   }
 
   if (pending) {
     const shown = draftReleaseSet(lines, pending.itemIds);
-    const count = pending.itemIds.length;
     return (
       <section
         aria-label="This release"
@@ -583,8 +616,8 @@ function Ceremony({
         <p className={CONSEQUENCE_CLS}>{draftReleaseHead(shown)}</p>
         <CeremonyLines set={shown} />
         <p className={CONSEQUENCE_CLS}>
-          These lines are on a drafted release. Send it to the client for
-          authorization, or void it to release them again.
+          These lines are on a drafted release. Preview the saved authorization
+          before sending, or void it to release them again.
         </p>
         {errorNote}
         {doneNote}
@@ -595,10 +628,12 @@ function Ceremony({
             aria-disabled={busy || undefined}
             onClick={() =>
               void attempt(async () => {
+                if (retired.current === pending.proposalId) return "";
                 await voidDraft.mutateAsync({
                   proposalId: pending.proposalId,
                   reason: VOID_REASON,
                 });
+                if (active.current) retirePreview(pending.proposalId);
                 return "The draft is void. Its lines can be released again.";
               })
             }
@@ -614,13 +649,12 @@ function Ceremony({
               aria-disabled={busy || !settled || undefined}
               onClick={() => {
                 if (!settled) return;
-                void attempt(async () => {
-                  await send.mutateAsync(pending.proposalId);
-                  return releasedWords(count);
-                });
+                if (busy || acting.current) return;
+                setPreviewId(pending.proposalId);
+                setPreviewOpen(true);
               }}
             >
-              Send purchasing authorization
+              Preview
             </button>
           )}
         </div>
@@ -628,7 +662,7 @@ function Ceremony({
     );
   }
 
-  if (set.rows.length === 0) {
+  if (set.rows.length === 0 && !previewId && !identityUnavailable) {
     return (
       <div className="flex flex-col items-end gap-3 text-right">
         {done && (
@@ -637,7 +671,7 @@ function Ceremony({
           </p>
         )}
         <p className="font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink-faint)]">
-          No selections are ready for purchasing authorization.
+          {lines.length === 0 ? "No selections yet. Add them in Preliminary selections, then return for purchasing authorization." : "No selections are ready for purchasing authorization."}
         </p>
         <LeftOut omitted={omitted} />
       </div>
@@ -645,7 +679,8 @@ function Ceremony({
   }
 
   const run = () => {
-    if (!settled || noClient) return;
+    if (!settled || noClient || identityUnavailable) return;
+    if (previewId) { setPreviewOpen(true); return; }
     const ids = set.rows.map((r) => r.line.id);
     void attempt(async () => {
       const number = nextInstrumentNumber(instruments ?? []);
@@ -653,9 +688,14 @@ function Ceremony({
         name: `Furnishings authorization № ${number}`,
         ffeItemIds: ids,
       });
-      // If the send fails, the refetch finds this draft and offers Send/Void.
-      await send.mutateAsync(created.proposalId);
-      return releasedWords(ids.length);
+      if (!active.current) return "";
+      if (!created?.proposalId) {
+        setIdentityUnavailable(true);
+        throw new Error("The draft was saved but its identity is unavailable. Open the authorization ledger; do not save again.");
+      }
+      setPreviewId(created.proposalId);
+      setPreviewOpen(true);
+      return "Draft saved. Nothing has been sent to the client.";
     });
   };
 
@@ -667,7 +707,7 @@ function Ceremony({
       <p className={CONSEQUENCE_CLS}>{releaseSetHead(set)}</p>
       <CeremonyLines set={set} />
       <LeftOut omitted={omitted} />
-      <p className={CONSEQUENCE_CLS}>{releaseConsequence(set)}</p>
+      <p className={CONSEQUENCE_CLS}>Saving creates a draft and reserves these items. Nothing is sent to the client.</p>
       {errorNote}
       {doneNote}
       {noClient ? (
@@ -676,12 +716,14 @@ function Ceremony({
         <button
           type="button"
           className={TERMINAL_CLS}
-          aria-disabled={busy || !settled || undefined}
+          aria-disabled={busy || !settled || identityUnavailable || undefined}
           onClick={run}
         >
-          {releaseActLabel(set)}
+          {previewId ? "Preview" : "Save draft & preview"}
         </button>
       )}
     </section>
   );
+  };
+  return <>{previewSheet}{content()}</>;
 }

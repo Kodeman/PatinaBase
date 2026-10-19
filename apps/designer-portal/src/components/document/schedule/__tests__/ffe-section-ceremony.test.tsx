@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 let mockRooms: Record<string, unknown>[] = [];
@@ -11,6 +11,11 @@ const mockItemsRefetch = jest.fn();
 let mockReadinessLoading = false;
 let mockReadinessError = false;
 const mockReadinessRefetch = jest.fn();
+const mockRelease = jest.fn();
+const mockSend = jest.fn();
+const mockPreviewReads = jest.fn();
+let mockPreviewError = false;
+let mockBudget: any = null;
 
 /* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
    attaches it) a stop renders QUIET, so every claim below about the region's
@@ -79,6 +84,7 @@ jest.mock('@patina/supabase', () => ({
   // C-24: the add sheet's "This piece takes COM" links the fabric line.
   useLinkFfePair: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
+  useRetryProposalSend: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 jest.mock('../add-to-project-sheet', () => ({
@@ -100,10 +106,11 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
   useProjectInstruments: () => ({ data: mockInstruments }),
   useTradeScopes: () => ({ data: mockTradeScopes }),
   useProjectBillingAuthority: () => mockAuthority,
-  useWorkingBudget: () => ({ isLoading: false, data: null }),
-  useReleaseForAuthorization: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useWorkingBudget: () => ({ isLoading: false, data: mockBudget }),
+  useReleaseForAuthorization: () => ({ mutateAsync: mockRelease, isPending: false }),
+  useFurnishingsAuthorizationPreview: (proposalId: string, projectId: string) => { mockPreviewReads(proposalId, projectId); return { data: undefined, isPending: false, isFetching: false, isError: mockPreviewError, refetch: jest.fn() }; },
   useSendFurnishingsAuthorization: () => ({
-    mutateAsync: jest.fn(),
+    mutateAsync: mockSend,
     isPending: false,
   }),
   usePublishBudgetCheckpoint: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -187,6 +194,10 @@ jest.mock('@/hooks/use-section-work', () => {
 
 describe('the schedule ceremony', () => {
   beforeEach(() => {
+    mockRelease.mockReset().mockResolvedValue({ proposalId: 'saved-1', documentId: 'document-1' });
+    mockSend.mockReset();
+    mockPreviewError = false;
+    mockBudget = null;
     mockItemsLoading = false;
     mockItemsError = false;
     mockItemsRefetch.mockReset();
@@ -522,5 +533,60 @@ describe('the schedule ceremony', () => {
         name: 'Include Walnut bed, king in this release',
       }),
     ).toBeChecked();
+  });
+});
+
+
+describe('saved preview at the actual ceremony owner', () => {
+  beforeEach(() => {
+    mockItemsLoading = false; mockItemsError = false; mockReadinessLoading = false; mockReadinessError = false;
+    mockRooms = [{ id: 'room-1', name: 'Primary bedroom', budget_cents: 0 }];
+    mockItems = [item()]; mockInstruments = []; mockTradeScopes = [];
+    mockAuthority = { data: { state: 'active', agreementId: 'agreement-1' } };
+    mockBudget = { version: { id: 'version-1', lines: [{ roomId: 'room-1', scheduledCents: 1230000 }] }, checkpoint: { id: 'checkpoint-1', state: 'acknowledged' } };
+    mockRelease.mockReset().mockResolvedValue({ proposalId: 'saved-1', documentId: 'document-1' });
+    mockSend.mockReset(); mockPreviewError = true;
+  });
+  const review = () => {
+    fireEvent.click(screen.getByRole('button', { name: /prepare purchasing authorization/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include Walnut bed, king in this release' }));
+    fireEvent.click(screen.getByRole('button', { name: /Review & release/i }));
+  };
+  const closeSaved = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByText(/Draft saved. Nothing has been sent/)).not.toBeInTheDocument();
+  };
+  it('reopens the exact saved preview after owner unmount and read failure with one creation and no Send', async () => {
+    renderSection(); review();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+    expect(screen.getByText(/saved preview could not be loaded/)).toBeVisible();
+    closeSaved();
+    fireEvent.click(screen.getByRole('button', { name: /Review & release/i }));
+    expect(screen.queryByRole('button', { name: 'Save draft & preview' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(screen.getByText(/saved preview could not be loaded/)).toBeVisible();
+    expect(mockPreviewReads).toHaveBeenLastCalledWith('saved-1', 'project-1');
+    expect(mockRelease).toHaveBeenCalledTimes(1); expect(mockSend).not.toHaveBeenCalled();
+  });
+  it('clears project-bound saved identity when switching projects', async () => {
+    const { rerender } = renderSection(); review();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+    rerender(<FFESection projectId="project-2" projectName="Other project" mode="project" />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    review();
+    expect(screen.getByRole('button', { name: 'Save draft & preview' })).toBeVisible();
+    expect(mockRelease).toHaveBeenCalledTimes(1); expect(mockSend).not.toHaveBeenCalled();
+  });
+  it('can prepare a new identity after the saved authorization is explicitly voided', async () => {
+    const { rerender } = renderSection(); review();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+    closeSaved();
+    mockInstruments = [{ proposalId: 'saved-1', number: 1, state: 'voided', items: [] }];
+    mockRelease.mockResolvedValueOnce({ proposalId: 'saved-2', documentId: 'document-2' });
+    rerender(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
+    fireEvent.click(screen.getByRole('button', { name: /Review & release/i }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+    expect(mockRelease).toHaveBeenCalledTimes(2); expect(mockSend).not.toHaveBeenCalled();
   });
 });

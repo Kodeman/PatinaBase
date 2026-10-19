@@ -3,9 +3,9 @@
  * `LINE · ROOM · STAGE · READINESS · FOR THE CLIENT`; the blocker sentences;
  * Leah's disposition select (placeholders print `—`); `Mark room ready for review` writes
  * only a hand-back; the ceremony names its 7 lines and $30,760, ends the set
- * with the wallpaper's install, and releases through
- * `create_furnishings_authorization_from_schedule` then the send; afterwards
- * the lines read RELEASED. Fixture: SPEC §4.2, Whole Home Renovation.
+ * with the wallpaper's install, and saves through
+ * `create_furnishings_authorization_from_schedule` before opening Preview.
+ * Send remains a separate preview action. Fixture: SPEC §4.2, Whole Home Renovation.
  */
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
@@ -21,7 +21,7 @@ const mockSend = jest.fn();
 const mockVoid = jest.fn();
 type Draft = { documentId: string; proposalId: string; itemIds: string[] };
 /** The server's draft read (00755): `null` is no draft. */
-const mockDraft: { data: Draft | null } = { data: null };
+const mockDraft: { data: Draft | null; isError: boolean } = { data: null, isError: false };
 const mockDraftRefetch = jest.fn();
 /** The server gate's refusals by line id; every other line it calls ready. */
 const mockRefused = new Map<
@@ -35,7 +35,7 @@ const mockProject: { data: { id: string; client_id: string | null } } = {
 jest.mock("@patina/supabase", () => ({
   useDraftRelease: () => ({
     data: mockDraft.data,
-    isError: false,
+    isError: mockDraft.isError,
     refetch: mockDraftRefetch,
   }),
   useProject: () => ({ data: mockProject.data }),
@@ -85,6 +85,10 @@ jest.mock("@/hooks/use-document-rooms", () => ({
       { id: "bedroom", name: "Bedroom" },
     ],
   }),
+}));
+
+jest.mock('../../overlays/purchasing-authorization-preview-sheet', () => ({
+  PurchasingAuthorizationPreviewSheet: ({ proposalId, projectId, onClose, onSent }: any) => <div role="dialog" aria-label="Saved preview"><p>{projectId}:{proposalId}</p><button onClick={onClose}>Back from preview</button><button onClick={async () => { await mockSend({ proposalId }); onSent(); }}>Complete preview send</button></div>,
 }));
 
 import { ReleaseLens } from "../release-lens";
@@ -208,6 +212,7 @@ beforeEach(() => {
   mockSend.mockReset().mockResolvedValue({});
   mockVoid.mockReset().mockResolvedValue({});
   mockDraft.data = null;
+  mockDraft.isError = false;
   mockDraftRefetch.mockReset();
   mockInvalidate.mockReset().mockResolvedValue(undefined);
   mockRefused.clear();
@@ -336,11 +341,11 @@ describe("ReleaseLens", () => {
     expect(items[6]).toBe("↳ Install, wallpaper hanger (labor) $765");
     expect(
       ceremony.getByText(
-        "Releasing sends these 7 lines to the client for authorization: 6 pieces and the one labor line that goes with its piece. Their prices lock when the client signs.",
+        "Saving creates a draft and reserves these items. Nothing is sent to the client.",
       ),
     ).toBeInTheDocument();
     const act_ = ceremony.getByRole("button", {
-      name: "Release 7 lines · $30,760 for authorization",
+      name: "Save draft & preview",
     });
     expect(act_).toHaveClass("act--terminal");
 
@@ -352,35 +357,26 @@ describe("ReleaseLens", () => {
       name: "Furnishings authorization № 3",
       ffeItemIds: ["L1", "L3", "F1", "D1", "T1", "R1", "R1a"],
     });
-    expect(mockSend).toHaveBeenCalledWith("prop-3");
+    expect(mockSend).not.toHaveBeenCalled();
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Released 7 lines to the client for authorization.",
+      "Draft saved. Nothing has been sent to the client.",
     );
   });
 
-  it("a failed send re-reads the draft from the server and offers its send, never a second authorization", async () => {
-    mockSend.mockRejectedValueOnce(new Error("The send did not go through."));
+  it("keeps the saved preview across empty-set and failed draft rereads without recreation", async () => {
     const { rerender } = render(<ReleaseLens {...props} />);
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Release 7 lines/ }));
-    });
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "The release did not go through.",
-    );
-    expect(mockDraftRefetch).toHaveBeenCalled();
-    // The refetch finds the draft the release made.
-    mockDraft.data = W4_DRAFT;
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+    mockItems.data = [];
+    mockDraft.isError = true;
     rerender(<ReleaseLens {...props} />);
-    expect(screen.queryByRole("button", { name: /^Release / })).toBeNull();
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Send purchasing authorization" }));
-    });
-    expect(mockRelease).toHaveBeenCalledTimes(1);
-    expect(mockSend).toHaveBeenCalledTimes(2);
-    expect(mockSend).toHaveBeenLastCalledWith("prop-3");
+    expect(screen.getByRole('alert')).toHaveTextContent('The draft check did not load');
+    expect(screen.getByRole('dialog', { name: 'Saved preview' })).toHaveTextContent('proj-1:prop-3');
+    fireEvent.click(screen.getByRole('button', { name: 'Back from preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(mockRelease).toHaveBeenCalledTimes(1); expect(mockSend).not.toHaveBeenCalled();
   });
 
-  it("a draft found after a reload shows its lines with SEND THE DRAFT and VOID THE DRAFT, and no release", async () => {
+  it("a draft found after a reload shows its lines with Preview and Void authorization draft, and no release", async () => {
     // A fresh mount: nothing in React state, only the server's draft read.
     mockDraft.data = W4_DRAFT;
     render(<ReleaseLens {...props} />);
@@ -403,14 +399,13 @@ describe("ReleaseLens", () => {
     expect(l1.queryByRole("combobox")).toBeNull();
 
     await act(async () => {
-      fireEvent.click(ceremony.getByRole("button", { name: "Send purchasing authorization" }));
+      fireEvent.click(ceremony.getByRole("button", { name: "Preview" }));
     });
-    expect(mockSend).toHaveBeenCalledWith("prop-3");
+    expect(mockSend).not.toHaveBeenCalled();
     expect(mockRelease).not.toHaveBeenCalled();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Released 7 lines to the client for authorization.",
-    );
-    expect(mockDraftRefetch).toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Saved preview' })).toHaveTextContent('proj-1:prop-3');
+    fireEvent.click(screen.getByRole('button', { name: 'Back from preview' }));
+    expect(mockVoid).not.toHaveBeenCalled(); expect(mockDraftRefetch).not.toHaveBeenCalled();
   });
 
   it("VOID THE DRAFT voids by proposal id with a reason, then re-reads the draft", async () => {
@@ -458,7 +453,7 @@ describe("ReleaseLens", () => {
     );
     expect(
       ceremony.getByRole("button", {
-        name: "Release 7 lines · $30,759.50 for authorization",
+        name: "Save draft & preview",
       }),
     ).toBeInTheDocument();
   });
@@ -524,7 +519,7 @@ describe("ReleaseLens", () => {
     await act(async () => {
       fireEvent.click(
         ceremony.getByRole("button", {
-          name: "Release 6 lines · $23,960 for authorization",
+          name: "Save draft & preview",
         }),
       );
     });
@@ -539,7 +534,7 @@ describe("ReleaseLens", () => {
     );
     render(<ReleaseLens {...props} />);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Release 7 lines/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Save draft & preview|^Preview$/ }));
     });
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent(
@@ -551,7 +546,7 @@ describe("ReleaseLens", () => {
   it("T-60j F20: after a release the lens re-reads its lines, the server gate and the draft, and settles with the done note", async () => {
     const { rerender } = render(<ReleaseLens {...props} />);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Release 7 lines/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Save draft & preview|^Preview$/ }));
     });
     expect(mockInvalidate).toHaveBeenCalledWith({
       queryKey: ["project-ffe-items", "proj-1"],
@@ -569,7 +564,7 @@ describe("ReleaseLens", () => {
     rerender(<ReleaseLens {...props} />);
     expect(screen.queryByRole("button", { name: /^Release / })).toBeNull();
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Released 7 lines to the client for authorization.",
+      "Draft saved. Nothing has been sent to the client.",
     );
     expect(within(rowOf("Custom cabinet")).getByText("Released")).toBeInTheDocument();
   });
@@ -584,7 +579,7 @@ describe("ReleaseLens", () => {
       () => new Promise<void>((resolve) => rereads.push(resolve)),
     );
     render(<ReleaseLens {...props} />);
-    const releaseAct = screen.getByRole("button", { name: /^Release 7 lines/ });
+    const releaseAct = screen.getByRole("button", { name: /Save draft & preview|^Preview$/ });
     // Two presses in the same tick, before React re-renders.
     await act(async () => {
       fireEvent.click(releaseAct);
@@ -594,18 +589,18 @@ describe("ReleaseLens", () => {
     await act(async () => {
       finishRelease({ proposalId: "prop-3", documentId: "doc-3", itemCount: 7 });
     });
-    // Released and sent; the re-read has not landed, so the old set still shows.
-    expect(mockSend).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("status")).toHaveTextContent("Released 7 lines");
+    // Draft saved, not sent; the reread has not landed, so the old set still shows.
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent("Draft saved");
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Release 7 lines/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Save draft & preview|^Preview$/ }));
     });
     expect(mockRelease).toHaveBeenCalledTimes(1);
     await act(async () => {
       rereads.forEach((resolve) => resolve());
     });
     expect(
-      screen.getByRole("button", { name: /^Release 7 lines/ }),
+      screen.getByRole("button", { name: /Save draft & preview|^Preview$/ }),
     ).not.toHaveAttribute("aria-disabled");
   });
 
@@ -614,5 +609,95 @@ describe("ReleaseLens", () => {
     expect(screen.getByRole("table", { name: "Release" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "This release" })).toBeNull();
     expect(screen.queryByText(/\$30,760/)).toBeNull();
+  });
+});
+
+
+it('does not attach a completed old-project save to a replacement project', async () => {
+  let finish!: (v: unknown) => void;
+  mockRelease.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const { rerender } = render(<ReleaseLens {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' }));
+  rerender(<ReleaseLens {...props} projectId="project-2" />);
+  await act(async () => { finish({ proposalId: 'old-project-draft' }); });
+  expect(screen.queryByRole('dialog', { name: 'Saved preview' })).not.toBeInTheDocument();
+  expect(mockRelease).toHaveBeenCalledTimes(1); expect(mockSend).not.toHaveBeenCalled();
+});
+
+it('does not recreate after a successful save loses its response identity', async () => {
+  mockRelease.mockResolvedValueOnce({}); render(<ReleaseLens {...props} />);
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+  const save = screen.getByRole('button', { name: 'Save draft & preview' });
+  expect(save).toHaveAttribute('aria-disabled', 'true');
+  await act(async () => { fireEvent.click(save); });
+  expect(mockRelease).toHaveBeenCalledTimes(1); expect(mockSend).not.toHaveBeenCalled();
+});
+
+
+describe('saved release lifecycle repair', () => {
+  it.each(['delivered', 'pending_retry'])('retires draft-only actions after %s Send even while refresh rejects', async (delivery) => {
+    mockDraft.data = W4_DRAFT;
+    mockSend.mockResolvedValue({ sentAt: '2026-10-19', proposalSendDispatchId: 'dispatch-3', _emailDeliveryState: delivery });
+    let rejectRefresh!: (error: Error) => void;
+    mockDraftRefetch.mockImplementation(() => new Promise((_, reject) => { rejectRefresh = reject; }));
+    const { rerender } = render(<ReleaseLens {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    const staleVoid = screen.getByRole('button', { name: 'Void authorization draft' });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Complete preview send' })); });
+    expect(screen.queryByRole('button', { name: 'Void authorization draft' })).not.toBeInTheDocument();
+    fireEvent.click(staleVoid);
+    expect(mockVoid).not.toHaveBeenCalled();
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['project-ffe-items', 'proj-1'] });
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['project-ffe-readiness'] });
+    expect(mockDraftRefetch).toHaveBeenCalledTimes(1);
+    await act(async () => { rejectRefresh(new Error('offline')); });
+    rerender(<ReleaseLens {...props} />);
+    expect(screen.queryByText(/These lines are on a drafted release/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Void authorization draft' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Authorization sent');
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockRelease).not.toHaveBeenCalled();
+    expect(mockVoid).not.toHaveBeenCalled();
+  });
+
+  it('prepares a new identity after same-mounted preview Back and successful explicit Void', async () => {
+    const { rerender } = render(<ReleaseLens {...props} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+    fireEvent.click(screen.getByRole('button', { name: 'Back from preview' }));
+    mockDraft.data = W4_DRAFT;
+    rerender(<ReleaseLens {...props} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Void authorization draft' })); });
+    mockDraft.data = null;
+    mockRelease.mockResolvedValueOnce({ proposalId: 'prop-4', documentId: 'doc-4' });
+    rerender(<ReleaseLens {...props} />);
+    expect(screen.queryByRole('button', { name: 'Save draft & preview' })).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+    expect(screen.getByRole('dialog', { name: 'Saved preview' })).toHaveTextContent('proj-1:prop-4');
+    expect(mockRelease).toHaveBeenCalledTimes(2);
+    expect(mockVoid).toHaveBeenCalledTimes(1);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('retains the same saved identity after failed explicit Void', async () => {
+    mockDraft.data = W4_DRAFT;
+    mockVoid.mockRejectedValueOnce(new Error('Void refused'));
+    render(<ReleaseLens {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back from preview' }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Void authorization draft' })); });
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(screen.getByRole('dialog', { name: 'Saved preview' })).toHaveTextContent('proj-1:prop-3');
+    expect(mockVoid).toHaveBeenCalledTimes(1);
+    expect(mockRelease).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('restores No selections yet for a money seat without a retained or pending draft', () => {
+    mockItems.data = [];
+    render(<ReleaseLens {...props} />);
+    expect(screen.queryByText(/No selections yet. Add them in Preliminary selections/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Save draft & preview' })).not.toBeInTheDocument();
+    expect(mockRelease).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
   });
 });

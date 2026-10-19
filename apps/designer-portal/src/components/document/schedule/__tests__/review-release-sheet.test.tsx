@@ -75,6 +75,10 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
   }),
 }));
 
+jest.mock('../../overlays/purchasing-authorization-preview-sheet', () => ({
+  PurchasingAuthorizationPreviewSheet: ({ proposalId, projectId, onClose }: any) => <div role="dialog" aria-label="Saved preview"><p>{projectId}:{proposalId}</p><button onClick={onClose}>Back from preview</button></div>,
+}));
+
 import { ReviewReleaseSheet } from '../review-release-sheet';
 
 const lines: ReleaseLine[] = [
@@ -252,43 +256,24 @@ describe('ReviewReleaseSheet', () => {
     expect(sendMutate).not.toHaveBeenCalled();
   });
 
-  it('releases first, then sends — in that order', async () => {
-    const onReleased = jest.fn();
-    renderSheet({ onReleased });
-    fireEvent.click(screen.getByRole('button', { name: /send for signature/i }));
-    await waitFor(() => expect(onReleased).toHaveBeenCalled());
-    expect(calls).toEqual(['release', 'send']);
-    expect(sendMutate).toHaveBeenCalledWith('proposal-9');
+  it('saves once and opens the saved preview without sending, then reopens read-only', async () => {
+    const onReleased = jest.fn(); renderSheet({ onReleased });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Saved preview' })).toHaveTextContent('project-1:proposal-9'));
+    expect(calls).toEqual(['release']); expect(sendMutate).not.toHaveBeenCalled(); expect(onReleased).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Back from preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(screen.getByRole('dialog', { name: 'Saved preview' })).toBeVisible();
+    expect(releaseMutate).toHaveBeenCalledTimes(1); expect(sendMutate).not.toHaveBeenCalled();
   });
 
-  it('retries only the send when release succeeds but send fails — never mints a second instrument', async () => {
-    sendMutate.mockRejectedValueOnce(new Error('The network dropped.'));
-    const onReleased = jest.fn();
-    renderSheet({ onReleased });
-
-    fireEvent.click(screen.getByRole('button', { name: /send for signature/i }));
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent('The network dropped.'),
-    );
-    expect(
-      screen.getByText('The authorization exists — retrying the send.'),
-    ).toBeInTheDocument();
-    expect(releaseMutate).toHaveBeenCalledTimes(1);
-    expect(sendMutate).toHaveBeenCalledTimes(1);
-    expect(onReleased).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: /send for signature/i }));
-    await waitFor(() => expect(onReleased).toHaveBeenCalled());
-
-    // The retry called release exactly once total (the first attempt) and
-    // sent the SAME proposalId both times — no second release. (The first
-    // send call rejects before it would record itself in `calls`; the
-    // second succeeds, so `calls` shows exactly one completed send.)
-    expect(releaseMutate).toHaveBeenCalledTimes(1);
-    expect(sendMutate).toHaveBeenCalledTimes(2);
-    expect(sendMutate).toHaveBeenNthCalledWith(1, 'proposal-9');
-    expect(sendMutate).toHaveBeenNthCalledWith(2, 'proposal-9');
-    expect(calls).toEqual(['release', 'send']);
+  it('holds recreation when a successful save returns no identity', async () => {
+    releaseMutate.mockResolvedValueOnce({} as any); renderSheet();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('identity is unavailable'));
+    expect(screen.getByRole('button', { name: 'Save draft & preview' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save authorization draft' }));
+    expect(releaseMutate).toHaveBeenCalledTimes(1); expect(sendMutate).not.toHaveBeenCalled();
   });
 
   it('blocks send while the checkpoint is open (unacknowledged), and an audited override unblocks it', async () => {
@@ -317,7 +302,7 @@ describe('ReviewReleaseSheet', () => {
       screen.getByText('Waiting on Ellsworth to acknowledge checkpoint B-004.'),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /send for signature/i }),
+      screen.getByRole('button', { name: /save draft & preview/i }),
     ).toBeDisabled();
     // The coverage remedy cannot help an already-covering, merely-open
     // checkpoint — publishing another one just creates another 'open' one.
@@ -370,7 +355,7 @@ describe('ReviewReleaseSheet', () => {
     );
     expect(screen.getByTestId('checkpoint-gate').dataset.gateState).toBe('current');
     expect(
-      screen.getByRole('button', { name: /send for signature/i }),
+      screen.getByRole('button', { name: /save draft & preview/i }),
     ).toBeEnabled();
   });
 
@@ -387,7 +372,7 @@ describe('ReviewReleaseSheet', () => {
       'blocked',
     );
     expect(
-      screen.getByRole('button', { name: /send for signature/i }),
+      screen.getByRole('button', { name: /save draft & preview/i }),
     ).toBeDisabled();
     expect(screen.getByTestId('checkpoint-gate')).toHaveTextContent(
       'has not seen a checkpoint covering Living',
@@ -432,7 +417,7 @@ describe('ReviewReleaseSheet', () => {
     );
     expect(screen.getByText(/The schedule has moved \$5,400/)).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /send for signature/i }),
+      screen.getByRole('button', { name: /save draft & preview/i }),
     ).toBeEnabled();
   });
 
@@ -450,10 +435,9 @@ describe('ReviewReleaseSheet', () => {
     process.env.NEXT_PUBLIC_FLAG_OVERRIDES = 'one-voice:true';
     try {
       renderSheet();
-      const confirm = screen.getByRole('button', { name: 'Issue for purchasing authorization' });
+      const confirm = screen.getByRole('button', { name: 'Save draft & preview' });
       expect(confirm).toHaveClass('da-terminal');
-      expect(screen.queryByRole('button', { name: 'Send for signature' })).not.toBeInTheDocument();
-      const sentence = screen.getByText(/Prices lock on release\./);
+      const sentence = screen.getByText(/Saving creates a draft and reserves these items\./);
       expect(sentence.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     } finally {
       process.env.NEXT_PUBLIC_FLAG_OVERRIDES = flags;
@@ -462,13 +446,13 @@ describe('ReviewReleaseSheet', () => {
 
   it('keeps Send for signature with the flag off', () => {
     renderSheet();
-    expect(screen.getByRole('button', { name: 'Send for signature' })).not.toHaveClass('da-terminal');
+    expect(screen.getByRole('button', { name: 'Save draft & preview' })).not.toHaveClass('da-terminal');
   });
 
   it('tells the truth about what happens next', () => {
     renderSheet();
     expect(
-      screen.getByText(/Prices lock on release\./),
+      screen.getByText(/Saving creates a draft and reserves these items\./),
     ).toBeInTheDocument();
   });
 
@@ -499,7 +483,7 @@ describe('external checkpoint review gate', () => {
     expect(overrideMutate).not.toHaveBeenCalled(); expect(sendMutate).not.toHaveBeenCalled(); expect(releaseMutate).not.toHaveBeenCalled();
     mockBudget = { isLoading: false, data: { version: { id: 'version-1', lines: [{ roomId: 'r1' }, { roomId: 'r2' }] }, checkpoint: { id: 'checkpoint-2', state: 'open' } } };
     view.rerender(<ReviewReleaseSheet open projectId="project-1" projectName="Ellsworth" instrumentNumber={3} lines={lines} onClose={jest.fn()} onReleased={jest.fn()} />);
-    expect(screen.getByRole('button', { name: 'Send for signature' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft & preview' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save authorization draft' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Record audited override' }));
     fireEvent.change(screen.getByLabelText('Override reason'), { target: { value: '  no  ' } });
@@ -514,7 +498,7 @@ describe('external checkpoint review gate', () => {
     mockPurchasing = { ...mockPurchasing, isPending: state === 'loading', isError: state === 'error' };
     renderSheet();
     expect(screen.getByRole('button', { name: 'Issue updated budget checkpoint' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Send for signature' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft & preview' })).toBeDisabled();
     expect(publishMutate).not.toHaveBeenCalled();
   });
 });
