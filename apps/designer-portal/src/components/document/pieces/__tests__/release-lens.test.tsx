@@ -3,9 +3,9 @@
  * `LINE · ROOM · STAGE · READINESS · FOR THE CLIENT`; the blocker sentences;
  * Leah's disposition select (placeholders print `—`); `Mark room ready for review` writes
  * only a hand-back; the ceremony names its 7 lines and $30,760, ends the set
- * with the wallpaper's install, and releases through
- * `create_furnishings_authorization_from_schedule` then the send; afterwards
- * the lines read RELEASED. Fixture: SPEC §4.2, Whole Home Renovation.
+ * with the wallpaper's install, and saves through
+ * `create_furnishings_authorization_from_schedule` before opening Preview.
+ * Send remains a separate preview action. Fixture: SPEC §4.2, Whole Home Renovation.
  */
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
@@ -21,7 +21,7 @@ const mockSend = jest.fn();
 const mockVoid = jest.fn();
 type Draft = { documentId: string; proposalId: string; itemIds: string[] };
 /** The server's draft read (00755): `null` is no draft. */
-const mockDraft: { data: Draft | null } = { data: null };
+const mockDraft: { data: Draft | null; isError: boolean } = { data: null, isError: false };
 const mockDraftRefetch = jest.fn();
 /** The server gate's refusals by line id; every other line it calls ready. */
 const mockRefused = new Map<
@@ -35,7 +35,7 @@ const mockProject: { data: { id: string; client_id: string | null } } = {
 jest.mock("@patina/supabase", () => ({
   useDraftRelease: () => ({
     data: mockDraft.data,
-    isError: false,
+    isError: mockDraft.isError,
     refetch: mockDraftRefetch,
   }),
   useProject: () => ({ data: mockProject.data }),
@@ -212,6 +212,7 @@ beforeEach(() => {
   mockSend.mockReset().mockResolvedValue({});
   mockVoid.mockReset().mockResolvedValue({});
   mockDraft.data = null;
+  mockDraft.isError = false;
   mockDraftRefetch.mockReset();
   mockInvalidate.mockReset().mockResolvedValue(undefined);
   mockRefused.clear();
@@ -365,14 +366,17 @@ describe("ReleaseLens", () => {
   it("keeps the saved preview across empty-set and failed draft rereads without recreation", async () => {
     const { rerender } = render(<ReleaseLens {...props} />);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
-    mockItems.data = []; rerender(<ReleaseLens {...props} />);
+    mockItems.data = [];
+    mockDraft.isError = true;
+    rerender(<ReleaseLens {...props} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('The draft check did not load');
     expect(screen.getByRole('dialog', { name: 'Saved preview' })).toHaveTextContent('proj-1:prop-3');
     fireEvent.click(screen.getByRole('button', { name: 'Back from preview' }));
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(mockRelease).toHaveBeenCalledTimes(1); expect(mockSend).not.toHaveBeenCalled();
   });
 
-  it("a draft found after a reload shows its lines with SEND THE DRAFT and VOID THE DRAFT, and no release", async () => {
+  it("a draft found after a reload shows its lines with Preview and Void authorization draft, and no release", async () => {
     // A fresh mount: nothing in React state, only the server's draft read.
     mockDraft.data = W4_DRAFT;
     render(<ReleaseLens {...props} />);
@@ -585,7 +589,7 @@ describe("ReleaseLens", () => {
     await act(async () => {
       finishRelease({ proposalId: "prop-3", documentId: "doc-3", itemCount: 7 });
     });
-    // Released and sent; the re-read has not landed, so the old set still shows.
+    // Draft saved, not sent; the reread has not landed, so the old set still shows.
     expect(mockSend).not.toHaveBeenCalled();
     expect(screen.getByRole("status")).toHaveTextContent("Draft saved");
     await act(async () => {

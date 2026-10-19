@@ -11,13 +11,13 @@
  * - **READY FOR LEAH** on each room heading records a hand-back (00742) and
  *   writes nothing else: no disposition, no select, no release.
  * - **The ceremony** names its whole set, labor included, then the consequence
- *   sentence, then the one terminal act. It drafts the authorization through
- *   `create_furnishings_authorization_from_schedule` and sends it, so the lines
- *   read RELEASED. A seat without money sees the table, never the ceremony.
+ *   sentence, then the explicit save. It drafts the authorization through
+ *   `create_furnishings_authorization_from_schedule` and opens the saved preview.
+ *   Sending is a separate act there. A seat without money sees only the table.
  * - **A drafted release** is read from the server (00755
- *   `draft_release_for_project`), never kept in React state. While one exists
- *   the ceremony shows its lines with SEND THE DRAFT and VOID THE DRAFT, and
- *   offers no new release.
+ *   `draft_release_for_project`). While one exists the ceremony shows its lines
+ *   with Preview and Void authorization draft, and offers no new release.
+ *   A newly saved preview retains its ID even if the draft reread fails.
  * - **No client linked:** the send would be refused, so the act is replaced
  *   by a sentence and nothing is drafted.
  * - **Refusals** read as sentences (`releaseRefusalMessage`), never SQL text,
@@ -538,8 +538,8 @@ function Ceremony({
       if (active.current) setError(releaseRefusalMessage(cause));
     } finally {
       // Every read the lens draws from: the lines (their stage and their
-      // authorization), the server gate, and the draft. A draft made before a
-      // failed send is found here, never held in state.
+      // authorization), the server gate, and the draft. The saved preview ID
+      // survives a failed reread; this refresh never creates or sends a draft.
       await Promise.allSettled([
         queryClient.invalidateQueries({
           queryKey: ["project-ffe-items", projectId],
@@ -579,6 +579,15 @@ function Ceremony({
         >
           TRY AGAIN
         </button>
+        {previewId && (
+          <button
+            type="button"
+            className={ACT_CLS}
+            onClick={() => setPreviewOpen(true)}
+          >
+            Preview
+          </button>
+        )}
       </p>
     );
   }
