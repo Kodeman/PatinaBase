@@ -115,12 +115,12 @@ describe('DocumentAction', () => {
         expect(action).toHaveClass('font-mono', 'uppercase', 'tracking-[0]', 'whitespace-nowrap');
       } else {
         // sentence case in the body face: no caps, no mono, no tracking, no 300
-        expect(action).toHaveClass('font-body');
+        expect(action).toHaveClass('font-body', 'normal-case', 'tracking-normal');
+        expect(action.className).not.toMatch(/\btracking-(?!normal\b)/);
         expect(action).not.toHaveClass('uppercase');
         expect(action).not.toHaveClass('font-mono');
         expect(action).not.toHaveClass('font-light');
         expect(action).not.toHaveClass('whitespace-nowrap');
-        expect(action.className).not.toMatch(/\btracking-/);
       }
 
       // The control itself owns the target. Its visual ink remains unboxed.
