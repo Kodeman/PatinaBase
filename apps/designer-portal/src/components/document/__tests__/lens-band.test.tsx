@@ -152,7 +152,7 @@ describe('LensBand · the box and the sentinel (C-5)', () => {
     expect(band()).not.toHaveAttribute('data-lens-state');
   });
 
-  it('is the sticky, opaque box with a 56px floor and its own lower rule', () => {
+  it('is the sticky, opaque box with a 56px floor: a charcoal ground from 600, paper with its rule below', () => {
     render(<LensBand model={model()} docId="doc-1" />);
     expect(band().tagName).toBe('SECTION');
     expect(band()).toHaveAccessibleName('Project overview');
@@ -164,8 +164,23 @@ describe('LensBand · the box and the sentinel (C-5)', () => {
     expect(band().className).toContain('sticky');
     expect(band().className).toContain('top-0');
     expect(band().className).toContain('z-[4]');
-    expect(band().className).toContain('bg-[var(--doc-paper)]');
-    expect(band().className).toContain('doc-rule-mid');
+    // US-43 R1-A — the dark ground hook, and the ground by width.
+    expect(band()).toHaveAttribute('data-ground', 'dark');
+    expect(band()).toHaveClass(
+      'bg-[var(--doc-paper)]',
+      'min-[600px]:bg-[var(--ink)]',
+      'min-[600px]:text-[var(--on-dark-ink)]',
+    );
+    // The ground's edge replaces the charcoal rule from 600; the paper band
+    // keeps `--rule-mid` below it.
+    expect(band()).not.toHaveClass('doc-rule-mid');
+    expect(band()).toHaveClass('max-[599px]:[border-bottom:var(--rule-mid)]');
+  });
+
+  it('prints its words in the on-dark register from 600 (US-43 R1-A)', () => {
+    render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
+    expect(line('1')).toHaveClass('min-[600px]:text-[var(--on-dark-muted)]');
+    expect(line('2').className).toMatch(/min-\[600px\]:text-\[var\(--on-dark-(ink|terracotta)\)\]/);
   });
 
   it('wraps both lines and truncates nothing — the act keeps its 44px box (US-28 S7, U-Q19)', () => {
@@ -1215,17 +1230,27 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
       });
 
-      it('US-28 S7 (U-Q19) — the last rung wraps onto a second line, and the act keeps its score on its own 44px row', () => {
+      it('US-28 S7 (U-Q19) — the last rung wraps onto a second line; US-43 R6 — below 600 the act leaves the band for the dock', () => {
         clips = (text) => text.length > 0;
         render(<LensBand model={chen({ tier: 'mobile' })} docId="doc-1" />);
         // The rung ladder is spent: the sentence wraps rather than clipping.
         expect(line('2')).toHaveClass('flex-wrap');
         expect(line('2')).not.toHaveClass('flex-nowrap');
-        expect(sentence()).toHaveClass('whitespace-normal', 'max-[599px]:basis-full');
+        expect(sentence()).toHaveClass('whitespace-normal');
+        // No forced row of its own: the door rides beside the sentence when
+        // it fits, so the phone band stays inside its landing clearance.
+        expect(sentence()).not.toHaveClass('max-[599px]:basis-full');
         expect(sentence().className).not.toMatch(/overflow-hidden|text-ellipsis|whitespace-nowrap/);
         const act = screen.getByRole('button', { name: 'Record the payment' });
         expect(act).toHaveAttribute('data-action-variant', 'primary');
-        expect(act.className).toContain('max-[599px]:my-0');
+        // display:none below 600 (out of the accessibility tree there); the
+        // 44px box keeps its inset into the line wherever it prints.
+        expect(act).toHaveClass('max-[599px]:hidden', 'my-[-12px]');
+        expect(act.className).not.toContain('max-[599px]:my-0');
+        // The NEXT eyebrow takes the on-dark clay on the charcoal band.
+        expect(document.querySelector('[data-lens-next-lead]')).toHaveClass(
+          'min-[600px]:text-[var(--on-dark-clay)]',
+        );
       });
 
       it('US-28 S7 — a rung on trial is held to one row only so the measure can see it overflow', () => {
@@ -1234,8 +1259,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         expect(line('2')).toHaveAttribute('data-lens-line2-form', 'long');
         // Nothing clips, so the long form stays — on one row, with no ellipsis.
         expect(sentence().className).not.toContain('text-ellipsis');
-        // Sharing that row, the act keeps its inset box; only the last rung's
-        // act takes a 44px row of its own at 390.
+        // Sharing that row, the act keeps its inset box.
         const act = screen.getByRole('button', { name: 'Record the payment' });
         expect(act.className).toContain('my-[-12px]');
         expect(act.className).not.toContain('max-[599px]:my-0');

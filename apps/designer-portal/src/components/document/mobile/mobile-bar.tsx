@@ -6,7 +6,7 @@
  * A time-log offer temporarily replaces this bar instead of stacking above it.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Ellipsis, Search, TimerReset } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -94,27 +94,45 @@ function openRegister() {
 
 const MENU_ITEM =
   'flex min-h-11 w-full items-center gap-3 border-b border-[var(--doc-ink-border)] px-3 py-2 text-left text-[var(--text-primary)] last:border-b-0 hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--clay-ink)] disabled:cursor-not-allowed disabled:opacity-50';
+/** US-43 — a held row reads muted by colour, never by opacity: `--text-subtle`
+ *  is 7.7:1 on More's paper, as its reason beneath it is. */
+const MENU_ITEM_HELD = MENU_ITEM.replace('text-[var(--text-primary)]', 'text-[var(--text-subtle)]');
 
 /** OD-11's reserve, and the floor the published height can never go under —
  *  the inset contract the paper was written against. */
 const MOBILE_BAR_FLOOR_PX = 72;
+
+/** US-43 R6 — below 600 the dock is a charcoal ground and owns Next. The
+ *  ground is painted by CSS at that width; the `data-ground` hook that turns
+ *  its acts to the on-dark grammar follows the same query. */
+const PHONE_QUERY = '(max-width: 599px)';
+function subscribePhone(onChange: () => void) {
+  if (typeof window.matchMedia !== 'function') return () => {};
+  const query = window.matchMedia(PHONE_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+const readPhone = () =>
+  typeof window.matchMedia === 'function' && window.matchMedia(PHONE_QUERY).matches;
+const readPhoneOnServer = () => false;
 
 export function MobileBar() {
   const pathname = usePathname();
   const {
     activeDoc,
     sheet,
-    primaryAction: electedAction,
+    primaryAction,
     secondaryActions,
     openSpine,
     openTimer,
     openDrawer,
     openMargin,
   } = useMobileShell();
-  // US-28 walk-fix paper — the band's Next prints on line 2 at every width
-  // (U-Q19, US-25 fix-now 13), so the dock never prints it a second time. It
-  // stays registered for ⌘K, which reads the elected act with its sentence.
-  const primaryAction = electedAction?.regionKey === 'lens-band' ? null : electedAction;
+  // US-43 R6 (revises U-Q19 and the US-28 walk-fix filter) — below 600 the
+  // dock is the band's Next's one printing; from 600 the band prints it, so
+  // the centre leaves it out by CSS display and Next is in the tree once.
+  const bandsNext = primaryAction?.regionKey === 'lens-band';
+  const phone = useSyncExternalStore(subscribePhone, readPhone, readPhoneOnServer);
   const { inHandToday, running, paused, elapsedSeconds, offer, offerOwnsEdge } =
     useDocumentTime();
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
@@ -350,7 +368,8 @@ export function MobileBar() {
       data-testid="mobile-bar"
       data-mobile-edge-owner="document-bar"
       data-reading-index={readingIndex ?? ''}
-      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[72px] items-center gap-2 border-t border-[var(--hairline-strong)] bg-[var(--paper-doc)] px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 min-[1180px]:hidden"
+      data-ground={phone ? 'dark' : undefined}
+      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[72px] items-center gap-2 border-t border-[var(--hairline-strong)] bg-[var(--paper-doc)] px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 max-[599px]:border-[var(--ink)] max-[599px]:bg-[var(--ink)] min-[1180px]:hidden"
     >
       {/* SQ-856 — the TESTER mark's place, empty for everyone else. */}
       <TesterSlot kind="bar" />
@@ -367,16 +386,16 @@ export function MobileBar() {
           aria-label={
             stopLabel ? `Open project contents, at ${stopLabel}` : 'Open project contents'
           }
-          className="flex min-h-11 min-w-0 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
+          className="flex min-h-11 min-w-0 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)] max-[599px]:focus-visible:outline-[var(--focus-on-dark)]"
         >
           {STRATA}
           <span className="min-w-0">
-            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)]">
+            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)] max-[599px]:text-[var(--on-dark-muted)]">
               Project file sections
             </span>
             {household && (
               <span
-                className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)]"
+                className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)] max-[599px]:text-[var(--on-dark-ink)]"
               >
                 {household}
               </span>
@@ -387,12 +406,13 @@ export function MobileBar() {
                 thumb and churns the door's subtree on every crossing. The
                 72px reserve above is already sized for three lines.
 
-                SQ-856 (chrome-p6): the bar is the dock's --paper-doc stock
-                now, not the dark ink band, so its accent text is
-                `--color-clay-ink` (AA on paper), not the base pigment. */}
+                SQ-856 (chrome-p6): from 600 the bar is the dock's
+                --paper-doc stock, so its accent text is `--color-clay-ink`
+                (AA on paper); below 600 the dock is charcoal again (US-43
+                R6) and the accent is `--on-dark-clay`. */}
             <span
               aria-hidden={stopLabel ? undefined : true}
-              className={`block break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] ${
+              className={`block break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] max-[599px]:text-[var(--on-dark-clay)] ${
                 stopLabel ? '' : 'invisible'
               }`}
             >
@@ -404,11 +424,11 @@ export function MobileBar() {
         <div className="flex min-w-0 flex-[1_1_0] items-center gap-2 px-1.5">
           {STRATA}
           <span className="min-w-0">
-            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)]">
+            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)] max-[599px]:text-[var(--on-dark-muted)]">
               Studio section
             </span>
             {/* F8 — the dock wraps, never truncates ("Studio overview"). */}
-            <span className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)]">
+            <span className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)] max-[599px]:text-[var(--on-dark-ink)]">
               {context}
             </span>
           </span>
@@ -416,8 +436,13 @@ export function MobileBar() {
       )}
 
       {/* SQ-856 — with no act the slot collapses, so the section label keeps
-          the width the Tester mark and the worded More now take. */}
-      <div className="flex min-w-0 flex-[1.15_1_0] items-center justify-center empty:hidden">
+          the width the Tester mark and the worded More now take. From 600
+          the band's Next is the band's, so its slot collapses the same way. */}
+      <div
+        className={`flex min-w-0 flex-[1.15_1_0] items-center justify-center empty:hidden ${
+          bandsNext ? 'min-[600px]:hidden' : ''
+        }`}
+      >
         {primaryAction && primaryShared ? (
           primaryAction.target.kind === 'href' ? (
             <DocumentAction
@@ -444,7 +469,7 @@ export function MobileBar() {
         aria-expanded={moreOpen}
         aria-controls="mobile-studio-menu"
         onClick={() => setMoreOpen((open) => !open)}
-        className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-[2px] px-1.5 text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
+        className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-[2px] px-1.5 text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)] max-[599px]:text-[var(--on-dark-ink)] max-[599px]:hover:bg-transparent max-[599px]:hover:underline max-[599px]:focus-visible:outline-[var(--focus-on-dark)]"
       >
         <Ellipsis className="h-5 w-5" strokeWidth={1.5} aria-hidden />
         <span className="font-mono text-[12px] uppercase tracking-[0.08em]">
@@ -484,7 +509,7 @@ export function MobileBar() {
                     data-mobile-secondary-key={action.actionKey}
                     aria-disabled="true"
                     aria-describedby={reasonId}
-                    className={`${MENU_ITEM} cursor-not-allowed !border-b-0 opacity-60`}
+                    className={`${MENU_ITEM_HELD} cursor-not-allowed !border-b-0`}
                   >
                     <span className="min-w-0 flex-1 text-[14px]">{action.label}</span>
                   </button>
