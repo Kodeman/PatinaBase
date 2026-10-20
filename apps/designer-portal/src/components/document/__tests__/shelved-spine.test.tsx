@@ -120,12 +120,13 @@ describe('the ladder’s money read', () => {
     usePurchaseOrders.mockReset();
   });
 
-  it('pays for no money read on a spread that prints no money row', () => {
+  it('pays for no money read on install and care, whose money row is stated from handed facts', () => {
     for (const section of ['install', 'care'] as const) {
       const { segments, doors } = ladderFor(section);
       expect(segments.map((segment) => segment.key)).toEqual([
         'approvals',
         'ffe',
+        'money',
         'care',
         'record',
       ]);
@@ -141,7 +142,7 @@ describe('the ladder’s money read', () => {
       expect(
         screen.queryByRole('navigation', { name: 'This paper' })
           ?.querySelector('[data-index-region="money"]'),
-      ).toBeNull();
+      ).not.toBeNull();
       unmount();
     }
 

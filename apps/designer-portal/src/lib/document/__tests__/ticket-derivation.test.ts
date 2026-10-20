@@ -592,13 +592,13 @@ describe('deriveTicket — a row only opens what the spread prints', () => {
   });
 
   it.each(['install', 'care'] as const)(
-    'gives Money and Dates no door on a %s spread, where neither region mounts',
+    'opens Money but gives Dates no door on a %s spread, where the schedule never mounts',
     (section) => {
       const rows = deriveTicket(emptyInput(section));
       const doorOf = (key: TicketRowKey) =>
         rows.find((row) => row.key === key)!.door;
       expect(doorOf('pieces')).toEqual({ kind: 'unfold-region', region: 'ffe' });
-      expect(doorOf('money')).toEqual({ kind: 'none' });
+      expect(doorOf('money')).toEqual({ kind: 'unfold-region', region: 'money' });
       expect(doorOf('dates')).toEqual({ kind: 'none' });
     },
   );

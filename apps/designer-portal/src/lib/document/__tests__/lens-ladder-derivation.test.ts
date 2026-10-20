@@ -261,12 +261,13 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
     expect(segments.money.rooms).toBeUndefined();
   });
 
-  it('prints four stops on install and on care — no money, no schedule', () => {
+  it('prints five stops on install and on care — money, no schedule', () => {
     for (const section of ['install', 'care'] as const) {
       const model = input({ ticket: ticket({ section }) });
       expect(deriveLadderSegments(model).map((s) => s.key)).toEqual([
         'approvals',
         'ffe',
+        'money',
         'care',
         'record',
       ]);

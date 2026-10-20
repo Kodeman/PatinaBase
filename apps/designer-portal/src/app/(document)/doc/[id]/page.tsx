@@ -3941,6 +3941,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 {/* R112: the install week's commitment act, on the section
                     whose whole subject is that week. */}
                 <InstallWindowCeremony projectId={row.project_id} />
+                {/* Buying continues at install, so the Working budget's
+                    recovery links must land here too. */}
+                {row.engagement_kind === 'project' && (
+                  <MoneyRegion
+                    projectId={row.project_id}
+                    projectName={row.title}
+                    clientName={row.client_name}
+                    activeSection={spreadSection}
+                    accountsElsewhere
+                  />
+                )}
                 {/* R80: at install the band opens unfolded — closing out IS the
                     work of this stage. */}
                 <CareBand projectId={row.project_id} onCloseoutReady={acceptCloseout} />
@@ -3968,6 +3979,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     sectionDragOver={sectionDrag}
                   />
                 )}
+                {row.engagement_kind === 'project' && row.project_id && (
+                  <MoneyRegion
+                    projectId={row.project_id}
+                    projectName={row.title}
+                    clientName={row.client_name}
+                    activeSection={spreadSection}
+                    accountsElsewhere
+                  />
+                )}
               </>
             )}
             </TableFrame>
@@ -3979,14 +3999,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           <>
             {/* Supporting project records follow the active work so a newly
                 opened document reaches the schedule before its reference material.
-                W2 — the accounts moved into the money region, which mounts only
-                while the Project section is open; every other section keeps the
-                band here, where it has always been. */}
-            {/* F1 — the band and the money region are one either-or, so both
-                sides read the SAME section. The money region mounts inside the
-                pinned spread; a band gated on the live row would print the
-                accounts twice (or nowhere) for as long as an armed turn goes
-                unpressed. Off the flag `spreadSection` IS `row.active_section`. */}
+                W2 — the accounts moved into the money region on the Project
+                spread; every other section keeps the band here, where it has
+                always been (Install and Care mount the region without them). */}
+            {/* F1 — the band and the money region's accounts are one
+                either-or, so both sides read the SAME section. The money region
+                mounts inside the pinned spread; a band gated on the live row
+                would print the accounts twice (or nowhere) for as long as an
+                armed turn goes unpressed. Off the flag `spreadSection` IS
+                `row.active_section`. */}
             {spreadSection !== 'project' && (
               <AccountBand
                 projectId={row.project_id}

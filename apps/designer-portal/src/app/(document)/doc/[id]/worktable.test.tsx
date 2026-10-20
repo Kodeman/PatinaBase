@@ -135,8 +135,15 @@ jest.mock('@/components/document/schedule/schedule-spine', () => ({
 jest.mock('@/components/document/ffe-section', () => ({
   FFESection: () => <div data-index-region="ffe" />,
 }));
+// The region states the accounts only when it embeds them (US-40: Install and
+// Care leave them to the standalone band).
 jest.mock('@/components/document/commercial/money-region', () => ({
-  MoneyRegion: () => <div data-index-region="money" data-accounts-surface="money" />,
+  MoneyRegion: ({ accountsElsewhere }: { accountsElsewhere?: boolean }) => (
+    <div
+      data-index-region="money"
+      data-accounts-surface={accountsElsewhere ? undefined : 'money'}
+    />
+  ),
 }));
 
 /* Everything else the page mounts is another suite's subject. */
@@ -425,6 +432,9 @@ describe('the Worktable, flag on', () => {
 
       expect(container.querySelector('[data-table-turn]')).not.toBeNull();
       expect(container.querySelectorAll('[data-accounts-surface]')).toHaveLength(1);
+      // The paper is still the Care spread: its money region (US-40) leaves
+      // the accounts to the band.
+      expect(container.querySelectorAll('[data-index-region="money"]')).toHaveLength(1);
       expect(
         container.querySelector('[data-accounts-surface]')!.getAttribute(
           'data-accounts-surface',

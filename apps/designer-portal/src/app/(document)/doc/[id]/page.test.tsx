@@ -1886,13 +1886,13 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      // No money row (MoneyRegion mounts only under spreadSection === 'project')
-      // and no schedule row (nor does ScheduleSpine, the only
-      // data-index-region="schedule" root) — a row for either would be a jump
-      // target with nothing behind it.
+      // A money row (US-40 mounts MoneyRegion here for the Working budget's
+      // recovery links) and no schedule row (ScheduleSpine, the only
+      // data-index-region="schedule" root, does not mount here, so that row
+      // would be a jump target with nothing behind it).
       const index = screen.getByTestId('ladder-segments');
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-        'approvals', 'ffe', 'care', 'record',
+        'approvals', 'ffe', 'money', 'care', 'record',
       ]);
     });
 
@@ -1906,13 +1906,13 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      // No money row (MoneyRegion mounts only under spreadSection === 'project')
-      // and no schedule row (nor does ScheduleSpine, the only
-      // data-index-region="schedule" root) — a row for either would be a jump
-      // target with nothing behind it.
+      // A money row (US-40 mounts MoneyRegion here for the Working budget's
+      // recovery links) and no schedule row (ScheduleSpine, the only
+      // data-index-region="schedule" root, does not mount here, so that row
+      // would be a jump target with nothing behind it).
       const index = screen.getByTestId('ladder-segments');
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-        'approvals', 'ffe', 'care', 'record',
+        'approvals', 'ffe', 'money', 'care', 'record',
       ]);
     });
 

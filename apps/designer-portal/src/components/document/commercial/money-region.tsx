@@ -105,6 +105,7 @@ export function MoneyRegion({
   clientName,
   activeSection,
   tableSeam = false,
+  accountsElsewhere = false,
 }: {
   projectId: string;
   projectName?: string;
@@ -113,6 +114,10 @@ export function MoneyRegion({
   /** W4b — on the Worktable's Delivery table money is reference, not the work:
    *  the region stands as its seam and unfolds in place to exactly this body. */
   tableSeam?: boolean;
+  /** US-40 — Install and Care keep the page's standalone AccountBand, the sole
+   *  owner of the change sheet at every Money posture, so the region leaves
+   *  out its own embedded band and the accounts print once. */
+  accountsElsewhere?: boolean;
 }) {
   // R108 — the one derivation the spine's running index also reads, so the
   // index can never summarise a ladder this region disagrees with.
@@ -445,12 +450,14 @@ export function MoneyRegion({
             projectName={projectName}
             clientName={clientName ?? undefined}
           />
-          <AccountBand
-            projectId={projectId}
-            clientName={clientName}
-            activeSection={activeSection}
-            headless
-          />
+          {!accountsElsewhere && (
+            <AccountBand
+              projectId={projectId}
+              clientName={clientName}
+              activeSection={activeSection}
+              headless
+            />
+          )}
         </div>
       </div>
       )}
