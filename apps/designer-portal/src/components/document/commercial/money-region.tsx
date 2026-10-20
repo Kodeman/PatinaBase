@@ -117,11 +117,9 @@ function budgetClause(rung: MoneyRung, authority: ProjectBillingAuthority | null
       : `Client budget ${money(rung.cents)}.`;
   }
   if (!rung.note) return null;
+  if (rung.note !== 'nothing approved yet') return `The client budget ${rung.note}.`;
   // F-2 again: an agreement with no ceiling is a budget, not a missing one.
-  if (authority) return 'The client budget has no ceiling.';
-  return rung.note === 'nothing approved yet'
-    ? 'No client budget recorded.'
-    : `The client budget ${rung.note}.`;
+  return authority ? 'The client budget has no ceiling.' : 'No client budget recorded.';
 }
 
 function authorizedClause(rung: MoneyRung): string | null {
@@ -267,6 +265,7 @@ export function MoneyRegion({
   // and rung 3 is `Authorized`. `authority`/`committed` named neither rung
   // after SP-03, and `authority` is the word direction-a §5 sends away.
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsToggleRef = useRef<HTMLButtonElement>(null);
   // The table's seam states the same two figures as one sentence: what has been
   // authorized, against the budget it is being spent out of.
   // F-2 again: an uncapped agreement has no budget figure either. `$0 budget`
@@ -323,6 +322,7 @@ export function MoneyRegion({
   const detailsToggle: RegionLedgerEntry = {
     key: 'money-details',
     label: 'Details',
+    actionRef: detailsToggleRef,
     variant: 'tertiary',
     'aria-expanded': detailsOpen,
     'aria-controls': DETAILS_ID,
@@ -390,7 +390,16 @@ export function MoneyRegion({
         {refundCents > 0 ? (
           <p className="mt-3 text-sm text-[var(--text-muted)]">A payment of {money(refundCents)} needs a refund.</p>
         ) : null}
-        <div id={DETAILS_ID}>
+        <div
+          id={DETAILS_ID}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || !detailsOpen) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setDetailsOpen(false);
+            detailsToggleRef.current?.focus();
+          }}
+        >
         {detailsOpen ? (
         <>
         <ol className="mt-3 space-y-2">
