@@ -152,6 +152,7 @@ import {
 } from './schedule/release-ceremony-context';
 import type { NeedLine, SectionKey } from '@/lib/document/desk-derivation';
 import {
+  bindCounts,
   electFfeLeader,
   ffeStateSentence,
   type FfeLeaderChoice,
@@ -179,6 +180,7 @@ import {
   deriveOverviewJob,
   overviewHeadStages,
 } from '@/lib/document/pieces/overview-derivation';
+import { countsAsPiece, liveBuildRoomLines } from '@/lib/document/pieces/live-lines';
 import { AskMakerSheet, InstallReadingLine } from './overlays/ask-maker-sheet';
 import { CareClosedLine } from './quiet-sections';
 import {
@@ -450,7 +452,10 @@ interface FfeLeadActs {
 }
 
 /** US-43 R4 — the act each elected state leads with, given its exception count. */
-const FFE_LEAD_ENTRIES: Record<FfeLeaderKind, (count: number, acts: FfeLeadActs) => RegionLedgerEntry> = {
+const FFE_LEAD_ENTRIES: Record<
+  FfeLeaderKind,
+  (count: number, acts: FfeLeadActs, lineId: string | null) => RegionLedgerEntry
+> = {
   release: (_count, acts) => acts.release,
   claim: (_count, acts) => ({
     key: 'ffe-lead-claim',
@@ -462,10 +467,11 @@ const FFE_LEAD_ENTRIES: Record<FfeLeaderKind, (count: number, acts: FfeLeadActs)
     label: NEED_ACT_LABELS.po_unacknowledged,
     onClick: () => acts.land('follow-up'),
   }),
-  spec: (count, acts) => ({
+  // Lands on the placeholder the election counted, not the act's own pick.
+  spec: (count, acts, lineId) => ({
     key: 'ffe-lead-spec',
     label: `Fill the ${placeholderCount(count)}`,
-    onClick: () => acts.land('spec'),
+    onClick: () => acts.land(lineId === null ? 'spec' : { act: 'spec', itemId: lineId }),
   }),
   price: (count, acts) => ({
     key: 'ffe-lead-price',
@@ -480,7 +486,7 @@ const FFE_LEAD_ENTRIES: Record<FfeLeaderKind, (count: number, acts: FfeLeadActs)
 function ffeLeadEntryFor(choice: FfeLeaderChoice, acts: FfeLeadActs): RegionLedgerEntry | null {
   if (choice.kind === null) return null;
   const count = choice.exceptions.find((exception) => exception.kind === choice.kind)?.count ?? 0;
-  return FFE_LEAD_ENTRIES[choice.kind](count, acts);
+  return FFE_LEAD_ENTRIES[choice.kind](count, acts, choice.highlightLineId);
 }
 
 /**
@@ -2101,12 +2107,14 @@ function FFESectionBody({
 
   // US-43 R4 — the head names the work's state in one sentence and leads with
   // the one act that state asks for, elected from the work, never fixed.
-  const liveRows = rows.filter((row) => row.item.removed_at == null);
+  // The overview's live pieces (`deriveOverviewJob`): a superseded predecessor
+  // or a line not selected never elects a lead.
+  const liveRows = rows.filter((row) => liveBuildRoomLines([row.item]).length > 0);
   const ffeLeader = electFfeLeader({
     ...ffeReleaseStanding({ inHead: releaseInHead, offered: releaseOffered, anyEligible, canRelease }),
     needs,
     unspecifiedLineIds: liveRows
-      .filter((row) => row.stamp.kind === 'placeholder')
+      .filter((row) => row.stamp.kind === 'placeholder' && countsAsPiece(row.item))
       .map((row) => String(row.item.id)),
     unpricedLineIds: liveRows.filter(isUnpricedSelection).map((row) => String(row.item.id)),
     awaitingCount: ffeAwaitingCount,
@@ -2376,7 +2384,7 @@ function FFESectionBody({
     ...ffeLeader.exceptions
       .filter((exception) => ['claim', 'po', 'waiting'].includes(exception.kind))
       .map((exception) => exception.text),
-  ];
+  ].map(bindCounts);
 
   // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else:
   // its own status line, the one inked leader, one sr-only sentence.
@@ -2601,33 +2609,43 @@ function FFESectionBody({
                 onFold={() => ffeFold.setFolded(true)}
               />
               {!ffeQuiet && (
+                // Its acts exist only while open (as LaterMenu's): a `flex`
+                // class would beat `[hidden]` and leave them focusable.
                 <div
                   id={ffeMoreId}
                   hidden={!ffeMoreOpen}
-                  className="mt-1 flex flex-wrap justify-start gap-x-4 min-[1180px]:justify-end"
+                  className={
+                    ffeMoreOpen
+                      ? 'mt-1 flex flex-wrap justify-start gap-x-4 min-[1180px]:justify-end'
+                      : undefined
+                  }
                 >
-                  <DocumentAction
-                    actionKey={PIECES_RECORD_A_CHANGE_KEY}
-                    surfaceKey="project"
-                    regionKey="ffe-more"
-                    variant="tertiary"
-                    onClick={() => {
-                      // The router hands focus back to its opener: More.
-                      closeFfeMore();
-                      openRecordAChange({ origin: 'pieces-head' });
-                    }}
-                  >
-                    Record a selection change
-                  </DocumentAction>
-                  <DocumentAction
-                    actionKey="open-spec-book"
-                    surfaceKey="project"
-                    regionKey="ffe-more"
-                    variant="tertiary"
-                    href={`/doc/${projectId}/spec-book`}
-                  >
-                    Open specification book
-                  </DocumentAction>
+                  {ffeMoreOpen && (
+                    <>
+                      <DocumentAction
+                        actionKey={PIECES_RECORD_A_CHANGE_KEY}
+                        surfaceKey="project"
+                        regionKey="ffe-more"
+                        variant="tertiary"
+                        onClick={() => {
+                          // The router hands focus back to its opener: More.
+                          closeFfeMore();
+                          openRecordAChange({ origin: 'pieces-head' });
+                        }}
+                      >
+                        Record a selection change
+                      </DocumentAction>
+                      <DocumentAction
+                        actionKey="open-spec-book"
+                        surfaceKey="project"
+                        regionKey="ffe-more"
+                        variant="tertiary"
+                        href={`/doc/${projectId}/spec-book`}
+                      >
+                        Open specification book
+                      </DocumentAction>
+                    </>
+                  )}
                 </div>
               )}
             </div>

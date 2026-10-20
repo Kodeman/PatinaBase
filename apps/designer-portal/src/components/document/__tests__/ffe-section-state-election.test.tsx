@@ -4,7 +4,7 @@
  * four states: priced, a missing price, with the client, and held. And the
  * rooms: a one-room job opens its room by default.
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 let mockRooms: Record<string, unknown>[] = [];
@@ -236,6 +236,86 @@ describe('US-43 R4 — the FF&E head elects its lead from the work’s state', (
     expect(screen.getByRole('link', { name: /Edit selections/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add items' })).toBeInTheDocument();
   });
+});
+
+describe('US-43 F-C — the head’s spec lead and its More (SQ-1506 F2, F7, F8)', () => {
+  const placeholder = (over: Record<string, unknown> = {}) =>
+    priced({
+      id: 'line-placeholder',
+      name: 'Dining chairs',
+      product_id: null,
+      unit_price_cents: null,
+      line_total_cents: null,
+      ...over,
+    });
+  /** Both priced lines are with the client, so nothing above the spec rung stands. */
+  const withTheClient = () => {
+    mockInstruments = [
+      { number: 1, state: 'sent', items: [{ sourceFfeItemId: 'line-1' }, { sourceFfeItemId: 'line-2' }] },
+    ];
+  };
+
+  it('F2: collapsed More exposes none of its acts, and opening it does', () => {
+    renderProject();
+    const more = screen.getByRole('button', { name: /^More/ });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      screen.queryByRole('button', { name: 'Record a selection change', hidden: true }),
+    ).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Open specification book', hidden: true })).toBeNull();
+    fireEvent.click(more);
+    expect(screen.getByRole('button', { name: 'Record a selection change' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open specification book' })).toBeInTheDocument();
+  });
+
+  it('F7: a custom vendor line before a genuine placeholder — the spec lead lands on the placeholder', async () => {
+    withTheClient();
+    mockItems = [
+      priced(),
+      priced({ id: 'line-2', name: 'Linen headboard' }),
+      priced({
+        id: 'line-custom',
+        name: 'Custom banquette',
+        product_id: null,
+        vendor_name: 'Hollis Millwork',
+        unit_price_cents: null,
+        line_total_cents: null,
+      }),
+      placeholder(),
+    ];
+    renderProject();
+    expect(leads()).toHaveLength(1);
+    const lead = leads()[0];
+    expect(lead).toHaveAttribute('data-action-key', 'ffe-lead-spec');
+    expect(lead).toHaveTextContent('Fill the 1 placeholder');
+    fireEvent.click(lead);
+    await waitFor(() =>
+      expect(document.getElementById('ffe-selection-line-placeholder')).toContainElement(
+        document.activeElement as HTMLElement,
+      ),
+    );
+    expect(document.getElementById('ffe-selection-line-custom')).not.toContainElement(
+      document.activeElement as HTMLElement,
+    );
+  });
+
+  it.each([['superseded'], ['not_selected']])(
+    'F8: a %s placeholder elects no spec lead',
+    (disposition) => {
+      withTheClient();
+      mockItems = [
+        priced(),
+        priced({ id: 'line-2', name: 'Linen headboard' }),
+        placeholder({ design_disposition: disposition }),
+      ];
+      renderProject();
+      expect(head().querySelector('[data-action-key="ffe-lead-spec"]')).toBeNull();
+      expect(head()).toHaveTextContent(
+        '2 selections are with the client for purchasing approval.',
+      );
+      expect(leads()).toHaveLength(0);
+    },
+  );
 });
 
 describe('US-43 R4 — rooms on the FF&E overview', () => {
