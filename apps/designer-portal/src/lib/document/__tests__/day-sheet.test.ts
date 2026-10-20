@@ -18,6 +18,7 @@ import { deriveDeskRoster } from '@/lib/document/desk-roster-derivation';
 import { classOfNeed, deskLeadNeed } from '@/lib/document/need-class';
 import { deriveHandoffNeeds, deskDesignersOf, type DeskLeads } from '@/lib/document/desk-scope';
 import {
+  cardStateWords,
   DAY_SHEET_LINES,
   deriveDaySheet,
   draftedForWords,
@@ -962,5 +963,38 @@ describe('groupSheetByJob (US-28 change 1)', () => {
     expect(groupSheetByJob([birch], new Map())).toEqual([
       { jobId: 'p-birch', name: 'Job 2', stage: null, holder: null, lines: [birch] },
     ]);
+  });
+});
+
+describe('cardStateWords — the card’s one state sentence (US-43 R7)', () => {
+  const settledAt = '2026-10-09T08:00:00.000Z';
+  const open = entry(1) as SheetEntry;
+  const overdue = entry(2, { kind: 'overdue_invoice' as NeedKind }) as SheetEntry;
+  const acted: SheetEntry = { ...entry(3), settled: { kind: 'acted', at: settledAt } };
+  const putOff: SheetEntry = { ...entry(4), settled: { kind: 'not_today', at: settledAt, until: '2026-10-12' } };
+  const mine = { userId: 'me', name: 'Leah', mine: true };
+  const jordan = { userId: 'u-jordan', name: 'Jordan', mine: false };
+
+  it('says whose move the job is today, and whether it is late', () => {
+    expect(cardStateWords({ holder: mine, lines: [open] })).toBe('Yours today.');
+    expect(cardStateWords({ holder: null, lines: [open] })).toBe('Yours today.');
+    expect(cardStateWords({ holder: mine, lines: [open, overdue] })).toBe('Overdue, and yours today.');
+    expect(cardStateWords({ holder: jordan, lines: [open] })).toBe('With Jordan today.');
+    expect(cardStateWords({ holder: jordan, lines: [overdue] })).toBe('Overdue, with Jordan today.');
+    expect(cardStateWords({ holder: { userId: null, name: null, mine: false }, lines: [open] })).toBe(
+      'With the lead today.',
+    );
+  });
+
+  it('reads only the open lines while any stand, and says a settled card once, never as a count', () => {
+    expect(cardStateWords({ holder: mine, lines: [acted, open] })).toBe('Yours today.');
+    expect(cardStateWords({ holder: mine, lines: [acted, putOff] })).toBe('Handled for today.');
+    expect(cardStateWords({ holder: mine, lines: [putOff] })).toBe('Put off for today.');
+    for (const words of [
+      cardStateWords({ holder: mine, lines: [open, overdue, acted] }),
+      cardStateWords({ holder: jordan, lines: [acted, putOff] }),
+    ]) {
+      expect(words).not.toMatch(/\d|cleared|streak/i);
+    }
   });
 });

@@ -2610,6 +2610,11 @@ html:has(.document-route-shell) {
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch; }
 @container (max-width: 899px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (max-width: 599px) { .cards { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
+/* US-43 R7 — Today: the card holding the top line spans the row; the rest
+   stand two to a row, and one to a row in a narrow container. */
+.cards.cards-lead { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cards.cards-lead > :first-child { grid-column: 1 / -1; }
+@container (max-width: 599px) { .cards.cards-lead { grid-template-columns: minmax(0, 1fr); } }
 .card { display: flex; flex-direction: column; min-width: 0; padding: 16px 20px 4px 18px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
 .card:is([class^="st-"], [class*=" st-"]) { border-left: var(--edge-stage) solid var(--st); }
 .card:hover { background-image: linear-gradient(var(--bg-hover), var(--bg-hover)); }
@@ -2624,6 +2629,8 @@ html:has(.document-route-shell) {
 .card-up .name::after { content: ''; position: absolute; inset: 0; }
 .card:hover .name { text-decoration-color: var(--clay); }
 .name-h { margin-top: 8px; }
+/* US-43 R7 — the card's one state sentence, in ink under its name. */
+.card-state { margin-top: 4px; color: var(--text-primary); overflow-wrap: anywhere; }
 .person { margin-top: 4px; color: var(--text-muted); }
 .lines { display: flex; flex-direction: column; flex: 1; margin-top: 12px; }
 .ln-item { display: flex; flex-direction: column; }
@@ -2634,6 +2641,11 @@ html:has(.document-route-shell) {
 .settled .line { color: var(--text-faint); }
 .od { color: var(--terracotta-ink); }
 .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; min-height: 44px; margin-top: 8px; margin-left: -6px; }
+/* US-43 R7 — "Later ▾": a disclosure whose items lie on a --paper-doc slip
+   with the card's own edge beneath it. D4: an edge, never a shadow. */
+.later { position: relative; }
+.later-menu { position: absolute; top: 100%; left: 0; z-index: 20; display: flex; flex-direction: column; align-items: flex-start; min-width: 160px; padding: 4px 6px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+.later-menu[hidden] { display: none; }
 /* §G-10's one exception: a Section of Cards that empties keeps one frame. */
 .card-empty { padding: 24px 20px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
 

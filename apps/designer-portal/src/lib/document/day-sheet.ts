@@ -409,6 +409,36 @@ export function groupSheetByJob(
 }
 
 /**
+ * US-43 R7 — the card's one state sentence, under its name: whose move the
+ * job is today and whether it is late, in words. Never a count (Q1), never
+ * "cleared"; a card whose lines all settled says so once.
+ */
+export function cardStateWords(card: Pick<SheetCard, 'holder' | 'lines'>): string {
+  const open = card.lines.filter((line) => !line.settled);
+  if (open.length === 0) return settledCardWords(card.lines);
+  return openCardWords(
+    theirName(card.holder),
+    open.some((line) => line.need.kind.startsWith('overdue_')),
+  );
+}
+
+/** Her own "Not today" or set-aside, not the holder's act. */
+const ownDeferral = (settled: SheetSettled) =>
+  !settled.by && (settled.kind === 'not_today' || settled.kind === 'set_aside');
+
+function settledCardWords(lines: readonly SheetEntry[]): string {
+  return lines.every(({ settled }) => !!settled && ownDeferral(settled)) ? 'Put off for today.' : 'Handled for today.';
+}
+
+/** Who else carries the job, where it is not hers; null where it is. */
+const theirName = (holder: DeskHolder | null) => (holder && !holder.mine ? (holder.name ?? 'the lead') : null);
+
+function openCardWords(theirs: string | null, late: boolean): string {
+  if (theirs) return late ? `Overdue, with ${theirs} today.` : `With ${theirs} today.`;
+  return late ? 'Overdue, and yours today.' : 'Yours today.';
+}
+
+/**
  * Q5 — the time word beside a line: "just now", "40 minutes ago", "2 hours
  * ago", "yesterday". Only inside 24 hours; older, or with no event time, the
  * line prints none. The Desk keeps no time the job was last opened (the

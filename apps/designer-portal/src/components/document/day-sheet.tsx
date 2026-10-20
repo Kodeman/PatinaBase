@@ -3,9 +3,13 @@
 /**
  * Today (US-25 slice 4; US-28 S3 change 1) — the top of the Desk: the day's
  * lines as cards, one per job (DeskJobCard), each line one sentence with its
- * act and a quiet "Not today". A line settles in place, muted, with what was
- * done and who the studio now waits on. What is past the fifth line, waiting
- * on others or coming back lives in the ledger below (DeskRoster).
+ * act. US-43 R7: the card holding the top line spans the row, the rest stand
+ * two to a row; each card prints one state sentence under its name; a line's
+ * foot is its act, "Record payment" where it has one, then a "Later" menu
+ * holding "Not today" and "Until…". A line settles in place, muted, at the
+ * height it stood, with what was done and who the studio now waits on. What
+ * is past the fifth line, waiting on others or coming back lives in the
+ * ledger below (DeskRoster).
  *
  * Colour by rule: the stage edge on the card, terracotta-ink on an overdue
  * clause, ink everywhere else. No badge, count, "cleared" or streak.
@@ -16,12 +20,13 @@
  * facts `f1` / `f2`. A quiet sheet's one sentence is its `headline settle`.
  */
 
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSetNeedState, type TeammateActed } from '@patina/supabase';
 import type { DeskHolder, DeskScope } from '@/lib/document/desk-scope';
 import { deskActionLabel, deskNeedText } from '@/lib/document/desk-derivation';
 import {
+  cardStateWords,
   draftedForWords,
   localDay,
   nextWorkingDay,
@@ -115,6 +120,94 @@ function Sentence({ text, overdue }: { text: string; overdue: boolean }) {
   );
 }
 
+/**
+ * US-43 R7 — "Later ▾": the line's postponements behind one disclosure. Its
+ * items mount only while it is open; Escape, or focus leaving it, closes it,
+ * and Escape hands focus back to "Later".
+ */
+function LaterMenu({
+  jobName,
+  disabled,
+  onNotToday,
+  onUntil,
+}: {
+  jobName: string;
+  disabled: boolean;
+  onNotToday: () => void;
+  onUntil: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuId = useId();
+  const toggleRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
+
+  return (
+    <div
+      className="later"
+      data-holds-escape={open ? '' : undefined}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || !open) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        toggleRef.current?.focus();
+      }}
+      onBlur={(event) => {
+        if (open && !event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
+      <DocumentAction
+        ref={toggleRef}
+        actionKey="day-sheet-later"
+        variant="tertiary"
+        aria-label={`Later — ${jobName}`}
+        aria-expanded={open}
+        aria-controls={menuId}
+        trailing="▾"
+        onClick={() => setOpen((was) => !was)}
+      >
+        Later
+      </DocumentAction>
+      <div id={menuId} className="later-menu" hidden={!open}>
+        {open && (
+          <>
+            {/* SQ-778 N5 — every line can be set aside for today: the line's
+                engagement names its studio. */}
+            <DocumentAction
+              actionKey="day-sheet-not-today"
+              variant="tertiary"
+              aria-label={`Not today — ${jobName}`}
+              disabled={disabled}
+              onClick={() => {
+                setOpen(false);
+                toggleRef.current?.focus();
+                onNotToday();
+              }}
+            >
+              Not today
+            </DocumentAction>
+            {/* U-Q5 — Set aside has its own door: a day and a reason. Either
+                choice rests focus on "Later" until the line settles, so the
+                sheet hands it back there. */}
+            <DocumentAction
+              actionKey="day-sheet-set-aside"
+              variant="tertiary"
+              aria-label={`Set aside until a day — ${jobName}`}
+              disabled={disabled}
+              onClick={() => {
+                setOpen(false);
+                toggleRef.current?.focus();
+                onUntil();
+              }}
+            >
+              Until…
+            </DocumentAction>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SheetLine({
   entry,
   index,
@@ -174,9 +267,31 @@ function SheetLine({
     onSettle(`${card.name}: Undone.`);
   }, [ownDeferral, card.name, onSettle]);
 
+  // US-43 R7 — a line that settles in place keeps the height it stood at, so
+  // its card never shrinks under her. Both renders are the same <li>; the
+  // open one records its height, the settled one holds it as a floor.
+  const itemRef = useRef<HTMLLIElement>(null);
+  const openHeight = useRef(0);
+  const isSettled = !!(settled && words);
+  useLayoutEffect(() => {
+    const item = itemRef.current;
+    if (!item) return;
+    if (!isSettled) {
+      item.style.minHeight = '';
+      openHeight.current = item.offsetHeight;
+    } else if (openHeight.current > 0) {
+      item.style.minHeight = `${openHeight.current}px`;
+    }
+  });
+
   if (settled && words) {
     return (
-      <li data-day-sheet-line={entry.key} data-part={index === 1 ? 'f1' : index === 2 ? 'f2' : undefined} className="ln-item settled">
+      <li
+        ref={itemRef}
+        data-day-sheet-line={entry.key}
+        data-part={index === 1 ? 'f1' : index === 2 ? 'f2' : undefined}
+        className="ln-item settled"
+      >
         <p ref={lineRef} tabIndex={-1} data-part={top ? 'headline' : undefined} className="line">
           {words}
         </p>
@@ -271,6 +386,7 @@ function SheetLine({
 
   return (
     <li
+      ref={itemRef}
       data-day-sheet-line={entry.key}
       data-part={index === 1 ? 'f1' : index === 2 ? 'f2' : undefined}
       className="ln-item"
@@ -301,7 +417,9 @@ function SheetLine({
             {label}
           </DocumentAction>
           {/* U-Q6 — an overdue invoice can also be recorded as paid, in the
-              same one act sheet; the door is quiet text. */}
+              same one act sheet; the door is quiet text. US-43 R7 — it stays
+              in the foot, never behind Later: it reconciles, it does not
+              postpone. */}
           {recordsPayment(entry) && actSheetKindOf(entry) !== 'record-payment' && (
             <DocumentAction
               actionKey="day-sheet-record-payment"
@@ -314,15 +432,11 @@ function SheetLine({
               Record payment
             </DocumentAction>
           )}
-          {/* SQ-778 N5 — every line can be set aside for today: the line's
-              engagement names its studio. */}
           {!handoff && (
-            <DocumentAction
-              actionKey="day-sheet-not-today"
-              variant="tertiary"
-              aria-label={`Not today — ${card.name}`}
+            <LaterMenu
+              jobName={card.name}
               disabled={setNeedState.isPending}
-              onClick={() => {
+              onNotToday={() => {
                 armed.current = true;
                 setFailed(null);
                 setNeedState.mutate(
@@ -335,24 +449,11 @@ function SheetLine({
                   { onError: () => setFailed('Not today did not save. Try again.') },
                 );
               }}
-            >
-              Not today
-            </DocumentAction>
-          )}
-          {/* U-Q5 — Set aside has its own door: a day and a reason. */}
-          {!handoff && (
-            <DocumentAction
-              actionKey="day-sheet-set-aside"
-              variant="tertiary"
-              aria-label={`Set aside until a day — ${card.name}`}
-              disabled={setNeedState.isPending}
-              onClick={() => {
+              onUntil={() => {
                 setFailed(null);
                 setAsideOpen(true);
               }}
-            >
-              Until…
-            </DocumentAction>
+            />
           )}
         </div>
       )}
@@ -463,9 +564,17 @@ export function DaySheet({
         <DocumentActionGroup surfaceKey="desk" regionKey="day-sheet" aria-label="Today’s actions">
           {/* `w-full`: an inline-size container sized by its flex row measures 0. */}
           <div className="cards-wrap w-full">
-            <div className="cards">
+            {/* US-43 R7 — `cards-lead`: card one, holding the top line, spans the row. */}
+            <div className="cards cards-lead">
               {cards.map((card, position) => (
-                <DeskJobCard key={card.jobId} card={card} scope={scope} now={now} first={position === 0}>
+                <DeskJobCard
+                  key={card.jobId}
+                  card={card}
+                  scope={scope}
+                  now={now}
+                  first={position === 0}
+                  state={cardStateWords(card)}
+                >
                   {card.lines.map((entry) => (
                     <SheetLine
                       key={entry.key}
