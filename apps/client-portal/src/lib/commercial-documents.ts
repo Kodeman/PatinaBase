@@ -346,8 +346,9 @@ export type WorkingBudgetLine = Pick<
 
 export interface WorkingBudgetCheckpoint extends Pick<
   CanonicalWorkingBudgetCheckpoint,
-  'id' | 'state' | 'publishedAt' | 'acknowledgedAt' | 'overrideReason'
+  'id' | 'projectId' | 'versionId' | 'state' | 'publishedAt' | 'acknowledgedAt' | 'overrideReason'
 > {
+  checkpointCode: string;
   evidenceFingerprint: string | null;
 }
 
@@ -1048,8 +1049,11 @@ export function adaptProjectCommercialSummary(value: unknown): ProjectCommercial
         notes: nullableText(row.notes),
       };
     }) : [],
-    checkpoint: Object.keys(checkpointRaw).length === 0 ? null : {
+    checkpoint: !['open', 'acknowledged', 'overridden'].includes(text(first(checkpointRaw, 'state', 'status'))) ? null : {
       id: text(checkpointRaw.id),
+      projectId: text(first(checkpointRaw, 'projectId', 'project_id')),
+      versionId: text(first(checkpointRaw, 'versionId', 'version_id', 'budget_version_id')),
+      checkpointCode: text(first(checkpointRaw, 'checkpointCode', 'checkpoint_code')),
       // project_budget_checkpoints.status (00412/00422) is exactly
       // 'open' | 'acknowledged' | 'overridden' — 'open' is the unacknowledged
       // default the moment a checkpoint publishes. Read it through, never

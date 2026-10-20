@@ -272,6 +272,23 @@ describe('commercial document client adapter', () => {
     expect(JSON.stringify(summary)).not.toContain('Do not leak me');
   });
 
+  it('carries checkpoint project version and code but excludes live and internal planning values', () => {
+    const adapted = adaptProjectCommercialSummary({ workingBudget: {
+      version: { id: 'v1', projectId: 'p1', status: 'published', note: 'PRIVATE', liveAuthorizedTotalCents: 555 },
+      lines: [{ roomName: 'Room', category: 'Seating', liveAuthorizedCents: 444, tradePrice: 333 }],
+      checkpoint: { id: 'c1', projectId: 'p1', versionId: 'v1', checkpointCode: 'BC-001', status: 'open', snapshotFingerprint: 'fp' },
+    } }).workingBudget;
+    expect(adapted?.checkpoint).toMatchObject({ id: 'c1', projectId: 'p1', versionId: 'v1', checkpointCode: 'BC-001', evidenceFingerprint: 'fp' });
+    expect(JSON.stringify(adapted)).not.toMatch(/PRIVATE|liveAuthorized|tradePrice/);
+  });
+
+  it('does not turn an unknown checkpoint status into an open acknowledgement', () => {
+    const adapted = adaptProjectCommercialSummary({ workingBudget: {
+      version: { id: 'v1', status: 'published' }, checkpoint: { id: 'c1', status: 'invalid' },
+    } }).workingBudget;
+    expect(adapted?.checkpoint).toBeNull();
+  });
+
   it('adapts the nested working-budget RPC contract without zeroing the published version', () => {
     const summary = adaptProjectCommercialSummary({
       workingBudget: {

@@ -77,6 +77,7 @@ import { Doorplate } from './doorplate';
 import { Doorstep, hasChangedBlock } from './doorstep';
 import { GroundFloor } from './ground-floor';
 import { HouseLedger } from './house-ledger';
+import { BudgetCheckpointReview } from './budget-checkpoint-review';
 import { LandmarkLedger } from './landmark-ledger';
 import { Letterbox } from './letterbox';
 import { Mat, type MatPaper, type MatPerson } from './mat';
@@ -1091,7 +1092,7 @@ export function Threshold({
   // she answers the same ask twice and reads the same lamp twice.
   const standsUnfiledAsks = adopted;
 
-  const ledger = <HouseLedger ledger={model.ledger} today={today} />;
+  const ledger = <><HouseLedger ledger={model.ledger} today={today} /><BudgetCheckpointReview projectId={projectId} /></>;
   const letterbox = (
     <Letterbox
       invoice={model.letterbox}
