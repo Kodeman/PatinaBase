@@ -520,9 +520,12 @@ function WorkingBudgetRecovery({
     >
       <p className={CONSEQUENCE_CLS}>
         A budget checkpoint is planning alignment with the client, not purchase
-        approval, a signature or payment. Set up or review the spending plan in
-        Working budget and publish a checkpoint there; the client acknowledges
-        it in their project. Your selections stay saved here. Nothing is
+        approval, a signature or payment. Open Working budget to review the
+        current checkpoint. Publish one only if none is published or the current
+        checkpoint no longer covers this selection. If it is already published
+        and covers this selection, ask the client to review and acknowledge it
+        in their project ledger; publishing again will not acknowledge it. Your
+        selections stay saved here. Nothing is
         published, acknowledged or sent from this page.
       </p>
       {/* Unmarked while held: ArrivalMount's capture listener would otherwise

@@ -730,6 +730,8 @@ describe('checkpoint refusal recovery', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Acknowledge the latest furnishings checkpoint on the Document before releasing.');
     const recovery = screen.getByRole('region', { name: 'Working budget recovery' });
     expect(recovery).toHaveTextContent('A budget checkpoint is planning alignment with the client, not purchase approval, a signature or payment.');
+    expect(recovery).toHaveTextContent('Open Working budget to review the current checkpoint. Publish one only if none is published or the current checkpoint no longer covers this selection.');
+    expect(recovery).toHaveTextContent('If it is already published and covers this selection, ask the client to review and acknowledge it in their project ledger; publishing again will not acknowledge it.');
     const open = within(recovery).getByRole('link', { name: 'Open Working budget' });
     expect(open).toHaveAttribute('href', '/doc/doc-1');
     expect(open).not.toHaveAttribute('aria-disabled');
