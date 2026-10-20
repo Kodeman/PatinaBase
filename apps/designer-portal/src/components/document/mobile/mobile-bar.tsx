@@ -6,7 +6,7 @@
  * A time-log offer temporarily replaces this bar instead of stacking above it.
  */
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Ellipsis, Search, TimerReset } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -30,6 +30,7 @@ import { householdDisplayName } from '@/lib/document/act-names';
 import { familyLabel } from '@/lib/document/family-label';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
 import { DocumentAction } from '../document-action';
+import { publishDockYieldedEdge, usePhoneWidth } from '../lens-band';
 import { openPost } from '../overlays/post-sheet';
 import { useMobileShell } from './mobile-shell';
 import { TesterSlot } from '@/components/tester/tester-slot';
@@ -102,20 +103,6 @@ const MENU_ITEM_HELD = MENU_ITEM.replace('text-[var(--text-primary)]', 'text-[va
  *  the inset contract the paper was written against. */
 const MOBILE_BAR_FLOOR_PX = 72;
 
-/** US-43 R6 — below 600 the dock is a charcoal ground and owns Next. The
- *  ground is painted by CSS at that width; the `data-ground` hook that turns
- *  its acts to the on-dark grammar follows the same query. */
-const PHONE_QUERY = '(max-width: 599px)';
-function subscribePhone(onChange: () => void) {
-  if (typeof window.matchMedia !== 'function') return () => {};
-  const query = window.matchMedia(PHONE_QUERY);
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
-}
-const readPhone = () =>
-  typeof window.matchMedia === 'function' && window.matchMedia(PHONE_QUERY).matches;
-const readPhoneOnServer = () => false;
-
 export function MobileBar() {
   const pathname = usePathname();
   const {
@@ -132,9 +119,18 @@ export function MobileBar() {
   // dock is the band's Next's one printing; from 600 the band prints it, so
   // the centre leaves it out by CSS display and Next is in the tree once.
   const bandsNext = primaryAction?.regionKey === 'lens-band';
-  const phone = useSyncExternalStore(subscribePhone, readPhone, readPhoneOnServer);
+  // US-43 R6 — below 600 the dock is a charcoal ground and owns Next. The
+  // ground is painted by CSS at that width; the `data-ground` hook that turns
+  // its acts to the on-dark grammar follows the same query.
+  const phone = usePhoneWidth();
   const { inHandToday, running, paused, elapsedSeconds, offer, offerOwnsEdge } =
     useDocumentTime();
+  // Review F5 — when the offer takes the edge this bar is not printed, so the
+  // band must print the Next it would otherwise leave to the dock.
+  useEffect(() => {
+    publishDockYieldedEdge(offerOwnsEdge);
+    return () => publishDockYieldedEdge(false);
+  }, [offerOwnsEdge]);
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
   const { data: unreadProcurement = 0 } = useProcurementUnreadCount();
   const unread = unreadInbox + unreadProcurement;
@@ -412,7 +408,9 @@ export function MobileBar() {
                 R6) and the accent is `--on-dark-clay`. */}
             <span
               aria-hidden={stopLabel ? undefined : true}
-              className={`block break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] max-[599px]:text-[var(--on-dark-clay)] ${
+              // Below 600 the stop holds to one line: at 320 a wrap broke the
+              // last word into an orphan line. The door's name keeps it whole.
+              className={`block break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] max-[599px]:truncate max-[599px]:text-[var(--on-dark-clay)] ${
                 stopLabel ? '' : 'invisible'
               }`}
             >
