@@ -1,0 +1,158 @@
+{
+ "390": {
+  "cardsBefore": [
+   {
+    "t": "Chen Residence",
+    "x": 27,
+    "y": 341,
+    "w": 336,
+    "h": 211
+   },
+   {
+    "t": "Chen Residence",
+    "x": 27,
+    "y": 341,
+    "w": 336,
+    "h": 211
+   },
+   {
+    "t": "Tanaka Garden Flat — Livi",
+    "x": 27,
+    "y": 564,
+    "w": 336,
+    "h": 210
+   },
+   {
+    "t": "Tanaka Garden Flat — Livi",
+    "x": 27,
+    "y": 564,
+    "w": 336,
+    "h": 210
+   }
+  ],
+  "recordPayment": true,
+  "laterCount": 5,
+  "menuItems": [],
+  "settle": {
+   "before": {
+    "h": 210,
+    "y": 564
+   },
+   "after": {
+    "h": 237,
+    "y": 157,
+    "text": "PROPOSAL |  | Tanaka Garden Flat — Living Room |  | Put off for today. |  | Not today · 5:21 · back Wednesday 21 October |  | Undo"
+   }
+  },
+  "undoVisible": 1,
+  "afterUndo": "PROPOSAL |  | Tanaka Garden Flat — Living Room |  | Yours today. |  | Issued 14 October · not yet viewed |  | Follow up | Later | ▾",
+  "cardsAfter": [
+   {
+    "t": "Chen Residence",
+    "x": 27,
+    "y": 341,
+    "w": 336,
+    "h": 211
+   },
+   {
+    "t": "Chen Residence",
+    "x": 27,
+    "y": 341,
+    "w": 336,
+    "h": 211
+   },
+   {
+    "t": "Tanaka Garden Flat — Livi",
+    "x": 27,
+    "y": 564,
+    "w": 336,
+    "h": 210
+   },
+   {
+    "t": "Tanaka Garden Flat — Livi",
+    "x": 27,
+    "y": 564,
+    "w": 336,
+    "h": 210
+   }
+  ]
+ },
+ "1440": {
+  "cardsBefore": [
+   {
+    "t": "Chen Residence",
+    "x": 232,
+    "y": 248,
+    "w": 976,
+    "h": 184
+   },
+   {
+    "t": "Chen Residence",
+    "x": 232,
+    "y": 248,
+    "w": 976,
+    "h": 184
+   },
+   {
+    "t": "Tanaka Garden Flat — Livi",
+    "x": 232,
+    "y": 455,
+    "w": 476,
+    "h": 184
+   },
+   {
+    "t": "Tanaka Garden Flat — Livi",
+    "x": 232,
+    "y": 455,
+    "w": 476,
+    "h": 184
+   }
+  ],
+  "recordPayment": true,
+  "laterCount": 5,
+  "menuItems": [],
+  "settle": {
+   "before": {
+    "h": 184,
+    "y": 455
+   },
+   "after": {
+    "h": 184,
+    "y": 455,
+    "text": "PROPOSAL |  | Tanaka Garden Flat — Living Room |  | Put off for today. |  | Not today · 5:20 · back Wednesday 21 October |  | Undo"
+   }
+  },
+  "undoVisible": 1,
+  "afterUndo": "PROPOSAL |  | Tanaka Garden Flat — Living Room |  | Yours today. |  | Issued 14 October · not yet viewed |  | Follow up | Later | ▾",
+  "cardsAfter": [
+   {
+    "t": "Chen Residence",
+    "x": 232,
+    "y": 248,
+    "w": 976,
+    "h": 184
+   },
+   {
+    "t": "Chen Residence",
+    "x": 232,
+    "y": 248,
+    "w": 976,
+    "h": 184
+   },
+   {
+    "t": "Tanaka Garden Flat — Livi",
+    "x": 232,
+    "y": 455,
+    "w": 476,
+    "h": 184
+   },
+   {
+    "t": "Tanaka Garden Flat — Livi",
+    "x": 232,
+    "y": 455,
+    "w": 476,
+    "h": 184
+   }
+  ]
+ }
+}

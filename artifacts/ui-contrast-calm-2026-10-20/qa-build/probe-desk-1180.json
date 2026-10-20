@@ -1,0 +1,133 @@
+{
+ "scrollW": 1180,
+ "clientW": 1180,
+ "hOverflow": false,
+ "headings": [
+  {
+   "t": "Good afternoon, Leah",
+   "tag": "H1",
+   "fs": "30.6px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 63,
+   "vis": true
+  },
+  {
+   "t": "Chen Residence",
+   "tag": "H3",
+   "fs": "20px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 289,
+   "vis": true
+  },
+  {
+   "t": "Tanaka Garden Flat — Living Room",
+   "tag": "H3",
+   "fs": "20px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 496,
+   "vis": true
+  },
+  {
+   "t": "Okafor Terrace — Study",
+   "tag": "H3",
+   "fs": "20px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 496,
+   "vis": true
+  },
+  {
+   "t": "Aspen Loft — Living Room Refresh",
+   "tag": "H3",
+   "fs": "20px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 704,
+   "vis": true
+  },
+  {
+   "t": "Aspen Loft Refresh",
+   "tag": "H3",
+   "fs": "20px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 704,
+   "vis": true
+  },
+  {
+   "t": "The rest of the jobs",
+   "tag": "H2",
+   "fs": "18px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 943,
+   "vis": true
+  }
+ ],
+ "caps": [
+  {
+   "t": "MINE",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.96px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "THE STUDIO’S",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.96px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "PATINA",
+   "tt": "uppercase",
+   "ff": "\"Playfair Display\"",
+   "ls": "3px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "STUDIO INBOX",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": false,
+   "allcaps": true
+  }
+ ],
+ "dark": [],
+ "pills": [
+  {
+   "t": "LH",
+   "bg": "rgba(196, 165, 123, 0.16)"
+  }
+ ],
+ "clipped": [
+  {
+   "el": "A.sr-only focus-visible:not-sr-only focus-",
+   "sw": 174,
+   "cw": 1,
+   "t": "Skip to main content"
+  },
+  {
+   "el": "H2.sr-only",
+   "sw": 154,
+   "cw": 1,
+   "t": "The rest of the jobs"
+  }
+ ],
+ "overflowers": []
+}

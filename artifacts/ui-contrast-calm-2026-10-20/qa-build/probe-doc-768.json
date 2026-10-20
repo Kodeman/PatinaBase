@@ -1,0 +1,380 @@
+{
+ "scrollW": 768,
+ "clientW": 768,
+ "hOverflow": false,
+ "headings": [
+  {
+   "t": "Aspen Loft Refresh",
+   "tag": "H1",
+   "fs": "34px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 101,
+   "vis": true
+  },
+  {
+   "t": "Client approvals",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 399,
+   "vis": true
+  },
+  {
+   "t": "PHASE HANDOFFS",
+   "tag": "H3",
+   "fs": "11px",
+   "ff": "\"DM Mono\"",
+   "fw": "600",
+   "tt": "uppercase",
+   "y": 731,
+   "vis": true
+  },
+  {
+   "t": "Workflow stage",
+   "tag": "H2",
+   "fs": "18px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 1027,
+   "vis": true
+  },
+  {
+   "t": "Project schedule",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 1028,
+   "vis": true
+  },
+  {
+   "t": "Schematic DesignANCHORED · 14 SEPTEMBEREXPAND",
+   "tag": "H3",
+   "fs": "18.36px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 1176,
+   "vis": true
+  },
+  {
+   "t": "Design Development",
+   "tag": "H3",
+   "fs": "23.04px",
+   "ff": "\"Playfair Display\"",
+   "fw": "600",
+   "tt": "none",
+   "y": 1264,
+   "vis": true
+  },
+  {
+   "t": "Installation & StylingANCHORED · 28 NOVEMBEREXPAND",
+   "tag": "H3",
+   "fs": "19.8px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 1521,
+   "vis": true
+  },
+  {
+   "t": "CompletionEXPAND",
+   "tag": "H3",
+   "fs": "19.8px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 1699,
+   "vis": true
+  },
+  {
+   "t": "FF&E selections",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 1991,
+   "vis": true
+  },
+  {
+   "t": "Project financials",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 2201,
+   "vis": true
+  },
+  {
+   "t": "Project closeout",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 2420,
+   "vis": true
+  },
+  {
+   "t": "Project record",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 2727,
+   "vis": true
+  }
+ ],
+ "caps": [
+  {
+   "t": "for the client↗",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": true,
+   "allcaps": false
+  },
+  {
+   "t": "SET DATES",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "+4 MORE",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "SCHEDULE DATES\nWEEK 6 · INSTALL NOVEMBER",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "ANCHORED · 14 SEPTEMBER",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "EXPAND",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "ANCHORED · 28 NOVEMBER",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "EXPAND",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "MORE",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": false,
+   "allcaps": true
+  }
+ ],
+ "dark": [
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 218,
+   "w": 56,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SECTION.sticky top-0 z-[4] box-border flex min-h-[var(--do",
+   "bg": "rgb(44, 41, 38)",
+   "x": 9,
+   "y": 291,
+   "w": 750,
+   "h": 56,
+   "pos": "sticky",
+   "t": "OVERDUE 6D · DECISIONS\nChase\n+4 MORE"
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 244,
+   "y": 305,
+   "w": 53,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 476,
+   "w": 154,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 610,
+   "y": 787,
+   "w": 125,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 610,
+   "y": 869,
+   "w": 125,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 1106,
+   "w": 129,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 2069,
+   "w": 125,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 2278,
+   "w": 120,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 49,
+   "y": 2656,
+   "w": 129,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 333,
+   "y": 972,
+   "w": 335,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  }
+ ],
+ "pills": [
+  {
+   "t": "",
+   "bg": "rgb(250, 247, 242)"
+  },
+  {
+   "t": "",
+   "bg": "rgb(250, 247, 242)"
+  },
+  {
+   "t": "",
+   "bg": "rgb(250, 247, 242)"
+  },
+  {
+   "t": "",
+   "bg": "rgb(250, 247, 242)"
+  }
+ ],
+ "clipped": [
+  {
+   "el": "A.sr-only focus-visible:not-sr-only focus-",
+   "sw": 174,
+   "cw": 1,
+   "t": "Skip to main content"
+  },
+  {
+   "el": "H2.sr-only",
+   "sw": 123,
+   "cw": 1,
+   "t": "Workflow stage"
+  },
+  {
+   "el": "SPAN.block truncate text-[13px] font-medium l",
+   "sw": 286,
+   "cw": 251,
+   "t": "Design Development sign-off — "
+  },
+  {
+   "el": "P.sr-only",
+   "sw": 546,
+   "cw": 1,
+   "t": "2 lines · not yet on the paper"
+  },
+  {
+   "el": "P.sr-only",
+   "sw": 733,
+   "cw": 1,
+   "t": "$4,250 receivable · not yet on"
+  },
+  {
+   "el": "P.sr-only",
+   "sw": 173,
+   "cw": 1,
+   "t": "No recorded activity"
+  }
+ ],
+ "overflowers": []
+}

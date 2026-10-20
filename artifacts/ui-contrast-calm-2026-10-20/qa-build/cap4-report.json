@@ -1,0 +1,199 @@
+{
+ "focusBand1440": "solid 2px rgb(250, 247, 242)",
+ "focusDock390": "solid 2px rgb(250, 247, 242)",
+ "forced1440": {
+  "acts": 98,
+  "withUnderlineLike": 43,
+  "scrollW": 1440,
+  "clientW": 1440,
+  "focusOutline": "solid 2px rgba(5, 0, 73, 0.8)"
+ },
+ "forced390": {
+  "acts": 68,
+  "withUnderlineLike": 41,
+  "scrollW": 390,
+  "clientW": 390,
+  "focusOutline": "solid 2px rgba(5, 0, 73, 0.8)"
+ },
+ "zoom200-1280desk": {
+  "sw": 640,
+  "cw": 640
+ },
+ "zoom200-1280doc": {
+  "sw": 640,
+  "cw": 640,
+  "clipped": [
+   "A.sr-only focus-visible:not-sr-o:174>1",
+   "H2.sr-only:123>1",
+   "P.sr-only:683>1",
+   "P.sr-only:546>1",
+   "P.sr-only:733>1",
+   "P.sr-only:173>1"
+  ]
+ },
+ "zoom200-720desk": {
+  "sw": 360,
+  "cw": 360
+ },
+ "zoom200-720doc": {
+  "sw": 360,
+  "cw": 360,
+  "clipped": [
+   "A.sr-only focus-visible:not-sr-o:174>1",
+   "H2.sr-only:123>1",
+   "P.sr-only:683>1",
+   "P.sr-only:546>1",
+   "P.sr-only:733>1",
+   "P.sr-only:173>1"
+  ]
+ },
+ "labelsDesk": [
+  {
+   "t": "MINE",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "THE STUDIO’S",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "PATINA",
+   "tt": "uppercase",
+   "mono": false
+  },
+  {
+   "t": "STUDIO INBOX",
+   "tt": "none",
+   "mono": false
+  }
+ ],
+ "labelsDoc": [
+  {
+   "t": "←",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "for the client↗",
+   "tt": "none",
+   "mono": false
+  },
+  {
+   "t": "SET DATES",
+   "tt": "none",
+   "mono": false
+  },
+  {
+   "t": "THE CLIENT",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "+4 MORE",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "SCHEMATIC DESIGN",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "DESIGN DEVELOPMENT",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "INSTALLATION & STYLING",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "COMPLETION",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "PROCUREMENT & ORDERS",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "ANCHORED · 14 SEPTEMBER",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "EXPAND",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "SIGN-OFF",
+   "tt": "none",
+   "mono": false
+  },
+  {
+   "t": "ANCHORED · 28 NOVEMBER",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "COLLAPSE",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "ANCHORED · 28 NOVEMBER",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "DRAFTS · 1 ↓",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "DECISION · OVERDUE",
+   "tt": "none",
+   "mono": false
+  },
+  {
+   "t": "DECISION · OVERDUE",
+   "tt": "none",
+   "mono": false
+  },
+  {
+   "t": "DECISION · DUE 23 OCTOBER",
+   "tt": "none",
+   "mono": false
+  },
+  {
+   "t": "MONEY · SENT",
+   "tt": "none",
+   "mono": false
+  },
+  {
+   "t": "DECISION · EXPIRED",
+   "tt": "none",
+   "mono": false
+  },
+  {
+   "t": "2 SETTLED ↓",
+   "tt": "uppercase",
+   "mono": true
+  },
+  {
+   "t": "PATINA",
+   "tt": "uppercase",
+   "mono": false
+  },
+  {
+   "t": "STUDIO INBOX",
+   "tt": "none",
+   "mono": false
+  }
+ ]
+}

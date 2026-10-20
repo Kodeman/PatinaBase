@@ -1,0 +1,291 @@
+{
+ "scrollW": 390,
+ "clientW": 390,
+ "hOverflow": false,
+ "headings": [
+  {
+   "t": "Aspen Loft Refresh",
+   "tag": "H1",
+   "fs": "34px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 101,
+   "vis": true
+  },
+  {
+   "t": "Client approvals",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 418,
+   "vis": true
+  },
+  {
+   "t": "PHASE HANDOFFS",
+   "tag": "H3",
+   "fs": "11px",
+   "ff": "\"DM Mono\"",
+   "fw": "600",
+   "tt": "uppercase",
+   "y": 812,
+   "vis": true
+  },
+  {
+   "t": "Workflow stage",
+   "tag": "H2",
+   "fs": "18px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 1237,
+   "vis": true
+  },
+  {
+   "t": "Project schedule",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 1238,
+   "vis": true
+  },
+  {
+   "t": "FF&E selections",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 1431,
+   "vis": true
+  },
+  {
+   "t": "Project financials",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 1640,
+   "vis": true
+  },
+  {
+   "t": "Project closeout",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 1876,
+   "vis": true
+  },
+  {
+   "t": "Project record",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 2261,
+   "vis": true
+  }
+ ],
+ "caps": [
+  {
+   "t": "for the client↗",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": true,
+   "allcaps": false
+  },
+  {
+   "t": "SET DATES",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "+4 MORE",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "SCHEDULE DATES\nWEEK 6 · INSTALL NOVEMBER",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "MORE",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": false,
+   "allcaps": true
+  }
+ ],
+ "dark": [
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 218,
+   "w": 56,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 244,
+   "y": 304,
+   "w": 53,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 520,
+   "w": 154,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 953,
+   "w": 125,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 1079,
+   "w": 125,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 1316,
+   "w": 97,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 1508,
+   "w": 125,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 34,
+   "y": 1718,
+   "w": 120,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 49,
+   "y": 2190,
+   "w": 129,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "NAV.fixed inset-x-0 bottom-0 z-40 flex min-h-[72px] it",
+   "bg": "rgb(44, 41, 38)",
+   "x": 0,
+   "y": 718,
+   "w": 390,
+   "h": 126,
+   "pos": "fixed",
+   "t": "PROJECT FILE SECTIONS\nClient User\nSECTIO"
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 157,
+   "y": 767,
+   "w": 133,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  }
+ ],
+ "pills": [],
+ "clipped": [
+  {
+   "el": "A.sr-only focus-visible:not-sr-only focus-",
+   "sw": 174,
+   "cw": 1,
+   "t": "Skip to main content"
+  },
+  {
+   "el": "H2.sr-only",
+   "sw": 123,
+   "cw": 1,
+   "t": "Workflow stage"
+  },
+  {
+   "el": "P.sr-only",
+   "sw": 683,
+   "cw": 1,
+   "t": "Install 28 November · not yet "
+  },
+  {
+   "el": "P.sr-only",
+   "sw": 546,
+   "cw": 1,
+   "t": "2 lines · not yet on the paper"
+  },
+  {
+   "el": "P.sr-only",
+   "sw": 733,
+   "cw": 1,
+   "t": "$4,250 receivable · not yet on"
+  },
+  {
+   "el": "P.sr-only",
+   "sw": 173,
+   "cw": 1,
+   "t": "No recorded activity"
+  }
+ ],
+ "overflowers": []
+}

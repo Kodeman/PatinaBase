@@ -1,0 +1,379 @@
+{
+ "320": {
+  "shot_ffe": true,
+  "shot_fin": true,
+  "shot_close": true,
+  "regions": [
+   {
+    "t": "Client approvals",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Workflow stage",
+    "fs": "18px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "oklch(0.376 0.0225 64.3434)"
+   },
+   {
+    "t": "Project schedule",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "FF&E selections",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project financials",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project closeout",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project record",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   }
+  ],
+  "ffeText": "FF&E selections\n\n2 priced selections are not yet invoiced. · 1 released\n\nBill 2 uninvoiced\nEdit selections\n→\nAdd items\nPrepare purchasing authorization\nMore\n⌄\nCollapse ↑\n\nNo selections are ready for purchasing authorization yet.\n\nRecord a selection change\nOpen specification book\n\n$12,900 released\n\nDining Room\n⌄\n1 LINE · 0 PLACEHOLDERS\n$9,050\nLiving Room\n⌄\n1 LINE · 0 PLACEHOLDERS\n$3,850\nAdd a room",
+  "finText": "PROJECT FINANCIAL SUMMARY\n\nProject financials\n\nNo client budget recorded. $13,250 authorized.\n\nDraft an invoice\nDetails\nCollapse ↑\n\nWORKING BUDGET · NOT STARTED\n\nScheduled and Authorized reflect the schedule as of the last sync — Target is the studio’s own figure. Planning only; this budget grants no purchasing authority.\n\nSync from the schedule\n\nNo working budget yet — sync from the schedule to start one.\n\nAUTHORIZATIONS & TRADE SCOPES\n\nDraft a trade scope\n\nAn authorization releases signed schedule items for purchasing — release one from the schedule. A trade scope buys work: written here, bid here, signed by the client, then engaged.\n\nKIND\tINSTRUMENT\tLINES\tTOTAL\tSTATE\nA1\tAuthorization № 1 · Authorization No. 1\t1\t$9,400\tEXECUTED\nTS1\tTrade scope № 1 · Aspen Loft — Paintwork and plaster· Substantially complete\t1\t$3,850\tAUTHORIZED\nProject accounts\n$120,000 BUDGET · $12,900 COMMITTED · 31% ",
+  "fold": [],
+  "dock": {
+   "h": 182,
+   "kids": [
+    {
+     "t": "PROJECT FILE SECTIONS",
+     "top": 528,
+     "bottom": 582,
+     "left": 41,
+     "right": 107
+    },
+    {
+     "t": "Client User",
+     "top": 582,
+     "bottom": 624,
+     "left": 41,
+     "right": 107
+    },
+    {
+     "t": "SECTION: CLIENT APPROVALS",
+     "top": 624,
+     "bottom": 690,
+     "left": 41,
+     "right": 107
+    },
+    {
+     "t": "Message the client",
+     "top": 591,
+     "bottom": 621,
+     "left": 129,
+     "right": 216
+    },
+    {
+     "t": "MORE",
+     "top": 600,
+     "bottom": 618,
+     "left": 267,
+     "right": 300
+    }
+   ],
+   "overlaps": []
+  }
+ },
+ "390": {
+  "shot_ffe": true,
+  "shot_fin": true,
+  "shot_close": true,
+  "regions": [
+   {
+    "t": "Client approvals",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Workflow stage",
+    "fs": "18px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "oklch(0.376 0.0225 64.3434)"
+   },
+   {
+    "t": "Project schedule",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "FF&E selections",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project financials",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project closeout",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project record",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   }
+  ],
+  "ffeText": "FF&E selections\n\n2 priced selections are not yet invoiced. · 1 released\n\nBill 2 uninvoiced\nEdit selections\n→\nAdd items\nPrepare purchasing authorization\nMore\n⌄\nCollapse ↑\n\nNo selections are ready for purchasing authorization yet.\n\nRecord a selection change\nOpen specification book\n\n$12,900 released\n\nDining Room\n⌄\n1 LINE · 0 PLACEHOLDERS\n$9,050\nLiving Room\n⌄\n1 LINE · 0 PLACEHOLDERS\n$3,850\nAdd a room",
+  "finText": "PROJECT FINANCIAL SUMMARY\n\nProject financials\n\nNo client budget recorded. $13,250 authorized.\n\nDraft an invoice\nDetails\nCollapse ↑\n\nWORKING BUDGET · NOT STARTED\n\nScheduled and Authorized reflect the schedule as of the last sync — Target is the studio’s own figure. Planning only; this budget grants no purchasing authority.\n\nSync from the schedule\n\nNo working budget yet — sync from the schedule to start one.\n\nAUTHORIZATIONS & TRADE SCOPES\n\nDraft a trade scope\n\nAn authorization releases signed schedule items for purchasing — release one from the schedule. A trade scope buys work: written here, bid here, signed by the client, then engaged.\n\nKIND\tINSTRUMENT\tLINES\tTOTAL\tSTATE\nA1\tAuthorization № 1 · Authorization No. 1\t1\t$9,400\tEXECUTED\nTS1\tTrade scope № 1 · Aspen Loft — Paintwork and plaster· Substantially complete\t1\t$3,850\tAUTHORIZED\nProject accounts\n$120,000 BUDGET · $12,900 COMMITTED · 31% ",
+  "fold": [],
+  "dock": {
+   "h": 126,
+   "kids": [
+    {
+     "t": "PROJECT FILE SECTIONS",
+     "top": 728,
+     "bottom": 764,
+     "left": 41,
+     "right": 139
+    },
+    {
+     "t": "Client User",
+     "top": 764,
+     "bottom": 785,
+     "left": 41,
+     "right": 139
+    },
+    {
+     "t": "SECTION: CLIENT APPROVALS",
+     "top": 785,
+     "bottom": 834,
+     "left": 41,
+     "right": 139
+    },
+    {
+     "t": "Message the client",
+     "top": 763,
+     "bottom": 793,
+     "left": 161,
+     "right": 286
+    },
+    {
+     "t": "MORE",
+     "top": 772,
+     "bottom": 790,
+     "left": 337,
+     "right": 370
+    }
+   ],
+   "overlaps": []
+  }
+ },
+ "768": {
+  "shot_ffe": true,
+  "shot_fin": true,
+  "shot_close": true,
+  "regions": [
+   {
+    "t": "Client approvals",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Workflow stage",
+    "fs": "18px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "oklch(0.376 0.0225 64.3434)"
+   },
+   {
+    "t": "Project schedule",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "FF&E selections",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project financials",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project closeout",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project record",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   }
+  ],
+  "ffeText": "FF&E selections\n\n2 priced selections are not yet invoiced. · 1 released\n\nBill 2 uninvoiced\nEdit selections\n→\nAdd items\nPrepare purchasing authorization\nMore\n⌄\nCollapse ↑\n\nNo selections are ready for purchasing authorization yet.\n\nRecord a selection change\nOpen specification book\n\n$12,900 released\n\nDining Room\n⌄\n1 LINE · 0 PLACEHOLDERS\n$9,050\nLiving Room\n⌄\n1 LINE · 0 PLACEHOLDERS\n$3,850\nAdd a room",
+  "finText": "PROJECT FINANCIAL SUMMARY\n\nProject financials\n\nNo client budget recorded. $13,250 authorized.\n\nDraft an invoice\nDetails\nCollapse ↑\n\nWORKING BUDGET · NOT STARTED\n\nScheduled and Authorized reflect the schedule as of the last sync — Target is the studio’s own figure. Planning only; this budget grants no purchasing authority.\n\nSync from the schedule\n\nNo working budget yet — sync from the schedule to start one.\n\nAUTHORIZATIONS & TRADE SCOPES\n\nDraft a trade scope\n\nAn authorization releases signed schedule items for purchasing — release one from the schedule. A trade scope buys work: written here, bid here, signed by the client, then engaged.\n\nKIND\tINSTRUMENT\tLINES\tTOTAL\tSTATE\nA1\tAuthorization № 1 · Authorization No. 1\t1\t$9,400\tEXECUTED\nTS1\tTrade scope № 1 · Aspen Loft — Paintwork and plaster· Substantially complete\t1\t$3,850\tAUTHORIZED\nProject accounts\n$120,000 BUDGET · $12,900 COMMITTED · 31% ",
+  "fold": []
+ },
+ "1180": {
+  "shot_ffe": true,
+  "shot_fin": true,
+  "shot_close": true,
+  "regions": [
+   {
+    "t": "Client approvals",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Workflow stage",
+    "fs": "18px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "oklch(0.376 0.0225 64.3434)"
+   },
+   {
+    "t": "Project schedule",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "FF&E selections",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project financials",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project closeout",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project record",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   }
+  ],
+  "ffeText": "FF&E selections\n\n2 priced selections are not yet invoiced. · 1 released\n\nBill 2 uninvoiced\nEdit selections\n→\nAdd items\nPrepare purchasing authorization\nMore\n⌄\nCollapse ↑\n\nNo selections are ready for purchasing authorization yet.\n\nRecord a selection change\nOpen specification book\n\n$12,900 released\n\nDining Room\n⌄\n1 LINE · 0 PLACEHOLDERS\n$9,050\nLiving Room\n⌄\n1 LINE · 0 PLACEHOLDERS\n$3,850\nAdd a room",
+  "finText": "PROJECT FINANCIAL SUMMARY\n\nProject financials\n\nNo client budget recorded. $13,250 authorized.\n\nDraft an invoice\nDetails\nCollapse ↑\n\nWORKING BUDGET · NOT STARTED\n\nScheduled and Authorized reflect the schedule as of the last sync — Target is the studio’s own figure. Planning only; this budget grants no purchasing authority.\n\nSync from the schedule\n\nNo working budget yet — sync from the schedule to start one.\n\nAUTHORIZATIONS & TRADE SCOPES\n\nDraft a trade scope\n\nAn authorization releases signed schedule items for purchasing — release one from the schedule. A trade scope buys work: written here, bid here, signed by the client, then engaged.\n\nKIND\tINSTRUMENT\tLINES\tTOTAL\tSTATE\nA1\tAuthorization № 1 · Authorization No. 1\t1\t$9,400\tEXECUTED\nTS1\tTrade scope № 1 · Aspen Loft — Paintwork and plaster· Substantially complete\t1\t$3,850\tAUTHORIZED\nProject accounts\n$120,000 BUDGET · $12,900 COMMITTED · 31% ",
+  "fold": []
+ },
+ "1440": {
+  "shot_ffe": true,
+  "shot_fin": true,
+  "shot_close": true,
+  "regions": [
+   {
+    "t": "Client approvals",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Workflow stage",
+    "fs": "18px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "oklch(0.376 0.0225 64.3434)"
+   },
+   {
+    "t": "Project schedule",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "FF&E selections",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project financials",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project closeout",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   },
+   {
+    "t": "Project record",
+    "fs": "26px",
+    "ff": "\"Playfair Display\"",
+    "tt": "none",
+    "color": "rgb(44, 41, 38)"
+   }
+  ],
+  "ffeText": "FF&E selections\n\n2 priced selections are not yet invoiced. · 1 released\n\nBill 2 uninvoiced\nEdit selections\n→\nAdd items\nPrepare purchasing authorization\nMore\n⌄\nCollapse ↑\n\nNo selections are ready for purchasing authorization yet.\n\nRecord a selection change\nOpen specification book\n\n$12,900 released\n\nDining Room\n⌄\n1 LINE · 0 PLACEHOLDERS\n$9,050\nLiving Room\n⌄\n1 LINE · 0 PLACEHOLDERS\n$3,850\nAdd a room",
+  "finText": "PROJECT FINANCIAL SUMMARY\n\nProject financials\n\nNo client budget recorded. $13,250 authorized.\n\nDraft an invoice\nDetails\nCollapse ↑\n\nWORKING BUDGET · NOT STARTED\n\nScheduled and Authorized reflect the schedule as of the last sync — Target is the studio’s own figure. Planning only; this budget grants no purchasing authority.\n\nSync from the schedule\n\nNo working budget yet — sync from the schedule to start one.\n\nAUTHORIZATIONS & TRADE SCOPES\n\nDraft a trade scope\n\nAn authorization releases signed schedule items for purchasing — release one from the schedule. A trade scope buys work: written here, bid here, signed by the client, then engaged.\n\nKIND\tINSTRUMENT\tLINES\tTOTAL\tSTATE\nA1\tAuthorization № 1 · Authorization No. 1\t1\t$9,400\tEXECUTED\nTS1\tTrade scope № 1 · Aspen Loft — Paintwork and plaster· Substantially complete\t1\t$3,850\tAUTHORIZED\nProject accounts\n$120,000 BUDGET · $12,900 COMMITTED · 31% ",
+  "fold": []
+ }
+}
