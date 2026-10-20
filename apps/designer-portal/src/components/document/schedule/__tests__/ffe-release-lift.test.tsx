@@ -183,7 +183,7 @@ describe('the release lift — the schedule’s half', () => {
     );
 
     // US-21 Q14: the head's leader is Build the item list, release lifted or not.
-    const inked = document.querySelectorAll('[data-action-variant="inked"]');
+    const inked = document.querySelectorAll('[data-action-variant="primary"]');
     expect(inked).toHaveLength(1);
     expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
     expect(
@@ -288,7 +288,7 @@ describe('the release lift — the schedule’s half', () => {
     );
 
     // US-21 Q14: Build the item list leads; the release stands in the head's ledger.
-    const inked = document.querySelectorAll('[data-action-variant="inked"]');
+    const inked = document.querySelectorAll('[data-action-variant="primary"]');
     expect(inked).toHaveLength(1);
     expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
     expect(

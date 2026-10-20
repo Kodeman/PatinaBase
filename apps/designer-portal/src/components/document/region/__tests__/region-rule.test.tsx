@@ -45,9 +45,9 @@ describe('RegionRule', () => {
     expect(rule.textContent).toBe('');
   });
 
-  it('is a Section by default: draws nothing at the head, and marks its region to close on --rule-mid', () => {
+  it('is a Section by default: draws nothing at the head, and marks its region to close', () => {
     // US-28 S7 (uplift.md area 2): each region is a Section that CLOSES on its
-    // own --rule-mid; the next region opens on that close, so the head draws
+    // own rule; the next region opens on that close, so the head draws
     // nothing. The default moves from `strong` to `mid` with intent: the
     // specimens now draw every region (approvals, schedule, money, mood boards,
     // care, prework) and none opens on a double rule.
@@ -61,17 +61,22 @@ describe('RegionRule', () => {
     expect(rule.getAttribute('class')).toBeNull();
   });
 
-  it('closes every region on the paper on --rule-mid, at full measure', () => {
+  it('closes every region on the paper on a hairline with 48px below, at full measure (US-43 R3)', () => {
     // The close is drawn on the region the mark sits in, scoped to the paper,
     // so the Desk's own double rule (outside [data-document-paper]) is not a
-    // region and closes nothing.
+    // region and closes nothing. Space groups; the charcoal --rule-mid close
+    // is gone, so no charcoal edge sits within 48px above a double rule.
     const css = readFileSync(GLOBALS_CSS, 'utf8');
     const block = css.slice(css.indexOf('/* US-28 S7 document */'));
     expect(block).not.toBe(css);
     expect(ruleBody(block, '[data-document-paper] :has(> [data-region-rule])')).toBe(
       // Read inside the S7 block alone, so the close is pinned to the token
       // it spends rather than to a literal.
-      ['border-bottom: var(--rule-mid)', 'padding-bottom: 24px'].join('; '),
+      [
+        'border-bottom: 1px solid var(--hairline-strong)',
+        'margin-bottom: 48px',
+        'padding-bottom: 24px',
+      ].join('; '),
     );
   });
 

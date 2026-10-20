@@ -160,11 +160,11 @@ describe('Client approvals region head', () => {
     );
 
     expect(
-      document.querySelectorAll('[data-action-variant="inked"]'),
+      document.querySelectorAll('[data-action-variant="primary"]'),
     ).toHaveLength(1);
     expect(
       screen.getByRole('button', { name: 'New approval' }),
-    ).toHaveAttribute('data-action-variant', 'inked');
+    ).toHaveAttribute('data-action-variant', 'primary');
   });
 
   it('arrives OPEN with no lead and no approvals — the default quiets a stop, it never folds it', () => {

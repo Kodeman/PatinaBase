@@ -138,10 +138,10 @@ describe('One scored leader per Money head at full density (F3-7)', () => {
   it('nothing due: Record a change leads, scored; Draw an invoice is plain', () => {
     render(<MoneyRegion projectId="project-1" />);
     const head = document.querySelector('[data-region-head="money-head"]')!;
-    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
+    expect(head.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
     expect(
       document.querySelector('[data-action-key="record-a-change-money-head"]'),
-    ).toHaveAttribute('data-action-variant', 'inked');
+    ).toHaveAttribute('data-action-variant', 'primary');
     expect(
       document.querySelector('[data-action-key="draw-project-invoice"]'),
     ).toHaveAttribute('data-action-variant', 'secondary');
@@ -152,7 +152,7 @@ describe('One scored leader per Money head at full density (F3-7)', () => {
     render(<MoneyRegion projectId="project-1" />);
     const head = document.querySelector('[data-region-head="money-head"]')!;
     expect(headKeys()[0]).toBe('record-client-payment');
-    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
+    expect(head.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
     expect(
       document.querySelector('[data-action-key="record-a-change-money-head"]'),
     ).toHaveAttribute('data-action-variant', 'secondary');
@@ -171,7 +171,7 @@ describe('Record a change at quiet on the project spread (F2-18)', () => {
     expect(headKeys()).toEqual(['record-a-change-money-head', 'draw-project-invoice']);
     expect(
       document.querySelector('[data-action-key="record-a-change-money-head"]'),
-    ).toHaveAttribute('data-action-variant', 'inked');
+    ).toHaveAttribute('data-action-variant', 'primary');
     expect(
       document.querySelector('[data-action-key="draw-project-invoice"]'),
     ).toHaveAttribute('data-action-variant', 'secondary');
@@ -195,7 +195,7 @@ describe('Record a change at quiet on the project spread (F2-18)', () => {
     expect(headKeys()).toEqual(['record-client-payment', 'record-a-change-money-head']);
     expect(
       document.querySelector('[data-action-key="record-client-payment"]'),
-    ).toHaveAttribute('data-action-variant', 'inked');
+    ).toHaveAttribute('data-action-variant', 'primary');
     expect(
       document.querySelector('[data-action-key="record-a-change-money-head"]'),
     ).toHaveAttribute('data-action-variant', 'secondary');

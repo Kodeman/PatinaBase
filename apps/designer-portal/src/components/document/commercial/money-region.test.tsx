@@ -353,11 +353,11 @@ describe('MoneyRegion', () => {
     render(<MoneyRegion projectId="project-1" />);
 
     expect(
-      document.querySelectorAll('[data-action-variant="inked"]'),
+      document.querySelectorAll('[data-action-variant="primary"]'),
     ).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Draft an invoice' })).toHaveAttribute(
       'data-action-variant',
-      'inked',
+      'primary',
     );
   });
 
@@ -759,8 +759,8 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
 
     const head = document.querySelector('[data-region-head="money-head"]') as HTMLElement;
     const record = within(head).getByRole('button', { name: 'Record the payment' });
-    expect(record).toHaveAttribute('data-action-variant', 'inked');
-    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
+    expect(record).toHaveAttribute('data-action-variant', 'primary');
+    expect(head.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
     expect(head.querySelectorAll('.da-terminal')).toHaveLength(0);
     expect(within(head).getByRole('button', { name: 'Draft an invoice' })).toHaveAttribute(
       'data-action-variant',
@@ -786,10 +786,10 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
 
     const head = document.querySelector('[data-region-head="money-head"]') as HTMLElement;
     expect(within(head).queryByRole('button', { name: 'Record the payment' })).not.toBeInTheDocument();
-    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
+    expect(head.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
     expect(within(head).getByRole('button', { name: 'Record a change' })).toHaveAttribute(
       'data-action-variant',
-      'inked',
+      'primary',
     );
     expect(within(head).getByRole('button', { name: 'Draft an invoice' })).toHaveAttribute(
       'data-action-variant',
@@ -797,7 +797,7 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
     );
   });
 
-  it('keeps today’s inked Draw an invoice with the flag off', () => {
+  it('keeps today’s scored Draw an invoice with the flag off', () => {
     process.env.NEXT_PUBLIC_FLAG_OVERRIDES = flags;
     mockInvoices = { data: [invoice({})], isLoading: false, error: null };
 
@@ -806,7 +806,7 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
     expect(screen.queryByRole('button', { name: 'Record the payment' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Draft an invoice' })).toHaveAttribute(
       'data-action-variant',
-      'inked',
+      'primary',
     );
   });
 });

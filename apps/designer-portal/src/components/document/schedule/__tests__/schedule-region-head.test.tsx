@@ -276,7 +276,7 @@ describe("ScheduleSpine region head", () => {
     renderSpine();
 
     expect(
-      document.querySelectorAll('[data-action-variant="inked"]'),
+      document.querySelectorAll('[data-action-variant="primary"]'),
     ).toHaveLength(1);
   });
 
@@ -293,11 +293,11 @@ describe("ScheduleSpine region head", () => {
       screen.getByRole("button", { name: "+ New open item" }),
     ).toHaveAttribute("data-action-variant", "secondary");
     expect(
-      document.querySelectorAll('[data-action-variant="inked"]'),
+      document.querySelectorAll('[data-action-variant="primary"]'),
     ).toHaveLength(0);
   });
 
-  it("flag off: `+ New open item` stays the inked leader", () => {
+  it("flag off: `+ New open item` stays the scored leader", () => {
     useResolvedScheduleMock.mockReturnValue(onePhaseSchedule("in_progress"));
     phaseStateMock.mockReturnValue("active");
 
@@ -305,7 +305,7 @@ describe("ScheduleSpine region head", () => {
 
     expect(
       screen.getByRole("button", { name: "+ New open item" }),
-    ).toHaveAttribute("data-action-variant", "inked");
+    ).toHaveAttribute("data-action-variant", "primary");
   });
 
   it("renders open with zero phases so ScheduleBirth stays reachable, with no seam", () => {
@@ -539,7 +539,7 @@ describe("ScheduleSpine quiet body (W4)", () => {
     // prints the head's own leader and nothing beside it, so the region still
     // inks exactly one word.
     expect(
-      container.querySelectorAll('[data-action-variant="inked"]'),
+      container.querySelectorAll('[data-action-variant="primary"]'),
     ).toHaveLength(1);
   });
 

@@ -157,7 +157,7 @@ describe("I91 shared action grammar", () => {
 
 /**
  * The Project, Composed — a region's leadership lives in its ledger's ORDER,
- * not in a variant a caller spells. RegionHead inks index 0 and nothing else,
+ * not in a variant a caller spells. RegionHead scores index 0 and nothing else,
  * so a region that has adopted it must not carry a hand-written `primary` in
  * its head, nor spell `'inked'` in the ledger it passes.
  *
@@ -290,19 +290,24 @@ describe("Project region ledgers", () => {
     },
   );
 
-  it("inks the leading ledger entry and only the leading one", () => {
+  // US-43 R4 — the leading entry is the one scored lead (`primary`, unfilled)
+  // unless its caller declares a variant; nothing is inked any more.
+  it("scores the leading ledger entry and only the leading one", () => {
     const head = readFileSync(
       join(COMPONENTS, "region", "region-head.tsx"),
       "utf8",
     );
-    expect(head.match(/'inked'/g) ?? []).toHaveLength(2);
+    expect(head.match(/'primary'/g) ?? []).toHaveLength(2);
     // US-19 499-2 / F2-12 (P-1): a head may declare it has no leader at all;
     // when it has one, it is still entry 0 and only entry 0.
-    expect(head).toContain("index === 0 && leader ? 'inked'");
-    // the second occurrence is the dev guard that catches a caller trying to
-    // spell leadership on a later entry — not a second place it is granted.
     expect(head).toContain(
-      "(entry.variant as DocumentActionVariant | undefined) === 'inked'",
+      "entry.variant ?? (index === 0 && leads ? 'primary' : 'secondary')",
     );
+    // the other occurrence is the dev guard that catches a caller trying to
+    // spell leadership on a later entry — not a second place it is granted.
+    expect(head).toContain("return declared === 'primary' || declared === 'inked';");
+    expect(head.match(/'inked'/g) ?? []).toHaveLength(1);
+    // US-25 Q8's band context is gone: the band no longer demotes the lead.
+    expect(head).not.toContain("BandLeadsContext");
   });
 });

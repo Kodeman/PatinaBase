@@ -1,16 +1,15 @@
 'use client';
 
 /**
- * The head of a Project region — two registers on one line: the region's name
- * as the Section header (the ornament and a mono eyebrow, US-28 walk-fix
- * paper) and its one-line state on the left, its ledger of acts on the right
- * (Scored Ink words, never boxes).
+ * The head of a Project region: the region's name as a `.t-d2` heading
+ * (US-43 R2, 26px Playfair, sentence case as authored) over one `.t-body`
+ * status sentence on the left, its ledger of acts on the right (Scored Ink
+ * words, never boxes).
  *
- * The ledger's ORDER is its hierarchy: entry 0 is the region's leader and is
- * rendered `inked` whatever it declares; everything after it is a secondary or
- * quieter word. That is why `variant` on entry 0 is ignored rather than
- * honored — a caller cannot demote the leader by relabelling it, and cannot
- * promote a second leader by spelling one.
+ * The ledger's ORDER is its hierarchy (US-43 R4): entry 0 is the section's one
+ * scored lead and renders `primary` (ink over clay scores, unfilled) unless the
+ * caller declares its variant; every later entry keeps its declared variant,
+ * `secondary` by default. A caller cannot promote a second lead.
  *
  * F28/F87 and direction-b §6 M4 — the head is a two-track grid only from
  * 1180px. Below that the heading stacks ABOVE its ledger, because a two-track
@@ -26,13 +25,12 @@
  */
 
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useId } from 'react';
+import { useEffect, useId } from 'react';
 import {
   DocumentAction,
   DocumentActionGroup,
   type DocumentActionVariant,
 } from '../document-action';
-import { SectionOrnament } from './section-ornament';
 
 export interface RegionLedgerEntry {
   /** DocumentAction actionKey — stable telemetry identity. */
@@ -42,7 +40,7 @@ export interface RegionLedgerEntry {
   actionRef?: React.Ref<HTMLButtonElement>;
   /** Link-form entries render as an anchor rather than a button. */
   href?: string;
-  /** Ignored at index 0, which is the inked leader unless the head is `leaderless`. */
+  /** At index 0, omitted means the scored `primary` lead (unless the head is `leaderless`). */
   variant?: 'secondary' | 'tertiary' | 'danger';
   disabled?: boolean;
   /**
@@ -81,7 +79,7 @@ export interface RegionHeadProps {
   reserveEyebrow?: boolean;
   surfaceKey: string;
   regionKey: string;
-  /** Primary-first: entry 0 renders inked. */
+  /** Lead-first: entry 0 renders primary unless it declares a variant. */
   actions: readonly RegionLedgerEntry[];
   /** When present, the head renders the Fold toggle for this body. */
   bodyId?: string;
@@ -96,7 +94,7 @@ export interface RegionHeadProps {
   /**
    * W4-R1 — which of the ledger's acts print while the lens has not reached
    * this region. `'leader'` prints entry 0 alone: proposal §4 R2 says the one
-   * inked leader prints at quiet and "the overflow group does not; it returns
+   * leader prints at quiet and "the overflow group does not; it returns
    * when the region opens". The entries are not rendered rather than rendered
    * inert, because `DocumentActionGroup`'s one-leader guard and
    * `action-visibility.spec.ts` both COUNT `[data-action-key]` nodes — an
@@ -111,7 +109,7 @@ export interface RegionHeadProps {
    * US-19 499-2 / F2-12 (P-1) — `false` declares a head with no scored leader:
    * entry 0 prints its own declared weight (`secondary` when none), as every
    * other entry does, and at quiet no act prints. Only the caller that knows
-   * nothing leads its region says so; the default keeps entry 0 inked.
+   * nothing leads its region says so; the default makes entry 0 the lead.
    */
   leader?: boolean;
   /**
@@ -131,15 +129,6 @@ export interface RegionHeadProps {
    */
   leaderless?: boolean;
 }
-
-/**
- * US-25 Q8 — one filled act per view. True while the Document's band prints
- * its Next act: that act is the view's one filled control, so every region
- * head under it prints its leader as a text act (its declared weight, or
- * `secondary`) rather than a second inked one. The count of acts a quiet head
- * prints does not change; only their weight does.
- */
-export const BandLeadsContext = createContext(false);
 
 export function RegionHead({
   headingId,
@@ -162,9 +151,6 @@ export function RegionHead({
   // SQ-514 `leader` (no receivable due) and SQ-518 `leaderless` (a create act
   // at index 0) both leave entry 0 its declared variant.
   const leads = leaderProp && !leaderless;
-  // Q8 — the band elected its own act; this head's leader drops to text.
-  const bandLeads = useContext(BandLeadsContext);
-  const leader = leads && !bandLeads;
   const showFold = Boolean(bodyId && onFold);
   const printedActions =
     actsAtQuiet === 'leader' ? actions.slice(0, leads ? 1 : 0) : actions;
@@ -185,17 +171,15 @@ export function RegionHead({
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
-    const misdeclared = actions
-      .slice(1)
-      .filter(
-        (entry) =>
-          (entry.variant as DocumentActionVariant | undefined) === 'inked',
-      );
+    const misdeclared = actions.slice(1).filter((entry) => {
+      const declared = entry.variant as DocumentActionVariant | undefined;
+      return declared === 'primary' || declared === 'inked';
+    });
     if (misdeclared.length > 0) {
       console.error(
-        `RegionHead "${surfaceKey}/${regionKey}" declares an inked variant at ledger index > 0 (${misdeclared
+        `RegionHead "${surfaceKey}/${regionKey}" declares a lead variant at ledger index > 0 (${misdeclared
           .map((entry) => entry.key)
-          .join(', ')}); only the leading entry is inked.`,
+          .join(', ')}); only the leading entry leads.`,
       );
     }
     if (actions.length === 0 && !bodyId && !allowNoActs) {
@@ -242,29 +226,28 @@ export function RegionHead({
         <h2
           id={headingId}
           tabIndex={-1}
-          // US-28 walk-fix paper (uplift.md area 2; specimens/document-*.html
-          // `.sec-head .eb`) — each region opens on the Section header: the
-          // ornament and the region's name in the mono eyebrow register, never
-          // a display heading. D2 — the letterhead's own ring, verbatim.
-          // `outline-none` on a -1 tabindex heading meant a rail jump landed
-          // with nothing drawn.
+          // US-43 R2 — the region's name is a real heading level: 26px
+          // Playfair in ink, sentence case as authored, wrapping at 390. The
+          // ring is clay-ink (5.75:1); clay drew 2.18:1, under 1.4.11. A -1
+          // tabindex heading that a rail jump focuses must draw its ring.
           className={
             silent
               ? 'sr-only'
-              : 'eb focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]'
+              : 't-d2 text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]'
           }
         >
-          {!silent && <SectionOrnament />}
-          {silent ? name : <span className="min-w-0">{name}</span>}
+          {name}
         </h2>
+        {/* US-43 — one status sentence in ink, on the paper and never on the
+            rail. The exceptions follow it in the same line, each in whatever
+            state ink its caller gives it. `h2 + p` stays the status
+            (prework-regions e2e). */}
         {!silent && (
-          <p className="text-[12.5px] text-[var(--color-mocha)]">{status}</p>
-        )}
-        {printedExceptions.length > 0 && (
-          <p className="text-[12.5px] text-[var(--color-mocha)]">
+          <p className="t-body mt-1 text-[var(--ink)]">
+            {status}
             {printedExceptions.map((exception, index) => (
               <span key={index}>
-                {index > 0 && ' · '}
+                {' · '}
                 {exception}
               </span>
             ))}
@@ -281,7 +264,7 @@ export function RegionHead({
         >
           {printedActions.map((entry, index) => {
             const variant: DocumentActionVariant =
-              index === 0 && leader ? 'inked' : (entry.variant ?? 'secondary');
+              entry.variant ?? (index === 0 && leads ? 'primary' : 'secondary');
             const shared = {
               actionKey: entry.key,
               variant,

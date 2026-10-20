@@ -84,11 +84,11 @@ describe('Boards region head', () => {
     render(<ProjectMoodBoards projectId="project-1" />);
 
     expect(
-      document.querySelectorAll('[data-action-variant="inked"]'),
+      document.querySelectorAll('[data-action-variant="primary"]'),
     ).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Start a board' })).toHaveAttribute(
       'data-action-variant',
-      'inked',
+      'primary',
     );
   });
 

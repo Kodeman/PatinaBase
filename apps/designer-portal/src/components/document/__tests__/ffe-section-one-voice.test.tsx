@@ -205,13 +205,13 @@ afterEach(() => {
 });
 
 describe('The project spread’s Pieces head (US-21 Q14)', () => {
-  it('prints Build the item list, inked, beside Record a change at quiet', () => {
+  it('prints Build the item list, scored, beside Record a change at quiet', () => {
     renderProject();
     expect(document.getElementById('project-ffe')).toHaveAttribute('data-density', 'quiet');
     expect(headActs()).toEqual(['work-the-pieces', 'record-a-change-pieces-head']);
     const lead = document.querySelector('[data-action-key="work-the-pieces"]');
     expect(lead).toHaveTextContent('Edit FF&E schedule');
-    expect(lead).toHaveAttribute('data-action-variant', 'inked');
+    expect(lead).toHaveAttribute('data-action-variant', 'primary');
     expect(lead).toHaveAttribute('href', '/doc/project-1/pieces?lens=rough');
     expect(
       document.querySelector('[data-action-key="record-a-change-pieces-head"]'),
@@ -230,7 +230,7 @@ describe('The project spread’s Pieces head (US-21 Q14)', () => {
       'record-a-change-pieces-head',
     ]);
     expect(
-      document.querySelectorAll('[data-region-head="ffe"] [data-action-variant="inked"]'),
+      document.querySelectorAll('[data-region-head="ffe"] [data-action-variant="primary"]'),
     ).toHaveLength(1);
   });
 

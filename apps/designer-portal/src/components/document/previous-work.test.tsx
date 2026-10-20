@@ -168,7 +168,7 @@ describe('PreviousWork', () => {
       // prints the head's own leader and nothing beside it, so a second inked
       // word would put two leaders on one region.
       expect(
-        container.querySelectorAll('[data-action-variant="inked"]'),
+        container.querySelectorAll('[data-action-variant="primary"]'),
       ).toHaveLength(1);
       expect(
         screen.getByText(

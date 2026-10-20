@@ -3027,15 +3027,19 @@ html:has(.document-route-shell) {
 
 /* US-28 S7 document */
 /* The Document paper (uplift.md area 2; specimens/document-{1440,390}.html).
-   Each region is a Section that closes on its own --rule-mid, at full
-   measure. The region is the element RegionRule marks (`data-region-rule`),
-   so the close needs no caller to restructure; it is scoped to the paper, so
-   the Desk's own double rule (outside it) is not a region and closes nothing.
-   The double rule stays only where a movement opens (RegionRule
-   weight="strong"). No Cards on the paper body. */
+   US-43 R3 — space groups and a rule only opens a movement: each region
+   closes on a 1px --hairline-strong at full measure with 48px of space below
+   it (the next root's 24px --doc-region-gap collapses into it). The region is
+   the element RegionRule marks (`data-region-rule`), so the close needs no
+   caller to restructure; it is scoped to the paper, so the Desk's own double
+   rule (outside it) is not a region and closes nothing. The double rule stays
+   only where a movement opens (RegionRule weight="strong"), and the close
+   above it is a hairline, so no charcoal edge sits within 48px of it. No
+   Cards on the paper body. */
 [data-document-paper] :has(> [data-region-rule]) {
   padding-bottom: 24px;
-  border-bottom: var(--rule-mid);
+  border-bottom: 1px solid var(--hairline-strong);
+  margin-bottom: 48px;
 }
 /* The margin's first-touch note is a Card off the paper (L2 on the ground),
    unclamped: its words and its × stay on one row. */
@@ -3373,10 +3377,8 @@ html:has(.document-route-shell) {
 
 /* US-28 walk-fix paper */
 /* The Document paper (SQ-834 WALK §2; specimens/document-{1440,390}.html
-   `.sec-head .eb`). A region opens on the Section header, the ornament and
-   its name in the mono eyebrow in full ink, open (RegionHead) or folded
-   (FoldSeam) alike. */
-[data-region-head] h2.eb,
+   `.sec-head .eb`). A folded region (FoldSeam) prints the ornament and its
+   name in the mono eyebrow in full ink; the open head is `.t-d2` (US-43 R2). */
 [data-fold-seam] .eb {
   color: var(--text-primary);
 }
