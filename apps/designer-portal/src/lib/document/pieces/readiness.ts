@@ -38,6 +38,8 @@ import {
 export interface ReleaseLensLine extends LineStageRow {
   id: string;
   name: string | null;
+  selection_thread_id?: string | null;
+  effective_lead_time_weeks?: number | null;
   status: string;
   blocked: boolean | null;
   received_quantity: number | null;

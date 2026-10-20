@@ -38,7 +38,7 @@ import {
   useRoomHandbacks,
   useTriageProjectFfeItems,
 } from "@patina/supabase";
-import type { FfeAssignmentScope } from "@patina/types";
+import { formatLeadTimeWeeks, type FfeAssignmentScope } from "@patina/types";
 import {
   useProjectInstruments,
   useReleaseForAuthorization,
@@ -68,6 +68,7 @@ import {
   type ServerReadiness,
 } from "@/lib/document/pieces/readiness";
 import { releaseRefusalMessage } from "@/lib/document/pieces/release-refusals";
+import { lineName, useNeedLabels, type NeedLabels } from "@/lib/document/pieces/line-name";
 import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
 import {
   QUIET_FOCUS,
@@ -467,13 +468,20 @@ function HandBack({
   );
 }
 
-function CeremonyLines({ set }: { set: ReleaseSet }) {
+function CeremonyLines({ set, needLabels }: { set: ReleaseSet; needLabels: NeedLabels }) {
   return (
-    <ul className="flex flex-col gap-1">
+    <ul className="flex w-full min-w-0 flex-col gap-1">
       {set.rows.map((row) => (
-        <li key={row.line.id} className={CONSEQUENCE_CLS}>
-          {row.labor ? `↳ ${row.line.name} (labor)` : row.line.name}{" "}
-          <span className="tabular-nums">{releaseAmountText(row.line)}</span>
+        <li key={row.line.id} className={cn(CONSEQUENCE_CLS, "break-words [overflow-wrap:anywhere]")}>
+          <span className="block">
+            {row.labor ? `↳ ${lineName(row.line, needLabels)} (labor)` : lineName(row.line, needLabels)}
+          </span>{" "}
+          <span>
+            {row.line.effective_lead_time_weeks == null
+              ? formatLeadTimeWeeks(null)
+              : `Lead time · ${formatLeadTimeWeeks(row.line.effective_lead_time_weeks)}`}
+          </span>{" "}
+          <span className="whitespace-nowrap tabular-nums">{releaseAmountText(row.line)}</span>
         </li>
       ))}
     </ul>
@@ -481,7 +489,7 @@ function CeremonyLines({ set }: { set: ReleaseSet }) {
 }
 
 /** The Selected lines the set leaves out, each with its reason. */
-function LeftOut({ omitted }: { omitted: readonly ReleaseOmission[] }) {
+function LeftOut({ omitted, needLabels }: { omitted: readonly ReleaseOmission[]; needLabels: NeedLabels }) {
   if (omitted.length === 0) return null;
   return (
     <section aria-label="Excluded selections" className="flex flex-col gap-1">
@@ -489,7 +497,7 @@ function LeftOut({ omitted }: { omitted: readonly ReleaseOmission[] }) {
       <ul className="flex flex-col gap-1">
         {omitted.map(({ row, reason }) => (
           <li key={row.line.id} className={CONSEQUENCE_CLS}>
-            {row.labor ? `↳ ${row.line.name} (labor)` : row.line.name}: {reason}
+            {row.labor ? `↳ ${lineName(row.line, needLabels)} (labor)` : lineName(row.line, needLabels)}: {reason}
           </li>
         ))}
       </ul>
@@ -564,6 +572,7 @@ function Ceremony({
   draft: ReturnType<typeof useDraftRelease>;
   previewReturn: React.RefObject<HTMLDivElement | null>;
 }) {
+  const needLabels = useNeedLabels(projectId, lines);
   const { data: instruments } = useProjectInstruments(projectId);
   const { data: project } = useProject(projectId);
   const release = useReleaseForAuthorization(projectId);
@@ -685,7 +694,7 @@ function Ceremony({
         className="ml-auto flex max-w-[640px] flex-col items-end gap-3 text-right"
       >
         <p className={CONSEQUENCE_CLS}>{draftReleaseHead(shown)}</p>
-        <CeremonyLines set={shown} />
+        <CeremonyLines set={shown} needLabels={needLabels} />
         <p className={CONSEQUENCE_CLS}>
           These lines are on a drafted release. Preview the saved authorization
           before sending, or void it to release them again.
@@ -744,7 +753,7 @@ function Ceremony({
         <p className="font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink-faint)]">
           {lines.length === 0 ? "No selections yet. Add them in Preliminary selections, then return for purchasing authorization." : "No selections are ready for purchasing authorization."}
         </p>
-        <LeftOut omitted={omitted} />
+        <LeftOut omitted={omitted} needLabels={needLabels} />
       </div>
     );
   }
@@ -776,8 +785,8 @@ function Ceremony({
       className="ml-auto flex max-w-[640px] flex-col items-end gap-3 text-right"
     >
       <p className={CONSEQUENCE_CLS}>{releaseSetHead(set)}</p>
-      <CeremonyLines set={set} />
-      <LeftOut omitted={omitted} />
+      <CeremonyLines set={set} needLabels={needLabels} />
+      <LeftOut omitted={omitted} needLabels={needLabels} />
       <p className={CONSEQUENCE_CLS}>Saving creates a draft and reserves these items. Nothing is sent to the client.</p>
       {errorNote}
       {doneNote}

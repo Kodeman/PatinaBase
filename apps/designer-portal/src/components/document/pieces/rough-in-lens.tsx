@@ -29,9 +29,7 @@ import {
   type PointerEvent,
 } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 import {
-  createBrowserClient,
   useArchiveProjectSelection,
   useBatchCreateNamedProjectNeeds,
   usePlaceProductInProjectV2,
@@ -81,6 +79,7 @@ import {
   type RowDragRoom,
 } from "@/lib/document/pieces/use-row-drag";
 import { ENTRY_NAME_ATTR } from "@/lib/document/pieces/rough-in-keys";
+import { lineName, useNeedLabels, type NeedLabels } from "@/lib/document/pieces/line-name";
 import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
 import {
   RoughInTable,
@@ -130,9 +129,6 @@ interface RoughInLine extends PieceLineStageRow {
   /** The item label (00808). */
   doc_code?: string | null;
 }
-
-/** Thread id → its need label, where it has one. */
-type NeedLabels = Readonly<Record<string, string>>;
 
 /** A table on the sheet: a project room, `Not in a room yet`, or `Throughout`. */
 interface Place {
@@ -206,63 +202,6 @@ function lineUnit(line: RoughInLine): FfeLineUnit {
   return line.unit && UNITS.has(line.unit)
     ? (line.unit as FfeLineUnit)
     : "each";
-}
-
-/** The need the line answers (D2): its thread's need label, else its name. */
-function lineName(line: RoughInLine, needLabels: NeedLabels = {}): string {
-  return (
-    (line.selection_thread_id && needLabels[line.selection_thread_id]) ||
-    line.name?.trim() ||
-    "Unnamed line"
-  );
-}
-
-/**
- * The need labels, from the same source the Spec lens reads
- * (`project_ffe_selection_threads.need_label`, spec-lens.tsx). A fill names
- * the line after the product; the need stays on the thread.
- */
-function useNeedLabels(
-  projectId: string,
-  lines: readonly RoughInLine[],
-): NeedLabels {
-  const threadIds = useMemo(
-    () =>
-      [
-        ...new Set(
-          lines
-            .map((line) => line.selection_thread_id)
-            .filter((id): id is string => !!id),
-        ),
-      ].sort(),
-    [lines],
-  );
-  const { data } = useQuery({
-    queryKey: [
-      "project-ffe-items",
-      projectId,
-      "need-labels",
-      threadIds.join(","),
-    ],
-    enabled: threadIds.length > 0,
-    queryFn: async (): Promise<NeedLabels> => {
-      const { data: threads, error } = await (createBrowserClient() as any)
-        .from("project_ffe_selection_threads")
-        .select("id, need_label")
-        .in("id", threadIds);
-      if (error) throw error;
-      const labels: Record<string, string> = {};
-      for (const thread of (threads ?? []) as {
-        id: string;
-        need_label: string | null;
-      }[]) {
-        if (thread.need_label?.trim())
-          labels[thread.id] = thread.need_label.trim();
-      }
-      return labels;
-    },
-  });
-  return data ?? {};
 }
 
 /** Where focus goes once the sheet holds it (T-60a F5, F7). */

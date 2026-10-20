@@ -8,12 +8,15 @@
  * Send remains a separate preview action. Fixture: SPEC §4.2, Whole Home Renovation.
  */
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import type { ReactElement, ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render as testingRender, screen, within } from "@testing-library/react";
 
 type Row = Record<string, unknown> & { id: string };
 
 const mockItems: { data: Row[] } = { data: [] };
 const mockHandbacks: { data: unknown[] } = { data: [] };
+const mockThreads: Record<string, string | null> = {};
 const mockTriage = jest.fn();
 const mockHandBack = jest.fn();
 const mockRelease = jest.fn();
@@ -33,6 +36,16 @@ const mockProject: { data: { id: string; client_id: string | null } } = {
 };
 
 jest.mock("@patina/supabase", () => ({
+  createBrowserClient: () => ({
+    from: () => ({
+      select: () => ({
+        in: async (_column: string, ids: string[]) => ({
+          data: ids.map((id) => ({ id, need_label: mockThreads[id] ?? null })),
+          error: null,
+        }),
+      }),
+    }),
+  }),
   useDraftRelease: () => ({
     data: mockDraft.data,
     isError: mockDraft.isError,
@@ -73,6 +86,7 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
 }));
 const mockInvalidate = jest.fn();
 jest.mock("@tanstack/react-query", () => ({
+  ...jest.requireActual("@tanstack/react-query"),
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
 }));
 jest.mock("@/hooks/use-document-rooms", () => ({
@@ -94,6 +108,15 @@ jest.mock('../../overlays/purchasing-authorization-preview-sheet', () => ({
 import { ReleaseLens } from "../release-lens";
 import { ArrivalMount } from "../../arrival/arrival-mount";
 import { consumeArriveToken } from "@/lib/arrival/session";
+
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return testingRender(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 function line(
   id: string,
@@ -202,6 +225,7 @@ const rowOf = (name: string) =>
   screen.getByText(name, { selector: "td, td *" }).closest("tr") as HTMLElement;
 
 beforeEach(() => {
+  for (const id of Object.keys(mockThreads)) delete mockThreads[id];
   mockItems.data = fixture();
   mockHandbacks.data = [];
   mockTriage.mockReset();
@@ -229,6 +253,66 @@ const W4_DRAFT: Draft = {
 };
 
 describe("ReleaseLens", () => {
+  it.each([false, true])("prints the thread need label instead of the filled product name (drafted=%s)", async (drafted) => {
+    mockItems.data = [line("L1", "living", "Library chair", ready({ product_id: "p-chair", selection_thread_id: "thread-chair", unit_price_cents: 190000 }))];
+    mockThreads["thread-chair"] = "  Bedroom accent chair  ";
+    if (drafted) mockDraft.data = { ...W4_DRAFT, itemIds: ["L1"] };
+    render(<ReleaseLens {...props} />);
+    const ceremony = within(screen.getByRole("region", { name: "This release" }));
+    const row = await ceremony.findByText(/Bedroom accent chair/);
+    expect(row.closest("li")).toHaveTextContent("Bedroom accent chair");
+    expect(row.closest("li")).not.toHaveTextContent("Library chair");
+  });
+
+  it("uses the line name when there is no thread", () => {
+    mockItems.data = [line("L1", "living", "Custom reading chair", ready({ unit_price_cents: 190000 }))];
+    render(<ReleaseLens {...props} />);
+    const ceremony = within(screen.getByRole("region", { name: "This release" }));
+    expect(ceremony.getByRole("listitem")).toHaveTextContent("Custom reading chair");
+  });
+
+  it.each([
+    [12, "Lead time · About 12 weeks"],
+    [0, "Lead time · In stock"],
+    [null, "Lead time to be confirmed"],
+  ])("prints effective lead time %s as %s", (weeks, text) => {
+    mockItems.data = [line("L1", "living", "Custom reading chair", ready({ unit_price_cents: 190000, effective_lead_time_weeks: weeks }))];
+    render(<ReleaseLens {...props} />);
+    const ceremony = within(screen.getByRole("region", { name: "This release" }));
+    expect(ceremony.getByText(text as string)).toBeInTheDocument();
+    expect(ceremony.getByRole("listitem")).toHaveTextContent(
+      "Custom reading chair " + text + " $1,900",
+    );
+  });
+
+  it("keeps Save draft & preview enabled with null lead time", async () => {
+    mockItems.data = [line("L1", "living", "Custom reading chair", ready({ unit_price_cents: 190000, effective_lead_time_weeks: null }))];
+    render(<ReleaseLens {...props} />);
+    const save = screen.getByRole("button", { name: "Save draft & preview" });
+    expect(save).toBeEnabled();
+    expect(save).not.toHaveAttribute("aria-disabled", "true");
+    await act(async () => { fireEvent.click(save); });
+    expect(mockRelease).toHaveBeenCalledWith({ name: "Furnishings authorization № 3", ffeItemIds: ["L1"] });
+  });
+
+  it("keeps the labor prefix and suffix around its need label", async () => {
+    mockItems.data = fixture().map((row) => row.id === "R1a" ? { ...row, selection_thread_id: "thread-labor" } : row);
+    mockThreads["thread-labor"] = "Hang bedroom wallpaper";
+    render(<ReleaseLens {...props} />);
+    const ceremony = within(screen.getByRole("region", { name: "This release" }));
+    expect(await ceremony.findByText(/↳ Hang bedroom wallpaper \(labor\)/)).toBeInTheDocument();
+  });
+
+  it("names an excluded selection by its thread need label", async () => {
+    mockItems.data = [line("L1", "living", "Library chair", ready({ product_id: "p-chair", selection_thread_id: "thread-chair", unit_price_cents: 190000 }))];
+    mockThreads["thread-chair"] = "Bedroom accent chair";
+    mockRefused.set("L1", { ready: false, missingFields: ["image"] });
+    render(<ReleaseLens {...props} />);
+    const excluded = within(screen.getByRole("region", { name: "Excluded selections" }));
+    expect(await excluded.findByText("Bedroom accent chair: Needs an image")).toBeInTheDocument();
+    expect(excluded.queryByText(/Library chair/)).not.toBeInTheDocument();
+  });
+
   it("prints the table across rooms: LINE · ROOM · STAGE · READINESS · FOR THE CLIENT · and an empty 6th column", () => {
     render(<ReleaseLens {...props} />);
     const table = screen.getByRole("table", { name: "Release" });
@@ -339,8 +423,8 @@ describe("ReleaseLens", () => {
     ).toBeInTheDocument();
     const items = ceremony.getAllByRole("listitem").map((li) => li.textContent);
     expect(items).toHaveLength(7);
-    expect(items[0]).toBe("Custom cabinet $9,600");
-    expect(items[6]).toBe("↳ Install, wallpaper hanger (labor) $765");
+    expect(items[0]).toBe("Custom cabinet Lead time to be confirmed $9,600");
+    expect(items[6]).toBe("↳ Install, wallpaper hanger (labor) Lead time to be confirmed $765");
     expect(
       ceremony.getByText(
         "Saving creates a draft and reserves these items. Nothing is sent to the client.",
@@ -390,8 +474,8 @@ describe("ReleaseLens", () => {
     ).toBeInTheDocument();
     const items = ceremony.getAllByRole("listitem").map((li) => li.textContent);
     expect(items).toHaveLength(7);
-    expect(items[0]).toBe("Custom cabinet $9,600");
-    expect(items[6]).toBe("↳ Install, wallpaper hanger (labor) $765");
+    expect(items[0]).toBe("Custom cabinet Lead time to be confirmed $9,600");
+    expect(items[6]).toBe("↳ Install, wallpaper hanger (labor) Lead time to be confirmed $765");
     expect(screen.queryByRole("button", { name: /^Release / })).toBeNull();
 
     // Lines on the draft are not READY: they read "On a drafted release".
@@ -451,7 +535,7 @@ describe("ReleaseLens", () => {
       ceremony.getByText("This release · 7 lines · $30,759.50:"),
     ).toBeInTheDocument();
     expect(ceremony.getAllByRole("listitem")[0]).toHaveTextContent(
-      "Custom cabinet $9,599.50",
+      "Custom cabinet Lead time to be confirmed $9,599.50",
     );
     expect(
       ceremony.getByRole("button", {
