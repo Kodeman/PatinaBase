@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 let mockRooms: Record<string, unknown>[] = [];
@@ -557,6 +557,26 @@ describe('saved preview at the actual ceremony owner', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByText(/Draft saved. Nothing has been sent/)).not.toBeInTheDocument();
   };
+  it('opens Working budget with the exact selection retained and durable destination focus', async () => {
+    mockBudget = { version: null, checkpoint: null };
+    const unfold = jest.fn();
+    window.addEventListener('document:unfold-region', unfold);
+    const view = render(<><h2 id="money-region-heading" tabIndex={-1}>Working budget destination</h2><FFESection projectId="project-1" projectName="Ellsworth" mode="project" /></>);
+    review();
+    fireEvent.click(screen.getByRole('button', { name: 'Set up a working budget' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(unfold.mock.calls[0][0].detail).toEqual({ region: 'money' });
+    expect(screen.getByRole('checkbox', { name: 'Include Walnut bed, king in this release' })).toBeChecked();
+    await waitFor(() => expect(document.getElementById('money-region-heading')).toHaveFocus());
+    mockBudget = { version: { id: 'version-1', lines: [{ roomId: 'room-1' }] }, checkpoint: { id: 'checkpoint-1', state: 'acknowledged' } };
+    view.rerender(<><h2 id="money-region-heading" tabIndex={-1}>Working budget destination</h2><FFESection projectId="project-1" projectName="Ellsworth" mode="project" /></>);
+    fireEvent.click(screen.getByRole('button', { name: /Review & release/i }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Walnut bed, king');
+    expect(screen.getByRole('button', { name: 'Save draft & preview' })).not.toHaveAttribute('aria-disabled', 'true');
+    expect(mockRelease).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
+    window.removeEventListener('document:unfold-region', unfold);
+  });
   it('reopens the exact saved preview after owner unmount and read failure with one creation and no Send', async () => {
     renderSection(); review();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });

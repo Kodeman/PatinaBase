@@ -55,6 +55,7 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocSheet } from '../overlays/doc-sheet';
 import { PurchasingAuthorizationPreviewSheet } from '../overlays/purchasing-authorization-preview-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { requestRegionUnfold } from '@/lib/document/document-index';
 
 const CHIPS = [0, 25, 50, 100] as const;
 
@@ -228,7 +229,7 @@ function ReviewReleaseSheetContent({
   const canPublish = agreementKnown && (Boolean(agreementId) ||
     (!authority.data && purchasingAgreement.data?.state === 'external_recorded'));
   const blocked = !canPublish || budget.isLoading || Boolean(budget.error) ||
-    !hasCheckpoint || coverageGap || awaitingAcknowledgment;
+    !budget.data?.version?.id || !hasCheckpoint || coverageGap || awaitingAcknowledgment;
   const drift = scheduleDrift({
     stampedCents: stampedScheduledCents(budget.data?.version),
     currentCents: currentScheduledCents,
@@ -292,6 +293,17 @@ function ReviewReleaseSheetContent({
           : 'The override was not recorded.',
       );
     }
+  };
+
+  const openWorkingBudget = () => {
+    onClose();
+    requestRegionUnfold('money');
+    // Land after DocSheet restores its trigger and Money mounts its heading.
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const heading = document.getElementById('money-region-heading');
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    }));
   };
 
   const publishFresh = async () => {
@@ -495,7 +507,13 @@ function ReviewReleaseSheetContent({
               : 'border-[var(--color-sage)]'
         }`}
       >
-        {blocked && !awaitingAcknowledgment ? (
+        {budget.isLoading ? <p role="status">Loading budget checkpoint…</p>
+        : budget.error ? <p role="alert">The budget checkpoint could not be loaded. No publication was attempted.</p>
+        : !versionId ? <>
+          <p>No budget checkpoint has been published yet. Set up a working budget in Money, then sync from the schedule and review it before publishing. A checkpoint is spending-plan alignment, not purchase approval or payment.</p>
+          <DocumentAction actionKey="set-up-working-budget" surfaceKey="project" regionKey="release-gate" onClick={openWorkingBudget}>Set up a working budget</DocumentAction>
+        </>
+        : blocked && !awaitingAcknowledgment ? (
           <>
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               Budget checkpoint
@@ -519,7 +537,7 @@ function ReviewReleaseSheetContent({
               disabled={publishCheckpoint.isPending || !canPublish || !versionId || Boolean(budget.error)}
               onClick={publishFresh}
             >
-              Issue updated budget checkpoint
+              {hasCheckpoint ? 'Issue updated budget checkpoint' : 'Publish first budget checkpoint'}
             </DocumentAction>
           </>
         ) : blocked && awaitingAcknowledgment ? (
@@ -532,6 +550,7 @@ function ReviewReleaseSheetContent({
                 ? `Waiting on ${clientLabel} to acknowledge checkpoint ${checkpoint.checkpointCode}.`
                 : `Waiting on ${clientLabel} to acknowledge the current checkpoint.`}
             </p>
+            <p className="mt-1 text-[11.5px] text-[var(--color-charcoal)]">Ask {clientLabel} to review the published budget in their project&rsquo;s ledger and explicitly acknowledge the spending plan. Publishing another checkpoint will not acknowledge this one.</p>
             {!overrideOpen ? (
               <DocumentAction
                 actionKey="open-checkpoint-override"

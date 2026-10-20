@@ -25,7 +25,7 @@ let mockAuthority: { data: unknown } = {
 // 'acknowledged' by default so the pre-existing send/deposit/drift tests below
 // exercise a genuinely unblocked checkpoint — the 'open' (unacknowledged) case
 // has its own dedicated test further down.
-let mockBudget: { isLoading: boolean; data: unknown } = {
+let mockBudget: { isLoading: boolean; data: unknown; error?: Error } = {
   isLoading: false,
   data: {
     version: {
@@ -399,6 +399,36 @@ describe('ReviewReleaseSheet', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
+  it('offers working budget setup instead of a disabled publication when no version exists', () => {
+    mockBudget = { isLoading: false, data: { version: null, checkpoint: null } };
+    const onClose = jest.fn();
+    const unfold = jest.fn();
+    window.addEventListener('document:unfold-region', unfold);
+    renderSheet({ onClose });
+    fireEvent.click(screen.getByRole('button', { name: 'Set up a working budget' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(unfold.mock.calls[0][0].detail).toEqual({ region: 'money' });
+    expect(publishMutate).not.toHaveBeenCalled();
+    expect(releaseMutate).not.toHaveBeenCalled();
+    window.removeEventListener('document:unfold-region', unfold);
+  });
+
+  it.each(['loading', 'error'])('holds unknown budget %s without claiming a missing checkpoint', (state) => {
+    mockBudget = { isLoading: state === 'loading', error: state === 'error' ? new Error('offline') : undefined, data: undefined };
+    renderSheet();
+    expect(screen.getByText(state === 'loading' ? 'Loading budget checkpoint…' : 'The budget checkpoint could not be loaded. No publication was attempted.')).toBeVisible();
+    expect(screen.queryByText(/No budget checkpoint has been published yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /publish|issue|set up/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save draft & preview' })).toBeDisabled();
+  });
+
+  it('names first publication separately from an updated checkpoint', async () => {
+    mockBudget = { isLoading: false, data: { version: { id: 'version-first', lines: [] }, checkpoint: null } };
+    renderSheet();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish first budget checkpoint' }));
+    await waitFor(() => expect(publishMutate).toHaveBeenCalledWith({ versionId: 'version-first', agreementId: 'agreement-1' }));
+  });
+
   it('holds the send when no checkpoint has ever been published', () => {
     mockBudget = { isLoading: false, data: { version: null, checkpoint: null } };
     renderSheet();
@@ -477,7 +507,7 @@ describe('external checkpoint review gate', () => {
   });
   it('publishes external-only explicitly, reports no notification and keeps open checkpoint held until deliberate override', async () => {
     const view = renderSheet();
-    fireEvent.click(screen.getByRole('button', { name: 'Issue updated budget checkpoint' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish first budget checkpoint' }));
     await waitFor(() => expect(publishMutate).toHaveBeenCalledWith({ versionId: 'version-1', agreementId: null }));
     expect(await screen.findByText('Checkpoint published. No client notification sent.')).toBeInTheDocument();
     expect(overrideMutate).not.toHaveBeenCalled(); expect(sendMutate).not.toHaveBeenCalled(); expect(releaseMutate).not.toHaveBeenCalled();
@@ -497,7 +527,7 @@ describe('external checkpoint review gate', () => {
   it.each(['loading', 'error'])('holds external publication and release while eligibility is %s', (state) => {
     mockPurchasing = { ...mockPurchasing, isPending: state === 'loading', isError: state === 'error' };
     renderSheet();
-    expect(screen.getByRole('button', { name: 'Issue updated budget checkpoint' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Publish first budget checkpoint' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save draft & preview' })).toBeDisabled();
     expect(publishMutate).not.toHaveBeenCalled();
   });
