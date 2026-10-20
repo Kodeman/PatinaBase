@@ -497,6 +497,53 @@ function LeftOut({ omitted }: { omitted: readonly ReleaseOmission[] }) {
   );
 }
 
+function isCheckpointRefusal(cause: unknown): boolean {
+  const message = (cause as { message?: unknown } | null)?.message ?? cause;
+  return CHECKPOINT_REFUSAL.test(String(message));
+}
+
+/** A checkpoint refusal's way out: the Document, Money unfolded. */
+function WorkingBudgetRecovery({
+  docId,
+  refused,
+  held,
+}: {
+  docId: string;
+  refused: boolean;
+  held: boolean;
+}) {
+  if (!refused) return null;
+  return (
+    <section
+      aria-label="Working budget recovery"
+      className="flex flex-col items-end gap-1"
+    >
+      <p className={CONSEQUENCE_CLS}>
+        A budget checkpoint is planning alignment with the client, not purchase
+        approval, a signature or payment. Set up or review the spending plan in
+        Working budget and publish a checkpoint there; the client acknowledges
+        it in their project. Your selections stay saved here. Nothing is
+        published, acknowledged or sent from this page.
+      </p>
+      {/* Unmarked while held: ArrivalMount's capture listener would otherwise
+          write the landing for a click that does not navigate. */}
+      <span data-register={held ? undefined : "act"}>
+        <Link
+          href={`/doc/${docId}`}
+          data-landing={MONEY_LANDING}
+          className={ACT_CLS}
+          aria-disabled={held || undefined}
+          onClick={(event) => {
+            if (held) event.preventDefault();
+          }}
+        >
+          Open Working budget
+        </Link>
+      </span>
+    </section>
+  );
+}
+
 function Ceremony({
   previewReturn,
   docId,
@@ -575,11 +622,7 @@ function Ceremony({
     } catch (cause) {
       if (active.current) {
         setError(releaseRefusalMessage(cause));
-        setCheckpointRefused(
-          CHECKPOINT_REFUSAL.test(
-            String((cause as { message?: unknown } | null)?.message ?? cause),
-          ),
-        );
+        setCheckpointRefused(isCheckpointRefusal(cause));
       }
     } finally {
       await refresh();
@@ -593,35 +636,7 @@ function Ceremony({
       <p role="alert" className="font-sans text-[14px] text-[var(--sheet-ink)]">
         {identityUnavailable ? "The draft was saved but its identity is unavailable. Open the authorization ledger; do not save again." : error}
       </p>
-      {checkpointRefused && !identityUnavailable && (
-        <section
-          aria-label="Working budget recovery"
-          className="flex flex-col items-end gap-1"
-        >
-          <p className={CONSEQUENCE_CLS}>
-            A budget checkpoint is planning alignment with the client, not
-            purchase approval, a signature or payment. Set up or review the
-            spending plan in Working budget and publish a checkpoint there; the
-            client acknowledges it in their project. Your selections stay saved
-            here. Nothing is published, acknowledged or sent from this page.
-          </p>
-          {/* Unmarked while held: ArrivalMount's capture listener would
-              otherwise write the landing for a click that does not navigate. */}
-          <span data-register={busy ? undefined : "act"}>
-            <Link
-              href={`/doc/${docId}`}
-              data-landing={MONEY_LANDING}
-              className={ACT_CLS}
-              aria-disabled={busy || undefined}
-              onClick={(event) => {
-                if (busy || acting.current) event.preventDefault();
-              }}
-            >
-              Open Working budget
-            </Link>
-          </span>
-        </section>
-      )}
+      <WorkingBudgetRecovery docId={docId} refused={checkpointRefused} held={busy} />
     </>
   );
   const doneNote = done && (
