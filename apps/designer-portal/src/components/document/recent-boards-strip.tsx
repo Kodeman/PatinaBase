@@ -56,7 +56,7 @@ export function RecentBoardsStrip({ compact = false }: RecentBoardsStripProps) {
                     from: pathname,
                     source: 'desk_recents',
                   })}
-                  className="group flex items-start gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                  className="group flex items-start gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                   aria-label={`Open mood board ${board.name}`}
                 >
                   <BoardCoverArt
@@ -110,7 +110,7 @@ export function RecentBoardsStrip({ compact = false }: RecentBoardsStripProps) {
                   from: pathname,
                   source: 'desk_recents',
                 })}
-                className="group w-[190px] shrink-0 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+                className="group w-[190px] shrink-0 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
                 aria-label={`Open mood board ${board.name}`}
               >
                 <BoardCoverArt

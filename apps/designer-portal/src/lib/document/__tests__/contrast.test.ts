@@ -866,6 +866,50 @@ describe('T-22 · the drafting stock inks clear AA on their own grounds', () => 
   });
 });
 
+/**
+ * US-43 F-F — the one focus-ring token.
+ *
+ * Every focus outline and ring draws `--focus-ring`. Base clay drew it at
+ * 2.23:1 on paper and 1.82:1 on the rail, under WCAG 1.4.11's 3:1 for a
+ * non-text indicator. The :root value is clay-ink; a [data-ground='dark']
+ * surface swaps in --focus-on-dark. The two declarations are read from their
+ * own blocks: the shared alias map keeps only the last one it sees.
+ */
+describe('US-43 F-F · --focus-ring clears 3:1 on every ground it draws on', () => {
+  const NON_TEXT_CONTRAST = 3;
+  const declaredIn = (block: RegExp): string | undefined =>
+    css.match(block)?.[1];
+  const rootValue = declaredIn(/:root\s*\{[^}]*?--focus-ring\s*:\s*var\((--[a-z0-9-]+)\)\s*;/);
+  const darkValue = declaredIn(
+    /\[data-ground='dark'\]\s*\{[^}]*?--focus-ring\s*:\s*var\((--[a-z0-9-]+)\)\s*;/,
+  );
+
+  it('is clay-ink on :root and --focus-on-dark on a dark ground', () => {
+    expect(rootValue).toBe('--color-clay-ink');
+    expect(darkValue).toBe('--focus-on-dark');
+  });
+
+  it.each(['--paper', '--paper-doc', '--doc-rail-stock'] as const)(
+    'holds the :root ring at 3:1 on %s',
+    (ground) => {
+      const ratio = contrastRatio(resolveToken(rootValue!), resolveToken(ground));
+      expect(ratio).toBeGreaterThanOrEqual(NON_TEXT_CONTRAST);
+    },
+  );
+
+  it('holds the dark-ground ring at 3:1 on charcoal', () => {
+    expect(contrastRatio(resolveToken(darkValue!), DARK_GROUND)).toBeGreaterThanOrEqual(
+      NON_TEXT_CONTRAST,
+    );
+  });
+
+  it('is what base clay was not: under 3:1 on paper and on the rail', () => {
+    const clay = resolveToken('--color-clay');
+    expect(contrastRatio(clay, resolveToken('--paper'))).toBeLessThan(NON_TEXT_CONTRAST);
+    expect(contrastRatio(clay, resolveToken('--doc-rail-stock'))).toBeLessThan(NON_TEXT_CONTRAST);
+  });
+});
+
 jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
   useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
   useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),

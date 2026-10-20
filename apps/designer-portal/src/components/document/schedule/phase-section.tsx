@@ -183,7 +183,7 @@ export function PhaseSection({
           // a hidden affordance on a closed chapter is a lie).
           const foldLabel = expanded ? 'Collapse' : 'Expand';
           const foldCls =
-            'ml-4 font-mono text-[11px] font-normal uppercase tracking-[0.08em] text-[var(--color-clay-ink)]';
+            'ml-4 font-body text-[14px] font-normal normal-case tracking-normal text-[var(--color-clay-ink)]';
           // An unpinnable anchor chip renders a real <button>; it must never
           // nest inside the fold toggle <button> (invalid HTML — the walk's
           // hydration warning). When the chip is inert (a <span>, the read-only

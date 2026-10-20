@@ -98,7 +98,7 @@ export function OrderCell({
             aria-label={`${NAMED_ACTS.openOrder}, ${
               po.po_number || po.vendor_po_number ? `PO ${poLabel}` : poLabel
             }`}
-            className="rounded-[2px] underline decoration-[var(--color-pearl)] underline-offset-2 hover:decoration-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="rounded-[2px] underline decoration-[var(--color-pearl)] underline-offset-2 hover:decoration-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             {poLabel}
           </button>

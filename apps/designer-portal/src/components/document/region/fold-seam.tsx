@@ -91,7 +91,7 @@ export function FoldSeam({
           </span>
         ) : null}
       </span>
-      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
+      <span className="font-body text-[14px] font-normal normal-case tracking-normal text-[var(--color-clay-ink)]">
         Expand{' '}
         <span data-fold-arrow className="fold-arrow-settle inline-block">
           ↓

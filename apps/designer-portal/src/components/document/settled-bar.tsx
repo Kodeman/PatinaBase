@@ -56,7 +56,7 @@ export function SettledBar({
           aria-expanded={open}
           aria-controls={anchorId ? `${anchorId}-review` : undefined}
           onClick={onToggle}
-          className={`${rowClass} hover:border-[#CFC8BB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+          className={`${rowClass} hover:border-[#CFC8BB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]`}
         >
           {inner}
         </button>
@@ -64,7 +64,7 @@ export function SettledBar({
         <div
           data-settled-heading
           tabIndex={-1}
-          className={`${rowClass} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+          className={`${rowClass} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]`}
         >
           {inner}
         </div>

@@ -144,7 +144,7 @@ type Busy = 'send' | 'mark' | 'save' | 'order' | 'bill' | 'hold' | null;
 
 const LABEL = 'doc-type-meta uppercase tracking-[0.07em] text-[var(--color-quiet-ink)]';
 const FIELD =
-  'min-h-11 min-w-0 border-0 border-b border-dotted border-[var(--color-rule-strong,#D8CCB8)] bg-transparent px-0 doc-type-body text-[var(--color-charcoal)] placeholder:text-[var(--color-quiet-ink)] focus:border-solid focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-60';
+  'min-h-11 min-w-0 border-0 border-b border-dotted border-[var(--color-rule-strong,#D8CCB8)] bg-transparent px-0 doc-type-body text-[var(--color-charcoal)] placeholder:text-[var(--color-quiet-ink)] focus:border-solid focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-60';
 const RULE = 'border-t border-[var(--color-pearl)]';
 
 const todayIso = () => new Date().toISOString();

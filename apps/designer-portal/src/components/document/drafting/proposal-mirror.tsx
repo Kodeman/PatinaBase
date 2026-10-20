@@ -472,7 +472,7 @@ function TierInstrument({
                 onClick={() => choose(t)}
                 disabled={update.isPending}
                 aria-pressed={active}
-                className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50 motion-reduce:transition-none ${
+                className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-50 motion-reduce:transition-none ${
                   active
                     ? 'text-[var(--color-charcoal)]'
                     : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'

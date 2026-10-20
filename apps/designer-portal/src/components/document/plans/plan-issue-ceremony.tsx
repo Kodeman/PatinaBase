@@ -48,7 +48,7 @@ const PURPOSES = ['pricing', 'production', 'information', 'record'] as const;
 type Purpose = (typeof PURPOSES)[number];
 
 const CHIP_CLASS =
-  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
 
 interface Recipient {
   /** party_id when off the roster, else the folded name — the same key the

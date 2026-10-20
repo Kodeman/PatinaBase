@@ -237,7 +237,7 @@ export function AccountSheet() {
                   role="radio"
                   aria-checked={selected}
                   onClick={() => setAvailability.mutate(value)}
-                  className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[5px] border px-2.5 py-1 text-[11px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                  className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[5px] border px-2.5 py-1 text-[11px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] ${
                     selected
                       ? 'border-[rgba(196,165,123,0.45)] bg-[rgba(196,165,123,0.12)] text-[var(--color-charcoal)]'
                       : 'border-[var(--color-pearl)] text-[var(--color-mocha)] hover:border-[rgba(196,165,123,0.4)]'
@@ -265,7 +265,7 @@ export function AccountSheet() {
               type="button"
               onClick={() => setPage(p.key)}
               aria-current={page === p.key ? 'page' : undefined}
-              className={`min-h-11 min-w-11 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+              className={`min-h-11 min-w-11 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] ${
                 page === p.key
                   ? 'text-[var(--color-clay-ink)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'

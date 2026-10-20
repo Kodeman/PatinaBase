@@ -337,7 +337,7 @@ function RecordRow({ item, onOpen }: { item: RecordItem; onOpen: () => void }) {
         data-testid="post-record-row"
         data-overlay-post-row="record"
         data-cross-reference={isCrossRef ? 'true' : undefined}
-        className="group block min-h-11 w-full px-1 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        className="group block min-h-11 w-full px-1 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
       >
         <div className="flex items-start gap-2.5">
           {/* Awareness dot, never a count (D8). */}
@@ -438,7 +438,7 @@ function LetterRow({
         onClick={onOpen}
         data-testid="post-letter-row"
         data-overlay-post-row="letter"
-        className="group block min-h-11 w-full px-1 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        className="group block min-h-11 w-full px-1 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
       >
         <div className="flex items-start gap-2.5">
           <span

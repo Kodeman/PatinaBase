@@ -63,7 +63,7 @@ function BoardTile({
       href={href}
       aria-label={`Open board ${board.name}`}
       className={[
-        "group flex min-h-11 items-baseline gap-3 rounded-[5px] border border-[var(--color-pearl)] bg-[var(--bg-surface)] px-3 py-2.5 no-underline transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none",
+        "group flex min-h-11 items-baseline gap-3 rounded-[5px] border border-[var(--color-pearl)] bg-[var(--bg-surface)] px-3 py-2.5 no-underline transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none",
         form === "wide"
           ? "w-44 shrink-0 flex-col gap-1"
           : "w-full justify-between",

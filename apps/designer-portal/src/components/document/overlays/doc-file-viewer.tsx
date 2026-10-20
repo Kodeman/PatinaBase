@@ -120,7 +120,7 @@ export function DocFileViewer({
             <a
               href={url}
               download={file.title}
-              className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] underline decoration-[var(--color-clay)] underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] underline decoration-[var(--color-clay)] underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
             >
               Download {file.title}
             </a>

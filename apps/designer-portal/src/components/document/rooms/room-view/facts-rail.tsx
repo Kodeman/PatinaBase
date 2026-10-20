@@ -144,7 +144,7 @@ export function FactsRail({
           <button
             type="button"
             onClick={photos.onOpen}
-            className="group inline-flex min-h-11 items-center gap-1.5 text-left font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-charcoal)] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="group inline-flex min-h-11 items-center gap-1.5 text-left font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-charcoal)] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <span className="da-score-hover">
               {plural(photos.count, 'photo')}
@@ -176,7 +176,7 @@ export function FactsRail({
               hover/focus. Links into /room/[scanId]/file (R21 dissolve). */}
           <Link
             href={roomFile.href}
-            className="group inline-flex min-h-11 items-center gap-1.5 font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-charcoal)] no-underline outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="group inline-flex min-h-11 items-center gap-1.5 font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-charcoal)] no-underline outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <span className="da-score-hover">Open drawing set</span>
             <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -212,7 +212,7 @@ export function FactsRail({
             onClick={measure.onArm}
             aria-pressed={measure.armed}
             className={cn(
-              'inline-flex min-h-11 min-w-11 items-center justify-center px-1.5 font-mono text-[12px] uppercase tracking-[0.12em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]',
+              'inline-flex min-h-11 min-w-11 items-center justify-center px-1.5 font-mono text-[12px] uppercase tracking-[0.12em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]',
               measure.armed
                 ? 'text-[var(--color-charcoal)]'
                 : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]',
@@ -228,7 +228,7 @@ export function FactsRail({
             <button
               type="button"
               onClick={measure.onClear}
-              className="inline-flex min-h-11 min-w-11 items-center justify-center px-1.5 font-mono text-[12px] font-light uppercase tracking-[0.12em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center px-1.5 font-mono text-[12px] font-light uppercase tracking-[0.12em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
             >
               <span className="da-score-hover">Clear measurement</span>
             </button>

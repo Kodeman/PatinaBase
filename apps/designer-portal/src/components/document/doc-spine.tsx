@@ -172,7 +172,7 @@ export function DocSpine({
         <Link
           href="/desk"
           aria-label="Back to Studio overview"
-          className="group mb-3 inline-flex min-h-11 w-full min-w-11 shrink-0 items-center justify-center gap-1 rounded-[3px] font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1440px]:mb-4 min-[1440px]:justify-start min-[1440px]:px-1.5"
+          className="group mb-3 inline-flex min-h-11 w-full min-w-11 shrink-0 items-center justify-center gap-1 rounded-[3px] font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] min-[1440px]:mb-4 min-[1440px]:justify-start min-[1440px]:px-1.5"
         >
           <span aria-hidden>←</span>
           <span className="da-score-hover hidden group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 min-[1180px]:inline">
@@ -289,7 +289,7 @@ export function DocSpine({
               type="button"
               data-spine-release-room
               onClick={() => onReleaseRoom(roomInHand.id)}
-              className="group inline-flex min-h-11 w-full min-w-11 items-center justify-start rounded-[3px] font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="group inline-flex min-h-11 w-full min-w-11 items-center justify-start rounded-[3px] font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
             >
               <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
                 Clear room focus

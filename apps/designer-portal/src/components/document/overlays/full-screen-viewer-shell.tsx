@@ -98,7 +98,7 @@ export function FullScreenViewerShell({
         aria-labelledby={titleId}
         tabIndex={-1}
         data-overlay-viewer-shell
-        className="fixed inset-0 z-[60] flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden overscroll-contain bg-[var(--doc-paper)] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] outline-none motion-safe:animate-[doc-fade_200ms_ease-out] motion-reduce:animate-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="fixed inset-0 z-[60] flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden overscroll-contain bg-[var(--doc-paper)] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] outline-none motion-safe:animate-[doc-fade_200ms_ease-out] motion-reduce:animate-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
       >
         {showHeader ? (
           <FullScreenViewerHeader

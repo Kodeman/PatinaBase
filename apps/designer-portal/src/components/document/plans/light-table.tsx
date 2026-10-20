@@ -320,7 +320,7 @@ export function LightTable({
             type="button"
             onClick={() => setShowMatched((open) => !open)}
             aria-expanded={showMatched}
-            className="inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             {cleanlyMatched.length} further{' '}
             {cleanlyMatched.length === 1 ? 'page' : 'pages'} matched cleanly ·{' '}

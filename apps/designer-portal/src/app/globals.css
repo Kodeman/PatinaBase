@@ -49,6 +49,11 @@
   --on-dark-clay: #D8B98A; /* 7.73:1 */
   --on-dark-terracotta: #E2A895; /* 7.07:1 */
   --focus-on-dark: var(--on-dark-ink);
+  /* US-43 F-F — the one focus-ring ink. Base clay drew the ring at 2.23:1 on
+     paper and 1.82:1 on the rail (under 1.4.11's 3:1); clay-ink clears every
+     paper ground. A dark ground swaps it for --focus-on-dark below.
+     contrast.test.ts gates it. */
+  --focus-ring: var(--color-clay-ink);
 
   /* — Extended Palette — */
   --color-sage: #A8B5A0;
@@ -1250,6 +1255,9 @@ html[data-loading-register] [data-register-off] {
    unavailable, focus — each later state outranks the one before it, as on
    paper. Inked and terminal never stand on a dark ground (the inked flood is
    charcoal; the terminal fill is charcoal), so they take no rule here. */
+[data-ground='dark'] {
+  --focus-ring: var(--focus-on-dark);
+}
 [data-ground='dark'] :is(.da-primary, .da-secondary, .da-tertiary) {
   color: var(--on-dark-ink);
 }

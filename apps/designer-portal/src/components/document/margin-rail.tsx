@@ -300,7 +300,7 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
         aria-expanded={openAsSheet}
         onClick={() => setOpen(true)}
         data-margin-trigger
-        className="group fixed right-0 top-28 z-[30] hidden min-h-11 min-w-11 items-center gap-2 rounded-l-[4px] border border-r-0 border-[var(--color-pearl)] bg-[rgba(250,247,242,0.96)] px-3 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1180px]:inline-flex min-[1440px]:hidden"
+        className="group fixed right-0 top-28 z-[30] hidden min-h-11 min-w-11 items-center gap-2 rounded-l-[4px] border border-r-0 border-[var(--color-pearl)] bg-[rgba(250,247,242,0.96)] px-3 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] min-[1180px]:inline-flex min-[1440px]:hidden"
       >
         <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
           {marginTabLabel(summary)}
@@ -351,7 +351,7 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
             onClick={() => setOpen(false)}
             aria-label="Close margin"
             data-margin-close
-            className="group inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="group inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
               Close
@@ -692,7 +692,7 @@ export function MarginRail({
             type="button"
             aria-expanded={draftsOpen}
             onClick={() => setDraftsOpen((v) => !v)}
-            className="group mb-1 inline-flex min-h-11 min-w-11 items-center font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+            className="group mb-1 inline-flex min-h-11 min-w-11 items-center font-body text-[14px] font-normal normal-case tracking-normal text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
           >
             <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
               Drafts · {draftItems.length} {draftsOpen ? '↑' : '↓'}
@@ -705,7 +705,7 @@ export function MarginRail({
                   key={d.id}
                   type="button"
                   onClick={() => setComposer({ mode: 'edit', item: d })}
-                  className="group flex min-h-11 min-w-11 items-center gap-2 px-2 py-1.5 text-left text-[14px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                  className="group flex min-h-11 min-w-11 items-center gap-2 px-2 py-1.5 text-left text-[14px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                 >
                   <span
                     className="inline-block rounded-[2px] border px-1 py-px font-mono text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--color-charcoal)]"
@@ -716,8 +716,8 @@ export function MarginRail({
                   <span className="flex-1 truncate">
                     {d.title || 'Untitled draft'}
                   </span>
-                  <span className="da-score-hover font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--color-charcoal)] transition-colors group-hover:text-[var(--color-clay-ink)] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 motion-reduce:transition-none">
-                    edit
+                  <span className="da-score-hover font-body text-[14px] font-normal normal-case tracking-normal text-[var(--color-charcoal)] transition-colors group-hover:text-[var(--color-clay-ink)] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 motion-reduce:transition-none">
+                    Edit
                   </span>
                 </button>
               ))}
@@ -838,7 +838,7 @@ export function MarginRail({
                       [group.key ?? 'whole-job']: !open[group.key ?? 'whole-job'],
                     }))
                   }
-                  className="group mb-1.5 inline-flex min-h-11 min-w-11 items-center font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+                  className="group mb-1.5 inline-flex min-h-11 min-w-11 items-center font-body text-[14px] font-normal normal-case tracking-normal text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
                 >
                   <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
                     {group.settledRows.length} settled{' '}

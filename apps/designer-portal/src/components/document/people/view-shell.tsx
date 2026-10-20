@@ -176,7 +176,7 @@ export function EmptyTeach({
           <button
             type="button"
             onClick={action.onClick}
-            className="inline-flex min-h-11 items-center font-body text-[16px] font-medium not-italic text-[var(--text-primary)] underline decoration-[var(--color-aged-oak)] decoration-1 underline-offset-4 transition-colors hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+            className="inline-flex min-h-11 items-center font-body text-[16px] font-medium not-italic text-[var(--text-primary)] underline decoration-[var(--color-aged-oak)] decoration-1 underline-offset-4 transition-colors hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
           >
             {action.label} <span aria-hidden>→</span>
           </button>

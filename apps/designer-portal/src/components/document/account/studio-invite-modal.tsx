@@ -394,7 +394,7 @@ export function StudioInviteModal({
                 onClick={() => setTitleOpen((o) => !o)}
                 aria-haspopup="listbox"
                 aria-expanded={titleOpen}
-                className="flex min-h-11 w-full items-center justify-between border-0 border-b border-[var(--border-default)] bg-transparent py-2 text-left text-[0.85rem] text-[var(--text-primary)] outline-none transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                className="flex min-h-11 w-full items-center justify-between border-0 border-b border-[var(--border-default)] bg-transparent py-2 text-left text-[0.85rem] text-[var(--text-primary)] outline-none transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 <span className={jobTitle ? '' : 'italic text-[var(--text-muted)]'}>
                   {jobTitle || 'None yet'}
@@ -452,7 +452,7 @@ export function StudioInviteModal({
                       role="radio"
                       aria-checked={selected}
                       onClick={() => setTier(value)}
-                      className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[5px] border px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                      className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[5px] border px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] ${
                         selected
                           ? 'border-[rgba(196,165,123,0.45)] bg-[rgba(196,165,123,0.12)] font-semibold text-[var(--color-charcoal)]'
                           : 'border-[var(--color-pearl)] text-[var(--color-mocha)] hover:border-[rgba(196,165,123,0.4)]'

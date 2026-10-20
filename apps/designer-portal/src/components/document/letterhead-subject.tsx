@@ -33,7 +33,7 @@ const TYPE = 'text-[15px] leading-[1.35] text-[var(--text-muted)]';
 
 /** D2 — the letterhead's own ring, on every control it carries. */
 const RING =
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
 
 export function LetterheadSubject({
   kind,

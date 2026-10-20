@@ -43,7 +43,7 @@ const QuietTheNotesRow = lazy(() =>
               // A failed teaching write stays silent (the hook surfaces it inline).
               patch(['quiet', 'off'], !quiet).catch(() => {});
             }}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-50"
           >
             <span
               className={`relative h-[20px] w-[36px] rounded-full border transition-colors ${
@@ -170,7 +170,7 @@ export function AccountNotificationsPage() {
                 aria-checked={enabled}
                 aria-label={`${pref.label} email notifications`}
                 onClick={() => toggle(pref.key, !enabled)}
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 <span
                   className={`relative h-[20px] w-[36px] rounded-full border transition-colors ${

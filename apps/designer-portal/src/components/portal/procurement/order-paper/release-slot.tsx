@@ -218,7 +218,7 @@ export function SendBackAct({
       <label className="doc-type-meta uppercase tracking-[0.07em] text-[var(--color-quiet-ink)]">
         Note to {heldByFirstName ?? 'the studio'}
         <textarea
-          className="mt-1 block min-h-20 w-full rounded-md border border-[var(--color-pearl)] bg-transparent p-2 doc-type-body normal-case tracking-normal text-[var(--color-charcoal)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="mt-1 block min-h-20 w-full rounded-md border border-[var(--color-pearl)] bg-transparent p-2 doc-type-body normal-case tracking-normal text-[var(--color-charcoal)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           maxLength={2000}
           value={note}
           onChange={(e) => setNote(e.target.value)}

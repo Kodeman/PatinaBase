@@ -150,7 +150,7 @@ export function PreviousWork({
               <button
                 type="button"
                 onClick={onOpenApprovals}
-                className="mt-1 flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                className="mt-1 flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 Client approvals · {approvalsAwaitingPublish} awaiting publish →
               </button>

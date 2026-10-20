@@ -110,7 +110,7 @@ export function TouchpointSheet({
                   type="button"
                   onClick={() => setKind(key)}
                   aria-pressed={on}
-                  className={`min-h-11 rounded-[16px] border px-3 py-1.5 text-[0.72rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                  className={`min-h-11 rounded-[16px] border px-3 py-1.5 text-[0.72rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] ${
                     on
                       ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.12)] text-[var(--color-charcoal)]'
                       : 'border-[var(--color-pearl)] bg-white text-[var(--color-aged-oak)] hover:border-[var(--color-clay)]'

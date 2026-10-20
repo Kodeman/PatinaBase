@@ -426,7 +426,7 @@ export function DocSheet({
               type="button"
               aria-label="Close sheet"
               onClick={onClose}
-              className="doc-type-meta ml-auto inline-flex min-h-11 items-center px-1 uppercase tracking-[0.1em] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="doc-type-meta ml-auto inline-flex min-h-11 items-center px-1 uppercase tracking-[0.1em] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
             >
               Put back · Esc
             </button>

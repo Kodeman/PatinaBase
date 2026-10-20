@@ -104,7 +104,7 @@ interface SupersedeState extends Omit<ApprovalFormState, 'phaseId' | 'why'> {
 }
 
 const INPUT =
-  'min-h-11 w-full min-w-0 rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[14px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'min-h-11 w-full min-w-0 rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[14px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
 const LABEL =
   'mb-1 block font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 const META =
@@ -1061,7 +1061,7 @@ export function ProjectApprovalDocument({
                 }
                 data-gate-state={sealed ? 'sealed' : 'open'}
                 tabIndex={-1}
-                className="min-w-0 scroll-mt-6 border-b border-[var(--color-pearl)] py-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                className="min-w-0 scroll-mt-6 border-b border-[var(--color-pearl)] py-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 {sealed ? (
                   /* State B — the section folds where it stands. */
@@ -1095,7 +1095,7 @@ export function ProjectApprovalDocument({
                           onClick={() =>
                             focusApprovalRow(predecessor.decisionId)
                           }
-                          className="min-h-11 font-mono text-[12px] uppercase tracking-[0.09em] text-[var(--text-muted)] underline decoration-[var(--color-aged-oak)] underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                          className="min-h-11 font-mono text-[12px] uppercase tracking-[0.09em] text-[var(--text-muted)] underline decoration-[var(--color-aged-oak)] underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                         >
                           Edition {predecessor.artifactVersion} superseded — view
                         </button>

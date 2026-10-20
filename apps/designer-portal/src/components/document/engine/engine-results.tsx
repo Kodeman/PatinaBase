@@ -199,7 +199,7 @@ export function EngineResults({
                 key={t.id}
                 type="button"
                 onClick={() => setPickedId(t.id)}
-                className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 py-1 text-[0.66rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 py-1 text-[0.66rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] ${
                   pickedId === t.id
                     ? 'text-[var(--color-charcoal)]'
                     : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
