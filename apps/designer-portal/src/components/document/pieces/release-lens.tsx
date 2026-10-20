@@ -27,6 +27,7 @@
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useDraftRelease,
@@ -113,12 +114,21 @@ const COLUMNS = [
 
 const NO_CLIENT = "Link a client to this job before releasing.";
 const VOID_REASON = "Voided in the Build room to release again.";
+/** The release RPC's budget-checkpoint refusals (release-refusals.ts); each is
+ *  remedied in the Document's Working budget. */
+const CHECKPOINT_REFUSAL =
+  /latest furnishings checkpoint must be acknowledged|budget checkpoint no longer matches its published version|is not covered by the acknowledged budget/;
+/** The Document's arrival landing (lib/arrival): ArrivalMount writes it for a
+ *  `[data-register="act"]` link, and /doc/[id] consumes it on a soft entry to
+ *  unfold Money and focus its heading. A hard load drops it. */
+const MONEY_LANDING = JSON.stringify({ kind: "region", region: "money" });
 
 export function ReleaseLens(props: ReleaseLensProps) {
   return <ReleaseLensContent key={props.projectId} {...props} />;
 }
 
 function ReleaseLensContent({
+  docId,
   projectId,
   room,
   canSeeMoney,
@@ -232,6 +242,7 @@ function ReleaseLensContent({
         <Ceremony
           key={projectId}
           previewReturn={previewReturn}
+          docId={docId}
           projectId={projectId}
           set={model.set}
           omitted={model.omitted}
@@ -486,14 +497,66 @@ function LeftOut({ omitted }: { omitted: readonly ReleaseOmission[] }) {
   );
 }
 
+function isCheckpointRefusal(cause: unknown): boolean {
+  const message = (cause as { message?: unknown } | null)?.message ?? cause;
+  return CHECKPOINT_REFUSAL.test(String(message));
+}
+
+/** A checkpoint refusal's way out: the Document, Money unfolded. */
+function WorkingBudgetRecovery({
+  docId,
+  refused,
+  held,
+}: {
+  docId: string;
+  refused: boolean;
+  held: boolean;
+}) {
+  if (!refused) return null;
+  return (
+    <section
+      aria-label="Working budget recovery"
+      className="flex flex-col items-end gap-1"
+    >
+      <p className={CONSEQUENCE_CLS}>
+        A budget checkpoint is planning alignment with the client, not purchase
+        approval, a signature or payment. Open Working budget to review the
+        current checkpoint. Publish one only if none is published or the current
+        checkpoint no longer covers this selection. If it is already published
+        and covers this selection, ask the client to review and acknowledge it
+        in their project ledger; publishing again will not acknowledge it. Your
+        selections stay saved here. Nothing is
+        published, acknowledged or sent from this page.
+      </p>
+      {/* Unmarked while held: ArrivalMount's capture listener would otherwise
+          write the landing for a click that does not navigate. */}
+      <span data-register={held ? undefined : "act"}>
+        <Link
+          href={`/doc/${docId}`}
+          data-landing={MONEY_LANDING}
+          className={ACT_CLS}
+          aria-disabled={held || undefined}
+          onClick={(event) => {
+            if (held) event.preventDefault();
+          }}
+        >
+          Open Working budget
+        </Link>
+      </span>
+    </section>
+  );
+}
+
 function Ceremony({
   previewReturn,
+  docId,
   projectId,
   set,
   omitted,
   lines,
   draft,
 }: {
+  docId: string;
   projectId: string;
   set: ReleaseSet;
   omitted: readonly ReleaseOmission[];
@@ -513,6 +576,7 @@ function Ceremony({
   const active = useRef(true);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const [error, setError] = useState<string | null>(null);
+  const [checkpointRefused, setCheckpointRefused] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const queryClient = useQueryClient();
   // Held from the press until the lens has re-read what the act changed. The
@@ -553,12 +617,16 @@ function Ceremony({
     acting.current = true;
     setRereading(true);
     setError(null);
+    setCheckpointRefused(false);
     setDone(null);
     try {
       const message = await act();
       if (active.current) setDone(message);
     } catch (cause) {
-      if (active.current) setError(releaseRefusalMessage(cause));
+      if (active.current) {
+        setError(releaseRefusalMessage(cause));
+        setCheckpointRefused(isCheckpointRefusal(cause));
+      }
     } finally {
       await refresh();
       acting.current = false;
@@ -567,9 +635,12 @@ function Ceremony({
   };
 
   const errorNote = error && (
-    <p role="alert" className="font-sans text-[14px] text-[var(--sheet-ink)]">
-      {identityUnavailable ? "The draft was saved but its identity is unavailable. Open the authorization ledger; do not save again." : error}
-    </p>
+    <>
+      <p role="alert" className="font-sans text-[14px] text-[var(--sheet-ink)]">
+        {identityUnavailable ? "The draft was saved but its identity is unavailable. Open the authorization ledger; do not save again." : error}
+      </p>
+      <WorkingBudgetRecovery docId={docId} refused={checkpointRefused} held={busy} />
+    </>
   );
   const doneNote = done && (
     <p role="status" className={CONSEQUENCE_CLS}>

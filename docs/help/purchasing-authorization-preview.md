@@ -22,6 +22,7 @@ Saved authorization items cannot be edited in place. To change them, explicitly 
 ## When something fails
 
 - **Saving fails:** review the error and retry the save when appropriate.
+- **Saving is refused for the budget checkpoint:** a budget checkpoint is planning alignment with the client, not purchase approval, a signature or payment. Choose **Open Working budget** to review the current checkpoint. Publish one only if none is published or the current checkpoint no longer covers this selection. If it is already published and covers this selection, ask the client to review and acknowledge it in their project ledger; publishing again will not acknowledge it. Your selections stay saved, so return to the Build room’s Release view to save the draft again. Opening Working budget does not publish, acknowledge, override or send anything, and it waits while a save or void is still finishing.
 - **Preview fails to load:** retry reading the saved preview. Do not create a replacement draft. If the save succeeded but its identity could not be recovered, open the authorization ledger rather than saving again.
 - **Content changed after review:** reload the preview, review it again, then choose Send. Reloading never sends automatically. Both the current conflict response (`PT409`, HTTP 409) and the older `40001` response keep Send held until that explicit reload.
 - **Draft is no longer available:** Send remains held. Check the saved authorization’s current state; do not recreate it automatically.
