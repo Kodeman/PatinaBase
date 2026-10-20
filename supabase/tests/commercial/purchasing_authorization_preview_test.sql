@@ -31,6 +31,33 @@ INSERT INTO projects (id,name,designer_id,client_id,created_by,studio_id) VALUES
 INSERT INTO project_ffe_items (id,project_id,name,status,item_type,quantity,unit,unit_price_cents,line_total_cents) VALUES
 ('83614260-0000-4000-8000-000000000050','83614260-0000-4000-8000-000000000020','Changed live flooring','specified','fixed',3,'each',9999,29997),
 ('83614260-0000-4000-8000-000000000051','83614260-0000-4000-8000-000000000020','Changed live allowance','specified','fixed',3,'each',9999,29997);
+-- Fresh own/custom/catalog references are captured by the canonical save helper.
+INSERT INTO products (id,name,captured_at,layer,images) VALUES
+('83614260-0000-4000-8000-000000000060','Photo fixture',now(),'catalog',ARRAY['https://images.example.test/catalog.jpg']);
+UPDATE project_ffe_items SET product_id='83614260-0000-4000-8000-000000000060' WHERE id='83614260-0000-4000-8000-000000000050';
+DELETE FROM project_ffe_item_images WHERE item_id='83614260-0000-4000-8000-000000000050';
+INSERT INTO project_ffe_item_images (item_id,project_id,url,source,position,is_primary) VALUES
+('83614260-0000-4000-8000-000000000050','83614260-0000-4000-8000-000000000020','https://images.example.test/own.jpg','upload',1,true),
+('83614260-0000-4000-8000-000000000050','83614260-0000-4000-8000-000000000020','https://images.example.test/secondary.jpg','upload',0,false);
+DO $$
+DECLARE line public.project_ffe_items; snap jsonb;
+BEGIN
+  SELECT * INTO line FROM project_ffe_items WHERE id='83614260-0000-4000-8000-000000000050';
+  snap := public._furnishing_authorization_item_snapshot(line);
+  IF snap->'clientImage' IS DISTINCT FROM '{"version":1,"url":"https://images.example.test/own.jpg"}'::jsonb
+     OR snap->>'productImageUrl' IS DISTINCT FROM 'https://images.example.test/catalog.jpg'
+     OR NOT (snap ?& ARRAY['budgetMinCents','budgetMaxCents','docCode','customFields','notes','unit','needLabel','lineKind','parentFfeItemId','placements']) THEN
+    RAISE EXCEPTION 'P15 canonical save freezes own primary and preserves snapshot keys: %',snap;
+  END IF;
+  SELECT * INTO line FROM project_ffe_items WHERE id='83614260-0000-4000-8000-000000000051';
+  IF public._furnishing_authorization_item_snapshot(line)->'clientImage' IS DISTINCT FROM '{"version":1,"url":null}'::jsonb THEN
+    RAISE EXCEPTION 'P16 custom missing photo is explicit null';
+  END IF;
+  line.product_id := '83614260-0000-4000-8000-000000000060';
+  IF public._furnishing_authorization_item_snapshot(line)#>>'{clientImage,url}' IS DISTINCT FROM 'https://images.example.test/catalog.jpg' THEN
+    RAISE EXCEPTION 'P17 catalog fallback only without own rows';
+  END IF;
+END $$;
 INSERT INTO proposals (id,project_id,designer_id,client_id,title,status,document_kind,commercial_state,total_amount,subtotal,deposit_percent) VALUES
 ('83614260-0000-4000-8000-000000000030','83614260-0000-4000-8000-000000000020','83614260-0000-4000-8000-000000000001',
  '83614260-0000-4000-8000-000000000003','Saved authorization','draft','furnishings_authorization','draft',10001,10001,25),
@@ -41,9 +68,28 @@ INSERT INTO project_commercial_documents (id,project_id,proposal_id,document_kin
  'furnishings_authorization','UNREVIEWED_WAVE',false,now(),'83614260-0000-4000-8000-000000000001');
 INSERT INTO furnishing_authorization_items (source_ffe_item_id,commercial_document_id,name,room_name,item_type,quantity,client_unit_price_cents,client_line_total_cents,trade_unit_cost_cents,snapshot,sort_order) VALUES
 ('83614260-0000-4000-8000-000000000050','83614260-0000-4000-8000-000000000040','Frozen flooring','Living','fixed',3,1000,3000,987654,
- '{"unit":"sq_ft","placements":[{"roomName":"Living","quantity":1},{"roomName":"Dining","quantity":2}],"internalNotes":"PRIVATE_SENTINEL","margin":987654}',0),
+ '{"unit":"sq_ft","placements":[{"roomName":"Living","quantity":1},{"roomName":"Dining","quantity":2}],"internalNotes":"PRIVATE_SENTINEL","margin":987654}'::jsonb || jsonb_build_object('clientImage',(SELECT public._furnishing_authorization_item_snapshot(i)->'clientImage' FROM project_ffe_items i WHERE i.id='83614260-0000-4000-8000-000000000050')),0),
 ('83614260-0000-4000-8000-000000000051','83614260-0000-4000-8000-000000000040','Lighting allowance',null,'allowance',3,2333,7001,987654,
  '{"unit":"lot","placements":[],"internalNotes":"PRIVATE_SENTINEL"}',1);
+-- Save once via the same helper called by the creator and canonical insert guard.
+CREATE TEMP TABLE frozen_photo AS SELECT public._commercial_document_fingerprint('83614260-0000-4000-8000-000000000030') fingerprint;
+UPDATE project_ffe_item_images SET url='https://images.example.test/changed-live.jpg'
+WHERE item_id='83614260-0000-4000-8000-000000000050' AND is_primary;
+UPDATE products SET images=ARRAY['https://images.example.test/changed-catalog.jpg'] WHERE id='83614260-0000-4000-8000-000000000060';
+DO $$
+DECLARE line public.project_ffe_items; candidate_url text;
+BEGIN
+  IF public._commercial_document_fingerprint('83614260-0000-4000-8000-000000000030') IS DISTINCT FROM (SELECT fingerprint FROM frozen_photo) THEN
+    RAISE EXCEPTION 'P18 live image edits cannot change saved fingerprint';
+  END IF;
+  SELECT * INTO line FROM project_ffe_items WHERE id='83614260-0000-4000-8000-000000000050';
+  FOREACH candidate_url IN ARRAY ARRAY['javascript:alert(1)','http://images.example.test/a.jpg','https://user:pass@images.example.test/a.jpg','https://images.example.test/a.jpg?X-Amz-Signature=secret','https://images.example.test/a.jpg?%65xpires=100','https://images.example.test/storage/v1/object/sign/private/a.jpg?token=secret'] LOOP
+    UPDATE project_ffe_item_images SET url=candidate_url WHERE item_id=line.id AND is_primary;
+    IF public._furnishing_authorization_item_snapshot(line)->'clientImage' IS DISTINCT FROM '{"version":1,"url":null}'::jsonb THEN
+      RAISE EXCEPTION 'P19 invalid own photo freezes null, never catalog: %',candidate_url;
+    END IF;
+  END LOOP;
+END $$;
 CREATE TEMP TABLE before_preview AS
 SELECT (SELECT jsonb_agg(to_jsonb(p)) FROM proposals p WHERE id::text LIKE '83614260-%') proposals,
        (SELECT jsonb_agg(to_jsonb(d)) FROM project_commercial_documents d WHERE id::text LIKE '83614260-%') documents,
@@ -64,6 +110,11 @@ BEGIN
     RAISE EXCEPTION 'P1 atomic saved identity/version';
   END IF;
   item := b #> '{items,0}';
+  IF item->'clientImage' IS DISTINCT FROM '{"version":1,"url":"https://images.example.test/own.jpg"}'::jsonb
+     OR b#>'{items,1}' ? 'clientImage'
+     OR public.get_client_commercial_document_bundle('83614260-0000-4000-8000-000000000030')#>'{furnishings,items,0,clientImage}' IS DISTINCT FROM item->'clientImage' THEN
+    RAISE EXCEPTION 'P20 frozen image parity and absent legacy field: %',item;
+  END IF;
   IF item->>'description' IS DISTINCT FROM 'Frozen flooring' OR item->>'unit' IS DISTINCT FROM 'sq_ft'
      OR item->'rooms' IS DISTINCT FROM '[{"name":"Living","quantity":1,"unit":"sq_ft"},{"name":"Dining","quantity":2,"unit":"sq_ft"}]'::jsonb THEN
     RAISE EXCEPTION 'P2 frozen rooms and units: %', item;

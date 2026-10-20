@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { ClientFurnishingsAuthorizationItem } from '@patina/types';
 import { FurnishingsAuthorizationBody } from './FurnishingsAuthorizationBody';
@@ -82,5 +82,47 @@ describe('FurnishingsAuthorizationBody', () => {
     const { container } = render(<FurnishingsAuthorizationBody items={untrusted} depositRequiredCents={0} totalAmountCents={0} depositPercent={0} />);
     expect(container).not.toHaveTextContent(/12345678|private margin|private operational note/);
     expect(within(container).getByText('Up to $2,000')).toBeInTheDocument();
+  });
+});
+
+
+describe('frozen authorization photos', () => {
+  const photo = (clientImage: unknown) => <FurnishingsAuthorizationBody items={[{ ...items[1], clientImage } as ClientFurnishingsAuthorizationItem]} totalAmountCents={0} depositPercent={0} />;
+  it('renders the frozen photo with descriptive alt and bounded private-referrer-safe loading', () => {
+    render(photo({ version: 1, url: 'https://images.example.test/frozen.jpg', notes: 'PRIVATE' }));
+    const image = screen.getByRole('img', { name: 'Wallpaper — item photo' });
+    expect(image).toHaveAttribute('src', 'https://images.example.test/frozen.jpg');
+    expect(image).toHaveAttribute('loading', 'lazy');
+    expect(image).toHaveAttribute('decoding', 'async');
+    expect(image).toHaveAttribute('referrerpolicy', 'no-referrer');
+    expect(image).toHaveClass('object-contain');
+    expect(image).toHaveStyle({ maxHeight: '160px', maxWidth: '160px' });
+    expect(screen.queryByText('PRIVATE')).not.toBeInTheDocument();
+  });
+  it('keeps legacy absent media image-less and distinguishes an explicit missing photo', () => {
+    const { rerender } = render(photo(undefined));
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.queryByText('No item photo saved.')).not.toBeInTheDocument();
+    rerender(photo({ version: 1, url: null }));
+    expect(screen.getByText('No item photo saved.')).toBeInTheDocument();
+  });
+  it('shows a broken frozen reference without fallback and resets failure for a different source', () => {
+    const { rerender } = render(photo({ version: 1, url: 'https://images.example.test/one.jpg' }));
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.getByText('Item photo unavailable.')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    rerender(photo({ version: 1, url: 'https://images.example.test/two.jpg' }));
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'https://images.example.test/two.jpg');
+    expect(screen.queryByText('Item photo unavailable.')).not.toBeInTheDocument();
+  });
+  it.each([
+    'javascript:alert(1)', 'data:image/png;base64,AA', 'http://images.example.test/a.jpg',
+    'https://user:pass@images.example.test/a.jpg', 'https://images.example.test/storage/v1/object/sign/private/a.jpg?token=secret',
+    'https://images.example.test/a.jpg?X-Amz-Signature=secret', 'https://images.example.test/a.jpg?%65xpires=100',
+    'https://images.example.test/a.jpg?sig=secret', 'https://images.example.test/a.jpg?token=secret',
+  ])('never renders an unsafe or expiring photo %s', url => {
+    render(photo({ version: 1, url }));
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('No item photo saved.')).toBeInTheDocument();
   });
 });

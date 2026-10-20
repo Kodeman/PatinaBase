@@ -1424,3 +1424,22 @@ it('normalizes SQL nullable room names to the actual client projection while ret
   expect(rpc).toHaveBeenLastCalledWith('send_commercial_document', expect.objectContaining({ p_proposal_id: 'proposal-1', p_expected_fingerprint: 'reviewed-null-rooms' }));
   expect(rpc).toHaveBeenCalledTimes(2); expect(invoke).not.toHaveBeenCalled();
 });
+
+
+describe('saved preview frozen image adapter', () => {
+  it.each([
+    [undefined, undefined],
+    [{ version: 1, url: 'https://images.example.test/saved.jpg', storagePath: 'PRIVATE' }, { version: 1, url: 'https://images.example.test/saved.jpg' }],
+    [{ version: 1, url: null }, { version: 1, url: null }],
+    [{ version: 1, url: 'https://user:pass@images.example.test/x' }, { version: 1, url: null }],
+    [{ version: 1, url: 'https://images.example.test/x?token=private' }, { version: 1, url: null }],
+    [{ version: 2, url: 'https://images.example.test/x' }, undefined],
+  ])('only carries validated versioned client media %j', async (clientImage, expected) => {
+    rpc.mockResolvedValueOnce({ error: null, data: { proposalId: 'saved', documentFingerprint: 'reviewed', furnishingsPreview: { proposalId: 'saved', projectId: 'project', title: 'Saved', state: 'draft', body: { totalAmountCents: 10, depositPercent: 0, items: [{ description: 'Wallpaper', roomName: 'Study', quantity: 1, unit: 'each', rooms: [], currency: 'USD', allowance: false, clientUnitPriceCents: 10, clientLineTotalCents: 10, clientImage, snapshot: 'PRIVATE' }] } } } });
+    const query = useFurnishingsAuthorizationPreview('saved', 'project') as unknown as { queryFn: () => Promise<any> };
+    const result = await query.queryFn();
+    expect(result.body.items[0].clientImage).toEqual(expected);
+    expect(JSON.stringify(result)).not.toContain('PRIVATE');
+    expect(result.body.items[0]).not.toHaveProperty('snapshot');
+  });
+});

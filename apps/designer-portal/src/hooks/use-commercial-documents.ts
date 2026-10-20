@@ -10,7 +10,7 @@ import {
   invalidateProjectWorkflow,
   settleScheduleWrite,
 } from "@patina/supabase";
-import { COMMERCIAL_STATES, type AgreementPart, type ClientFurnishingsAuthorizationItem, type FfeLineUnit, type FurnishingsAuthorizationPreview } from "@patina/types";
+import { authorizationClientImage, COMMERCIAL_STATES, type AgreementPart, type ClientFurnishingsAuthorizationItem, type FfeLineUnit, type FurnishingsAuthorizationPreview } from "@patina/types";
 import type { ScheduleDisclosedImpact } from "@/lib/document/schedule-impact";
 import {
   asCommercialDocumentKind,
@@ -1326,6 +1326,7 @@ function previewItem(value: unknown): ClientFurnishingsAuthorizationItem {
     clientUnitPriceCents: previewNumber(item.clientUnitPriceCents, true),
     clientLineTotalCents: previewNumber(item.clientLineTotalCents, true),
     currency, allowance: item.allowance,
+    ...(item.clientImage === undefined ? {} : { clientImage: authorizationClientImage(item.clientImage) }),
   };
 }
 

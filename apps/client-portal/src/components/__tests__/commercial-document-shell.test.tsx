@@ -1331,3 +1331,12 @@ describe('purchasing preview parity', () => {
     expect(screen.getByRole('link', { name: 'Open payments' })).toHaveAttribute('href', '/invoices?project=p1');
   });
 });
+
+
+it('renders the same frozen item photo in the actual client authorization', () => {
+  const base = furnishingsBundle();
+  base.furnishings!.items[0].clientImage = { version: 1, url: 'https://images.example.test/saved-client.jpg' };
+  render(<CommercialDocumentShell bundle={base} />);
+  expect(screen.getByRole('img', { name: 'Meadow linen sectional — item photo' })).toHaveAttribute('src', 'https://images.example.test/saved-client.jpg');
+  expect(screen.getByRole('link', { name: 'Open payments' })).toHaveAttribute('href', '/invoices?project=p1');
+});

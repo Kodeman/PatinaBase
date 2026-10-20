@@ -13,6 +13,7 @@ import {
   type FFEStageKey,
   type FfeLineUnit,
   type ClientFurnishingsAuthorizationItem,
+  authorizationClientImage,
   type ProjectBillingAuthoritySummary,
   type TradeScopeProgressState,
   type WorkingBudgetCheckpoint as CanonicalWorkingBudgetCheckpoint,
@@ -951,6 +952,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
           quantity,
           unit,
           rooms: lineRooms(row.rooms, unit),
+          ...(row.clientImage === undefined ? {} : { clientImage: authorizationClientImage(row.clientImage) }),
           clientUnitPriceCents,
           // Fall back to the product only when the RPC sent no line total at
           // all (a legacy payload). Where both exist the line total wins.

@@ -23352,6 +23352,36 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00838_authorization_item_imagery.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._furnishing_authorization_item_snapshot(public.project_ffe_items) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00838_authorization_item_imagery.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00838_authorization_item_imagery.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00838_authorization_item_imagery.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_commercial_document_send_snapshot(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00838_authorization_item_imagery.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_commercial_document_send_snapshot(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

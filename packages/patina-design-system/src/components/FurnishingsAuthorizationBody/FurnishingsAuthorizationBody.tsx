@@ -1,4 +1,15 @@
-import type { ClientFurnishingsAuthorizationItem, FurnishingsAuthorizationBodyData } from '@patina/types';
+'use client';
+
+import { useState } from 'react';
+import { authorizationClientImage, type ClientFurnishingsAuthorizationItem, type FurnishingsAuthorizationBodyData } from '@patina/types';
+
+function FrozenPhoto({ url, description }: { url: string | null; description: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!url) return <p className="type-meta-small mt-2">No item photo saved.</p>;
+  if (failed) return <p className="type-meta-small mt-2">Item photo unavailable.</p>;
+  return <img src={url} alt={description + ' — item photo'} loading="lazy" decoding="async" referrerPolicy="no-referrer"
+    className="mt-2 h-40 w-40 object-contain" style={{ maxHeight: 160, maxWidth: 160 }} onError={() => setFailed(true)} />;
+}
 
 function money(cents: number, currency = 'USD'): string {
   return new Intl.NumberFormat('en-US', {
@@ -62,6 +73,7 @@ export function FurnishingsAuthorizationBody({ items, depositRequiredCents: exec
                   // A line in several rooms files under its primary room and
                   // names every room it is in; a one-room line reads as before.
                   const roomsLine = clientRoomsLine(item.description, item);
+                  const clientImage = authorizationClientImage(item.clientImage);
                   return (
                     <div
                       key={`${roomName}-${item.description}-${index}`}
@@ -69,6 +81,7 @@ export function FurnishingsAuthorizationBody({ items, depositRequiredCents: exec
                     >
                       <div>
                         <p className="type-body-small text-[var(--text-primary)]">{roomsLine ?? item.description}</p>
+                        {clientImage && <FrozenPhoto key={clientImage.url ?? 'missing'} url={clientImage.url} description={item.description} />}
                         {roomsLine === null && (
                           <p className="type-meta-small mt-0.5">
                             Quantity {clientQuantityLabel(item.quantity, item.unit)}

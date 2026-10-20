@@ -193,6 +193,35 @@ export interface FurnishingsAuthorizationItem {
   rooms?: Array<{ name: string; quantity: number; unit: FfeLineUnit }>;
 }
 
+/** Frozen reference only: the remote host may later change the pixels. */
+export interface AuthorizationClientImage {
+  version: 1;
+  url: string | null;
+}
+
+/** Shared trust-boundary decoder; absent/unknown versions stay legacy image-less. */
+export function authorizationClientImage(value: unknown): AuthorizationClientImage | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const image = value as Record<string, unknown>;
+  if (image.version !== 1) return undefined;
+  return { version: 1, url: safeAuthorizationImageUrl(image.url) };
+}
+
+function safeAuthorizationImageUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || /[\s\\%]/.test(value)) return null;
+  try {
+    const url = new URL(value);
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) return null;
+    if (url.username || url.password || url.hash || !url.hostname) return null;
+    if (/\/storage\/v1\/object\/(sign|authenticated)\//i.test(decodeURIComponent(url.pathname))) return null;
+    for (const key of url.searchParams.keys()) {
+      if (/^(x-amz-.+|x-goog-.+|awsaccesskeyid|signature|sig|token|expires?|expiry|policy|key-pair-id|se|sp|sv|st|sas)$/i.test(key)) return null;
+    }
+    return value;
+  } catch { return null; }
+}
+
 export type ClientFurnishingsAuthorizationItem = Pick<
   FurnishingsAuthorizationItem,
   'description' | 'quantity' | 'clientUnitPriceCents' | 'currency' | 'unit' | 'rooms'
@@ -204,6 +233,7 @@ export type ClientFurnishingsAuthorizationItem = Pick<
    * furniture with no idea which room anything went in.
    */
   roomName: string;
+  clientImage?: AuthorizationClientImage;
   /**
    * The authoritative per-line figure — NOT `quantity × clientUnitPriceCents`.
    * An allowance is snapshotted at its ceiling and the unit price is that

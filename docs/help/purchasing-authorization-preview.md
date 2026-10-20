@@ -28,3 +28,7 @@ Saved authorization items cannot be edited in place. To change them, explicitly 
 - **Authorization sent but email is pending or failed:** follow the saved authorization’s delivery status and existing email retry action. Do not create or send another authorization to retry notification.
 
 Unsent drafts remain private to the authorized studio. Preview does not sign anything, acknowledge a checkpoint or grant purchasing authority.
+
+## Item photos
+
+New drafts save the item’s primary photo reference, or its catalog photo when there are no item photos. Both the preview and the client authorization use that same saved reference, never a live replacement. Missing and unavailable photos are stated honestly. A saved URL does not guarantee that the remote image pixels stay unchanged. Older authorizations remain image-less; to include photos, explicitly Void the draft with a reason and prepare a new one.

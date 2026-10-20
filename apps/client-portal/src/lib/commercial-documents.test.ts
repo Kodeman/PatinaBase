@@ -1132,3 +1132,20 @@ describe('a proposal whose row carries no project_id key at all', () => {
     expect(summary.projectId).toBe('project-1');
   });
 });
+
+
+describe('authorization frozen image adapter', () => {
+  it.each([
+    [undefined, undefined],
+    [{ version: 1, url: 'https://images.example.test/saved.jpg', storagePath: 'PRIVATE' }, { version: 1, url: 'https://images.example.test/saved.jpg' }],
+    [{ version: 1, url: null }, { version: 1, url: null }],
+    [{ version: 1, url: 'https://user:pass@images.example.test/x' }, { version: 1, url: null }],
+    [{ version: 1, url: 'https://images.example.test/x?token=private' }, { version: 1, url: null }],
+    [{ version: 2, url: 'https://images.example.test/x' }, undefined],
+  ])('only carries validated versioned client media %j', (clientImage, expected) => {
+    const result = adaptCommercialDocumentBundle({ document: { id: 'saved', kind: 'furnishings_authorization' }, furnishings: { items: [{ name: 'Wallpaper', quantity: 1, clientImage, snapshot: { clientImage: { version: 1, url: 'https://live.test/x' } } }] } });
+    expect(result?.furnishings?.items[0].clientImage).toEqual(expected);
+    expect(JSON.stringify(result?.furnishings)).not.toContain('PRIVATE');
+    expect(result?.furnishings?.items[0]).not.toHaveProperty('snapshot');
+  });
+});
