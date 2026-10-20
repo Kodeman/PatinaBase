@@ -30,7 +30,6 @@
  * is held. Nothing is created until the review sheet commits.
  */
 
-import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useFfeInvoiceCoverage,
@@ -115,6 +114,8 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
   ACT_LANDING_EVENTS,
   NAMED_ACTS,
+  NEED_ACT_LABELS,
+  placeholderCount,
   type FfeActLanding,
   type FfeActLandingDetail,
 } from '@/lib/document/act-names';
@@ -150,7 +151,12 @@ import {
   useReleaseCeremony,
 } from './schedule/release-ceremony-context';
 import type { NeedLine, SectionKey } from '@/lib/document/desk-derivation';
-import { scanFfeExceptions } from '@/lib/document/ffe-leader';
+import {
+  electFfeLeader,
+  ffeStateSentence,
+  type FfeLeaderChoice,
+  type FfeLeaderKind,
+} from '@/lib/document/ffe-leader';
 import { DocumentAction } from './document-action';
 import { SectionLoadingLine } from './section-loading-line';
 import { RegionHead, type RegionLedgerEntry } from './region/region-head';
@@ -172,7 +178,6 @@ import {
 import {
   deriveOverviewJob,
   overviewHeadStages,
-  overviewHeadStatus,
 } from '@/lib/document/pieces/overview-derivation';
 import { AskMakerSheet, InstallReadingLine } from './overlays/ask-maker-sheet';
 import { CareClosedLine } from './quiet-sections';
@@ -390,6 +395,122 @@ interface LineRow {
   auth: LineAuthorization;
   eligible: LineEligibility;
   tradeHold: TradeLineHold;
+}
+
+/** A specified line nothing has happened to yet: no trade scope, no paper, no order. */
+function isUntouchedLine(row: LineRow): boolean {
+  return (
+    row.stamp.kind !== 'placeholder' &&
+    !row.tradeHold.onTradeScope &&
+    row.auth.track === 'none' &&
+    !UNDERWAY.has(row.stamp.kind)
+  );
+}
+
+/** US-43 R4 — a specified, chosen line still owed the price it would release at. */
+function isUnpricedSelection(row: LineRow): boolean {
+  const disposition = row.item.design_disposition;
+  return (
+    row.item.removed_at == null &&
+    isUntouchedLine(row) &&
+    (!disposition || disposition === 'selected') &&
+    signableCents(row.item) === null
+  );
+}
+
+/** US-43 R4 — the job's standing for the head's election. */
+function ffeJobOf(projectStatus: string | null): 'open' | 'on-hold' | 'closed' {
+  if (projectStatus === 'on_hold') return 'on-hold';
+  return projectStatus === 'completed' ? 'closed' : 'open';
+}
+
+/**
+ * I141 — the release in this head: pressable here (the lift), or standing
+ * with lines ready but held by its prerequisite.
+ */
+function ffeReleaseStanding(release: {
+  inHead: boolean;
+  offered: boolean;
+  anyEligible: boolean;
+  canRelease: boolean;
+}): { releaseLift: boolean; releaseHeld: boolean } {
+  return {
+    releaseLift: release.inHead && release.offered,
+    releaseHeld: release.inHead && release.anyEligible && !release.canRelease,
+  };
+}
+
+/** What the head's elected lead may open; every one is a destination that already exists. */
+interface FfeLeadActs {
+  docId: string;
+  release: RegionLedgerEntry;
+  addItems: RegionLedgerEntry;
+  land: (detail: FfeActLandingDetail) => boolean;
+  bill: () => void;
+}
+
+/** US-43 R4 — the act each elected state leads with, given its exception count. */
+const FFE_LEAD_ENTRIES: Record<FfeLeaderKind, (count: number, acts: FfeLeadActs) => RegionLedgerEntry> = {
+  release: (_count, acts) => acts.release,
+  claim: (_count, acts) => ({
+    key: 'ffe-lead-claim',
+    label: NAMED_ACTS.fileClaim,
+    onClick: () => acts.land('claim'),
+  }),
+  po: (_count, acts) => ({
+    key: 'ffe-lead-follow-up',
+    label: NEED_ACT_LABELS.po_unacknowledged,
+    onClick: () => acts.land('follow-up'),
+  }),
+  spec: (count, acts) => ({
+    key: 'ffe-lead-spec',
+    label: `Fill the ${placeholderCount(count)}`,
+    onClick: () => acts.land('spec'),
+  }),
+  price: (count, acts) => ({
+    key: 'ffe-lead-price',
+    label: count === 1 ? 'Add the missing price' : 'Add the missing prices',
+    href: buildRoomHref(acts.docId, { lens: 'price', room: null }),
+    trailing: '→',
+  }),
+  bill: (count, acts) => ({ key: 'bill-project-ffe', label: `Bill ${count} uninvoiced`, onClick: acts.bill }),
+  'add-line': (_count, acts) => ({ ...acts.addItems, variant: undefined }),
+};
+
+function ffeLeadEntryFor(choice: FfeLeaderChoice, acts: FfeLeadActs): RegionLedgerEntry | null {
+  if (choice.kind === null) return null;
+  const count = choice.exceptions.find((exception) => exception.kind === choice.kind)?.count ?? 0;
+  return FFE_LEAD_ENTRIES[choice.kind](count, acts);
+}
+
+/**
+ * US-43 R4 — the head's ledger: the elected lead first; then the quiet tools,
+ * Edit selections and Add items; the release where it stands here unelected
+ * (held with its reason); the purchases and riders doors while something is
+ * owed a client line; and More, holding Record a selection change and the
+ * specification book.
+ */
+function ffeHeadLedger(parts: {
+  lead: RegionLedgerEntry | null;
+  kind: FfeLeaderKind | null;
+  editSelections: RegionLedgerEntry;
+  addItems: RegionLedgerEntry;
+  release: RegionLedgerEntry;
+  releaseInHead: boolean;
+  billDoors: readonly (RegionLedgerEntry | null)[];
+  more: RegionLedgerEntry;
+}): RegionLedgerEntry[] {
+  const { lead, kind } = parts;
+  return [
+    ...(lead ? [lead] : []),
+    parts.editSelections,
+    ...(kind === 'add-line' ? [] : [parts.addItems]),
+    ...(parts.releaseInHead && kind !== 'release'
+      ? [{ ...parts.release, variant: 'secondary' as const }]
+      : []),
+    ...parts.billDoors.filter((entry): entry is RegionLedgerEntry => entry !== null),
+    parts.more,
+  ];
 }
 
 /**
@@ -634,7 +755,7 @@ function FFELine({
           )}
           {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
           {item.added_via === 'engine' && (
-            <p className="mt-px font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] opacity-70">
+            <p className="mt-px font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
               — matched by eye
             </p>
           )}
@@ -1126,8 +1247,8 @@ interface FFESectionProps {
    *  outside it. Reported, never asked for: `canRelease` and per-line
    *  eligibility are derived here and nowhere else. Pass a stable callback. */
   onReleaseOffered?: (offered: boolean) => void;
-  /** US-19 FR3 F3-10 — the project's status. Unread since US-21 Q14: the
-   *  overview's head leads with `Work the pieces` on a held job too. */
+  /** US-19 FR3 F3-10 — the project's status. US-43 R4: a held (`on_hold`) or
+   *  closed (`completed`) job elects no lead but a claim or an unanswered PO. */
   projectStatus?: string | null;
 }
 
@@ -1230,10 +1351,14 @@ function FFESectionBody({
   releaseLeaderElsewhere = false,
   needs = [],
   onReleaseOffered,
+  projectStatus = null,
   instruments,
 }: FFESectionProps & { instruments: NonNullable<ReturnType<typeof useProjectInstruments>["data"]> }) {
   const { heldRoomId, toggleRoom } = useRoomLens();
   const [openLineId, setOpenLineId] = useState<string | null>(null);
+  // US-43 R4 — the head's More disclosure and its toggle, where focus returns.
+  const [ffeMoreOpen, setFfeMoreOpen] = useState(false);
+  const ffeMoreRef = useRef<HTMLButtonElement>(null);
   // US-19 FR4 Fix 6 (520-2): the line `Follow up with the maker` opened the
   // maker composer on.
   const [followUpLineId, setFollowUpLineId] = useState<string | null>(null);
@@ -1967,7 +2092,6 @@ function FFESectionBody({
     [rooms, pendingRoomIds],
   );
   const overviewJob = useMemo(() => deriveOverviewJob(overviewLines), [overviewLines]);
-  const ffeStatus = overviewHeadStatus(overviewRooms.length, overviewJob);
   const ffeSeamSummary =
     total === 0
       ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet`
@@ -1975,15 +2099,29 @@ function FFESectionBody({
         ? `${ffeCounts} · ${ffeAwaiting}`
         : ffeCounts;
 
-  // The standing exceptions a damage claim or an unanswered PO make still
-  // print beside the stage sentence; their acts live on the band and the line.
-  const ffeNeedExceptions = scanFfeExceptions({ releaseLift: false, needs });
+  // US-43 R4 — the head names the work's state in one sentence and leads with
+  // the one act that state asks for, elected from the work, never fixed.
+  const liveRows = rows.filter((row) => row.item.removed_at == null);
+  const ffeLeader = electFfeLeader({
+    ...ffeReleaseStanding({ inHead: releaseInHead, offered: releaseOffered, anyEligible, canRelease }),
+    needs,
+    unspecifiedLineIds: liveRows
+      .filter((row) => row.stamp.kind === 'placeholder')
+      .map((row) => String(row.item.id)),
+    unpricedLineIds: liveRows.filter(isUnpricedSelection).map((row) => String(row.item.id)),
+    awaitingCount: ffeAwaitingCount,
+    uninvoicedLineIds: billableUninvoiced.map((item) => String(item.id)),
+    emptySchedule: total === 0,
+    job: ffeJobOf(projectStatus),
+  });
+  const ffeStateLine = ffeStateSentence(ffeLeader, overviewJob.released);
 
   // US-21 fix-now #3: the head adds to the job (the Add-to-project sheet);
-  // each room's own act stays `Add a line`.
+  // each room's own act stays `Add room selection`.
   const ffeAddToProjectEntry: RegionLedgerEntry = {
     key: 'open-add-to-project',
-    label: 'Add project items',
+    label: 'Add items',
+    variant: 'secondary',
     onClick: () => openAddToProject('section'),
   };
   // 0a-8 / D3 Gated — held, not natively disabled: the act stays in tab order
@@ -2189,36 +2327,55 @@ function FFESectionBody({
           onClick: openRidersBill,
         }
       : null;
-  // US-21 a1 — the overview's acts, in this order whatever the spread holds:
-  // the one door into the Build room (inked), Add to the job, Release for
-  // authorization (held with its reason while nothing can go), Record a
-  // change, then Fold (the head's own). The purchases and riders doors stand
-  // last, only while something is owed a client line.
-  const ffeLedger: RegionLedgerEntry[] = [
-    {
+  const ffeLeadEntry = ffeLeadEntryFor(ffeLeader, {
+    docId,
+    release: ffeReleaseEntry,
+    addItems: ffeAddToProjectEntry,
+    land: landFfeAct,
+    bill: () =>
+      openInvoiceComposer({
+        projectId,
+        initialFfeItemIds: billableUninvoiced.map((it) => it.id as string),
+      }),
+  });
+  const ffeMoreId = `ffe-more-${projectId}`;
+  const ffeLedger = ffeHeadLedger({
+    lead: ffeLeadEntry,
+    kind: ffeLeader.kind,
+    editSelections: {
       key: 'work-the-pieces',
-      label: 'Edit FF&E schedule',
+      label: 'Edit selections',
       href: buildRoomHref(docId, { lens: 'rough', room: null }),
       trailing: '→',
+      variant: 'secondary',
     },
-    ffeAddToProjectEntry,
-    ...(releaseInHead ? [ffeReleaseEntry] : []),
-    {
-      key: PIECES_RECORD_A_CHANGE_KEY,
-      label: NAMED_ACTS.recordChange,
-      onClick: () => openRecordAChange({ origin: 'pieces-head' }),
+    addItems: ffeAddToProjectEntry,
+    release: ffeReleaseEntry,
+    releaseInHead,
+    billDoors: [ffeBillPurchasesEntry, ffeBillRidersEntry],
+    more: {
+      key: 'ffe-more',
+      label: 'More',
+      variant: 'tertiary',
+      trailing: '⌄',
+      actionRef: ffeMoreRef,
+      'aria-expanded': ffeMoreOpen,
+      'aria-controls': ffeMoreId,
+      onClick: () => setFfeMoreOpen((open) => !open),
     },
-    ...[ffeBillPurchasesEntry, ffeBillRidersEntry].filter(
-      (entry): entry is RegionLedgerEntry => entry !== null,
-    ),
-  ];
+  });
+  const closeFfeMore = () => {
+    ffeMoreRef.current?.focus();
+    setFfeMoreOpen(false);
+  };
   const changeOrderLine = changeOrderLineId
     ? (rows.find((row) => String(row.item.id) === changeOrderLineId) ?? null)
     : null;
   const ffeExceptions = [
     overviewHeadStages(overviewJob),
-    ...ffeNeedExceptions.map((exception) => exception.text),
-    ...(ffeAwaiting ? [ffeAwaiting] : []),
+    ...ffeLeader.exceptions
+      .filter((exception) => ['claim', 'po', 'waiting'].includes(exception.kind))
+      .map((exception) => exception.text),
   ];
 
   // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else:
@@ -2318,12 +2475,15 @@ function FFESectionBody({
               </DocumentAction>
             ) : (
               <>
-                <Link
+                <DocumentAction
+                  actionKey="open-spec-book"
+                  surfaceKey="project"
+                  regionKey="ffe-head"
+                  variant="tertiary"
                   href={`/doc/${projectId}/spec-book`}
-                  className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:text-[var(--color-charcoal)]"
                 >
                   Spec book →
-                </Link>
+                </DocumentAction>
                 {/* Add to project and Release for authorization are project-
                     mode acts, and project mode (not selecting) now renders
                     RegionHead below instead of this block — so both are
@@ -2397,7 +2557,20 @@ function FFESectionBody({
               regionKey="ffe"
             />
           ) : (
-            <div className="mb-1.5">
+            <div
+              className="mb-1.5"
+              // Esc closes More from its toggle or from inside it.
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape' || !ffeMoreOpen) return;
+                const target = event.target as Node;
+                const inMore =
+                  target === ffeMoreRef.current ||
+                  document.getElementById(ffeMoreId)?.contains(target);
+                if (!inMore) return;
+                event.stopPropagation();
+                closeFfeMore();
+              }}
+            >
               <RegionHead
                 headingId={ffeHeadingId}
                 name="FF&E selections"
@@ -2407,7 +2580,7 @@ function FFESectionBody({
                 // its exit moves no box. Both hold at either density.
                 status={
                   <>
-                    {ffeQuiet ? ffeQuietStatus : ffeStatus}
+                    {ffeQuiet ? ffeQuietStatus : ffeStateLine}
                     {!readinessQuery.isError && readinessQuery.isLoading && (
                       <SectionLoadingLine variant="inline" label="Checking readiness" />
                     )}
@@ -2419,19 +2592,44 @@ function FFESectionBody({
                 exceptions={ffeExceptions}
                 surfaceKey="project"
                 regionKey="ffe"
-                // F2-18: at quiet the named act prints beside the leader, as
-                // it does on the install and care heads.
-                actions={
-                  ffeQuiet
-                    ? ffeLedger.filter(
-                        (entry, i) => i === 0 || entry.key === PIECES_RECORD_A_CHANGE_KEY,
-                      )
-                    : ffeLedger
-                }
+                // At quiet the head prints its first act alone: the lead, or
+                // Edit selections where nothing leads.
+                actions={ffeQuiet ? ffeLedger.slice(0, 1) : ffeLedger}
+                leader={ffeLeadEntry !== null}
                 actsAtQuiet="all"
                 bodyId={ffeBodyId}
                 onFold={() => ffeFold.setFolded(true)}
               />
+              {!ffeQuiet && (
+                <div
+                  id={ffeMoreId}
+                  hidden={!ffeMoreOpen}
+                  className="mt-1 flex flex-wrap justify-start gap-x-4 min-[1180px]:justify-end"
+                >
+                  <DocumentAction
+                    actionKey={PIECES_RECORD_A_CHANGE_KEY}
+                    surfaceKey="project"
+                    regionKey="ffe-more"
+                    variant="tertiary"
+                    onClick={() => {
+                      // The router hands focus back to its opener: More.
+                      closeFfeMore();
+                      openRecordAChange({ origin: 'pieces-head' });
+                    }}
+                  >
+                    Record a selection change
+                  </DocumentAction>
+                  <DocumentAction
+                    actionKey="open-spec-book"
+                    surfaceKey="project"
+                    regionKey="ffe-more"
+                    variant="tertiary"
+                    href={`/doc/${projectId}/spec-book`}
+                  >
+                    Open specification book
+                  </DocumentAction>
+                </div>
+              )}
             </div>
           )}
         </>

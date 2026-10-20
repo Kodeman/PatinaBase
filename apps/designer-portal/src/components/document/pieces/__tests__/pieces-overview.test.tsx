@@ -189,9 +189,12 @@ describe('<PiecesOverview>', () => {
     document.querySelector<HTMLElement>(`[data-pieces-room="${key}"]`)!;
 
   beforeEach(() => {
+    window.localStorage.clear();
     mockPlacements = PLACEMENTS;
     mockPalettes = [];
   });
+  const toggle = (key: string, name: string) =>
+    within(row(key)).getByRole('button', { name });
 
   it('shows the wall swatch on the room row, and none where no wall has a colour (S8)', () => {
     mockPalettes = [
@@ -215,29 +218,116 @@ describe('<PiecesOverview>', () => {
     expect(within(row('living')).queryByRole('img')).not.toBeInTheDocument();
   });
 
-  it('prints the front matter and one row per room: mark, name, counts, figure and two acts', () => {
+  it('prints the front matter and one row per room: mark, name with its ⌄, counts and figure', () => {
     renderOverview();
     expect(screen.getByText('~$69,328 roughed · nothing released')).toBeInTheDocument();
     expect(document.querySelectorAll('[data-pieces-room]')).toHaveLength(7);
 
     const living = row('living');
     expect(within(living).getByTestId('strata-mark')).toHaveAttribute('data-state', 'active');
-    expect(within(living).getByRole('button', { name: 'Living Room' })).toBeInTheDocument();
+    const name = toggle('living', 'Living Room');
+    // US-43 R4: the name is `.t-d3`, with a visible ⌄ that is not its name.
+    expect(name.closest('h3')).toHaveClass('t-d3');
+    expect(name).toHaveTextContent('⌄');
+    expect(name).toHaveAttribute('aria-expanded', 'false');
     expect(within(living).getByText('6 lines · 5 placeholders')).toBeInTheDocument();
     expect(within(living).getByText('~$23,564')).toBeInTheDocument();
-    expect(within(living).getByRole('button', { name: 'Add room selection' })).toHaveAttribute(
+    // A closed row carries no acts of its own.
+    expect(document.querySelectorAll('[data-action-key="open-add-schedule-line"]')).toHaveLength(0);
+    expect(document.querySelectorAll('[data-action-key="work-this-room"]')).toHaveLength(0);
+  });
+
+  it('US-43 R4 — stands the room’s two acts inside the room she opens', () => {
+    renderOverview();
+    fireEvent.click(toggle('living', 'Living Room'));
+    const body = document.getElementById('pieces-room-lines-living')!;
+    expect(within(body).getByRole('button', { name: 'Add room selection' })).toHaveAttribute(
       'data-action-key',
       'open-add-schedule-line',
     );
-    const work = within(living).getByRole('link', { name: /Edit room selections/ });
+    const work = within(body).getByRole('link', { name: /Edit room selections/ });
     expect(work).toHaveAttribute('href', '/doc/doc-1/pieces?lens=rough&room=living');
     expect(work).toHaveTextContent('→');
+    expect(document.querySelectorAll('[data-action-key="open-add-schedule-line"]')).toHaveLength(1);
   });
 
   it('hands ADD A LINE its room', () => {
     const { onAddLine } = renderOverview();
+    fireEvent.click(toggle('dining', 'Dining'));
     fireEvent.click(within(row('dining')).getByRole('button', { name: 'Add room selection' }));
     expect(onAddLine).toHaveBeenCalledWith(expect.objectContaining({ key: 'dining', roomId: 'dining' }));
+  });
+
+  it('US-43 R4 — opens a one-room job’s room by default, and remembers her closing it', () => {
+    const oneRoom = LINES.filter((line) => line.project_room_id === 'dining');
+    const props = { lines: oneRoom, rooms: [{ id: 'dining', name: 'Dining' }], job: deriveOverviewJob(oneRoom) };
+    const first = renderOverview(props);
+    expect(document.querySelectorAll('[data-pieces-room]')).toHaveLength(1);
+    expect(toggle('dining', 'Dining')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('line-D1')).toBeInTheDocument();
+
+    fireEvent.click(toggle('dining', 'Dining'));
+    expect(toggle('dining', 'Dining')).toHaveAttribute('aria-expanded', 'false');
+    first.unmount();
+
+    // Her choice outranks the default on this project, and only on this one.
+    renderOverview(props).unmount();
+    renderOverview(props);
+    expect(toggle('dining', 'Dining')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('US-43 R4 — remembers the room left open per project, in storage that may refuse', () => {
+    const first = renderOverview();
+    fireEvent.click(toggle('kitchen', 'Kitchen'));
+    first.unmount();
+
+    const again = renderOverview();
+    expect(toggle('kitchen', 'Kitchen')).toHaveAttribute('aria-expanded', 'true');
+    again.unmount();
+
+    const other = renderOverview({ projectId: 'project-2' });
+    expect(toggle('kitchen', 'Kitchen')).toHaveAttribute('aria-expanded', 'false');
+    other.unmount();
+
+    // A refusing store forgets the room, and the overview still works.
+    const getItem = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+    const setItem = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    try {
+      renderOverview();
+      expect(toggle('kitchen', 'Kitchen')).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(toggle('hall', 'Hall'));
+      expect(toggle('hall', 'Hall')).toHaveAttribute('aria-expanded', 'true');
+    } finally {
+      getItem.mockRestore();
+      setItem.mockRestore();
+    }
+  });
+
+  it('US-43 R4 — hands focus back to the room’s toggle when it closes with focus inside', () => {
+    const { rerender } = renderOverview({ openLineId: 'D2' });
+    const add = within(row('dining')).getByRole('button', { name: 'Add room selection' });
+    add.focus();
+    expect(add).toHaveFocus();
+
+    // A line held open in another room takes the page there; Dining folds.
+    rerender(
+      <PiecesOverview
+        projectId="project-1"
+        docId="doc-1"
+        lines={LINES}
+        rooms={ROOMS}
+        job={job}
+        openLineId="K1"
+        onAddLine={jest.fn()}
+        renderLines={(_row, ids) => ids.map((id) => <span key={id} data-testid={`line-${id}`} />)}
+      />,
+    );
+    expect(toggle('dining', 'Dining')).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle('dining', 'Dining')).toHaveFocus();
   });
 
   it('unfolds a room to its lines, placed lines included, one room at a time', () => {
@@ -308,10 +398,11 @@ describe('<PiecesOverview>', () => {
     renderOverview();
     const line = row('living').firstElementChild as HTMLElement;
     expect(line).toHaveClass('flex-col', 'sm:flex-row', 'min-h-14');
-    // At 390 the door stands above ADD A LINE; from sm they read in order.
+    // US-43 R4: the room's acts wrap in one line inside the opened room.
+    fireEvent.click(toggle('living', 'Living Room'));
     const acts = within(row('living')).getByRole('link', { name: /Edit room selections/ })
       .parentElement as HTMLElement;
-    expect(acts).toHaveClass('flex-col-reverse', 'sm:flex-row');
+    expect(acts).toHaveClass('flex', 'flex-wrap');
   });
 
   it('lifts the room the room lens holds to the top', () => {

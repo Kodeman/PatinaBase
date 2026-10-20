@@ -182,10 +182,10 @@ describe('the release lift — the schedule’s half', () => {
       />,
     );
 
-    // US-21 Q14: the head's leader is Build the item list, release lifted or not.
+    // US-43 R4: with the release lifted, the head elects the next state's act.
     const inked = document.querySelectorAll('[data-action-variant="primary"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
+    expect(inked[0]).toHaveTextContent('Fill the 1 placeholder');
     expect(
       screen.queryByRole('button', { name: 'Prepare purchasing authorization' }),
     ).toBeNull();
@@ -287,10 +287,10 @@ describe('the release lift — the schedule’s half', () => {
       <FFESection projectId="project-1" projectName="Ellsworth" mode="project" />,
     );
 
-    // US-21 Q14: Build the item list leads; the release stands in the head's ledger.
+    // US-43 R4: a release that can go here leads the head (I141).
     const inked = document.querySelectorAll('[data-action-variant="primary"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
+    expect(inked[0]).toHaveTextContent('Prepare purchasing authorization');
     expect(
       screen.getByRole('button', { name: 'Prepare purchasing authorization' }),
     ).not.toHaveAttribute('aria-disabled', 'true');

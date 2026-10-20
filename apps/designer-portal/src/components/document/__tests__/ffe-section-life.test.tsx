@@ -124,12 +124,15 @@ import { FFESection } from '../ffe-section';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 // US-21 Q14 — the region opens on room rows; the room unfolds to its lines.
+// US-43 R4: a one-room job opens its room by default, so the click below only
+// lands where a room was left closed. Stamps are counted on the page, since a
+// room open from the first render renders its stamp more than once.
 const renderSection = (highlightId?: string | null) => {
   const view = render(
     <FFESection projectId="project-1" projectName="Ellsworth" mode="project" highlightId={highlightId} />,
   );
   const room = view.container.querySelector<HTMLButtonElement>(
-    '[data-pieces-room="room-1"] button[aria-expanded="false"]',
+    '[data-pieces-room="room-1"] h3 button[aria-expanded="false"]',
   );
   if (room) fireEvent.click(room);
   return view;
@@ -330,7 +333,7 @@ describe('FF&E stamp — filled variant + tone', () => {
     (status) => {
       mockItems = [{ ...baseFurnishing, status }];
       renderSection();
-      expect(stampCalls).toHaveLength(1);
+      expect(screen.getAllByTestId('stamp')).toHaveLength(1);
       expect(stampCalls[0].variant).toBe('filled');
       expect(stampCalls[0].tone).toBe('ordered');
     },
@@ -346,7 +349,7 @@ describe('FF&E stamp — filled variant + tone', () => {
     // outstanding. Sage is their own pigment now.
     mockItems = [{ ...baseFurnishing, ...(patch as Record<string, unknown>) }];
     renderSection();
-    expect(stampCalls).toHaveLength(1);
+    expect(screen.getAllByTestId('stamp')).toHaveLength(1);
     expect(stampCalls[0].variant).toBe('filled');
     expect(stampCalls[0].tone).toBe('delivered');
   });
@@ -356,7 +359,7 @@ describe('FF&E stamp — filled variant + tone', () => {
     (status) => {
       mockItems = [{ ...baseFurnishing, status }];
       renderSection();
-      expect(stampCalls).toHaveLength(1);
+      expect(screen.getAllByTestId('stamp')).toHaveLength(1);
       expect(stampCalls[0].variant).toBeUndefined();
       expect(stampCalls[0].tone).toBeUndefined();
     },
@@ -372,7 +375,7 @@ describe('FF&E stamp — filled variant + tone', () => {
       },
     ];
     renderSection();
-    expect(stampCalls).toHaveLength(1);
+    expect(screen.getAllByTestId('stamp')).toHaveLength(1);
     expect(stampCalls[0].variant).toBe('filled');
     expect(stampCalls[0].tone).toBe('decision');
   });
@@ -382,7 +385,7 @@ describe('FF&E stamp — filled variant + tone', () => {
       { ...baseFurnishing, status: 'delivered', item_claims: [{ state: 'drafted' }] },
     ];
     renderSection();
-    expect(stampCalls).toHaveLength(1);
+    expect(screen.getAllByTestId('stamp')).toHaveLength(1);
     expect(stampCalls[0].variant).toBe('filled');
     expect(stampCalls[0].tone).toBe('damaged');
   });

@@ -203,7 +203,7 @@ const renderPaper = () => {
     </>,
   );
   const room = view.container.querySelector<HTMLButtonElement>(
-    '[data-pieces-room="throughout"] button[aria-expanded="false"]',
+    '[data-pieces-room="throughout"] h3 button[aria-expanded="false"]',
   );
   if (room) fireEvent.click(room);
   return view;
@@ -211,7 +211,22 @@ const renderPaper = () => {
 
 const continueAct = () => screen.getByRole('button', { name: /Continue/ });
 
+// US-43 R4 — the Pieces head's act is `Record a selection change` in its More;
+// pressing it closes More onto its toggle, so More is the sheet's opener.
+const more = () => screen.getByRole('button', { name: /^More/ });
+const openHeadAct = () => {
+  if (more().getAttribute('aria-expanded') !== 'true') fireEvent.click(more());
+  return screen.getByRole('button', { name: 'Record a selection change' });
+};
+/** Press the head's act the way she does: from its More, with focus on it. */
+const pressHeadAct = () => {
+  const headAct = openHeadAct();
+  headAct.focus();
+  fireEvent.click(headAct);
+};
+
 beforeEach(() => {
+  window.localStorage.clear();
   mockAskThePaper = true;
   mockRealChangeOrder = false;
   mockItems = [onPO, noPO];
@@ -350,23 +365,28 @@ describe('Record a change — the router (D5)', () => {
 });
 
 describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
-  const headAct = () => screen.getByRole('button', { name: 'Record a change' });
-
-  it('prints in the head after Build the item list and Add to the job (US-21 Q14)', () => {
+  it('stands in the head’s More, after Edit selections and Add items (US-43 R4)', () => {
     renderPaper();
     // The head's ledger, links and buttons alike: index 0 is the leader.
     const head = document.querySelector('[data-region-head="ffe"]') as HTMLElement;
-    const keys = Array.from(head.querySelectorAll('[data-action-key]')).map((act) =>
-      act.getAttribute('data-action-key'),
-    );
-    expect(keys.slice(0, 2)).toEqual(['work-the-pieces', 'open-add-to-project']);
-    expect(keys).toContain('record-a-change-pieces-head');
+    const keys = Array.from(head.querySelectorAll('[data-action-key]'))
+      .map((act) => act.getAttribute('data-action-key'))
+      .filter((key) => key !== 'ffe-fold');
+    const edit = keys.indexOf('work-the-pieces');
+    expect(edit).toBeGreaterThanOrEqual(0);
+    expect(keys[edit + 1]).toBe('open-add-to-project');
+    expect(keys[keys.length - 1]).toBe('ffe-more');
+    expect(keys).not.toContain('record-a-change-pieces-head');
+    const panel = document.getElementById(more().getAttribute('aria-controls')!)!;
+    expect(
+      panel.querySelector('[data-action-key="record-a-change-pieces-head"]'),
+    ).toHaveTextContent('Record a selection change');
   });
 
   it('with both flags off, the head\'s act still opens the sheet (T-61 F6)', () => {
     mockAskThePaper = false;
     renderPaper();
-    fireEvent.click(headAct());
+    pressHeadAct();
     expect(screen.getByRole('dialog')).toHaveTextContent('What changed?');
 
     fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
@@ -376,7 +396,7 @@ describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
 
   it('On the agreement opens the amendment sheet', () => {
     renderPaper();
-    fireEvent.click(headAct());
+    pressHeadAct();
     fireEvent.click(screen.getByRole('radio', { name: /On the agreement/ }));
     fireEvent.click(continueAct());
     expect(screen.getByTestId('amendment-sheet')).toBeInTheDocument();
@@ -384,7 +404,7 @@ describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
 
   it('On a piece prompts Choose the piece; a line on a PO opens its change order', async () => {
     renderPaper();
-    fireEvent.click(headAct());
+    pressHeadAct();
     fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
     fireEvent.click(continueAct());
 
@@ -401,7 +421,7 @@ describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
 
   it('On a piece, a line without a PO unfolds with today\'s controls', () => {
     renderPaper();
-    fireEvent.click(headAct());
+    pressHeadAct();
     fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
     fireEvent.click(continueAct());
 
@@ -410,14 +430,14 @@ describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
     expect(screen.queryByTestId('change-order-sheet')).not.toBeInTheDocument();
   });
 
-  it('Esc returns focus to the head\'s act', async () => {
+  it('Esc returns focus to More, the head act\'s toggle', async () => {
     renderPaper();
-    headAct().focus();
-    fireEvent.click(headAct());
+    pressHeadAct();
     await screen.findByRole('dialog');
+    expect(more()).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => expect(headAct()).toHaveFocus());
+    await waitFor(() => expect(more()).toHaveFocus());
   });
 
   it('each unfolded line leads with Record a change, which goes straight to its change order', () => {
@@ -451,7 +471,8 @@ describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
 });
 
 describe('Leaving Choose the piece (R34, F3)', () => {
-  const headAct = () => screen.getByRole('button', { name: 'Record a change' });
+  // US-43 R4: More is where the head's act hands focus back.
+  const headAct = more;
 
   /** The shell's Put down listens on the document; it must never hear Esc
    *  while she is choosing. */
@@ -466,8 +487,7 @@ describe('Leaving Choose the piece (R34, F3)', () => {
 
   const choose = async () => {
     renderPaper();
-    headAct().focus();
-    fireEvent.click(headAct());
+    pressHeadAct();
     fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
     fireEvent.click(continueAct());
     const prompt = screen.getByText('Choose the piece');
@@ -481,7 +501,7 @@ describe('Leaving Choose the piece (R34, F3)', () => {
     expect(putBack).toHaveAttribute('data-action-variant', 'secondary');
   });
 
-  it('Esc ends choosing, returns focus to Record a change, and never reaches Put down', async () => {
+  it('Esc ends choosing, returns focus to More (the head act’s toggle), and never reaches Put down', async () => {
     const prompt = await choose();
     fireEvent.keyDown(prompt, { key: 'Escape' });
 
@@ -505,7 +525,7 @@ describe('Leaving Choose the piece (R34, F3)', () => {
     expect(headAct()).toHaveFocus();
   });
 
-  it('Put back ends choosing and returns focus to Record a change', async () => {
+  it('Put back ends choosing and returns focus to More (the head act’s toggle)', async () => {
     await choose();
     fireEvent.click(screen.getByRole('button', { name: 'Put back · Esc' }));
 
@@ -637,9 +657,7 @@ describe('Record a change — focus lands on a control, one Esc puts back (walk 
   it('Change this order opens with nothing preselected, named by its title; one Esc returns to the line (F6-4)', async () => {
     mockRealChangeOrder = true;
     renderPaper();
-    const headAct = screen.getByRole('button', { name: 'Record a change' });
-    headAct.focus();
-    fireEvent.click(headAct);
+    pressHeadAct();
     fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
     fireEvent.click(continueAct());
     await waitFor(() => expect(screen.getByText('Choose the piece')).toHaveFocus());
