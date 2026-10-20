@@ -14,6 +14,7 @@ import {
   type FfeLineUnit,
   type ClientFurnishingsAuthorizationItem,
   authorizationClientImage,
+  authorizationLeadTime,
   type ProjectBillingAuthoritySummary,
   type TradeScopeProgressState,
   type WorkingBudgetCheckpoint as CanonicalWorkingBudgetCheckpoint,
@@ -764,6 +765,14 @@ function adaptDesignBuildSubs(value: unknown): DesignBuildSubIdentity[] {
   });
 }
 
+function authorizationItemMetadata(row: Record<string, unknown>) {
+  const leadTime = authorizationLeadTime(row.leadTime);
+  return {
+    ...(leadTime === undefined ? {} : { leadTime }),
+    ...(row.clientImage === undefined ? {} : { clientImage: authorizationClientImage(row.clientImage) }),
+  };
+}
+
 /** Maps the database-owned allowlist bundle and intentionally discards every unknown key. */
 export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumentBundle | null {
   const raw = record(value);
@@ -953,7 +962,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
           quantity,
           unit,
           rooms: lineRooms(row.rooms, unit),
-          ...(row.clientImage === undefined ? {} : { clientImage: authorizationClientImage(row.clientImage) }),
+          ...authorizationItemMetadata(row),
           clientUnitPriceCents,
           // Fall back to the product only when the RPC sent no line total at
           // all (a legacy payload). Where both exist the line total wins.

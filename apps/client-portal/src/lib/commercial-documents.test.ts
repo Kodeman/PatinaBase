@@ -1166,3 +1166,27 @@ describe('authorization frozen image adapter', () => {
     expect(result?.furnishings?.items[0]).not.toHaveProperty('snapshot');
   });
 });
+
+
+describe('frozen authorization lead time adapter', () => {
+  it.each([
+    [{ version: 1, weeks: 0 }, { version: 1, weeks: 0 }],
+    [{ version: 1, weeks: 1 }, { version: 1, weeks: 1 }],
+    [{ version: 1, weeks: 12, notes: 'PRIVATE' }, { version: 1, weeks: 12 }],
+    [{ version: 1, weeks: 104 }, { version: 1, weeks: 104 }],
+    [{ version: 1, weeks: null }, { version: 1, weeks: null }],
+    [undefined, undefined], [null, undefined], [[], undefined], ['12', undefined],
+    [{ version: 2, weeks: 12 }, undefined], [{ version: '1', weeks: 12 }, undefined],
+    [{ version: 1 }, undefined], [{ version: 1, weeks: '12' }, undefined],
+    [{ version: 1, weeks: -1 }, undefined], [{ version: 1, weeks: 105 }, undefined],
+    [{ version: 1, weeks: 1.5 }, undefined], [{ version: 1, weeks: Infinity }, undefined],
+    [{ version: 1, weeks: NaN }, undefined],
+  ])('carries only valid frozen lead time %j', (leadTime, expected) => {
+    const result = adaptCommercialDocumentBundle({ document: { id: 'saved', kind: 'furnishings_authorization' }, furnishings: { items: [{ name: 'Wallpaper', quantity: 1, leadTime, snapshot: { leadTime: { version: 1, weeks: 99 } } }] } });
+    const item = result?.furnishings?.items[0];
+    expect(item?.leadTime).toEqual(expected);
+    if (expected === undefined) expect(item).not.toHaveProperty('leadTime');
+    expect(item).not.toHaveProperty('snapshot');
+    expect(JSON.stringify(item)).not.toContain('PRIVATE');
+  });
+});

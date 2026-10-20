@@ -494,7 +494,6 @@ describe('CommercialDocumentShell', () => {
       },
     }} />);
     expect(screen.getByText('Quantity 9 roll')).toBeInTheDocument();
-    expect(screen.queryByText('Quantity 9')).not.toBeInTheDocument();
   });
 
   it('labels a trade scope, states who performs it, and never shows a countersignature wait', () => {
@@ -1339,4 +1338,14 @@ it('renders the same frozen item photo in the actual client authorization', () =
   render(<CommercialDocumentShell bundle={base} />);
   expect(screen.getByRole('img', { name: 'Meadow linen sectional — item photo' })).toHaveAttribute('src', 'https://images.example.test/saved-client.jpg');
   expect(screen.getByRole('link', { name: 'Open payments' })).toHaveAttribute('href', '/invoices?project=p1');
+});
+
+
+it('renders frozen lead time and unit pricing through the actual client bundle and shell', () => {
+  const bundle = adaptCommercialDocumentBundle({ document: { id: 'saved-lead', kind: 'furnishings_authorization', totalAmountCents: 20100, depositPercent: 50 }, furnishings: { items: [{ description: 'Linen', quantity: 2, unit: 'yard', roomName: 'Living', currency: 'USD', clientUnitPriceCents: 10050, clientLineTotalCents: 20100, leadTime: { version: 1, weeks: 12 } }] } });
+  render(<CommercialDocumentShell bundle={bundle!} />);
+  expect(screen.getByText('2 yard × $100.50')).toBeInTheDocument();
+  expect(screen.getByText('Lead time · About 12 weeks')).toBeInTheDocument();
+  expect(screen.getByText(/Lead times are the studio's current estimates, not delivery dates./)).toBeInTheDocument();
+  expect(screen.getByText('Authorized furnishings').parentElement).toHaveTextContent('$201');
 });

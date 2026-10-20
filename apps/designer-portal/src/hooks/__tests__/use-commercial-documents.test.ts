@@ -1443,3 +1443,28 @@ describe('saved preview frozen image adapter', () => {
     expect(result.body.items[0]).not.toHaveProperty('snapshot');
   });
 });
+
+
+describe('saved preview frozen lead time adapter', () => {
+  it.each([
+    [{ version: 1, weeks: 0 }, { version: 1, weeks: 0 }],
+    [{ version: 1, weeks: 1 }, { version: 1, weeks: 1 }],
+    [{ version: 1, weeks: 12, notes: 'PRIVATE' }, { version: 1, weeks: 12 }],
+    [{ version: 1, weeks: 104 }, { version: 1, weeks: 104 }],
+    [{ version: 1, weeks: null }, { version: 1, weeks: null }],
+    [undefined, undefined], [null, undefined], [[], undefined], ['12', undefined],
+    [{ version: 2, weeks: 12 }, undefined], [{ version: '1', weeks: 12 }, undefined],
+    [{ version: 1 }, undefined], [{ version: 1, weeks: '12' }, undefined],
+    [{ version: 1, weeks: -1 }, undefined], [{ version: 1, weeks: 105 }, undefined],
+    [{ version: 1, weeks: 1.5 }, undefined], [{ version: 1, weeks: Infinity }, undefined],
+    [{ version: 1, weeks: NaN }, undefined],
+  ])('carries only validated frozen lead time %j', async (leadTime, expected) => {
+    rpc.mockResolvedValueOnce({ error: null, data: { proposalId: 'saved', documentFingerprint: 'reviewed', furnishingsPreview: { proposalId: 'saved', projectId: 'project', title: 'Saved', state: 'draft', body: { totalAmountCents: 10, depositPercent: 0, items: [{ description: 'Wallpaper', roomName: 'Study', quantity: 1, unit: 'each', rooms: [], currency: 'USD', allowance: false, clientUnitPriceCents: 10, clientLineTotalCents: 10, leadTime, snapshot: 'PRIVATE' }] } } } });
+    const query = useFurnishingsAuthorizationPreview('saved', 'project') as unknown as { queryFn: () => Promise<any> };
+    const result = await query.queryFn();
+    expect(result.body.items[0].leadTime).toEqual(expected);
+    if (expected === undefined) expect(result.body.items[0]).not.toHaveProperty('leadTime');
+    expect(result.body.items[0]).not.toHaveProperty('snapshot');
+    expect(JSON.stringify(result)).not.toContain('PRIVATE');
+  });
+});
