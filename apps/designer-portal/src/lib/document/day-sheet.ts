@@ -415,18 +415,26 @@ export function groupSheetByJob(
  */
 export function cardStateWords(card: Pick<SheetCard, 'holder' | 'lines'>): string {
   const open = card.lines.filter((line) => !line.settled);
-  if (open.length === 0) {
-    const putOff = card.lines.every(
-      ({ settled }) => !settled?.by && (settled?.kind === 'not_today' || settled?.kind === 'set_aside'),
-    );
-    return putOff ? 'Put off for today.' : 'Handled for today.';
-  }
-  const late = open.some((line) => line.need.kind.startsWith('overdue_'));
-  const holder = card.holder;
-  if (holder && !holder.mine) {
-    const who = holder.name ?? 'the lead';
-    return late ? `Overdue, with ${who} today.` : `With ${who} today.`;
-  }
+  if (open.length === 0) return settledCardWords(card.lines);
+  return openCardWords(
+    theirName(card.holder),
+    open.some((line) => line.need.kind.startsWith('overdue_')),
+  );
+}
+
+/** Her own "Not today" or set-aside, not the holder's act. */
+const ownDeferral = (settled: SheetSettled) =>
+  !settled.by && (settled.kind === 'not_today' || settled.kind === 'set_aside');
+
+function settledCardWords(lines: readonly SheetEntry[]): string {
+  return lines.every(({ settled }) => !!settled && ownDeferral(settled)) ? 'Put off for today.' : 'Handled for today.';
+}
+
+/** Who else carries the job, where it is not hers; null where it is. */
+const theirName = (holder: DeskHolder | null) => (holder && !holder.mine ? (holder.name ?? 'the lead') : null);
+
+function openCardWords(theirs: string | null, late: boolean): string {
+  if (theirs) return late ? `Overdue, with ${theirs} today.` : `With ${theirs} today.`;
   return late ? 'Overdue, and yours today.' : 'Yours today.';
 }
 

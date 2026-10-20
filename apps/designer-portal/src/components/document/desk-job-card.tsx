@@ -34,6 +34,16 @@ export function clockTime(at: string | null | undefined): string {
   return `${date.getHours() % 12 || 12}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+/** US-43 R7 — the card's one state sentence, in body type under its name. */
+function CardState({ words }: { words?: string }) {
+  if (!words) return null;
+  return (
+    <p className="t-body card-state" data-card-state>
+      {words}
+    </p>
+  );
+}
+
 export function DeskJobCard({
   card,
   scope,
@@ -100,11 +110,7 @@ export function DeskJobCard({
             {card.name}
           </Link>
         </h3>
-        {state && (
-          <p className="t-body card-state" data-card-state>
-            {state}
-          </p>
-        )}
+        <CardState words={state} />
       </div>
       <ul className="lines">{children}</ul>
     </article>
