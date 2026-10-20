@@ -133,6 +133,19 @@ for (const [file, frame] of boards) {
   if (/innerHTML|appendChild/.test(src)) fail(where, 'script-built UI not allowed');
   if (EMOJI.test(src)) fail(where, 'emoji found');
   if (/\bAI\b/.test(src.replace(/<script[\s\S]*?<\/script>/g, ''))) fail(where, '"AI" in copy (vision: Designer-Taught Intelligence, never AI)');
+  // Dead anchors and disclosure associations in literal markup. Hole-built values ({{ … }})
+  // and hashes generated in the logic script are skipped here and must be checked by hand.
+  const markup = src.replace(/<script[\s\S]*?<\/script>/g, '');
+  const tags = markup.match(/<[a-zA-Z][\w-]*(?:\s+[^\s=>"']+(?:\s*=\s*(?:"[^"]*"|'[^']*'))?)*\s*\/?>/g) || [];
+  const attr = (tag, name) => (tag.match(new RegExp(`\\s${name}\\s*=\\s*"([^"]*)"`)) || [])[1];
+  const ids = new Set(tags.map((t) => attr(t, 'id')).filter((v) => v && !v.includes('{{')));
+  for (const tag of tags) {
+    const href = attr(tag, 'href');
+    if (href && href.startsWith('#') && !href.includes('{{') && !ids.has(href.slice(1))) fail(where, `href="${href}" names no id on this board`);
+    const controls = attr(tag, 'aria-controls');
+    if (controls && !controls.includes('{{')) for (const c of controls.split(/\s+/).filter(Boolean)) if (!ids.has(c)) fail(where, `aria-controls="${c}" names no id on this board`);
+    if (attr(tag, 'aria-expanded') !== undefined && controls === undefined) fail(where, `aria-expanded without aria-controls: ${tag.slice(0, 80)}`);
+  }
   const text = norm(src);
   for (const s of REQUIRED[stem] || []) if (!text.includes(norm(s))) fail(where, `required copy missing: "${s}"`);
   if (stem !== 'Words') for (const s of BANNED) if (text.toLowerCase().includes(s.toLowerCase())) fail(where, `retired copy present: "${s}"`);

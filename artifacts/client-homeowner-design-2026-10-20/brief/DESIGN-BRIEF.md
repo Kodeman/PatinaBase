@@ -129,7 +129,7 @@ Clay ink 5.61 (all on Off-White); Ink faint on Rail 5.32; Paper on Charcoal 13.5
 | Consequence sentence | Inter | 16px / 1.55, max-width 56ch | 400 | 0 | `#2C2926` | R141 (C8) |
 | Dense non-critical prose | Inter | 14px / 1.5 | 400 | 0 | `#4E4339` | `.t-body-sm` (never money/date/party/consequence) |
 | Money, invoice number, dated figures in rows | `'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace` | 15px / 1.5, `font-variant-numeric: tabular-nums` | 400 | .02em / sentence | `#2C2926` | `.t-money` |
-| Metadata (captions, sub-labels) | DM Mono | 12px / 1.5 | 400 | .08em / sentence | `#5A4E43` | `.t-meta` |
+| Metadata (captions outside the screen, non-critical sub-labels; any money, date or party name is 15px / 1.5, .02em, like the doorplate) | DM Mono | 12px / 1.5 | 400 | .08em / sentence | `#5A4E43` | `.t-meta` |
 | Running head / eyebrow | DM Mono | 12px / 16px | 500 | .08em / UPPER | `#5A4E43` | `.t-head` (C7) |
 | Terminal label | Inter | 16px / 20px, tabular | 500 | 0 / sentence | `#FAF7F2` on `#2C2926` | R139 |
 | Secondary label (one per section) | Inter | 15px / 20px | 500 | 0 / sentence | `#2C2926` | R201 |
@@ -184,11 +184,11 @@ mat). It is decoration: `aria-hidden`.
 
 ```html
 <header id="doorplate" style="padding: 0 0 12px; border-bottom: 1px solid #E8E3DB">
-  <p style="margin: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 18px; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">
+  <p style="margin: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 18px; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; color: #5A4E43">
     <span>Birchwood Studio · Madison, Wisconsin</span><span>Prepared for June Brennan</span>
   </p>
   <h1 style="margin: 12px 0 4px; font-family: 'Playfair Display', Georgia, serif; font-size: 34px; line-height: 1.15; font-weight: 500; color: #2C2926">Elm Street House</h1>
-  <p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; letter-spacing: .08em; color: #5A4E43">Procurement · October 2026</p>
+  <p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; color: #5A4E43">Procurement · October 2026</p>
 </header>
 <p style="margin: 24px 0 0; max-width: 56ch; font-family: 'Inter', -apple-system, sans-serif; font-size: 16px; line-height: 1.55; color: #4E4339">Pay invoices, review approvals, and follow your project here.</p>
 ```
@@ -228,7 +228,7 @@ The `h2` is the literal destination name. The eyebrow carries the scope. Group h
   <p style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 17px; line-height: 24px; font-weight: 500; color: #2C2926">Sofa deposit</p>
   <p style="margin: 0; text-align: right; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">$300.00</p>
   <p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; color: #2C2926">INV-2026-017 · Elm Street House</p>
-  <p style="margin: 0; text-align: right; font-family: 'DM Mono', monospace; font-size: 12px; line-height: 1.5; letter-spacing: .08em; color: #5A4E43">of $800.00</p>
+  <p style="margin: 0; text-align: right; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; color: #5A4E43; font-variant-numeric: tabular-nums">of $800.00</p>
   <p style="margin: 0; grid-column: 1 / -1; font-family: 'Inter', -apple-system, sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">Due 2 November 2026 · $500.00 paid</p>
   <div style="grid-column: 1 / -1">
     <!-- disclosure control, 3.9 -->
@@ -432,9 +432,13 @@ Elm Street House: Now `Procurement`. Next milestone `Living room installation`, 
 22 January 2027**. Current designer update, sent **16 October 2026**, signed `Maren Holt · Birchwood
 Studio · 16 October 2026`:
 
-> The walnut sideboard is finished at the workshop, and I've asked for photographs before it is
+> The walnut sideboard is being finished at the workshop, and I've asked for photographs before it is
 > wrapped. When you have a quiet moment, look at the second edition of the sofa. Once it reads right
 > to you, I can order the linen.
+
+Walnut sideboard stage: `In production` (finishing at the workshop is part of production, before
+wrapping and dispatch). The note says it is being finished, not finished; no delivery date or
+percentage is drawn.
 
 **Outstanding invoices (USD; sorted due-date ascending, undated last):**
 
@@ -468,6 +472,12 @@ Draft and void invoices exist in the data and are never drawn.
   review one; Total outstanding **$1,975.00** (each counted once).
 - Second currency (A04): INV-2026-026 · Lake Cottage rug sample · CAD $120.00 → totals shown
   separately: `USD $1,375.00` and `CAD $120.00`, never added.
+- Pending without a PaymentIntent (A05): variant of INV-2026-020 with a checkout session only. Not
+  processing evidence (spec §3, resolver 00636), so it stays under **Invoices to pay**, counted once,
+  with the same `View invoice` entry as its siblings and no processing or settlement copy.
+- Reconciliation hold (A08): variant of INV-2026-017 after an uncertain checkout return, no
+  `requires_refund` evidence → **Payment needs review**, no pay action; the hold copy is the same
+  after Close payment details and View invoice again.
 - Check intent: INV-2026-022 after a successful acknowledgement → `Check expected` · balance still
   `$250.00` · not paid, no receipt.
 
@@ -475,7 +485,7 @@ Draft and void invoices exist in the data and are never drawn.
 Mail a check. Fees are never invented. Draw full totals as bracketed holes in DM Mono:
 `$300.00 + [bank fee from quote]` → full total `[bank total from quote]`; Card
 `[card fee from quote]` / `[card total from quote]`; Mail a check `No fee · $300.00`. Continuation:
-`Continue to secure payment · [bank total from quote]`. Payee line: `Paid to Birchwood Studio`.
+`Continue to secure payment · [bank total from quote]`. Payee line: `Payable to Birchwood Studio`.
 
 **Approval (Approval-Ask, Approval-States):** `Living room sofa, edition 2`, id `appr-sofa-e2`,
 presented by Maren Holt on 16 October 2026. What changed from edition 1: oatmeal performance linen
@@ -526,13 +536,41 @@ founder may retype stays literal markup.
 | `Main.dc.html` | SQ-1509 (A) | 390×3600 | CPUX-01, 02, 06, 07 · A01, A03, A17, A18, A19, A20 | Full Elm Street House page, top to bottom: Strata mini → doorplate → purpose sentence → ledger → summary prose → the current ask (sofa edition, prominence kept, inline link to `#approval-appr-sofa-e2`) → `#letterbox` Invoices (all six rows visible, closed; `Total outstanding $1,375.00` + scope; `Payment history` closed) → `#approvals` Approvals (the sofa edition entry; full flow lives on Approval-Ask) → `#road` Progress summary (Now/Next/Target date/Current designer update, Waiting on you) → `#note` the update + `Contact Maren Holt` (phone) → `#mat-papers` Documents (2–3 signed papers) → mat (`Lake Cottage` under other houses, `Your details`, `Sign out`) → Strata full divider → colophon `Prepared by Birchwood Studio · Sent through Patina`. Static. |
 | `Arrival-Studio.dc.html` | SQ-1509 (A) | 390×2600 | CPUX-01.5, 02, 06 · A03, A06 (honest empty), A18 | Studio-only page: doorplate `Birchwood Studio` (no project vitals) → F6 purpose sentence → ledger Invoices · Approvals · Progress · Contact your designer → Invoices (2 studio rows, `$650.00`) → Approvals (pending `Design services agreement`, `Read and sign`) → Progress lands on the not-connected explanation → contact fallback sentence → mat, colophon. Static. |
 | `Arrival-Desktop.dc.html` | SQ-1509 (A) | 1280×2600, `expand: fill` | CPUX-01, 07 · A19 | Main at desktop: 1100 measure, doorplate 56px, ledger on one line, summary, ask, Invoices block with the six rows in a 56ch-wide ledger (figures right-aligned to the table rule), Progress summary in two columns (`flex-wrap`, stacks at phone width). No sticky rail, no header. Static. |
-| `Invoices-List.dc.html` | SQ-1510 (B) | 390×3200 | CPUX-02, 03.1, 07 · A01, A02, A03, A07 | `Invoices to pay` (6) with written statuses, `Total outstanding $1,375.00` + scope; `Payment history` (zero-balance `No balance due` + 2 paid). **Works:** each `View invoice` opens that row's details (number, title, origin, payee `Birchwood Studio`, total/paid/balance in `.t-money`, print link `Print invoice`) and closes any other; focus moves to the opened region heading (draw the ring there); `Close payment details` closes it; `Payment history` toggles. `aria-expanded`/`aria-controls` bound from state. |
+| `Invoices-List.dc.html` | SQ-1510 (B) | 390×3200 | CPUX-02, 03.1, 07 · A01, A02, A03, A07 | `Invoices to pay` (6) with written statuses, `Total outstanding $1,375.00` + scope; `Payment history` (zero-balance `No balance due` + 2 paid). **Works:** each `View invoice` opens that row's details (number, title, origin, payee `Birchwood Studio`, total/paid/balance in `.t-money`, print link `Print invoice` to the retained app print page `/invoices/<id>/print`, labelled `Opens this invoice’s print page.`; an invoice sheet, never called a receipt) and closes any other; focus moves to the opened region heading (draw the ring there); `Close payment details` closes it; `Payment history` toggles. `aria-expanded`/`aria-controls` bound from state. |
 | `Invoices-Pay.dc.html` | SQ-1510 (B) | 390×2800 | CPUX-03 · A08, A09 | INV-2026-017 open: balance head `$300.00` at 26px Playfair (the one announced figure), `Due 2 November 2026 · $500.00 paid`, payee; method radios (native `<input type="radio">` + `<label>`, 44px rows) each with its full total and fee beneath; consequence; `Continue to secure payment · …` terminal; `Close payment details`. **Works:** choosing a method updates the total line and the terminal label; `Mail a check` replaces the terminal with check instructions and a secondary `I'll mail a check` acknowledgement, after which the status line reads `Check expected` and the balance stays `$300.00`. No payment ever submits. |
-| `Invoices-States.dc.html` | SQ-1510 (B) | 1760×2600 | CPUX-02, 03 · A04, A05, A06, A08, A09 | A sheet of 390-wide panels, 4 per row, each headed by a DM Mono caption outside the screen naming the state: loading (no zero, no all-clear), failed with no data + Retry, incomplete merge (rows kept, total withheld), stale refresh failed, empty success `No invoices to pay.` with history, `Payments in progress` (INV-2026-020, no pay action), `Payment needs review` (INV-2026-018, help, no retry), `Check expected`, card fee unresolved (card unavailable, bank still available), two currencies (separate totals), states fixture totals (6 to pay, 1 in progress, 1 in review, `$1,975.00`). Static. |
+| `Invoices-States.dc.html` | SQ-1510 (B) | 1760×2600 | CPUX-02, 03 · A04, A05, A06, A08, A09 | A sheet of 390-wide panels, 4 per row, each headed by a DM Mono caption outside the screen naming the state: loading (no zero, no all-clear), failed with no data + Retry, incomplete merge (rows kept, total withheld), stale refresh failed, empty success `No invoices to pay.` with history, `Payments in progress` (INV-2026-020, no pay action), `Payment needs review` (INV-2026-018, help, no retry), `Check expected`, card fee unresolved (card unavailable, bank still available), two currencies (separate totals), states fixture totals (6 to pay, 1 in progress, 1 in review, `$1,975.00`), pending without a PaymentIntent (stays in Invoices to pay), reconciliation hold after an uncertain checkout return (survives reopen). Static. |
 | `Approval-Ask.dc.html` | SQ-1511 (C) | 390×3200 | CPUX-04 · A10, A11, A14 | The sofa edition ask: name, presented by, what changed, three separate impacts, choices `Approve` / `Request changes` / `Pause to discuss` (`aria-pressed`), separate `Ask Maren Holt a question`. **Works:** choosing reveals that choice's consequence, field and final action and moves focus (name field / note field / confirmation heading); attempting the final act with the field empty shows the helper in the status line and focuses the field (no submit); with input it shows a hold caption, and a 900 ms press (pointer down/up handlers on the button itself) shows the dated result; `Choose another response` returns to the choices. Approve = terminal `Approve this edition · $7,480.00`; change/pause = secondary, held (F5). |
 | `Approval-States.dc.html` | SQ-1511 (C) | 1760×2800 | CPUX-04 · A12, A13 | Panels: review-only draft (`Confirm review`, cannot approve), confirmed draft sentence, pending (choices), recorded outcome (A9 record block, `Copy link to this record`, no new response), withdrawn / superseded (link to the newer edition) / expired, household viewer read-only, missing authority (recovery sentence + `Refresh review` + contact; draft note kept, labelled unsent), changed edition after refresh (requires a new response), `Loading document`, document unavailable. Static. |
 | `Invitation.dc.html` | SQ-1511 (C) | 1760×2000 | CPUX-05 · A15, A16 | Panels: project invitation shell (studio, project, recipient, note, purpose sentence, `Open your project`), page invitation (`Open your page`), used, expired + `Send a new invitation link`, after request (neutral acknowledgement), transport failure + `Try again`, sign-in that returns to the named instrument (shows `Sign in to see Living room sofa, edition 2`). Static. |
 | `Progress.dc.html` | SQ-1509 (A) | 390×3000 | CPUX-06 · A17, A18 | Top: `Project progress` summary (Now `Procurement`; Next `Living room installation`; Target date `22 January 2027`; Current designer update with its date and signature) and `Waiting on you` linking to the sofa ask; below, the existing detailed road (pieces in words only: no dates we don't hold), `Past updates`, contact (phone `(608) 555-0148` as a `tel:` link, `Write to Maren Holt` opens the composer and sends nothing). Lower half, ruled, captioned in DM Mono: unknown states (`No project stage is shown here yet.`, `Your designer will share the next step here.`, `Date not confirmed`, `No current designer update is shown here.` with `Past updates` still offered, failed note read with Retry). Static. |
+
+### A01–A20 coverage on the canvas
+
+Drawn = the visual case is on a board. Partial = some branches are missing (named). Not visual =
+runtime behaviour a static or local-state mock cannot show; it is not verified here.
+
+| ID | Coverage | Where | Missing or not visual |
+|---|---|---|---|
+| A01 | drawn | Main, Invoices-List | Not visual: runtime projection |
+| A02 | partial (missing: draft/void exclusion shown) | Invoices-List | Draft and void rows are stated, not demonstrated |
+| A03 | partial (missing: duplicate-ID suppression; adopted-project ownership across several projects) | Main, Arrival-Studio, Invoices-States | — |
+| A04 | drawn | Invoices-States | Excerpt: one of six USD rows plus the CAD row |
+| A05 | partial (missing: overlapping review/zero/pending precedence) | Invoices-States | PI processing, session-only pending, requires_refund and paid-positive contradiction are drawn |
+| A06 | drawn | Invoices-States, Progress | Not visual: actual query recovery |
+| A07 | partial (missing: unpaid/history/unauthorized/draft/void deep-link paths) | Invoices-List | No URL or hash handling in the List script |
+| A08 | partial (missing: duplicate activation) | Invoices-Pay, Invoices-States | Not visual: settlement lifecycle, server reconciliation |
+| A09 | partial (missing: check failure; settlement-to-receipt transition) | Invoices-Pay, Invoices-States | — |
+| A10 | drawn | Approval-Ask | Not visual: backend outcome, consent, authority, idempotency payloads |
+| A11 | drawn | Approval-Ask | Not visual: real DOM and assistive-technology focus |
+| A12 | drawn | Approval-States | Not visual: stale-authority rejection, refresh lifecycle, duplicate-note prevention |
+| A13 | partial (missing: studio viewer authority) | Approval-States | — |
+| A14 | drawn | Approval-Ask | Not visual: real browser/AT behaviour and equivalence with the current app |
+| A15 | drawn | Invitation | Not visual: token privacy, request guard |
+| A16 | partial (missing: non-active-project return; query/anchor preservation; safe redirect validation) | Invitation | — |
+| A17 | drawn | Main, Progress | Not visual: source freshness |
+| A18 | drawn | Main, Progress, Arrival-Studio | Not visual: messaging and contact capability |
+| A19 | partial (missing: 360, tablet, 200% zoom and reflow frames) | Main, Arrival-Desktop | Not visual: screen reader, measured target geometry |
+| A20 | drawn | Main, Invoices-List, Approval-States | Not visual: legacy auth, record and nonce runtime paths |
 
 Panels on a states sheet: each panel is a 390-wide screen fragment on Off-White, separated by 48px,
 with a DM Mono 12px caption above it (outside the screen) naming the state and its A-id. The caption
