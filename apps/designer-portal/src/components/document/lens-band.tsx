@@ -24,7 +24,15 @@
  * yield) with a different geometry, and is not a substitute for this one.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
   LENS_ANNOUNCE_DEDUPE_MS,
@@ -45,6 +53,43 @@ import { StandingSheet } from './standing-sheet';
 /** Slice 2 — the dock (SQ-2C) opens the band's standing sheet with this when
  *  the 390 measure has moved the `Standing · N` door into More (D2). */
 export const OPEN_STANDING_SHEET_EVENT = 'document:open-standing-sheet';
+
+/** US-43 R6 — the 600 break in script, for the one thing CSS cannot gate by
+ *  width: the `data-ground` hook. Below it the band is paper and the dock is
+ *  the charcoal ground, so each takes the hook only on its own side. */
+const PHONE_QUERY = '(max-width: 599px)';
+function subscribePhone(onChange: () => void) {
+  if (typeof window.matchMedia !== 'function') return () => {};
+  const query = window.matchMedia(PHONE_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+const readPhone = () =>
+  typeof window.matchMedia === 'function' && window.matchMedia(PHONE_QUERY).matches;
+const readPhoneOnServer = () => false;
+export function usePhoneWidth(): boolean {
+  return useSyncExternalStore(subscribePhone, readPhone, readPhoneOnServer);
+}
+
+/** US-43 R6 (review F5) — below 600 the dock prints the band's Next, so the
+ *  band does not. While the log offer owns the thumb edge the dock is not
+ *  printed at all, so the band takes its act back: Next is never zero. The
+ *  bar is this bit's one writer. */
+let dockYieldedEdge = false;
+const dockYieldListeners = new Set<() => void>();
+export function publishDockYieldedEdge(yielded: boolean) {
+  if (dockYieldedEdge === yielded) return;
+  dockYieldedEdge = yielded;
+  dockYieldListeners.forEach((listener) => listener());
+}
+function subscribeDockYield(onChange: () => void) {
+  dockYieldListeners.add(onChange);
+  return () => {
+    dockYieldListeners.delete(onChange);
+  };
+}
+const readDockYield = () => dockYieldedEdge;
+const readDockYieldOnServer = () => false;
 
 /** A rung on trial: held to one line so the measure can see it overflow
  *  (D-B24). The layout effect drops the rung before paint, so this never
@@ -329,6 +374,12 @@ export function LensBand({
   const nextIsException =
     spokenRow !== null && (spoken?.standing.some((item) => item.key === spokenRow) ?? false);
   const door = spoken && spoken.standingCount > 0 && !spoken.doorInDock ? spoken : null;
+  const phone = usePhoneWidth();
+  const dockYielded = useSyncExternalStore(
+    subscribeDockYield,
+    readDockYield,
+    readDockYieldOnServer,
+  );
 
   return (
     <>
@@ -350,9 +401,9 @@ export function LensBand({
         // US-43 R1-A — from 600 the band is a charcoal ground, and its edge is
         // the rule: the charcoal `--rule-mid` stays only on the paper band
         // below 600. The ground bleeds 20px past the paper's measure so the
-        // words keep their column. Below 600 the only `.da-*` it holds (Next)
-        // is display:none, so the dark-ground hook styles nothing there.
-        data-ground="dark"
+        // words keep their column. Below 600 the band is paper, so the hook
+        // comes off: any act it prints there takes the paper inks (review F1).
+        data-ground={phone ? undefined : 'dark'}
         className="sticky top-0 z-[4] box-border flex min-h-[var(--doc-band-height,56px)] flex-col justify-center gap-[2px] bg-[var(--doc-paper)] max-[599px]:[border-bottom:var(--rule-mid)] min-[600px]:-mx-5 min-[600px]:bg-[var(--ink)] min-[600px]:px-5 min-[600px]:text-[var(--on-dark-ink)]"
       >
         <p
@@ -502,8 +553,9 @@ export function LensBand({
                 // Next's one printing, so the band prints its sentence only:
                 // display:none takes the act out of the accessibility tree,
                 // and its 44px box no longer grows the phone band past the
-                // landing clearance it is declared under.
-                className="my-[-12px] shrink-0 max-[599px]:hidden"
+                // landing clearance it is declared under. While the log offer
+                // owns the edge there is no dock, so the band keeps it (F5).
+                className={`my-[-12px] shrink-0 ${dockYielded ? '' : 'max-[599px]:hidden'}`}
                 disabled={spoken.next.act.disabled}
                 onClick={() => {
                   onActed?.();
@@ -580,7 +632,9 @@ export function LensBand({
               variant="primary"
               data-part="act"
               // The 44px target the Scored Ink owns must not grow the declared
-              // 56px box, so the control is inset into the 19.5px line.
+              // 56px box, so the control is inset into the 19.5px line. The
+              // dock never takes this act (flag off), so the band is its one
+              // printing at every width — on paper below 600 (review F1).
               className="my-[-12px] shrink-0"
               disabled={printed.act.disabled}
               onClick={() => {

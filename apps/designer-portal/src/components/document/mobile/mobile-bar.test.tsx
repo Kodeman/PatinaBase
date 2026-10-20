@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { deriveLensBand } from '@/lib/document/lens-band-derivation';
+import { LensBand } from '../lens-band';
 import { StandingSheet } from '../standing-sheet';
 import { MobileBar } from './mobile-bar';
 import { MobileSheets } from './mobile-sheets';
@@ -933,6 +935,76 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
       phoneWidth(false);
       const bar = mountBandNext();
       expect(bar).not.toHaveAttribute('data-ground');
+    });
+
+    // Review F5 (SQ-1514) — the band's Next and the dock together, below 600:
+    // a printed Next is one not under `max-[599px]:hidden` (jsdom loads no
+    // CSS, so the phone's display:none is read from its class).
+    function mountBandAndDock() {
+      const bandModel = deriveLensBand({
+        spreadKind: 'project',
+        ticket: [],
+        needs: [
+          {
+            key: 'pay',
+            kind: 'payment_due',
+            text: 'Balance to Woodward & Sons · $12,400 due Aug 20 — PO WS-188',
+            actionLabel: 'Record payment',
+            onAct: jest.fn(),
+            urgent: true,
+            // Undated: this file stubs `@patina/supabase`, whose day count a
+            // dated need would read. The Next is the same either way.
+            dueOn: null,
+          },
+        ],
+        guide: null,
+        tier: 'mobile',
+        household: 'Chen family',
+        jobName: 'Chen Residence',
+        clientFirstName: 'Mei',
+        stageWord: 'Procurement & Orders',
+        stageIndex: { position: 4, of: 6 },
+        installDate: null,
+        moneyFigure: null,
+        proposalInvestment: null,
+        sentDate: null,
+        readingStop: null,
+        now: new Date('2026-08-29T12:00:00'),
+      });
+      const label = bandModel.voice?.next?.act.label ?? '';
+      render(
+        <TestProviders>
+          <HoldDocument doc={heldDocument} />
+          <Primary
+            action={{ ...press(label, 'next:pay'), regionKey: 'lens-band' }}
+            priority={MOBILE_ACTION_PRIORITY.next}
+          />
+          <LensBand model={bandModel} docId="doc-1" />
+          <MobileBar />
+        </TestProviders>,
+      );
+      return () =>
+        screen
+          .queryAllByRole('button', { name: label })
+          .filter((el) => !el.closest('.max-\\[599px\\]\\:hidden'));
+    }
+
+    it('offer owning the edge below 600: exactly one Next, the band’s, on paper', () => {
+      phoneWidth(true);
+      mockOffer = { entryId: 'entry-a', projectId: 'proj-1' };
+      const printed = mountBandAndDock();
+      expect(screen.queryByTestId('mobile-bar')).toBeNull();
+      expect(printed()).toHaveLength(1);
+      expect(printed()[0].closest('[data-lens-band]')).not.toBeNull();
+      expect(printed()[0].closest('[data-ground="dark"]')).toBeNull();
+    });
+
+    it('with no offer below 600: exactly one Next, the dock’s', () => {
+      phoneWidth(true);
+      mockOffer = null;
+      const printed = mountBandAndDock();
+      expect(printed()).toHaveLength(1);
+      expect(printed()[0].closest('[data-testid="mobile-bar"]')).not.toBeNull();
     });
   });
 

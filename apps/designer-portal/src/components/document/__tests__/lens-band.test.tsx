@@ -7,7 +7,7 @@ import {
   type LensSpreadKind,
 } from '@/lib/document/lens-band-derivation';
 import { installReading } from '@/lib/document/install-reading';
-import { LensBand, OPEN_STANDING_SHEET_EVENT } from '../lens-band';
+import { LensBand, OPEN_STANDING_SHEET_EVENT, publishDockYieldedEdge } from '../lens-band';
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -1430,5 +1430,59 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(sentence().textContent).toBe('');
     expect(screen.queryByRole('button', { name: 'Open the pieces' })).toBeNull();
     expect(door()).toBeNull();
+  });
+});
+
+// ── Review F1 / F5 (SQ-1514) — the paper band below 600 ──────────────────────
+
+describe('LensBand · below 600 the band is paper (US-43 R6, review F1/F5)', () => {
+  const original = window.matchMedia;
+  const phoneWidth = (matches: boolean) => {
+    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: query === '(max-width: 599px)' ? matches : false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })) as unknown as typeof window.matchMedia;
+  };
+  afterEach(() => {
+    window.matchMedia = original;
+    act(() => publishDockYieldedEdge(false));
+  });
+
+  it('one-voice off below 600: the act is not under a dark ground, and prints there', () => {
+    phoneWidth(true);
+    render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
+    const next = screen.getByRole('button', { name: 'Send a reminder' });
+    expect(band()).not.toHaveAttribute('data-ground');
+    expect(next.closest('[data-ground="dark"]')).toBeNull();
+    // The dock never takes this act, so the band is its one printing.
+    expect(next).not.toHaveClass('max-[599px]:hidden');
+  });
+
+  it('one-voice off from 600: the same act stands on the charcoal ground', () => {
+    phoneWidth(false);
+    render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
+    const next = screen.getByRole('button', { name: 'Send a reminder' });
+    expect(next.closest('[data-ground="dark"]')).toBe(band());
+  });
+
+  it('one voice below 600: Next leaves the band for the dock, until the dock yields the edge', () => {
+    mockOneVoice = true;
+    phoneWidth(true);
+    render(<LensBand model={chen()} docId="doc-1" />);
+    const next = screen.getByRole('button', { name: 'Record the payment' });
+    expect(next).toHaveClass('max-[599px]:hidden');
+    // The log offer takes the edge: there is no dock, so the band prints its
+    // Next, on paper.
+    act(() => publishDockYieldedEdge(true));
+    expect(next).not.toHaveClass('max-[599px]:hidden');
+    expect(next.closest('[data-ground="dark"]')).toBeNull();
+    act(() => publishDockYieldedEdge(false));
+    expect(next).toHaveClass('max-[599px]:hidden');
   });
 });
