@@ -92,6 +92,8 @@ jest.mock('../../overlays/purchasing-authorization-preview-sheet', () => ({
 }));
 
 import { ReleaseLens } from "../release-lens";
+import { ArrivalMount } from "../../arrival/arrival-mount";
+import { consumeArriveToken } from "@/lib/arrival/session";
 
 function line(
   id: string,
@@ -699,5 +701,73 @@ describe('saved release lifecycle repair', () => {
     expect(screen.queryByRole('button', { name: 'Save draft & preview' })).not.toBeInTheDocument();
     expect(mockRelease).not.toHaveBeenCalled();
     expect(mockSend).not.toHaveBeenCalled();
+  });
+});
+
+describe('checkpoint refusal recovery', () => {
+  const CHECKPOINT_REFUSAL =
+    'latest furnishings checkpoint must be acknowledged before releasing project proj-1';
+  // The Document's existing arrival landing: /doc/[id] consumes this token on
+  // mount, unfolds Money and focuses its heading (page.test.tsx R-DM21).
+  const MONEY_TOKEN = {
+    via: 'act',
+    to: '/doc/doc-1',
+    at: expect.any(Number),
+    landing: { kind: 'region', region: 'money' },
+  };
+  const spendToken = () => consumeArriveToken('/doc/doc-1', Date.now());
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    // The (document) layout mounts this above every /doc route, Pieces included.
+    render(<ArrivalMount />);
+  });
+
+  it('explains the checkpoint and opens Working budget through the Document money landing by keyboard', async () => {
+    mockRelease.mockRejectedValueOnce(new Error(CHECKPOINT_REFUSAL));
+    render(<ReleaseLens {...props} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+    expect(screen.getByRole('alert')).toHaveTextContent('Acknowledge the latest furnishings checkpoint on the Document before releasing.');
+    const recovery = screen.getByRole('region', { name: 'Working budget recovery' });
+    expect(recovery).toHaveTextContent('A budget checkpoint is planning alignment with the client, not purchase approval, a signature or payment.');
+    const open = within(recovery).getByRole('link', { name: 'Open Working budget' });
+    expect(open).toHaveAttribute('href', '/doc/doc-1');
+    expect(open).not.toHaveAttribute('aria-disabled');
+    expect(open).not.toHaveAttribute('tabindex', '-1');
+    open.focus();
+    expect(open).toHaveFocus();
+    // detail 0 is a keyboard activation (Enter on the focused link).
+    fireEvent.click(open, { detail: 0 });
+    expect(spendToken()).toEqual(MONEY_TOKEN);
+    // The selection stays where the server holds it; nothing else is done for her.
+    expect(mockTriage).not.toHaveBeenCalled();
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockVoid).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('holds Working budget while the failed save is still re-reading', async () => {
+    mockRelease.mockRejectedValueOnce(new Error(CHECKPOINT_REFUSAL));
+    const rereads: Array<() => void> = [];
+    mockInvalidate.mockImplementation(() => new Promise<void>((resolve) => rereads.push(resolve)));
+    render(<ReleaseLens {...props} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+    const open = screen.getByRole('link', { name: 'Open Working budget' });
+    expect(open).toHaveAttribute('aria-disabled', 'true');
+    expect(fireEvent.click(open, { detail: 1 })).toBe(false);
+    expect(spendToken()).toBeNull();
+    await act(async () => { rereads.forEach((resolve) => resolve()); });
+    expect(open).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(open, { detail: 1 });
+    expect(spendToken()).toEqual(MONEY_TOKEN);
+  });
+
+  it('keeps an unrelated refusal as its own sentence with no Working budget act', async () => {
+    mockRelease.mockRejectedValueOnce(new Error('project proj-1 has no executed design-services origin'));
+    render(<ReleaseLens {...props} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });
+    expect(screen.getByRole('alert')).toHaveTextContent('Sign the design agreement with the client before releasing pieces.');
+    expect(screen.queryByRole('region', { name: 'Working budget recovery' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open Working budget' })).not.toBeInTheDocument();
   });
 });
