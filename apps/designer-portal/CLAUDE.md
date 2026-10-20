@@ -46,3 +46,5 @@ On conflict between 1 and 2: do not silently pick. Append the conflict to `DECIS
 ## What success looks like
 
 Leah opens `/desk` on a real Tuesday and sees her actual two-to-four folders with truthful need lines. She picks up a real project, resolves a real decision, and watches the stamp, margin, and Desk update from one act. She puts it down and adjusts the time log up because she'd been sketching. At no point does she see a shadow, a zone, a badge, or a dashboard; the only filled control she ever sees is a terminal act where money moves or a paper is signed. If any slice can't produce that experience against real data, the slice isn't done.
+
+**V25:** The Next band is a dark ground, not a filled control; fill still means terminal only.

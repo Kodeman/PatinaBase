@@ -24,10 +24,9 @@ the three Google Fonts families named below.
 
 ## A1. Tokens
 
-Paste this block verbatim. Do not add tokens — with the single exception
-recorded as R144 (`--card-edge`, below, named `--color-card-edge` in the
-portal), which was ruled into the sheet rather than added to a surface. Do
-not use a hex literal anywhere else in the file.
+Paste this block verbatim. Do not add tokens — with the exceptions recorded
+as R144 (`--card-edge`) and R201's on-dark tokens below. Do not use a hex
+literal anywhere else in the file.
 
 ```css
 :root {
@@ -44,6 +43,13 @@ not use a hex literal anywhere else in the file.
   --ink-subtle:       #5A4E43;  /* 7.73:1 */
   --ink-faint:        #65594E;  /* 6.51:1 — also the disabled ink */
   --ink-paper:        #FAF7F2;  /* ink ON charcoal */
+
+  /* — Next band on charcoal (R201); contrast against --ink — */
+  --on-dark-ink:          #FAF7F2;  /* 14.43:1 */
+  --on-dark-muted:        #D6CEC4;  /* 9.90:1 */
+  --on-dark-clay:         #D8B98A;  /* 8.24:1 */
+  --on-dark-terracotta:   #E2A895;  /* 7.54:1 */
+  --focus-on-dark:        #FAF7F2;  /* 14.43:1 */
 
   /* — hairlines — */
   --hairline:         #E8E3DB;
@@ -178,6 +184,8 @@ negative below 40px.
 | Truncation | none. `text-overflow: ellipsis` must not appear. Wrap. |
 
 ## A5. The three action tiers — exact CSS
+
+**R201 action-label ruling:** Actions use sentence-case Inter: the section's one scored lead is 15px / 500; tools are 14px / 400. Mono caps are for metadata only (V18 Q9). A section has one scored lead. These label rules supersede the uppercase mono defaults shown in the legacy tier CSS below; tier behavior and control-box sizing remain as specified.
 
 All three share the control box:
 

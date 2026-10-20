@@ -669,4 +669,19 @@ Both start with a design spike: specimens, then the build.
 
 **Build:** US-34.
 
-*Entries add: … · V18 · V19 · V20 (US-28) · V21 (Founding Circle) · V22 · V23 · V24 (US-33) · last id = V24*
+*Entries add: … · V18 · V19 · V20 (US-28) · V21 (Founding Circle) · V22 · V23 · V24 (US-33) · V25 · last id = V25*
+
+### V25 · Where the eye goes: the Next band goes dark — US-42/43 rulings — Kody 2026-10-20
+
+- **R1 — A, dark band.** The Next band has a dark ground; this revises V20's “None on the paper” and R126's rejection of a dark header. The act itself is not filled; fill still means terminal only.
+- **R2 — 26px Playfair.** This reverses US-28's “never a display heading” decision.
+- **R3 — Region closes.** Space plus a hairline closes a region; the double rule opens a movement. This revises V20/US-27's “each region closes on `--rule-mid`”.
+- **R4 — One state-elected local lead per section, unfilled.** This revises d4b1720cf and f0e55a02b.
+- **R5 — Action labels.** Sentence-case Inter; mono caps for metadata only. This amends house sheet §A5 and applies V18 Q9.
+- **R6 — Narrow ownership.** Below 600px, the charcoal dock owns Next. This revises V20 U-Q19 and the a28655a4f/707e22a07 behavior.
+- **R7 — Desk cards.** Adopt card-level layout; the creates stay in the header (U-Q3 kept).
+- **R8 — Not now.** The `prefers-contrast: more` tier is not adopted now.
+
+Ships to everyone, with no flag. Dark mode stays deferred (U-Q9). Leah: “I need the contrast that I see on the sign-in page. It helps my eyes know where to go.”
+
+**Source:** Kody, 2026-10-20; `artifacts/ui-contrast-calm-2026-10-20/reviews/direction.md` §6; deck https://claude.ai/artifact/8qh87CuK6waMgWe1GLyHLb.
