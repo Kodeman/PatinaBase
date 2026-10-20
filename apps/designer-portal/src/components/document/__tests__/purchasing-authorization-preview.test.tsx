@@ -6,12 +6,13 @@ const mockRetry = jest.fn();
 const mockRefetch = jest.fn();
 let mockRead: any;
 let mockBudget: any;
+let mockSendPending = false;
 const mockUnfold = jest.fn();
 jest.mock('@/lib/document/document-index', () => ({ requestRegionUnfold: (...args: unknown[]) => mockUnfold(...args) }));
 jest.mock('@/hooks/use-commercial-documents', () => ({
   useWorkingBudget: () => mockBudget,
   useFurnishingsAuthorizationPreview: () => mockRead,
-  useSendFurnishingsAuthorization: () => ({ mutateAsync: mockSend, isPending: false }),
+  useSendFurnishingsAuthorization: () => ({ mutateAsync: mockSend, isPending: mockSendPending }),
 }));
 jest.mock('@patina/supabase', () => ({
   useRetryProposalSend: () => ({ mutateAsync: mockRetry, isPending: false }),
@@ -29,6 +30,7 @@ const props = { projectId: 'project-1', proposalId: 'saved-1', onClose: jest.fn(
 const sendButton = () => screen.getByRole('button', { name: 'Send to client' });
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSendPending = false;
   mockBudget = { data: { version: null, checkpoint: null }, isLoading: false, isFetching: false, error: null };
   mockRead = { data: saved(), isPending: false, isFetching: false, isError: false, refetch: mockRefetch };
   mockRefetch.mockResolvedValue({ isError: false });
@@ -39,7 +41,7 @@ beforeEach(() => {
 describe('saved purchasing authorization preview', () => {
   it.each([
     ['missing', 'Set up a working budget'],
-    ['unpublished', 'Review the working budget before publishing a first checkpoint'],
+    ['unpublished', 'Review the working budget before publishing a checkpoint for this version'],
     ['awaiting', 'Waiting for the client to acknowledge the current published spending plan'],
     ['loading', 'Loading current budget status'],
     ['error', 'Current budget status could not be loaded'],
@@ -70,6 +72,32 @@ describe('saved purchasing authorization preview', () => {
     expect(mockSend).toHaveBeenCalledWith({ proposalId: 'saved-1', expectedFingerprint: 'reviewed-v1' });
     expect(mockRefetch).not.toHaveBeenCalled();
   });
+  it.each(['synchronous guard', 'pending state'])('holds Working budget recovery during Send with the %s', async (phase) => {
+    let finish!: (value: unknown) => void;
+    mockSend.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const leave = jest.fn();
+    const { rerender } = render(<PurchasingAuthorizationPreviewSheet {...props} onOpenWorkingBudget={leave} />);
+    fireEvent.click(sendButton());
+    if (phase === 'pending state') {
+      mockSendPending = true;
+      rerender(<PurchasingAuthorizationPreviewSheet {...props} onOpenWorkingBudget={leave} />);
+    }
+    const recovery = screen.getByRole('button', { name: 'Set up a working budget' });
+    fireEvent.click(recovery);
+    const left = leave.mock.calls.length;
+    const unfolded = mockUnfold.mock.calls.length;
+    const disabled = (recovery as HTMLButtonElement).disabled;
+    await act(async () => { finish({ sentAt: '2026-10-19', _emailDispatched: true }); });
+    expect(left).toBe(0);
+    expect(unfolded).toBe(0);
+    expect(props.onClose).not.toHaveBeenCalled();
+    if (phase === 'pending state') expect(disabled).toBe(true);
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockSend).toHaveBeenCalledWith({ proposalId: 'saved-1', expectedFingerprint: 'reviewed-v1' });
+    expect(mockRefetch).not.toHaveBeenCalled();
+    expect(screen.getByText('Authorization sent')).toBeVisible();
+  });
+
   it('shows the frozen shared body and sends only its displayed identity and reviewed token on explicit Send', async () => {
     render(<PurchasingAuthorizationPreviewSheet {...props} />);
     expect(screen.getByText('Preview · Not sent')).toBeVisible();
