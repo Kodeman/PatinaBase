@@ -56,6 +56,17 @@ describe('saved purchasing authorization preview', () => {
     expect(sendButton()).toHaveAttribute('aria-disabled', 'true'); fireEvent.click(sendButton()); expect(mockSend).not.toHaveBeenCalled();
   });
 
+  it.each(['loading', 'error', 'sent', 'executed', 'voided', 'declined', 'expired'])('labels persisted %s state without claiming an unsent draft', (state) => {
+    if (state === 'loading') mockRead.isPending = true;
+    else if (state === 'error') mockRead.isError = true;
+    else mockRead.data = saved({ state });
+    render(<PurchasingAuthorizationPreviewSheet {...props} />);
+    expect(screen.queryByText('Preview · Not sent')).not.toBeInTheDocument();
+    expect(screen.getByText(state === 'loading' || state === 'error' ? 'Preview' : `Preview · ${state}`)).toBeVisible();
+    expect(sendButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it('retries a failed preview read using the retained saved identity and never sends on reload', async () => {
     mockRead.isError = true;
     const { rerender } = render(<PurchasingAuthorizationPreviewSheet {...props} />);

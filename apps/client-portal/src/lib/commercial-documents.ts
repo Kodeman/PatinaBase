@@ -454,27 +454,6 @@ function lineRooms(value: unknown, unit: FfeLineUnit): ClientLineRoom[] {
   });
 }
 
-/** `913 sq ft`; an `each` line prints its bare count. `sq_ft` prints `sq ft`. */
-export function clientQuantityLabel(quantity: number, unit: FfeLineUnit = 'each'): string {
-  const count = quantity.toLocaleString('en-US');
-  return unit === 'each' ? count : `${count} ${unit.replace('_', ' ')}`;
-}
-
-/**
- * A line in more than one room, as the client reads it:
- * `White oak floor · 913 sq ft · Hall · Living Room · Dining · Kitchen` — the
- * line's whole quantity (waste included), then its rooms in placement order.
- * Null for a line in one room or none: that line prints as it always has.
- */
-export function clientRoomsLine(
-  name: string,
-  line: { quantity: number; unit?: FfeLineUnit; rooms?: ClientLineRoom[] },
-): string | null {
-  const rooms = line.rooms ?? [];
-  if (rooms.length < 2) return null;
-  return [name, clientQuantityLabel(line.quantity, line.unit), ...rooms.map((room) => room.name)].join(' · ');
-}
-
 export function legacyStatusToCommercialState(status: Proposal['status']): CommercialDocumentState {
   switch (status) {
     case 'sent':

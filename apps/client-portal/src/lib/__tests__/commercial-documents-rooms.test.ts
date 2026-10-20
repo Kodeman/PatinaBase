@@ -1,8 +1,6 @@
 import {
   adaptClientSelections,
   adaptCommercialDocumentBundle,
-  clientQuantityLabel,
-  clientRoomsLine,
 } from '../commercial-documents';
 
 // D7 phase 2 (00745): every client line carries `unit` and
@@ -63,9 +61,6 @@ describe('commercial bundle — a released line in several rooms', () => {
     expect(oak.unit).toBe('sq_ft');
     expect(oak.roomName).toBe('Hall');
     expect(oak.rooms).toEqual(OAK_ROOMS);
-    expect(clientRoomsLine(oak.description, oak)).toBe(
-      'White oak floor · 913 sq ft · Hall · Living Room · Dining · Kitchen',
-    );
   });
 
   it('carries no rough, need label or internal field onto the client line', () => {
@@ -138,7 +133,6 @@ describe('commercial bundle — a released line in several rooms', () => {
       [],
     ]);
     expect(items.map((item) => item.roomName)).toEqual(['Study', 'General', 'Living room']);
-    for (const item of items) expect(clientRoomsLine(item.description, item)).toBeNull();
   });
 });
 
@@ -167,9 +161,6 @@ describe('client selections — the threshold payload', () => {
     expect(oak.roomName).toBe('Hall');
     expect(oak.unit).toBe('sq_ft');
     expect(oak.rooms).toEqual(OAK_ROOMS);
-    expect(clientRoomsLine(oak.name, oak)).toBe(
-      'White oak floor · 913 sq ft · Hall · Living Room · Dining · Kitchen',
-    );
     expect(JSON.stringify(oak)).not.toMatch(/rough|need|Flooring through|line_?kind|link_?kind|parent/i);
   });
 
@@ -194,17 +185,5 @@ describe('client selections — the threshold payload', () => {
       { name: 'Dining', quantity: 6, unit: 'each' },
       { name: 'Kitchen', quantity: 2, unit: 'each' },
     ]);
-    expect(clientRoomsLine(chairs.name, chairs)).toBe('Dining chair · 8 · Dining · Kitchen');
-  });
-});
-
-describe('clientQuantityLabel', () => {
-  it('prints the unit with its underscore read as a space, and a bare count for each', () => {
-    expect(clientQuantityLabel(913, 'sq_ft')).toBe('913 sq ft');
-    expect(clientQuantityLabel(40, 'lin_ft')).toBe('40 lin ft');
-    expect(clientQuantityLabel(9, 'roll')).toBe('9 roll');
-    expect(clientQuantityLabel(1200, 'sq_ft')).toBe('1,200 sq ft');
-    expect(clientQuantityLabel(8, 'each')).toBe('8');
-    expect(clientQuantityLabel(8)).toBe('8');
   });
 });

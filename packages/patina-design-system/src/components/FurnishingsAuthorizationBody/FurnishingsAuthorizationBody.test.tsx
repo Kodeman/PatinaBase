@@ -35,6 +35,29 @@ describe('FurnishingsAuthorizationBody', () => {
     expect(screen.getByText('Authorized furnishings').parentElement).toHaveTextContent('$2,900');
   });
 
+  it.each([
+    [913, 'sq_ft', '913 sq ft'], [40, 'lin_ft', '40 lin ft'],
+    [9, 'roll', '9 roll'], [1200, 'sq_ft', '1,200 sq ft'],
+    [8, 'each', '8'], [8, undefined, '8'],
+  ] as const)('prints quantity %s %s through the actual shared renderer', (quantity, unit, label) => {
+    render(<FurnishingsAuthorizationBody items={[{ ...items[1], quantity, unit, rooms: [] }]}
+      totalAmountCents={0} depositPercent={0} />);
+    expect(screen.getByText(`Quantity ${label}`)).toBeInTheDocument();
+    expect(screen.getByText('Wallpaper')).toBeInTheDocument();
+  });
+
+  it('keeps legacy, absent-room and single-room lines separate from multi-room labels', () => {
+    render(<FurnishingsAuthorizationBody items={[
+      { ...items[1], description: 'Legacy', unit: undefined, rooms: undefined },
+      { ...items[1], description: 'One room', rooms: [{ name: 'Study', quantity: 9, unit: 'roll' }] },
+      { ...items[1], description: 'No room', roomName: '', rooms: [] },
+    ]} totalAmountCents={0} depositPercent={0} />);
+    expect(screen.getByText('Legacy')).toBeInTheDocument();
+    expect(screen.getByText('One room')).toBeInTheDocument();
+    expect(screen.getByText('No room')).toBeInTheDocument();
+    expect(screen.getByText('General')).toBeInTheDocument();
+  });
+
   it('preserves stated totals, nonzero deposit and exact client consent text', () => {
     render(body());
     expect(screen.getByTestId('authorization-terms-strip')).toHaveTextContent('Total $3,000 · Deposit $1,450 (50%) on signature');

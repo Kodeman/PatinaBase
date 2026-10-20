@@ -99,7 +99,7 @@ function SavedPreview({ projectId, proposalId, clientName, onClose, onSent, fall
   return (
     <DocSheet open onClose={close} title="Purchasing authorization preview" icon={FileSignature} wide fallbackFocusRef={fallbackFocusRef}>
       <div style={{ '--text-muted': 'var(--color-quiet-ink)' } as CSSProperties}>
-        <p className="type-meta text-[var(--text-muted)]">{receipt ? 'Authorization sent' : 'Preview · Not sent'}</p>
+        <p className="type-meta text-[var(--text-muted)]">{receipt ? 'Authorization sent' : ready && data ? (data.state === 'draft' ? 'Preview · Not sent' : `Preview · ${data.state}`) : 'Preview'}</p>
         {clientName && <p className="mt-2 type-body-small">For {clientName}</p>}
         {preview.isPending || preview.isFetching ? <p role="status">Loading saved preview…</p> : null}
         {preview.isError && <p role="alert">The saved preview could not be loaded. The draft and its reservations are retained.</p>}

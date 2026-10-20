@@ -1350,6 +1350,14 @@ function FFESectionBody({
   const tradeProgressKnown = mode === 'project' && !tradeScopesPending;
   const ceremony = useReleaseCeremony();
   const [savedProposalId, setSavedProposalId] = useState<string | null>(null);
+  const saveOwnerActive = useRef(true);
+  useEffect(() => {
+    saveOwnerActive.current = true;
+    return () => { saveOwnerActive.current = false; };
+  }, []);
+  const retainSavedProposal = useCallback((proposalId: string) => {
+    if (saveOwnerActive.current) setSavedProposalId(proposalId);
+  }, []);
   const savedInstrument = instruments.find((instrument) => instrument.proposalId === savedProposalId);
   const retainedProposalId = savedInstrument && savedInstrument.state !== "draft" ? null : savedProposalId;
   useEffect(() => {
@@ -2801,7 +2809,7 @@ function FFESectionBody({
           lines={releaseLines}
           currentScheduledCents={currentScheduledCents}
           savedProposalId={retainedProposalId}
-          onSaved={setSavedProposalId}
+          onSaved={retainSavedProposal}
           onClose={ceremony.backToSelecting}
           onReleased={() => { setSavedProposalId(null); ceremony.putBack(); }}
         />

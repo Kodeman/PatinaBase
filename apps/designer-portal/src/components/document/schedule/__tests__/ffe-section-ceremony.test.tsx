@@ -569,6 +569,62 @@ describe('saved preview at the actual ceremony owner', () => {
     expect(mockPreviewReads).toHaveBeenLastCalledWith('saved-1', 'project-1');
     expect(mockRelease).toHaveBeenCalledTimes(1); expect(mockSend).not.toHaveBeenCalled();
   });
+  it.each(['Escape', 'Close'])('retains the exact deferred saved ID after %s dismisses the child', async (dismissal) => {
+    let resolve!: (value: unknown) => void;
+    mockRelease.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    renderSection(); review();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' }));
+    if (dismissal === 'Escape') fireEvent.keyDown(document, { key: 'Escape' });
+    else fireEvent.click(screen.getByRole('button', { name: /close/i }));
+    await act(async () => { resolve({ proposalId: 'deferred-exact', documentId: 'document-1' }); });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Review & release/i }));
+    expect(screen.queryByRole('button', { name: 'Save draft & preview' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(mockPreviewReads).toHaveBeenLastCalledWith('deferred-exact', 'project-1');
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+  it('does not attach a pending old-project save to the new project owner', async () => {
+    let resolve!: (value: unknown) => void;
+    mockRelease.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    const { rerender } = renderSection(); review();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' }));
+    rerender(<FFESection projectId="project-2" projectName="Other" mode="project" />);
+    await act(async () => { resolve({ proposalId: 'old-project-draft' }); });
+    review();
+    expect(screen.getByRole('button', { name: 'Save draft & preview' })).toBeVisible();
+    expect(mockPreviewReads).not.toHaveBeenCalledWith('old-project-draft', 'project-2');
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+  });
+  it('leaves selection available after a dismissed pending save fails', async () => {
+    let reject!: (error: Error) => void;
+    mockRelease.mockReturnValueOnce(new Promise((_done, fail) => { reject = fail; }));
+    renderSection(); review();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await act(async () => { reject(new Error('Save failed')); });
+    fireEvent.click(screen.getByRole('button', { name: /Review & release/i }));
+    expect(screen.getByRole('button', { name: 'Save draft & preview' })).toBeVisible();
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+  it('recovers a completed save after the whole owner unmounts only from persisted instruments', async () => {
+    let resolve!: (value: unknown) => void;
+    mockRelease.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    const owner = renderSection(); review();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' }));
+    owner.unmount();
+    await act(async () => { resolve({ proposalId: 'persisted-after-unmount' }); });
+    mockInstruments = [{ proposalId: 'persisted-after-unmount', number: 4, state: 'draft',
+      items: [{ sourceFfeItemId: 'line-1', clientLineTotalCents: 1230000 }] }];
+    renderSection(); unfold('room-1');
+    expect(screen.getByText('Draft · A4')).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /prepare purchasing authorization/i })).toHaveAttribute('aria-disabled', 'true');
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
   it('clears project-bound saved identity when switching projects', async () => {
     const { rerender } = renderSection(); review();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save draft & preview' })); });

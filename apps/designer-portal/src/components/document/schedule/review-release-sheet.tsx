@@ -259,13 +259,15 @@ function ReviewReleaseSheetContent({
     saving.current = true;
     try {
       const created = await runRelease();
+      // The project owner outlives this dismissible sheet; deliver persistence
+      // before checking whether the child may still render.
+      if (created?.proposalId) onSaved?.(created.proposalId);
       if (!active.current) return;
       if (!created?.proposalId) {
         setIdentityUnavailable(true);
         throw new Error('The draft was saved but its identity is unavailable. Open it from the authorization ledger; do not save again.');
       }
       setLocalProposalId(created.proposalId);
-      onSaved?.(created.proposalId);
       if (preview) setPreviewOpen(true);
       else onReleased();
     } catch (cause) {
@@ -612,11 +614,6 @@ function ReviewReleaseSheetContent({
       {error && (
         <p role="alert" className="mb-1 text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
-        </p>
-      )}
-      {error && releasedProposalId && (
-        <p className="mb-3 text-[11px] text-[var(--text-muted)]">
-          The saved authorization is retained. Reopen its preview without creating another.
         </p>
       )}
 
