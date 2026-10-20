@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 16" width="120" height="16" aria-label="Patina Strata Mark">
+  <rect x="0" y="1" width="120" height="2" rx="1" fill="#5C4A3C"></rect>
+  <rect x="0" y="7" width="96" height="2" rx="1" fill="#C4A57B" opacity="0.7"></rect>
+  <rect x="0" y="13" width="72" height="2" rx="1" fill="#C4A57B" opacity="0.35"></rect>
+</svg>

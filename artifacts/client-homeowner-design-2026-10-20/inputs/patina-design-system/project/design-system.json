@@ -1,0 +1,41 @@
+{
+  "v": 3,
+  "assetGroups": {
+    "Other": {
+      "files": {},
+      "name": "Other",
+      "order": []
+    },
+    "notes": {
+      "files": {},
+      "name": "notes",
+      "order": []
+    }
+  },
+  "blobs": {},
+  "createdOnFiles": {
+    "at": "2026-10-14T01:45:20.680Z",
+    "v": 1
+  },
+  "docs": {
+    "readme": "project/README.md",
+    "sections": []
+  },
+  "editing": "off",
+  "groups": [
+    "notes",
+    "Other"
+  ],
+  "layout": "files",
+  "libraries": [],
+  "sections": {},
+  "source": {
+    "app": "claude-design",
+    "exportedAt": "2026-10-14T01:45:20.680Z",
+    "map": "project/migration-map.json",
+    "projectId": "62688112-3bff-4513-a4ad-9efb0ed476be",
+    "url": "https://claude.ai/design/p/62688112-3bff-4513-a4ad-9efb0ed476be",
+    "v": 1
+  },
+  "title": "Patina Design System"
+}

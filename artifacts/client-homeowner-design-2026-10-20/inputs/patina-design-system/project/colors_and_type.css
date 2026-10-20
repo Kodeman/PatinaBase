@@ -1,0 +1,246 @@
+/* =====================================================================
+   PATINA DESIGN SYSTEM — COLORS + TYPE
+   =====================================================================
+
+   Single source of truth for:
+   - Primary color palette
+   - Status palette
+   - Semantic assignments (bg, text, accent, border)
+   - Spacing scale
+   - Animation tokens
+   - Type faces (Playfair Display, Inter, DM Mono)
+   - Semantic type utility classes (.type-page-title … .type-meta-small)
+
+   Drop this into any page with a <link rel="stylesheet" href="colors_and_type.css">
+   and you have the whole Patina typographic system available.
+   ===================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap');
+
+/* ---- TOKENS ---- */
+
+:root {
+  /* Primary palette */
+  --color-off-white:   #FAF7F2;
+  --color-pearl:       #E5E2DD;
+  --color-clay:        #C4A57B;
+  --color-aged-oak:    #8B7355;
+  --color-mocha:       #5C4A3C;
+  --color-charcoal:    #2C2926;
+  --color-white:       #FFFFFF;
+
+  /* Status palette (NEVER used as decoration — only status) */
+  --color-sage:         #A8B5A0;   /* success, up, completed */
+  --color-dusty-blue:   #8B9CAD;   /* info, consultation */
+  --color-terracotta:   #D4A090;   /* error, down, installation */
+  --color-golden-hour:  #E8C547;   /* warning, procurement */
+
+  /* Semantic: surfaces */
+  --bg-primary:   var(--color-off-white);
+  --bg-surface:   var(--color-white);
+  --bg-hover:     rgba(196, 165, 123, 0.06);
+  --bg-scrim:     rgba(0, 0, 0, 0.4);
+
+  /* Semantic: text */
+  --text-primary: var(--color-charcoal);
+  --text-body:    var(--color-mocha);
+  --text-muted:   var(--color-aged-oak);
+  --text-subtle:  var(--color-pearl);
+  --text-inverse: var(--color-off-white);
+
+  /* Semantic: accents */
+  --accent-primary: var(--color-clay);
+  --accent-hover:   var(--color-aged-oak);
+  --accent-active:  var(--color-charcoal);
+
+  /* Semantic: borders */
+  --border-default: var(--color-pearl);
+  --border-subtle:  rgba(229, 226, 221, 0.6);
+
+  /* Semantic: functional */
+  --color-success: #7A9B76;
+  --color-warning: #D4A574;
+  --color-error:   #C77B6E;
+  --color-info:    #8B9CAD;
+
+  /* Phase colors (maps to project phases) */
+  --phase-consultation:  var(--color-dusty-blue);
+  --phase-concept:       var(--color-clay);
+  --phase-refinement:    var(--color-aged-oak);
+  --phase-procurement:   var(--color-golden-hour);
+  --phase-installation:  var(--color-terracotta);
+  --phase-walkthrough:   var(--color-sage);
+
+  /* Type faces */
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', monospace;
+
+  /* Spacing scale */
+  --space-1:  0.25rem;   /* 4px */
+  --space-2:  0.5rem;    /* 8px */
+  --space-3:  0.75rem;   /* 12px */
+  --space-4:  1rem;      /* 16px */
+  --space-6:  1.5rem;    /* 24px */
+  --space-8:  2rem;      /* 32px */
+  --space-10: 2.5rem;    /* 40px */
+  --space-12: 3rem;      /* 48px */
+  --space-16: 4rem;      /* 64px */
+  --space-20: 5rem;      /* 80px */
+  --space-24: 6rem;      /* 96px */
+
+  /* Radii — very minimal. No pills. */
+  --radius-sm: 2px;   /* style tags */
+  --radius-md: 3px;   /* buttons */
+  --radius-lg: 8px;   /* room-scan preview, media */
+  --radius-full: 9999px; /* score circle only */
+
+  /* Animation */
+  --ease-default:   cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring:    cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast:      150ms;
+  --duration-normal:    300ms;
+  --duration-slow:      500ms;
+  --duration-editorial: 700ms;
+}
+
+/* ---- BASE ---- */
+
+html, body {
+  background: var(--bg-primary);
+  color: var(--text-body);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(196, 165, 123, 0.28);
+  color: var(--text-primary);
+}
+
+/* Hairline divider — the ONLY border pattern */
+.divider          { border-bottom: 1px solid var(--border-default); }
+.divider-subtle   { border-bottom: 1px solid var(--border-subtle); }
+.divider-vertical { border-left: 1px solid var(--border-default); }
+
+/* ---- SEMANTIC TYPE CLASSES ---- */
+
+/* Display — Playfair */
+.type-page-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.type-section-head {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.type-item-name {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.3rem;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.type-data-large {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.4rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.type-data-unit {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Body — Inter */
+.type-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-body);
+}
+.type-body-small {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-body);
+}
+.prose-body { max-width: 640px; }
+
+/* Labels — Inter */
+.type-label {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.type-label-secondary {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* Meta — DM Mono, always UPPERCASE */
+.type-meta {
+  font-family: var(--font-meta);
+  font-weight: 400;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.type-meta-small {
+  font-family: var(--font-meta);
+  font-weight: 400;
+  font-size: 0.63rem;
+  line-height: 1.5;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Interactive */
+.type-btn-text {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.85rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+/* Brand — wordmark */
+.type-wordmark {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+/* Italic emphasis — the "greeting trick" */
+.type-italic-accent {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--color-aged-oak);
+}

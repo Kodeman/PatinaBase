@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Patina · Client Portal UI Kit</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<style>
+  html, body { background: var(--bg-primary); margin: 0; padding: 0; }
+  .showcase { max-width: 1100px; margin: 0 auto; padding: 60px clamp(24px, 5vw, 56px) 120px; }
+  .hero { padding: 32px 0 60px; border-bottom: 1px solid var(--border-default); margin-bottom: 80px;}
+  .eyebrow { font-family: var(--font-meta); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 20px;}
+  .title { font-family: var(--font-display); font-weight: 400; font-size: clamp(2.2rem, 4.5vw, 3.4rem); letter-spacing: -0.02em; color: var(--text-primary); margin: 0 0 18px; line-height: 1.1;}
+  .lead { font-family: var(--font-body); font-size: 1.05rem; color: var(--text-secondary); line-height: 1.6; max-width: 620px; margin: 0;}
+  .section { margin-bottom: 96px; }
+  .kicker { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 20px; margin-bottom: 40px; border-bottom: 1px solid var(--border-default);}
+  .kicker h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.6rem; margin: 0; color: var(--text-primary); letter-spacing: -0.01em;}
+  .kicker .counter { font-family: var(--font-meta); font-size: 0.68rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase;}
+  .example { margin-bottom: 48px; }
+  .example-label { font-family: var(--font-meta); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 14px;}
+  .demo { border: 1px solid var(--border-default); background: var(--bg-primary); overflow: hidden;}
+  .demo-pad { padding: 32px 40px; }
+  .demo-full { padding: 0; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="../designer-portal/Primitives.jsx"></script>
+<script type="text/babel" src="Components.jsx"></script>
+</head>
+<body>
+
+<div class="showcase">
+  <div class="hero">
+    <div class="eyebrow">Client Portal · UI Kit</div>
+    <h1 class="title">A <span class="type-italic-accent">calm</span> window into the work.</h1>
+    <p class="lead">The client portal is the homeowner's view — warm, reassuring, unhurried. Fewer lists than the designer portal, bigger type, more breathing room. The goal isn't efficiency; it's confidence. Clients come here to approve, to review, to stay in sync.</p>
+  </div>
+
+  <div class="section">
+    <div class="kicker"><h2>Chrome</h2><span class="counter">01 — Header</span></div>
+    <div class="example">
+      <div class="example-label">Client Header — sticky, with project switcher and counts</div>
+      <div class="demo demo-full" id="mount-header"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="kicker"><h2>Project List</h2><span class="counter">02 — Dashboard</span></div>
+    <div class="example">
+      <div class="example-label">Project rows — large progress numeral, thin bar</div>
+      <div class="demo demo-pad" id="mount-projects"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="kicker"><h2>Decision</h2><span class="counter">03 — Approval flow</span></div>
+    <div class="example">
+      <div class="example-label">Decision Card — the core approval interaction</div>
+      <div class="demo demo-pad" id="mount-decision"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="kicker"><h2>Budget</h2><span class="counter">04 — Financials</span></div>
+    <div class="example">
+      <div class="example-label">Budget Overview — three numbers, one bar, payment schedule</div>
+      <div class="demo demo-pad" id="mount-budget"></div>
+    </div>
+  </div>
+</div>
+
+<script type="text/babel" data-presets="react">
+function mount(id, el) {
+  const node = document.getElementById(id);
+  if (node) ReactDOM.createRoot(node).render(el);
+}
+
+mount('mount-header', <ClientHeader activeProject="Whitfield living room" approvals={2} messages={5} lastUpdated="2 hours ago" />);
+
+mount('mount-projects',
+  <div>
+    <ClientProjectRow name="Whitfield living room" location="Wauwatosa, WI" nextMilestone="Mood board review" approvals={2} messages={5} progress={42} />
+    <ClientProjectRow name="Okafor whole-home refresh" location="Bay View, WI" nextMilestone="Fabric approvals" approvals={1} messages={2} progress={68} />
+    <ClientProjectRow name="Chen residence · East wing" location="Shorewood, WI" nextMilestone="Final walkthrough" approvals={0} messages={0} progress={94} />
+  </div>
+);
+
+mount('mount-decision',
+  <DecisionCard
+    kind="Mood Board"
+    title="Living room direction"
+    summary="Kira has put together three directions for the living room, grounded in the conversations we've had. Each is complete as-is; we can also blend elements if something here resonates but isn't quite right."
+    deadline="by Friday"
+    options={[
+      { name: 'Quiet Atelier', meta: 'Warm neutrals · natural linen' },
+      { name: 'Gathering Hearth', meta: 'Deeper tones · textured wool' },
+      { name: 'Open Pavilion', meta: 'Pale oak · airy silhouettes' },
+    ]}
+  />
+);
+
+mount('mount-budget',
+  <BudgetOverview
+    budget={24500}
+    committed={18200}
+    paid={9800}
+    utilization={74}
+    milestones={[
+      { name: 'Design fee', date: 'Paid Mar 3', amount: 2500, status: 'paid' },
+      { name: 'Furniture deposit — 50%', date: 'Paid Mar 22', amount: 7300, status: 'paid' },
+      { name: 'Furniture balance — 50%', date: 'Due at delivery', amount: 7300, status: 'upcoming' },
+      { name: 'Installation + styling', date: 'Due May 22', amount: 3400, status: 'upcoming' },
+    ]}
+  />
+);
+</script>
+
+</body>
+</html>
