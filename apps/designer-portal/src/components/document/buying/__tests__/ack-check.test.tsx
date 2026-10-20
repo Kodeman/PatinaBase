@@ -367,7 +367,6 @@ describe('F9-2 — the acknowledgment inside the Order cell wraps at 390', () =>
     expect(rowLabel.className).toBe('py-1 pr-2 align-top font-normal');
     expect(verdict).toHaveClass('whitespace-nowrap');
     expect(decisions).toHaveClass('flex', 'flex-wrap');
-    expect(door).toHaveClass('whitespace-nowrap');
     expect(door).not.toHaveClass('whitespace-normal');
     expect(door).not.toHaveClass('text-left');
   });
@@ -394,7 +393,7 @@ describe('F9-2 — the acknowledgment inside the Order cell wraps at 390', () =>
     expect(door).toHaveClass('whitespace-normal', 'text-left');
   });
 
-  it('F9-2b: inCell wraps the Accept theirs / Dispute decisions; the default keeps them nowrap', () => {
+  it('F9-2b: inCell wraps the Accept theirs / Dispute decisions; the default leaves them unwrapped (US-43 R5: no forced nowrap)', () => {
     const { rerender } = render(<AckRecord purchaseOrderId="po-1" projectId="project-1" inCell />);
     const finishInCell = screen.getByTestId('ack-line-line-finish');
     const acceptInCell = within(finishInCell).getByRole('button', { name: 'Accept acknowledged value' });
@@ -408,9 +407,7 @@ describe('F9-2 — the acknowledgment inside the Order cell wraps at 390', () =>
     const finishDefault = screen.getByTestId('ack-line-line-finish');
     const acceptDefault = within(finishDefault).getByRole('button', { name: 'Accept acknowledged value' });
     const disputeDefault = within(finishDefault).getByRole('button', { name: 'Dispute acknowledgment' });
-    expect(acceptDefault).toHaveClass('whitespace-nowrap');
     expect(acceptDefault).not.toHaveClass('whitespace-normal');
-    expect(disputeDefault).toHaveClass('whitespace-nowrap');
     expect(disputeDefault).not.toHaveClass('whitespace-normal');
   });
 });

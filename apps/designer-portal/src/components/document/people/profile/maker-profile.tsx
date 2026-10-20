@@ -646,7 +646,7 @@ export function MakerProfile({
                 openLedger('orders', { page: 'vendors', vendorId })
               }
             >
-              terms & orders →
+              Terms & orders →
             </DocumentAction>
           </Card>
 

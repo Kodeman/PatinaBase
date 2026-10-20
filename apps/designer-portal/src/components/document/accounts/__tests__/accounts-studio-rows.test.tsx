@@ -104,7 +104,7 @@ describe('AccountsLedgerPage · a studio row beside the houses', () => {
     const houseRow = screen.getByText('Invoice INV-0030').closest('li') as HTMLElement;
     expect(houseRow.textContent).toContain('Hollis House');
     expect(within(houseRow).queryByText('studio')).toBeNull();
-    expect(within(houseRow).getByRole('button', { name: 'document ↗' })).toBeInTheDocument();
+    expect(within(houseRow).getByRole('button', { name: 'Document ↗' })).toBeInTheDocument();
   });
 });
 
@@ -154,7 +154,7 @@ describe('AccountsReceivablesPage · a studio row ages like any other', () => {
     const row = screen.getByText(/Invoice INV-0030/).closest('li') as HTMLElement;
     expect(row.textContent).toContain('Hollis House');
     expect(within(row).queryByText('studio')).toBeNull();
-    expect(within(row).getByRole('button', { name: 'document ↗' })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Document ↗' })).toBeInTheDocument();
   });
 });
 

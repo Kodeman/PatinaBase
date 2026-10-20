@@ -690,7 +690,7 @@ export function InvoiceFolio({
                 variant="tertiary"
                 onClick={() => onOpenDocument(documentProjectId)}
               >
-                document ↗
+                Document ↗
               </DocumentAction>
             )}
           </div>
@@ -1188,7 +1188,7 @@ export function InvoiceFolio({
                 disabled={busy}
                 onClick={() => setAct(null)}
               >
-                never mind
+                Never mind
               </DocumentAction>
             </DocumentActionGroup>
           </div>
@@ -1291,7 +1291,7 @@ export function InvoiceFolio({
                 variant="tertiary"
                 onClick={() => setAct(null)}
               >
-                never mind
+                Never mind
               </DocumentAction>
             </DocumentActionGroup>
           </div>
@@ -1333,7 +1333,7 @@ export function InvoiceFolio({
                 variant="tertiary"
                 onClick={() => setAct(null)}
               >
-                never mind
+                Never mind
               </DocumentAction>
             </DocumentActionGroup>
           </div>
@@ -1364,7 +1364,7 @@ export function InvoiceFolio({
                 variant="tertiary"
                 onClick={() => setAct(null)}
               >
-                never mind
+                Never mind
               </DocumentAction>
             </DocumentActionGroup>
           </div>

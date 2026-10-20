@@ -171,7 +171,7 @@ describe('N15 — folio image remove with Undo', () => {
     fireEvent.change(screen.getByPlaceholderText('paste an image URL (or a cut sheet)'), {
       target: { value: D },
     });
-    fireEvent.click(screen.getByRole('button', { name: '+ add' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
     await waitFor(() => expect(mockWrites).toHaveLength(2));
     expect(mockWrites[1].images).toEqual([A, C, D]);
     await accept(1);

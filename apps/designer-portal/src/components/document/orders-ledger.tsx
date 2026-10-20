@@ -106,7 +106,7 @@ function LensLink({
  * US-19 walk D3 — `Send the purchase order` where no Pieces line carries the
  * drafted PO (the need counts the project's POs, not its lines) sets this
  * before it opens the ledger on the project; the page spends it once its
- * orders have read, landing on the first drafted, unsent row's own `send →`.
+ * orders have read, landing on the first drafted, unsent row's own `Send →`.
  * The ledger is never the landing (520-4's grammar).
  */
 export const ordersSendLanding = { pending: false };
@@ -627,7 +627,7 @@ export function OrdersLedger({
                           variant="secondary"
                           onClick={() => setPaperPo(po)}
                         >
-                          open →
+                          Open →
                         </DocumentAction>
                       )}
                     </li>
@@ -838,12 +838,12 @@ export function OrdersLedger({
                               }
                             >
                               {po.sent_at
-                                ? 'resend'
+                                ? 'Resend'
                                 : po.status === 'draft'
-                                  ? 'send →'
+                                  ? 'Send →'
                                   : po.status === 'held_for_release'
-                                    ? 'open →'
-                                    : 'pdf'}
+                                    ? 'Open →'
+                                    : 'PDF'}
                             </DocumentAction>
                             <button
                               type="button"

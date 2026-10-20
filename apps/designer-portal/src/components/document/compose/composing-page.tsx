@@ -491,7 +491,7 @@ export function ComposingPage() {
                 onClick={addImage}
                 disabled={!imageDraft.trim()}
               >
-                + add
+                + Add
               </DocumentAction>
             </div>
             <p className="doc-type-body mt-2 italic text-[var(--color-quiet-ink)]">

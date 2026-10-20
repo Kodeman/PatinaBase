@@ -210,7 +210,7 @@ function InvoiceRows({
                       variant="tertiary"
                       onClick={() => onOpenDocument(inv.project_id)}
                     >
-                      document ↗
+                      Document ↗
                     </DocumentAction>
                   </span>
                 )}

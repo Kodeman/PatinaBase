@@ -154,7 +154,7 @@ const confirmAct = () => {
   const acts = screen.getAllByRole('button', { name: 'Issue & send' });
   return acts[acts.length - 1];
 };
-const neverMind = () => screen.getByRole('button', { name: 'never mind' });
+const neverMind = () => screen.getByRole('button', { name: 'Never mind' });
 /** Let a reconnect's paused reads resume, and anything they would continue into run. */
 const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
 const offline = 'Could not issue — You’re offline. Nothing was sent.';

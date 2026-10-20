@@ -1432,7 +1432,7 @@ function TermsFields({
                   aria-label={`Remove milestone ${idx + 1}`}
                   onClick={() => onMilestonesChange(milestones.filter((x) => x.key !== m.key))}
                 >
-                  remove
+                  Remove
                 </DocumentAction>
               ) : (
                 <span />

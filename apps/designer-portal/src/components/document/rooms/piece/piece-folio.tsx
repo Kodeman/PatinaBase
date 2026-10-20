@@ -387,7 +387,7 @@ export function PieceFolio({
           onClick={addUrl}
           disabled={!draft.trim() || busy}
         >
-          + add
+          + Add
         </DocumentAction>
         <DocumentAction
           actionKey="upload-piece-image"

@@ -276,7 +276,7 @@ export function DiscoveryScheduleLine({
             href={`/people?thread=${ceremony.thread_id}`}
             trailing="→"
           >
-            view the thread
+            View the thread
           </DocumentAction>
         </p>
       )}

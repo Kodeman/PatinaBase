@@ -252,7 +252,7 @@ function ReceivableRow({
           onClick={() => onOpenDocument(invoice.project_id)}
           className="min-h-11 whitespace-nowrap rounded-[3px] text-[11px] text-[var(--color-clay-ink)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
-          document ↗
+          Document ↗
         </button>
       )}
     </li>

@@ -325,14 +325,14 @@ describe('OrdersLedger quiet register', () => {
     expect(
       container.querySelectorAll('[data-orders-unscheduled]'),
     ).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'send →' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'resend' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'pdf' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send →' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resend' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'PDF' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'log ack ↓' }));
     expect(screen.getByTestId('ack-unfold')).toHaveTextContent('po-2');
 
-    fireEvent.click(screen.getByRole('button', { name: 'resend' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resend' }));
     expect(screen.getByTestId('po-preview')).toHaveTextContent('po-2');
 
     fireEvent.click(
@@ -772,7 +772,7 @@ describe('OrdersLedger · held for release (C-32)', () => {
     expect(heldGroup(container)).toBeNull();
     expect(container.querySelectorAll('[data-orders-po-row]')).toHaveLength(4);
     expect(screen.getByText('held for release')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'open →' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open →' }));
     expect(screen.getByTestId('order-paper')).toHaveTextContent('Paper po-held');
   });
 
@@ -824,10 +824,10 @@ describe('OrdersLedger · Send the purchase order lands on its row (walk D3)', (
 
   const draftedSend = () =>
     [...document.querySelectorAll<HTMLElement>('[data-orders-po-row]')]
-      .find((row) => row.textContent?.includes('send →'))
+      .find((row) => row.textContent?.includes('Send →'))
       ?.querySelector<HTMLElement>('[data-action-key="open-purchase-order-preview"]');
 
-  it('spends the armed landing once the orders read, focusing the drafted row’s send →', async () => {
+  it('spends the armed landing once the orders read, focusing the drafted row’s Send →', async () => {
     mockUsePurchaseOrders.mockReturnValue({ data: undefined, isLoading: true });
     ordersSendLanding.pending = true;
     const { rerender } = render(<OrdersLedger onClose={jest.fn()} initialContext={lensed} />);
@@ -841,7 +841,7 @@ describe('OrdersLedger · Send the purchase order lands on its row (walk D3)', (
     // confirmed and drafted rows: the landing is the third row's act.
     expect(document.querySelectorAll('[data-orders-po-row]')).toHaveLength(3);
     const send = draftedSend();
-    expect(send).toHaveTextContent('send →');
+    expect(send).toHaveTextContent('Send →');
     await waitFor(() => expect(document.activeElement).toBe(send));
   });
 

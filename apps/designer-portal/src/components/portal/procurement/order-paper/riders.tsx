@@ -346,7 +346,7 @@ export function PoRiders({
             variant="tertiary"
             onClick={() => setAdding(true)}
           >
-            + freight, crating, receiving…
+            + Freight, crating, receiving…
           </DocumentAction>
         ))}
       {error && (

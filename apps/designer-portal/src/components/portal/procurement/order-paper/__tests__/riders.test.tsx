@@ -134,7 +134,7 @@ describe('<PoRiders>', () => {
 
   it('adds a rider with "Bill the client" checked at cost by default', async () => {
     renderRiders('po-1');
-    fireEvent.click(screen.getByRole('button', { name: /freight, crating, receiving/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Freight, crating, receiving/ }));
     expect(screen.getByRole('checkbox', { name: 'Bill the client' })).toBeChecked();
     expect(screen.getByRole('combobox', { name: 'Billing rule' })).toHaveValue('at_cost');
     fireEvent.change(screen.getByRole('textbox', { name: 'Estimate' }), {
@@ -227,7 +227,7 @@ describe('<PoRiders>', () => {
 
   it('on a new paper, riders wait and are written once the PO exists', async () => {
     const { rerender } = renderRiders(null);
-    fireEvent.click(screen.getByRole('button', { name: /freight, crating, receiving/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Freight, crating, receiving/ }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Estimate' }), {
       target: { value: '120' },
     });
