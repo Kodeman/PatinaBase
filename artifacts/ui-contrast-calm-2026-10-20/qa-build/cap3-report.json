@@ -1,0 +1,890 @@
+{
+ "band320": {
+  "band": {
+   "text": "OVERDUE 6D · DECISIONS | Chase | +4 MORE",
+   "bg": "rgb(252, 250, 246)",
+   "x": 32,
+   "w": 257,
+   "y": 398,
+   "h": 45,
+   "pos": "static",
+   "btns": [
+    {
+     "t": "Chase",
+     "color": "rgb(250, 247, 242)",
+     "op": "1",
+     "bg": "rgb(252, 250, 246)",
+     "ff": "Inter",
+     "tt": "none",
+     "fs": "15px",
+     "cr": "1.03"
+    },
+    {
+     "t": "+4 MORE",
+     "color": "rgb(156, 83, 64)",
+     "op": "1",
+     "bg": "rgb(252, 250, 246)",
+     "ff": "\"DM Mono\"",
+     "tt": "uppercase",
+     "fs": "11px",
+     "cr": "5.41"
+    }
+   ],
+   "ancestorPos": [
+    "P:static:rgb(252, 250, 246)",
+    "SECTION:sticky:rgb(252, 250, 246)",
+    "MAIN:static:rgb(252, 250, 246)",
+    "DIV:relative:rgb(252, 250, 246)"
+   ]
+  },
+  "rules": {
+   "h1bottom": 175
+  },
+  "nextInAria": {
+   "chase": 1,
+   "message": 2,
+   "lines": [
+    "      - button \"Chase\""
+   ]
+  },
+  "focus": [
+   {
+    "t": "SKIP TO MAIN CONTENT",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "oklch(0.9582 0.0152 90.2357)",
+    "y": 18,
+    "inView": true,
+    "cr": "7.84"
+   },
+   {
+    "t": "Aspen Loft Refresh",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 101,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "for the client↗",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 190,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "SET DATES",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 221,
+    "inView": true,
+    "cr": "2.23"
+   },
+   {
+    "t": "Message",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 246,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Preview",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 246,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Sharing",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 246,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Project directory",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 299,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Chase",
+    "outline": "solid 2px rgb(250, 247, 242)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 411,
+    "inView": true,
+    "cr": "1.03"
+   },
+   {
+    "t": "+4 MORE",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 426,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "Assign project client",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 608,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Collapse ↑",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 608,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "SCHEDULE DATES\nWEEK 6 · INSTAL",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 151,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "Complete phase",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 345,
+    "inView": true,
+    "cr": "5.75"
+   }
+  ]
+ },
+ "band390": {
+  "band": {
+   "text": "OVERDUE 6D · DECISIONS | Chase | +4 MORE",
+   "bg": "rgb(252, 250, 246)",
+   "x": 32,
+   "w": 327,
+   "y": 308,
+   "h": 40,
+   "pos": "static",
+   "btns": [
+    {
+     "t": "Chase",
+     "color": "rgb(250, 247, 242)",
+     "op": "1",
+     "bg": "rgb(252, 250, 246)",
+     "ff": "Inter",
+     "tt": "none",
+     "fs": "15px",
+     "cr": "1.03"
+    },
+    {
+     "t": "+4 MORE",
+     "color": "rgb(156, 83, 64)",
+     "op": "1",
+     "bg": "rgb(252, 250, 246)",
+     "ff": "\"DM Mono\"",
+     "tt": "uppercase",
+     "fs": "11px",
+     "cr": "5.41"
+    }
+   ],
+   "ancestorPos": [
+    "P:static:rgb(252, 250, 246)",
+    "SECTION:sticky:rgb(252, 250, 246)",
+    "MAIN:static:rgb(252, 250, 246)",
+    "DIV:relative:rgb(252, 250, 246)"
+   ]
+  },
+  "rules": {
+   "h1bottom": 138
+  },
+  "nextInAria": {
+   "chase": 1,
+   "message": 2,
+   "lines": [
+    "      - button \"Chase\""
+   ]
+  },
+  "focus": [
+   {
+    "t": "SKIP TO MAIN CONTENT",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "oklch(0.9582 0.0152 90.2357)",
+    "y": 18,
+    "inView": true,
+    "cr": "7.84"
+   },
+   {
+    "t": "Aspen Loft Refresh",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 101,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "for the client↗",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 154,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "SET DATES",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 184,
+    "inView": true,
+    "cr": "2.23"
+   },
+   {
+    "t": "Message",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 210,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Preview",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 210,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Sharing",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 210,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Project directory",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 210,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Chase",
+    "outline": "solid 2px rgb(250, 247, 242)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 296,
+    "inView": true,
+    "cr": "1.03"
+   },
+   {
+    "t": "+4 MORE",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 333,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "Assign project client",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 512,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Collapse ↑",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 512,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "SCHEDULE DATES\nWEEK 6 · INSTAL",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 632,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "Complete phase",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 373,
+    "inView": true,
+    "cr": "5.75"
+   }
+  ]
+ },
+ "band768": {
+  "band": {
+   "text": "OVERDUE 6D · DECISIONS | Chase | +4 MORE",
+   "bg": "rgb(44, 41, 38)",
+   "x": 32,
+   "w": 705,
+   "y": 308,
+   "h": 21,
+   "pos": "static",
+   "btns": [
+    {
+     "t": "Chase",
+     "color": "rgb(250, 247, 242)",
+     "op": "1",
+     "bg": "rgb(44, 41, 38)",
+     "ff": "Inter",
+     "tt": "none",
+     "fs": "15px",
+     "cr": "13.53"
+    },
+    {
+     "t": "+4 MORE",
+     "color": "rgb(226, 168, 149)",
+     "op": "1",
+     "bg": "rgb(44, 41, 38)",
+     "ff": "\"DM Mono\"",
+     "tt": "uppercase",
+     "fs": "11px",
+     "cr": "7.07"
+    }
+   ],
+   "ancestorPos": [
+    "P:static:rgb(44, 41, 38)",
+    "SECTION:sticky:rgb(44, 41, 38)",
+    "MAIN:static:rgb(252, 250, 246)",
+    "DIV:relative:rgb(252, 250, 246)"
+   ]
+  },
+  "rules": {
+   "h1bottom": 138
+  },
+  "nextInAria": {
+   "chase": 1,
+   "message": 2,
+   "lines": [
+    "      - button \"Chase\"",
+    "    - paragraph: 4 phases · Design Development · next milestone Design Development sign-off"
+   ]
+  },
+  "focus": [
+   {
+    "t": "SKIP TO MAIN CONTENT",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "oklch(0.9582 0.0152 90.2357)",
+    "y": 18,
+    "inView": true,
+    "cr": "7.84"
+   },
+   {
+    "t": "Aspen Loft Refresh",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 101,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "for the client↗",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 154,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "SET DATES",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 184,
+    "inView": true,
+    "cr": "2.23"
+   },
+   {
+    "t": "Message",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 210,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Preview",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 210,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Sharing",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 210,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Project directory",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 210,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Chase",
+    "outline": "solid 2px rgb(250, 247, 242)",
+    "off": "2px",
+    "bg": "rgb(44, 41, 38)",
+    "y": 297,
+    "inView": true,
+    "cr": "13.53"
+   },
+   {
+    "t": "+4 MORE",
+    "outline": "solid 2px rgb(250, 247, 242)",
+    "off": "3px",
+    "bg": "rgb(44, 41, 38)",
+    "y": 311,
+    "inView": true,
+    "cr": "13.53"
+   },
+   {
+    "t": "Assign project client",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 468,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Collapse ↑",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 468,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "SCHEDULE DATES\nWEEK 6 · INSTAL",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 623,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "Complete phase",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 779,
+    "inView": true,
+    "cr": "5.75"
+   }
+  ]
+ },
+ "band1180": {
+  "band": {
+   "text": "2 decisions overdue — oldest due 14 October | Chase the approval | +4 MORE",
+   "bg": "rgb(44, 41, 38)",
+   "x": 183,
+   "w": 950,
+   "y": 255,
+   "h": 21,
+   "pos": "static",
+   "btns": [
+    {
+     "t": "Chase the approval",
+     "color": "rgb(250, 247, 242)",
+     "op": "1",
+     "bg": "rgb(44, 41, 38)",
+     "ff": "Inter",
+     "tt": "none",
+     "fs": "15px",
+     "cr": "13.53"
+    },
+    {
+     "t": "+4 MORE",
+     "color": "rgb(226, 168, 149)",
+     "op": "1",
+     "bg": "rgb(44, 41, 38)",
+     "ff": "\"DM Mono\"",
+     "tt": "uppercase",
+     "fs": "11px",
+     "cr": "7.07"
+    }
+   ],
+   "ancestorPos": [
+    "P:static:rgb(44, 41, 38)",
+    "SECTION:sticky:rgb(44, 41, 38)",
+    "MAIN:static:rgb(252, 250, 246)",
+    "DIV:relative:rgb(252, 250, 246)"
+   ]
+  },
+  "rules": {
+   "h1bottom": 138
+  },
+  "nextInAria": {
+   "chase": 1,
+   "message": 1,
+   "lines": [
+    "      - button \"Chase the approval\"",
+    "    - paragraph: 4 phases · Design Development · next milestone Design Development sign-off"
+   ]
+  },
+  "focus": [
+   {
+    "t": "SKIP TO MAIN CONTENT",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "oklch(0.9582 0.0152 90.2357)",
+    "y": 18,
+    "inView": true,
+    "cr": "7.84"
+   },
+   {
+    "t": "←\nBACK TO STUDIO OVERVIEW",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 18,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Client approvals\nNOTHING YET",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 206,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Drawing sets",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 564,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Specification book",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 614,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Boards",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 663,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Project directory",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 713,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Aspen Loft Refresh",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 101,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "for the client↗",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 154,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "SET DATES",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 184,
+    "inView": true,
+    "cr": "2.23"
+   },
+   {
+    "t": "Message",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 147,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Preview",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 147,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Sharing",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 147,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Project directory · 0",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 147,
+    "inView": true,
+    "cr": "5.75"
+   }
+  ]
+ },
+ "band1440": {
+  "band": {
+   "text": "2 decisions overdue — oldest due 14 October | Chase the approval | +4 MORE",
+   "bg": "rgb(44, 41, 38)",
+   "x": 254,
+   "w": 900,
+   "y": 255,
+   "h": 21,
+   "pos": "static",
+   "btns": [
+    {
+     "t": "Chase the approval",
+     "color": "rgb(250, 247, 242)",
+     "op": "1",
+     "bg": "rgb(44, 41, 38)",
+     "ff": "Inter",
+     "tt": "none",
+     "fs": "15px",
+     "cr": "13.53"
+    },
+    {
+     "t": "+4 MORE",
+     "color": "rgb(226, 168, 149)",
+     "op": "1",
+     "bg": "rgb(44, 41, 38)",
+     "ff": "\"DM Mono\"",
+     "tt": "uppercase",
+     "fs": "11px",
+     "cr": "7.07"
+    }
+   ],
+   "ancestorPos": [
+    "P:static:rgb(44, 41, 38)",
+    "SECTION:sticky:rgb(44, 41, 38)",
+    "MAIN:static:rgb(252, 250, 246)",
+    "DIV:relative:rgb(252, 250, 246)"
+   ]
+  },
+  "rules": {
+   "h1bottom": 138
+  },
+  "nextInAria": {
+   "chase": 1,
+   "message": 1,
+   "lines": [
+    "      - button \"Chase the approval\"",
+    "    - paragraph: 4 phases · Design Development · next milestone Design Development sign-off"
+   ]
+  },
+  "focus": [
+   {
+    "t": "SKIP TO MAIN CONTENT",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "oklch(0.9582 0.0152 90.2357)",
+    "y": 18,
+    "inView": true,
+    "cr": "7.84"
+   },
+   {
+    "t": "←\nBACK TO STUDIO OVERVIEW",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 27,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Client approvals\nNOTHING YET",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 201,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Drawing sets",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 564,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Specification book",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 614,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Boards",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 663,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Project directory",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(232, 227, 219)",
+    "y": 713,
+    "inView": true,
+    "cr": "1.82"
+   },
+   {
+    "t": "Aspen Loft Refresh",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 101,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "for the client↗",
+    "outline": "solid 2px rgb(101, 89, 78)",
+    "off": "3px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 154,
+    "inView": true,
+    "cr": "6.51"
+   },
+   {
+    "t": "SET DATES",
+    "outline": "solid 2px rgb(196, 165, 123)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 184,
+    "inView": true,
+    "cr": "2.23"
+   },
+   {
+    "t": "Message",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 147,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Preview",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 147,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Sharing",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 147,
+    "inView": true,
+    "cr": "5.75"
+   },
+   {
+    "t": "Project directory · 0",
+    "outline": "solid 2px rgb(124, 94, 48)",
+    "off": "2px",
+    "bg": "rgb(252, 250, 246)",
+    "y": 147,
+    "inView": true,
+    "cr": "5.75"
+   }
+  ]
+ }
+}

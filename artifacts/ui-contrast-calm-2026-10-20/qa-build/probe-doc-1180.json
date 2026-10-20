@@ -1,0 +1,455 @@
+{
+ "scrollW": 1180,
+ "clientW": 1180,
+ "hOverflow": false,
+ "headings": [
+  {
+   "t": "Aspen Loft Refresh",
+   "tag": "H1",
+   "fs": "34px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 101,
+   "vis": true
+  },
+  {
+   "t": "Client approvals",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 346,
+   "vis": true
+  },
+  {
+   "t": "PHASE HANDOFFS",
+   "tag": "H3",
+   "fs": "11px",
+   "ff": "\"DM Mono\"",
+   "fw": "600",
+   "tt": "uppercase",
+   "y": 625,
+   "vis": true
+  },
+  {
+   "t": "Workflow stage",
+   "tag": "H2",
+   "fs": "18px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 921,
+   "vis": true
+  },
+  {
+   "t": "Project schedule",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 922,
+   "vis": true
+  },
+  {
+   "t": "Schematic DesignANCHORED · 14 SEPTEMBEREXPAND",
+   "tag": "H3",
+   "fs": "18.36px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 1017,
+   "vis": true
+  },
+  {
+   "t": "Design Development",
+   "tag": "H3",
+   "fs": "23.04px",
+   "ff": "\"Playfair Display\"",
+   "fw": "600",
+   "tt": "none",
+   "y": 1105,
+   "vis": true
+  },
+  {
+   "t": "Installation & StylingANCHORED · 28 NOVEMBEREXPAND",
+   "tag": "H3",
+   "fs": "19.8px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 1362,
+   "vis": true
+  },
+  {
+   "t": "CompletionEXPAND",
+   "tag": "H3",
+   "fs": "19.8px",
+   "ff": "\"Playfair Display\"",
+   "fw": "400",
+   "tt": "none",
+   "y": 1540,
+   "vis": true
+  },
+  {
+   "t": "FF&E selections",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 1832,
+   "vis": true
+  },
+  {
+   "t": "Project financials",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 2003,
+   "vis": true
+  },
+  {
+   "t": "Project closeout",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 2168,
+   "vis": true
+  },
+  {
+   "t": "Project record",
+   "tag": "H2",
+   "fs": "26px",
+   "ff": "\"Playfair Display\"",
+   "fw": "500",
+   "tt": "none",
+   "y": 2392,
+   "vis": true
+  }
+ ],
+ "caps": [
+  {
+   "t": "←\nBACK TO STUDIO OVERVIEW",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.96px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "for the client↗",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": true,
+   "allcaps": false
+  },
+  {
+   "t": "SET DATES",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "+4 MORE",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "SCHEDULE DATES\nWEEK 6 · INSTALL NOVEMBER",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "ANCHORED · 14 SEPTEMBER",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "EXPAND",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "ANCHORED · 28 NOVEMBER",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "EXPAND",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.88px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "CLOSE",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.96px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "DRAFTS · 1 ↓",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.96px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "2 SETTLED ↓",
+   "tt": "uppercase",
+   "ff": "\"DM Mono\"",
+   "ls": "0.96px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "PATINA",
+   "tt": "uppercase",
+   "ff": "\"Playfair Display\"",
+   "ls": "3px",
+   "lower": false,
+   "allcaps": true
+  },
+  {
+   "t": "STUDIO INBOX",
+   "tt": "none",
+   "ff": "Inter",
+   "ls": "normal",
+   "lower": false,
+   "allcaps": true
+  }
+ ],
+ "dark": [
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 794,
+   "y": 155,
+   "w": 60,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SECTION.sticky top-0 z-[4] box-border flex min-h-[var(--do",
+   "bg": "rgb(44, 41, 38)",
+   "x": 161,
+   "y": 238,
+   "w": 995,
+   "h": 56,
+   "pos": "sticky",
+   "t": "2 decisions overdue — oldest due 14 Octo"
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 538,
+   "y": 252,
+   "w": 147,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 878,
+   "y": 354,
+   "w": 154,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 1006,
+   "y": 681,
+   "w": 125,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 1006,
+   "y": 763,
+   "w": 125,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 903,
+   "y": 930,
+   "w": 129,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 908,
+   "y": 1840,
+   "w": 125,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 912,
+   "y": 1994,
+   "w": 120,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  },
+  {
+   "el": "SPAN.da-pool",
+   "bg": "rgb(44, 41, 38)",
+   "x": 833,
+   "y": 2321,
+   "w": 129,
+   "h": 28,
+   "pos": "absolute",
+   "t": ""
+  }
+ ],
+ "pills": [
+  {
+   "t": "",
+   "bg": "rgb(250, 247, 242)"
+  },
+  {
+   "t": "",
+   "bg": "rgb(250, 247, 242)"
+  },
+  {
+   "t": "",
+   "bg": "rgb(250, 247, 242)"
+  },
+  {
+   "t": "",
+   "bg": "rgb(250, 247, 242)"
+  },
+  {
+   "t": "LH",
+   "bg": "rgba(196, 165, 123, 0.16)"
+  }
+ ],
+ "clipped": [
+  {
+   "el": "A.sr-only focus-visible:not-sr-only focus-",
+   "sw": 174,
+   "cw": 1,
+   "t": "Skip to main content"
+  },
+  {
+   "el": "H2.sr-only",
+   "sw": 123,
+   "cw": 1,
+   "t": "Workflow stage"
+  },
+  {
+   "el": "SPAN.block truncate text-[13px] font-medium l",
+   "sw": 286,
+   "cw": 251,
+   "t": "Design Development sign-off — "
+  },
+  {
+   "el": "P.sr-only",
+   "sw": 546,
+   "cw": 1,
+   "t": "2 lines · not yet on the paper"
+  },
+  {
+   "el": "P.sr-only",
+   "sw": 733,
+   "cw": 1,
+   "t": "$4,250 receivable · not yet on"
+  },
+  {
+   "el": "P.sr-only",
+   "sw": 173,
+   "cw": 1,
+   "t": "No recorded activity"
+  }
+ ],
+ "overflowers": [
+  {
+   "el": "DIV.sticky top-0 z-[1] flex min-h-14 items-c",
+   "r": 1540,
+   "t": "IN THE MARGIN\n\nCLOSE"
+  },
+  {
+   "el": "P.font-mono text-[12px] font-semibold uppe",
+   "r": 1305,
+   "t": "IN THE MARGIN"
+  },
+  {
+   "el": "BUTTON.group inline-flex min-h-11 min-w-11 item",
+   "r": 1522,
+   "t": "CLOSE"
+  },
+  {
+   "el": "SPAN.da-score-hover group-hover:after:scale-x",
+   "r": 1518,
+   "t": "CLOSE"
+  },
+  {
+   "el": "DIV.px-4 pb-24 pt-4 min-[1440px]:pt-6",
+   "r": 1540,
+   "t": "–One client, one paper. T"
+  },
+  {
+   "el": "ASIDE.flex max-w-[34ch] items-start gap-2 card",
+   "r": 1522,
+   "t": "–One client, one paper. T"
+  },
+  {
+   "el": "P.min-w-0 flex-1",
+   "r": 1472,
+   "t": "–One client, one paper. T"
+  },
+  {
+   "el": "SPAN.font-heading text-[15px] italic leading-",
+   "r": 1468,
+   "t": "–One client, one paper. T"
+  }
+ ]
+}
