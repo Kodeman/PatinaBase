@@ -10,7 +10,7 @@ import {
   invalidateProjectWorkflow,
   settleScheduleWrite,
 } from "@patina/supabase";
-import { authorizationClientImage, COMMERCIAL_STATES, type AgreementPart, type ClientFurnishingsAuthorizationItem, type FfeLineUnit, type FurnishingsAuthorizationPreview } from "@patina/types";
+import { authorizationClientImage, authorizationLeadTime, COMMERCIAL_STATES, type AgreementPart, type ClientFurnishingsAuthorizationItem, type FfeLineUnit, type FurnishingsAuthorizationPreview } from "@patina/types";
 import type { ScheduleDisclosedImpact } from "@/lib/document/schedule-impact";
 import {
   asCommercialDocumentKind,
@@ -1324,6 +1324,14 @@ function previewRooms(value: unknown): ClientFurnishingsAuthorizationItem["rooms
   });
 }
 
+function previewItemMetadata(item: Record<string, unknown>) {
+  const leadTime = authorizationLeadTime(item.leadTime);
+  return {
+    ...(leadTime === undefined ? {} : { leadTime }),
+    ...(item.clientImage === undefined ? {} : { clientImage: authorizationClientImage(item.clientImage) }),
+  };
+}
+
 function previewItem(value: unknown): ClientFurnishingsAuthorizationItem {
   const item = previewRecord(value);
   if (typeof item.allowance !== "boolean") throw new Error("The saved preview is incomplete.");
@@ -1337,7 +1345,7 @@ function previewItem(value: unknown): ClientFurnishingsAuthorizationItem {
     clientUnitPriceCents: previewCents(item.clientUnitPriceCents),
     clientLineTotalCents: previewCents(item.clientLineTotalCents),
     currency, allowance: item.allowance,
-    ...(item.clientImage === undefined ? {} : { clientImage: authorizationClientImage(item.clientImage) }),
+    ...previewItemMetadata(item),
   };
 }
 

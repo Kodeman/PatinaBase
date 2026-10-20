@@ -126,3 +126,103 @@ describe('frozen authorization photos', () => {
     expect(screen.getByText('No item photo saved.')).toBeInTheDocument();
   });
 });
+
+
+describe('authorization unit prices and lead times', () => {
+  const consent = 'This signature covers only the descriptions, quantities, and client prices shown here. It does not alter the design-services agreement.';
+  const estimate = " Lead times are the studio's current estimates, not delivery dates.";
+  const fixed = { ...items[1], description: 'Chair', quantity: 3, unit: 'each', clientUnitPriceCents: 10000, clientLineTotalCents: 30000 };
+
+  it('matches the exact pre-US-41 legacy fixed, allowance and multi-room strings', () => {
+    const { container } = render(<FurnishingsAuthorizationBody items={[
+      { ...fixed, description: 'Legacy fixed', clientUnitPriceCents: 3333, clientLineTotalCents: 9999 },
+      { ...items[0], description: 'Legacy allowance', quantity: 3, unit: 'each', rooms: [], clientLineTotalCents: 10000 },
+      { ...fixed, description: 'Multi-room', roomName: 'Living room', quantity: 2, rooms: [{ name: 'Living room', quantity: 1 }, { name: 'Hall', quantity: 1 }], clientLineTotalCents: 1050 },
+    ]} totalAmountCents={21049} depositPercent={50} />);
+    // Golden strings from 17e543c44, including its whole-dollar rounding and consent.
+    expect(Array.from(container.querySelectorAll('p'), node => node.textContent)).toEqual([
+      'Study', 'Legacy fixed', 'Quantity 3', '$100',
+      'Hall', 'Legacy allowance', 'Quantity 3', 'Up to $100',
+      'Living room', 'Multi-room · 2 · Living room · Hall', '$11',
+      'Total $210 · Deposit $105 (50%) on signature', consent,
+    ]);
+    expect(screen.getByText('Authorized furnishings').parentElement?.textContent).toBe('Authorized furnishings$210');
+    expect(container).not.toHaveTextContent('×');
+  });
+
+  it.each([
+    [3, 10000, '3 × $100', '$300'],
+    [2, 3333, '2 × $33.33', '$66.66'],
+  ] as const)('prints new-format quantity %s with exact unit and line prices', (quantity, clientUnitPriceCents, label, price) => {
+    const total = quantity * clientUnitPriceCents;
+    render(<FurnishingsAuthorizationBody items={[{ ...fixed, quantity, clientUnitPriceCents, clientLineTotalCents: total, leadTime: { version: 1, weeks: 12 } }]}
+      totalAmountCents={total} depositPercent={50} />);
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.getAllByText(price)).toHaveLength(2);
+    expect(screen.getByTestId('authorization-terms-strip')).toHaveTextContent(quantity === 2 ? 'Total $67 · Deposit $33 (50%) on signature' : 'Total $300 · Deposit $150 (50%) on signature');
+  });
+
+  it('keeps Quantity for a new-format mismatch and preserves its authoritative cents', () => {
+    const { container } = render(<FurnishingsAuthorizationBody items={[{ ...fixed, quantity: 3, clientUnitPriceCents: 3333, clientLineTotalCents: 10001, leadTime: { version: 1, weeks: 1 } }]}
+      totalAmountCents={10001} depositPercent={0} />);
+    expect(screen.getByText('Quantity 3')).toBeInTheDocument();
+    expect(screen.getAllByText('$100.01')).toHaveLength(2);
+    expect(container).not.toHaveTextContent('×');
+  });
+
+  it('keeps new-format Quantity 1 and an allowance ceiling free of unit-price lines', () => {
+    const { container } = render(<FurnishingsAuthorizationBody items={[
+      { ...fixed, quantity: 1, leadTime: { version: 1, weeks: 0 } },
+      { ...items[0], rooms: [], leadTime: { version: 1, weeks: 12 } },
+    ]} totalAmountCents={0} depositPercent={0} />);
+    expect(screen.getByText('Quantity 1')).toBeInTheDocument();
+    expect(screen.getByText('Quantity 913 sq ft')).toBeInTheDocument();
+    const allowance = screen.getByText('Up to $2,000').parentElement!;
+    expect(within(allowance).getByText('Lead time · About 12 weeks')).toBeInTheDocument();
+    expect(container).not.toHaveTextContent('×');
+  });
+
+  it.each([[0, 'Lead time · In stock'], [1, 'Lead time · About 1 week'], [12, 'Lead time · About 12 weeks'], [null, 'Lead time to be confirmed']] as const)('prints frozen lead time %s and the exact estimate consent', (weeks, label) => {
+    render(<FurnishingsAuthorizationBody items={[{ ...fixed, leadTime: { version: 1, weeks } }]}
+      totalAmountCents={30000} depositPercent={50} />);
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.getByText(consent + estimate)).toBeInTheDocument();
+    expect(screen.getByTestId('authorization-terms-strip')).toHaveTextContent('Total $300 · Deposit $150 (50%) on signature');
+  });
+
+  it('gates per-item pricing while extending consent once on a mixed document', () => {
+    render(<FurnishingsAuthorizationBody items={[
+      { ...fixed, description: 'New chair', leadTime: { version: 1, weeks: 0 } },
+      { ...fixed, description: 'Legacy chair', clientUnitPriceCents: 3333, clientLineTotalCents: 9999 },
+    ]} totalAmountCents={39999} depositPercent={0} />);
+    const newLine = screen.getByText('New chair').parentElement!.parentElement!;
+    const legacyLine = screen.getByText('Legacy chair').parentElement!.parentElement!;
+    expect(within(newLine).getByText('3 × $100')).toBeInTheDocument();
+    expect(within(newLine).getByText('Lead time · In stock')).toBeInTheDocument();
+    expect(within(legacyLine).getByText('Quantity 3')).toBeInTheDocument();
+    expect(within(legacyLine).getByText('$100')).toBeInTheDocument();
+    expect(legacyLine).not.toHaveTextContent(/×|Lead time/);
+    expect(screen.getByText('Authorized furnishings').parentElement?.textContent).toBe('Authorized furnishings$399.99');
+    expect(screen.getByText(consent + estimate)).toBeInTheDocument();
+  });
+
+  it.each([undefined, null, {}, { version: 2, weeks: 12 }, { version: '1', weeks: 12 }, { version: 1, weeks: 105 }, { version: 1, weeks: -1 }, { version: 1, weeks: 1.5 }, { version: 1, weeks: '12' }])('renders invalid raw leadTime %j exactly as legacy', leadTime => {
+    const { container } = render(<FurnishingsAuthorizationBody items={[{ ...fixed, clientLineTotalCents: 9999, leadTime } as ClientFurnishingsAuthorizationItem]}
+      totalAmountCents={9999} depositPercent={0} />);
+    expect(screen.getByText('Quantity 3')).toBeInTheDocument();
+    expect(screen.getAllByText('$100')).toHaveLength(2);
+    expect(screen.getByText(consent)).toBeInTheDocument();
+    expect(container).not.toHaveTextContent(/×|Lead time/);
+  });
+
+  it('keeps multi-room text with wrapping left-column metadata and a right-column total', () => {
+    render(<FurnishingsAuthorizationBody items={[{ ...items[0], allowance: false, clientUnitPriceCents: 219, clientLineTotalCents: 199947, leadTime: { version: 1, weeks: 12 } }]}
+      totalAmountCents={199947} depositPercent={0} />);
+    const name = screen.getByText('White oak floor · 913 sq ft · Hall · Living room');
+    expect(name.parentElement).toHaveClass('min-w-0', 'break-words');
+    expect(within(name.parentElement!).getByText('913 sq ft × $2.19')).toBeInTheDocument();
+    expect(within(name.parentElement!).getByText('Lead time · About 12 weeks')).toBeInTheDocument();
+    expect(name.parentElement!.parentElement).toHaveClass('grid-cols-[minmax(0,1fr)_auto]');
+    expect(within(name.parentElement!.parentElement!).getByText('$1,999.47')).toHaveClass('text-right');
+  });
+});

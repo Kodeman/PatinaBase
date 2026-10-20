@@ -176,12 +176,13 @@ describe('client pricing privacy (US-37 D6)', () => {
           quantity: 2,
           clientUnitPriceCents: 120_000,
           clientLineTotalCents: 240_000,
+          leadTime: { version: 1, weeks: 12, ...PRIVATE_PRICING },
           ...PRIVATE_PRICING,
         }],
       },
     });
 
-    expect(bundle?.furnishings?.items[0]).toMatchObject({ clientUnitPriceCents: 120_000, quantity: 2 });
+    expect(bundle?.furnishings?.items[0]).toMatchObject({ clientUnitPriceCents: 120_000, quantity: 2, leadTime: { version: 1, weeks: 12 } });
     expect(privateKeys(bundle)).toEqual([]);
     expect(privateValues(bundle)).toEqual([]);
   });

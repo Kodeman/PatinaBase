@@ -222,6 +222,29 @@ function safeAuthorizationImageUrl(value: unknown): string | null {
   } catch { return null; }
 }
 
+export interface AuthorizationLeadTime {
+  version: 1;
+  weeks: number | null;
+}
+
+function isAuthorizationLeadTimeWeeks(value: unknown): value is number | null {
+  return value === null || (Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 104);
+}
+
+/** Only the frozen, versioned client projection crosses this boundary. */
+export function authorizationLeadTime(raw: unknown): AuthorizationLeadTime | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const leadTime = raw as Record<string, unknown>;
+  if (leadTime.version !== 1 || !isAuthorizationLeadTimeWeeks(leadTime.weeks)) return undefined;
+  return { version: 1, weeks: leadTime.weeks };
+}
+
+export function formatLeadTimeWeeks(weeks: number | null): string {
+  if (weeks === null) return 'Lead time to be confirmed';
+  if (weeks === 0) return 'In stock';
+  return weeks === 1 ? 'About 1 week' : 'About ' + weeks + ' weeks';
+}
+
 export type ClientFurnishingsAuthorizationItem = Pick<
   FurnishingsAuthorizationItem,
   'description' | 'quantity' | 'clientUnitPriceCents' | 'currency' | 'unit' | 'rooms'
@@ -234,6 +257,7 @@ export type ClientFurnishingsAuthorizationItem = Pick<
    */
   roomName: string;
   clientImage?: AuthorizationClientImage;
+  leadTime?: AuthorizationLeadTime;
   /**
    * The authoritative per-line figure — NOT `quantity × clientUnitPriceCents`.
    * An allowance is snapshotted at its ceiling and the unit price is that

@@ -202,3 +202,14 @@ describe('saved purchasing authorization preview', () => {
     expect(mockSend).not.toHaveBeenCalled(); expect(mockRefetch).not.toHaveBeenCalled();
   });
 });
+
+
+it('renders saved lead time and unit prices in the designer preview sheet', () => {
+  const preview = saved();
+  mockRead.data = { ...preview, body: { ...preview.body, items: [{ ...preview.body.items[0], quantity: 2, allowance: false, clientUnitPriceCents: 500, leadTime: { version: 1, weeks: 12 } }] } };
+  render(<PurchasingAuthorizationPreviewSheet {...props} />);
+  expect(screen.getByText('2 × $5')).toBeVisible();
+  expect(screen.getByText('Lead time · About 12 weeks')).toBeVisible();
+  expect(screen.getByText(/Lead times are the studio's current estimates, not delivery dates./)).toBeVisible();
+  expect(screen.getByText('Authorized furnishings').parentElement).toHaveTextContent('$10');
+});
