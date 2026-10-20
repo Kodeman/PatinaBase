@@ -6,6 +6,8 @@ Use Previous/Next, arrow keys, or the slide menu. View all presents a scrolling 
 
 The review prioritizes unpaid invoice discovery, plain approval language, understandable confirmation, invitation recovery, progress summaries, and readable financial instructions. Includes proposed screens, delivery sequence, discussion prompts, acceptance checks, and a suggested homeowner study.
 
+For coding-agent handoff, use the [implementation specification](../../docs/specs/_active/client-portal-homeowner-usability.md). It defines the required scope, current source contracts, acceptance cases, and verification commands. It resolves the presentation into Patina's existing single-page design; the alternative confirmation gesture remains a separate experiment.
+
 ## Evidence and boundaries
 
 - Read-only live review of `https://client.patina.cloud/` on October 20, 2026, using an existing signed-in session. The observed account landed in the studio-only view.
