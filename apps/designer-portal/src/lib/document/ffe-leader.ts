@@ -199,8 +199,13 @@ const STATE_SENTENCES: Record<FfeStateKind, (n: number, released: number) => str
       : 'Nothing is released.',
 };
 
+/** Each count stays on its noun's line (`1 released` never wraps to `1 / released`). */
+export function bindCounts(text: string): string {
+  return text.replace(/(\d) (?=\S)/g, '$1 ');
+}
+
 /** The head's one plain sentence for the elected state. */
 export function ffeStateSentence(choice: FfeLeaderChoice, released: number): string {
   const n = choice.exceptions.find((e) => e.kind === choice.state)?.count ?? 0;
-  return STATE_SENTENCES[choice.state](n, released);
+  return bindCounts(STATE_SENTENCES[choice.state](n, released));
 }

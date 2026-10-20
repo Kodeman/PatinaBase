@@ -378,6 +378,9 @@ describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
     expect(keys[keys.length - 1]).toBe('ffe-more');
     expect(keys).not.toContain('record-a-change-pieces-head');
     const panel = document.getElementById(more().getAttribute('aria-controls')!)!;
+    // SQ-1516 F2 — collapsed More holds none of its acts; opened, it does.
+    expect(panel.querySelector('[data-action-key="record-a-change-pieces-head"]')).toBeNull();
+    fireEvent.click(more());
     expect(
       panel.querySelector('[data-action-key="record-a-change-pieces-head"]'),
     ).toHaveTextContent('Record a selection change');

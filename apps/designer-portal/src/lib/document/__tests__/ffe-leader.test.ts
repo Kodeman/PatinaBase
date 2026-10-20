@@ -1,4 +1,5 @@
 import {
+  bindCounts,
   electFfeLeader,
   ffeStateSentence,
   scanFfeExceptions,
@@ -203,7 +204,7 @@ describe('ffeStateSentence — one plain sentence per state', () => {
       'One selection still needs a confirmed price.',
     );
     expect(sentence({ awaitingCount: 2 })).toBe(
-      '2 selections are with the client for purchasing approval.',
+      '2\u00a0selections are with the client for purchasing approval.',
     );
     expect(sentence({ releaseHeld: true })).toBe(
       'Selections are ready, but purchasing authorization is held.',
@@ -212,14 +213,22 @@ describe('ffeStateSentence — one plain sentence per state', () => {
 
   it('counts what is standing in words', () => {
     expect(sentence({ needs: [need('damage_claim'), need('damage_claim')] })).toBe(
-      '2 damage claims are open.',
+      '2\u00a0damage claims are open.',
     );
     expect(sentence({ uninvoicedLineIds: ['a'] })).toBe(
       'One priced selection is not yet invoiced.',
     );
     expect(sentence({ emptySchedule: true })).toBe('No selections yet.');
-    expect(sentence({}, 3)).toBe('3 selections are released.');
+    expect(sentence({}, 3)).toBe('3\u00a0selections are released.');
     expect(sentence({ job: 'on-hold' })).toBe('The job is on hold.');
+  });
+
+  it('binds each count to its noun so a wrap never strands the number', () => {
+    expect(sentence({ uninvoicedLineIds: ['a', 'b'] })).toBe(
+      '2 priced selections are not yet invoiced.',
+    );
+    expect(bindCounts('2 specced · 1 released')).toBe('2 specced · 1 released');
+    expect(bindCounts('nothing released')).toBe('nothing released');
   });
 });
 
