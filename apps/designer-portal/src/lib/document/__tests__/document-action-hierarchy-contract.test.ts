@@ -196,6 +196,84 @@ function ledgerLiterals(source: string): string[] {
   return found;
 }
 
+/**
+ * US-43 R5 — the scored word's grammar in globals.css. jsdom applies no
+ * stylesheet, so the CSS half of the grammar is pinned at the source: the
+ * on-dark inks, the [data-ground="dark"] restatement of every scored tier,
+ * and the §A11 forced-colors block.
+ */
+const globalsCss = readFileSync(join(SRC, "app", "globals.css"), "utf8");
+const scoredInkBlock = globalsCss.slice(
+  globalsCss.indexOf("/* The Scored Ink (I107)"),
+  globalsCss.indexOf("/* ── stilled"),
+);
+
+function cssRule(selectorFragment: string, source = scoredInkBlock): string {
+  const at = source.indexOf(selectorFragment);
+  expect(at).toBeGreaterThanOrEqual(0);
+  return source.slice(at, source.indexOf("}", at) + 1);
+}
+
+describe("US-43 R5 scored-word grammar (globals.css)", () => {
+  it("declares the on-dark inks in :root", () => {
+    expect(globalsCss).toMatch(/--on-dark-ink:\s*var\(--ink-paper\);/);
+    expect(globalsCss).toMatch(/--on-dark-muted:\s*var\(--color-pearl\);/);
+    expect(globalsCss).toMatch(/--on-dark-clay:\s*#D8B98A;/);
+    expect(globalsCss).toMatch(/--on-dark-terracotta:\s*#E2A895;/);
+    expect(globalsCss).toMatch(/--focus-on-dark:\s*var\(--on-dark-ink\);/);
+  });
+
+  it("sets no caps, mono face or tracking on any scored tier but the terminal label", () => {
+    const withoutTerminalLabel = scoredInkBlock.replace(cssRule(".da-terminal .da-label {"), "");
+    expect(withoutTerminalLabel).not.toMatch(/text-transform:\s*uppercase/);
+    expect(withoutTerminalLabel).not.toMatch(/font-family:\s*var\(--font-mono\)/);
+    expect(withoutTerminalLabel).not.toMatch(/letter-spacing:\s*0?\.\d/);
+    expect(withoutTerminalLabel).not.toMatch(/font-weight:\s*300/);
+  });
+
+  it("keeps the 44px target and both scores under the word", () => {
+    const act = cssRule(".da-act {");
+    expect(act).toContain("min-width: 44px");
+    expect(act).toContain("min-height: 44px");
+    expect(scoredInkBlock).toMatch(/\n\.da-label::before \{\s*bottom:\s*-\d/);
+    expect(scoredInkBlock).toMatch(/\n\.da-label::after \{\s*bottom:\s*-\d/);
+  });
+
+  it("restates every non-filled tier for a dark ground", () => {
+    expect(cssRule("[data-ground='dark'] :is(.da-primary, .da-secondary, .da-tertiary) {")).toContain(
+      "color: var(--on-dark-ink)",
+    );
+    expect(cssRule("[data-ground='dark'] .da-danger {")).toContain("color: var(--on-dark-terracotta)");
+    expect(cssRule("[data-ground='dark'] .da-primary .da-label::before {")).toContain("var(--on-dark-ink)");
+    expect(cssRule("[data-ground='dark'] .da-primary .da-label::after {")).toContain("var(--on-dark-clay)");
+    expect(cssRule("[data-ground='dark'] :is(.da-secondary, .da-tertiary) .da-label::before {")).toContain(
+      "var(--on-dark-muted)",
+    );
+    expect(cssRule("[data-ground='dark'] .da-act::before {")).toContain("var(--on-dark-muted)");
+    expect(cssRule("[data-ground='dark'] :is(.da-secondary, .da-tertiary):hover {")).toContain(
+      "var(--on-dark-ink)",
+    );
+    const focus = cssRule("[data-ground='dark'] .da-act:focus-visible {");
+    expect(focus).toContain("outline: 2px solid var(--focus-on-dark)");
+    expect(focus).toContain("outline-offset: 2px");
+    // inked and terminal never stand on a dark ground
+    expect(scoredInkBlock).not.toMatch(/\[data-ground='dark'\][^{]*\.da-(inked|terminal)/);
+  });
+
+  it("carries the §A11 forced-colors rules without un-forcing the text", () => {
+    const at = scoredInkBlock.indexOf("@media (forced-colors: active)");
+    expect(at).toBeGreaterThanOrEqual(0);
+    const block = scoredInkBlock.slice(at, scoredInkBlock.indexOf("\n}\n", at) + 2);
+    expect(cssRule(".da-label::after {", block)).toMatch(/forced-color-adjust:\s*none/);
+    expect(cssRule(".da-label::after {", block)).toContain("background-color: CanvasText");
+    expect(cssRule(".da-terminal {", block)).toContain("border: 1px solid ButtonText");
+    expect(block).toMatch(/\.da-inked,\s*\.da-terminal\s*\{/);
+    expect(block).toMatch(/\.da-act:focus-visible[^{]*\{\s*outline: 2px solid Highlight/);
+    // only the scores opt out — never the act or its word
+    expect(block.match(/forced-color-adjust:\s*none/g) ?? []).toHaveLength(1);
+  });
+});
+
 describe("Project region ledgers", () => {
   it.each(PROJECT_REGION_FILES)(
     "%s keeps its head free of a hand-spelled leader",
