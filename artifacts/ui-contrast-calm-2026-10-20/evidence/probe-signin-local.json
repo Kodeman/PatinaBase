@@ -1,0 +1,6203 @@
+{
+ "surface": "signin-local",
+ "url": "http://localhost:3000/auth/signin",
+ "capturedAt": "2026-10-20T19:28:34.508Z",
+ "vp1440": {
+  "url": "http://localhost:3000/auth/signin",
+  "viewport": {
+   "w": 1440,
+   "h": 900
+  },
+  "docHeight": 1031,
+  "pageBackground": {
+   "html": "#000000",
+   "body": "#f5f1e6",
+   "bodyImage": "none"
+  },
+  "textEntries": [
+   {
+    "el": "div.mb-[56px].flex.items-center",
+    "text": "Patina",
+    "rect": {
+     "x": 201,
+     "y": 89,
+     "w": 509,
+     "h": 26
+    },
+    "color": "#e5e2dd",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 13.7,
+    "fontSize": 11,
+    "fontWeight": "600",
+    "letterSpacingPx": 2.2,
+    "textTransform": "uppercase",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#1d1b19",
+    "ratioTextVsPixelBg": 13.29
+   },
+   {
+    "el": "p.font-mono.text-[11px].uppercase",
+    "text": "THE STUDIO",
+    "rect": {
+     "x": 201,
+     "y": 171,
+     "w": 509,
+     "h": 17
+    },
+    "color": "#c4a265",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 7.34,
+    "fontSize": 11,
+    "fontWeight": "400",
+    "letterSpacingPx": 2.75,
+    "textTransform": "uppercase",
+    "fontFamily": "DM Mono",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#1d1b19",
+    "ratioTextVsPixelBg": 7.12
+   },
+   {
+    "el": "span.pa-auth-display-fill.block.animate-[pa-auth-reveal_1.1s_cubic-bezier(0.16,1,0.3,1)_0.24s_both]",
+    "text": "Welcome back to the studio.",
+    "rect": {
+     "x": 201,
+     "y": 206,
+     "w": 509,
+     "h": 98
+    },
+    "color": "#c4a57b",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": true,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 7.6,
+    "fontSize": 47.52,
+    "fontWeight": "500",
+    "letterSpacingPx": -1.9008,
+    "textTransform": "none",
+    "fontFamily": "Playfair Display",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#1d1b19",
+    "ratioTextVsPixelBg": 7.37
+   },
+   {
+    "el": "p.mt-[20px].max-w-[34ch].text-[14px]",
+    "text": "Your projects, proposals, and workshop records are waiting.",
+    "rect": {
+     "x": 201,
+     "y": 323,
+     "w": 300,
+     "h": 45
+    },
+    "color": "#b8a999",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 7.73,
+    "fontSize": 14,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#23211e",
+    "ratioTextVsPixelBg": 7.01
+   },
+   {
+    "el": "span.mt-[18px].block.max-w-[26ch]",
+    "text": "Scan with your signed-in phone",
+    "rect": {
+     "x": 366,
+     "y": 686,
+     "w": 180,
+     "h": 18
+    },
+    "color": "#b8a999",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 7.73,
+    "fontSize": 12,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#1a1817",
+    "ratioTextVsPixelBg": 7.73
+   },
+   {
+    "el": "span.mt-[6px].block.text-center",
+    "text": "Refreshes in 4:56",
+    "rect": {
+     "x": 383,
+     "y": 710,
+     "w": 146,
+     "h": 17
+    },
+    "color": "#c4a265",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 7.34,
+    "fontSize": 11,
+    "fontWeight": "400",
+    "letterSpacingPx": 1.98,
+    "textTransform": "uppercase",
+    "fontFamily": "DM Mono",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#191817",
+    "ratioTextVsPixelBg": 7.35
+   },
+   {
+    "el": "p.max-w-[36ch].text-[14px].leading-[1.6]",
+    "text": "A workshop for interior designers, their clients, and the makers they trust.",
+    "rect": {
+     "x": 201,
+     "y": 840,
+     "w": 318,
+     "h": 45
+    },
+    "color": "#b8a999",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 7.73,
+    "fontSize": 14,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#28241e",
+    "ratioTextVsPixelBg": 6.74
+   },
+   {
+    "el": "a.mt-[14px].inline-block.min-h-[44px]",
+    "text": "Need a hand? support@patina.cloud",
+    "rect": {
+     "x": 201,
+     "y": 898,
+     "w": 241,
+     "h": 44
+    },
+    "color": "#e5e2dd",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 13.7,
+    "fontSize": 14,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "underline",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "link",
+    "inRegionHead": null
+   },
+   {
+    "el": "p.font-mono.text-[11px].uppercase",
+    "text": "Sign in",
+    "rect": {
+     "x": 839,
+     "y": 262,
+     "w": 384,
+     "h": 17
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 11,
+    "fontWeight": "400",
+    "letterSpacingPx": 2.75,
+    "textTransform": "uppercase",
+    "fontFamily": "DM Mono",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#fbf9f5",
+    "ratioTextVsPixelBg": 6.46
+   },
+   {
+    "el": "h2.font-heading.text-[30px].font-medium",
+    "text": "Start with your email.",
+    "rect": {
+     "x": 839,
+     "y": 287,
+     "w": 384,
+     "h": 33
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 13.87,
+    "fontSize": 30,
+    "fontWeight": "500",
+    "letterSpacingPx": -0.9,
+    "textTransform": "none",
+    "fontFamily": "Playfair Display",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "heading",
+    "inRegionHead": null,
+    "pixelBgMedian": "#fbf9f5",
+    "ratioTextVsPixelBg": 13.75
+   },
+   {
+    "el": "label.text-[11px].font-semibold.uppercase",
+    "text": "Email address",
+    "rect": {
+     "x": 839,
+     "y": 355,
+     "w": 384,
+     "h": 15
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 11,
+    "fontWeight": "600",
+    "letterSpacingPx": 1.65,
+    "textTransform": "uppercase",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "form-label",
+    "inRegionHead": null,
+    "pixelBgMedian": "#fbf9f5",
+    "ratioTextVsPixelBg": 6.46
+   },
+   {
+    "el": "button.h-[48px].w-full.bg-[#1A1816]",
+    "text": "Email sign-in code",
+    "rect": {
+     "x": 839,
+     "y": 446,
+     "w": 384,
+     "h": 48
+    },
+    "color": "#faf7f2",
+    "colorAlpha": 0.55,
+    "opacityChain": 0.55,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 5.76,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#1a1816",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "action",
+    "inRegionHead": null,
+    "pixelBgMedian": "#7f7e7b",
+    "ratioTextVsPixelBg": 2.25
+   },
+   {
+    "el": "button.flex.min-h-[48px].w-full",
+    "text": "Continue with Apple",
+    "rect": {
+     "x": 839,
+     "y": 535,
+     "w": 384,
+     "h": 48
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#ffffff",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 14.46,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#ffffff",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "r": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "b": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "l": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     }
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "action",
+    "inRegionHead": null,
+    "pixelBgMedian": "#fefefe",
+    "ratioTextVsPixelBg": 14.34
+   },
+   {
+    "el": "span",
+    "text": "Use a password instead",
+    "rect": {
+     "x": 839,
+     "y": 617,
+     "w": 161,
+     "h": 21
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 13.87,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "action",
+    "inRegionHead": null,
+    "pixelBgMedian": "#f9f6f1",
+    "ratioTextVsPixelBg": 13.41
+   },
+   {
+    "el": "a.underline.underline-offset-4",
+    "text": "Create designer account",
+    "rect": {
+     "x": 939,
+     "y": 679,
+     "w": 183,
+     "h": 19
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 15.75,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "underline",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "link",
+    "inRegionHead": null,
+    "pixelBgMedian": "#f9f6ef",
+    "ratioTextVsPixelBg": 6.29
+   },
+   {
+    "el": "span.font-mono.text-[10px].uppercase",
+    "text": "Dev Accounts",
+    "rect": {
+     "x": 856,
+     "y": 730,
+     "w": 102,
+     "h": 23
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 10,
+    "fontWeight": "500",
+    "letterSpacingPx": 2.5,
+    "textTransform": "uppercase",
+    "fontFamily": "DM Mono",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "action",
+    "inRegionHead": null,
+    "pixelBgMedian": "#fbf9f5",
+    "ratioTextVsPixelBg": 6.46
+   },
+   {
+    "el": "span.border.border-[#8B7355].px-[6px]",
+    "text": "4 available",
+    "rect": {
+     "x": 968,
+     "y": 727,
+     "w": 95,
+     "h": 29
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 10,
+    "fontWeight": "500",
+    "letterSpacingPx": 1.4,
+    "textTransform": "uppercase",
+    "fontFamily": "DM Mono",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.3,
+      "ratioVsParentBg": 4.3
+     },
+     "r": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.3,
+      "ratioVsParentBg": 4.3
+     },
+     "b": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.3,
+      "ratioVsParentBg": 4.3
+     },
+     "l": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.3,
+      "ratioVsParentBg": 4.3
+     }
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "action",
+    "inRegionHead": null,
+    "pixelBgMedian": "#fbf9f5",
+    "ratioTextVsPixelBg": 6.46
+   }
+  ],
+  "inputs": [
+   {
+    "el": "input#portal-auth-email.h-[48px].w-full.border",
+    "text": "",
+    "rect": {
+     "x": 839,
+     "y": 378,
+     "w": 384,
+     "h": 48
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#ffffff",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 14.46,
+    "fontSize": 16,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#ffffff",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "r": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "b": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "l": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     }
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "input",
+    "type": "email",
+    "placeholder": "you@example.com",
+    "placeholderColor": "#7a6a5b",
+    "pixelBgMedian": "#fefefe",
+    "ratioTextVsPixelBg": 14.34
+   }
+  ],
+  "buttons": [
+   {
+    "el": "button.h-[48px].w-full.bg-[#1A1816]",
+    "text": "Email sign-in code",
+    "rect": {
+     "x": 839,
+     "y": 446,
+     "w": 384,
+     "h": 48
+    },
+    "color": "#faf7f2",
+    "colorAlpha": 0.55,
+    "opacityChain": 0.55,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 5.76,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#1a1816",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "button-box",
+    "fullText": true,
+    "fillVsSurroundingRatio": 16.98,
+    "surroundingBg": "#fcfaf6",
+    "variant": null,
+    "actionKey": null,
+    "ariaLabel": null,
+    "pixelBgMedian": "#7f7e7b",
+    "ratioTextVsPixelBg": 2.25
+   },
+   {
+    "el": "button.flex.min-h-[48px].w-full",
+    "text": "Continue with Apple",
+    "rect": {
+     "x": 839,
+     "y": 535,
+     "w": 384,
+     "h": 48
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#ffffff",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 14.46,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#ffffff",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "r": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "b": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "l": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     }
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "button-box",
+    "fullText": true,
+    "fillVsSurroundingRatio": 1.04,
+    "surroundingBg": "#fcfaf6",
+    "variant": null,
+    "actionKey": null,
+    "ariaLabel": null,
+    "pixelBgMedian": "#fefefe",
+    "ratioTextVsPixelBg": 14.34
+   },
+   {
+    "el": "button.flex.min-h-[44px].w-full",
+    "text": "Use a password instead +",
+    "rect": {
+     "x": 839,
+     "y": 604,
+     "w": 384,
+     "h": 47
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 13.87,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "button-box",
+    "fullText": true,
+    "fillVsSurroundingRatio": null,
+    "surroundingBg": "#fcfaf6",
+    "variant": null,
+    "actionKey": null,
+    "ariaLabel": null,
+    "pixelBgMedian": "#faf7f1",
+    "ratioTextVsPixelBg": 13.52
+   },
+   {
+    "el": "button#radix-_R_nbinebn5r76lb_.flex.flex-1.items-center",
+    "text": "DEV ACCOUNTS 4 AVAILABLE",
+    "rect": {
+     "x": 840,
+     "y": 715,
+     "w": 382,
+     "h": 53
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 15.75,
+    "fontWeight": "500",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Playfair Display",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "button-box",
+    "fullText": true,
+    "fillVsSurroundingRatio": null,
+    "surroundingBg": "#fcfaf6",
+    "variant": null,
+    "actionKey": null,
+    "ariaLabel": null,
+    "pixelBgMedian": "#fbf9f5",
+    "ratioTextVsPixelBg": 6.46
+   },
+   {
+    "el": "button.tsqd-open-btn",
+    "text": "",
+    "rect": {
+     "x": 1384,
+     "y": 844,
+     "w": 40,
+     "h": 40
+    },
+    "color": "#4a3f35",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#f5f1e6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 9.06,
+    "fontSize": 18,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "9999px",
+    "kind": "button-box",
+    "fullText": true,
+    "fillVsSurroundingRatio": null,
+    "surroundingBg": "#f5f1e6",
+    "variant": null,
+    "actionKey": null,
+    "ariaLabel": "Open Tanstack query devtools",
+    "pixelBgMedian": "#cfbb6b",
+    "ratioTextVsPixelBg": 5.34
+   }
+  ],
+  "regions": [
+   {
+    "el": "main.min-h-screen.bg-[#FAF7F2].px-[16px]",
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "w": 1440,
+     "h": 1031
+    },
+    "ownBg": "#faf7f2",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#faf7f2",
+    "parentEffectiveBg": "#f5f1e6",
+    "ratioVsParent": 1.06,
+    "bgImage": null,
+    "boxShadow": null
+   },
+   {
+    "el": "div.pa-auth-card.mx-auto.grid",
+    "rect": {
+     "x": 144,
+     "y": 32,
+     "w": 1152,
+     "h": 967
+    },
+    "ownBg": "#fcfaf6",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#fcfaf6",
+    "parentEffectiveBg": "#faf7f2",
+    "ratioVsParent": 1.03,
+    "bgImage": null,
+    "boxShadow": null
+   },
+   {
+    "el": "section.relative.z-0.flex",
+    "rect": {
+     "x": 145,
+     "y": 33,
+     "w": 622,
+     "h": 965
+    },
+    "ownBg": "#1a1816",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#1a1816",
+    "parentEffectiveBg": "#fcfaf6",
+    "ratioVsParent": 16.98,
+    "bgImage": null,
+    "boxShadow": null
+   },
+   {
+    "el": "span.pa-auth-display-fill.block.animate-[pa-auth-reveal_1.1s_cubic-bezier(0.16,1,0.3,1)_0.24s_both]",
+    "rect": {
+     "x": 201,
+     "y": 206,
+     "w": 509,
+     "h": 98
+    },
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "effectiveBg": "#1a1816",
+    "parentEffectiveBg": "#1a1816",
+    "ratioVsParent": 1,
+    "bgImage": "linear-gradient(135deg, rgb(184, 169, 153), rgb(196, 162, 101))",
+    "boxShadow": null,
+    "pixelBgMedian": "#1d1b19"
+   },
+   {
+    "el": "input#portal-auth-email.h-[48px].w-full.border",
+    "rect": {
+     "x": 839,
+     "y": 378,
+     "w": 384,
+     "h": 48
+    },
+    "ownBg": "#ffffff",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#ffffff",
+    "parentEffectiveBg": "#fcfaf6",
+    "ratioVsParent": 1.04,
+    "bgImage": null,
+    "boxShadow": null,
+    "pixelBgMedian": "#fefefe"
+   },
+   {
+    "el": "button.h-[48px].w-full.bg-[#1A1816]",
+    "rect": {
+     "x": 839,
+     "y": 446,
+     "w": 384,
+     "h": 48
+    },
+    "ownBg": "#1a1816",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#1a1816",
+    "parentEffectiveBg": "#fcfaf6",
+    "ratioVsParent": 16.98,
+    "bgImage": null,
+    "boxShadow": null,
+    "pixelBgMedian": "#7f7e7b"
+   },
+   {
+    "el": "button.flex.min-h-[48px].w-full",
+    "rect": {
+     "x": 839,
+     "y": 535,
+     "w": 384,
+     "h": 48
+    },
+    "ownBg": "#ffffff",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#ffffff",
+    "parentEffectiveBg": "#fcfaf6",
+    "ratioVsParent": 1.04,
+    "bgImage": null,
+    "boxShadow": null,
+    "pixelBgMedian": "#fefefe"
+   },
+   {
+    "el": "div.border.rounded-none.border-[#8B7355]",
+    "rect": {
+     "x": 839,
+     "y": 714,
+     "w": 384,
+     "h": 55
+    },
+    "ownBg": "#fcfaf6",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#fcfaf6",
+    "parentEffectiveBg": "#fcfaf6",
+    "ratioVsParent": 1,
+    "bgImage": null,
+    "boxShadow": null,
+    "pixelBgMedian": "#fbf9f5"
+   }
+  ],
+  "rules": [
+   {
+    "el": "div.pa-auth-card.mx-auto.grid",
+    "rect": {
+     "x": 144,
+     "y": 32,
+     "w": 1152,
+     "h": 967
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Top",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.2
+     },
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.2
+     },
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.2
+     },
+     {
+      "side": "Left",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.2
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#faf7f2",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "section.relative.z-0.flex",
+    "rect": {
+     "x": 145,
+     "y": 33,
+     "w": 622,
+     "h": 965
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "input#portal-auth-email.h-[48px].w-full.border",
+    "rect": {
+     "x": 839,
+     "y": 378,
+     "w": 384,
+     "h": 48
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Top",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Left",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "button.flex.min-h-[48px].w-full",
+    "rect": {
+     "x": 839,
+     "y": 535,
+     "w": 384,
+     "h": 48
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Top",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Left",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "div.border-b.border-border",
+    "rect": {
+     "x": 839,
+     "y": 714,
+     "w": 384,
+     "h": 56
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#dbd0ba",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 1.47
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "div.border.rounded-none.border-[#8B7355]",
+    "rect": {
+     "x": 839,
+     "y": 714,
+     "w": 384,
+     "h": 55
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Top",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Left",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "span.border.border-[#8B7355].px-[6px]",
+    "rect": {
+     "x": 968,
+     "y": 727,
+     "w": 95,
+     "h": 29
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Top",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Left",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   }
+  ],
+  "regionHeads": [],
+  "named": {
+   "heroHeading": {
+    "self": {
+     "el": "span.pa-auth-display-fill.block.animate-[pa-auth-reveal_1.1s_cubic-bezier(0.16,1,0.3,1)_0.24s_both]",
+     "text": "Welcome back to the studio.",
+     "rect": {
+      "x": 201,
+      "y": 206,
+      "w": 509,
+      "h": 98
+     },
+     "color": "#c4a57b",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#1a1816",
+     "bgHasImageOrGradient": true,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 7.6,
+     "fontSize": 47.52,
+     "fontWeight": "500",
+     "letterSpacingPx": -1.9008,
+     "textTransform": "none",
+     "fontFamily": "Playfair Display",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#1d1b19",
+     "ratioTextVsPixelBg": 7.37
+    },
+    "ancestors": [
+     {
+      "el": "h1.-mb-[0.14em].mt-[18px].block",
+      "text": "",
+      "rect": {
+       "x": 201,
+       "y": 206,
+       "w": 509,
+       "h": 105
+      },
+      "color": "#c4a57b",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 7.6,
+      "fontSize": 47.52,
+      "fontWeight": "500",
+      "letterSpacingPx": -1.9008,
+      "textTransform": "none",
+      "fontFamily": "Playfair Display",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Welcome back to the studio."
+     },
+     {
+      "el": "div.relative",
+      "text": "",
+      "rect": {
+       "x": 201,
+       "y": 89,
+       "w": 509,
+       "h": 279
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     },
+     {
+      "el": "section.relative.z-0.flex",
+      "text": "",
+      "rect": {
+       "x": 145,
+       "y": 33,
+       "w": 622,
+       "h": 965
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#1a1816",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": null,
+       "r": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 3.95,
+        "ratioVsParentBg": 4.3
+       },
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     },
+     {
+      "el": "div.pa-auth-card.mx-auto.grid",
+      "text": "",
+      "rect": {
+       "x": 144,
+       "y": 32,
+       "w": 1152,
+       "h": 967
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#fcfaf6",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "r": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "b": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "l": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       }
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     }
+    ]
+   },
+   "heroSub": {
+    "self": {
+     "el": "p.mt-[20px].max-w-[34ch].text-[14px]",
+     "text": "Your projects, proposals, and workshop records are waiting.",
+     "rect": {
+      "x": 201,
+      "y": 323,
+      "w": 300,
+      "h": 45
+     },
+     "color": "#b8a999",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#1a1816",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 7.73,
+     "fontSize": 14,
+     "fontWeight": "400",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#23211e",
+     "ratioTextVsPixelBg": 7.01
+    },
+    "ancestors": [
+     {
+      "el": "div.relative",
+      "text": "",
+      "rect": {
+       "x": 201,
+       "y": 89,
+       "w": 509,
+       "h": 279
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     },
+     {
+      "el": "section.relative.z-0.flex",
+      "text": "",
+      "rect": {
+       "x": 145,
+       "y": 33,
+       "w": 622,
+       "h": 965
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#1a1816",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": null,
+       "r": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 3.95,
+        "ratioVsParentBg": 4.3
+       },
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     },
+     {
+      "el": "div.pa-auth-card.mx-auto.grid",
+      "text": "",
+      "rect": {
+       "x": 144,
+       "y": 32,
+       "w": 1152,
+       "h": 967
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#fcfaf6",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "r": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "b": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "l": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       }
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     }
+    ]
+   },
+   "eyebrowTheStudio": {
+    "self": {
+     "el": "p.font-mono.text-[11px].uppercase",
+     "text": "THE STUDIO",
+     "rect": {
+      "x": 201,
+      "y": 171,
+      "w": 509,
+      "h": 17
+     },
+     "color": "#c4a265",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#1a1816",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 7.34,
+     "fontSize": 11,
+     "fontWeight": "400",
+     "letterSpacingPx": 2.75,
+     "textTransform": "uppercase",
+     "fontFamily": "DM Mono",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#1d1b19",
+     "ratioTextVsPixelBg": 7.12
+    },
+    "ancestors": [
+     {
+      "el": "div.relative",
+      "text": "",
+      "rect": {
+       "x": 201,
+       "y": 89,
+       "w": 509,
+       "h": 279
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     },
+     {
+      "el": "section.relative.z-0.flex",
+      "text": "",
+      "rect": {
+       "x": 145,
+       "y": 33,
+       "w": 622,
+       "h": 965
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#1a1816",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": null,
+       "r": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 3.95,
+        "ratioVsParentBg": 4.3
+       },
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     }
+    ]
+   },
+   "panelFooterRule": null,
+   "footerCopy": {
+    "self": {
+     "el": "p.max-w-[36ch].text-[14px].leading-[1.6]",
+     "text": "A workshop for interior designers, their clients, and the makers they trust.",
+     "rect": {
+      "x": 201,
+      "y": 840,
+      "w": 318,
+      "h": 45
+     },
+     "color": "#b8a999",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#1a1816",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 7.73,
+     "fontSize": 14,
+     "fontWeight": "400",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#28241e",
+     "ratioTextVsPixelBg": 6.74
+    },
+    "ancestors": [
+     {
+      "el": "div.relative.mt-[46px].animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.54s_both]",
+      "text": "",
+      "rect": {
+       "x": 201,
+       "y": 840,
+       "w": 509,
+       "h": 103
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "A workshop for interior designers, their clients, and the makers they trust. Need a hand? support@pa"
+     },
+     {
+      "el": "section.relative.z-0.flex",
+      "text": "",
+      "rect": {
+       "x": 145,
+       "y": 33,
+       "w": 622,
+       "h": 965
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#1a1816",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": null,
+       "r": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 3.95,
+        "ratioVsParentBg": 4.3
+       },
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     }
+    ]
+   },
+   "signInHeading": {
+    "self": {
+     "el": "p.font-mono.text-[11px].uppercase",
+     "text": "SIGN IN",
+     "rect": {
+      "x": 839,
+      "y": 262,
+      "w": 384,
+      "h": 17
+     },
+     "color": "#65594e",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 6.51,
+     "fontSize": 11,
+     "fontWeight": "400",
+     "letterSpacingPx": 2.75,
+     "textTransform": "uppercase",
+     "fontFamily": "DM Mono",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#fbf9f5",
+     "ratioTextVsPixelBg": 6.46
+    },
+    "ancestors": [
+     {
+      "el": "div.grid.gap-[8px].animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.28s_both]",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 73
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email."
+     },
+     {
+      "el": "form.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 232
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code"
+     },
+     {
+      "el": "div.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 388
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code Continue with Apple Use a password i"
+     },
+     {
+      "el": "div.da-press-scope",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 388
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code Continue with Apple Use a password i"
+     }
+    ]
+   },
+   "signInSub": {
+    "self": {
+     "el": "h2.font-heading.text-[30px].font-medium",
+     "text": "Start with your email.",
+     "rect": {
+      "x": 839,
+      "y": 287,
+      "w": 384,
+      "h": 33
+     },
+     "color": "#2c2926",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 13.87,
+     "fontSize": 30,
+     "fontWeight": "500",
+     "letterSpacingPx": -0.9,
+     "textTransform": "none",
+     "fontFamily": "Playfair Display",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#fbf9f5",
+     "ratioTextVsPixelBg": 13.75
+    },
+    "ancestors": [
+     {
+      "el": "div.grid.gap-[8px].animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.28s_both]",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 73
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email."
+     },
+     {
+      "el": "form.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 232
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code"
+     }
+    ]
+   },
+   "emailLabel": {
+    "self": {
+     "el": "label.text-[11px].font-semibold.uppercase",
+     "text": "EMAIL ADDRESS",
+     "rect": {
+      "x": 839,
+      "y": 355,
+      "w": 384,
+      "h": 15
+     },
+     "color": "#65594e",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 6.51,
+     "fontSize": 11,
+     "fontWeight": "600",
+     "letterSpacingPx": 1.65,
+     "textTransform": "uppercase",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#fbf9f5",
+     "ratioTextVsPixelBg": 6.46
+    },
+    "ancestors": [
+     {
+      "el": "div.group.relative.grid",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 355,
+       "w": 384,
+       "h": 71
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "EMAIL ADDRESS"
+     },
+     {
+      "el": "form.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 232
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code"
+     }
+    ]
+   },
+   "primaryButton": {
+    "self": {
+     "el": "button.h-[48px].w-full.bg-[#1A1816]",
+     "text": "Email sign-in code",
+     "rect": {
+      "x": 839,
+      "y": 446,
+      "w": 384,
+      "h": 48
+     },
+     "color": "#faf7f2",
+     "colorAlpha": 0.55,
+     "opacityChain": 0.55,
+     "effectiveBg": "#1a1816",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 5.76,
+     "fontSize": 14,
+     "fontWeight": "600",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#1a1816",
+     "ownBgAlpha": 1,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#7f7e7b",
+     "ratioTextVsPixelBg": 2.25
+    },
+    "ancestors": [
+     {
+      "el": "div.animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.44s_both].motion-reduce:animate-none",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 446,
+       "w": 384,
+       "h": 48
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Email sign-in code"
+     },
+     {
+      "el": "form.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 232
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code"
+     },
+     {
+      "el": "div.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 388
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code Continue with Apple Use a password i"
+     }
+    ]
+   },
+   "appleButton": {
+    "self": {
+     "el": "button.flex.min-h-[48px].w-full",
+     "text": "Continue with Apple",
+     "rect": {
+      "x": 839,
+      "y": 535,
+      "w": 384,
+      "h": 48
+     },
+     "color": "#2c2926",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#ffffff",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 14.46,
+     "fontSize": 14,
+     "fontWeight": "600",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#ffffff",
+     "ownBgAlpha": 1,
+     "borders": {
+      "t": {
+       "w": 1,
+       "style": "solid",
+       "color": "#8b7355",
+       "alpha": 1,
+       "ratioVsBg": 4.49,
+       "ratioVsParentBg": 4.3
+      },
+      "r": {
+       "w": 1,
+       "style": "solid",
+       "color": "#8b7355",
+       "alpha": 1,
+       "ratioVsBg": 4.49,
+       "ratioVsParentBg": 4.3
+      },
+      "b": {
+       "w": 1,
+       "style": "solid",
+       "color": "#8b7355",
+       "alpha": 1,
+       "ratioVsBg": 4.49,
+       "ratioVsParentBg": 4.3
+      },
+      "l": {
+       "w": 1,
+       "style": "solid",
+       "color": "#8b7355",
+       "alpha": 1,
+       "ratioVsBg": 4.49,
+       "ratioVsParentBg": 4.3
+      }
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#fefefe",
+     "ratioTextVsPixelBg": 14.34
+    },
+    "ancestors": [
+     {
+      "el": "div.space-y-[20px].animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.52s_both].motion-reduce:animate-none",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 514,
+       "w": 384,
+       "h": 137
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Continue with Apple Use a password instead +"
+     },
+     {
+      "el": "div.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 388
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code Continue with Apple Use a password i"
+     },
+     {
+      "el": "div.da-press-scope",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 262,
+       "w": 384,
+       "h": 388
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code Continue with Apple Use a password i"
+     }
+    ]
+   },
+   "passwordLink": {
+    "self": {
+     "el": "span",
+     "text": "Use a password instead",
+     "rect": {
+      "x": 839,
+      "y": 617,
+      "w": 161,
+      "h": 21
+     },
+     "color": "#2c2926",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 13.87,
+     "fontSize": 14,
+     "fontWeight": "600",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#f9f6f1",
+     "ratioTextVsPixelBg": 13.41
+    },
+    "ancestors": [
+     {
+      "el": "button.flex.min-h-[44px].w-full",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 604,
+       "w": 384,
+       "h": 47
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 14,
+      "fontWeight": "600",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Use a password instead +"
+     },
+     {
+      "el": "div",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 603,
+       "w": 384,
+       "h": 48
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Use a password instead +"
+     }
+    ]
+   },
+   "createAccount": {
+    "self": {
+     "el": "a.underline.underline-offset-4",
+     "text": "Create designer account",
+     "rect": {
+      "x": 939,
+      "y": 679,
+      "w": 183,
+      "h": 19
+     },
+     "color": "#65594e",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 6.51,
+     "fontSize": 15.75,
+     "fontWeight": "400",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "underline",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#f9f6ef",
+     "ratioTextVsPixelBg": 6.29
+    },
+    "ancestors": [
+     {
+      "el": "p",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 678,
+       "w": 384,
+       "h": 23
+      },
+      "color": "#65594e",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 6.51,
+      "fontSize": 15.75,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Create designer account"
+     },
+     {
+      "el": "div.mt-6.space-y-3.text-center",
+      "text": "",
+      "rect": {
+       "x": 839,
+       "y": 678,
+       "w": 384,
+       "h": 92
+      },
+      "color": "#65594e",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 6.51,
+      "fontSize": 15.75,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Create designer account DEV ACCOUNTS 4 AVAILABLE"
+     }
+    ]
+   }
+  },
+  "pixelSampledCount": 38,
+  "primaryButtonEnabled": {
+   "self": {
+    "el": "button.h-[48px].w-full.bg-[#1A1816]",
+    "text": "Email sign-in code",
+    "rect": {
+     "x": 839,
+     "y": 446,
+     "w": 384,
+     "h": 48
+    },
+    "color": "#faf7f2",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 16.57,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#1a1816",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "fullText": true,
+    "pixelBgMedian": "#1a1816",
+    "ratioTextVsPixelBg": 16.57,
+    "note": "email field filled with a placeholder address, never submitted; button now enabled"
+   },
+   "ancestors": [
+    {
+     "el": "div.animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.44s_both].motion-reduce:animate-none",
+     "text": "",
+     "rect": {
+      "x": 839,
+      "y": 446,
+      "w": 384,
+      "h": 48
+     },
+     "color": "#2c2926",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 13.87,
+     "fontSize": 18,
+     "fontWeight": "400",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": false,
+     "kind": "ancestor",
+     "childText": "Email sign-in code"
+    }
+   ]
+  }
+ },
+ "vp390": {
+  "url": "http://localhost:3000/auth/signin",
+  "viewport": {
+   "w": 390,
+   "h": 844
+  },
+  "docHeight": 1111,
+  "pageBackground": {
+   "html": "#000000",
+   "body": "#f5f1e6",
+   "bodyImage": "none"
+  },
+  "textEntries": [
+   {
+    "el": "div.mb-[56px].flex.items-center",
+    "text": "Patina",
+    "rect": {
+     "x": 45,
+     "y": 49,
+     "w": 300,
+     "h": 26
+    },
+    "color": "#e5e2dd",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 13.7,
+    "fontSize": 11,
+    "fontWeight": "600",
+    "letterSpacingPx": 2.2,
+    "textTransform": "uppercase",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#1d1b1a",
+    "ratioTextVsPixelBg": 13.28
+   },
+   {
+    "el": "p.font-mono.text-[11px].uppercase",
+    "text": "THE STUDIO",
+    "rect": {
+     "x": 45,
+     "y": 131,
+     "w": 300,
+     "h": 17
+    },
+    "color": "#c4a265",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 7.34,
+    "fontSize": 11,
+    "fontWeight": "400",
+    "letterSpacingPx": 2.75,
+    "textTransform": "uppercase",
+    "fontFamily": "DM Mono",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#1c1b19",
+    "ratioTextVsPixelBg": 7.13
+   },
+   {
+    "el": "span.pa-auth-display-fill.block.animate-[pa-auth-reveal_1.1s_cubic-bezier(0.16,1,0.3,1)_0.24s_both]",
+    "text": "Welcome back to the studio.",
+    "rect": {
+     "x": 45,
+     "y": 166,
+     "w": 300,
+     "h": 68
+    },
+    "color": "#c4a57b",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": true,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 7.6,
+    "fontSize": 33,
+    "fontWeight": "500",
+    "letterSpacingPx": -1.32,
+    "textTransform": "none",
+    "fontFamily": "Playfair Display",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#1d1b19",
+    "ratioTextVsPixelBg": 7.37
+   },
+   {
+    "el": "p.mt-[20px].max-w-[34ch].text-[14px]",
+    "text": "Your projects, proposals, and workshop records are waiting.",
+    "rect": {
+     "x": 45,
+     "y": 253,
+     "w": 300,
+     "h": 45
+    },
+    "color": "#b8a999",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 7.73,
+    "fontSize": 14,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#1a1917",
+    "ratioTextVsPixelBg": 7.67
+   },
+   {
+    "el": "p.max-w-[36ch].text-[14px].leading-[1.6]",
+    "text": "A workshop for interior designers, their clients, and the makers they trust.",
+    "rect": {
+     "x": 45,
+     "y": 411,
+     "w": 300,
+     "h": 45
+    },
+    "color": "#b8a999",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 7.73,
+    "fontSize": 14,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#1b1a18",
+    "ratioTextVsPixelBg": 7.6
+   },
+   {
+    "el": "a.mt-[14px].inline-block.min-h-[44px]",
+    "text": "Need a hand? support@patina.cloud",
+    "rect": {
+     "x": 45,
+     "y": 470,
+     "w": 241,
+     "h": 44
+    },
+    "color": "#e5e2dd",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 13.7,
+    "fontSize": 14,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "underline",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "link",
+    "inRegionHead": null,
+    "pixelBgMedian": "#2a261e",
+    "ratioTextVsPixelBg": 11.66
+   },
+   {
+    "el": "p.font-mono.text-[11px].uppercase",
+    "text": "Sign in",
+    "rect": {
+     "x": 37,
+     "y": 563,
+     "w": 316,
+     "h": 17
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 11,
+    "fontWeight": "400",
+    "letterSpacingPx": 2.75,
+    "textTransform": "uppercase",
+    "fontFamily": "DM Mono",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "text",
+    "inRegionHead": null,
+    "pixelBgMedian": "#fbf9f5",
+    "ratioTextVsPixelBg": 6.46
+   },
+   {
+    "el": "h2.font-heading.text-[30px].font-medium",
+    "text": "Start with your email.",
+    "rect": {
+     "x": 37,
+     "y": 588,
+     "w": 316,
+     "h": 33
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 13.87,
+    "fontSize": 30,
+    "fontWeight": "500",
+    "letterSpacingPx": -0.9,
+    "textTransform": "none",
+    "fontFamily": "Playfair Display",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "heading",
+    "inRegionHead": null,
+    "pixelBgMedian": "#fbf9f5",
+    "ratioTextVsPixelBg": 13.75
+   },
+   {
+    "el": "label.text-[11px].font-semibold.uppercase",
+    "text": "Email address",
+    "rect": {
+     "x": 37,
+     "y": 656,
+     "w": 316,
+     "h": 15
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 11,
+    "fontWeight": "600",
+    "letterSpacingPx": 1.65,
+    "textTransform": "uppercase",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "form-label",
+    "inRegionHead": null,
+    "pixelBgMedian": "#fbf9f5",
+    "ratioTextVsPixelBg": 6.46
+   },
+   {
+    "el": "button.h-[48px].w-full.bg-[#1A1816]",
+    "text": "Email sign-in code",
+    "rect": {
+     "x": 37,
+     "y": 747,
+     "w": 316,
+     "h": 48
+    },
+    "color": "#faf7f2",
+    "colorAlpha": 0.55,
+    "opacityChain": 0.55,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 5.76,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#1a1816",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "action",
+    "inRegionHead": null,
+    "pixelBgMedian": "#7f7e7b",
+    "ratioTextVsPixelBg": 2.25
+   },
+   {
+    "el": "button.flex.min-h-[48px].w-full",
+    "text": "Continue with Apple",
+    "rect": {
+     "x": 37,
+     "y": 836,
+     "w": 316,
+     "h": 48
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#ffffff",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 14.46,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#ffffff",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "r": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "b": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "l": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     }
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "action",
+    "inRegionHead": null
+   },
+   {
+    "el": "span",
+    "text": "Use a password instead",
+    "rect": {
+     "x": 37,
+     "y": 918,
+     "w": 161,
+     "h": 21
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 13.87,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "action",
+    "inRegionHead": null
+   },
+   {
+    "el": "a.underline.underline-offset-4",
+    "text": "Create designer account",
+    "rect": {
+     "x": 103,
+     "y": 979,
+     "w": 183,
+     "h": 19
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 15.75,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "underline",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "link",
+    "inRegionHead": null
+   },
+   {
+    "el": "span.font-mono.text-[10px].uppercase",
+    "text": "Dev Accounts",
+    "rect": {
+     "x": 54,
+     "y": 1030,
+     "w": 102,
+     "h": 23
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 10,
+    "fontWeight": "500",
+    "letterSpacingPx": 2.5,
+    "textTransform": "uppercase",
+    "fontFamily": "DM Mono",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "action",
+    "inRegionHead": null
+   },
+   {
+    "el": "span.border.border-[#8B7355].px-[6px]",
+    "text": "4 available",
+    "rect": {
+     "x": 166,
+     "y": 1027,
+     "w": 95,
+     "h": 29
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 10,
+    "fontWeight": "500",
+    "letterSpacingPx": 1.4,
+    "textTransform": "uppercase",
+    "fontFamily": "DM Mono",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.3,
+      "ratioVsParentBg": 4.3
+     },
+     "r": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.3,
+      "ratioVsParentBg": 4.3
+     },
+     "b": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.3,
+      "ratioVsParentBg": 4.3
+     },
+     "l": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.3,
+      "ratioVsParentBg": 4.3
+     }
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "action",
+    "inRegionHead": null
+   }
+  ],
+  "inputs": [
+   {
+    "el": "input#portal-auth-email.h-[48px].w-full.border",
+    "text": "",
+    "rect": {
+     "x": 37,
+     "y": 679,
+     "w": 316,
+     "h": 48
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#ffffff",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 14.46,
+    "fontSize": 16,
+    "fontWeight": "400",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#ffffff",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "r": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "b": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "l": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     }
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "input",
+    "type": "email",
+    "placeholder": "you@example.com",
+    "placeholderColor": "#7a6a5b",
+    "pixelBgMedian": "#fefefe",
+    "ratioTextVsPixelBg": 14.34
+   }
+  ],
+  "buttons": [
+   {
+    "el": "button.h-[48px].w-full.bg-[#1A1816]",
+    "text": "Email sign-in code",
+    "rect": {
+     "x": 37,
+     "y": 747,
+     "w": 316,
+     "h": 48
+    },
+    "color": "#faf7f2",
+    "colorAlpha": 0.55,
+    "opacityChain": 0.55,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 5.76,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#1a1816",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "button-box",
+    "fullText": true,
+    "fillVsSurroundingRatio": 16.98,
+    "surroundingBg": "#fcfaf6",
+    "variant": null,
+    "actionKey": null,
+    "ariaLabel": null,
+    "pixelBgMedian": "#7f7e7b",
+    "ratioTextVsPixelBg": 2.25
+   },
+   {
+    "el": "button.flex.min-h-[48px].w-full",
+    "text": "Continue with Apple",
+    "rect": {
+     "x": 37,
+     "y": 836,
+     "w": 316,
+     "h": 48
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#ffffff",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 14.46,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#ffffff",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "r": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "b": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     },
+     "l": {
+      "w": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsBg": 4.49,
+      "ratioVsParentBg": 4.3
+     }
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "button-box",
+    "fullText": true,
+    "fillVsSurroundingRatio": 1.04,
+    "surroundingBg": "#fcfaf6",
+    "variant": null,
+    "actionKey": null,
+    "ariaLabel": null
+   },
+   {
+    "el": "button.flex.min-h-[44px].w-full",
+    "text": "Use a password instead +",
+    "rect": {
+     "x": 37,
+     "y": 905,
+     "w": 316,
+     "h": 47
+    },
+    "color": "#2c2926",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 13.87,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "button-box",
+    "fullText": true,
+    "fillVsSurroundingRatio": null,
+    "surroundingBg": "#fcfaf6",
+    "variant": null,
+    "actionKey": null,
+    "ariaLabel": null
+   },
+   {
+    "el": "button#radix-_R_nbinebn5r76lb_.flex.flex-1.items-center",
+    "text": "DEV ACCOUNTS 4 AVAILABLE",
+    "rect": {
+     "x": 38,
+     "y": 1015,
+     "w": 314,
+     "h": 53
+    },
+    "color": "#65594e",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#fcfaf6",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 6.51,
+    "fontSize": 15.75,
+    "fontWeight": "500",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Playfair Display",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "kind": "button-box",
+    "fullText": true,
+    "fillVsSurroundingRatio": null,
+    "surroundingBg": "#fcfaf6",
+    "variant": null,
+    "actionKey": null,
+    "ariaLabel": null
+   }
+  ],
+  "regions": [
+   {
+    "el": "main.min-h-screen.bg-[#FAF7F2].px-[16px]",
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 1111
+    },
+    "ownBg": "#faf7f2",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#faf7f2",
+    "parentEffectiveBg": "#f5f1e6",
+    "ratioVsParent": 1.06,
+    "bgImage": null,
+    "boxShadow": null
+   },
+   {
+    "el": "div.pa-auth-card.mx-auto.grid",
+    "rect": {
+     "x": 16,
+     "y": 20,
+     "w": 358,
+     "h": 1071
+    },
+    "ownBg": "#fcfaf6",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#fcfaf6",
+    "parentEffectiveBg": "#faf7f2",
+    "ratioVsParent": 1.03,
+    "bgImage": null,
+    "boxShadow": null
+   },
+   {
+    "el": "section.relative.z-0.flex",
+    "rect": {
+     "x": 17,
+     "y": 21,
+     "w": 356,
+     "h": 522
+    },
+    "ownBg": "#1a1816",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#1a1816",
+    "parentEffectiveBg": "#fcfaf6",
+    "ratioVsParent": 16.98,
+    "bgImage": null,
+    "boxShadow": null,
+    "pixelBgMedian": "#1c1b18"
+   },
+   {
+    "el": "span.pa-auth-display-fill.block.animate-[pa-auth-reveal_1.1s_cubic-bezier(0.16,1,0.3,1)_0.24s_both]",
+    "rect": {
+     "x": 45,
+     "y": 166,
+     "w": 300,
+     "h": 68
+    },
+    "ownBg": "#000000",
+    "ownBgAlpha": 0,
+    "effectiveBg": "#1a1816",
+    "parentEffectiveBg": "#1a1816",
+    "ratioVsParent": 1,
+    "bgImage": "linear-gradient(135deg, rgb(184, 169, 153), rgb(196, 162, 101))",
+    "boxShadow": null,
+    "pixelBgMedian": "#1d1b19"
+   },
+   {
+    "el": "input#portal-auth-email.h-[48px].w-full.border",
+    "rect": {
+     "x": 37,
+     "y": 679,
+     "w": 316,
+     "h": 48
+    },
+    "ownBg": "#ffffff",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#ffffff",
+    "parentEffectiveBg": "#fcfaf6",
+    "ratioVsParent": 1.04,
+    "bgImage": null,
+    "boxShadow": null,
+    "pixelBgMedian": "#fefefe"
+   },
+   {
+    "el": "button.h-[48px].w-full.bg-[#1A1816]",
+    "rect": {
+     "x": 37,
+     "y": 747,
+     "w": 316,
+     "h": 48
+    },
+    "ownBg": "#1a1816",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#1a1816",
+    "parentEffectiveBg": "#fcfaf6",
+    "ratioVsParent": 16.98,
+    "bgImage": null,
+    "boxShadow": null,
+    "pixelBgMedian": "#7f7e7b"
+   },
+   {
+    "el": "button.flex.min-h-[48px].w-full",
+    "rect": {
+     "x": 37,
+     "y": 836,
+     "w": 316,
+     "h": 48
+    },
+    "ownBg": "#ffffff",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#ffffff",
+    "parentEffectiveBg": "#fcfaf6",
+    "ratioVsParent": 1.04,
+    "bgImage": null,
+    "boxShadow": null
+   },
+   {
+    "el": "div.border.rounded-none.border-[#8B7355]",
+    "rect": {
+     "x": 37,
+     "y": 1014,
+     "w": 316,
+     "h": 55
+    },
+    "ownBg": "#fcfaf6",
+    "ownBgAlpha": 1,
+    "effectiveBg": "#fcfaf6",
+    "parentEffectiveBg": "#fcfaf6",
+    "ratioVsParent": 1,
+    "bgImage": null,
+    "boxShadow": null
+   }
+  ],
+  "rules": [
+   {
+    "el": "div.pa-auth-card.mx-auto.grid",
+    "rect": {
+     "x": 16,
+     "y": 20,
+     "w": 358,
+     "h": 1071
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Top",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.2
+     },
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.2
+     },
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.2
+     },
+     {
+      "side": "Left",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.2
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#faf7f2",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "section.relative.z-0.flex",
+    "rect": {
+     "x": 17,
+     "y": 21,
+     "w": 356,
+     "h": 522
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "input#portal-auth-email.h-[48px].w-full.border",
+    "rect": {
+     "x": 37,
+     "y": 679,
+     "w": 316,
+     "h": 48
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Top",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Left",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "button.flex.min-h-[48px].w-full",
+    "rect": {
+     "x": 37,
+     "y": 836,
+     "w": 316,
+     "h": 48
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Top",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Left",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "div.border-b.border-border",
+    "rect": {
+     "x": 37,
+     "y": 1014,
+     "w": 316,
+     "h": 56
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#dbd0ba",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 1.47
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "div.border.rounded-none.border-[#8B7355]",
+    "rect": {
+     "x": 37,
+     "y": 1014,
+     "w": 316,
+     "h": 55
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Top",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Left",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   },
+   {
+    "el": "span.border.border-[#8B7355].px-[6px]",
+    "rect": {
+     "x": 166,
+     "y": 1027,
+     "w": 95,
+     "h": 29
+    },
+    "kind": "border",
+    "borders": [
+     {
+      "side": "Top",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Right",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Bottom",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     },
+     {
+      "side": "Left",
+      "widthPx": 1,
+      "style": "solid",
+      "color": "#8b7355",
+      "alpha": 1,
+      "ratioVsSurroundingBg": 4.3
+     }
+    ],
+    "fill": null,
+    "surroundingBg": "#fcfaf6",
+    "surroundingHasImage": false
+   }
+  ],
+  "regionHeads": [],
+  "named": {
+   "heroHeading": {
+    "self": {
+     "el": "span.pa-auth-display-fill.block.animate-[pa-auth-reveal_1.1s_cubic-bezier(0.16,1,0.3,1)_0.24s_both]",
+     "text": "Welcome back to the studio.",
+     "rect": {
+      "x": 45,
+      "y": 166,
+      "w": 300,
+      "h": 68
+     },
+     "color": "#c4a57b",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#1a1816",
+     "bgHasImageOrGradient": true,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 7.6,
+     "fontSize": 33,
+     "fontWeight": "500",
+     "letterSpacingPx": -1.32,
+     "textTransform": "none",
+     "fontFamily": "Playfair Display",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#1d1b19",
+     "ratioTextVsPixelBg": 7.37
+    },
+    "ancestors": [
+     {
+      "el": "h1.-mb-[0.14em].mt-[18px].block",
+      "text": "",
+      "rect": {
+       "x": 45,
+       "y": 166,
+       "w": 300,
+       "h": 73
+      },
+      "color": "#c4a57b",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 7.6,
+      "fontSize": 33,
+      "fontWeight": "500",
+      "letterSpacingPx": -1.32,
+      "textTransform": "none",
+      "fontFamily": "Playfair Display",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Welcome back to the studio."
+     },
+     {
+      "el": "div.relative",
+      "text": "",
+      "rect": {
+       "x": 45,
+       "y": 49,
+       "w": 300,
+       "h": 249
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     },
+     {
+      "el": "section.relative.z-0.flex",
+      "text": "",
+      "rect": {
+       "x": 17,
+       "y": 21,
+       "w": 356,
+       "h": 522
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#1a1816",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 3.95,
+        "ratioVsParentBg": 4.3
+       },
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     },
+     {
+      "el": "div.pa-auth-card.mx-auto.grid",
+      "text": "",
+      "rect": {
+       "x": 16,
+       "y": 20,
+       "w": 358,
+       "h": 1071
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#fcfaf6",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "r": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "b": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "l": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       }
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     }
+    ]
+   },
+   "heroSub": {
+    "self": {
+     "el": "p.mt-[20px].max-w-[34ch].text-[14px]",
+     "text": "Your projects, proposals, and workshop records are waiting.",
+     "rect": {
+      "x": 45,
+      "y": 253,
+      "w": 300,
+      "h": 45
+     },
+     "color": "#b8a999",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#1a1816",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 7.73,
+     "fontSize": 14,
+     "fontWeight": "400",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#1a1917",
+     "ratioTextVsPixelBg": 7.67
+    },
+    "ancestors": [
+     {
+      "el": "div.relative",
+      "text": "",
+      "rect": {
+       "x": 45,
+       "y": 49,
+       "w": 300,
+       "h": 249
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     },
+     {
+      "el": "section.relative.z-0.flex",
+      "text": "",
+      "rect": {
+       "x": 17,
+       "y": 21,
+       "w": 356,
+       "h": 522
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#1a1816",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 3.95,
+        "ratioVsParentBg": 4.3
+       },
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     },
+     {
+      "el": "div.pa-auth-card.mx-auto.grid",
+      "text": "",
+      "rect": {
+       "x": 16,
+       "y": 20,
+       "w": 358,
+       "h": 1071
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#fcfaf6",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "r": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "b": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       },
+       "l": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 4.3,
+        "ratioVsParentBg": 4.2
+       }
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     }
+    ]
+   },
+   "eyebrowTheStudio": {
+    "self": {
+     "el": "p.font-mono.text-[11px].uppercase",
+     "text": "THE STUDIO",
+     "rect": {
+      "x": 45,
+      "y": 131,
+      "w": 300,
+      "h": 17
+     },
+     "color": "#c4a265",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#1a1816",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 7.34,
+     "fontSize": 11,
+     "fontWeight": "400",
+     "letterSpacingPx": 2.75,
+     "textTransform": "uppercase",
+     "fontFamily": "DM Mono",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#1c1b19",
+     "ratioTextVsPixelBg": 7.13
+    },
+    "ancestors": [
+     {
+      "el": "div.relative",
+      "text": "",
+      "rect": {
+       "x": 45,
+       "y": 49,
+       "w": 300,
+       "h": 249
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     },
+     {
+      "el": "section.relative.z-0.flex",
+      "text": "",
+      "rect": {
+       "x": 17,
+       "y": 21,
+       "w": 356,
+       "h": 522
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#1a1816",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 3.95,
+        "ratioVsParentBg": 4.3
+       },
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     }
+    ]
+   },
+   "panelFooterRule": null,
+   "footerCopy": {
+    "self": {
+     "el": "p.max-w-[36ch].text-[14px].leading-[1.6]",
+     "text": "A workshop for interior designers, their clients, and the makers they trust.",
+     "rect": {
+      "x": 45,
+      "y": 411,
+      "w": 300,
+      "h": 45
+     },
+     "color": "#b8a999",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#1a1816",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 7.73,
+     "fontSize": 14,
+     "fontWeight": "400",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#1b1a18",
+     "ratioTextVsPixelBg": 7.6
+    },
+    "ancestors": [
+     {
+      "el": "div.relative.mt-[46px].animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.54s_both]",
+      "text": "",
+      "rect": {
+       "x": 45,
+       "y": 411,
+       "w": 300,
+       "h": 103
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "A workshop for interior designers, their clients, and the makers they trust. Need a hand? support@pa"
+     },
+     {
+      "el": "section.relative.z-0.flex",
+      "text": "",
+      "rect": {
+       "x": 17,
+       "y": 21,
+       "w": 356,
+       "h": 522
+      },
+      "color": "#e5e2dd",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#1a1816",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.7,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#1a1816",
+      "ownBgAlpha": 1,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": {
+        "w": 1,
+        "style": "solid",
+        "color": "#8b7355",
+        "alpha": 1,
+        "ratioVsBg": 3.95,
+        "ratioVsParentBg": 4.3
+       },
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "PATINA THE STUDIO Welcome back to the studio. Your projects, proposals, and workshop records are wai"
+     }
+    ]
+   },
+   "signInHeading": {
+    "self": {
+     "el": "p.font-mono.text-[11px].uppercase",
+     "text": "SIGN IN",
+     "rect": {
+      "x": 37,
+      "y": 563,
+      "w": 316,
+      "h": 17
+     },
+     "color": "#65594e",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 6.51,
+     "fontSize": 11,
+     "fontWeight": "400",
+     "letterSpacingPx": 2.75,
+     "textTransform": "uppercase",
+     "fontFamily": "DM Mono",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#fbf9f5",
+     "ratioTextVsPixelBg": 6.46
+    },
+    "ancestors": [
+     {
+      "el": "div.grid.gap-[8px].animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.28s_both]",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 73
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email."
+     },
+     {
+      "el": "form.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 232
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code"
+     },
+     {
+      "el": "div.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 388
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code Continue with Apple Use a password i"
+     },
+     {
+      "el": "div.da-press-scope",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 388
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code Continue with Apple Use a password i"
+     }
+    ]
+   },
+   "signInSub": {
+    "self": {
+     "el": "h2.font-heading.text-[30px].font-medium",
+     "text": "Start with your email.",
+     "rect": {
+      "x": 37,
+      "y": 588,
+      "w": 316,
+      "h": 33
+     },
+     "color": "#2c2926",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 13.87,
+     "fontSize": 30,
+     "fontWeight": "500",
+     "letterSpacingPx": -0.9,
+     "textTransform": "none",
+     "fontFamily": "Playfair Display",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#fbf9f5",
+     "ratioTextVsPixelBg": 13.75
+    },
+    "ancestors": [
+     {
+      "el": "div.grid.gap-[8px].animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.28s_both]",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 73
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email."
+     },
+     {
+      "el": "form.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 232
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code"
+     }
+    ]
+   },
+   "emailLabel": {
+    "self": {
+     "el": "label.text-[11px].font-semibold.uppercase",
+     "text": "EMAIL ADDRESS",
+     "rect": {
+      "x": 37,
+      "y": 656,
+      "w": 316,
+      "h": 15
+     },
+     "color": "#65594e",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 6.51,
+     "fontSize": 11,
+     "fontWeight": "600",
+     "letterSpacingPx": 1.65,
+     "textTransform": "uppercase",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#fbf9f5",
+     "ratioTextVsPixelBg": 6.46
+    },
+    "ancestors": [
+     {
+      "el": "div.group.relative.grid",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 656,
+       "w": 316,
+       "h": 71
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "EMAIL ADDRESS"
+     },
+     {
+      "el": "form.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 232
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code"
+     }
+    ]
+   },
+   "primaryButton": {
+    "self": {
+     "el": "button.h-[48px].w-full.bg-[#1A1816]",
+     "text": "Email sign-in code",
+     "rect": {
+      "x": 37,
+      "y": 747,
+      "w": 316,
+      "h": 48
+     },
+     "color": "#faf7f2",
+     "colorAlpha": 0.55,
+     "opacityChain": 0.55,
+     "effectiveBg": "#1a1816",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 5.76,
+     "fontSize": 14,
+     "fontWeight": "600",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#1a1816",
+     "ownBgAlpha": 1,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#7f7e7b",
+     "ratioTextVsPixelBg": 2.25
+    },
+    "ancestors": [
+     {
+      "el": "div.animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.44s_both].motion-reduce:animate-none",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 747,
+       "w": 316,
+       "h": 48
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Email sign-in code"
+     },
+     {
+      "el": "form.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 232
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code"
+     },
+     {
+      "el": "div.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 388
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code Continue with Apple Use a password i"
+     }
+    ]
+   },
+   "appleButton": {
+    "self": {
+     "el": "button.flex.min-h-[48px].w-full",
+     "text": "Continue with Apple",
+     "rect": {
+      "x": 37,
+      "y": 836,
+      "w": 316,
+      "h": 48
+     },
+     "color": "#2c2926",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#ffffff",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 14.46,
+     "fontSize": 14,
+     "fontWeight": "600",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#ffffff",
+     "ownBgAlpha": 1,
+     "borders": {
+      "t": {
+       "w": 1,
+       "style": "solid",
+       "color": "#8b7355",
+       "alpha": 1,
+       "ratioVsBg": 4.49,
+       "ratioVsParentBg": 4.3
+      },
+      "r": {
+       "w": 1,
+       "style": "solid",
+       "color": "#8b7355",
+       "alpha": 1,
+       "ratioVsBg": 4.49,
+       "ratioVsParentBg": 4.3
+      },
+      "b": {
+       "w": 1,
+       "style": "solid",
+       "color": "#8b7355",
+       "alpha": 1,
+       "ratioVsBg": 4.49,
+       "ratioVsParentBg": 4.3
+      },
+      "l": {
+       "w": 1,
+       "style": "solid",
+       "color": "#8b7355",
+       "alpha": 1,
+       "ratioVsBg": 4.49,
+       "ratioVsParentBg": 4.3
+      }
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true,
+     "pixelBgMedian": "#fefefe",
+     "ratioTextVsPixelBg": 14.34
+    },
+    "ancestors": [
+     {
+      "el": "div.space-y-[20px].animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.52s_both].motion-reduce:animate-none",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 815,
+       "w": 316,
+       "h": 137
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Continue with Apple Use a password instead +"
+     },
+     {
+      "el": "div.space-y-[20px]",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 388
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code Continue with Apple Use a password i"
+     },
+     {
+      "el": "div.da-press-scope",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 563,
+       "w": 316,
+       "h": 388
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "SIGN IN Start with your email. EMAIL ADDRESS Email sign-in code Continue with Apple Use a password i"
+     }
+    ]
+   },
+   "passwordLink": {
+    "self": {
+     "el": "span",
+     "text": "Use a password instead",
+     "rect": {
+      "x": 37,
+      "y": 918,
+      "w": 161,
+      "h": 21
+     },
+     "color": "#2c2926",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 13.87,
+     "fontSize": 14,
+     "fontWeight": "600",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true
+    },
+    "ancestors": [
+     {
+      "el": "button.flex.min-h-[44px].w-full",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 905,
+       "w": 316,
+       "h": 47
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 14,
+      "fontWeight": "600",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Use a password instead +"
+     },
+     {
+      "el": "div",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 904,
+       "w": 316,
+       "h": 48
+      },
+      "color": "#2c2926",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 13.87,
+      "fontSize": 18,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Use a password instead +"
+     }
+    ]
+   },
+   "createAccount": {
+    "self": {
+     "el": "a.underline.underline-offset-4",
+     "text": "Create designer account",
+     "rect": {
+      "x": 103,
+      "y": 979,
+      "w": 183,
+      "h": 19
+     },
+     "color": "#65594e",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 6.51,
+     "fontSize": 15.75,
+     "fontWeight": "400",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "underline",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": true
+    },
+    "ancestors": [
+     {
+      "el": "p",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 978,
+       "w": 316,
+       "h": 23
+      },
+      "color": "#65594e",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 6.51,
+      "fontSize": 15.75,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Create designer account"
+     },
+     {
+      "el": "div.mt-6.space-y-3.text-center",
+      "text": "",
+      "rect": {
+       "x": 37,
+       "y": 978,
+       "w": 316,
+       "h": 92
+      },
+      "color": "#65594e",
+      "colorAlpha": 1,
+      "opacityChain": 1,
+      "effectiveBg": "#fcfaf6",
+      "bgHasImageOrGradient": false,
+      "bgFromPseudoElementFill": false,
+      "ratioTextVsBgCss": 6.51,
+      "fontSize": 15.75,
+      "fontWeight": "400",
+      "letterSpacingPx": 0,
+      "textTransform": "none",
+      "fontFamily": "Inter",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "ownBg": "#000000",
+      "ownBgAlpha": 0,
+      "borders": {
+       "t": null,
+       "r": null,
+       "b": null,
+       "l": null
+      },
+      "boxShadow": null,
+      "borderRadius": "0px",
+      "fullText": false,
+      "kind": "ancestor",
+      "childText": "Create designer account DEV ACCOUNTS 4 AVAILABLE"
+     }
+    ]
+   }
+  },
+  "pixelSampledCount": 27,
+  "primaryButtonEnabled": {
+   "self": {
+    "el": "button.h-[48px].w-full.bg-[#1A1816]",
+    "text": "Email sign-in code",
+    "rect": {
+     "x": 37,
+     "y": 747,
+     "w": 316,
+     "h": 48
+    },
+    "color": "#faf7f2",
+    "colorAlpha": 1,
+    "opacityChain": 1,
+    "effectiveBg": "#1a1816",
+    "bgHasImageOrGradient": false,
+    "bgFromPseudoElementFill": false,
+    "ratioTextVsBgCss": 16.57,
+    "fontSize": 14,
+    "fontWeight": "600",
+    "letterSpacingPx": 0,
+    "textTransform": "none",
+    "fontFamily": "Inter",
+    "fontStyle": "normal",
+    "textDecoration": "none",
+    "ownBg": "#1a1816",
+    "ownBgAlpha": 1,
+    "borders": {
+     "t": null,
+     "r": null,
+     "b": null,
+     "l": null
+    },
+    "boxShadow": null,
+    "borderRadius": "0px",
+    "fullText": true,
+    "pixelBgMedian": "#1a1816",
+    "ratioTextVsPixelBg": 16.57,
+    "note": "email field filled with a placeholder address, never submitted; button now enabled"
+   },
+   "ancestors": [
+    {
+     "el": "div.animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.44s_both].motion-reduce:animate-none",
+     "text": "",
+     "rect": {
+      "x": 37,
+      "y": 747,
+      "w": 316,
+      "h": 48
+     },
+     "color": "#2c2926",
+     "colorAlpha": 1,
+     "opacityChain": 1,
+     "effectiveBg": "#fcfaf6",
+     "bgHasImageOrGradient": false,
+     "bgFromPseudoElementFill": false,
+     "ratioTextVsBgCss": 13.87,
+     "fontSize": 18,
+     "fontWeight": "400",
+     "letterSpacingPx": 0,
+     "textTransform": "none",
+     "fontFamily": "Inter",
+     "fontStyle": "normal",
+     "textDecoration": "none",
+     "ownBg": "#000000",
+     "ownBgAlpha": 0,
+     "borders": {
+      "t": null,
+      "r": null,
+      "b": null,
+      "l": null
+     },
+     "boxShadow": null,
+     "borderRadius": "0px",
+     "fullText": false,
+     "kind": "ancestor",
+     "childText": "Email sign-in code"
+    }
+   ]
+  }
+ }
+}
