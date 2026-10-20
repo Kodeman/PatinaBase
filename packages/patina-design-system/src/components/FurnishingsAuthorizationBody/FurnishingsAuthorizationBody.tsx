@@ -137,9 +137,10 @@ export function FurnishingsAuthorizationBody({ items, depositRequiredCents: exec
             className="type-body-small mt-3 text-[var(--text-primary)]"
             data-testid="authorization-terms-strip"
           >
-            {`Total ${money(statedTotal, currency)} · Deposit ${money(
+            {`Total ${money(statedTotal, currency, hasLeadTime)} · Deposit ${money(
               depositRequiredCents,
               currency,
+              hasLeadTime,
             )} (${percent(depositPercent)}%) on signature`}
           </p>
         )}

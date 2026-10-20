@@ -211,5 +211,5 @@ it('renders saved lead time and unit prices in the designer preview sheet', () =
   expect(screen.getByText('2 × $5')).toBeVisible();
   expect(screen.getByText('Lead time · About 12 weeks')).toBeVisible();
   expect(screen.getByText(/Lead times are the studio's current estimates, not delivery dates./)).toBeVisible();
-  expect(screen.getByText('Authorized furnishings').parentElement).toHaveTextContent('$10');
+  expect(screen.getByText('Authorized furnishings').parentElement?.textContent).toBe('Authorized furnishings$10');
 });

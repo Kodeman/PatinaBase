@@ -139,14 +139,16 @@ describe('authorization unit prices and lead times', () => {
       { ...items[0], description: 'Legacy allowance', quantity: 3, unit: 'each', rooms: [], clientLineTotalCents: 10000 },
       { ...fixed, description: 'Multi-room', roomName: 'Living room', quantity: 2, rooms: [{ name: 'Living room', quantity: 1 }, { name: 'Hall', quantity: 1 }], clientLineTotalCents: 1050 },
     ]} totalAmountCents={21049} depositPercent={50} />);
-    // Golden strings from 17e543c44, including its whole-dollar rounding and consent.
-    expect(Array.from(container.querySelectorAll('p'), node => node.textContent)).toEqual([
-      'Study', 'Legacy fixed', 'Quantity 3', '$100',
-      'Hall', 'Legacy allowance', 'Quantity 3', 'Up to $100',
-      'Living room', 'Multi-room · 2 · Living room · Hall', '$11',
-      'Total $210 · Deposit $105 (50%) on signature', consent,
-    ]);
-    expect(screen.getByText('Authorized furnishings').parentElement?.textContent).toBe('Authorized furnishings$210');
+    // Golden markup rendered by 17e543c44: classes, structure, whole-dollar rounding and consent.
+    expect(container.innerHTML).toBe([
+      '<section><h2 class="type-section-head">Named furnishing lines</h2><div class="mt-4 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">',
+      '<div data-testid="authorization-room-group"><p class="type-meta pt-4 text-[var(--accent-primary)]" data-testid="authorization-room-heading">Study</p><div class="divide-y divide-[var(--border-subtle)]"><div class="grid grid-cols-[1fr_auto] gap-x-4 py-3"><div><p class="type-body-small text-[var(--text-primary)]">Legacy fixed</p><p class="type-meta-small mt-0.5">Quantity 3</p></div><p class="type-label text-right">$100</p></div></div></div>',
+      '<div data-testid="authorization-room-group"><p class="type-meta pt-4 text-[var(--accent-primary)]" data-testid="authorization-room-heading">Hall</p><div class="divide-y divide-[var(--border-subtle)]"><div class="grid grid-cols-[1fr_auto] gap-x-4 py-3"><div><p class="type-body-small text-[var(--text-primary)]">Legacy allowance</p><p class="type-meta-small mt-0.5">Quantity 3</p></div><p class="type-label text-right">Up to $100</p></div></div></div>',
+      '<div data-testid="authorization-room-group"><p class="type-meta pt-4 text-[var(--accent-primary)]" data-testid="authorization-room-heading">Living room</p><div class="divide-y divide-[var(--border-subtle)]"><div class="grid grid-cols-[1fr_auto] gap-x-4 py-3"><div><p class="type-body-small text-[var(--text-primary)]">Multi-room · 2 · Living room · Hall</p></div><p class="type-label text-right">$11</p></div></div></div>',
+      '<div class="flex items-baseline justify-between py-4"><span class="type-body-small font-medium">Authorized furnishings</span><span class="type-data-large">$210</span></div></div>',
+      '<p class="type-body-small mt-3 text-[var(--text-primary)]" data-testid="authorization-terms-strip">Total $210 · Deposit $105 (50%) on signature</p>',
+      '<p class="type-body-small mt-3 text-[var(--text-muted)]">This signature covers only the descriptions, quantities, and client prices shown here. It does not alter the design-services agreement.</p></section>',
+    ].join(''));
     expect(container).not.toHaveTextContent('×');
   });
 
@@ -159,7 +161,7 @@ describe('authorization unit prices and lead times', () => {
       totalAmountCents={total} depositPercent={50} />);
     expect(screen.getByText(label)).toBeInTheDocument();
     expect(screen.getAllByText(price)).toHaveLength(2);
-    expect(screen.getByTestId('authorization-terms-strip')).toHaveTextContent(quantity === 2 ? 'Total $67 · Deposit $33 (50%) on signature' : 'Total $300 · Deposit $150 (50%) on signature');
+    expect(screen.getByTestId('authorization-terms-strip').textContent).toBe(quantity === 2 ? 'Total $66.66 · Deposit $33.33 (50%) on signature' : 'Total $300 · Deposit $150 (50%) on signature');
   });
 
   it('keeps Quantity for a new-format mismatch and preserves its authoritative cents', () => {

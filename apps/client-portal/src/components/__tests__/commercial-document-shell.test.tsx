@@ -1347,5 +1347,6 @@ it('renders frozen lead time and unit pricing through the actual client bundle a
   expect(screen.getByText('2 yard × $100.50')).toBeInTheDocument();
   expect(screen.getByText('Lead time · About 12 weeks')).toBeInTheDocument();
   expect(screen.getByText(/Lead times are the studio's current estimates, not delivery dates./)).toBeInTheDocument();
-  expect(screen.getByText('Authorized furnishings').parentElement).toHaveTextContent('$201');
+  expect(screen.getByText('Authorized furnishings').parentElement?.textContent).toBe('Authorized furnishings$201');
+  expect(screen.getByTestId('authorization-terms-strip').textContent).toBe('Total $201 · Deposit $100.50 (50%) on signature');
 });
