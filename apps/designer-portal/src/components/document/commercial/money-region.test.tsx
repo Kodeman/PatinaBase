@@ -295,6 +295,24 @@ describe('MoneyRegion', () => {
     expect(screen.getByText('Undisbursed vendor payments · could not be read')).toBeVisible();
   });
 
+  it('never calls a cached capped budget uncapped after a failed background read', () => {
+    mockAuthority = {
+      data: { authorizedCents: 10_000_000, remainingCents: 1_800_000 },
+      isLoading: false,
+      error: null,
+    };
+    const { rerender, container } = render(<MoneyRegion projectId="project-1" />);
+    expect(screen.getByText('Client budget $100,000, $18,000 remaining. Nothing has been authorized.')).toBeVisible();
+
+    mockAuthority = { ...mockAuthority, error: new Error('background read failed') };
+    rerender(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.getByText('The client budget could not be read. Nothing has been authorized.')).toBeVisible();
+    expect(container).not.toHaveTextContent('no ceiling');
+    openDetails();
+    expect(screen.getByText('Client budget · could not be read')).toBeVisible();
+  });
+
   it('degrades every tier to a band-honest line when nothing is recorded', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
@@ -619,6 +637,32 @@ describe('MoneyRegion', () => {
 
     expect(details).toHaveAttribute('aria-expanded', 'false');
     expect(panel!.querySelectorAll('ol > li')).toHaveLength(0);
+  });
+
+  it('closes Details on Escape, restores toggle focus, and keeps the key off the document', () => {
+    render(<MoneyRegion projectId="project-1" />);
+    unfoldIfNeeded();
+    const toggle = screen.getByRole('button', { name: 'Details' });
+    openDetails();
+    const ledger = screen.getByRole('button', { name: 'Project time ledger ↗' });
+    ledger.focus();
+    const onDocumentKeyDown = jest.fn();
+    document.addEventListener('keydown', onDocumentKeyDown);
+    try {
+      const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      fireEvent(ledger, escape);
+
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(toggle).toHaveFocus();
+      expect(screen.queryByRole('button', { name: 'Project time ledger ↗' })).not.toBeInTheDocument();
+      expect(escape.defaultPrevented).toBe(true);
+      expect(onDocumentKeyDown).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(toggle, { key: 'Escape' });
+      expect(onDocumentKeyDown).toHaveBeenCalledTimes(1);
+    } finally {
+      document.removeEventListener('keydown', onDocumentKeyDown);
+    }
   });
 
   it('says the budget and the authorized figure once, in one summary', () => {
