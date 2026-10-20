@@ -425,11 +425,12 @@ describe('the Worktable, flag on', () => {
 
       expect(container.querySelector('[data-table-turn]')).not.toBeNull();
       expect(container.querySelectorAll('[data-accounts-surface]')).toHaveLength(1);
+      // The paper is still the Care spread, which carries the money region.
       expect(
         container.querySelector('[data-accounts-surface]')!.getAttribute(
           'data-accounts-surface',
         ),
-      ).toBe('band');
+      ).toBe('money');
     });
   });
 

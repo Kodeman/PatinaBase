@@ -475,14 +475,15 @@ describe('the Delivery table, tooled', () => {
       // The install spread never mentions the lift at all; the prop defaults off.
       expect(mockFfeProps.current.releaseLeaderElsewhere).toBeUndefined();
       // The install spread stands as it did: FF&E at install grade, the window
-      // ceremony, the Care band — and no money region, which has never mounted
-      // outside the project spread (the accounts band states them here).
-      expect(container.querySelector('[data-index-region="money"]')).toBeNull();
+      // ceremony, the Care band — and, since US-40, one money region carrying
+      // the accounts in place of the standalone band.
+      expect(container.querySelectorAll('[data-index-region="money"]')).toHaveLength(1);
+      expect(container.querySelectorAll('[data-accounts-surface]')).toHaveLength(1);
       expect(
         container.querySelector('[data-accounts-surface]')!.getAttribute(
           'data-accounts-surface',
         ),
-      ).toBe('band');
+      ).toBe('money');
     });
   });
 });

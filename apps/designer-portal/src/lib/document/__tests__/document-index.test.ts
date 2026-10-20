@@ -73,13 +73,13 @@ describe('paperRegionsForSection', () => {
     ]);
   });
 
-  // Money and Schedule mount only under `spreadSection === 'project'`, so a row
-  // for either on install or care would be a scroll-spy target with nothing
-  // behind it.
+  // Schedule mounts only on the Project spread, so a row for it on install or
+  // care would be a scroll-spy target with nothing behind it. Money mounts on
+  // both (US-40), so it has a row.
   it.each(['install', 'care'] as const)(
-    'prints four on the %s spread — no money row, no schedule row',
+    'prints five on the %s spread — a money row, no schedule row',
     (section) => {
-      expect(keysOf(section)).toEqual(['approvals', 'ffe', 'care', 'record']);
+      expect(keysOf(section)).toEqual(['approvals', 'ffe', 'money', 'care', 'record']);
     },
   );
 

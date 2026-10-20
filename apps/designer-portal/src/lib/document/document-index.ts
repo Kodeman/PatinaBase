@@ -148,11 +148,10 @@ export function paperRegionFor(key: DocumentIndexKey): ProjectPaperRegion {
  * row per section, so a spread's order is stated once and read everywhere.
  *
  * A row whose region the spread never mounts is a scroll-spy target with
- * nothing behind it, so the install and care spreads print neither Money
- * (`MoneyRegion` mounts only under `spreadSection === 'project'`,
- * page.tsx:1448) nor Schedule (`ScheduleSpine` — the only
- * `data-index-region="schedule"` root — mounts only under the same branch,
- * page.tsx:1399).
+ * nothing behind it, so the install and care spreads print no Schedule
+ * (`ScheduleSpine` — the only `data-index-region="schedule"` root — mounts
+ * only on the Project spread). They do print Money: US-40 mounts
+ * `MoneyRegion` on them for the Working budget's recovery links.
  *
  * Wave 5 (OD-2) gives the four pre-work spreads their own rows. They mount
  * their regions in page.tsx's own order rather than in `PROJECT_PAPER_ORDER`,
@@ -188,8 +187,8 @@ const SECTION_PAPER_REGIONS: Record<
     'record',
   ]),
   project: PROJECT_PAPER_ORDER,
-  install: regionsInPaperOrder(['approvals', 'ffe', 'care', 'record']),
-  care: regionsInPaperOrder(['approvals', 'ffe', 'care', 'record']),
+  install: regionsInPaperOrder(['approvals', 'ffe', 'money', 'care', 'record']),
+  care: regionsInPaperOrder(['approvals', 'ffe', 'money', 'care', 'record']),
 };
 
 export function paperRegionsForSection(

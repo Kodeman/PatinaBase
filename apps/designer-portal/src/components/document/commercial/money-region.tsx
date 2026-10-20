@@ -23,7 +23,7 @@
  * region head now carries it.
  */
 
-import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useProjectInvoices } from '@patina/supabase';
 import { useAccountPage } from '@/hooks/use-account-page';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
@@ -41,6 +41,7 @@ import { useRegionFold, type RegionFoldKey } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { NAMED_ACTS } from '@/lib/document/act-names';
+import { AmendmentSheet } from '../overlays/amendment-sheet';
 import { openRecordAChange } from '../overlays/record-a-change-sheet';
 import { ProjectAuthorityBandForProject } from './project-authority-band';
 import { ProjectCommerceSection } from './project-commerce-section';
@@ -268,6 +269,30 @@ export function MoneyRegion({
     money,
   });
 
+  // The accounts band owns the change sheet and its two events, but it mounts
+  // only in the full body. Folded or quiet, the region holds them instead, so
+  // ⌘K's `Add a change` and a line's change order still open the sheet.
+  const bandMounted = !folded && !quiet;
+  const [changeOpen, setChangeOpen] = useState(false);
+  useEffect(() => {
+    if (bandMounted) return;
+    const openChange = () => setChangeOpen(true);
+    if (changeOnly) window.addEventListener('document:open-project-change', openChange);
+    window.addEventListener('document:compose-amendment', openChange);
+    return () => {
+      window.removeEventListener('document:open-project-change', openChange);
+      window.removeEventListener('document:compose-amendment', openChange);
+    };
+  }, [bandMounted, changeOnly]);
+  const changeSheet = changeOpen ? (
+    <AmendmentSheet
+      projectId={projectId}
+      clientName={clientName ?? ''}
+      open
+      onClose={() => setChangeOpen(false)}
+    />
+  ) : null;
+
   const ledger: RegionLedgerEntry[] = [
     ...(receivableDue
       ? [
@@ -358,6 +383,7 @@ export function MoneyRegion({
           surfaceKey="accounts"
           regionKey="money-head"
         />
+        {changeSheet}
       </section>
     );
   }
@@ -454,6 +480,7 @@ export function MoneyRegion({
         </div>
       </div>
       )}
+      {changeSheet}
     </section>
   );
 }

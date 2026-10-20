@@ -152,12 +152,12 @@ describe('the ladder’s stops', () => {
     ).toEqual(['approvals', 'schedule', 'ffe', 'money', 'care', 'record']);
   });
 
-  it('prints four on install and on care — no money row, no schedule row', () => {
+  it('prints five on install and on care — a money row, no schedule row', () => {
     for (const section of ['install', 'care'] as const) {
       const { unmount } = mount({}, section);
       expect(
         segmentRows().map((row) => row.getAttribute('data-index-region')),
-      ).toEqual(['approvals', 'ffe', 'care', 'record']);
+      ).toEqual(['approvals', 'ffe', 'money', 'care', 'record']);
       unmount();
     }
   });
@@ -876,7 +876,7 @@ describe('the ladder’s keyboard', () => {
     expect(fewer).toHaveLength(6);
     expect(rovingRows()).toHaveLength(1);
 
-    // And a shorter spread — four stops, no rungs at all.
+    // And a shorter spread — five stops, no rungs at all.
     const install = ladderFor('install');
     rerender(
       <LensLadder
@@ -888,7 +888,7 @@ describe('the ladder’s keyboard', () => {
     );
     expect(
       ladderNav().querySelectorAll('[data-ladder-row]'),
-    ).toHaveLength(4);
+    ).toHaveLength(5);
     expect(rovingRows()).toHaveLength(1);
 
     // The rungs come back; still exactly one.

@@ -101,6 +101,17 @@ jest.mock('../../account-band', () => ({
   ),
 }));
 
+jest.mock('../../overlays/amendment-sheet', () => ({
+  AmendmentSheet: ({ open, onClose }: { open: boolean; onClose: () => void }) =>
+    open ? (
+      <div role="dialog" aria-label="Change composer">
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    ) : null,
+}));
+
 import { MoneyRegion } from '../money-region';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 
@@ -142,6 +153,67 @@ describe('the Working budget editor on the Install and Care spreads (US-40)', ()
       expect(screen.getByRole('button', { name: 'Sync from the schedule' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Publish checkpoint' })).toBeInTheDocument();
       expect(document.getElementById('money-region-heading')).not.toBeNull();
+    },
+  );
+});
+
+// The accounts band (stubbed above) owns the change sheet only in the full
+// body; quiet or folded, ⌘K's `Add a change` must still open it.
+describe('the change composer while Money is quiet or folded (US-40 F1)', () => {
+  const quietOrFolded = {
+    quiet: () => __setDensityForTest('quiet'),
+    folded: () => window.localStorage.setItem('patina:doc-fold:project-1:money', '1'),
+  };
+  const composer = () => screen.queryByRole('dialog', { name: 'Change composer' });
+
+  it.each([
+    ['install', 'quiet'],
+    ['install', 'folded'],
+    ['care', 'quiet'],
+    ['care', 'folded'],
+  ] as const)('on the %s spread with Money %s, ⌘K Add a change opens it', (activeSection, posture) => {
+    quietOrFolded[posture]();
+    const { container } = render(
+      <MoneyRegion projectId="project-1" activeSection={activeSection} />,
+    );
+    expect(container.querySelector('[data-account-band]')).toBeNull();
+    expect(composer()).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('document:open-project-change'));
+    });
+    expect(composer()).toBeInTheDocument();
+
+    act(() => screen.getByRole('button', { name: 'Close' }).click());
+    expect(composer()).toBeNull();
+  });
+
+  it.each(['install', 'care'] as const)(
+    'on the %s spread with Money folded, a line’s change order opens it',
+    (activeSection) => {
+      quietOrFolded.folded();
+      render(<MoneyRegion projectId="project-1" activeSection={activeSection} />);
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('document:compose-amendment'));
+      });
+      expect(composer()).toBeInTheDocument();
+    },
+  );
+
+  it.each(['install', 'care'] as const)(
+    'on the %s spread with Money full, leaves the event to the accounts band — no second sheet',
+    (activeSection) => {
+      const { container } = render(
+        <MoneyRegion projectId="project-1" activeSection={activeSection} />,
+      );
+      expect(container.querySelector('[data-account-band]')).not.toBeNull();
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('document:open-project-change'));
+        window.dispatchEvent(new CustomEvent('document:compose-amendment'));
+      });
+      expect(composer()).toBeNull();
     },
   );
 });
