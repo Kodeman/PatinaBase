@@ -129,7 +129,9 @@ describe('F56 · text-grade ink tokens clear WCAG AA', () => {
     for (const name of PIGMENT_INKS) expect(tokens.get(name)).toBeDefined();
     // An alias-form ink (`--x-ink: var(--color-clay)`) parses to no hex. It
     // would keep the count healthy and ship unmeasured, so name it here.
-    expect(aliasedInkNames(css)).toEqual([]);
+    // The on-dark inks are aliases by design and are measured on charcoal in
+    // their own block below (US-43 R5).
+    expect(aliasedInkNames(css).filter((name) => !name.startsWith('--on-dark-'))).toEqual([]);
   });
 
   it.each(inkTokens)('%s reaches 4.5:1 on every light ground', (name, hex) => {
@@ -730,6 +732,47 @@ describe('F56 · the base pigments are not spent as text', () => {
  * shadow that would rescue it. R144 amends "no new token" exactly once, for
  * this one value, on Claim cards only.
  */
+describe('US-43 R5 · the on-dark inks clear AA on the charcoal ground', () => {
+  /** One alias hop at a time (`--on-dark-ink` → `--ink-paper` →
+   *  `--color-off-white`) until a hex is reached. */
+  const aliases = new Map<string, string>();
+  for (const match of css.matchAll(/(--[a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)\s*;/g)) {
+    aliases.set(match[1]!, match[2]!);
+  }
+  const resolve = (name: string): string | undefined => {
+    for (let hop = name, depth = 0; depth < 5; depth += 1) {
+      const hex = tokens.get(hop);
+      if (hex) return hex;
+      const next = aliases.get(hop);
+      if (!next) return undefined;
+      hop = next;
+    }
+    return undefined;
+  };
+  const onDark = (name: string) => Number(contrastRatio(resolve(name)!, DARK_GROUND).toFixed(2));
+
+  it('resolves every on-dark token to a hex', () => {
+    for (const name of [
+      '--on-dark-ink',
+      '--on-dark-muted',
+      '--on-dark-clay',
+      '--on-dark-terracotta',
+      '--focus-on-dark',
+    ]) {
+      expect(resolve(name)).toMatch(/^#[0-9a-fA-F]{6}$/);
+    }
+  });
+
+  it('reads at the ratios the house sheet records', () => {
+    expect(onDark('--on-dark-ink')).toBeGreaterThanOrEqual(13);
+    expect(onDark('--on-dark-muted')).toBeGreaterThanOrEqual(11);
+    expect(onDark('--on-dark-clay')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    expect(onDark('--on-dark-terracotta')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    // a focus ring is a non-text indicator, but it gets the text floor here
+    expect(onDark('--focus-on-dark')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+});
+
 describe('D4 · --color-card-edge is the one boundary grey', () => {
   it('is declared, and at the ruled value', () => {
     // A retune has to be a ruling, not an edit.

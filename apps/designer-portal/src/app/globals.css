@@ -39,6 +39,16 @@
      the quiet mono notes that name a state. */
   --color-golden-hour-ink: #79651E; /* 5.45:1 paper · 5.32:1 off-white · 5.69:1 white */
   --color-sage-ink: #5F6B57; /* 5.40:1 paper · 5.27:1 off-white · 5.63:1 white */
+  /* US-43 R5 — the inks a scored word takes on a charcoal ground. A dark
+     surface says so with [data-ground="dark"] and every .da-* act inside it
+     reads these instead of the paper inks above (house sheet §A1 dark block).
+     Measured on --color-charcoal; contrast.test.ts gates them there, not on
+     paper. */
+  --on-dark-ink: var(--ink-paper); /* 13.53:1 */
+  --on-dark-muted: var(--color-pearl); /* 11.19:1 */
+  --on-dark-clay: #D8B98A; /* 7.73:1 */
+  --on-dark-terracotta: #E2A895; /* 7.07:1 */
+  --focus-on-dark: var(--on-dark-ink);
 
   /* — Extended Palette — */
   --color-sage: #A8B5A0;
@@ -869,12 +879,17 @@ html[data-loading-register] [data-register-off] {
   transition: clip-path 260ms var(--ease-editorial);
 }
 
-/* ── the word · z 1, and the scores ride with it above the ink ───────────── */
+/* ── the word · z 1, and the scores ride with it above the ink ─────────────
+   US-43 R5: sentence case in the body face (14–15px Inter, set by the
+   variant class), so the word now has descenders. An 18px box puts the
+   baseline 14px down and the descenders at the box floor; the first score
+   starts 0.5px below that floor, so a "g" or "y" sits on its rule rather than
+   being struck through, and the two scores keep their 2.5px gap. */
 .da-label {
   position: relative;
   z-index: 1;
   display: inline-block;
-  line-height: 12px;
+  line-height: 18px;
 }
 .da-label::before,
 .da-label::after {
@@ -889,11 +904,11 @@ html[data-loading-register] [data-register-off] {
     transform 240ms var(--ease-editorial);
 }
 .da-label::before {
-  bottom: -4px;
+  bottom: -2px;
   height: 1.5px;
 }
 .da-label::after {
-  bottom: -7.5px;
+  bottom: -5.5px;
   height: 1px;
 }
 
@@ -902,9 +917,9 @@ html[data-loading-register] [data-register-off] {
 .da-trailing {
   position: relative;
   z-index: 1;
-  /* the same 12px box the word keeps, so a glyph never lifts the control taller
+  /* the same 18px box the word keeps, so a glyph never lifts the control taller
      than its unmarked neighbours and the scores stay on one line across a row */
-  line-height: 12px;
+  line-height: 18px;
   color: var(--color-quiet-ink);
   transition:
     color 120ms linear 60ms,
@@ -1224,6 +1239,119 @@ html[data-loading-register] [data-register-off] {
 }
 .da-inked:focus-visible .da-label::before {
   background-color: var(--color-off-white);
+}
+
+/* ── on a dark ground (US-43 R5) ────────────────────────────────────────────
+   A charcoal surface declares [data-ground="dark"]; every scored word inside
+   it takes the on-dark inks. The rules restate each state the paper rules set
+   because each of those reads against PAPER: charcoal on charcoal is nothing.
+   A press still paints its word against its own pool, so the press values
+   follow the pool, not the ground. Order is the cascade: rest, hover, press,
+   unavailable, focus — each later state outranks the one before it, as on
+   paper. Inked and terminal never stand on a dark ground (the inked flood is
+   charcoal; the terminal fill is charcoal), so they take no rule here. */
+[data-ground='dark'] :is(.da-primary, .da-secondary, .da-tertiary) {
+  color: var(--on-dark-ink);
+}
+[data-ground='dark'] .da-danger {
+  color: var(--on-dark-terracotta);
+}
+[data-ground='dark'] .da-act::before {
+  color: var(--on-dark-muted);
+}
+[data-ground='dark'] :is(.da-primary, .da-secondary, .da-tertiary, .da-danger) :is(.da-leading, .da-trailing) {
+  color: var(--on-dark-muted);
+}
+[data-ground='dark'] .da-primary :is(.da-leading, .da-trailing) {
+  color: var(--on-dark-clay);
+}
+[data-ground='dark'] .da-primary .da-label::before {
+  background-color: var(--on-dark-ink);
+}
+[data-ground='dark'] .da-primary .da-label::after {
+  background-color: var(--on-dark-clay);
+}
+[data-ground='dark'] :is(.da-secondary, .da-tertiary) .da-label::before {
+  background-color: var(--on-dark-muted);
+}
+[data-ground='dark'] .da-danger .da-label::before,
+[data-ground='dark'] .da-danger .da-label::after {
+  background-color: var(--on-dark-terracotta);
+}
+/* hover · the rest rule brightens to the word's own ink */
+[data-ground='dark'] :is(.da-secondary, .da-tertiary):hover {
+  color: var(--on-dark-ink);
+}
+[data-ground='dark'] :is(.da-secondary, .da-tertiary):hover .da-label::before {
+  background-color: var(--on-dark-ink);
+}
+[data-ground='dark'] .da-danger:hover {
+  color: var(--on-dark-terracotta);
+}
+/* press · the secondary's warm pool and the danger's terracotta pool are
+   light, so the word turns over against them exactly as on paper; the
+   tertiary has no pool and deepens to full on-dark ink. */
+[data-ground='dark'] .da-secondary:active,
+[data-ground='dark'] .da-secondary:active :is(.da-leading, .da-trailing) {
+  color: var(--color-charcoal);
+}
+[data-ground='dark'] .da-danger:active,
+[data-ground='dark'] .da-danger:active :is(.da-leading, .da-trailing) {
+  color: var(--on-dark-ink);
+}
+[data-ground='dark'] .da-tertiary:active .da-label::before {
+  background-color: var(--on-dark-ink);
+}
+/* unavailable · never opacity: the word falls to the muted ink and its
+   scores to a mocha hairline, the dark ground's equivalent of pearl on paper */
+[data-ground='dark'] .da-act:is(:disabled, [aria-disabled='true']),
+[data-ground='dark'] .da-act:is(:disabled, [aria-disabled='true']) :is(.da-leading, .da-trailing) {
+  color: var(--on-dark-muted);
+}
+[data-ground='dark'] .da-act:is(:disabled, [aria-disabled='true']) .da-label::before,
+[data-ground='dark'] .da-act:is(:disabled, [aria-disabled='true']) .da-label::after {
+  background-color: var(--color-mocha);
+}
+/* focus · the ring is the on-dark ink (a clay-ink ring falls to 2.41:1 on
+   charcoal), the caret keeps the muted ink, the scores turn clay */
+[data-ground='dark'] .da-act:focus-visible {
+  outline: 2px solid var(--focus-on-dark);
+  outline-offset: 2px;
+}
+[data-ground='dark'] [data-held-focus-cue] {
+  outline: 2px solid var(--focus-on-dark) !important;
+  outline-offset: 2px !important;
+}
+[data-ground='dark'] .da-act:focus-visible .da-label::before,
+[data-ground='dark'] .da-act:focus-visible .da-label::after {
+  background-color: var(--on-dark-clay);
+}
+
+/* ── forced colors (house sheet §A11) ───────────────────────────────────────
+   High Contrast repaints every background to Canvas, and a score IS a
+   background on an empty pseudo-element — so the scores alone opt out and
+   draw in CanvasText. The text never opts out: the system keeps the word.
+   The two filled tiers lose their fill to Canvas, so a 1px ButtonText edge
+   puts their silhouette back. `!important` because the per-variant and
+   per-ground score colours above outrank a bare .da-label selector. */
+@media (forced-colors: active) {
+  .da-label::before,
+  .da-label::after {
+    forced-color-adjust: none;
+    background-color: CanvasText !important;
+  }
+  .da-inked,
+  .da-terminal {
+    border: 1px solid ButtonText;
+  }
+  .da-act:focus-visible,
+  [data-ground='dark'] .da-act:focus-visible {
+    outline: 2px solid Highlight;
+  }
+  [data-held-focus-cue],
+  [data-ground='dark'] [data-held-focus-cue] {
+    outline: 2px solid Highlight !important;
+  }
 }
 
 /* ── stilled · the same room by the other door. No bead, no draw, no snap;

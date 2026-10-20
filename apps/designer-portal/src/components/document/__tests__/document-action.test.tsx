@@ -30,43 +30,45 @@ const events = documentEvents as jest.Mocked<typeof documentEvents>;
 
 /**
  * The Scored Ink (I107): the visible control is a scored word, not a box. Each
- * variant keeps the 12px floor (I91), owns a real 44px target, and
- * differentiates by weight and ink; the retired chrome column is the box
- * grammar that must no longer appear.
+ * variant owns a real 44px target and differentiates by size, weight and ink;
+ * the retired chrome column is the box grammar that must no longer appear.
+ * US-43 R5: the scored word is sentence case in the body face — 15px/500 for
+ * the leaders, 14px/400 for the held-back tiers — so the mono caps, its
+ * tracking and the 300 weight are retired chrome too.
  */
 const VARIANTS = [
   {
     variant: 'primary',
     retiredChrome: 'bg-[var(--color-charcoal)]',
-    tracking: 'tracking-[0.12em]',
+    size: 'text-[15px]',
     weight: 'font-medium',
     hasPool: true,
   },
   {
     variant: 'inked',
     retiredChrome: 'bg-[var(--color-charcoal)]',
-    tracking: 'tracking-[0.12em]',
+    size: 'text-[15px]',
     weight: 'font-medium',
     hasPool: true,
   },
   {
     variant: 'secondary',
     retiredChrome: 'border-[var(--color-aged-oak)]',
-    tracking: 'tracking-[0.1em]',
+    size: 'text-[14px]',
     weight: 'font-normal',
     hasPool: true,
   },
   {
     variant: 'tertiary',
     retiredChrome: 'underline',
-    tracking: 'tracking-[0.1em]',
-    weight: 'font-light',
+    size: 'text-[14px]',
+    weight: 'font-normal',
     hasPool: false,
   },
   {
     variant: 'danger',
     retiredChrome: 'bg-[var(--color-terracotta)]',
-    tracking: 'tracking-[0.12em]',
+    size: 'text-[15px]',
     weight: 'font-medium',
     hasPool: true,
   },
@@ -77,7 +79,7 @@ const VARIANTS = [
     // distinction.
     variant: 'terminal',
     retiredChrome: null,
-    tracking: 'tracking-[0]',
+    size: 'text-[12px]',
     weight: 'font-medium',
     hasPool: true,
   },
@@ -86,7 +88,7 @@ const VARIANTS = [
 describe('DocumentAction', () => {
   it.each(VARIANTS)(
     'renders the $variant variant in the scored-ink grammar',
-    ({ variant, retiredChrome, tracking, weight }) => {
+    ({ variant, retiredChrome, size, weight }) => {
       render(
         <DocumentAction
           actionKey={`${variant}-action`}
@@ -104,10 +106,22 @@ describe('DocumentAction', () => {
         `da-${variant}`,
         'min-h-[44px]',
         'min-w-[44px]',
-        'text-[12px]',
-        tracking,
+        size,
         weight,
       );
+      if (variant === 'terminal') {
+        // R139's terminal keeps its own grammar unchanged; its label is
+        // Inter 16px in globals.css and the act never wraps.
+        expect(action).toHaveClass('font-mono', 'uppercase', 'tracking-[0]', 'whitespace-nowrap');
+      } else {
+        // sentence case in the body face: no caps, no mono, no tracking, no 300
+        expect(action).toHaveClass('font-body');
+        expect(action).not.toHaveClass('uppercase');
+        expect(action).not.toHaveClass('font-mono');
+        expect(action).not.toHaveClass('font-light');
+        expect(action).not.toHaveClass('whitespace-nowrap');
+        expect(action.className).not.toMatch(/\btracking-/);
+      }
 
       // The control itself owns the target. Its visual ink remains unboxed.
       expect(action).not.toHaveClass('min-h-11');
@@ -536,7 +550,7 @@ describe('held', () => {
 });
 
 describe('wrap (F9-2)', () => {
-  it('swaps whitespace-nowrap for whitespace-normal text-left, and changes nothing else', () => {
+  it('adds whitespace-normal text-left and min-w-0 in place of shrink-0, and changes nothing else', () => {
     render(
       <>
         <DocumentAction actionKey="log" variant="tertiary" className="mt-1">
@@ -549,16 +563,20 @@ describe('wrap (F9-2)', () => {
     );
     const plain = screen.getByRole('button', { name: 'Plain' });
     const wrapped = screen.getByRole('button', { name: 'Wrapped' });
-    expect(plain).toHaveClass('whitespace-nowrap');
+    // US-43 R5: every scored word may wrap, so neither carries a nowrap
+    expect(plain).not.toHaveClass('whitespace-nowrap');
     expect(plain).not.toHaveClass('whitespace-normal');
     expect(plain).not.toHaveClass('text-left');
     expect(wrapped).toHaveClass('whitespace-normal', 'text-left');
     expect(wrapped).not.toHaveClass('whitespace-nowrap');
-    expect(wrapped.className).toBe(
-      plain.className
-        .replace('whitespace-nowrap', 'whitespace-normal text-left')
-        .replace('shrink-0', 'min-w-0'),
-    );
+    const plainClasses = plain.className.split(/\s+/);
+    const wrappedClasses = wrapped.className.split(/\s+/);
+    expect(wrappedClasses.filter((c) => !plainClasses.includes(c)).sort()).toEqual([
+      'min-w-0',
+      'text-left',
+      'whitespace-normal',
+    ]);
+    expect(plainClasses.filter((c) => !wrappedClasses.includes(c))).toEqual(['shrink-0']);
     expect(wrapped).not.toHaveAttribute('wrap');
   });
 
@@ -573,7 +591,7 @@ describe('wrap (F9-2)', () => {
     expect(wrapped).toHaveClass('min-w-0');
   });
 
-  it('keeps shrink-0 and whitespace-nowrap, byte-identical, when wrap is unset', () => {
+  it('keeps shrink-0 when wrap is unset', () => {
     render(
       <DocumentAction actionKey="log" variant="tertiary">
         Accept theirs
@@ -581,8 +599,17 @@ describe('wrap (F9-2)', () => {
     );
     const plain = screen.getByRole('button', { name: 'Accept theirs' });
     expect(plain).toHaveClass('shrink-0');
-    expect(plain).toHaveClass('whitespace-nowrap');
     expect(plain).not.toHaveClass('min-w-0');
-    expect(plain).not.toHaveClass('whitespace-normal');
+  });
+
+  it('keeps the terminal act on one line even when wrap is set', () => {
+    render(
+      <DocumentAction actionKey="pay" variant="terminal" wrap>
+        Pay $4,060.00
+      </DocumentAction>,
+    );
+    const terminal = screen.getByRole('button', { name: 'Pay $4,060.00' });
+    expect(terminal).toHaveClass('whitespace-nowrap');
+    expect(terminal).not.toHaveClass('whitespace-normal');
   });
 });

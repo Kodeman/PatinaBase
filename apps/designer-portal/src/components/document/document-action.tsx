@@ -70,19 +70,20 @@ const ActionRegionContext = createContext<ActionRegion | null>(null);
    the matching "The Scored Ink (I107)" block. Colour and depth are value only
    — never a shadow (D4). ─────────────────────────────────────────────────── */
 const BASE_CLASS =
-  'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
-const WRAP_BASE_CLASS = BASE_CLASS.replace(
-  'whitespace-nowrap',
-  'whitespace-normal text-left',
-).replace('shrink-0', 'min-w-0');
+  'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 px-[6px] pt-[4px] pb-[10px] no-underline disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
+const WRAP_BASE_CLASS = `${BASE_CLASS.replace('shrink-0', 'min-w-0')} whitespace-normal text-left`;
 
+/* US-43 R5 — the scored word is set in sentence case in the body face, so a
+   label reads as the words the studio would say. The terminal tier keeps its
+   own grammar byte for byte: its label is already Inter 16px in globals.css. */
 const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
-  primary: 'da-primary font-medium tracking-[0.12em]',
-  inked: 'da-inked font-medium tracking-[0.12em]',
-  secondary: 'da-secondary font-normal tracking-[0.1em]',
-  tertiary: 'da-tertiary font-light tracking-[0.1em]',
-  danger: 'da-danger font-medium tracking-[0.12em]',
-  terminal: 'da-terminal font-medium tracking-[0]',
+  primary: 'da-primary font-body text-[15px] font-medium',
+  inked: 'da-inked font-body text-[15px] font-medium',
+  secondary: 'da-secondary font-body text-[14px] font-normal',
+  tertiary: 'da-tertiary font-body text-[14px] font-normal',
+  danger: 'da-danger font-body text-[15px] font-medium',
+  terminal:
+    'da-terminal whitespace-nowrap font-mono text-[12px] uppercase font-medium tracking-[0]',
 };
 
 interface DocumentActionBaseProps {
@@ -129,8 +130,10 @@ interface DocumentActionBaseProps {
   restoreFocusRef?: RefObject<HTMLElement | null>;
   /**
    * Let a long label wrap to left-aligned lines inside a narrow host (F9-2).
-   * Swaps the base `whitespace-nowrap` rather than overriding it; every caller
-   * that leaves it unset renders exactly as before.
+   * Every scored word may wrap (US-43 R5), inheriting its host's
+   * `white-space`; `wrap` insists on `whitespace-normal` even under a nowrap
+   * host, left-aligns the lines, and trades `shrink-0` for `min-w-0` so the
+   * act can shrink to its wrapped width. The terminal tier stays on one line.
    */
   wrap?: boolean;
   children: ReactNode;
@@ -279,7 +282,7 @@ export const DocumentAction = forwardRef<
     // inert (T1R-06); a held-specific treatment belongs in a
     // `.da-act[data-held='true']` rule after :1086, not here.
     className: [
-      wrap ? WRAP_BASE_CLASS : BASE_CLASS,
+      wrap && variant !== 'terminal' ? WRAP_BASE_CLASS : BASE_CLASS,
       VARIANT_CLASS[variant],
       className ?? '',
     ].join(' '),
