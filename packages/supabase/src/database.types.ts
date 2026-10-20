@@ -18760,6 +18760,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          lead_time_weeks: number | null
           line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
@@ -18821,6 +18822,7 @@ export type Database = {
           installed_on?: string | null
           item_type?: string
           last_status_change_at?: string | null
+          lead_time_weeks?: number | null
           line_group_id?: string | null
           line_kind?: string
           line_total_cents?: number | null
@@ -18882,6 +18884,7 @@ export type Database = {
           installed_on?: string | null
           item_type?: string
           last_status_change_at?: string | null
+          lead_time_weeks?: number | null
           line_group_id?: string | null
           line_kind?: string
           line_total_cents?: number | null
@@ -37345,6 +37348,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          lead_time_weeks: number | null
           line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
@@ -41724,6 +41728,24 @@ export type Database = {
         }
         Returns: boolean
       }
+      ffe_item_effective_lead_time_weeks: {
+        Args: {
+          p_line: Database["public"]["Tables"]["project_ffe_items"]["Row"]
+        }
+        Returns: number
+      }
+      ffe_item_suggested_lead_time_source: {
+        Args: {
+          p_line: Database["public"]["Tables"]["project_ffe_items"]["Row"]
+        }
+        Returns: string
+      }
+      ffe_item_suggested_lead_time_weeks: {
+        Args: {
+          p_line: Database["public"]["Tables"]["project_ffe_items"]["Row"]
+        }
+        Returns: number
+      }
       ffe_line_authorization: {
         Args: { p: Database["public"]["Tables"]["project_ffe_items"]["Row"] }
         Returns: string
@@ -42890,6 +42912,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          lead_time_weeks: number | null
           line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
@@ -43205,6 +43228,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          lead_time_weeks: number | null
           line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
@@ -44614,6 +44638,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          lead_time_weeks: number | null
           line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
@@ -46498,6 +46523,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          lead_time_weeks: number | null
           line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
@@ -46568,6 +46594,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          lead_time_weeks: number | null
           line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
@@ -46638,6 +46665,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          lead_time_weeks: number | null
           line_group_id: string | null
           line_kind: string
           line_total_cents: number | null

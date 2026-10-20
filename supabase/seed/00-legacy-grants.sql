@@ -23382,6 +23382,84 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ffe_item_suggested_lead_time_weeks(public.project_ffe_items) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.ffe_item_suggested_lead_time_weeks(public.project_ffe_items) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ffe_item_suggested_lead_time_source(public.project_ffe_items) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.ffe_item_suggested_lead_time_source(public.project_ffe_items) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ffe_item_effective_lead_time_weeks(public.project_ffe_items) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.ffe_item_effective_lead_time_weeks(public.project_ffe_items) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_ffe_line_build_fields(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_project_ffe_line_build_fields(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._furnishing_authorization_item_snapshot(public.project_ffe_items) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_commercial_document_send_snapshot(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00839_ffe_line_lead_time.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_commercial_document_send_snapshot(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
