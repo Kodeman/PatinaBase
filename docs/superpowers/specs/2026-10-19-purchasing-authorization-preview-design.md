@@ -34,9 +34,10 @@ An existing saved draft also has a **Preview** action in its authorization detai
 ### Preview
 
 - Show the real client-facing authorization body, using shared presentation and client-safe data rather than a designer-only lookalike.
-- Clearly mark the surrounding studio controls **Preview · Not sent**. Do not add this label to the client's actual document.
+- Derive studio preview chrome from persisted state: **Preview · Not sent** only for a loaded draft, neutral while loading/error, actual state for sent/terminal documents. Do not add studio chrome to the client's actual document.
 - Include the same room grouping, item names, quantity/unit presentation, client prices, allowance treatment, totals, deposit and client-visible terms as the client view.
-- The current client authorization body has no item imagery. This scope mirrors that reality; adding images is a separate improvement, not part of preview parity.
+- New saved authorizations freeze `snapshot.clientImage={version:1,url:string|null}`. Choose the item's primary in 00807 ordering; use catalog fallback at save only when no item-owned image row exists. Invalid own images freeze explicit null, never another photo. Preserve existing snapshot keys and fingerprints of historical documents. Both safe projections/adapters and the shared body use only this optional field, never live catalog substitution. Absent legacy fields retain image-less presentation; existing drafts needing photos require explicit Void(reason)/new draft.
+- Accept HTTPS only (HTTP solely for explicitly local test/development hosts), without credentials, non-web schemes, private signed storage or recognizable expiry signatures. No arbitrary server fetch or private signer. Render bounded object-contain images with frozen-description alt, lazy/async loading, no-referrer and per-source failure reset; distinguish missing from unavailable images. The selected URL reference is frozen, not guaranteed immutable image bytes.
 - Opening, closing or reopening a saved preview is read-only. Closing leaves the draft and its reservations intact.
 - The designer can return to review without mutation. Frozen authorization lines cannot be edited. To change them, use the existing explicit **Void** action with its required reason, then prepare a new draft and preview its new ID. Do not add an editing or implicit replacement workflow.
 - Do not show internal costs, trade pricing, markup, margin, operational notes or authority metadata.
@@ -62,7 +63,13 @@ An existing saved draft also has a **Preview** action in its authorization detai
 
 In scope: shared client-facing document presentation, a safe draft read where the existing read is incomplete, preview entry points, explicit saved-preview-send state, stale-content protection, accessibility and focused regression tests.
 
-Out of scope: purchase-order preview; new item imagery; PDF/export; email preview/composition; signature simulation; agreement capture changes; new services or dependencies; automatic sends or overrides; replacement of the commercial-document lifecycle; broad portal redesign.
+In scope under US-40 decisions #2–#7: project-owned save completion across sheet dismissal, persisted-state chrome, narrow dead-presentation removal, frozen item-photo references in both client and studio bodies, actionable working-budget navigation and a focused client published-checkpoint review at Threshold #ledger.
+
+A checkpoint is nonbinding spending-plan alignment, not another agreement, purchasing authorization or payment. No working version offers **Set up a working budget**, unfolding Money via `requestRegionUnfold('money')` and `ceremony.backToSelecting`, preserving the selection and durable focus. Distinguish first publication, update/stale coverage, awaiting actual client acknowledgement, loading and read failure. Never republish a covering checkpoint merely for outstanding acknowledgement. Reuse existing sync/publish/review interfaces; do nothing automatically. External-recorded-only publication sends no budget email.
+
+The client review reuses `useProjectWorkingBudget` and `useAcknowledgeBudgetCheckpoint` at the existing ledger destination. Display only coherent published client-safe version lines/totals and their checkpoint identity; hold on mismatched/stale/unavailable state. Only explicit client click acknowledges that displayed checkpoint. Preserve exact-client/latest/fingerprint server guards and isolate project changes. Any missing safe read seam requires a ruling before server changes.
+
+Out of scope: purchase-order preview; image archival copying/private signing; PDF/export; email preview/composition; signature simulation; agreement capture changes; new services or dependencies; automatic sends or overrides; replacement of the commercial-document lifecycle; broad portal redesign.
 
 The external signed-agreement work in US-39 remains separate. Implementation must start after its accepted changes are integrated, because both features touch the authorization review and commercial hooks. Its external-only checkpoint behavior and purchase-authority guards must remain intact.
 

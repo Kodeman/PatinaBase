@@ -1,6 +1,6 @@
 # Purchasing Authorization Preview Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan. Use the US-40 Sidequest contract for dispatch, ownership and evidence; do not create a second queue or orchestration ledger.
+> **For agentic workers:** Follow the frozen US-40 Sidequest dispatch, ownership and evidence contract. One producer, no nested agents or auto-forking skills; do not create a second queue or orchestration ledger.
 
 **Goal:** Let the designer preview the actual saved client-facing purchasing authorization, then explicitly send the same reviewed version to the client.
 
@@ -20,12 +20,43 @@
 - Prices remain integer cents. Allowance line totals are authoritative; do not recompute them as quantity times truncated unit price.
 - Preview opens/closes read-only; creation happens only through an explicit save action and reserves lines. Failed preview reads retain the saved document ID.
 - No automatic Send, acknowledgement, override, billing authority or signature.
-- Existing client presentation has no item images. Do not add imagery, PDF export, email composition or purchase-order preview in this feature.
-- Local database 127.0.0.1:54322 belongs to SQ-1423 until its explicit terminal/command-clean handoff. No reset. Maximum two heavy workers with finite deadlines and descendant cleanup.
+- US-40 #6 supersedes the old no-imagery exclusion: add optional versioned frozen `clientImage` for NEW saves through the existing snapshot builder, both safe projections/adapters and the shared body. No legacy backfill, live fallback, archival copying/private signer, PDF/email composition or purchase-order preview.
+- SQ-1445 owns local database 127.0.0.1:54322 and one heavy lane by explicit parent transfer. No reset, guard disabling, other-worker fixture/residue cleanup or production access. Maximum two heavy workers with finite deadlines and descendant cleanup.
 - US-39 owns pending migration 00835. Preview migration 00836 is provisional and must be reconciled at integration; never edit deployed migrations.
 - Integrate US-39 first. Preview changes to `use-commercial-documents.ts` and `review-release-sheet.tsx` must preserve external-agreement eligibility, honest no-notification checkpoint publication and held checkpoint behavior.
 - Generated types/grants use `SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres pnpm db:generate` and `python3 scripts/generate-legacy-grants.py`; never hand-edit.
 - Ship only after independent acceptance and green applicable gates. Deploy changed portals through `./infra/deploy-portal.sh designer` and `./infra/deploy-portal.sh client`, exporting each portal's Supabase trio from wrangler.jsonc in the same shell.
+
+## Combined repair plan — US-40 #2–#7 (before implementation)
+
+Preserve the complete rejected 2eba605 ancestry and original 27-path delta; this fresh candidate is not acceptance of either rejected producer. Retain previous factual verification without inventing inherited controls. New behavior requires real assertion-failure controls and a final native clean-commit capture.
+
+### Save event table
+
+Owner: existing project-keyed FFESection content retains a successful proposal ID. ReviewReleaseSheet owns only its local rendering and preview-open state. The owner callback must ignore completions after owner unmount/project switch; dismissing the child must not suppress a successful same-project callback.
+
+| Pending save event | Success | Save failure | Subsequent preview-read failure |
+| --- | --- | --- | --- |
+| Escape closes child | Live same-project owner retains exact persisted ID; no automatic reopening | No ID, no automatic retry; selected items remain | Retain exact ID, retry read only |
+| Close/back dismisses child | Same as Escape; exactly one create | Same as Escape | Same ID, no recreate |
+| Entire project owner unmounts | No local callback/state; recover only through persisted authorization reads on return | No invented saved state | Persisted ledger remains authority |
+| Project switches | Old completion cannot attach to new project; old persisted authorization is recoverable in its project | No new-project error/state | No cross-project preview or Send |
+
+Implement F1 at that existing callback seam and keep child-local lifetime checks. Add actual-owner deferred-save → dismiss before resolution → resolve → reopen exact ID/one-create, rejection, pending project switch and full-owner-unmount persisted recovery regressions. F2 derives chrome from loaded persisted state, neutral on loading/error. F3 deletes dead client quantity/room helpers and the unreachable saved-ID error note; move useful assertions to the shared renderer.
+
+### Frozen images
+
+Check latest definitions and migration numbers. Provisional 00838 grafts snapshot helper00744, client bundle00755 and preview00836, preserving STABLE/search_path/grants/guards and all prior snapshot keys. Capture own primary in00807 ordering, catalog only if no own row; invalid own reference → explicit null. Freeze URL reference, not image bytes. Preserve canonical fingerprints/senders/creators/payment bodies. Both safe adapters/types carry only validated optional `{version:1,url:string|null}`; shared renderer is the only photo presentation, with bounded object-contain/frozen alt/lazy/async/no-referrer/source-reset and truthful missing/unavailable states. Reject unsafe/credentialed/private-signed/recognizably expiring references; HTTP only for explicit local dev/test hosts. No fetching, fallback, backfill or private signing. Old drafts requiring photos use explicit Void/new.
+
+### Checkpoint recovery and client destination
+
+Explain planning prerequisite; missing version navigates existing Money/Working budget using requestRegionUnfold('money') + backToSelecting, never putBack. Preserve ticks/focus. Distinguish loading/read-error, first publication, update/stale coverage and awaiting acknowledgement; do not republish merely because acknowledgement is outstanding. Reuse existing sync/publish/review UI, with truthful saved-detail remedy where supported.
+
+Client #ledger gets a narrow review component using existing working-budget/acknowledge hooks, subject to published-safe coherent-read preflight. Render only published version lines/totals tied to the displayed checkpoint; never unpublished/internal data. Missing/mismatch/stale/error holds the action. A real click acknowledges the displayed ID, not purchasing/signature/payment authority. Keep server latest/current/fingerprint/exact-client checks. External-only publication sends no email; no new sender/route/RPC or automatic mutation. Return any missing safe-read seam to main before server changes.
+
+### Focused verification
+
+Add transactional SQL ownership/fallback/null/unsafe/frozen-reference+fingerprint/forgery/legacy/privacy/denial/PT409 assertions; shared photo/alt/legacy/null/broken/unsafe/source-reset tests; both strict-adapter and actual-client parity tests; lifecycle/deferred isolation/status/navigation/focus/loading/error tests; client published/coherence/stale/click/no-auto-mutation and Threshold mounting tests. Run new controls RED then GREEN, documented scoped commands, required dependency builds and DS/designer/client type checks. Native final capture follows final commit. Configured quality gate reports measured rows or exact unavailable reason. The integration owner alone runs assembled broad/admin gates; fresh independent review and 1400/390 keyboard/browser gate remain required. No production fixtures/sends/deploy/push by this producer.
 
 ## Team and sequence
 
