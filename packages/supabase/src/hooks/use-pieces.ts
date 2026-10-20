@@ -138,7 +138,10 @@ export function useBatchCreateNamedProjectNeeds() {
   });
 }
 
-export type SetFfeLineBuildFieldsInput = { projectId: string; itemId: string } & SetFfeLineBuildFieldsRequest;
+export type SetFfeLineBuildFieldsInput = { projectId: string; itemId: string } & SetFfeLineBuildFieldsRequest & {
+  /** The designer's lead time override in weeks (00839); `null` clears it back to the suggestion. */
+  leadTimeWeeks?: number | null;
+};
 
 export function useSetFfeLineBuildFields() {
   const queryClient = useQueryClient();

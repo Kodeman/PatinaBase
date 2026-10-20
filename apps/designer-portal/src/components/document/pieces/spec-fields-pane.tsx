@@ -16,8 +16,8 @@
  * column grant, row_version checked); the maker through
  * `set_project_ffe_line_commercials` (00692); the fill through
  * `place_product_in_project_v2`, which keeps the need label on the thread
- * (D2) and the line's allowance (Q12); the unit through
- * `set_project_ffe_line_build_fields` (00730).
+ * (D2) and the line's allowance (Q12); the unit and the lead time override
+ * through `set_project_ffe_line_build_fields` (00730, 00839).
  */
 
 import {
@@ -43,7 +43,9 @@ import type {
   FfeLineUnit,
   FfeRoomPlacement,
 } from "@patina/types";
+import { LeadTimeSelect } from "@/components/portal/ffe/lead-time-select";
 import { ProductPickerModal } from "@/components/portal/proposals/product-picker-modal";
+import { leadTimeLabel } from "@/lib/scope/lead-time";
 import {
   LABOR_STAMP_LABEL,
   isLaborLine,
@@ -96,6 +98,11 @@ export type SpecLensLine = PieceLineStageRow & {
   primary_image_url?: string | null;
   /** The item label (00808), printed before the name. */
   doc_code?: string | null;
+  /** The designer's lead time override in weeks (00839). */
+  lead_time_weeks?: number | null;
+  /** What the line already knows (00839): quote, option, catalog, proposal. */
+  suggested_lead_time_weeks?: number | null;
+  suggested_lead_time_source?: string | null;
   product?: {
     id?: string;
     name?: string | null;
@@ -143,6 +150,25 @@ const MAKER_ON_ORDER_SENTENCE =
 const DROP_LINK_SENTENCE = "Drop an image from a web page, or paste its link.";
 const LINK_INVALID_SENTENCE =
   "That is not a web link. Paste one that starts with https://.";
+export const LEAD_TIME_UNSET_SENTENCE =
+  "Not set — the client will see ‘Lead time to be confirmed’";
+const LEAD_TIME_SOURCE_WORD: Readonly<Record<string, string>> = {
+  quote: "quote",
+  configuration: "option",
+  catalog: "catalog",
+  proposal: "proposal",
+};
+
+/** "Suggested · 9–12 wks · from quote", or null when nothing is suggested. */
+export function suggestedLeadTimeText(
+  weeks: number | null | undefined,
+  source: string | null | undefined,
+): string | null {
+  const label = leadTimeLabel(weeks);
+  if (!label) return null;
+  const word = source ? LEAD_TIME_SOURCE_WORD[source] : undefined;
+  return word ? `Suggested · ${label} · from ${word}` : `Suggested · ${label}`;
+}
 
 const DISPOSITIONS: ReadonlySet<string> = new Set([
   "candidate",
@@ -185,6 +211,12 @@ export function imageLink(raw: string): string | null {
 
 function errorText(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+/** An Error's message, or a plain PostgREST error's (`{code,message,…}`). */
+function refusalText(error: unknown, fallback: string): string {
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === "string" && message ? message : fallback;
 }
 
 function Field({
@@ -321,12 +353,22 @@ export function SpecFieldsPane({
   const [link, setLink] = useState("");
   const [imageNote, setImageNote] = useState<string | null>(null);
   const fillActRef = useRef<HTMLButtonElement>(null);
+  const leadTimeRef = useRef<HTMLDivElement>(null);
+  const [leadTimeFocus, setLeadTimeFocus] = useState(false);
   const ids = useId();
 
   // A chosen product opens the preview; its act takes focus (F4).
   useEffect(() => {
     if (pick) fillActRef.current?.focus();
   }, [pick]);
+
+  // The picker is disabled while its write is pending, so focus returns to it
+  // only once it is live again.
+  useEffect(() => {
+    if (!leadTimeFocus || buildFields.isPending) return;
+    setLeadTimeFocus(false);
+    leadTimeRef.current?.querySelector("select")?.focus();
+  }, [leadTimeFocus, buildFields.isPending]);
 
   const labor = isLaborLine(line);
   const read = pieceLineStage(line, piece);
@@ -366,6 +408,49 @@ export function SpecFieldsPane({
       .catch((e: unknown) =>
         setError(errorText(e, "The field was not saved.")),
       );
+  };
+
+  const leadTimeOverride = line.lead_time_weeks ?? null;
+  const leadTimeSuggestion = suggestedLeadTimeText(
+    line.suggested_lead_time_weeks,
+    line.suggested_lead_time_source,
+  );
+
+  /** Resolves true once saved; a refusal prints in the pane's alert. */
+  const saveLeadTime = (leadTimeWeeks: number | null): Promise<boolean> => {
+    setError(null);
+    return buildFields
+      .mutateAsync({ projectId, itemId: line.id, leadTimeWeeks })
+      .then(
+        () => true,
+        (err: unknown) => {
+          setError(refusalText(err, "The lead time was not saved."));
+          return false;
+        },
+      );
+  };
+
+  const chooseLeadTime = (weeks: number | null) => {
+    if (locked || buildFields.isPending) return;
+    void saveLeadTime(weeks).then(() => {
+      // Unless the designer moved on, the picker keeps focus once it is live.
+      const active = document.activeElement;
+      if (
+        !active ||
+        active === document.body ||
+        leadTimeRef.current?.contains(active)
+      ) {
+        setLeadTimeFocus(true);
+      }
+    });
+  };
+
+  const revertLeadTime = () => {
+    if (locked || buildFields.isPending) return;
+    // The act leaves with the override, so focus returns to the picker.
+    void saveLeadTime(null).then((saved) => {
+      if (saved) setLeadTimeFocus(true);
+    });
   };
 
   const setMaker = (vendorId: string) => {
@@ -797,6 +882,44 @@ export function SpecFieldsPane({
           {locked && (
             <span id={`${ids}-unit`} className={REASON_CLS}>
               {tradeScope ? TRADE_SCOPE_REASON : UNIT_LOCKED_SENTENCE}
+            </span>
+          )}
+        </Field>
+
+        <Field label="Lead time">
+          <div ref={leadTimeRef}>
+            <LeadTimeSelect
+              value={leadTimeOverride}
+              disabled={locked || buildFields.isPending}
+              onChange={chooseLeadTime}
+            />
+          </div>
+          {leadTimeOverride == null ? (
+            <span data-testid="spec-lead-time-note" className={REASON_CLS}>
+              {leadTimeSuggestion ?? LEAD_TIME_UNSET_SENTENCE}
+            </span>
+          ) : (
+            leadTimeSuggestion && (
+              <span className="flex flex-wrap items-center gap-x-3">
+                <span data-testid="spec-lead-time-note" className={REASON_CLS}>
+                  {leadTimeSuggestion}
+                </span>
+                <button
+                  type="button"
+                  className={ACT_CLS}
+                  aria-disabled={locked || buildFields.isPending || undefined}
+                  aria-describedby={locked ? `${ids}-lead` : undefined}
+                  aria-busy={buildFields.isPending || undefined}
+                  onClick={revertLeadTime}
+                >
+                  USE SUGGESTED
+                </button>
+              </span>
+            )
+          )}
+          {locked && (
+            <span id={`${ids}-lead`} className={REASON_CLS}>
+              {lockReason}
             </span>
           )}
         </Field>

@@ -179,6 +179,44 @@ describe('ReviewReleaseSheet', () => {
     expect(screen.queryByText(/trade cost/i)).not.toBeInTheDocument();
   });
 
+  it('states each line’s lead time, or that it is to be confirmed, inside the item cell', () => {
+    renderSheet({
+      lines: [
+        { ...lines[0], leadTimeWeeks: 12 },
+        { ...lines[1], leadTimeWeeks: 0 },
+        { ...lines[2], leadTimeWeeks: null },
+      ],
+    });
+    expect(
+      screen.getAllByTestId('release-line-lead-time').map((c) => c.textContent),
+    ).toEqual([
+      'Lead time · 9–12 wks',
+      'Lead time · In stock',
+      'Lead time to be confirmed',
+    ]);
+    expect(
+      screen.getByText('Walnut bed, king').closest('td'),
+    ).toContainElement(screen.getAllByTestId('release-line-lead-time')[0]);
+  });
+
+  it('reads a line with no lead time as to be confirmed and saves exactly as before', async () => {
+    renderSheet({ lines: [{ ...lines[0], leadTimeWeeks: 12 }, lines[1], lines[2]] });
+    expect(
+      screen.getAllByTestId('release-line-lead-time').map((c) => c.textContent),
+    ).toEqual([
+      'Lead time · 9–12 wks',
+      'Lead time to be confirmed',
+      'Lead time to be confirmed',
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: /save authorization draft/i }));
+    await waitFor(() => expect(releaseMutate).toHaveBeenCalledTimes(1));
+    expect(releaseMutate).toHaveBeenCalledWith({
+      name: 'Furnishings authorization № 3',
+      ffeItemIds: ['a', 'b', 'c'],
+      depositPercent: 50,
+    });
+  });
+
   it('figures the total, the deposit and the balance', () => {
     renderSheet();
     expect(screen.getByText('Authorization total')).toBeInTheDocument();

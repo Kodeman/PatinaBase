@@ -531,6 +531,8 @@ export interface ReleaseLine {
   clientLineTotalCents: number;
   /** The line's ISO-4217 currency (00661); missing reads as USD. */
   currency?: string | null;
+  /** The line's effective lead time in weeks (00839); null when nothing is known. */
+  leadTimeWeeks?: number | null;
 }
 
 /** The running composition: what is ticked, stated as arithmetic. The total
