@@ -211,7 +211,6 @@ import {
 import { LensBand } from '@/components/document/lens-band';
 import { BandStatusLine } from '@/components/feedback/saving-band';
 import { BandTourNote } from '@/components/document/margin-note';
-import { BandLeadsContext } from '@/components/document/region/region-head';
 import {
   deriveLensBand,
   type LensBandModel,
@@ -3481,10 +3480,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           procurement panels (inspection drawer, Order Assistant) mounted in
           line unfolds beneath the aside rail and the drawer strip. The z-0
           grain painting over content is imperceptible at 1% alpha. */}
-      {/* US-25 Q8 — one filled act per view: while the band prints its Next,
-          that act is the only filled control and every region head under it
-          prints its leader as a text act. */}
-      <BandLeadsContext.Provider value={oneVoice && Boolean(bandModel?.voice.next)}>
       <main
         ref={mainRef}
         data-document-paper
@@ -4123,7 +4118,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           />
         )}
       </main>
-      </BandLeadsContext.Provider>
 
       {/* Margin rail (D12; D2: the margin IS the notification model).
           Below 1180px the margin lives as anchored chips + the mobile spine

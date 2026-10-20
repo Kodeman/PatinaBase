@@ -222,7 +222,7 @@ describe('FF&E project-mode region head', () => {
     mockItems = [settled()];
     mockCoverage = { 'line-1': { coverage: 'invoiced' } };
     renderProject();
-    const inked = document.querySelectorAll('[data-action-variant="inked"]');
+    const inked = document.querySelectorAll('[data-action-variant="primary"]');
     expect(inked).toHaveLength(1);
     expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
     expect(inked[0]).toHaveAttribute('data-action-key', 'work-the-pieces');
@@ -287,7 +287,7 @@ describe('FF&E project-mode region head', () => {
         ]}
       />,
     );
-    const inked = document.querySelectorAll('[data-action-variant="inked"]');
+    const inked = document.querySelectorAll('[data-action-variant="primary"]');
     expect(inked).toHaveLength(1);
     expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
     for (const retired of [
@@ -329,7 +329,7 @@ describe('FF&E project-mode region head', () => {
     const release = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
     expect(release).toHaveAttribute('data-action-variant', 'secondary');
     expect(release).not.toHaveAttribute('aria-disabled', 'true');
-    expect(document.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
   });
 
   it('arrives OPEN when the schedule has settled empty — the default quiets a stop, it never folds it', () => {

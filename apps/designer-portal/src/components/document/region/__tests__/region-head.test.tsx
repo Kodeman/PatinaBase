@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { render, screen } from '@testing-library/react';
-import { BandLeadsContext, RegionHead, type RegionLedgerEntry } from '../region-head';
+import { RegionHead, type RegionLedgerEntry } from '../region-head';
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -35,12 +35,15 @@ function renderHead(props: Partial<Parameters<typeof RegionHead>[0]> = {}) {
 }
 
 describe('RegionHead', () => {
-  it('inks the leading ledger entry and leaves the rest their declared variant', () => {
+  // US-43 R4 — entry 0 is the one scored lead (primary, unfilled); the rest
+  // keep their declared variant, secondary by default.
+  it('scores the leading ledger entry primary and leaves the rest their declared variant', () => {
     renderHead();
     expect(screen.getByRole('button', { name: 'Approve' })).toHaveAttribute(
       'data-action-variant',
-      'inked',
+      'primary',
     );
+    expect(document.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Revise' })).toHaveAttribute(
       'data-action-variant',
       'secondary',
@@ -55,41 +58,61 @@ describe('RegionHead', () => {
     );
   });
 
-  // FR2 F2-13 (R150 R5) — a head whose caller says it has no leader inks
+  // FR2 F2-13 (R150 R5) — a head whose caller says it has no leader scores
   // nothing: entry 0 keeps its declared variant, secondary by default.
-  it('inks nothing when the head is leaderless', () => {
+  it('scores nothing when the head is leaderless', () => {
     renderHead({ leaderless: true });
     expect(screen.getByRole('button', { name: 'Approve' })).toHaveAttribute(
       'data-action-variant',
       'secondary',
     );
     expect(
-      document.querySelectorAll('[data-action-variant="inked"]'),
+      document.querySelectorAll('[data-action-variant="inked"], [data-action-variant="primary"]'),
     ).toHaveLength(0);
   });
 
-  // US-28 walk-fix paper (SQ-834 WALK §2; specimens/document-*.html
-  // `.sec-head .eb`) — the region opens on the Section header, the ornament
-  // and its name in the mono eyebrow, where it printed a 24px Playfair heading.
-  it('prints the region name as the Section header — ornament and mono eyebrow — over its eyebrow', () => {
+  it('honours a variant the caller declares on the leading entry', () => {
+    renderHead({
+      actions: [
+        { key: 'lead-act', label: 'Approve', variant: 'tertiary', onClick: jest.fn() },
+        ...ledger.slice(1),
+      ],
+    });
+    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAttribute(
+      'data-action-variant',
+      'tertiary',
+    );
+    expect(document.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(0);
+  });
+
+  it('prints the same lead whatever else stands on the view (no band context)', () => {
+    renderHead({ actsAtQuiet: 'leader' });
+    const acts = document.querySelectorAll('[data-action-key]');
+    expect(acts).toHaveLength(1);
+    expect(acts[0]).toHaveTextContent('Approve');
+    expect(acts[0]).toHaveAttribute('data-action-variant', 'primary');
+  });
+
+  // US-43 R2 — the region name is a real heading level: `.t-d2`, 26px
+  // Playfair in ink, sentence case as authored, with no ornament or mono
+  // eyebrow register; the status is one `.t-body` ink sentence.
+  it('prints the region name as a .t-d2 heading in ink, over its eyebrow', () => {
     const { container } = renderHead({ eyebrow: 'The job · project' });
     const heading = screen.getByRole('heading', { name: 'Approvals' });
-    expect(heading).toHaveClass('eb');
-    expect(heading).not.toHaveClass('font-heading');
-    expect(heading.className).not.toMatch(/text-\[24px\]/);
-    const ornament = heading.querySelector('svg.orn')!;
-    expect(ornament).toHaveAttribute('aria-hidden', 'true');
-    expect(ornament).toHaveAttribute('focusable', 'false');
-    // Full ink, as `.sec-head .eb` paints it, from the fenced paper block.
+    expect(heading).toHaveClass('t-d2', 'text-[var(--ink)]');
+    expect(heading).not.toHaveClass('eb');
+    expect(heading).not.toHaveClass('uppercase');
+    expect(heading.querySelector('svg.orn')).toBeNull();
+    expect(heading).toHaveTextContent(/^Approvals$/);
+    // `.t-d2` is the 26px Playfair display step.
     const css = readFileSync(GLOBALS_CSS, 'utf8');
-    const block = css.slice(
-      css.indexOf('/* US-28 walk-fix paper */'),
-      css.indexOf('/* end US-28 walk-fix paper */'),
-    );
-    expect(block).toMatch(/\[data-region-head\] h2\.eb,[\s\S]*?\{\s*color: var\(--text-primary\);/);
+    expect(css).toMatch(/\.t-d2\s*\{\s*font-family: var\(--font-display\); font-size: 26px;/);
     // The status line still follows the heading directly (prework-regions
     // e2e reads `[data-region-head] h2 + p`).
-    expect(heading.nextElementSibling).toHaveTextContent('Two decisions waiting');
+    const status = heading.nextElementSibling!;
+    expect(status).toHaveTextContent('Two decisions waiting');
+    expect(status).toHaveClass('t-body', 'text-[var(--ink)]');
+    expect(status.className).not.toMatch(/text-\[12\.5px\]|mocha|rail/);
     const eyebrow = container.querySelector('p')!;
     expect(eyebrow).toHaveTextContent('The job · project');
     expect(eyebrow).toHaveClass(
@@ -112,8 +135,10 @@ describe('RegionHead', () => {
       'focus-visible:outline',
       'focus-visible:outline-2',
       'focus-visible:outline-offset-2',
-      'focus-visible:outline-[var(--color-clay)]',
+      'focus-visible:outline-[var(--color-clay-ink)]',
     );
+    // Clay drew the ring at 2.18:1 (under 1.4.11); clay-ink is 5.75:1.
+    expect(heading).not.toHaveClass('focus-visible:outline-[var(--color-clay)]');
   });
 
   it('renders no fold toggle without a body id', () => {
@@ -141,7 +166,7 @@ describe('RegionHead', () => {
     });
     expect(screen.getByRole('button', { name: 'Collapse ↑' })).toBeInTheDocument();
     expect(
-      document.querySelectorAll('[data-action-variant="inked"]'),
+      document.querySelectorAll('[data-action-variant="inked"], [data-action-variant="primary"]'),
     ).toHaveLength(0);
     expect(
       document.querySelectorAll('[role="group"] [data-action-key]'),
@@ -151,7 +176,7 @@ describe('RegionHead', () => {
   it('stacks the heading above its ledger below 1180 (F28)', () => {
     renderHead();
     const head = document.querySelector('[data-region-head="approvals"]');
-    // The two-track grid — the one that put the inked leader over the heading
+    // The two-track grid — the one that put the leader over the heading
     // at 390 — is now gated behind 1180; below it the head is one column.
     expect(head).toHaveClass('grid-cols-1');
     expect(head).toHaveClass('min-[1180px]:grid-cols-[minmax(20rem,1fr)_auto]');
@@ -259,11 +284,22 @@ describe('RegionHead', () => {
     expect(screen.queryByText(/…/)).not.toBeInTheDocument();
   });
 
-  it('prints no second line when the region carries no exception', () => {
+  // US-43 — status and exceptions are one `.t-body` sentence, never two lines.
+  it('prints the status and its exceptions as one ink sentence', () => {
+    renderHead({
+      status: 'the FF&E schedule, by room · 3 groups · 12 lines',
+      exceptions: ['1 open damage claim', '2 unspecified'],
+    });
+    const lines = document.querySelectorAll('[data-region-head] p.t-body');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toHaveTextContent(
+      'the FF&E schedule, by room · 3 groups · 12 lines · 1 open damage claim · 2 unspecified',
+    );
+  });
+
+  it('prints one status line when the region carries no exception', () => {
     renderHead({ status: 'the FF&E schedule, by room · 1 group · 2 lines' });
-    expect(
-      document.querySelectorAll('.text-\\[12\\.5px\\]'),
-    ).toHaveLength(1);
+    expect(document.querySelectorAll('[data-region-head] p.t-body')).toHaveLength(1);
   });
 
   it('reports an empty head with nothing to fold', async () => {
@@ -311,46 +347,3 @@ describe('RegionHead', () => {
   });
 });
 
-// US-25 Q8 — one filled act per view: while the band prints its Next, a
-// region head's leader drops to a text act, and a quiet head still prints it.
-describe('RegionHead under the band’s elected act (Q8)', () => {
-  const underBand = (props: Partial<Parameters<typeof RegionHead>[0]> = {}) =>
-    render(
-      <BandLeadsContext.Provider value>
-        <RegionHead
-          headingId="region-approvals-heading"
-          name="Approvals"
-          status="Two decisions waiting"
-          surfaceKey="document"
-          regionKey="approvals"
-          actions={ledger}
-          {...props}
-        />
-      </BandLeadsContext.Provider>,
-    );
-
-  it('prints no filled act: the leader is a text act at its declared weight', () => {
-    underBand();
-    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAttribute(
-      'data-action-variant',
-      'secondary',
-    );
-    expect(document.querySelectorAll('[data-action-variant="inked"], [data-action-variant="primary"]')).toHaveLength(0);
-  });
-
-  it('a quiet head still prints its one act, as text', () => {
-    underBand({ actsAtQuiet: 'leader' });
-    const acts = document.querySelectorAll('[data-action-key]');
-    expect(acts).toHaveLength(1);
-    expect(acts[0]).toHaveTextContent('Approve');
-    expect(acts[0]).toHaveAttribute('data-action-variant', 'secondary');
-  });
-
-  it('with no band act, the head keeps its inked leader', () => {
-    renderHead();
-    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAttribute(
-      'data-action-variant',
-      'inked',
-    );
-  });
-});
