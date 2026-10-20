@@ -469,6 +469,7 @@ describe("the right pane", () => {
       "Notes",
       "Rooms",
       "Unit",
+      "Lead time",
       "Labor",
       "COM",
     ]);

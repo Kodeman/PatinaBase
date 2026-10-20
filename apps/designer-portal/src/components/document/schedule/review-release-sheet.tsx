@@ -36,6 +36,7 @@ import {
   type ReleaseLine,
 } from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { leadTimeLabel } from '@/lib/scope/lead-time';
 import {
   formatCurrencyTotal,
   formatMoney,
@@ -58,6 +59,7 @@ import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { requestRegionUnfold } from '@/lib/document/document-index';
 
 const CHIPS = [0, 25, 50, 100] as const;
+const LEAD_TIME_TBC = 'Lead time to be confirmed';
 
 /** The checkpoint's stamped schedule figure. `scheduled_cents` is frozen INTO
  *  the budget line by publish_budget_checkpoint (00422), so this is what the
@@ -394,6 +396,14 @@ function ReviewReleaseSheetContent({
                 >
                   <td className="py-1.5 pr-3 text-[12px] text-[var(--color-charcoal)]">
                     {line.name}
+                    <span
+                      data-testid="release-line-lead-time"
+                      className="block text-[11px] text-[var(--text-muted)]"
+                    >
+                      {line.leadTimeWeeks == null
+                        ? LEAD_TIME_TBC
+                        : `Lead time · ${leadTimeLabel(line.leadTimeWeeks)}`}
+                    </span>
                   </td>
                   <td className="py-1.5 pr-3 text-[11px] text-[var(--text-muted)]">
                     {room.name}

@@ -1497,6 +1497,7 @@ function FFESectionBody({
           clientLineTotalCents:
             signableCents(row.item) ?? row.item.line_total_cents ?? 0,
           currency: rowCurrency(row.item),
+          leadTimeWeeks: row.item.effective_lead_time_weeks ?? null,
         }))
     : [];
   // Counted the way publish_budget_checkpoint counts, so the drift read on
