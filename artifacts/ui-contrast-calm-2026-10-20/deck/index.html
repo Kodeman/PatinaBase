@@ -259,6 +259,8 @@ ul.plain li::marker{color:var(--oak)}
 /* anchor variants (slide 8) */
 .anchor-b .band-act,.spec[data-anchor="b"] .band-act{background:var(--sp-ink);color:var(--sp-on-dark);border-radius:2px;padding:0 20px;font-weight:600}
 .spec[data-anchor="b"] .band-act::before,.spec[data-anchor="b"] .band-act::after{content:none}
+.spec.anchor-test .band-act{padding:0 20px;font-weight:600}
+.spec.anchor-test .band-act::before,.spec.anchor-test .band-act::after{left:20px;right:20px}
 .spec[data-anchor="a"] .band{background:var(--sp-ink);color:var(--sp-on-dark);border-color:var(--sp-ink)}
 .spec[data-anchor="a"] .band-k{color:var(--sp-clay)}
 .spec[data-anchor="a"] .band-act{color:var(--sp-on-dark)}
@@ -436,7 +438,7 @@ ul.plain li::marker{color:var(--oak)}
     <blockquote class="quote" style="margin:0">I need the contrast that I see on the sign-in page. It helps my eyes know where to go.</blockquote>
     <p class="cite">Leah, co-founder and designer</p>
     <div class="heard">
-      <p><strong>What we heard.</strong> Text contrast on the Document is already strong. Body ink is 13.5:1 and most action text is 6.3–8:1.</p>
+      <p><strong>What we heard.</strong> Text contrast on the Document is generally strong, with a few local failures (slide 17). Body ink is 13.5:1 and most action text is 6.3–8:1.</p>
       <p><strong>What helps the eye is salience:</strong> one shape that stands out, and a real step in size between where you are and what you can do.</p>
     </div>
   </div>
@@ -511,10 +513,10 @@ ul.plain li::marker{color:var(--oak)}
 </section>
 
 <!-- 5 · Numbers -->
-<section class="slide" id="s5" data-title="Text is fine. Salience isn't." aria-labelledby="h5" tabindex="-1">
+<section class="slide" id="s5" data-title="Text is mostly fine. Salience isn't." aria-labelledby="h5" tabindex="-1">
   <div class="frame">
     <p class="eyebrow">05 · The measured gap</p>
-    <h2 id="h5">Text is fine. Salience isn't.</h2>
+    <h2 id="h5">Text is mostly fine. Salience isn't.</h2>
     <div class="bigs">
       <div><span class="big">13.87<small>:1</small></span><p>Ink on the Document's paper. Darkening grey text adds ratio, not salience.</p><span class="src">Lens A · ink | paper-doc</span></div>
       <div><span class="big">1.72<small>×</small></span><p>The only luminance step between a region's name and its actions. They share size, face and case.</p><span class="src">Lens A · ink vs mocha</span></div>
@@ -550,7 +552,7 @@ ul.plain li::marker{color:var(--oak)}
     <h2 id="h7">Six principles.</h2>
     <ol class="prin">
       <li><div><strong>At most one dark shape per view.</strong><span>Only for an eligible next step. Closed, held, waiting and open-sheet states show no fill. Never make up work to fill the slot.</span></div></li>
-      <li><div><strong>Size before ink.</strong><span>A real heading level between page title and metadata. Region name against its metadata at 2× or more, the sign-in ratio.</span></div></li>
+      <li><div><strong>Size before ink.</strong><span>A real heading level between page title and metadata. Region name clearly larger than its metadata (sign-in runs about 2–2.7×); the exact step is chosen by specimen in R2.</span></div></li>
       <li><div><strong>Space groups; a rule only opens a movement.</strong><span>12 within a group, 24 between groups, 48 between regions. A region closes with space and a hairline.</span></div></li>
       <li><div><strong>One lead per section, chosen by the work's state.</strong><span>A state sentence, one scored lead (unfilled), then quiet tools. The band names the same step when it points there.</span></div></li>
       <li><div><strong>Actions read as words.</strong><span>Sentence-case Inter 14–15, weight 400 or more, with a resting underline. Mono caps for metadata only.</span></div></li>
@@ -565,7 +567,7 @@ ul.plain li::marker{color:var(--oak)}
     <p class="eyebrow">08 · Test this first</p>
     <h2 id="h8">The one variable: the dark anchor.</h2>
     <div class="two">
-      <figure class="spec" data-spec data-anchor="b">
+      <figure class="spec anchor-test" data-spec data-anchor="b">
         <div class="spec-bar">
           <div class="seg" role="group" aria-label="Dark anchor option">
             <button type="button" data-set="anchor:a" aria-pressed="false">A · Dark band</button>
@@ -585,7 +587,7 @@ ul.plain li::marker{color:var(--oak)}
               <p class="band-s">The selections in Bed are priced. Nothing is released.</p>
               <button type="button" class="n-lead band-act" data-say="Opens a read-only purchasing readiness review. It sends, signs and orders nothing.">Review purchasing readiness</button>
             </div>
-            <div class="c-rule-strong" style="margin-top:24px"></div>
+            <div class="c-rule-strong" style="margin-top:48px"></div>
             <div class="n-stack" style="padding-top:24px">
               <h4 class="n-name">FF&amp;E selections</h4>
               <p class="n-meta">1 room · 2 selections · $6,612 priced</p>
@@ -599,7 +601,7 @@ ul.plain li::marker{color:var(--oak)}
             </div>
           </div>
         </div>
-        <p class="spec-out" data-out role="status">Layout, type and space are identical in A, B and C. Only the anchor changes.</p>
+        <p class="spec-out" data-out role="status">Layout, type, button size and space are identical in A, B and C. Only the anchor changes. This is the band at 600px and wider; below 600 the dock carries the Next act (slide 13). The section lead repeats the band's step on purpose: the band points into this section.</p>
       </figure>
       <div style="display:flex;flex-direction:column;gap:20px">
         <div><span class="tag prov">Provisional · B</span></div>
@@ -610,9 +612,9 @@ ul.plain li::marker{color:var(--oak)}
         </div>
         <div class="fillmean">
           <div class="pv"><div class="n-stack"><span class="n-meta">On the paper</span><div><button type="button" class="n-plate" data-say="Fill on the paper: your next step. It never commits.">Review purchasing readiness</button></div><span class="n-state sm">Your next step. Never commits.</span></div></div>
-          <div class="pv"><div class="sheet n-stack"><span class="n-meta">Inside a sheet</span><div><button type="button" class="n-terminal" data-say="A commit act lives only inside its sheet, with the amount in the label.">Send for client authorization · $6,612</button></div><span class="n-state sm">Amount in the label. This commits.</span></div></div>
+          <div class="pv"><div class="sheet n-stack"><span class="n-meta">Inside a sheet</span><div><button type="button" class="n-terminal" data-say="A commit act lives only inside its sheet, with the amount in the label.">Accept the finished work · $2,980.00</button></div><span class="n-state sm">Amount in the label. This commits.</span></div></div>
         </div>
-        <p class="meta">Amount shown is the priced total from Leah's screen; the real label carries the confirmed amount.</p>
+        <p class="meta">Commit example is R139's own: fill is spent only where money moves or a paper is signed. Sending a request for authorization is not a commit.</p>
       </div>
     </div>
   </div>
@@ -884,7 +886,7 @@ ul.plain li::marker{color:var(--oak)}
           </div>
         </div>
       </div>
-      <p class="spec-out" data-out role="status">Try Later ▾ then Not today: the card settles in place with Undo, and no other card moves up.</p>
+      <p class="spec-out" data-out role="status">Try Later ▾ then Not today: the card settles in place, keeps its height, offers Undo, and the slot is not refilled.</p>
     </figure>
     <ul class="plain note" style="max-width:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:8px 32px;padding-left:20px">
       <li>The top card spans the width; the rest sit in two columns.</li>
@@ -962,7 +964,7 @@ ul.plain li::marker{color:var(--oak)}
           <tr><td>Other actions</td><td>Mocha / quiet-ink 12 caps, weight 300–400</td><td>Tools in sentence case, weight 400+, oak rest rule. More holds the inventory.</td></tr>
           <tr><td>Region close</td><td><code>--rule-mid</code> 1.5px charcoal (V20)</td><td>48px plus <code>--hairline-strong</code>.</td></tr>
           <tr><td>Room rows</td><td>Toolbar always visible; disclosure only on hover</td><td>Name in <code>.t-d3</code> 20 with a visible ⌄; actions inside the open room. A single-room job opens by default, respecting any saved preference.</td></tr>
-          <tr><td>Narrow widths</td><td>Dock below 1180; band phone layout below 600; Next filtered from the dock</td><td>Below 600 the dock owns the Next plate; 600–1179 the band owns it. Specimens at 320, 390, 768 plus 200% zoom.</td></tr>
+          <tr><td>Narrow widths</td><td>Dock below 1180; band phone layout below 600; Next filtered from the dock</td><td>Below 600 the dock owns the Next plate; 600–1179 the band owns it. Specimens at 320, 390 and 768; 200% zoom still to verify.</td></tr>
           <tr><td>Desk</td><td>~4 actions per line; three columns; creates first</td><td>Card-level layout, top card full width. Grouping, settled-in-place, Undo and non-refilling slots kept. "Later" for Not today / Until…; Record payment stays visible.</td></tr>
           <tr><td>FF&amp;E More</td><td>Five head actions, up to seven</td><td>Visible: Edit selections, Add items. In More: Record a selection change, Open specification book. Financials Details: time ledger, financial change.</td></tr>
         </tbody>
@@ -979,7 +981,7 @@ ul.plain li::marker{color:var(--oak)}
     <div class="rulings">
       <article class="rul"><span class="rid">R1</span><h3>The dark anchor and what fill means</h3><p>Choose A, B or C. With A or B, fill on the paper means "your next step, which never commits"; commit fills live only in sheets with the amount in the label.</p><p class="rev">Revises V20 and US-27 Area 2 ("None on the paper"); narrows R139/R141 and "only terminal fills".</p><p class="rec"><span class="tag prov">Decide after Leah's side-by-side</span><br>Provisional: <b>B</b>.</p></article>
       <article class="rul"><span class="rid">R2</span><h3>The heading level</h3><p>20 or 26 Playfair, or eyebrow plus a strong sentence, judged on a long, folded, seven-room Document.</p><p class="rev">Reverses US-28 "never a display heading".</p><p class="rec"><span class="tag prov">Decide after the specimen</span><br>Pick by specimen. Lenses split 2:1 for a Playfair name.</p></article>
-      <article class="rul"><span class="rid">R3</span><h3>The rule budget</h3><p>A region closes with space and a hairline. The double rule is used only where a movement opens.</p><p class="rev">Revises V20/US-27 "each region closes on --rule-mid" and R126's placement.</p><p class="rec">Recommend <b>yes</b>.</p></article>
+      <article class="rul"><span class="rid">R3</span><h3>The rule budget</h3><p>A region closes with space and a hairline. The double rule opens a movement, at most once per view, and no other charcoal edge sits within 48px of it.</p><p class="rev">Revises V20/US-27 "each region closes on --rule-mid" and R126's placement.</p><p class="rec">Recommend <b>yes</b>.</p></article>
       <article class="rul"><span class="rid">R4</span><h3>One state-elected lead per section</h3><p>Unfilled. Carries the 19 Oct state/action matrix and its read-only readiness destination.</p><p class="rev">Revises d4b1720cf and f0e55a02b.</p><p class="rec">Recommend <b>yes</b>.</p></article>
       <article class="rul"><span class="rid">R5</span><h3>Sentence-case actions</h3><p>Mono caps only for metadata.</p><p class="rev">Amends house sheet §A5; applies V18 Q9.</p><p class="rec">Recommend <b>yes</b>.</p></article>
       <article class="rul"><span class="rid">R6</span><h3>Narrow-width ownership of Next</h3><p>Below 600 the dock owns it; 600–1179 the band owns it.</p><p class="rev">Revises V20 U-Q19 and the a28655a4f filter.</p><p class="rec">Recommend <b>yes</b>, with the breakpoint table.</p></article>
@@ -997,7 +999,7 @@ ul.plain li::marker{color:var(--oak)}
     <div class="panel">
       <article><span class="who">Lens A · visual weight · Opus</span><h3>One dark field and one filled act.</h3><p>Sign-in tells the eye where to go with both; the Document has neither, and spends its darkest ink on full-width rules (24.4% of ink mass in Leah's screenshot, an image statistic). <b>Ranks the pane first.</b> Its dissent on the heading: keep the eyebrow name, put the weight in a strong state sentence.</p></article>
       <article><span class="who">Lens B · space, rhythm, calm · Opus</span><h3>There is no middle tier.</h3><p>Title at 34px, then every region named at 12px, the same size as its status and its buttons. <b>26px Playfair region names are the biggest single lever</b>, which is where A and B part. Space groups; a rule only opens a movement. Warns bigger heads add ~100px+ over seven regions.</p></article>
-      <article><span class="who">Lens C · low vision, accessibility · Opus</span><h3>Ratio isn't salience.</h3><p>Text tokens already clear 4.5:1 (weakest action text 6.35:1). The effect is salience. <b>Prefers a value step to a dark band:</b> on charcoal, mocha drops to 1.72 and a clay-ink focus ring to 2.41. Found defects to fix regardless, and offered the <code>prefers-contrast</code> tier.</p></article>
+      <article><span class="who">Lens C · low vision, accessibility · Opus</span><h3>Ratio isn't salience.</h3><p>Text tokens clear 4.5:1 on every stock (weakest action text 6.35:1); a few rendered spots fail through opacity (slide 17). The effect is salience. <b>Prefers a value step to a dark band:</b> on charcoal, mocha drops to 1.72 and a clay-ink focus ring to 2.41. Found defects to fix regardless, and offered the <code>prefers-contrast</code> tier.</p></article>
       <article><span class="who">Astra · cross-provider review · GPT-6 Astra</span><h3>Not ready unchanged. 15 findings, all accepted.</h3><p>Three required changes: (1) correct the V20 history and ruling map; (2) an unbiased pane-vs-button comparison with explicit review-vs-commit meaning; (3) long-document, responsive, accessibility and ordinary-editing specimens, not a squint test alone. It also narrowed C's "all tokens clear 4.5" to "generally strong".</p></article>
     </div>
   </div>
@@ -1288,12 +1290,12 @@ ul.plain li::marker{color:var(--oak)}
     if (settle){
       var card = settle.closest('.card'); closeMenus();
       $('.settled-txt', card).textContent = settle.dataset.settle === 'until' ? 'Set aside until a date you pick. The slot stays empty.' : 'Set aside for today. The slot stays empty.';
-      card.classList.add('settled'); $('[data-undo]', card).focus();
-      $('[data-out]', card.closest('.spec')).textContent = 'Settled in place. Nothing below moved up.';
+      card.style.minHeight = card.offsetHeight + 'px'; card.classList.add('settled'); $('[data-undo]', card).focus();
+      $('[data-out]', card.closest('.spec')).textContent = 'Settled in place, same height. Nothing refills the slot.';
       return;
     }
     var undo = t.closest('[data-undo]');
-    if (undo){ var c = undo.closest('.card'); c.classList.remove('settled'); $('.n-row button', c).focus(); $('[data-out]', c.closest('.spec')).textContent = 'Back as it was.'; return; }
+    if (undo){ var c = undo.closest('.card'); c.classList.remove('settled'); c.style.minHeight = ''; $('.n-row button', c).focus(); $('[data-out]', c.closest('.spec')).textContent = 'Back as it was.'; return; }
     var say = t.closest('[data-say]');
     if (say){
       var o = $('[data-out]', say.closest('.spec') || say.closest('.slide')); if (o) o.textContent = say.dataset.say;
