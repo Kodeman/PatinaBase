@@ -23,17 +23,19 @@
  * region head now carries it.
  */
 
-import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useProjectInvoices } from '@patina/supabase';
 import { useAccountPage } from '@/hooks/use-account-page';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
+import type { ProjectBillingAuthority } from '@/lib/document/commercial-documents';
 import type { SectionKey } from '@/lib/document/desk-derivation';
-import { type MoneyRung } from '@/lib/document/money-ladder';
+import { type MoneyLadder, type MoneyRung } from '@/lib/document/money-ladder';
 import { money } from '@/lib/document/project-commerce';
 import { AccountBand } from '../account-band';
 import { openInvoiceComposer, openInvoiceFolio } from '../accounts/invoice-overlays';
 import { openLedger } from '../command-bar';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { RegionRule } from '../region/region-rule';
@@ -65,6 +67,7 @@ const QUIET_RESERVE = {
 
 const HEADING_ID = 'money-region-heading';
 const BODY_ID = 'money-region-body';
+const DETAILS_ID = 'money-region-details';
 
 /** One rung. `figure` is null while its source has not answered — a tier that
  *  stated a number and later softened it would be the same lie, briefly. */
@@ -95,6 +98,38 @@ function Rung({
 function figureOf(rung: MoneyRung): string | null {
   if (rung.cents == null) return rung.note || null;
   return rung.note ? `${money(rung.cents)} ${rung.note}` : money(rung.cents);
+}
+
+/** R4 — the head's one plain summary: the client budget, then what has been
+ *  authorized against it. Each fact is said once; the ladder behind Details
+ *  carries the rest. A clause whose read has not answered says nothing. */
+function headSummary(ladder: MoneyLadder, authority: ProjectBillingAuthority | null): string {
+  return [budgetClause(ladder.budget, authority), authorizedClause(ladder.authorized)]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function budgetClause(rung: MoneyRung, authority: ProjectBillingAuthority | null): string | null {
+  if (rung.cents != null) {
+    // F-2: an uncapped agreement has no remaining figure, so none prints.
+    return authority?.remainingCents != null
+      ? `Client budget ${money(rung.cents)}, ${money(authority.remainingCents)} remaining.`
+      : `Client budget ${money(rung.cents)}.`;
+  }
+  if (!rung.note) return null;
+  // F-2 again: an agreement with no ceiling is a budget, not a missing one.
+  if (authority) return 'The client budget has no ceiling.';
+  return rung.note === 'nothing approved yet'
+    ? 'No client budget recorded.'
+    : `The client budget ${rung.note}.`;
+}
+
+function authorizedClause(rung: MoneyRung): string | null {
+  if (rung.cents != null) return `${money(rung.cents)} authorized.`;
+  if (!rung.note) return null;
+  return rung.note === 'nothing executed yet'
+    ? 'Nothing has been authorized.'
+    : `Authorized purchases ${rung.note}.`;
 }
 
 const RECORD_A_CHANGE_KEY = 'record-a-change-money-head';
@@ -134,13 +169,11 @@ export function MoneyRegion({
   // The same word the accounts band uses for this act, derived the same way.
   const changeOnly = activeSection === 'install' || activeSection === 'care';
   const askThePaper = useFeatureFlag('ask-the-paper').value;
-  // FR2 508-1 / F2-18 (`one-voice`): the door is `Record a change` at every
-  // state of ask-the-paper, and it prints at quiet beside the leader.
-  // US-19 499-2 / 507-1 (one-voice) — the head leads with `Record the
-  // payment` only while a client receivable on this paper is due: an invoice
-  // sent and unpaid (the folio's own record test). A maker balance leads its
-  // order's row in Pieces, never this head. FR3 F3-7: nothing due, `Record a
-  // change` leads (scored) with `Draw an invoice` plain beside it.
+  // FR2 508-1 (`one-voice`): the door is `Record a change` at every state of
+  // ask-the-paper. US-19 499-2 / 507-1 (one-voice) — a client receivable on
+  // this paper is due when an invoice is sent and unpaid (the folio's own
+  // record test). A maker balance leads its order's row in Pieces, never this
+  // head.
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const { data: projectInvoices } = useProjectInvoices(oneVoice ? projectId : null);
   const receivableDue = oneVoice
@@ -233,15 +266,7 @@ export function MoneyRegion({
   // The head and the seam speak the ladder's own words: rung 1 is `Budget`
   // and rung 3 is `Authorized`. `authority`/`committed` named neither rung
   // after SP-03, and `authority` is the word direction-a §5 sends away.
-  // F-2: an uncapped agreement (no rate card) has no remaining figure. Say so
-  // rather than printing `$0 remaining`, which reads as exhausted.
-  const headStatus = authority
-    ? `${
-        authority.remainingCents === null
-          ? 'no ceiling'
-          : `${money(authority.remainingCents)} remaining`
-      } · ${money(committedCents)} authorized`
-    : 'no budget yet';
+  const [detailsOpen, setDetailsOpen] = useState(false);
   // The table's seam states the same two figures as one sentence: what has been
   // authorized, against the budget it is being spent out of.
   // F-2 again: an uncapped agreement has no budget figure either. `$0 budget`
@@ -273,72 +298,36 @@ export function MoneyRegion({
     money,
   });
 
-  const ledger: RegionLedgerEntry[] = [
-    ...(receivableDue
-      ? [
-          {
-            key: 'record-client-payment',
-            label: NAMED_ACTS.recordPayment,
-            // F3-3 (P-1) — the folio opens on its filled record control.
-            onClick: () => openInvoiceFolio(receivableDue.id, { landOn: 'record' }),
-          },
-        ]
-      : []),
-    // R74b — draw an invoice for THIS engagement: the anti-wizard composer,
-    // milestones/time/FF&E pulled through pre-scoped. Same opener the accounts
-    // band's own primary calls — the region head is now the single doorway.
-    {
-      key: 'draw-project-invoice',
-      label: 'Draft an invoice',
-      onClick: () => openInvoiceComposer({ projectId }),
-    },
-    // D5 (US-19) — Record a change, the head's second act on every spread
-    // (R33): it opens the router (`What changed?`), never a sheet of its own.
-    // F16 — with it, the amendment is reached through `Record a change` →
-    // `On the agreement` only, so the head's own Amendment leaves.
-    ...(askThePaper || oneVoice
-      ? [
-          {
-            key: RECORD_A_CHANGE_KEY,
-            label: NAMED_ACTS.recordChange,
-            onClick: () => openRecordAChange({ origin: 'money-head' }),
-          },
-        ]
-      : [
-          // R81 — the Amendment: scope changes composed from the money region
-          // (the margin escalation is the other doorway). The band listens
-          // for this event and opens its own AmendmentSheet.
-          {
-            key: 'compose-project-amendment',
-            // The band names this act by the section it is standing in; the
-            // region's doorway to the SAME sheet must not name it differently.
-            label: changeOnly ? 'Add a change' : 'Amendment',
-            variant: 'secondary' as const,
-            onClick: () =>
-              window.dispatchEvent(new CustomEvent('document:compose-amendment')),
-          },
-        ]),
-    // R77 — the per-document Hours lens, same opener the band's own tertiary
-    // calls.
-    {
-      key: 'open-project-hours',
-      label: 'Project time ledger ↗',
-      variant: 'tertiary',
-      onClick: () => openLedger('hours', { projectId }),
-    },
-  ];
-  // US-19 FR3 F3-7 / 515-2 (one-voice) — one scored leader per head, and the
-  // head's entry 0 is its leader. A receivable due: `Record the payment`
-  // leads, `Record a change` plain. Nothing due: `Record a change` leads and
-  // `Draw an invoice` prints plain beside it, at quiet too.
-  const leaderLedger =
-    oneVoice && !receivableDue
-      ? [
-          ...ledger.filter((entry) => entry.key === RECORD_A_CHANGE_KEY),
-          ...ledger.filter((entry) => entry.key !== RECORD_A_CHANGE_KEY),
-        ]
-      : ledger;
-  const quietCompanionKey = receivableDue ? RECORD_A_CHANGE_KEY : 'draw-project-invoice';
+  // R74b — draw an invoice for THIS engagement: the anti-wizard composer,
+  // milestones/time/FF&E pulled through pre-scoped. Same opener the accounts
+  // band's own primary calls — the region head is now the single doorway.
+  const drawInvoice: RegionLedgerEntry = {
+    key: 'draw-project-invoice',
+    label: 'Draft an invoice',
+    onClick: () => openInvoiceComposer({ projectId }),
+  };
+  // R4 (V25) — one state-elected lead, entry 0: `Record the payment` while a
+  // client receivable is due, otherwise `Draft an invoice`. The quiet tools
+  // follow it; the rest of the money's acts sit behind Details.
+  const headActions: RegionLedgerEntry[] = receivableDue
+    ? [
+        {
+          key: 'record-client-payment',
+          label: NAMED_ACTS.recordPayment,
+          // F3-3 (P-1) — the folio opens on its filled record control.
+          onClick: () => openInvoiceFolio(receivableDue.id, { landOn: 'record' }),
+        },
+        drawInvoice,
+      ]
+    : [drawInvoice];
+  const detailsToggle: RegionLedgerEntry = {
+    key: 'money-details',
+    label: 'Details',
+    variant: 'tertiary',
+    'aria-expanded': detailsOpen,
+    'aria-controls': DETAILS_ID,
+    onClick: () => setDetailsOpen((open) => !open),
+  };
 
   if (folded) {
     return (
@@ -379,16 +368,12 @@ export function MoneyRegion({
       <RegionHead
         headingId={HEADING_ID}
         name="Project financials"
-        status={quiet ? quietStatus : headStatus}
+        status={quiet ? quietStatus : headSummary(ladder, authority)}
         eyebrow="Project financial summary"
         surfaceKey="accounts"
         regionKey="money-head"
-        actions={
-          quiet && oneVoice
-            ? leaderLedger.filter((entry, i) => i === 0 || entry.key === quietCompanionKey)
-            : leaderLedger
-        }
-        actsAtQuiet={quiet && !oneVoice ? 'leader' : 'all'}
+        // Details discloses a part of the full body, so it prints only there.
+        actions={quiet ? headActions : [...headActions, detailsToggle]}
         bodyId={BODY_ID}
         onFold={() => setFolded(true)}
       />
@@ -405,6 +390,9 @@ export function MoneyRegion({
         {refundCents > 0 ? (
           <p className="mt-3 text-sm text-[var(--text-muted)]">A payment of {money(refundCents)} needs a refund.</p>
         ) : null}
+        <div id={DETAILS_ID}>
+        {detailsOpen ? (
+        <>
         <ol className="mt-3 space-y-2">
           <Rung
             name="Client budget"
@@ -442,6 +430,51 @@ export function MoneyRegion({
             ? ` ${draftScopeCount} trade ${draftScopeCount === 1 ? 'scope' : 'scopes'} still in draft, counted in neither.`
             : ''}
         </p>
+
+        <DocumentActionGroup
+          surfaceKey="accounts"
+          regionKey="money-details"
+          aria-label="Project financials details actions"
+          className="mt-3"
+        >
+          {askThePaper || oneVoice ? (
+            // D5 (US-19) — Record a change opens the router (`What changed?`),
+            // never a sheet of its own. F16 — with it, the amendment is reached
+            // through `Record a change` → `On the agreement` only.
+            <DocumentAction
+              actionKey={RECORD_A_CHANGE_KEY}
+              variant="secondary"
+              onClick={() => openRecordAChange({ origin: 'money-head' })}
+            >
+              {NAMED_ACTS.recordChange}
+            </DocumentAction>
+          ) : (
+            // R81 — the Amendment: the band listens for this event and opens
+            // its own AmendmentSheet. The band names this act by the section it
+            // is standing in; this doorway to the SAME sheet names it alike.
+            <DocumentAction
+              actionKey="compose-project-amendment"
+              variant="secondary"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('document:compose-amendment'));
+              }}
+            >
+              {changeOnly ? 'Add a change' : 'Amendment'}
+            </DocumentAction>
+          )}
+          {/* R77 — the per-document Hours lens, same opener the band's own
+              tertiary calls. */}
+          <DocumentAction
+            actionKey="open-project-hours"
+            variant="tertiary"
+            onClick={() => openLedger('hours', { projectId })}
+          >
+            Project time ledger ↗
+          </DocumentAction>
+        </DocumentActionGroup>
+        </>
+        ) : null}
+        </div>
 
         <div className="mt-4">
           <ProjectAuthorityBandForProject projectId={projectId} allowAddendum />

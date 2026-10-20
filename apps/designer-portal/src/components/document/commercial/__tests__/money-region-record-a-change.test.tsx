@@ -2,10 +2,10 @@
  * US-19 FR1 — the Money head with `ask-the-paper` on.
  *   F16 — `Amendment` leaves the head; the amendment is reached through
  *         `Record a change` → `On the agreement` only.
- *   R33 — `Record a change` is the head's second act on every spread,
- *         Install and Care included.
+ *   R33 — `Record a change` prints on every spread, Install and Care
+ *         included; R4 (V25) moves it behind the head's Details.
  */
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 let mockAskThePaper = true;
 
@@ -76,36 +76,39 @@ afterEach(() => {
   __setDensityForTest(undefined);
 });
 
-/** The head's acts, in the order they print. */
-const headActs = () =>
+/** The acts under a selector, in the order they print. */
+const actsIn = (selector: string) =>
   Array.from(
-    document.querySelectorAll<HTMLElement>('[data-region-head="money-head"] button, [data-region-head="money-head"] a'),
+    document.querySelectorAll<HTMLElement>(`${selector} button, ${selector} a`),
   ).map((act) => act.textContent?.trim() ?? '');
+const headActs = () => actsIn('[data-region-head="money-head"]');
+/** R4 — Record a change and the time ledger sit behind the head's Details. */
+const detailsActs = () => {
+  fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+  return actsIn('[data-action-region="money-details"]');
+};
 
 describe('The Money head with ask-the-paper on (F16, R33)', () => {
-  it('prints Draw an invoice · Record a change · Hours · this project ↗ · Fold, and no Amendment', () => {
+  it('prints Draft an invoice · Details · Fold, with Record a change and the time ledger in Details', () => {
     render(<MoneyRegion projectId="project-1" />);
     const acts = headActs();
 
-    expect(acts.slice(0, 3)).toEqual([
-      'Draft an invoice',
-      'Record a change',
-      'Project time ledger ↗',
-    ]);
+    expect(acts.slice(0, 2)).toEqual(['Draft an invoice', 'Details']);
     expect(acts.some((act) => /Collapse/.test(act))).toBe(true);
-    expect(acts).not.toContain('Amendment');
+    expect(acts).not.toContain('Record a change');
+    expect(detailsActs()).toEqual(['Record a change', 'Project time ledger ↗']);
     expect(
       document.querySelectorAll('[data-action-key="compose-project-amendment"]'),
     ).toHaveLength(0);
   });
 
   it.each(['install', 'care'] as const)(
-    'Record a change is the second act on the %s spread, and Add a change does not print',
+    'Record a change is the first Details act on the %s spread, and Add a change does not print',
     (activeSection) => {
       render(<MoneyRegion projectId="project-1" activeSection={activeSection} />);
-      const acts = headActs();
+      const acts = detailsActs();
 
-      expect(acts[1]).toBe('Record a change');
+      expect(acts[0]).toBe('Record a change');
       expect(acts).not.toContain('Add a change');
       expect(acts).not.toContain('Amendment');
     },
@@ -114,7 +117,7 @@ describe('The Money head with ask-the-paper on (F16, R33)', () => {
   it('keeps today\'s Amendment act with the flag off', () => {
     mockAskThePaper = false;
     render(<MoneyRegion projectId="project-1" />);
-    const acts = headActs();
+    const acts = detailsActs();
 
     expect(acts).toContain('Amendment');
     expect(acts).not.toContain('Record a change');

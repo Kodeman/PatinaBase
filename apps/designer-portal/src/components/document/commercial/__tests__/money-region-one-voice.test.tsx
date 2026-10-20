@@ -2,11 +2,12 @@
  * US-19 FR2 — the Money head under `one-voice`.
  *   508-1 — the door is `Record a change` at every state of ask-the-paper;
  *           `Amendment` never prints at a door.
- *   F2-18 — it prints on the project spread at quiet too, beside the leader,
- *           as it does on install and care.
- * one-voice off keeps today's head.
+ *   R4 (V25) — the head has one state-elected lead (`Record the payment`
+ *           while a receivable is due, otherwise `Draft an invoice`); the
+ *           door sits behind Details, which prints only at full density.
+ * one-voice off keeps today's Amendment wording.
  */
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 let mockAskThePaper = false;
 let mockOneVoice = true;
@@ -99,18 +100,23 @@ const headKeys = () =>
 const headText = () =>
   document.querySelector('[data-region-head="money-head"]')!.textContent ?? '';
 
+/** R4 (V25) — the door now sits behind the head's Details. */
+const detailsText = () => {
+  fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+  return document.querySelector('[data-action-region="money-details"]')!.textContent ?? '';
+};
+
 describe('The Money head’s door under one-voice (508-1)', () => {
   it.each([false, true])(
-    'is Record a change with ask-the-paper %s, and Amendment never prints',
+    'is Record a change in Details with ask-the-paper %s, and Amendment never prints',
     (askThePaper) => {
       mockAskThePaper = askThePaper;
       render(<MoneyRegion projectId="project-1" />);
-      expect(headKeys().slice(0, 2)).toEqual([
-        'record-a-change-money-head',
-        'draw-project-invoice',
-      ]);
-      expect(headText()).toContain('Record a change');
-      expect(headText()).not.toContain('Amendment');
+      expect(headKeys()).toEqual(['draw-project-invoice', 'money-details']);
+      expect(headText()).not.toContain('Record a change');
+      const details = detailsText();
+      expect(details).toContain('Record a change');
+      expect(details).not.toContain('Amendment');
       expect(
         document.querySelectorAll('[data-action-key="compose-project-amendment"]'),
       ).toHaveLength(0);
@@ -122,59 +128,60 @@ describe('The Money head’s door under one-voice (508-1)', () => {
     (activeSection) => {
       render(<MoneyRegion projectId="project-1" activeSection={activeSection} />);
       expect(headText()).not.toContain('Add a change');
-      expect(headKeys()[0]).toBe('record-a-change-money-head');
+      const details = detailsText();
+      expect(details).not.toContain('Add a change');
+      expect(details).toContain('Record a change');
     },
   );
 
   it('keeps today’s Amendment with one-voice and ask-the-paper off', () => {
     mockOneVoice = false;
     render(<MoneyRegion projectId="project-1" />);
-    expect(headText()).toContain('Amendment');
-    expect(headText()).not.toContain('Record a change');
+    const details = detailsText();
+    expect(details).toContain('Amendment');
+    expect(details).not.toContain('Record a change');
   });
 });
 
-describe('One scored leader per Money head at full density (F3-7)', () => {
-  it('nothing due: Record a change leads, scored; Draw an invoice is plain', () => {
+describe('One scored leader per Money head at full density (R4)', () => {
+  it('nothing due: Draft an invoice leads, scored; Record a change is plain in Details', () => {
     render(<MoneyRegion projectId="project-1" />);
     const head = document.querySelector('[data-region-head="money-head"]')!;
     expect(head.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
     expect(
-      document.querySelector('[data-action-key="record-a-change-money-head"]'),
+      document.querySelector('[data-action-key="draw-project-invoice"]'),
     ).toHaveAttribute('data-action-variant', 'primary');
+    detailsText();
+    expect(
+      document.querySelector('[data-action-key="record-a-change-money-head"]'),
+    ).toHaveAttribute('data-action-variant', 'secondary');
+  });
+
+  it('a receivable due: Record the payment leads; Draft an invoice is plain', () => {
+    mockInvoices = [{ id: 'invoice-1', status: 'sent', due_date: '2026-08-03' }];
+    render(<MoneyRegion projectId="project-1" />);
+    const head = document.querySelector('[data-region-head="money-head"]')!;
+    expect(headKeys()).toEqual(['record-client-payment', 'draw-project-invoice', 'money-details']);
+    expect(head.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
     expect(
       document.querySelector('[data-action-key="draw-project-invoice"]'),
     ).toHaveAttribute('data-action-variant', 'secondary');
   });
-
-  it('a receivable due: Record the payment leads; Record a change is plain', () => {
-    mockInvoices = [{ id: 'invoice-1', status: 'sent', due_date: '2026-08-03' }];
-    render(<MoneyRegion projectId="project-1" />);
-    const head = document.querySelector('[data-region-head="money-head"]')!;
-    expect(headKeys()[0]).toBe('record-client-payment');
-    expect(head.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
-    expect(
-      document.querySelector('[data-action-key="record-a-change-money-head"]'),
-    ).toHaveAttribute('data-action-variant', 'secondary');
-  });
 });
 
-describe('Record a change at quiet on the project spread (F2-18)', () => {
+describe('The Money head at quiet on the project spread (R4)', () => {
   beforeEach(() => {
     act(() => {
       __setDensityForTest('quiet');
     });
   });
 
-  it('leads, scored, with Draw an invoice plain beside it when nothing is due (F3-7)', () => {
+  it('prints its lead alone when nothing is due, and no Details', () => {
     render(<MoneyRegion projectId="project-1" />);
-    expect(headKeys()).toEqual(['record-a-change-money-head', 'draw-project-invoice']);
-    expect(
-      document.querySelector('[data-action-key="record-a-change-money-head"]'),
-    ).toHaveAttribute('data-action-variant', 'primary');
+    expect(headKeys()).toEqual(['draw-project-invoice']);
     expect(
       document.querySelector('[data-action-key="draw-project-invoice"]'),
-    ).toHaveAttribute('data-action-variant', 'secondary');
+    ).toHaveAttribute('data-action-variant', 'primary');
   });
 
   it('never offers Record the payment for a fully paid invoice', () => {
@@ -189,15 +196,15 @@ describe('Record a change at quiet on the project spread (F2-18)', () => {
     expect(document.querySelector('[data-action-key="record-client-payment"]')).toBeNull();
   });
 
-  it('prints plain beside Record the payment when a receivable is due (F3-7)', () => {
+  it('prints Draft an invoice plain beside Record the payment when a receivable is due', () => {
     mockInvoices = [{ id: 'invoice-1', status: 'sent', due_date: '2026-08-03' }];
     render(<MoneyRegion projectId="project-1" />);
-    expect(headKeys()).toEqual(['record-client-payment', 'record-a-change-money-head']);
+    expect(headKeys()).toEqual(['record-client-payment', 'draw-project-invoice']);
     expect(
       document.querySelector('[data-action-key="record-client-payment"]'),
     ).toHaveAttribute('data-action-variant', 'primary');
     expect(
-      document.querySelector('[data-action-key="record-a-change-money-head"]'),
+      document.querySelector('[data-action-key="draw-project-invoice"]'),
     ).toHaveAttribute('data-action-variant', 'secondary');
   });
 
