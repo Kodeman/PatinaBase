@@ -92,6 +92,12 @@ function unfoldIfNeeded() {
   if (seam) fireEvent.click(seam);
 }
 
+/** R4 — the ladder and the money's other acts sit behind Details, closed by
+ *  default. */
+function openDetails() {
+  fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   mockOpenInvoiceComposer.mockClear();
@@ -177,7 +183,10 @@ describe('MoneyRegion', () => {
 
     expect(screen.getByRole('heading', { name: 'Project financials' })).toBeVisible();
     expect(screen.getByRole('group', { name: 'Project financials actions' })).toBeVisible();
-    expect(screen.getByText('$18,000 remaining · $13,772 authorized')).toBeVisible();
+    expect(
+      screen.getByText('Client budget $100,000, $18,000 remaining. $13,772 authorized.'),
+    ).toBeVisible();
+    openDetails();
     expect(screen.getByText('Client budget · $100,000 approved')).toBeVisible();
     expect(screen.getByText('Planned expenditure · $86,540 specified')).toBeVisible();
     expect(screen.getByText('Client-authorized purchases · $13,772 ordered')).toBeVisible();
@@ -197,6 +206,7 @@ describe('MoneyRegion', () => {
   it('prints the six rungs in the ladder’s own order, and no other', () => {
     render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
+    openDetails();
 
     const rungs = Array.from(document.querySelectorAll('ol > li')).map(
       (li) => li.querySelector('p')?.textContent?.split(' · ')[0],
@@ -218,6 +228,7 @@ describe('MoneyRegion', () => {
   it('retires the retired vocabulary from its own head, seam and rungs', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
+    openDetails();
 
     expect(container).not.toHaveTextContent('Design authority');
     expect(container).not.toHaveTextContent('Authority ·');
@@ -237,6 +248,7 @@ describe('MoneyRegion', () => {
     };
 
     render(<MoneyRegion projectId="project-1" />);
+    openDetails();
 
     expect(screen.getByText('Client-authorized purchases · $10,000 ordered')).toBeVisible();
     expect(
@@ -253,6 +265,7 @@ describe('MoneyRegion', () => {
 
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
+    openDetails();
 
     expect(screen.getByText('Planned expenditure · working budget v1 · no rooms yet')).toBeVisible();
     expect(container).not.toHaveTextContent('$0');
@@ -267,6 +280,12 @@ describe('MoneyRegion', () => {
     mockInvoices = { data: undefined, isLoading: false, error: new Error('boom') };
 
     render(<MoneyRegion projectId="project-1" />);
+    expect(
+      screen.getByText(
+        'The client budget could not be read. Authorized purchases could not be read.',
+      ),
+    ).toBeVisible();
+    openDetails();
 
     expect(screen.getByText('Client budget · could not be read')).toBeVisible();
     expect(screen.getByText('Planned expenditure · could not be read')).toBeVisible();
@@ -280,8 +299,11 @@ describe('MoneyRegion', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
 
-    expect(screen.getByText('no budget yet')).toBeVisible();
+    expect(
+      screen.getByText('No client budget recorded. Nothing has been authorized.'),
+    ).toBeVisible();
     expect(screen.queryByText(/remaining/)).not.toBeInTheDocument();
+    openDetails();
     expect(screen.getByText('Client budget · nothing approved yet')).toBeVisible();
     expect(screen.getByText('Planned expenditure · no working budget yet')).toBeVisible();
     expect(screen.getByText('Client-authorized purchases · nothing executed yet')).toBeVisible();
@@ -296,6 +318,7 @@ describe('MoneyRegion', () => {
     mockPurchaseOrders = { data: undefined, isLoading: true, error: null };
 
     render(<MoneyRegion projectId="project-1" />);
+    openDetails();
 
     expect(screen.getByText('Planned expenditure')).toBeVisible();
     expect(screen.getByText('Authorized, not yet paid to vendors')).toBeVisible();
@@ -317,6 +340,7 @@ describe('MoneyRegion', () => {
   it('names the moved rung’s derivation so it cannot be read as the owed total', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
+    openDetails();
 
     const caption = screen.getByText(/Client budget → planned expenditure/);
     expect(caption).toHaveTextContent(
@@ -337,6 +361,7 @@ describe('MoneyRegion', () => {
     };
 
     render(<MoneyRegion projectId="project-1" />);
+    openDetails();
 
     expect(screen.getByText(/Client budget → planned expenditure/)).toHaveTextContent(
       '1 trade scope still in draft, counted in neither.',
@@ -385,8 +410,12 @@ describe('MoneyRegion', () => {
     render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
 
+    expect(
+      screen.getByText('The client budget has no ceiling. Nothing has been authorized.'),
+    ).toBeVisible();
+    expect(screen.queryByText(/\$0/)).not.toBeInTheDocument();
+    openDetails();
     expect(screen.getByText('Client budget · nothing approved yet')).toBeVisible();
-    expect(screen.getByText(/^no ceiling · /)).toBeVisible();
   });
 
   it('states the uncapped seam summary without a $0 budget', () => {
@@ -484,6 +513,7 @@ describe('MoneyRegion', () => {
     };
 
     render(<MoneyRegion projectId="project-1" activeSection="install" />);
+    openDetails();
 
     expect(screen.getByRole('button', { name: 'Add a change' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Amendment' })).not.toBeInTheDocument();
@@ -529,6 +559,7 @@ describe('MoneyRegion', () => {
     };
 
     render(<MoneyRegion projectId="project-1" />);
+    openDetails();
     fireEvent.click(screen.getByRole('button', { name: 'Project time ledger ↗' }));
 
     expect(mockOpenLedger).toHaveBeenCalledWith('hours', { projectId: 'project-1' });
@@ -544,10 +575,72 @@ describe('MoneyRegion', () => {
     window.addEventListener('document:compose-amendment', heard);
 
     render(<MoneyRegion projectId="project-1" />);
+    openDetails();
     fireEvent.click(screen.getByRole('button', { name: 'Amendment' }));
 
     expect(heard).toHaveBeenCalledTimes(1);
     window.removeEventListener('document:compose-amendment', heard);
+  });
+
+  it('keeps the ladder and the other acts behind Details, closed by default (R4)', () => {
+    mockInstruments = {
+      data: [{ state: 'executed', totalAmountCents: 1_000_000 }],
+      isLoading: false,
+      error: null,
+    };
+
+    render(<MoneyRegion projectId="project-1" />);
+
+    const details = screen.getByRole('button', { name: 'Details' });
+    const head = document.querySelector('[data-region-head="money-head"]') as HTMLElement;
+    expect(head).toContainElement(details);
+    expect(details).toHaveAttribute('aria-expanded', 'false');
+    const panel = document.getElementById(details.getAttribute('aria-controls')!);
+    expect(panel).not.toBeNull();
+    expect(document.querySelectorAll('ol > li')).toHaveLength(0);
+    expect(screen.queryByText(/Client budget → planned expenditure/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Amendment' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Project time ledger ↗' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(details);
+
+    expect(details).toHaveAttribute('aria-expanded', 'true');
+    expect(panel!.querySelectorAll('ol > li')).toHaveLength(6);
+    expect(within(panel!).getByText(/Client budget → planned expenditure/)).toBeVisible();
+    expect(within(panel!).getByRole('button', { name: 'Amendment' })).toBeVisible();
+    expect(within(panel!).getByRole('button', { name: 'Project time ledger ↗' })).toBeVisible();
+    expect(head).not.toContainElement(
+      within(panel!).getByRole('button', { name: 'Project time ledger ↗' }),
+    );
+
+    fireEvent.click(details);
+
+    expect(details).toHaveAttribute('aria-expanded', 'false');
+    expect(panel!.querySelectorAll('ol > li')).toHaveLength(0);
+  });
+
+  it('says the budget and the authorized figure once, in one summary', () => {
+    mockAuthority = {
+      data: { authorizedCents: 10_000_000, remainingCents: 1_800_000 },
+      isLoading: false,
+      error: null,
+    };
+    mockInstruments = {
+      data: [{ state: 'executed', totalAmountCents: 1_000_000 }],
+      isLoading: false,
+      error: null,
+    };
+
+    const { container } = render(<MoneyRegion projectId="project-1" />);
+    const head = document.querySelector('[data-region-head="money-head"]') as HTMLElement;
+
+    expect(head).toHaveTextContent(
+      'Client budget $100,000, $18,000 remaining. $10,000 authorized.',
+    );
+    expect(container.textContent!.match(/\$100,000/g)).toHaveLength(1);
+    expect(container.textContent!.match(/\$10,000/g)).toHaveLength(1);
   });
 });
 
@@ -621,7 +714,8 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     render(<MoneyRegion projectId="project-1" />);
 
     const head = document.querySelector('[data-region-head="money-head"]')!;
-    // Entry 0 of a three-act ledger.
+    // The lead; Details discloses part of the full body, so it is not here.
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
     expect(head).toContainElement(
       screen.getByRole('button', { name: 'Draft an invoice' }),
     );
@@ -684,6 +778,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
       document.querySelector('[data-index-region="money"]'),
     ).toHaveAttribute('data-density', 'full');
     expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+    openDetails();
     expect(screen.getByText(/^Client receivables · /)).toBeInTheDocument();
     // The same outer box on the other side of the promotion: same
     // margins, same border, same reserve, same rules. A stop that grew a
@@ -772,7 +867,7 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
     expect(mockOpenInvoiceFolio).toHaveBeenCalledWith('invoice-late', { landOn: 'record' });
   });
 
-  it('leads with Record a change when nothing is due: Draw an invoice is plain (F3-7)', () => {
+  it('leads with Draft an invoice when nothing is due; Record a change sits in Details (R4)', () => {
     mockInvoices = {
       data: [
         invoice({ id: 'invoice-draft', status: 'draft' }),
@@ -787,14 +882,46 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
     const head = document.querySelector('[data-region-head="money-head"]') as HTMLElement;
     expect(within(head).queryByRole('button', { name: 'Record the payment' })).not.toBeInTheDocument();
     expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
-    expect(within(head).getByRole('button', { name: 'Record a change' })).toHaveAttribute(
+    expect(within(head).getByRole('button', { name: 'Draft an invoice' })).toHaveAttribute(
       'data-action-variant',
       'inked',
     );
-    expect(within(head).getByRole('button', { name: 'Draft an invoice' })).toHaveAttribute(
+    expect(within(head).queryByRole('button', { name: 'Record a change' })).not.toBeInTheDocument();
+    openDetails();
+    expect(screen.getByRole('button', { name: 'Record a change' })).toHaveAttribute(
       'data-action-variant',
       'secondary',
     );
+  });
+
+  // R4 (V25) — one state-elected lead, first in the head: the receivable when
+  // one is due, otherwise the invoice; quiet tools after it, then Details.
+  it.each([
+    [
+      'a receivable is due',
+      [invoice({})],
+      ['record-client-payment', 'draw-project-invoice', 'money-details'],
+    ],
+    [
+      'nothing is due',
+      [invoice({ status: 'paid', amount_paid_cents: 175_000 })],
+      ['draw-project-invoice', 'money-details'],
+    ],
+  ])('elects its lead when %s', (_state, invoices, keys) => {
+    mockInvoices = { data: invoices, isLoading: false, error: null };
+
+    render(<MoneyRegion projectId="project-1" />);
+
+    const head = document.querySelector('[data-region-head="money-head"]') as HTMLElement;
+    const printed = Array.from(head.querySelectorAll<HTMLElement>('[data-action-key]'))
+      .map((act) => act.getAttribute('data-action-key'))
+      .filter((key) => !/fold/.test(key ?? ''));
+    expect(printed).toEqual(keys);
+    expect(head.querySelector(`[data-action-key="${keys[0]}"]`)).toHaveAttribute(
+      'data-action-variant',
+      'inked',
+    );
+    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
   });
 
   it('keeps today’s inked Draw an invoice with the flag off', () => {

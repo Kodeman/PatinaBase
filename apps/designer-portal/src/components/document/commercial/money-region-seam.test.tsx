@@ -145,7 +145,10 @@ describe('the Money seam, on the Delivery table', () => {
     ).toEqual(['mt-[var(--doc-region-gap)]']);
     expect(section.className).not.toMatch(/\bmb-/);
     expect(screen.getByRole('heading', { name: 'Project financials' })).toBeVisible();
-    expect(screen.getByText('$17,600 remaining · $62,400 authorized')).toBeVisible();
+    expect(
+      screen.getByText('Client budget $80,000, $17,600 remaining. $62,400 authorized.'),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
     expect(screen.getByText('Client budget · $80,000 approved')).toBeVisible();
     expect(screen.getByText('Account band')).toBeInTheDocument();
   });
@@ -229,7 +232,9 @@ describe('the Money seam, on the Delivery table', () => {
       screen.queryByText('$0 authorized · no budget yet'),
     ).not.toBeInTheDocument();
     // The region stands as it does anywhere unsettled: each rung printing its
-    // name and no figure.
+    // name and no figure, and the summary saying nothing of the budget.
+    expect(screen.queryByText(/client budget/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
     expect(screen.getByText('Client budget')).toBeInTheDocument();
   });
 
