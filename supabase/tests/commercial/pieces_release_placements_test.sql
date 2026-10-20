@@ -121,6 +121,13 @@ VALUES
 
 CREATE TEMP TABLE t36_ids (key text PRIMARY KEY, id uuid NOT NULL) ON COMMIT DROP;
 
+-- US-41 (00839): the floor's live maker quote says 10 weeks.
+INSERT INTO vendor_quotes (id, vendor_id, project_id, received_on)
+VALUES ('74400000-0000-4000-8000-000000000801', '74400000-0000-4000-8000-000000000011',
+        '74400000-0000-4000-8000-000000000001', '2026-10-01');
+INSERT INTO vendor_quote_lines (quote_id, ffe_item_id, unit_trade_cents, lead_time_weeks)
+VALUES ('74400000-0000-4000-8000-000000000801', '74400000-0000-4000-8000-000000000201', 900, 10);
+
 -- The floor's need label (D2) differs from its name; the runner's does not.
 DO $$
 DECLARE
@@ -161,6 +168,10 @@ BEGIN
   v_priced := public.set_labor_line_price((v_labor->>'selectionId')::uuid, 300);
   ASSERT (v_priced->>'lineTotalCents')::int = 273900,
     format('fixture: the install prices at 913 sq ft x $3 = $2,739: %s', v_priced);
+
+  -- US-41: the studio sets the runner's lead time by hand.
+  PERFORM public.set_project_ffe_line_build_fields('74400000-0000-4000-8000-000000000202',
+    '{"leadTimeWeeks": 6}'::jsonb);
 
   v_published := public.publish_budget_checkpoint('74400000-0000-4000-8000-000000000001',
                                                   '74400000-0000-4000-8000-000000000700');
@@ -238,6 +249,8 @@ BEGIN
      AND v_row.snapshot->'lineKind' = 'null'::jsonb
      AND v_row.snapshot->'parentFfeItemId' = 'null'::jsonb,
     format('O7: unit, need label, goods, no parent: %s', v_row.snapshot);
+  ASSERT v_row.snapshot->'leadTime' = '{"version":1,"weeks":10}'::jsonb,
+    format('O8: the floor freezes its live quote''s lead time: %s', v_row.snapshot->'leadTime');
 
   RAISE NOTICE 'PASS O: the oak floor is one row, 913 sq ft, its snapshot 4 rooms summing 830';
 END $$;
@@ -261,6 +274,8 @@ BEGIN
     format('S1: a one-room each goods line keeps every new key null: %s', v_snap);
   ASSERT v_snap ?& ARRAY['budgetMinCents', 'budgetMaxCents', 'docCode', 'customFields', 'notes', 'productImageUrl'],
     format('S2: the six base keys remain: %s', v_snap);
+  ASSERT v_snap->'leadTime' = '{"version":1,"weeks":6}'::jsonb,
+    format('S3: the runner freezes the studio''s own lead time: %s', v_snap->'leadTime');
 
   RAISE NOTICE 'PASS S: a single-room default line freezes no placements';
 END $$;
@@ -286,6 +301,8 @@ BEGIN
      AND v_row.snapshot->>'unit' = 'sq_ft'
      AND v_row.snapshot->'placements' = 'null'::jsonb,
     format('L4: the install''s snapshot names it labor under the floor: %s', v_row.snapshot);
+  ASSERT v_row.snapshot->'leadTime' = '{"version":1,"weeks":null}'::jsonb,
+    format('L6: the install knows no lead time and freezes null weeks: %s', v_row.snapshot->'leadTime');
   ASSERT (SELECT subtotal = 1049950 + 120000 + 273900 FROM proposals
            WHERE id = current_setting('t36.proposal')::uuid),
     'L5: the release is $14,437.50';
@@ -305,6 +322,16 @@ BEGIN
      WHERE d.proposal_id = current_setting('t36.proposal')::uuid
        AND a.snapshot IS DISTINCT FROM public._furnishing_authorization_item_snapshot(i)),
     'F1: every frozen snapshot equals the helper re-derived from its source';
+  ASSERT NOT EXISTS (
+    SELECT 1
+      FROM furnishing_authorization_items a
+      JOIN project_commercial_documents d ON d.id = a.commercial_document_id
+      JOIN project_ffe_items i ON i.id = a.source_ffe_item_id
+     WHERE d.proposal_id = current_setting('t36.proposal')::uuid
+       AND (a.snapshot->'leadTime'->>'version' IS DISTINCT FROM '1'
+            OR a.snapshot->'leadTime'->'weeks' IS DISTINCT FROM
+               COALESCE(to_jsonb(public.ffe_item_effective_lead_time_weeks(i)), 'null'::jsonb))),
+    'F2: every frozen leadTime is v1 and the line''s effective lead time';
   RAISE NOTICE 'PASS F: the frozen snapshot is the one definition';
 END $$;
 

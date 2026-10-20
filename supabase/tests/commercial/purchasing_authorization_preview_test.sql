@@ -39,6 +39,8 @@ DELETE FROM project_ffe_item_images WHERE item_id='83614260-0000-4000-8000-00000
 INSERT INTO project_ffe_item_images (item_id,project_id,url,source,position,is_primary) VALUES
 ('83614260-0000-4000-8000-000000000050','83614260-0000-4000-8000-000000000020','https://images.example.test/own.jpg','upload',1,true),
 ('83614260-0000-4000-8000-000000000050','83614260-0000-4000-8000-000000000020','https://images.example.test/secondary.jpg','upload',0,false);
+-- US-41: the studio's lead time on the flooring line, frozen with the save.
+UPDATE project_ffe_items SET lead_time_weeks=8 WHERE id='83614260-0000-4000-8000-000000000050';
 DO $$
 DECLARE line public.project_ffe_items; snap jsonb;
 BEGIN
@@ -68,7 +70,8 @@ INSERT INTO project_commercial_documents (id,project_id,proposal_id,document_kin
  'furnishings_authorization','UNREVIEWED_WAVE',false,now(),'83614260-0000-4000-8000-000000000001');
 INSERT INTO furnishing_authorization_items (source_ffe_item_id,commercial_document_id,name,room_name,item_type,quantity,client_unit_price_cents,client_line_total_cents,trade_unit_cost_cents,snapshot,sort_order) VALUES
 ('83614260-0000-4000-8000-000000000050','83614260-0000-4000-8000-000000000040','Frozen flooring','Living','fixed',3,1000,3000,987654,
- '{"unit":"sq_ft","placements":[{"roomName":"Living","quantity":1},{"roomName":"Dining","quantity":2}],"internalNotes":"PRIVATE_SENTINEL","margin":987654}'::jsonb || jsonb_build_object('clientImage',(SELECT public._furnishing_authorization_item_snapshot(i)->'clientImage' FROM project_ffe_items i WHERE i.id='83614260-0000-4000-8000-000000000050')),0),
+ '{"unit":"sq_ft","placements":[{"roomName":"Living","quantity":1},{"roomName":"Dining","quantity":2}],"internalNotes":"PRIVATE_SENTINEL","margin":987654}'::jsonb || jsonb_build_object('clientImage',(SELECT public._furnishing_authorization_item_snapshot(i)->'clientImage' FROM project_ffe_items i WHERE i.id='83614260-0000-4000-8000-000000000050'),
+   'leadTime',(SELECT public._furnishing_authorization_item_snapshot(i)->'leadTime' FROM project_ffe_items i WHERE i.id='83614260-0000-4000-8000-000000000050')),0),
 ('83614260-0000-4000-8000-000000000051','83614260-0000-4000-8000-000000000040','Lighting allowance',null,'allowance',3,2333,7001,987654,
  '{"unit":"lot","placements":[],"internalNotes":"PRIVATE_SENTINEL"}',1);
 -- Save once via the same helper called by the creator and canonical insert guard.
@@ -76,11 +79,12 @@ CREATE TEMP TABLE frozen_photo AS SELECT public._commercial_document_fingerprint
 UPDATE project_ffe_item_images SET url='https://images.example.test/changed-live.jpg'
 WHERE item_id='83614260-0000-4000-8000-000000000050' AND is_primary;
 UPDATE products SET images=ARRAY['https://images.example.test/changed-catalog.jpg'] WHERE id='83614260-0000-4000-8000-000000000060';
+UPDATE project_ffe_items SET lead_time_weeks=30 WHERE id='83614260-0000-4000-8000-000000000050';
 DO $$
 DECLARE line public.project_ffe_items; candidate_url text;
 BEGIN
   IF public._commercial_document_fingerprint('83614260-0000-4000-8000-000000000030') IS DISTINCT FROM (SELECT fingerprint FROM frozen_photo) THEN
-    RAISE EXCEPTION 'P18 live image edits cannot change saved fingerprint';
+    RAISE EXCEPTION 'P18 live image and lead time edits cannot change saved fingerprint';
   END IF;
   SELECT * INTO line FROM project_ffe_items WHERE id='83614260-0000-4000-8000-000000000050';
   FOREACH candidate_url IN ARRAY ARRAY['javascript:alert(1)','http://images.example.test/a.jpg','https://user:pass@images.example.test/a.jpg','https://images.example.test/a.jpg?X-Amz-Signature=secret','https://images.example.test/a.jpg?%65xpires=100','https://images.example.test/storage/v1/object/sign/private/a.jpg?token=secret'] LOOP
@@ -111,11 +115,11 @@ DECLARE source public.project_ffe_items; canonical jsonb; candidate jsonb; refus
 BEGIN
   SELECT * INTO source FROM project_ffe_items WHERE id='83614260-0000-4000-8000-000000000051';
   canonical := public._furnishing_authorization_item_snapshot(source);
-  FOREACH candidate IN ARRAY ARRAY[canonical, jsonb_set(canonical,'{clientImage,url}','"https://images.example.test/forged.jpg"')] LOOP
+  FOREACH candidate IN ARRAY ARRAY[canonical, jsonb_set(canonical,'{clientImage,url}','"https://images.example.test/forged.jpg"'), jsonb_set(canonical,'{leadTime,weeks}','99')] LOOP
     BEGIN
       INSERT INTO furnishing_authorization_items (source_ffe_item_id,commercial_document_id,project_room_id,product_id,name,room_name,category,item_type,quantity,client_unit_price_cents,client_line_total_cents,trade_unit_cost_cents,markup_percent,vendor_id,vendor_name,snapshot,sort_order)
       VALUES (source.id,'83614260-0000-4000-8000-000000000040',source.project_room_id,source.product_id,source.name,null,COALESCE(source.ffe_category,'Uncategorized'),source.item_type,source.quantity,source.unit_price_cents,source.line_total_cents,source.trade_price_cents,source.markup_percent,source.vendor_id,source.vendor_name,candidate,source.sort_order);
-      IF candidate IS DISTINCT FROM canonical THEN RAISE EXCEPTION 'P22 forged image must be rejected'; END IF;
+      IF candidate IS DISTINCT FROM canonical THEN RAISE EXCEPTION 'P22 forged image or lead time must be rejected'; END IF;
       -- Roll back the successful canonical probe without changing frozen rows.
       RAISE EXCEPTION SQLSTATE 'Z0001';
     EXCEPTION WHEN SQLSTATE 'Z0001' THEN NULL;
@@ -129,7 +133,7 @@ BEGIN
   RAISE NOTICE 'P21-P22 custom primary and canonical forged-image rejection passed';
 END $$;
 RESET ROLE;
-INSERT INTO project_ffe_items (id,project_id,name,status,item_type,quantity,unit,unit_price_cents,line_total_cents) SELECT ('83614260-0000-4000-8000-' || lpad((52+n)::text,12,'0'))::uuid,'83614260-0000-4000-8000-000000000020'::uuid,'Adversarial source','specified','fixed',1,'each',100,100 FROM generate_series(0,2) n;
+INSERT INTO project_ffe_items (id,project_id,name,status,item_type,quantity,unit,unit_price_cents,line_total_cents) SELECT ('83614260-0000-4000-8000-' || lpad((52+n)::text,12,'0'))::uuid,'83614260-0000-4000-8000-000000000020'::uuid,'Adversarial source','specified','fixed',1,'each',100,100 FROM generate_series(0,5) n;
 -- Adversarial historical snapshots are fixture inserts, never immutable updates.
 INSERT INTO proposals (id,project_id,designer_id,client_id,title,status,document_kind,commercial_state,total_amount,subtotal,deposit_percent) VALUES
 ('83614260-0000-4000-8000-000000000032','83614260-0000-4000-8000-000000000020','83614260-0000-4000-8000-000000000001','83614260-0000-4000-8000-000000000003','Adversarial safe projection','sent','furnishings_authorization','sent',100,100,0);
@@ -137,11 +141,14 @@ INSERT INTO project_commercial_documents (id,project_id,proposal_id,document_kin
 ('83614260-0000-4000-8000-000000000042','83614260-0000-4000-8000-000000000020','83614260-0000-4000-8000-000000000032','furnishings_authorization','Private wave',false,now(),'83614260-0000-4000-8000-000000000001');
 INSERT INTO furnishing_authorization_items (source_ffe_item_id,commercial_document_id,name,item_type,quantity,client_unit_price_cents,client_line_total_cents,snapshot,sort_order)
 SELECT ('83614260-0000-4000-8000-' || lpad((52+ord)::text,12,'0'))::uuid, '83614260-0000-4000-8000-000000000042'::uuid, 'Adversarial photo', 'fixed',1,100,100,
-jsonb_build_object('internalNotes','SECRET_PROJECTION','clientImage',image), ord
+jsonb_build_object('internalNotes','SECRET_PROJECTION','clientImage',image,'leadTime',lead), ord
 FROM (VALUES
-(0,'{"version":1,"url":"https://images.example.test/safe.jpg","storagePath":"SECRET_PROJECTION","notes":"SECRET_PROJECTION"}'::jsonb),
-(1,'{"version":1,"url":"https://images.example.test/storage/v1/object/sign/private/a.jpg?token=SECRET_PROJECTION"}'::jsonb),
-(2,'{"version":2,"url":"https://images.example.test/unknown.jpg"}'::jsonb)) cases(ord,image);
+(0,'{"version":1,"url":"https://images.example.test/safe.jpg","storagePath":"SECRET_PROJECTION","notes":"SECRET_PROJECTION"}'::jsonb,'{"version":1,"weeks":6,"source":"SECRET_PROJECTION"}'::jsonb),
+(1,'{"version":1,"url":"https://images.example.test/storage/v1/object/sign/private/a.jpg?token=SECRET_PROJECTION"}'::jsonb,'{"version":1,"weeks":105}'::jsonb),
+(2,'{"version":2,"url":"https://images.example.test/unknown.jpg"}'::jsonb,'{"version":2,"weeks":6}'::jsonb),
+(3,NULL,'{"version":1,"weeks":"6"}'::jsonb),
+(4,NULL,'{"version":1,"weeks":6.5}'::jsonb),
+(5,NULL,'{"version":1,"weeks":-1}'::jsonb)) cases(ord,image,lead);
 CREATE FUNCTION pg_temp.assert_safe_images(body jsonb) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   IF body#>'{items,0,clientImage}' IS DISTINCT FROM '{"version":1,"url":"https://images.example.test/safe.jpg"}'::jsonb
@@ -152,6 +159,20 @@ BEGIN
   END IF;
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.assert_safe_images(jsonb) TO authenticated;
+-- US-41: only a v1 lead time projects, rebuilt from whole weeks 0..104.
+CREATE FUNCTION pg_temp.assert_safe_lead_times(body jsonb) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF body#>'{items,0,leadTime}' IS DISTINCT FROM '{"version":1,"weeks":6}'::jsonb
+     OR body#>'{items,1,leadTime}' IS DISTINCT FROM '{"version":1,"weeks":null}'::jsonb
+     OR body#>'{items,2}' ? 'leadTime'
+     OR body#>'{items,3,leadTime}' IS DISTINCT FROM '{"version":1,"weeks":null}'::jsonb
+     OR body#>'{items,4,leadTime}' IS DISTINCT FROM '{"version":1,"weeks":null}'::jsonb
+     OR body#>'{items,5,leadTime}' IS DISTINCT FROM '{"version":1,"weeks":null}'::jsonb
+     OR body::text LIKE '%SECRET_PROJECTION%' THEN
+    RAISE EXCEPTION 'P25 adversarial client/preview lead time allowlist: %',body;
+  END IF;
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assert_safe_lead_times(jsonb) TO authenticated;
 CREATE TEMP TABLE before_preview AS
 SELECT (SELECT jsonb_agg(to_jsonb(p)) FROM proposals p WHERE id::text LIKE '83614260-%') proposals,
        (SELECT jsonb_agg(to_jsonb(d)) FROM project_commercial_documents d WHERE id::text LIKE '83614260-%') documents,
@@ -163,6 +184,11 @@ DO $$
 DECLARE s jsonb; b jsonb; item jsonb; needle text;
 BEGIN
   PERFORM pg_temp.assert_safe_images(public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000032')#>'{furnishingsPreview,body}');
+  PERFORM pg_temp.assert_safe_lead_times(public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000032')#>'{furnishingsPreview,body}');
+  IF (SELECT jsonb_agg(i->'leadTime' ORDER BY o) FROM jsonb_array_elements(public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000032')#>'{furnishingsPreview,body,items}') WITH ORDINALITY x(i,o))
+     IS DISTINCT FROM (SELECT jsonb_agg(i->'leadTime' ORDER BY o) FROM jsonb_array_elements(public.get_client_commercial_document_bundle('83614260-0000-4000-8000-000000000032')#>'{furnishings,items}') WITH ORDINALITY x(i,o)) THEN
+    RAISE EXCEPTION 'P26 preview and client bundle project the same lead times';
+  END IF;
   s := public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000030');
   b := s #> '{furnishingsPreview,body}';
   IF s->>'proposalId' <> '83614260-0000-4000-8000-000000000030'
@@ -177,6 +203,13 @@ BEGIN
      OR b#>'{items,1}' ? 'clientImage'
      OR public.get_client_commercial_document_bundle('83614260-0000-4000-8000-000000000030')#>'{furnishings,items,0,clientImage}' IS DISTINCT FROM item->'clientImage' THEN
     RAISE EXCEPTION 'P20 frozen image parity and absent legacy field: %',item;
+  END IF;
+  -- Frozen at 8 weeks; the live line now says 30 and must not leak through.
+  IF item->'leadTime' IS DISTINCT FROM '{"version":1,"weeks":8}'::jsonb
+     OR b#>'{items,1}' ? 'leadTime'
+     OR public.get_client_commercial_document_bundle('83614260-0000-4000-8000-000000000030')#>'{furnishings,items,0,leadTime}' IS DISTINCT FROM item->'leadTime'
+     OR public.get_client_commercial_document_bundle('83614260-0000-4000-8000-000000000030')#>'{furnishings,items,1}' ? 'leadTime' THEN
+    RAISE EXCEPTION 'P24 frozen lead time parity and absent legacy field: %',b;
   END IF;
   IF item->>'description' IS DISTINCT FROM 'Frozen flooring' OR item->>'unit' IS DISTINCT FROM 'sq_ft'
      OR item->'rooms' IS DISTINCT FROM '[{"name":"Living","quantity":1,"unit":"sq_ft"},{"name":"Dining","quantity":2,"unit":"sq_ft"}]'::jsonb THEN
@@ -205,6 +238,7 @@ DO $$ BEGIN
 END $$;
 SELECT pg_temp.preview_as('83614260-0000-4000-8000-000000000003');
 SELECT pg_temp.assert_safe_images(public.get_client_commercial_document_bundle('83614260-0000-4000-8000-000000000032')->'furnishings');
+SELECT pg_temp.assert_safe_lead_times(public.get_client_commercial_document_bundle('83614260-0000-4000-8000-000000000032')->'furnishings');
 DO $$ BEGIN
   BEGIN
     PERFORM public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000030');

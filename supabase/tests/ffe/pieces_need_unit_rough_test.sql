@@ -416,7 +416,7 @@ BEGIN
 
   v_err := pg_temp.refusal(format('SELECT public.set_project_ffe_line_build_fields(%L, %L::jsonb)',
     v_id, '{"budgetMaxCents": 5000}'));
-  ASSERT v_err = '23514||set_project_ffe_line_build_fields: only name, needLabel, quantity, unit and roughCents can be set here',
+  ASSERT v_err = '23514||set_project_ffe_line_build_fields: only name, needLabel, quantity, unit, roughCents and leadTimeWeeks can be set here',
     format('FAIL 7: an allowance key is refused, got %L', v_err);
   v_err := pg_temp.refusal(format('SELECT public.set_project_ffe_line_build_fields(%L, %L::jsonb)',
     v_id, '{"quantity": 0}'));
