@@ -347,6 +347,15 @@ BEGIN
         IS DISTINCT FROM 'A1 White oak floor' THEN
     RAISE EXCEPTION 'T5: the wall prints the signed clientName, else the working name, got %', v_thr->'selections';
   END IF;
+  -- 00841: the iOS reader names the same lines the same way.
+  IF (SELECT e->>'name' FROM jsonb_array_elements(v_sel->'selections') e
+      WHERE e->>'id' = '74500000-0000-4000-8000-000000000212')
+        IS DISTINCT FROM 'Signed dining chairs'
+     OR (SELECT e->>'name' FROM jsonb_array_elements(v_sel->'selections') e
+         WHERE e->>'id' = '74500000-0000-4000-8000-000000000211')
+        IS DISTINCT FROM 'A1 White oak floor' THEN
+    RAISE EXCEPTION 'S9: selections print the signed clientName, else the working name, got %', v_sel->'selections';
+  END IF;
 
   SELECT e INTO v_line FROM jsonb_array_elements(v_thr->'selections') e
   WHERE e->>'id' = '74500000-0000-4000-8000-000000000214';
