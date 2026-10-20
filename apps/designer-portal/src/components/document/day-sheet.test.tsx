@@ -137,6 +137,13 @@ const lines = (container: HTMLElement) =>
 const lineOf = (container: HTMLElement, key: string) =>
   container.querySelector<HTMLElement>(`[data-day-sheet-line="${key}"]`)!;
 
+/** US-43 R7 — "Not today" and "Until…" live behind the line's "Later ▾". */
+const openLater = async (job: string) => {
+  await act(async () => {
+    await userEvent.setup().click(screen.getByRole('button', { name: `Later — ${job}` }));
+  });
+};
+
 beforeEach(() => {
   mockMutate.mockReset();
   mockMutateAsync.mockReset();
@@ -246,6 +253,121 @@ describe('DaySheet — the cards', () => {
   });
 });
 
+describe('DaySheet — the cards’ layout and foot (US-43 R7)', () => {
+  it('stands the card holding the top line first, on the lead grid that spans it across the row', () => {
+    const { container } = renderSheet([entry(1), entry(2), entry(3)]);
+    const grid = container.querySelector<HTMLElement>('.cards')!;
+    expect(grid).toHaveClass('cards-lead');
+    const cards = grid.querySelectorAll<HTMLElement>(':scope > article[data-desk-card]');
+    expect(Array.from(cards, (card) => card.dataset.deskCard)).toEqual(['p1', 'p2', 'p3']);
+    expect(cards[0].querySelector('[data-part~="headline"]')).toHaveTextContent('Task 1 is due');
+  });
+
+  it('prints one state sentence in body type under each job’s display name', () => {
+    const invoice = entry(1, { kind: 'overdue_invoice', text: 'Invoice INV-1 is $3,800 overdue' });
+    const { container } = renderSheet(
+      [invoice, entry(2), entry(3)],
+      { states: new Map([state('task_due:t3', { actedAt: at(8), updatedAt: at(8), waitingOn: 'the Chens' })]) },
+      { holderOf: (jobId) => (jobId === 'p2' ? JORDAN : LEAH) },
+    );
+    const stateOf = (jobId: string) => {
+      const card = container.querySelector(`[data-desk-card="${jobId}"]`)!;
+      const sentences = card.querySelectorAll('[data-card-state]');
+      expect(sentences).toHaveLength(1);
+      expect(sentences[0]).toHaveClass('t-body');
+      expect(sentences[0].previousElementSibling).toHaveClass('t-d3');
+      return sentences[0].textContent;
+    };
+    expect(stateOf('p1')).toBe('Overdue, and yours today.');
+    expect(stateOf('p2')).toBe('With Jordan today.');
+    expect(stateOf('p3')).toBe('Handled for today.');
+    // The overdue clause on the line stays the one terracotta.
+    expect(container.querySelectorAll('.od')).toHaveLength(1);
+  });
+
+  it('reads the act, then “Record payment”, then “Later ▾” — never “Not today” or “Until…” in the foot', () => {
+    const { container } = renderSheet([
+      entry(1, { kind: 'overdue_invoice', recordId: 'inv-1', text: 'Invoice INV-1 is $3,800 overdue' }),
+    ]);
+    const foot = container.querySelector('[data-register="act"]')!;
+    const labels = Array.from(foot.querySelectorAll('a, button'), (el) => el.getAttribute('aria-label'));
+    expect(labels).toHaveLength(3);
+    expect(labels[0]).toMatch(/ — Job 1$/);
+    expect(labels.slice(1)).toEqual(['Record payment — Job 1', 'Later — Job 1']);
+    expect(within(foot as HTMLElement).getByRole('button', { name: 'Later — Job 1' })).toHaveTextContent('Later▾');
+    expect(screen.queryByRole('button', { name: /^Not today|^Set aside/ })).not.toBeInTheDocument();
+  });
+
+  it('opens “Later” by keyboard with aria-expanded; Escape closes it and hands focus back', async () => {
+    renderSheet([entry(1)]);
+    const user = userEvent.setup();
+    const later = screen.getByRole('button', { name: 'Later — Job 1' });
+    expect(later).toHaveAttribute('aria-expanded', 'false');
+    const menu = document.getElementById(later.getAttribute('aria-controls')!)!;
+    expect(menu).not.toBeVisible();
+    later.focus();
+    await act(async () => {
+      await user.keyboard('{Enter}');
+    });
+    expect(later).toHaveAttribute('aria-expanded', 'true');
+    expect(menu).toBeVisible();
+    expect(within(menu).getAllByRole('button').map((item) => item.textContent)).toEqual(['Not today', 'Until…']);
+    await act(async () => {
+      await user.tab();
+    });
+    expect(within(menu).getByRole('button', { name: 'Not today — Job 1' })).toHaveFocus();
+    await act(async () => {
+      await user.keyboard('{Escape}');
+    });
+    expect(later).toHaveAttribute('aria-expanded', 'false');
+    expect(later).toHaveFocus();
+    expect(screen.queryByRole('button', { name: 'Not today — Job 1' })).not.toBeInTheDocument();
+  });
+
+  it('closes “Later” when focus leaves it', async () => {
+    renderSheet([entry(1), entry(2)]);
+    await openLater('Job 1');
+    expect(screen.getByRole('button', { name: 'Later — Job 1' })).toHaveAttribute('aria-expanded', 'true');
+    await act(async () => {
+      screen.getByRole('button', { name: 'Later — Job 2' }).focus();
+    });
+    expect(screen.getByRole('button', { name: 'Later — Job 1' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('offers a hand-off no “Later”: it has nothing to put off', () => {
+    renderSheet([
+      {
+        ...entry(9, { kind: 'handoff', text: 'Leah handed you Ridge House', actionLabel: 'Open project file' }),
+        key: 'handoff:p9',
+      },
+    ]);
+    expect(screen.queryByRole('button', { name: /^Later/ })).not.toBeInTheDocument();
+  });
+
+  it('holds a settling line at the height it stood, so its card keeps its height', () => {
+    const height = jest.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(132);
+    try {
+      const needs = [entry(1)];
+      const { container, rerender } = render(sheetElement(needs));
+      expect(lineOf(container, 'task_due:t1').style.minHeight).toBe('');
+      rerender(
+        sheetElement(needs, {
+          states: new Map([state('task_due:t1', { deferredUntil: '2026-10-12', updatedAt: at(10) })]),
+        }),
+      );
+      const settledLine = lineOf(container, 'task_due:t1');
+      expect(settledLine).toHaveClass('settled');
+      expect(settledLine.style.minHeight).toBe('132px');
+      // Undone, the open line gives the floor back.
+      rerender(sheetElement(needs));
+      expect(lineOf(container, 'task_due:t1')).not.toHaveClass('settled');
+      expect(lineOf(container, 'task_due:t1').style.minHeight).toBe('');
+    } finally {
+      height.mockRestore();
+    }
+  });
+});
+
 describe('DaySheet — the eyebrow', () => {
   it('heads Today with the day, the arrival head and settle (U-Q3)', () => {
     const { container } = renderSheet([entry(1)]);
@@ -275,6 +397,7 @@ describe('DaySheet — the eyebrow', () => {
 describe('DaySheet — the acts', () => {
   it('“Not today” puts the need off until the next working day, through useSetNeedState', async () => {
     renderSheet([entry(1)]);
+    await openLater('Job 1');
     await act(async () => {
       await userEvent.setup().click(screen.getByRole('button', { name: 'Not today — Job 1' }));
     });
@@ -293,8 +416,9 @@ describe('DaySheet — the acts', () => {
     };
     const { container } = renderSheet([chen, aspen]);
     for (const line of Array.from(lines(container))) {
-      expect(within(line).getByRole('button', { name: /^Not today — / })).toBeInTheDocument();
+      expect(within(line).getByRole('button', { name: /^Later — / })).toHaveAttribute('aria-expanded', 'false');
     }
+    await openLater('Job 2');
     await act(async () => {
       await userEvent.setup().click(screen.getByRole('button', { name: 'Not today — Job 2' }));
     });
@@ -307,6 +431,7 @@ describe('DaySheet — the acts', () => {
   it('“Until…” opens Set aside, which writes the day and reason through useSetNeedState (U-Q5)', async () => {
     mockMutateAsync.mockResolvedValue(undefined);
     renderSheet([entry(1)]);
+    await openLater('Job 1');
     await act(async () => {
       await userEvent.setup().click(screen.getByRole('button', { name: 'Set aside until a day — Job 1' }));
     });
@@ -376,6 +501,7 @@ describe('DaySheet — the acts', () => {
   it('says so on its line when “Not today” did not save (SQ-751 F6)', async () => {
     mockMutate.mockImplementation((_vars, options) => options?.onError?.(new Error('refused')));
     const { container } = renderSheet([entry(1)]);
+    await openLater('Job 1');
     await act(async () => {
       await userEvent.setup().click(screen.getByRole('button', { name: 'Not today — Job 1' }));
     });
@@ -468,6 +594,7 @@ describe('DaySheet — a line settles in place (U-Q2, U-Q11)', () => {
   it('moves focus to the settled line’s Undo after her act, and says so once, politely', async () => {
     const needs = [entry(1)];
     const { container, rerender } = render(sheetElement(needs));
+    await openLater('Job 1');
     await act(async () => {
       await userEvent.setup().click(screen.getByRole('button', { name: 'Not today — Job 1' }));
     });

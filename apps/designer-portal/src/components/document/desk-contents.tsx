@@ -35,7 +35,6 @@ import {
   STUDIO_LEDGERS,
   STUDIO_VERBS,
 } from '@/lib/document/registry';
-import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { documentEvents } from '@/lib/analytics/document-events';
 import {
   openLedger,
@@ -176,9 +175,9 @@ function HoursInHandAct() {
 }
 
 /** The small DM-mono heading over each column of the contents. */
-function ColumnHead({ children }: { children: React.ReactNode }) {
+function ColumnHead({ id, children }: { id?: string; children: React.ReactNode }) {
   return (
-    <p className="doc-type-meta mb-3.5 font-semibold uppercase tracking-[0.14em]">
+    <p id={id} className="doc-type-meta mb-3.5 font-semibold uppercase tracking-[0.14em]">
       {children}
     </p>
   );
@@ -342,13 +341,10 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
           : 'mt-16 border-t border-[var(--border-subtle)] pt-12'
       }
     >
-      <SectionEyebrow>
-        <span id="the-studio">Studio resources</span>
-      </SectionEyebrow>
-
+      {/* US-43 R7 — one heading: the first column's names the section. */}
       <div className="grid grid-cols-1 gap-x-12 gap-y-9 min-[700px]:grid-cols-3">
         <div>
-          <ColumnHead>Studio resources</ColumnHead>
+          <ColumnHead id="the-studio">Studio resources</ColumnHead>
           <ul>
             {rooms.map((room) => (
               <ContentsRow

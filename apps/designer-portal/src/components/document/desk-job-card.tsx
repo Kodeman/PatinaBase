@@ -3,7 +3,8 @@
 /**
  * A Today card (US-28 S3; uplift.md change 1): one job and its lines on the
  * Day Sheet. The S1 Card — the stage edge on the left, the eyebrow (stage ·
- * holder · freshness), the job's name in display type, then its lines. The
+ * holder · freshness), the job's name in display type, its one state
+ * sentence (US-43 R7), then its lines. The
  * name's link covers the card's upper block; the lines keep their own acts.
  */
 
@@ -38,6 +39,7 @@ export function DeskJobCard({
   scope,
   now,
   first = false,
+  state,
   children,
 }: {
   card: SheetCard;
@@ -45,6 +47,8 @@ export function DeskJobCard({
   now: Date;
   /** Card one carries the arrival's `job` mark on its name. */
   first?: boolean;
+  /** US-43 R7 — the one state sentence under the name (`cardStateWords`). */
+  state?: string;
   children: ReactNode;
 }) {
   const { stage, holder } = card;
@@ -96,6 +100,11 @@ export function DeskJobCard({
             {card.name}
           </Link>
         </h3>
+        {state && (
+          <p className="t-body card-state" data-card-state>
+            {state}
+          </p>
+        )}
       </div>
       <ul className="lines">{children}</ul>
     </article>

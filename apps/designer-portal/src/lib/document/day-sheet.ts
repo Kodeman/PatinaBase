@@ -409,6 +409,28 @@ export function groupSheetByJob(
 }
 
 /**
+ * US-43 R7 — the card's one state sentence, under its name: whose move the
+ * job is today and whether it is late, in words. Never a count (Q1), never
+ * "cleared"; a card whose lines all settled says so once.
+ */
+export function cardStateWords(card: Pick<SheetCard, 'holder' | 'lines'>): string {
+  const open = card.lines.filter((line) => !line.settled);
+  if (open.length === 0) {
+    const putOff = card.lines.every(
+      ({ settled }) => !settled?.by && (settled?.kind === 'not_today' || settled?.kind === 'set_aside'),
+    );
+    return putOff ? 'Put off for today.' : 'Handled for today.';
+  }
+  const late = open.some((line) => line.need.kind.startsWith('overdue_'));
+  const holder = card.holder;
+  if (holder && !holder.mine) {
+    const who = holder.name ?? 'the lead';
+    return late ? `Overdue, with ${who} today.` : `With ${who} today.`;
+  }
+  return late ? 'Overdue, and yours today.' : 'Yours today.';
+}
+
+/**
  * Q5 — the time word beside a line: "just now", "40 minutes ago", "2 hours
  * ago", "yesterday". Only inside 24 hours; older, or with no event time, the
  * line prints none. The Desk keeps no time the job was last opened (the
