@@ -6,7 +6,8 @@
  * Build room (`WORK THIS ROOM →`) is where the lines are worked.
  *
  * One room unfolds at a time, to every line it holds (placed lines included),
- * so a line placed in four rooms is on the page once. A line the paper asks
+ * so a line placed in four rooms is on the page once. The room left open is
+ * remembered per project; a job with one room opens it. A line the paper asks
  * for (a landing, a deep link, `#line-<id>`) unfolds the room it stands in.
  * While every room must show (choosing a piece, marking installed) each line
  * prints in its primary room only.
@@ -50,6 +51,28 @@ export interface PiecesOverviewProps {
   children?: ReactNode;
 }
 
+const openRoomStorageKey = (projectId: string) => `patina:pieces-open-room:${projectId}`;
+
+/** The room left open on this project; `undefined` when none was chosen or storage is unavailable. */
+function readOpenRoom(projectId: string): string | null | undefined {
+  try {
+    const stored = window.localStorage.getItem(openRoomStorageKey(projectId));
+    if (stored === null) return undefined;
+    const parsed: unknown = JSON.parse(stored);
+    return typeof parsed === 'string' || parsed === null ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeOpenRoom(projectId: string, key: string | null): void {
+  try {
+    window.localStorage.setItem(openRoomStorageKey(projectId), JSON.stringify(key));
+  } catch {
+    // Storage refused (private window, quota): the room simply is not remembered.
+  }
+}
+
 export function PiecesOverview({
   projectId,
   docId,
@@ -77,7 +100,18 @@ export function PiecesOverview({
       : derived;
   }, [lines, placements, rooms, heldRoomId]);
 
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  // US-43 R4: the room she left open is remembered per project; until she
+  // chooses, a job with one room opens it. `undefined` is "not chosen yet".
+  const [chosenKey, setChosenKey] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    const remembered = readOpenRoom(projectId);
+    if (remembered !== undefined) setChosenKey(remembered);
+  }, [projectId]);
+  const openKey = chosenKey === undefined ? (rows.length === 1 ? rows[0].key : null) : chosenKey;
+  const choose = (key: string | null) => {
+    setChosenKey(key);
+    writeOpenRoom(projectId, key);
+  };
   const holds = (key: string | null, lineId: string) =>
     rows.find((row) => row.key === key)?.lineIds.includes(lineId) ?? false;
   // A line held open elsewhere wins over the room she unfolded by hand, and its
@@ -89,14 +123,14 @@ export function PiecesOverview({
         null)
       : null;
   useEffect(() => {
-    if (forcedKey) setOpenKey(forcedKey);
+    if (forcedKey) setChosenKey(forcedKey);
   }, [forcedKey]);
   const shownKey = forcedKey ?? openKey;
 
   const toggle = (key: string) => {
     const shown = rows.find((row) => row.key === shownKey);
     if (shown) onRoomFolded?.(shown.lineIds);
-    setOpenKey(key === shownKey ? null : key);
+    choose(key === shownKey ? null : key);
   };
 
   const frontMatter = overviewFrontMatter(job);

@@ -2,13 +2,14 @@
 
 /**
  * One room on the Document's Pieces overview (US-21 Q14, SPEC a1/a10/a12):
- * the strata mark, the room's name, `6 lines · 5 placeholders`, `~$23,564`,
- * `ADD A LINE` and `WORK THIS ROOM →`. The name unfolds the room to its lines.
- * The row the reader came back from carries the 3px ink bar (a10). At 390 the
- * row stacks, `WORK THIS ROOM →` above `ADD A LINE` (a12).
+ * the strata mark, the room's name, `6 lines · 5 placeholders` and `~$23,564`.
+ * US-43 R4: the name (`.t-d3`, with a visible ⌄) unfolds the room to its lines,
+ * and the room's own acts — `Add room selection`, `Edit room selections →` —
+ * stand inside the opened room rather than on every closed row. The row the
+ * reader came back from carries the 3px ink bar (a10). At 390 the row stacks.
  */
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { RoomFinish } from '@patina/types';
 import { DocumentAction } from '../document-action';
 import { StrataMark } from '../strata-mark';
@@ -59,6 +60,15 @@ export function PiecesOverviewRow({
   useEffect(() => {
     if (returned) nameRef.current?.focus({ preventScroll: true });
   }, [returned]);
+  // A room that closes with focus inside it hands focus back to its toggle,
+  // unless something else has already taken it.
+  const focusLeftWithBody = useRef(false);
+  useEffect(() => {
+    if (open || !focusLeftWithBody.current) return;
+    focusLeftWithBody.current = false;
+    const active = document.activeElement;
+    if (!active || active === document.body) nameRef.current?.focus({ preventScroll: true });
+  }, [open]);
   return (
     <li
       id={piecesOverviewRowId(row)}
@@ -74,16 +84,24 @@ export function PiecesOverviewRow({
       >
         <div className="flex items-center gap-3">
           <StrataMark size="sm" state={row.mark} />
-          <h3 className="font-heading text-[16px] italic text-[var(--ink)]">
+          <h3 className="t-d3 text-[var(--ink)]">
             <button
               ref={nameRef}
               type="button"
               aria-expanded={open}
               aria-controls={open ? bodyId : undefined}
               onClick={onToggle}
-              className="min-h-11 text-left underline-offset-4 hover:underline hover:decoration-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]"
+              className="inline-flex min-h-11 items-center gap-2 text-left underline-offset-4 hover:underline hover:decoration-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]"
             >
               {row.name}
+              <span
+                aria-hidden
+                className={`inline-block text-[16px] leading-none text-[var(--ink-faint)] motion-safe:transition-transform ${
+                  open ? 'rotate-180' : ''
+                }`}
+              >
+                ⌄
+              </span>
             </button>
           </h3>
           {wallSwatch?.hex && (
@@ -105,34 +123,60 @@ export function PiecesOverviewRow({
             </span>
           )}
         </div>
-        {/* DOM order is the 1440 order; at 390 the door stands first. */}
-        <div className="flex flex-col-reverse items-start gap-1 sm:ml-auto sm:flex-row sm:items-center sm:gap-4">
-          <DocumentAction
-            actionKey="open-add-schedule-line"
-            surfaceKey="project"
-            regionKey="pieces-overview-row"
-            variant="tertiary"
-            onClick={onAddLine}
-          >
-            Add room selection
-          </DocumentAction>
-          <DocumentAction
-            actionKey="work-this-room"
-            surfaceKey="project"
-            regionKey="pieces-overview-row"
-            variant="secondary"
-            href={buildRoomHref(docId, { lens: 'rough', room: row.key })}
-            trailing="→"
-          >
-            Edit room selections
-          </DocumentAction>
-        </div>
       </div>
       {open && (
-        <div id={bodyId} className="pb-3">
+        <RoomBody id={bodyId} onCloseWithFocus={() => (focusLeftWithBody.current = true)}>
           {children}
-        </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <DocumentAction
+              actionKey="open-add-schedule-line"
+              surfaceKey="project"
+              regionKey="pieces-overview-row"
+              variant="tertiary"
+              onClick={onAddLine}
+            >
+              Add room selection
+            </DocumentAction>
+            <DocumentAction
+              actionKey="work-this-room"
+              surfaceKey="project"
+              regionKey="pieces-overview-row"
+              variant="secondary"
+              href={buildRoomHref(docId, { lens: 'rough', room: row.key })}
+              trailing="→"
+            >
+              Edit room selections
+            </DocumentAction>
+          </div>
+        </RoomBody>
       )}
     </li>
+  );
+}
+
+/** The opened room. Its layout-effect cleanup runs before the body leaves the
+ *  page, while it can still see whether focus was inside it. */
+function RoomBody({
+  id,
+  onCloseWithFocus,
+  children,
+}: {
+  id: string;
+  onCloseWithFocus: () => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onClose = useRef(onCloseWithFocus);
+  onClose.current = onCloseWithFocus;
+  useLayoutEffect(() => {
+    const body = ref.current;
+    return () => {
+      if (body?.contains(document.activeElement)) onClose.current();
+    };
+  }, []);
+  return (
+    <div ref={ref} id={id} className="pb-3">
+      {children}
+    </div>
   );
 }
