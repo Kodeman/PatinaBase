@@ -15,7 +15,7 @@ const LABEL =
   'mb-1 block font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
 const HELP = 'mt-1 text-[11px] leading-relaxed text-[var(--color-aged-oak)]';
 const INPUT =
-  'min-h-11 w-28 rounded-md border border-[var(--color-pearl)] bg-white px-2 text-[13px] text-[var(--color-charcoal)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'min-h-11 w-28 rounded-md border border-[var(--color-pearl)] bg-white px-2 text-[13px] text-[var(--color-charcoal)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
 
 const dollars = (cents: number) =>
   new Intl.NumberFormat('en-US', {
@@ -151,7 +151,7 @@ export function StudioReleaseGateCard({
         <button
           type="button"
           onClick={save}
-          className="mt-3 inline-flex min-h-11 items-center rounded-md border border-[var(--color-pearl)] px-3 text-[13px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="mt-3 inline-flex min-h-11 items-center rounded-md border border-[var(--color-pearl)] px-3 text-[13px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         >
           Save
         </button>

@@ -38,7 +38,7 @@ export function SinceLine({ items, changesHref }: SinceLineProps) {
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.11em] text-[var(--text-faint)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.11em] text-[var(--text-faint)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
       >
         Since you were last here
       </button>
@@ -58,7 +58,7 @@ export function SinceLine({ items, changesHref }: SinceLineProps) {
         </ul>
         <Link
           href={changesHref}
-          className="inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] underline decoration-[var(--color-aged-oak)] underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] underline decoration-[var(--color-aged-oak)] underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         >
           What changed
         </Link>

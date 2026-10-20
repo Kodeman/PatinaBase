@@ -259,7 +259,7 @@ export function CaptureLeadSheet({
                     type="button"
                     aria-pressed={on}
                     onClick={() => setSource(s)}
-                    className={`min-h-11 min-w-11 rounded-[4px] border px-3 py-1.5 font-mono text-[12px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
+                    className={`min-h-11 min-w-11 rounded-[4px] border px-3 py-1.5 font-mono text-[12px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none ${
                       on
                         ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.18)] text-[var(--color-charcoal)]'
                         : 'border-[var(--color-pearl)] text-[var(--color-aged-oak)] hover:border-[var(--color-clay)]'
@@ -401,7 +401,7 @@ function Input({
       required={required}
       aria-invalid={invalid || undefined}
       aria-describedby={describedBy}
-      className="min-h-11 min-w-0 w-full border-b border-[var(--color-pearl)] bg-transparent px-1 py-2 text-[16px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      className="min-h-11 min-w-0 w-full border-b border-[var(--color-pearl)] bg-transparent px-1 py-2 text-[16px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
     />
   );
 }

@@ -79,8 +79,8 @@ export function MemberTitleLine({
         aria-expanded={open}
         className={
           jobTitle
-            ? 'da-score-hover block min-h-11 min-w-11 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]'
-            : 'da-score-hover inline-flex min-h-11 min-w-11 items-center font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--color-clay-ink)] transition-colors disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]'
+            ? 'da-score-hover block min-h-11 min-w-11 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]'
+            : 'da-score-hover inline-flex min-h-11 min-w-11 items-center font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--color-clay-ink)] transition-colors disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]'
         }
       >
         {jobTitle || 'Set title'}

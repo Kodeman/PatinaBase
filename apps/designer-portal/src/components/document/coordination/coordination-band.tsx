@@ -123,7 +123,7 @@ export function CoordinationBand({
   };
 
   return (
-    <section id="document-decision-controls" tabIndex={-1} aria-label="Project coordination" className="mt-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
+    <section id="document-decision-controls" tabIndex={-1} aria-label="Project coordination" className="mt-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">
       {/* The band head — a quiet Playfair label over the StrataMiniRule (the
           canonical separator), not a card. Depth = value contrast, no shadow. */}
       <div className="flex items-baseline justify-between">

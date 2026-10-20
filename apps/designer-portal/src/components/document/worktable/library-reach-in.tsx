@@ -301,7 +301,7 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
                           type="button"
                           onClick={() => void handleAdd(row)}
                           disabled={addItem.isPending}
-                          className="group flex min-h-11 w-full items-center gap-3 border-b border-[var(--doc-ink-border)] px-1 py-2 text-left transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+                          className="group flex min-h-11 w-full items-center gap-3 border-b border-[var(--doc-ink-border)] px-1 py-2 text-left transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                         >
                           <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[3px] bg-[var(--doc-sheet-2)]">
                             {row.images?.[0] ? (

@@ -1929,7 +1929,7 @@ function BoardRoomContextMenu({
           type="button"
           role="menuitem"
           tabIndex={index === 0 ? 0 : -1}
-          className="block min-h-11 w-full rounded px-3 py-2 text-left text-sm hover:bg-black/5 focus:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-clay)]"
+          className="block min-h-11 w-full rounded px-3 py-2 text-left text-sm hover:bg-black/5 focus:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus-ring)]"
           onClick={() => {
             entry.action();
             api.closeContextMenu();

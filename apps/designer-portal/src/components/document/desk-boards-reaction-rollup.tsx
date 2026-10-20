@@ -51,7 +51,7 @@ export function DeskBoardsReactionRollup() {
             <Link
               key={key}
               href={`/boards?status=${statusParam}`}
-              className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
             >
               {label(entries.length)}
             </Link>

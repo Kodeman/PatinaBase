@@ -464,7 +464,7 @@ export function LensLadder({
                     }}
                     onFocus={() => setRoving(rowKey)}
                     onClick={() => onJump(segment.key)}
-                    className="block w-full py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                    className="block w-full py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                   >
                     {body}
                   </button>
@@ -502,7 +502,7 @@ export function LensLadder({
                         // OD-14 — the rungs belong to the full measure only.
                         // Hidden by class, never by a width read, and skipped
                         // by the arrow walk while they are hidden.
-                        className={`hidden min-h-[27px] w-full items-center pl-3 text-left text-[13px] leading-tight text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1440px]:flex ${
+                        className={`hidden min-h-[27px] w-full items-center pl-3 text-left text-[13px] leading-tight text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] min-[1440px]:flex ${
                           room.held
                             ? 'font-semibold text-[var(--color-clay-ink)]'
                             : ''
@@ -518,7 +518,7 @@ export function LensLadder({
                   // track cannot hold are counted, not overprinted.
                   <p
                     data-ladder-rooms-overflow={hiddenRungs}
-                    className="hidden min-h-[27px] items-center pl-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)] min-[1440px]:flex"
+                    className="hidden min-h-[27px] items-center pl-3 font-body text-[14px] font-normal normal-case tracking-normal text-[var(--text-muted)] min-[1440px]:flex"
                   >
                     +{hiddenRungs} more
                   </p>
@@ -554,7 +554,7 @@ export function LensLadder({
           </p>
           {doors.map((door) => {
             const className =
-              'flex min-h-11 w-full items-center gap-[8px] text-left text-[13px] leading-tight text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+              'flex min-h-11 w-full items-center gap-[8px] text-left text-[13px] leading-tight text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
             const Icon = DOOR_ICON[door.key];
             const glyph = (
               <Icon

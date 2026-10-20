@@ -238,9 +238,9 @@ function VitalDate({
           ref={triggerRef}
           type="button"
           onClick={() => setOpen(true)}
-          className="group inline-flex items-baseline text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="group inline-flex items-baseline text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         >
-          <span className="da-score-hover font-mono text-[11px] uppercase tracking-[0.06em] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+          <span className="da-score-hover font-body text-[14px] font-normal normal-case tracking-normal group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
             {emptyAct}
           </span>
         </button>

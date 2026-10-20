@@ -191,7 +191,7 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
             aria-expanded={isOpen}
             aria-controls={`outbound-review-${d.id}`}
             onClick={() => toggleOpened(d.id)}
-            className="flex min-h-11 min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="flex min-h-11 min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <span className="min-w-0 [overflow-wrap:anywhere]">
               <span className="text-[14px] text-[var(--text-primary)]">{label}</span>

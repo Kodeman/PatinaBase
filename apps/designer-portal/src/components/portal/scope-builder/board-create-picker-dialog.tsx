@@ -76,7 +76,7 @@ function TemplateCard({
       type="button"
       onClick={onChoose}
       disabled={busy}
-      className="overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] text-left transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
+      className="overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] text-left transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
       aria-label={`Start from ${template.name}`}
     >
       <div className="flex h-24 items-center justify-center overflow-hidden bg-[var(--bg-muted)]">

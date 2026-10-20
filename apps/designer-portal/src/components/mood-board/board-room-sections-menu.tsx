@@ -46,9 +46,9 @@ function SectionRow({
           }
         }}
       />
-      <button type="button" aria-label={`Move ${section.name} up`} disabled={index === 0} onClick={() => move(-1)} className="min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30">↑</button>
-      <button type="button" aria-label={`Move ${section.name} down`} disabled={index === (api.state?.sections.length ?? 0) - 1} onClick={() => move(1)} className="min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30">↓</button>
-      <button type="button" aria-label={`Delete ${section.name}`} onClick={() => api.updateSections({ type: 'delete', sectionId: section.id })} className="min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">×</button>
+      <button type="button" aria-label={`Move ${section.name} up`} disabled={index === 0} onClick={() => move(-1)} className="min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-30">↑</button>
+      <button type="button" aria-label={`Move ${section.name} down`} disabled={index === (api.state?.sections.length ?? 0) - 1} onClick={() => move(1)} className="min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-30">↓</button>
+      <button type="button" aria-label={`Delete ${section.name}`} onClick={() => api.updateSections({ type: 'delete', sectionId: section.id })} className="min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]">×</button>
     </li>
   );
 }

@@ -264,7 +264,7 @@ export function FolderCard({
         data-action-key={need.actionLabel ? need.kind : undefined}
         data-action-variant={need.actionLabel ? 'primary' : undefined}
         data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}
-        className="absolute inset-0 block cursor-grab rounded-[0_8px_8px_8px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] active:cursor-grabbing"
+        className="absolute inset-0 block cursor-grab rounded-[0_8px_8px_8px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] active:cursor-grabbing"
       />
       <FolderFace
         folder={folder}
@@ -410,7 +410,7 @@ function FolderFace({
                   onOpenSheet();
                 }}
                 aria-label={`${actionLabel} — ${row.title}`}
-                className="pointer-events-auto relative mt-4 flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                className="pointer-events-auto relative mt-4 flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
                   {actionLabel}
@@ -450,7 +450,7 @@ function FolderFace({
                   openLedger(need.ledger!.name, need.ledger!.context);
                 }}
                 aria-label={`${actionLabel} — ${row.title}`}
-                className="pointer-events-auto relative mt-4 flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                className="pointer-events-auto relative mt-4 flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
                   {actionLabel}

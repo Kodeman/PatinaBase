@@ -88,7 +88,7 @@ const SECTION_LABEL: Record<string, string> = {
  *  charcoal for the mode you're in. No box: the rounded plate is gone, the 44px
  *  target stays as padding. */
 function modeClass(active: boolean, pad: string): string {
-  const base = `${pad} min-h-11 -mb-px border-b-2 pb-3 pt-2.5 font-mono text-[12px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`;
+  const base = `${pad} min-h-11 -mb-px border-b-2 pb-3 pt-2.5 font-mono text-[12px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]`;
   return active
     ? `${base} border-[var(--color-charcoal)] text-[var(--color-charcoal)]`
     : `${base} border-transparent text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]`;

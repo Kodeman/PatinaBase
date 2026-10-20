@@ -190,7 +190,7 @@ const inputCls =
 /** The scored word that opens the rolodex from the court block (flag-on only) —
  *  the portal's shared SCORED INK idiom, not a button. */
 const SCORED_WORD =
-  'da-score-hover min-h-11 inline-flex items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'da-score-hover min-h-11 inline-flex items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
 
 export function ItemComposer({
   projectId,
@@ -502,7 +502,7 @@ export function ItemComposer({
               type="button"
               onClick={() => setKind(k)}
               aria-pressed={on}
-              className="min-h-11 rounded-[7px] border px-2 py-2.5 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="min-h-11 rounded-[7px] border px-2 py-2.5 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               style={{
                 borderColor: on ? 'var(--color-clay)' : 'var(--color-pearl)',
                 background: on ? 'rgba(196,165,123,0.08)' : 'transparent',
@@ -540,7 +540,7 @@ export function ItemComposer({
                   type="button"
                   onClick={() => setDecisionType(t.key)}
                   aria-pressed={on}
-                  className="min-h-11 rounded-[5px] border px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.04em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                  className="min-h-11 rounded-[5px] border px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.04em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                   style={{
                     borderColor: on
                       ? 'var(--color-clay)'
@@ -571,7 +571,7 @@ export function ItemComposer({
               type="button"
               onClick={() => pickCourt(c)}
               aria-pressed={on}
-              className="min-h-11 rounded-[7px] border px-2 py-2 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="min-h-11 rounded-[7px] border px-2 py-2 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               style={{
                 borderColor: on ? 'var(--color-clay)' : 'var(--color-pearl)',
                 background: on ? 'rgba(196,165,123,0.08)' : 'transparent',

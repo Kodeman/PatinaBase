@@ -50,9 +50,9 @@ type AnyRecord = any;
 const labelCls =
   'font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]';
 const fieldCls =
-  'min-h-11 w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[16px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none';
+  'min-h-11 w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[16px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none';
 const quietBtnCls =
-  'inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-body)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-body)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
 
 const fmtMoney = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 
@@ -617,7 +617,7 @@ export function AmendmentSheet({
                           setError(null);
                           setReviewingId(a.id);
                         }}
-                        className="grid min-h-11 w-full grid-cols-1 items-baseline gap-x-3 gap-y-0.5 px-1.5 py-2 text-left transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none sm:grid-cols-[1fr_auto_auto]"
+                        className="grid min-h-11 w-full grid-cols-1 items-baseline gap-x-3 gap-y-0.5 px-1.5 py-2 text-left transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none sm:grid-cols-[1fr_auto_auto]"
                       >
                         <span className="truncate text-[14px] text-[var(--color-charcoal)]">
                           {a.title}

@@ -105,7 +105,7 @@ export function RefineReadout({
       <Note>{COPY.photosUnaffected}</Note>
 
       <details className="mt-2">
-        <summary className="inline-flex min-h-11 cursor-pointer items-center font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] outline-none transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] outline-none transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">
           {COPY.disclosureSummary}
         </summary>
 

@@ -521,7 +521,7 @@ function PalettePanel({
             paletteId: palette.id,
             data: { name: palette.name, swatches: swatchesByPalette.get(palette.id) ?? [] },
           })}
-          className="flex min-h-11 w-full items-center justify-between rounded-[4px] border border-[var(--border-default)] px-3 text-left text-[12px] hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-60"
+          className="flex min-h-11 w-full items-center justify-between rounded-[4px] border border-[var(--border-default)] px-3 text-left text-[12px] hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-60"
         >
           <span className="truncate">{palette.name}</span>
           <span className="font-mono text-[9px] uppercase text-[var(--text-muted)]">
@@ -592,7 +592,7 @@ function ScansList({
               },
             ], 'rail_click');
           }}
-          className="min-h-11 min-w-11 overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+          className="min-h-11 min-w-11 overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={scan.thumbnail_url ?? ''} alt="" draggable={false} className="aspect-[4/3] w-full object-cover"  decoding="async" loading="lazy"/>
@@ -956,7 +956,7 @@ export function BoardAddRail({
                 onClick={() => onAddItems([
                   projectSelectionToBoardItem(selection, nextPoint(), nextZ()),
                 ], 'rail_click')}
-                className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[4px] border border-[var(--border-default)] px-2.5 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[4px] border border-[var(--border-default)] px-2.5 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 <span className="min-w-0">
                   <span className="block truncate text-[11px] text-[var(--text-primary)]">
@@ -1020,7 +1020,7 @@ export function BoardAddRail({
                     boardId,
                     captureToBoardItem(capture, { x: 0, y: 0 }, 0),
                   )}
-                  className="flex min-h-11 w-full items-center gap-2 rounded-[4px] border border-[var(--border-default)] p-2 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                  className="flex min-h-11 w-full items-center gap-2 rounded-[4px] border border-[var(--border-default)] p-2 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[3px] bg-[var(--bg-muted)]">
                     {capture.thumbnail_url ? (
@@ -1062,7 +1062,7 @@ export function BoardAddRail({
               <button
                 type="button"
                 onClick={onBringInDeck}
-                className="ml-3 min-h-11 text-[12px] text-[var(--color-clay-ink)] underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                className="ml-3 min-h-11 text-[12px] text-[var(--color-clay-ink)] underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 Import presentation…
               </button>
@@ -1101,7 +1101,7 @@ export function BoardAddRail({
                           y: 0,
                           zIndex: 0,
                         })}
-                        className="min-h-11 min-w-11 overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                        className="min-h-11 min-w-11 overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={thumbnail} alt="" draggable={false} className="aspect-[4/3] w-full object-cover"  decoding="async" loading="lazy"/>

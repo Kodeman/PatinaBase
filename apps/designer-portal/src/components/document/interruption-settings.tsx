@@ -93,7 +93,7 @@ export function InterruptionSettings() {
                   onClick={() =>
                     setRule.mutate({ kind: key, enabled: !enabled })
                   }
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-50"
                 >
                   <span
                     className={`relative h-[20px] w-[36px] rounded-full border transition-colors ${

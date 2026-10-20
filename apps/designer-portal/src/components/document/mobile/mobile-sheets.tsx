@@ -1159,7 +1159,7 @@ function MobileTimerSheet() {
           <button
             type="button"
             onClick={pause}
-            className={`${BTN} min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+            className={`${BTN} min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]`}
           >
             Pause
           </button>
@@ -1168,7 +1168,7 @@ function MobileTimerSheet() {
           <button
             type="button"
             onClick={resume}
-            className={`${BTN} min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+            className={`${BTN} min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]`}
           >
             Resume
           </button>

@@ -31,7 +31,7 @@ type AnyVendor = any;
 // itself, so it rides an inner span (see the category line below). Scoring the
 // padded box would rule 17px under the word and as wide as the halo.
 const MONO_LINK =
-  'group inline-flex min-h-11 min-w-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none';
+  'group inline-flex min-h-11 min-w-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none';
 
 const MONO_SCORE =
   'da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100';
@@ -210,7 +210,7 @@ export function MakersMarketplace({
                   <button
                     type="button"
                     onClick={() => onOpenMaker(v.id)}
-                    className="flex min-h-11 min-w-11 flex-1 items-center gap-3.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                    className="flex min-h-11 min-w-11 flex-1 items-center gap-3.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                   >
                     <Avatar name={String(v.name ?? 'Maker')} role="maker" />
                     <span className="min-w-0 flex-1">

@@ -208,7 +208,7 @@ export function ChipMultiSelect({
             key={o.value}
             type="button"
             onClick={() => onToggle(o.value)}
-            className={`min-h-11 px-2.5 py-1 text-[11.5px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+            className={`min-h-11 px-2.5 py-1 text-[11.5px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] ${
               on
                 ? 'text-[var(--color-charcoal)]'
                 : 'text-[var(--color-aged-oak)]'

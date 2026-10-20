@@ -1565,7 +1565,7 @@ function BoardRoomSurface({
               <button
                 type="button"
                 disabled={api.isRetryingPersistence}
-                className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase underline underline-offset-2 disabled:no-underline disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase underline underline-offset-2 disabled:no-underline disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
                 onClick={() => { void api.retryPersistence(); }}
               >
                 {api.isRetryingPersistence ? 'Trying…' : 'Try again'}
@@ -1573,7 +1573,7 @@ function BoardRoomSurface({
             )}
             <button
               type="button"
-              className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+              className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
               onClick={() => {
                 setSurfaceError(null);
                 api.discardPersistenceError();
@@ -1591,7 +1591,7 @@ function BoardRoomSurface({
           <button
             type="button"
             aria-label="Dismiss board notice"
-            className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+            className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
             onClick={() => setSurfaceNotice(null)}
           >
             Dismiss
@@ -1605,7 +1605,7 @@ function BoardRoomSurface({
             <button
               type="button"
               onClick={() => focusFeedbackItem(unpreparedReviewMediaItemIds[0])}
-              className="min-h-11 text-left underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+              className="min-h-11 text-left underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
             >
               {reviewMediaBannerCopy(unpreparedReviewMediaCount)}
             </button>
@@ -1630,7 +1630,7 @@ function BoardRoomSurface({
               <button
                 type="button"
                 onClick={() => setDeckLedgerOpen(true)}
-                className="min-h-8 text-[var(--color-clay-ink)] underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                className="min-h-8 text-[var(--color-clay-ink)] underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 Review import
               </button>
@@ -1784,7 +1784,7 @@ function BoardRoomSurface({
                 type="button"
                 aria-label="Close Tidy spacing"
                 onClick={() => setTidySession(null)}
-                className="min-h-11 min-w-11 text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                className="min-h-11 min-w-11 text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 ×
               </button>
@@ -1826,7 +1826,7 @@ function BoardRoomSurface({
                     type="button"
                     aria-label="Dismiss"
                     onClick={() => setPresentPrefetchResult(null)}
-                    className="min-h-11 min-w-11 text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                    className="min-h-11 min-w-11 text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
                   >
                     ×
                   </button>

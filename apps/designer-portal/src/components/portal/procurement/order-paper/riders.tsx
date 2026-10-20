@@ -54,7 +54,7 @@ const TYPE: Record<Variant, { label: string; body: string; field: string }> = {
     label: 'doc-type-meta uppercase tracking-[0.07em] text-[var(--color-quiet-ink)]',
     body: 'doc-type-body text-[var(--color-charcoal)]',
     field:
-      'min-h-11 min-w-0 border-0 border-b border-dotted border-[var(--color-rule-strong,#D8CCB8)] bg-transparent px-0 doc-type-body text-[var(--color-charcoal)] placeholder:text-[var(--color-quiet-ink)] focus:border-solid focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-60',
+      'min-h-11 min-w-0 border-0 border-b border-dotted border-[var(--color-rule-strong,#D8CCB8)] bg-transparent px-0 doc-type-body text-[var(--color-charcoal)] placeholder:text-[var(--color-quiet-ink)] focus:border-solid focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-60',
   },
   cell: {
     label: 'font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]',

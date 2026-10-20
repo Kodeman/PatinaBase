@@ -240,7 +240,7 @@ export function DeckPieceActs({
               disabled={busy}
               data-deck-crop={pin.id}
               onClick={() => void decisions.choose(item, undefined, pin.id).then((ok) => ok && setMode('idle'))}
-              className={`h-14 w-14 overflow-hidden rounded-[3px] border ${index === pickIndex ? 'border-[var(--color-clay)]' : 'border-[var(--border-default)]'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]`}
+              className={`h-14 w-14 overflow-hidden rounded-[3px] border ${index === pickIndex ? 'border-[var(--color-clay)]' : 'border-[var(--border-default)]'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={cropUrl(pin) ?? undefined} alt="" className="h-full w-full object-cover"  decoding="async" loading="lazy"/>

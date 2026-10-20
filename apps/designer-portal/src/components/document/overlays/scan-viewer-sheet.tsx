@@ -64,7 +64,7 @@ export function ScanViewerSheet({
     >
       <div
         data-overlay-scan-viewer
-        className="flex min-h-0 flex-1 flex-col [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-[var(--color-clay)]"
+        className="flex min-h-0 flex-1 flex-col [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-[var(--focus-ring)]"
       >
         <ScanStill scan={scan} onClose={onClose} />
       </div>

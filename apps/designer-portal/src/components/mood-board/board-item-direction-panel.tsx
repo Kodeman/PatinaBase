@@ -118,7 +118,7 @@ export function BoardItemDirectionPanel({
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="flex min-h-11 w-full items-center justify-between gap-2 px-2.5 py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-clay)]"
+        className="flex min-h-11 w-full items-center justify-between gap-2 px-2.5 py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus-ring)]"
       >
         <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           Studio direction{directions.length > 0 ? ` · ${directions.length}` : ''}

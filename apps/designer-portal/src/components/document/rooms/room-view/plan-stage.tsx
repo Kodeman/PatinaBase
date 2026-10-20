@@ -187,7 +187,7 @@ function hitHandlers(
     onFocus: onFocusShow(tip),
     onBlur: onHide,
     className:
-      'cursor-crosshair outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-clay)]',
+      'cursor-crosshair outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus-ring)]',
   };
 }
 

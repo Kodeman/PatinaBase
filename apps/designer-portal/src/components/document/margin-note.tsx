@@ -391,7 +391,7 @@ export function MarginNote({
           type="button"
           onClick={() => recedeAs('dismissed')}
           aria-label="Dismiss note"
-          className="mt-[2px] shrink-0 rounded-[3px] p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="mt-[2px] shrink-0 rounded-[3px] p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         >
           <X className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
         </button>

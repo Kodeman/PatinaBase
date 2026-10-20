@@ -396,7 +396,7 @@ function SiteRequestHandoffItem({
                                   [item.itemId]: event.target.value,
                                 }))
                               }
-                              className="mt-1 min-h-11 w-full min-w-0 max-w-full rounded-[3px] border border-[var(--border-subtle)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-charcoal)] outline-none focus-visible:border-[var(--color-clay)] focus-visible:ring-2 focus-visible:ring-[var(--color-clay)]/30"
+                              className="mt-1 min-h-11 w-full min-w-0 max-w-full rounded-[3px] border border-[var(--border-subtle)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-charcoal)] outline-none focus-visible:border-[var(--color-clay)] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]/30"
                             >
                               <option value="">Select a project room</option>
                               {detailQuery.data.rooms.map((room) => (
@@ -470,7 +470,7 @@ function SiteRequestHandoffItem({
                               [item.itemId]: event.target.value,
                             }))
                           }
-                          className="mt-1 min-h-[88px] w-full min-w-0 max-w-full resize-y rounded-[3px] border border-[var(--border-subtle)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-charcoal)] outline-none focus-visible:border-[var(--color-clay)] focus-visible:ring-2 focus-visible:ring-[var(--color-clay)]/30"
+                          className="mt-1 min-h-[88px] w-full min-w-0 max-w-full resize-y rounded-[3px] border border-[var(--border-subtle)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-charcoal)] outline-none focus-visible:border-[var(--color-clay)] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]/30"
                         />
                         <DocumentAction
                           actionKey="redo-site-request-item"
@@ -523,7 +523,7 @@ function SiteRequestHandoffItem({
                     maxLength={4000}
                     value={nudgeNote}
                     onChange={(event) => setNudgeNote(event.target.value)}
-                    className="mt-1 min-h-[88px] w-full min-w-0 max-w-full resize-y rounded-[3px] border border-[var(--border-subtle)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-charcoal)] outline-none focus-visible:border-[var(--color-clay)] focus-visible:ring-2 focus-visible:ring-[var(--color-clay)]/30"
+                    className="mt-1 min-h-[88px] w-full min-w-0 max-w-full resize-y rounded-[3px] border border-[var(--border-subtle)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-charcoal)] outline-none focus-visible:border-[var(--color-clay)] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]/30"
                   />
                   <DocumentAction
                     actionKey="nudge-site-request"

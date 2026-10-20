@@ -183,7 +183,7 @@ describe('LetterheadSubject', () => {
       'focus-visible:outline',
       'focus-visible:outline-2',
       'focus-visible:outline-offset-2',
-      'focus-visible:outline-[var(--color-clay)]',
+      'focus-visible:outline-[var(--focus-ring)]',
       'py-3',
       '-my-3',
     );
@@ -196,7 +196,7 @@ describe('LetterheadSubject', () => {
     const input = screen.getByRole('textbox', { name: 'Subject line' });
     expect(input).toHaveClass(
       'focus-visible:outline',
-      'focus-visible:outline-[var(--color-clay)]',
+      'focus-visible:outline-[var(--focus-ring)]',
       'min-h-[44px]',
       '-my-3',
     );

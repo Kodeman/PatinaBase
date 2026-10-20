@@ -1158,7 +1158,7 @@ export function ScheduleSpine({
       style={{ '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties}
       tabIndex={-1}
       aria-label="Project schedule"
-      className="mt-[var(--doc-region-gap)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      className="mt-[var(--doc-region-gap)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
     >
       {/* The region's rule opens it whether folded or open — a printed device,
           not a divider with meaning (region-rule.tsx). */}

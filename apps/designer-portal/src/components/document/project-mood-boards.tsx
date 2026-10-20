@@ -421,7 +421,7 @@ export function ProjectMoodBoards({
                 <Link
                   key={board.id}
                   href={roomHref(board.id, pathname)}
-                  className="group w-[184px] shrink-0 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                  className="group w-[184px] shrink-0 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                   aria-label={`Open live mood board ${board.name}`}
                 >
                   <BoardCoverArt
@@ -456,7 +456,7 @@ export function ProjectMoodBoards({
         <button
           type="button"
           onClick={() => setStartingBoard(true)}
-          className="mt-5 w-full rounded-[5px] border border-dashed border-[var(--border-default)] px-6 py-8 text-center hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+          className="mt-5 w-full rounded-[5px] border border-dashed border-[var(--border-default)] px-6 py-8 text-center hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
         >
           <span className="block font-heading text-[15px] text-[var(--color-charcoal)]">Start the first working board</span>
           <span className="mt-1 block text-[11px] text-[var(--text-muted)]">References stay loose; Library and capture products become project selections as they are placed.</span>
@@ -488,7 +488,7 @@ export function ProjectMoodBoards({
                   {continued ? (
                     <Link
                       href={roomHref(continued.id, pathname)}
-                      className="inline-flex min-h-11 items-center rounded-[4px] border border-[var(--color-clay)] px-3 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                      className="inline-flex min-h-11 items-center rounded-[4px] border border-[var(--color-clay)] px-3 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                     >
                       Open continued board
                     </Link>

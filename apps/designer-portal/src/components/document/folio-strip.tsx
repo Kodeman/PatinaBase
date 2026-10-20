@@ -70,7 +70,7 @@ function FileChip({
       <button
         type="button"
         onClick={() => onOpen(head)}
-        className="inline-flex min-h-11 min-w-11 max-w-[180px] items-center justify-center text-[11px] text-[var(--color-mocha)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        className="inline-flex min-h-11 min-w-11 max-w-[180px] items-center justify-center text-[11px] text-[var(--color-mocha)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
         title={head.title}
       >
         <span className="da-score-hover block min-w-0 max-w-full">
@@ -95,7 +95,7 @@ function FileChip({
       <button
         type="button"
         onClick={() => onToggleVisibility(head)}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] uppercase tracking-[0.05em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] uppercase tracking-[0.05em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         style={{
           color: head.client_visible
             ? 'var(--color-sage-ink)'

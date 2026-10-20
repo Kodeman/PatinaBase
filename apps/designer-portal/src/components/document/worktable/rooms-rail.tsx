@@ -38,7 +38,7 @@ interface RailRoom {
 }
 
 const SEGMENT =
-  'da-score-hover doc-type-control whitespace-nowrap px-1 py-1.5 text-[13px] leading-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'da-score-hover doc-type-control whitespace-nowrap px-1 py-1.5 text-[13px] leading-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
 
 export function RoomsRail({
   proposalId,

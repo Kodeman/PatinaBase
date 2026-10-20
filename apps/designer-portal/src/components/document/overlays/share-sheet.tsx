@@ -38,7 +38,7 @@ const labelCls =
   'font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]';
 
 const fieldCls =
-  'min-h-11 w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[16px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none';
+  'min-h-11 w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[16px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none';
 
 // Guests are always view-only, so the feedback toggle is meaningless on a share
 // link (it is forced off for tokenized guests). Omit it from the matrix.
@@ -257,7 +257,7 @@ export function ShareSheet({
                   onClick={() =>
                     setVisibility((v) => ({ ...v, [f.key]: !v[f.key] }))
                   }
-                  className="flex min-h-11 w-full items-start justify-between gap-3 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 text-left transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+                  className="flex min-h-11 w-full items-start justify-between gap-3 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 text-left transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
                 >
                   <span className="min-w-0">
                     <span className="block text-[14px] text-[var(--color-charcoal)]">

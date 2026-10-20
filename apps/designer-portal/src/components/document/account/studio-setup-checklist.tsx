@@ -61,7 +61,7 @@ export interface StudioSetupChecklistProps extends StudioSetupInput {
 }
 
 const SCORED_ROW_LABEL =
-  'da-score-hover inline-flex min-h-11 min-w-11 items-center text-left text-[13.5px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'da-score-hover inline-flex min-h-11 min-w-11 items-center text-left text-[13.5px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
 
 function ChecklistRow({
   done,

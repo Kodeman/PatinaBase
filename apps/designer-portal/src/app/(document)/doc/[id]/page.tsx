@@ -3682,7 +3682,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             id={sectionAnchorId(row.active_section)}
             data-active-section
             tabIndex={-1}
-            className="scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
             onDragOver={(e) => {
               if (!sectionTakesFiles || !e.dataTransfer?.types?.includes('Files')) return;
               e.preventDefault();

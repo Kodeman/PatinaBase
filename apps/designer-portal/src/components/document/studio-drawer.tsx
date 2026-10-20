@@ -350,7 +350,7 @@ export function StudioDrawer() {
           <TesterSlot kind="drawer" />
           <Link
             href="/desk"
-            className="inline-flex min-h-11 shrink-0 items-center rounded-[3px] font-heading text-[15px] font-medium uppercase tracking-[0.2em] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="inline-flex min-h-11 shrink-0 items-center rounded-[3px] font-heading text-[15px] font-medium uppercase tracking-[0.2em] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             Patina
           </Link>
@@ -396,7 +396,7 @@ export function StudioDrawer() {
                   });
                   enterRoom(ledger.href!, ledger.key, 'drawer');
                 }}
-                className={`relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)] ${
+                className={`relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] ${
                   here
                     ? 'text-[var(--text-primary)]'
                     : 'text-[var(--text-body)] hover:bg-[var(--bg-hover)]'
@@ -426,7 +426,7 @@ export function StudioDrawer() {
               aria-expanded={booksOpen}
               aria-controls="studio-books-menu"
               onClick={() => setBooksOpen((open) => !open)}
-              className={`relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)] ${
+              className={`relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] ${
                 openLedger
                   ? 'text-[var(--text-primary)]'
                   : 'text-[var(--text-body)] hover:bg-[var(--bg-hover)]'
@@ -568,7 +568,7 @@ export function StudioDrawer() {
                name. The words on the paper are the ruled ones and do not move;
                the name says which door this is. */
             aria-label="Find anything (⌘K), from the studio drawer"
-            className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+            className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)]"
           >
             <Search className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} aria-hidden />
             {/* F03 — at 1280 the drawer's centre and right zones overprint.
@@ -590,7 +590,7 @@ export function StudioDrawer() {
               type="button"
               onClick={() => openKeys('drawer')}
               aria-label="Keys (?)"
-              className="relative inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+              className="relative inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)]"
             >
               <span className="hidden min-[1440px]:inline">Keys</span>
               <kbd className="rounded-[3px] border border-[var(--border-default)] px-1.5 py-px font-mono text-[12px] leading-none text-[var(--text-muted)]">
@@ -616,7 +616,7 @@ export function StudioDrawer() {
               data-drawer-timer-doorway
               onClick={() => openTimer()}
               aria-label={`Open time controls, in hand ${fmtMinutes(inHandToday)}`}
-              className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-[3px] px-2 py-1.5 transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+              className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-[3px] px-2 py-1.5 transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)]"
             >
               <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
                 In hand today
@@ -651,7 +651,7 @@ export function StudioDrawer() {
                 ? `${THE_POST.label}, ${unread} unread`
                 : THE_POST.label
             }
-            className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+            className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)]"
           >
             <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
               <THE_POST.icon

@@ -92,7 +92,7 @@ export function CeremonySlots({
             value={toLocalInputValue(slot.starts_at)}
             onChange={(e) => editSlot(slot.id, e.target.value)}
             aria-label="Offered time"
-            className="min-w-0 flex-1 bg-transparent font-heading text-[15.5px] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="min-w-0 flex-1 bg-transparent font-heading text-[15.5px] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           />
           <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             {slot.duration_minutes} min

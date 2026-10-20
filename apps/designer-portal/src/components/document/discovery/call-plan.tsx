@@ -106,7 +106,7 @@ export function CallPlan({
             key={c.block}
             type="button"
             onClick={() => onOpenBlock(c.block)}
-            className="flex min-h-11 w-full items-start gap-3 rounded-[3px] border-b border-[var(--color-pearl)] py-2.5 text-left last:border-b-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="flex min-h-11 w-full items-start gap-3 rounded-[3px] border-b border-[var(--color-pearl)] py-2.5 text-left last:border-b-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <span
               aria-hidden

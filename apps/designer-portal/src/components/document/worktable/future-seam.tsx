@@ -18,7 +18,7 @@ export function FutureSeam({ name, opens }: { name: string; opens: string }) {
     <div
       data-future-seam
       tabIndex={0}
-      className="mb-2 flex min-h-11 w-full items-center justify-between gap-3 rounded-[5px] border border-dashed border-[var(--color-pearl)] px-4 py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      className="mb-2 flex min-h-11 w-full items-center justify-between gap-3 rounded-[5px] border border-dashed border-[var(--color-pearl)] px-4 py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
     >
       <span className="font-heading text-[13px] font-medium italic text-[var(--text-muted)]">
         {name}

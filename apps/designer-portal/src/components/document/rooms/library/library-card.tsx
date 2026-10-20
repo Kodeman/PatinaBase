@@ -279,7 +279,7 @@ function InlineQuickTags({
               key={s.id}
               type="button"
               onClick={() => setPicked((p) => (p === s.id ? null : s.id))}
-              className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 py-1 text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
+              className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 py-1 text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none ${
                 picked === s.id
                   ? "text-[var(--color-charcoal)]"
                   : "text-[var(--text-body)] hover:text-[var(--color-charcoal)]"

@@ -220,7 +220,7 @@ export function PlanRoomSet({
               key={row.sheetId}
               type="button"
               onClick={() => onOpenSheet(row.sheetId)}
-              className="flex min-h-[44px] flex-col items-start gap-1.5 border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-3 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="flex min-h-[44px] flex-col items-start gap-1.5 border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-3 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
             >
               <span className="flex w-full items-center justify-between gap-2">
                 <span className="flex items-center gap-2">

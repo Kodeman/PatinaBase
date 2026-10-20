@@ -182,7 +182,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
             <Link
               key={board.id}
               href={hrefFor(board.id)}
-              className="group w-[210px] shrink-0 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+              className="group w-[210px] shrink-0 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
               aria-label={`Open mood board ${board.name}`}
             >
               <BoardCover board={board} />
@@ -202,7 +202,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
-          className="w-full rounded-[5px] border border-dashed border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-9 text-center transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+          className="w-full rounded-[5px] border border-dashed border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-9 text-center transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
         >
           <span className="block font-heading text-[16px] text-[var(--text-primary)]">
             Start the first mood board

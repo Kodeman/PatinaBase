@@ -127,7 +127,7 @@ export function BoardSuggestionsRail({ items, onAdd }: BoardSuggestionsRailProps
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex min-h-11 w-full items-center justify-between focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+        className="flex min-h-11 w-full items-center justify-between focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
       >
         <span className="type-meta block text-[var(--accent-primary)]">More like this · from your library</span>
         <span aria-hidden className="text-xs text-[var(--text-muted)]">
@@ -172,7 +172,7 @@ export function BoardSuggestionsRail({ items, onAdd }: BoardSuggestionsRailProps
                 type="button"
                 aria-label={`Dismiss ${p.name}`}
                 onClick={() => dismiss(p, i)}
-                className="min-h-11 min-w-11 rounded-sm px-1.5 py-1 text-sm leading-none text-[var(--text-muted)] hover:text-[var(--text-default)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                className="min-h-11 min-w-11 rounded-sm px-1.5 py-1 text-sm leading-none text-[var(--text-muted)] hover:text-[var(--text-default)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 ×
               </button>
