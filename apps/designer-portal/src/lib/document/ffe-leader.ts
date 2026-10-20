@@ -9,16 +9,16 @@
  *   3. an unanswered purchase order                  (`po_unacknowledged`, rank 2)
  *   4. a line with nothing specified, then a specified line with no price
  *   5. lines with the client for authorization       (the client's turn)
- *   6. a priced line not yet on an invoice
- *   7. an empty schedule                             (Add items)
+ *   6. a release held by its prerequisite            (the hold names its fix)
+ *   7. a priced line not yet on an invoice
+ *   8. otherwise                                     (Add items)
  *
  * The claim and the PO are read off the operational needs scan the document
  * already carries; the line classes are counted by the section itself.
  *
- * A state with nothing to press elects no lead: the client's turn, a held or
- * closed job (where only a claim or an unanswered PO still leads), and a
- * schedule with nothing standing on it. The slot is never filled for its own
- * sake.
+ * A state with nothing to press elects no lead: the client's turn, a held
+ * release, and a job on hold or closed (where only a claim or an unanswered
+ * PO still leads).
  *
  * Pure: no React, no DOM.
  */
@@ -31,8 +31,14 @@ export type FfeExceptionKind = 'claim' | 'po' | 'spec' | 'price' | 'waiting' | '
 /** The acts the head can lead with. The client's turn is never one. */
 export type FfeLeaderKind = Exclude<FfeExceptionKind, 'waiting'> | 'release' | 'add-line';
 
-/** The state the head names, lead or not. */
-export type FfeStateKind = FfeLeaderKind | 'waiting' | 'held' | 'closed' | 'none';
+/** The state the head names, lead or not. `settled` has nothing standing. */
+export type FfeStateKind =
+  | FfeLeaderKind
+  | 'waiting'
+  | 'held'
+  | 'on-hold'
+  | 'closed'
+  | 'settled';
 
 export interface FfeException {
   kind: FfeExceptionKind;
@@ -61,12 +67,14 @@ export interface FfeLeaderInput {
   unpricedLineIds?: readonly string[];
   /** Lines with the client for authorization (the section's `ffeAwaiting`). */
   awaitingCount?: number;
+  /** The release stands in this head with lines ready, held by its prerequisite. */
+  releaseHeld?: boolean;
   /** Priced lines not yet on a live invoice. */
   uninvoicedLineIds?: readonly string[];
   /** The schedule holds no line yet. */
   emptySchedule?: boolean;
-  /** `held` is a job on hold, `closed` a completed one. */
-  job?: 'open' | 'held' | 'closed';
+  /** `on-hold` is a job on hold, `closed` a completed one. */
+  job?: 'open' | 'on-hold' | 'closed';
 }
 
 export interface FfeLeaderChoice {
@@ -127,10 +135,14 @@ export function electFfeLeader(input: FfeLeaderInput): FfeLeaderChoice {
   }
   if (input.releaseLift) return choose('release', 'release');
 
-  const sharpest = exceptions[0];
+  // Billing is the last exception, so this is the sharpest one above it.
+  const sharpest = exceptions.find((e) => e.kind !== 'bill');
   if (sharpest?.kind === 'waiting') return choose('waiting', null);
   if (sharpest) return choose(sharpest.kind, sharpest.kind as FfeLeaderKind, sharpest.lineId);
-  return input.emptySchedule ? choose('add-line', 'add-line') : choose('none', null);
+  if (input.releaseHeld) return choose('held', null);
+  const bill = exceptions.find((e) => e.kind === 'bill');
+  if (bill) return choose('bill', 'bill', bill.lineId);
+  return choose(input.emptySchedule ? 'add-line' : 'settled', 'add-line');
 }
 
 const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
@@ -158,10 +170,12 @@ export function ffeStateSentence(choice: FfeLeaderChoice, released: number): str
     case 'add-line':
       return 'No selections yet.';
     case 'held':
+      return 'Selections are ready, but purchasing authorization is held.';
+    case 'on-hold':
       return 'The job is on hold.';
     case 'closed':
       return 'The job is closed.';
-    case 'none':
+    case 'settled':
       return released > 0
         ? `${count(released, 'One selection is', 'selections are')} released.`
         : 'Nothing is released.';

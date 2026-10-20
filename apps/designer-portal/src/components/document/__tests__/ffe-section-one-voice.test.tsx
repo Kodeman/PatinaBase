@@ -205,29 +205,26 @@ afterEach(() => {
 });
 
 describe('The project spread’s Pieces head (US-21 Q14)', () => {
-  it('prints Build the item list, scored, beside Record a change at quiet', () => {
+  it('US-43 R4 — prints the elected lead alone, scored, at quiet', () => {
     renderProject();
     expect(document.getElementById('project-ffe')).toHaveAttribute('data-density', 'quiet');
-    expect(headActs()).toEqual(['work-the-pieces', 'record-a-change-pieces-head']);
-    const lead = document.querySelector('[data-action-key="work-the-pieces"]');
-    expect(lead).toHaveTextContent('Edit FF&E schedule');
+    expect(headActs()).toEqual(['ffe-lead-spec']);
+    const lead = document.querySelector('[data-action-key="ffe-lead-spec"]');
+    expect(lead).toHaveTextContent('Fill the 1 placeholder');
     expect(lead).toHaveAttribute('data-action-variant', 'primary');
-    expect(lead).toHaveAttribute('href', '/doc/project-1/pieces?lens=rough');
-    expect(
-      document.querySelector('[data-action-key="record-a-change-pieces-head"]'),
-    ).toHaveAttribute('data-action-variant', 'secondary');
   });
 
-  it('prints Build the item list, Add to the job, Release for authorization, Record a change in the full ledger', () => {
+  it('US-43 R4 — prints the lead, Edit selections, Add items, the release and More in the full ledger', () => {
     act(() => {
       __setDensityForTest('full');
     });
     renderProject();
     expect(headActs()).toEqual([
+      'ffe-lead-spec',
       'work-the-pieces',
       'open-add-to-project',
       'release-for-authorization',
-      'record-a-change-pieces-head',
+      'ffe-more',
     ]);
     expect(
       document.querySelectorAll('[data-region-head="ffe"] [data-action-variant="primary"]'),
@@ -243,7 +240,12 @@ describe('The project spread’s Pieces head (US-21 Q14)', () => {
     render(
       <FFESection projectId="project-1" projectName="Harrow" mode="project" projectStatus="on_hold" />,
     );
+    // US-43 R4: a job on hold elects no lead; Edit selections stands first, quiet.
     expect(headActs()[0]).toBe('work-the-pieces');
+    expect(
+      document.querySelectorAll('[data-region-head="ffe"] [data-action-variant="primary"]'),
+    ).toHaveLength(0);
+    expect(screen.getByText('The job is on hold.')).toBeInTheDocument();
     for (const retired of ['open-spec-book', 'open-the-pieces', 'bill-project-ffe']) {
       expect(headActs()).not.toContain(retired);
     }
@@ -271,7 +273,13 @@ describe('The project spread’s Pieces head (US-21 Q14)', () => {
     renderProject();
     expect(screen.queryByText('No pieces yet.')).not.toBeInTheDocument();
     expect(screen.queryByText('Build the FF&E schedule')).not.toBeInTheDocument();
-    expect(screen.getByText('by room · 0 rooms · 0 lines')).toBeInTheDocument();
+    // US-43 R4: the empty schedule's state, and Add items as its lead.
+    expect(screen.getByText('No selections yet.')).toBeInTheDocument();
+    expect(headActs()[0]).toBe('open-add-to-project');
+    expect(document.querySelector('[data-action-key="open-add-to-project"]')).toHaveAttribute(
+      'data-action-variant',
+      'primary',
+    );
   });
 });
 

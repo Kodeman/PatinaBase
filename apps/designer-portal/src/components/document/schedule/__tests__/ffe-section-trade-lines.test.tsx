@@ -111,7 +111,7 @@ import { __setDensityForTest } from '@/hooks/use-lens-density';
 const renderSection = () => {
   const view = render(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
   const room = view.container.querySelector<HTMLButtonElement>(
-    '[data-pieces-room="room-2"] button[aria-expanded="false"]',
+    '[data-pieces-room="room-2"] h3 button[aria-expanded="false"]',
   );
   if (room) fireEvent.click(room);
   return view;

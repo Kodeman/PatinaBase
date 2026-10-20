@@ -109,8 +109,10 @@ import { __setDensityForTest } from '@/hooks/use-lens-density';
 // job the line stands under Throughout, which unfolds to it.
 const renderSection = (mode: 'project' | 'install' = 'project') => {
   const view = render(<FFESection projectId="project-1" projectName="Ellsworth" mode={mode} />);
+  // The room's own toggle (its name), never a line's: a one-room job opens by
+  // default (US-43 R4), and its folded lines carry aria-expanded too.
   const room = view.container.querySelector<HTMLButtonElement>(
-    '[data-pieces-room="throughout"] button[aria-expanded="false"]',
+    '[data-pieces-room="throughout"] h3 button[aria-expanded="false"]',
   );
   if (room) fireEvent.click(room);
   return view;

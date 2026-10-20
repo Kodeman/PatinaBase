@@ -27,6 +27,8 @@ let mockBudget: any = null;
 // suite; C-8 asks for exactly that guard.
 beforeEach(() => {
   __setDensityForTest('full');
+  // US-43 R4: the open room is remembered per project; no test inherits one.
+  window.localStorage.clear();
 });
 afterEach(() => {
   __setDensityForTest(undefined);
@@ -167,7 +169,7 @@ const renderSection = () =>
 /** US-21 Q14 — the region opens on room rows; a room unfolds to its lines. */
 const unfold = (roomKey: string) => {
   const room = document.querySelector<HTMLButtonElement>(
-    `[data-pieces-room="${roomKey}"] button[aria-expanded="false"]`,
+    `[data-pieces-room="${roomKey}"] h3 button[aria-expanded="false"]`,
   );
   if (room) fireEvent.click(room);
 };
@@ -505,15 +507,20 @@ describe('the schedule ceremony', () => {
     expect(within(dialog).queryByText('$2,000')).not.toBeInTheDocument();
   });
 
-  it('carries a quiet Add a line under every room', () => {
+  it('carries a quiet Add room selection inside the room she opens', () => {
     // SP-09 gave the region-head ledger act the same words ('Add room selection'), so
     // the per-room add is scoped by its own action key rather than by text.
+    // US-43 R4: the room's acts stand inside the opened room, not on each row.
     renderSection();
-    const roomAddLines = document.querySelectorAll(
-      '[data-action-key="open-add-schedule-line"]',
-    );
-    expect(roomAddLines).toHaveLength(2);
-    fireEvent.click(roomAddLines[0]);
+    const roomAddLines = () =>
+      document.querySelectorAll<HTMLElement>('[data-action-key="open-add-schedule-line"]');
+    expect(roomAddLines()).toHaveLength(0);
+    unfold('room-1');
+    expect(roomAddLines()).toHaveLength(1);
+    expect(
+      document.querySelector('[data-pieces-room="room-1"]')!.contains(roomAddLines()[0]),
+    ).toBe(true);
+    fireEvent.click(roomAddLines()[0]);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByLabelText('Line name')).toBeInTheDocument();
   });

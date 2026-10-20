@@ -218,37 +218,64 @@ describe('FF&E project-mode region head', () => {
     line({ product_id: 'product-1', ...over });
   const head = () => document.querySelector('[data-region-head="ffe"]') as HTMLElement;
 
-  it('inks exactly one ledger entry — Build the item list, to the Build room', () => {
+  it('US-43 R4 — a release held by its prerequisite elects no lead: Edit selections stays a quiet tool', () => {
     mockItems = [settled()];
     mockCoverage = { 'line-1': { coverage: 'invoiced' } };
     renderProject();
-    const inked = document.querySelectorAll('[data-action-variant="primary"]');
-    expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
-    expect(inked[0]).toHaveAttribute('data-action-key', 'work-the-pieces');
-    expect(inked[0]).toHaveAttribute('href', '/doc/project-1/pieces?lens=rough');
+    expect(document.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(0);
+    const edit = document.querySelector('[data-action-key="work-the-pieces"]');
+    expect(edit).toHaveTextContent('Edit selections');
+    expect(edit).toHaveAttribute('data-action-variant', 'secondary');
+    expect(edit).toHaveAttribute('href', '/doc/project-1/pieces?lens=rough');
+    expect(head()).toHaveTextContent(
+      'Selections are ready, but purchasing authorization is held.',
+    );
   });
 
-  it('US-21 Q14 — prints Build the item list, Add to the job, Release, Record a change, in that order', () => {
+  it('US-43 R4 — prints the elected lead, Edit selections, Add items, the held release, then More', () => {
     renderProject();
     const keys = Array.from(head().querySelectorAll('[data-action-key]'))
       .map((el) => el.getAttribute('data-action-key'))
       .filter((key) => key !== 'ffe-fold');
     expect(keys).toEqual([
+      'ffe-lead-spec',
       'work-the-pieces',
       'open-add-to-project',
       'release-for-authorization',
-      'record-a-change-pieces-head',
+      'ffe-more',
     ]);
+    expect(head().querySelector('[data-action-key="ffe-lead-spec"]')).toHaveAttribute(
+      'data-action-variant',
+      'primary',
+    );
     expect(screen.getByRole('button', { name: 'Collapse ↑' })).toBeInTheDocument();
   });
 
-  it('US-21 fix-now #3 — the head adds to the job; the room act stays Add a line', () => {
+  it('US-43 R4 — More discloses Record a selection change and the specification book', async () => {
+    const user = userEvent.setup();
+    renderProject();
+    const more = screen.getByRole('button', { name: /^More/ });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    const panel = document.getElementById(more.getAttribute('aria-controls')!)!;
+    expect(panel).not.toBeVisible();
+    await user.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(within(panel).getByRole('button', { name: 'Record a selection change' })).toBeVisible();
+    expect(within(panel).getByRole('link', { name: 'Open specification book' })).toHaveAttribute(
+      'href',
+      '/doc/project-1/spec-book',
+    );
+    await user.keyboard('{Escape}');
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(more).toHaveFocus();
+  });
+
+  it('US-21 fix-now #3 — the head adds to the job; the room act stays Add room selection', () => {
     mockItems = [settled()];
     mockCoverage = { 'line-1': { coverage: 'invoiced' } };
     renderProject();
     const add = document.querySelector('[data-action-key="open-add-to-project"]');
-    expect(add).toHaveTextContent('Add project items');
+    expect(add).toHaveTextContent('Add items');
     expect(add).not.toHaveTextContent('Add room selection');
     const roomAct = document.querySelector('[data-action-key="open-add-schedule-line"]');
     expect(roomAct).toHaveTextContent('Add room selection');
@@ -265,12 +292,12 @@ describe('FF&E project-mode region head', () => {
       line({ id: 'ffe-5', removed_at: '2026-10-01T00:00:00Z' }),
     ];
     renderProject();
-    expect(head()).toHaveTextContent('by room · 1 room · 4 lines');
+    expect(head()).toHaveTextContent('2 selections have no piece specified yet.');
     expect(head()).toHaveTextContent('2 placeholders · 1 specced · 1 ready · nothing released');
     expect(head()).not.toHaveTextContent(/unspecified/i);
   });
 
-  it('US-21 Q14 — retires the elected leader: no Fill, Spec, Bill or File the claim act', () => {
+  it('US-43 R4 — restores the elected leader: an open damage claim leads with File the claim', () => {
     render(
       <FFESection
         projectId="project-1"
@@ -289,16 +316,9 @@ describe('FF&E project-mode region head', () => {
     );
     const inked = document.querySelectorAll('[data-action-variant="primary"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
-    for (const retired of [
-      'open-spec-book',
-      'bill-project-ffe',
-      'file-ffe-claim',
-      'chase-ffe-po',
-    ]) {
-      expect(document.querySelectorAll(`[data-action-key="${retired}"]`)).toHaveLength(0);
-    }
-    expect(screen.queryByText(/uninvoiced/)).not.toBeInTheDocument();
+    expect(inked[0]).toHaveTextContent('File the claim');
+    expect(inked[0]).toHaveAttribute('data-action-key', 'ffe-lead-claim');
+    expect(head()).toHaveTextContent('A damage claim is open.');
     // The claim still stands on line two, beside the stage sentence.
     expect(head()).toHaveTextContent('1 placeholder · nothing released · 1 open damage claim');
   });
@@ -323,11 +343,11 @@ describe('FF&E project-mode region head', () => {
     ).toBeInTheDocument();
   });
 
-  it('prints Release for authorization pressable, still not inked, once canRelease holds', () => {
+  it('US-43 R4 — leads with Prepare purchasing authorization once the release can go', () => {
     mockAuthority = { data: { state: 'active', agreementId: 'agreement-1' } };
     renderProject();
     const release = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
-    expect(release).toHaveAttribute('data-action-variant', 'secondary');
+    expect(release).toHaveAttribute('data-action-variant', 'primary');
     expect(release).not.toHaveAttribute('aria-disabled', 'true');
     expect(document.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
   });
@@ -356,23 +376,23 @@ describe('FF&E project-mode region head', () => {
     ).toBeInTheDocument();
   });
 
-  it('counts the job’s rooms, and prints the lines in no room under Throughout', () => {
+  it('prints the lines in no room under Throughout', () => {
     mockRooms = [];
     mockItems = [
       line({ id: 'ffe-1', project_room_id: null, room: null }),
       line({ id: 'ffe-2', project_room_id: null, room: null }),
     ];
     renderProject();
-    expect(screen.getByText('by room · 0 rooms · 2 lines')).toBeInTheDocument();
+    expect(head()).toHaveTextContent('2 selections have no piece specified yet.');
     const throughout = document.querySelector('[data-pieces-room="throughout"]');
     expect(throughout).toHaveTextContent('Throughout');
     expect(throughout).toHaveTextContent('2 lines · 2 placeholders');
   });
 
-  it('counts one line and one room in the singular (walk D15)', () => {
+  it('names one line in the singular (walk D15)', () => {
     mockItems = [line({ id: 'ffe-1' })];
     renderProject();
-    expect(screen.getByText('by room · 1 room · 1 line')).toBeInTheDocument();
+    expect(screen.getByText('One selection has no piece specified yet.')).toBeInTheDocument();
   });
 
   it('opens from the seam back to the full head, round-trip', () => {
@@ -429,6 +449,12 @@ describe('FF&E room rows — the name unfolds the room', () => {
     );
 
   it('unfolds the room to its lines, and is no room-lens press target', () => {
+    // Two rooms, so neither opens by default (a one-room job opens its room).
+    mockRooms = [...mockRooms, { id: 'room-2', name: 'Guest room', budget_cents: 0 }];
+    mockItems = [
+      line(),
+      line({ id: 'line-2', name: 'Guest chair', project_room_id: 'room-2', room: { id: 'room-2', name: 'Guest room' } }),
+    ];
     renderProjectInLens();
     const name = screen.getByRole('button', { name: 'Primary bedroom' });
     expect(name).toHaveAttribute('aria-expanded', 'false');
@@ -516,33 +542,30 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     renderProject();
 
     const head = document.querySelector('[data-region-head="ffe"]')!;
-    // US-21 Q14: entry 0 is Build the item list; Add to the job and the release
-    // are overflow.
+    // US-43 R4: entry 0 is the elected lead; the quiet tools, the release and
+    // More are overflow.
     expect(head).toContainElement(
-      screen.getByRole('link', { name: /Edit FF&E schedule/ }),
+      screen.getByRole('button', { name: 'Fill the 1 placeholder' }),
     );
     // Not rendered, not hidden: `DocumentActionGroup`'s one-leader guard and
     // `action-visibility.spec.ts` both COUNT `[data-action-key]` nodes, so an
     // `aria-hidden` copy would still be one of them.
     for (const key of [
+      'work-the-pieces',
       'open-add-to-project',
       'release-for-authorization',
-      'file-ffe-claim',
-      'chase-ffe-po',
+      'ffe-more',
+      'record-a-change-pieces-head',
     ]) {
       expect(
         document.querySelectorAll(`[data-action-key="${key}"]`),
       ).toHaveLength(0);
     }
-    // The ledger prints its leader beside the head's own Fold control, with
-    // the named act Record a change (F2-18, `one-voice` shipped on).
+    // The ledger prints its lead alone beside the head's own Fold control.
     const acts = Array.from(
       head.querySelectorAll('[data-action-key]'),
     ).map((el) => el.getAttribute('data-action-key'));
-    expect(acts.filter((key) => key !== 'ffe-fold')).toEqual([
-      'work-the-pieces',
-      'record-a-change-pieces-head',
-    ]);
+    expect(acts.filter((key) => key !== 'ffe-fold')).toEqual(['ffe-lead-spec']);
   });
 
   it('names the damage the paper holds, and prints nothing where it holds none', () => {

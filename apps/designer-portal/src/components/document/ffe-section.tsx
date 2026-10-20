@@ -2003,10 +2003,11 @@ function FFESectionBody({
       .map((row) => String(row.item.id)),
     unpricedLineIds: liveRows.filter(isUnpricedSelection).map((row) => String(row.item.id)),
     awaitingCount: ffeAwaitingCount,
+    releaseHeld: releaseInHead && anyEligible && !canRelease,
     uninvoicedLineIds: billableUninvoiced.map((item) => String(item.id)),
     emptySchedule: total === 0,
     job:
-      projectStatus === 'on_hold' ? 'held' : projectStatus === 'completed' ? 'closed' : 'open',
+      projectStatus === 'on_hold' ? 'on-hold' : projectStatus === 'completed' ? 'closed' : 'open',
   });
   const ffeStateLine = ffeStateSentence(ffeLeader, overviewJob.released);
 
@@ -2490,7 +2491,20 @@ function FFESectionBody({
               regionKey="ffe"
             />
           ) : (
-            <div className="mb-1.5">
+            <div
+              className="mb-1.5"
+              // Esc closes More from its toggle or from inside it.
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape' || !ffeMoreOpen) return;
+                const target = event.target as Node;
+                const inMore =
+                  target === ffeMoreRef.current ||
+                  document.getElementById(ffeMoreId)?.contains(target);
+                if (!inMore) return;
+                event.stopPropagation();
+                closeFfeMore();
+              }}
+            >
               <RegionHead
                 headingId={ffeHeadingId}
                 name="FF&E selections"
@@ -2524,11 +2538,6 @@ function FFESectionBody({
                 <div
                   id={ffeMoreId}
                   hidden={!ffeMoreOpen}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Escape') return;
-                    event.stopPropagation();
-                    closeFfeMore();
-                  }}
                   className="mt-1 flex flex-wrap justify-start gap-x-4 min-[1180px]:justify-end"
                 >
                   <DocumentAction

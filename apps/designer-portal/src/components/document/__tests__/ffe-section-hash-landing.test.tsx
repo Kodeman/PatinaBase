@@ -262,17 +262,18 @@ describe('Pieces — #line-<id> landing (US-21 fix-now #8)', () => {
 
   it('does nothing for a line that is not on the paper, or for any other hash', () => {
     window.history.replaceState(null, '', '/doc/project-1#line-gone');
-    // US-21 Q14 — nothing unfolds: the rooms stay folded, so no line prints.
+    // US-21 Q14 — nothing unfolds. US-43 R4: this one-room job opens its room
+    // by default, so its lines print, every one still folded.
     const first = renderProject();
     expect(scrolled).toHaveLength(0);
-    expect(rowToggle('ffe-1')).toBeNull();
-    expect(rowToggle('ffe-2')).toBeNull();
+    expect(rowToggle('ffe-1')).toHaveAttribute('aria-expanded', 'false');
+    expect(rowToggle('ffe-2')).toHaveAttribute('aria-expanded', 'false');
     first.unmount();
 
     window.history.replaceState(null, '', '/doc/project-1#ffe-selection-ffe-1');
     renderProject();
     expect(scrolled).toHaveLength(0);
-    expect(rowToggle('ffe-1')).toBeNull();
+    expect(rowToggle('ffe-1')).toHaveAttribute('aria-expanded', 'false');
   });
 });
 
