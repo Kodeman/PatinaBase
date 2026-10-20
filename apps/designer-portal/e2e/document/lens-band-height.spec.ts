@@ -567,8 +567,14 @@ test.describe('the letterhead grid', () => {
  * `overflow: hidden` on that line cut 12px off its box for painting AND for
  * hit-testing. At 390, DL-05 made line 2 the ONLY printing of that act, so the
  * phone's primary act was shipping a ~20px target against a 44px contract.
+ *
+ * US-43 R6 — below 600 the charcoal dock is Next's one printing and the band's
+ * act is display:none, so at 390 the 44px target measured is the dock's. The
+ * band's own act (the `one-voice`-off band, which registers nothing in the
+ * dock) is measured where it still prints. Either way Next is in the
+ * accessibility tree exactly once.
  */
-test.describe('line 2’s act is a whole 44px target at 390 (C-02)', () => {
+test.describe('Next is a whole 44px target at 390, printed once (C-02, US-43 R6)', () => {
 
   test('is not clipped by the line it stands in', async ({
     authenticatedPage: page,
@@ -585,30 +591,40 @@ test.describe('line 2’s act is a whole 44px target at 390 (C-02)', () => {
     console.log(`line 2 overflow at 390: ${overflow}`);
     expect(overflow).toBe('visible');
 
-    const act = line2.locator('[data-action-key^="lens-band-"]');
-    if ((await act.count()) === 0) {
+    const bandAct = line2.locator('[data-action-key^="lens-band-"]');
+    const dockAct = page.locator(
+      '[data-testid="mobile-bar"] [data-action-region="lens-band"]',
+    );
+    if ((await bandAct.count()) === 0) {
       // A paper whose worst standing item carries no act (A-11) prints none.
       // The clip assertion above is the part that must hold on every paper.
       console.log('line 2 prints no act on this paper — nothing to measure');
       return;
     }
-    const box = await act.first().boundingBox();
+    const bandPrints = await bandAct.first().isVisible();
+    const dockPrints = (await dockAct.count()) > 0 && (await dockAct.first().isVisible());
+    console.log(`Next at 390: band ${bandPrints ? 'prints' : 'hidden'} · dock ${dockPrints ? 'prints' : 'absent'}`);
+    // Exactly one printing: never both, never neither.
+    expect(Number(bandPrints) + Number(dockPrints)).toBe(1);
+    const act = bandPrints ? bandAct.first() : dockAct.first();
+
+    const box = await act.boundingBox();
     expect(box).not.toBeNull();
-    const height = await layoutHeight(act.first());
+    const height = await layoutHeight(act);
     console.log(
-      `line 2 act box at 390: ${box!.width}×${height}px (layout) · ` +
+      `Next act box at 390: ${box!.width}×${height}px (layout) · ` +
         `${box!.height}px (composited)`,
     );
     expect(height).toBeGreaterThanOrEqual(44);
 
     // And it is genuinely hittable at its own top and bottom edges: the point
-    // 2px inside each edge resolves to the control, not to the clipped line.
+    // 2px inside each edge resolves to the control, not to a clipping line.
     const hits = await page.evaluate(
       ([x, top, bottom]) => {
         const at = (y: number) =>
           document
             .elementFromPoint(x as number, y as number)
-            ?.closest('[data-action-key^="lens-band-"]') !== null;
+            ?.closest('[data-action-region="lens-band"]') !== null;
         return [at(top as number), at(bottom as number)];
       },
       [box!.x + box!.width / 2, box!.y + 2, box!.y + box!.height - 2],

@@ -9,7 +9,9 @@
  * nothing stands. US-28 S7 (V20 U-Q19): nothing in the band truncates. The
  * box is a 56px MINIMUM; the rungs still pick the form that fits one line, and
  * when even the last rung cannot, the sentence wraps onto a second line and
- * the act keeps its score (at 390, on its own 44px row).
+ * the act keeps its score. US-43: from 600 the band is a charcoal ground
+ * (R1-A); below 600 it is paper and prints its sentence only, and the
+ * charcoal dock prints the act (R6).
  *
  * It publishes nothing: no `ResizeObserver`, no CSS variable, no measured
  * height. `--doc-band-height` is a declared constant (D-1), and a name that no
@@ -193,8 +195,10 @@ export function LensBand({
       get current(): HTMLElement | null {
         const door = moreRef.current;
         if (door?.isConnected) return door;
+        // US-43 R6 — below 600 the act is display:none (the dock prints it),
+        // and focus sent to a box that is not rendered falls to `<body>`.
         const act = actRef.current;
-        if (act?.isConnected) return act;
+        if (act?.isConnected && act.checkVisibility?.() !== false) return act;
         return bandRef.current;
       },
     }),
@@ -254,9 +258,10 @@ export function LensBand({
   const rung = spoken
     ? (spoken.rungs[Math.min(dropped, spoken.rungs.length - 1)] ?? spoken)
     : null;
-  // US-25 fix-now 13 — at 390 the act sits beside its reason, so the measure
-  // stops on the last sentence rung (the phone form, clipped if it must)
-  // rather than giving the reason up for the act alone.
+  // US-25 fix-now 13 — the measure stops on the last sentence rung (the phone
+  // form, wrapped if it must) rather than giving the reason up for the act
+  // alone: below 600 the act is the dock's (US-43 R6), so an act-only rung
+  // would print nothing here.
   const lastRung = spoken
     ? spoken.rungs.length -
       1 -
@@ -342,7 +347,13 @@ export function LensBand({
         tabIndex={-1}
         data-lens-band=""
         data-lens-open={open ? 'true' : 'false'}
-        className="doc-rule-mid sticky top-0 z-[4] box-border flex min-h-[var(--doc-band-height,56px)] flex-col justify-center gap-[2px] bg-[var(--doc-paper)]"
+        // US-43 R1-A — from 600 the band is a charcoal ground, and its edge is
+        // the rule: the charcoal `--rule-mid` stays only on the paper band
+        // below 600. The ground bleeds 20px past the paper's measure so the
+        // words keep their column. Below 600 the only `.da-*` it holds (Next)
+        // is display:none, so the dark-ground hook styles nothing there.
+        data-ground="dark"
+        className="sticky top-0 z-[4] box-border flex min-h-[var(--doc-band-height,56px)] flex-col justify-center gap-[2px] bg-[var(--doc-paper)] max-[599px]:[border-bottom:var(--rule-mid)] min-[600px]:-mx-5 min-[600px]:bg-[var(--ink)] min-[600px]:px-5 min-[600px]:text-[var(--on-dark-ink)]"
       >
         <p
           data-lens-line="1"
@@ -354,7 +365,7 @@ export function LensBand({
           // what D-B34's cause gate caught. `min-h` is the ONE line of 11px mono
           // at `leading-[1.4]` (11 × 1.4 = 15.4px, a literal because the root is
           // 18px and `rem` would not land on the same number).
-          className={`flex min-h-[15.4px] flex-wrap items-baseline justify-between gap-x-4 font-mono text-[11px] uppercase leading-[1.4] tracking-[0.08em] text-[var(--text-muted)] ${LINE_WRAP}`}
+          className={`flex min-h-[15.4px] flex-wrap items-baseline justify-between gap-x-4 font-mono text-[11px] uppercase leading-[1.4] tracking-[0.08em] text-[var(--text-muted)] min-[600px]:text-[var(--on-dark-muted)] ${LINE_WRAP}`}
         >
           {/* At s0 the letterhead 60px above prints the household at 40px, the
               stage as its arc and the date in its vitals, so both yield; the
@@ -372,7 +383,7 @@ export function LensBand({
                   type="button"
                   onClick={onToTop}
                   data-lens-to-top
-                  className="flex min-w-0 items-baseline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline"
+                  className="flex min-w-0 items-baseline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline min-[600px]:text-[var(--on-dark-muted)] min-[600px]:hover:text-[var(--on-dark-ink)]"
                 >
                   <Eyebrow voice={spoken} />
                 </button>
@@ -386,7 +397,7 @@ export function LensBand({
                     type="button"
                     onClick={onToTop}
                     data-lens-to-top
-                    className="inline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline"
+                    className="inline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline min-[600px]:text-[var(--on-dark-muted)] min-[600px]:hover:text-[var(--on-dark-ink)]"
                   >
                     {line1.identity}
                   </button>
@@ -425,9 +436,9 @@ export function LensBand({
         {/* The clip lives on the SENTENCE, never on this flex line: the act's
             44px control is inset by -12px into the 19.5px line, so an
             `overflow: hidden` here would cut 12px off its box for painting and
-            for hit-testing. US-25 fix-now 13 — at 390 the act prints here
-            beside its reason on every rung, the `sentence` rungs (F6-6)
-            included: the dock's centre is never the only place it lives. */}
+            for hit-testing. US-43 R6 — from 600 the act prints here beside
+            its reason on every rung; below 600 the dock's centre is its one
+            printing and the act here is display:none. */}
         {spoken && rung ? (
           <p
             data-lens-line="2"
@@ -443,14 +454,14 @@ export function LensBand({
               dropped < lastRung ? 'flex-nowrap' : 'flex-wrap'
             } ${
               nextIsException
-                ? 'text-[var(--color-terracotta-ink)]'
-                : 'text-[var(--text-primary)]'
+                ? 'text-[var(--color-terracotta-ink)] min-[600px]:text-[var(--on-dark-terracotta)]'
+                : 'text-[var(--text-primary)] min-[600px]:text-[var(--on-dark-ink)]'
             }`}
           >
             {rung.lead && (
               <span
                 data-lens-next-lead
-                className="shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
+                className="shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)] min-[600px]:text-[var(--on-dark-clay)]"
               >
                 {rung.lead}
               </span>
@@ -467,7 +478,7 @@ export function LensBand({
                   : undefined
               }
               className={`min-w-0 ease-[var(--ease-editorial)] transition-opacity motion-reduce:transition-none ${
-                dropped < lastRung ? RUNG_TRIAL : `${LINE_WRAP} max-[599px]:basis-full`
+                dropped < lastRung ? RUNG_TRIAL : LINE_WRAP
               } ${
                 voiceTurning
                   ? 'opacity-0 duration-[90ms]'
@@ -487,12 +498,12 @@ export function LensBand({
                 // no room for (D3, R141).
                 variant="primary"
                 data-part="act"
-                // U-Q19 — at 390 the last rung's act takes its own 44px row
-                // under the wrapped sentence, so its box is not inset into the
-                // line. A rung on trial keeps the inset: it shares the one row.
-                className={`my-[-12px] shrink-0 ${
-                  dropped < lastRung ? '' : 'max-[599px]:my-0'
-                }`}
+                // US-43 R6 (revises U-Q19) — below 600 the charcoal dock is
+                // Next's one printing, so the band prints its sentence only:
+                // display:none takes the act out of the accessibility tree,
+                // and its 44px box no longer grows the phone band past the
+                // landing clearance it is declared under.
+                className="my-[-12px] shrink-0 max-[599px]:hidden"
                 disabled={spoken.next.act.disabled}
                 onClick={() => {
                   onActed?.();
@@ -518,8 +529,8 @@ export function LensBand({
                 // money or a signature behind it, clay otherwise.
                 className={`ml-auto shrink-0 font-mono text-[11px] tracking-[0.04em] underline underline-offset-[3px] ${
                   door.doorClassOne
-                    ? 'text-[var(--color-terracotta-ink)]'
-                    : 'text-[var(--color-clay-ink)]'
+                    ? 'text-[var(--color-terracotta-ink)] min-[600px]:text-[var(--on-dark-terracotta)]'
+                    : 'text-[var(--color-clay-ink)] min-[600px]:text-[var(--on-dark-clay)]'
                 }`}
               >
                 {standingDoorLabel(door.standingCount)}
@@ -538,8 +549,8 @@ export function LensBand({
           aria-atomic="true"
           className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[16px] leading-[1.3] ${
             standing
-              ? 'text-[var(--color-terracotta-ink)]'
-              : 'text-[var(--text-primary)]'
+              ? 'text-[var(--color-terracotta-ink)] min-[600px]:text-[var(--on-dark-terracotta)]'
+              : 'text-[var(--text-primary)] min-[600px]:text-[var(--on-dark-ink)]'
           }`}
         >
           <span
@@ -595,8 +606,8 @@ export function LensBand({
               // clay, and terracotta returns the moment one of them is.
               className={`shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] underline underline-offset-[3px] ${
                 printed.withheldHasException
-                  ? 'text-[var(--color-terracotta-ink)]'
-                  : 'text-[var(--color-clay-ink)]'
+                  ? 'text-[var(--color-terracotta-ink)] min-[600px]:text-[var(--on-dark-terracotta)]'
+                  : 'text-[var(--color-clay-ink)] min-[600px]:text-[var(--on-dark-clay)]'
               }`}
             >
               +{withheld} MORE

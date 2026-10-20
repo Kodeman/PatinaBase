@@ -862,10 +862,11 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
     expect(within(bar).queryByRole('button', { name: 'Open the project' })).toBeNull();
   });
 
-  // US-28 walk-fix paper (WALK §2, 390: "SEND REMINDER appears twice") — the
-  // band prints its Next on line 2 at every width, so a Next the letterhead
-  // registers from the band is never printed again in the dock's centre.
-  it('never prints the band’s Next in the centre: the band is its one printing', () => {
+  // US-43 R6 (revises the US-28 walk-fix filter) — below 600 the charcoal dock
+  // is the band's Next's one printing (the band hides its own act there); from
+  // 600 the band prints it, so the dock's slot is display:none. Exactly one
+  // Next in the accessibility tree at each width.
+  function mountBandNext() {
     render(
       <TestProviders>
         <HoldDocument doc={heldDocument} />
@@ -877,9 +878,62 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
         <MobileBar />
       </TestProviders>,
     );
-    const bar = screen.getByTestId('mobile-bar');
-    expect(within(bar).queryByRole('button', { name: 'Send reminder' })).toBeNull();
-    expect(bar.querySelector('[data-action-key="next:remind"]')).toBeNull();
+    return screen.getByTestId('mobile-bar');
+  }
+
+  it('prints the band’s Next in the centre, and leaves it out from 600 by CSS display', () => {
+    const bar = mountBandNext();
+    const act = within(bar).getByRole('button', { name: 'Send reminder' });
+    expect(act).toHaveAttribute('data-action-key', 'next:remind');
+    expect(act).toHaveAttribute('data-action-variant', 'primary');
+    expect(act.parentElement).toHaveClass('min-[600px]:hidden');
+  });
+
+  it('keeps any other centre act at every width', () => {
+    mountDock();
+    const act = within(screen.getByTestId('mobile-bar')).getByRole('button', {
+      name: 'Record the payment',
+    });
+    expect(act.parentElement).not.toHaveClass('min-[600px]:hidden');
+  });
+
+  describe('the ground by width (US-43 R6)', () => {
+    const original = window.matchMedia;
+    const phoneWidth = (matches: boolean) => {
+      window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+        matches: query === '(max-width: 599px)' ? matches : false,
+        media: query,
+        onchange: null,
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+      })) as unknown as typeof window.matchMedia;
+    };
+    afterEach(() => {
+      window.matchMedia = original;
+    });
+
+    it('below 600 the dock is a charcoal ground, its words on-dark', () => {
+      phoneWidth(true);
+      const bar = mountBandNext();
+      expect(bar).toHaveAttribute('data-ground', 'dark');
+      expect(bar).toHaveClass('max-[599px]:bg-[var(--ink)]');
+      expect(within(bar).getByText('Project file sections')).toHaveClass(
+        'max-[599px]:text-[var(--on-dark-muted)]',
+      );
+      expect(within(bar).getByRole('button', { name: 'More studio actions' })).toHaveClass(
+        'max-[599px]:text-[var(--on-dark-ink)]',
+        'max-[599px]:focus-visible:outline-[var(--focus-on-dark)]',
+      );
+    });
+
+    it('from 600 the dock is paper: no dark-ground hook for its acts', () => {
+      phoneWidth(false);
+      const bar = mountBandNext();
+      expect(bar).not.toHaveAttribute('data-ground');
+    });
   });
 
   it('leads More with the ruled acts, in order, and keeps one Call sheet door', () => {
@@ -908,8 +962,14 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
     expect(message).toHaveAttribute('aria-disabled', 'true');
     expect(message).not.toHaveAttribute('disabled');
     expect(message).toHaveFocus();
+    // US-43 — muted by colour (`--text-subtle`, 7.7:1 on More's paper), never
+    // by opacity; its reason is the same AA colour.
+    expect(message.className).not.toMatch(/(^|\s)opacity-/);
+    expect(message).toHaveClass('text-[var(--text-subtle)]');
+    expect(message).not.toHaveClass('text-[var(--text-primary)]');
     const reason = document.getElementById(message.getAttribute('aria-describedby')!);
     expect(reason).toHaveTextContent('Link a client first.');
+    expect(reason).toHaveClass('text-[var(--text-subtle)]');
 
     fireEvent.click(message);
     expect(RULED[0].onPress).not.toHaveBeenCalled();

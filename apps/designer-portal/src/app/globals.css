@@ -3046,17 +3046,30 @@ html:has(.document-route-shell) {
 .card.doc-margin-card {
   flex-direction: row;
 }
-/* Below 600px the band no longer holds to its declared 56px: NEXT wraps and its
-   act takes a row of its own (U-Q19), so the band is as tall as its words and
-   publishes no length (D-1). The schedule's pinned glance stands under that
-   declared constant, so there it would slide beneath the band's second line.
-   At phone width the glance yields; the strip it repeats is in flow above. */
+/* Below 600px the band no longer holds to its declared 56px: NEXT wraps (U-Q19),
+   so the band is as tall as its words and publishes no length (D-1). The
+   schedule's pinned glance stands under that declared constant, so there it
+   would slide beneath the band's second line. At phone width the glance
+   yields; the strip it repeats is in flow above. */
 @media (max-width: 599px) {
   [data-document-shell] section[aria-label='Schedule rule'] {
     visibility: hidden;
   }
 }
 /* end US-28 S7 document */
+
+/* US-43 R1-A — from 600 the lens band is a charcoal ground (lens-band.tsx).
+   The page hands the band its status line, so its colour is set here, and the
+   band's own non-action controls (the eyebrow's to-top, the door) take the
+   on-dark focus ring the `.da-*` acts take from `[data-ground="dark"]`. */
+@media (min-width: 600px) {
+  section[data-lens-band] [data-band-status] {
+    color: var(--on-dark-muted);
+  }
+  section[data-lens-band] :focus-visible {
+    outline-color: var(--focus-on-dark);
+  }
+}
 
 /* ═══ US-28 S10 library ════════════════════════════════════════════════════
    Area 5 (uplift.md (c); specimens/library-{1440,390}.html). Places the S1
