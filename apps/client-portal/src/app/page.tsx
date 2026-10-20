@@ -18,7 +18,7 @@ import { toOtherHouses } from '@/lib/threshold/other-houses';
  * replaced — so anything that reaches this function is a signed-in client of
  * this portal.
  */
-export default async function HomePage(props?: {
+export default async function HomePage(props: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const projects = await fetchClientProjects();

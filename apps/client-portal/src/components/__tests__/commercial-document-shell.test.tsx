@@ -1312,3 +1312,31 @@ describe('CommercialDeclineDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 });
+
+
+describe('purchasing preview parity', () => {
+  it('shows the contractual pre-signature deposit instead of a different linked invoice amount', () => {
+    const base = furnishingsBundle();
+    render(<CommercialDocumentShell bundle={{ ...base, document: { ...base.document, state: 'sent' }, furnishings: { ...base.furnishings!, depositRequiredCents: 123400 } }} />);
+    expect(screen.getByTestId('authorization-terms-strip')).toHaveTextContent('Total $20,000 · Deposit $10,000 (50%) on signature');
+    expect(screen.queryByText(/Deposit handoff|Open payments/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1,234/)).not.toBeInTheDocument();
+  });
+
+  it('retains actual invoice amounts in the executed body and payment handoff', () => {
+    const base = furnishingsBundle();
+    render(<CommercialDocumentShell bundle={{ ...base, furnishings: { ...base.furnishings!, depositRequiredCents: 123400, depositPaidCents: 23400 } }} />);
+    expect(screen.getByTestId('authorization-terms-strip')).toHaveTextContent('Deposit $1,234 (50%) on signature');
+    expect(screen.getByText(/\$1,000 remains due/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open payments' })).toHaveAttribute('href', '/invoices?project=p1');
+  });
+});
+
+
+it('renders the same frozen item photo in the actual client authorization', () => {
+  const base = furnishingsBundle();
+  base.furnishings!.items[0].clientImage = { version: 1, url: 'https://images.example.test/saved-client.jpg' };
+  render(<CommercialDocumentShell bundle={base} />);
+  expect(screen.getByRole('img', { name: 'Meadow linen sectional — item photo' })).toHaveAttribute('src', 'https://images.example.test/saved-client.jpg');
+  expect(screen.getByRole('link', { name: 'Open payments' })).toHaveAttribute('href', '/invoices?project=p1');
+});

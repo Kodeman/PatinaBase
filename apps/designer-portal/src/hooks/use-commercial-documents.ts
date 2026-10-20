@@ -10,7 +10,7 @@ import {
   invalidateProjectWorkflow,
   settleScheduleWrite,
 } from "@patina/supabase";
-import type { AgreementPart } from "@patina/types";
+import { authorizationClientImage, COMMERCIAL_STATES, type AgreementPart, type ClientFurnishingsAuthorizationItem, type FfeLineUnit, type FurnishingsAuthorizationPreview } from "@patina/types";
 import type { ScheduleDisclosedImpact } from "@/lib/document/schedule-impact";
 import {
   asCommercialDocumentKind,
@@ -81,6 +81,8 @@ export const commercialDocumentKeys = {
   // list that never carried it.
   tradeScopes: (projectId: string) => ["trade-scopes", projectId] as const,
   tradeScope: (proposalId: string) => ["trade-scope", proposalId] as const,
+  furnishingsPreview: (projectId: string | null, proposalId: string | null) =>
+    ["furnishings-authorization-preview", projectId, proposalId] as const,
 };
 
 export type CommercialNotificationDelivery =
@@ -1285,22 +1287,130 @@ export function useAuthorizationLineDrift(
   });
 }
 
+function previewRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("The saved preview is incomplete. Reload it before sending.");
+  return value as Record<string, unknown>;
+}
+
+function previewText(value: unknown): string {
+  if (typeof value !== "string") throw new Error("The saved preview is incomplete. Reload it before sending.");
+  return value;
+}
+
+function previewNumber(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error("The saved preview has invalid amounts. Reload it before sending.");
+  }
+  return value;
+}
+
+function previewCents(value: unknown): number {
+  const amount = previewNumber(value);
+  if (!Number.isSafeInteger(amount)) throw new Error("The saved preview has invalid amounts. Reload it before sending.");
+  return amount;
+}
+
+function previewUnit(value: unknown): FfeLineUnit {
+  if (!["each", "sq_ft", "lin_ft", "roll", "yard", "box", "hour", "lot"].includes(String(value))) throw new Error("The saved preview has an invalid unit.");
+  return value as FfeLineUnit;
+}
+
+function previewRooms(value: unknown): ClientFurnishingsAuthorizationItem["rooms"] {
+  if (!Array.isArray(value)) throw new Error("The saved preview is incomplete.");
+  return value.flatMap(value => {
+    const room = previewRecord(value);
+    if (room.name === null || room.name === "") return [];
+    return [{ name: previewText(room.name), quantity: previewNumber(room.quantity), unit: previewUnit(room.unit) }];
+  });
+}
+
+function previewItem(value: unknown): ClientFurnishingsAuthorizationItem {
+  const item = previewRecord(value);
+  if (typeof item.allowance !== "boolean") throw new Error("The saved preview is incomplete.");
+  const currency = previewText(item.currency);
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error("The saved preview has an invalid currency.");
+  // Reconstruct the safe projection: unknown/private fields never enter the body.
+  return {
+    description: previewText(item.description), roomName: item.roomName === null ? "General" : previewText(item.roomName),
+    quantity: previewNumber(item.quantity), unit: previewUnit(item.unit),
+    rooms: previewRooms(item.rooms),
+    clientUnitPriceCents: previewCents(item.clientUnitPriceCents),
+    clientLineTotalCents: previewCents(item.clientLineTotalCents),
+    currency, allowance: item.allowance,
+    ...(item.clientImage === undefined ? {} : { clientImage: authorizationClientImage(item.clientImage) }),
+  };
+}
+
+function previewProjectIdentity(snapshot: Record<string, unknown>, preview: Record<string, unknown>, proposalId: string, projectId: string | null): string {
+  const returnedProjectId = previewText(preview.projectId);
+  const matchesProposal = [snapshot.proposalId, preview.proposalId].every(id => {
+    return id === proposalId;
+  });
+  if (!matchesProposal) {
+    throw new Error("The saved preview does not match this authorization. Reload it before sending.");
+  }
+  if (!returnedProjectId) throw new Error("The saved preview does not match this authorization. Reload it before sending.");
+  if (projectId !== null && returnedProjectId !== projectId) throw new Error("The saved preview does not match this authorization. Reload it before sending.");
+  return returnedProjectId;
+}
+
+function previewBody(value: unknown): FurnishingsAuthorizationPreview["body"] {
+  const body = previewRecord(value);
+  if (!Array.isArray(body.items) || body.items.length === 0) throw new Error("The saved preview does not match this authorization. Reload it before sending.");
+  const depositPercent = previewNumber(body.depositPercent);
+  if (depositPercent > 100) throw new Error("The saved preview has an invalid deposit.");
+  return { items: body.items.map(previewItem), totalAmountCents: previewCents(body.totalAmountCents), depositPercent };
+}
+
+export function useFurnishingsAuthorizationPreview(proposalId: string | null, projectId: string | null = null) {
+  return useQuery({
+    queryKey: commercialDocumentKeys.furnishingsPreview(projectId, proposalId),
+    enabled: Boolean(proposalId),
+    retry: false,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    queryFn: async (): Promise<FurnishingsAuthorizationPreview> => {
+      if (!proposalId) throw new Error("Choose a saved authorization to preview.");
+      const { data, error } = await getSupabase().rpc("get_commercial_document_send_snapshot", { p_proposal_id: proposalId });
+      if (error) throw error;
+      const snapshot = previewRecord(data);
+      const preview = previewRecord(snapshot.furnishingsPreview);
+      const returnedProjectId = previewProjectIdentity(snapshot, preview, proposalId, projectId);
+      const fingerprint = previewText(snapshot.documentFingerprint);
+      if (!fingerprint.trim()) throw new Error("The saved preview does not match this authorization. Reload it before sending.");
+      if (!COMMERCIAL_STATES.includes(preview.state as any)) throw new Error("The saved preview does not match this authorization. Reload it before sending.");
+      return {
+        proposalId, projectId: returnedProjectId, title: previewText(preview.title),
+        state: preview.state as FurnishingsAuthorizationPreview["state"], documentFingerprint: fingerprint,
+        body: previewBody(preview.body),
+      };
+    },
+  });
+}
+
+function reviewedFurnishingsSendArguments(proposalId: string, expectedFingerprint: string) {
+  if (!proposalId || !expectedFingerprint?.trim()) {
+    throw new Error("Review the saved authorization before sending.");
+  }
+  return {
+    p_proposal_id: proposalId,
+    p_expected_fingerprint: expectedFingerprint,
+    p_personal_message: null,
+    p_valid_until: null,
+  };
+}
+
 export function useSendFurnishingsAuthorization(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     meta: { act: 'send' },
     retry: false,
     mutationKey: ["send-furnishings-authorization", projectId],
-    mutationFn: async (proposalId: string) => {
+    mutationFn: async ({ proposalId, expectedFingerprint }: { proposalId: string; expectedFingerprint: string }) => {
+      const args = reviewedFurnishingsSendArguments(proposalId, expectedFingerprint);
       const supabase = getSupabase();
-      const fingerprint =
-        await fetchCommercialDocumentSendFingerprint(proposalId);
-      const { data, error } = await supabase.rpc("send_commercial_document", {
-        p_proposal_id: proposalId,
-        p_expected_fingerprint: fingerprint,
-        p_personal_message: null,
-        p_valid_until: null,
-      });
+      const { data, error } = await supabase.rpc("send_commercial_document", args);
       if (error) throw error;
 
       const sentAt = data?.sentAt ?? data?.sent_at;
@@ -1360,9 +1470,10 @@ export function useSendFurnishingsAuthorization(projectId: string) {
           "The furnishings send instance is incomplete. Refresh before retrying.",
       };
     },
-    onSuccess: async (_, proposalId) => {
+    onSuccess: async (_, { proposalId }) => {
       await Promise.all([
         invalidateProjectCommerce(queryClient, projectId),
+        queryClient.invalidateQueries({ queryKey: ["furnishings-authorization-preview"] }),
         queryClient.invalidateQueries({
           queryKey: commercialDocumentKeys.bundle(proposalId),
         }),

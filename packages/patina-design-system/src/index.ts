@@ -26,3 +26,5 @@ export * from './mood-board'
 
 // Styles
 export const stylesPath = './styles/globals.css'
+
+export { FurnishingsAuthorizationBody } from './components/FurnishingsAuthorizationBody';

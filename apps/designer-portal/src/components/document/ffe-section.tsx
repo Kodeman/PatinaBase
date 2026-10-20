@@ -84,7 +84,6 @@ import {
   releaseSummary,
   scheduledContributionCents,
   signableCents,
-  type InstrumentLike,
   type LineAuthorization,
   type LineEligibility,
   type ReleaseLine,
@@ -1205,11 +1204,9 @@ function landOnControl(find: () => HTMLElement | null | undefined): void {
  * design: releasing is the schedule's act, not the document's.
  */
 export function FFESection(props: FFESectionProps) {
-  const { data: instruments } = useProjectInstruments(props.projectId) as {
-    data: InstrumentLike[] | undefined;
-  };
+  const { data: instruments } = useProjectInstruments(props.projectId);
   return (
-    <ReleaseCeremonyProvider instruments={instruments ?? []}>
+    <ReleaseCeremonyProvider key={props.projectId} instruments={instruments ?? []}>
       <FFESectionBody {...props} instruments={instruments ?? []} />
     </ReleaseCeremonyProvider>
   );
@@ -1234,7 +1231,7 @@ function FFESectionBody({
   needs = [],
   onReleaseOffered,
   instruments,
-}: FFESectionProps & { instruments: InstrumentLike[] }) {
+}: FFESectionProps & { instruments: NonNullable<ReturnType<typeof useProjectInstruments>["data"]> }) {
   const { heldRoomId, toggleRoom } = useRoomLens();
   const [openLineId, setOpenLineId] = useState<string | null>(null);
   // US-19 FR4 Fix 6 (520-2): the line `Follow up with the maker` opened the
@@ -1352,6 +1349,20 @@ function FFESectionBody({
   // "Engaged" for good.
   const tradeProgressKnown = mode === 'project' && !tradeScopesPending;
   const ceremony = useReleaseCeremony();
+  const [savedProposalId, setSavedProposalId] = useState<string | null>(null);
+  const saveOwnerActive = useRef(true);
+  useEffect(() => {
+    saveOwnerActive.current = true;
+    return () => { saveOwnerActive.current = false; };
+  }, []);
+  const retainSavedProposal = useCallback((proposalId: string) => {
+    if (saveOwnerActive.current) setSavedProposalId(proposalId);
+  }, []);
+  const savedInstrument = instruments.find((instrument) => instrument.proposalId === savedProposalId);
+  const retainedProposalId = savedInstrument && savedInstrument.state !== "draft" ? null : savedProposalId;
+  useEffect(() => {
+    if (savedInstrument && savedInstrument.state !== "draft") setSavedProposalId(null);
+  }, [savedInstrument]);
 
   const instrumentIndex = useMemo(
     () => buildInstrumentIndex(instruments),
@@ -2797,8 +2808,10 @@ function FFESectionBody({
           instrumentNumber={ceremony.provisionalNumber}
           lines={releaseLines}
           currentScheduledCents={currentScheduledCents}
+          savedProposalId={retainedProposalId}
+          onSaved={retainSavedProposal}
           onClose={ceremony.backToSelecting}
-          onReleased={ceremony.putBack}
+          onReleased={() => { setSavedProposalId(null); ceremony.putBack(); }}
         />
       )}
 

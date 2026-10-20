@@ -82,7 +82,7 @@ describe('the front door', () => {
     mockActiveHouse.mockResolvedValue('p1');
     mockProjectView.mockResolvedValue(view('p1'));
 
-    render(await HomePage());
+    render(await HomePage({}));
 
     expect(mockActiveHouse).toHaveBeenCalledWith(['p1']);
     expect(mockProjectView).toHaveBeenCalledWith('p1');
@@ -94,7 +94,7 @@ describe('the front door', () => {
     mockActiveHouse.mockResolvedValue('p1');
     mockProjectView.mockResolvedValue(view('p1'));
 
-    render(await HomePage());
+    render(await HomePage({}));
 
     expect(screen.getByTestId('surface')).toHaveAttribute(
       'data-view-source',
@@ -111,7 +111,7 @@ describe('the front door', () => {
     mockActiveHouse.mockResolvedValue('p2');
     mockProjectView.mockResolvedValue(view('p2'));
 
-    render(await HomePage());
+    render(await HomePage({}));
 
     expect(screen.getByTestId('surface')).toHaveAttribute(
       'data-other-houses',
@@ -127,7 +127,7 @@ describe('the front door', () => {
     mockProjects.mockResolvedValue([]);
     mockActiveHouse.mockResolvedValue(null);
 
-    render(await HomePage());
+    render(await HomePage({}));
 
     expect(screen.getByTestId('letterbox-door')).toBeInTheDocument();
     expect(screen.queryByTestId('surface')).not.toBeInTheDocument();
@@ -145,7 +145,7 @@ describe('the front door', () => {
     mockActiveHouse.mockResolvedValue('p1');
     mockProjectView.mockImplementation(async (id: string) => (id === 'p2' ? view('p2') : null));
 
-    render(await HomePage());
+    render(await HomePage({}));
 
     expect(mockProjectView).toHaveBeenCalledWith('p1');
     expect(mockProjectView).toHaveBeenCalledWith('p2');
@@ -201,7 +201,7 @@ describe('the front door', () => {
     mockActiveHouse.mockResolvedValue('p1');
     mockProjectView.mockImplementation(async (id: string) => view(id));
 
-    render(await HomePage());
+    render(await HomePage({}));
 
     expect(mockActiveHouse).toHaveBeenCalledWith(['p1']);
     expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p1');
@@ -215,7 +215,7 @@ describe('the front door', () => {
     mockActiveHouse.mockResolvedValue('p1');
     mockProjectView.mockResolvedValue(null);
 
-    render(await HomePage());
+    render(await HomePage({}));
 
     // She HAS a house the list named, so this is not the letterbox door: the
     // door stands only where there is no house at all.

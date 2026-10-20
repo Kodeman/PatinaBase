@@ -25,7 +25,7 @@
  * which checkpoint was current when it was signed.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { FileSignature } from 'lucide-react';
 import {
   checkpointCoverage,
@@ -48,13 +48,14 @@ import {
   useProjectBillingAuthority,
   usePublishBudgetCheckpoint,
   useReleaseForAuthorization,
-  useSendFurnishingsAuthorization,
   useWorkingBudget,
 } from '@/hooks/use-commercial-documents';
 import { useProjectPurchasingAgreement } from '@/hooks/use-project-purchasing-agreement';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocSheet } from '../overlays/doc-sheet';
+import { PurchasingAuthorizationPreviewSheet } from '../overlays/purchasing-authorization-preview-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { requestRegionUnfold } from '@/lib/document/document-index';
 
 const CHIPS = [0, 25, 50, 100] as const;
 
@@ -123,7 +124,11 @@ function Figure({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function ReviewReleaseSheet({
+export function ReviewReleaseSheet(props: ComponentProps<typeof ReviewReleaseSheetContent>) {
+  return <ReviewReleaseSheetContent key={props.projectId} {...props} />;
+}
+
+function ReviewReleaseSheetContent({
   open,
   projectId,
   projectName,
@@ -133,6 +138,8 @@ export function ReviewReleaseSheet({
   currentScheduledCents = null,
   onClose,
   onReleased,
+  savedProposalId = null,
+  onSaved,
 }: {
   open: boolean;
   projectId: string;
@@ -148,18 +155,25 @@ export function ReviewReleaseSheet({
   onClose: () => void;
   /** The release landed — put the ceremony back. */
   onReleased: () => void;
+  savedProposalId?: string | null;
+  onSaved?: (proposalId: string) => void;
 }) {
   const authority = useProjectBillingAuthority(projectId);
   const purchasingAgreement = useProjectPurchasingAgreement(projectId);
   const budget = useWorkingBudget(projectId);
   const release = useReleaseForAuthorization(projectId);
-  const send = useSendFurnishingsAuthorization(projectId);
   const publishCheckpoint = usePublishBudgetCheckpoint(projectId);
   const overrideCheckpoint = useOverrideBudgetCheckpoint(projectId);
   // US-19 D3 (one-voice, R162): a paper sent for signature is the filled tier,
   // beneath the consequence sentence the sheet already states (R141).
   const oneVoice = useFeatureFlag('one-voice').value === true;
 
+  const active = useRef(true);
+  const saving = useRef(false);
+  const previewTrigger = useRef<HTMLButtonElement>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [identityUnavailable, setIdentityUnavailable] = useState(false);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const agreementPercent = furnishingsDepositPercent(authority.data);
   const [chosenPercent, setChosenPercent] = useState<number | null>(null);
   const [otherOpen, setOtherOpen] = useState(false);
@@ -167,11 +181,8 @@ export function ReviewReleaseSheet({
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
-  // Stashed the instant release succeeds, so a send that fails afterward can
-  // retry the send alone — re-clicking must never mint a second instrument.
-  const [releasedProposalId, setReleasedProposalId] = useState<string | null>(
-    null,
-  );
+  const [localProposalId, setLocalProposalId] = useState<string | null>(null);
+  const releasedProposalId = savedProposalId ?? localProposalId;
 
   const percent = chosenPercent ?? agreementPercent;
   const { lineCount, roomCount, total } = releaseSummary(lines);
@@ -218,7 +229,7 @@ export function ReviewReleaseSheet({
   const canPublish = agreementKnown && (Boolean(agreementId) ||
     (!authority.data && purchasingAgreement.data?.state === 'external_recorded'));
   const blocked = !canPublish || budget.isLoading || Boolean(budget.error) ||
-    !hasCheckpoint || coverageGap || awaitingAcknowledgment;
+    !budget.data?.version?.id || !hasCheckpoint || coverageGap || awaitingAcknowledgment;
   const drift = scheduleDrift({
     stampedCents: stampedScheduledCents(budget.data?.version),
     currentCents: currentScheduledCents,
@@ -231,7 +242,7 @@ export function ReviewReleaseSheet({
   const clientLabel = clientName?.trim() || 'the client';
 
   const versionId = budget.data?.version?.id ?? null;
-  const busy = release.isPending || send.isPending;
+  const busy = release.isPending;
   const name = `Furnishings authorization № ${instrumentNumber}`;
 
   const runRelease = async () => {
@@ -243,46 +254,26 @@ export function ReviewReleaseSheet({
     });
   };
 
-  const saveDraft = async () => {
+  const save = async (preview: boolean) => {
+    if (saving.current || busy || identityUnavailable || (blocked && !releasedProposalId)) return;
+    if (releasedProposalId) { setPreviewOpen(preview); return; }
+    saving.current = true;
     try {
-      await runRelease();
-      onReleased();
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : 'The authorization could not be drafted.',
-      );
-    }
-  };
-
-  const sendForSignature = async () => {
-    setError(null);
-    try {
-      let proposalId = releasedProposalId;
-      if (!proposalId) {
-        const created = await runRelease();
-        const createdId =
-          (created as { proposalId?: string } | null)?.proposalId ?? null;
-        if (!createdId) {
-          throw new Error(
-            'The authorization was drafted but its record came back incomplete. Open it from the ledger to send.',
-          );
-        }
-        proposalId = createdId;
-        // Stashed before the send is attempted — if the send throws, this
-        // survives to guard the retry against minting a second instrument.
-        setReleasedProposalId(createdId);
+      const created = await runRelease();
+      // The project owner outlives this dismissible sheet; deliver persistence
+      // before checking whether the child may still render.
+      if (created?.proposalId) onSaved?.(created.proposalId);
+      if (!active.current) return;
+      if (!created?.proposalId) {
+        setIdentityUnavailable(true);
+        throw new Error('The draft was saved but its identity is unavailable. Open it from the authorization ledger; do not save again.');
       }
-      await send.mutateAsync(proposalId);
-      onReleased();
+      setLocalProposalId(created.proposalId);
+      if (preview) setPreviewOpen(true);
+      else onReleased();
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : 'The authorization could not be sent.',
-      );
-    }
+      if (active.current) setError(cause instanceof Error ? cause.message : 'The authorization could not be drafted.');
+    } finally { saving.current = false; }
   };
 
   const submitOverride = async () => {
@@ -302,6 +293,17 @@ export function ReviewReleaseSheet({
           : 'The override was not recorded.',
       );
     }
+  };
+
+  const openWorkingBudget = () => {
+    onClose();
+    requestRegionUnfold('money');
+    // Land after DocSheet restores its trigger and Money mounts its heading.
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const heading = document.getElementById('money-region-heading');
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    }));
   };
 
   const publishFresh = async () => {
@@ -324,6 +326,15 @@ export function ReviewReleaseSheet({
       );
     }
   };
+
+  if (releasedProposalId) return (
+    <DocSheet open={open} onClose={onClose} wide icon={FileSignature} title="Purchasing authorization" pageLabel={`№ ${instrumentNumber}`}>
+      <p role="status">Draft saved. Nothing has been sent to the client. The saved lines and deposit are frozen; closing leaves their reservations intact.</p>
+      <p className="mt-3">To revise, use the existing Void action with a reason, then prepare a new draft.</p>
+      <DocumentAction ref={previewTrigger} actionKey="reopen-saved-purchasing-preview" surfaceKey="project" regionKey="release-review" onClick={() => setPreviewOpen(true)}>Preview</DocumentAction>
+      {previewOpen && <PurchasingAuthorizationPreviewSheet projectId={projectId} proposalId={releasedProposalId} clientName={clientName} fallbackFocusRef={previewTrigger} onClose={() => setPreviewOpen(false)} onOpenWorkingBudget={() => { setPreviewOpen(false); onClose(); }} onSent={() => { if (active.current) onReleased(); }} />}
+    </DocSheet>
+  );
 
   return (
     <DocSheet
@@ -496,7 +507,13 @@ export function ReviewReleaseSheet({
               : 'border-[var(--color-sage)]'
         }`}
       >
-        {blocked && !awaitingAcknowledgment ? (
+        {budget.isLoading ? <p role="status">Loading budget checkpoint…</p>
+        : budget.error ? <p role="alert">The budget checkpoint could not be loaded. No publication was attempted.</p>
+        : !versionId ? <>
+          <p>No budget checkpoint has been published yet. Set up a working budget in Money, then sync from the schedule and review it before publishing. A checkpoint is spending-plan alignment, not purchase approval or payment.</p>
+          <DocumentAction actionKey="set-up-working-budget" surfaceKey="project" regionKey="release-gate" onClick={openWorkingBudget}>Set up a working budget</DocumentAction>
+        </>
+        : blocked && !awaitingAcknowledgment ? (
           <>
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               Budget checkpoint
@@ -520,7 +537,7 @@ export function ReviewReleaseSheet({
               disabled={publishCheckpoint.isPending || !canPublish || !versionId || Boolean(budget.error)}
               onClick={publishFresh}
             >
-              Issue updated budget checkpoint
+              {hasCheckpoint ? 'Issue updated budget checkpoint' : 'Publish first budget checkpoint'}
             </DocumentAction>
           </>
         ) : blocked && awaitingAcknowledgment ? (
@@ -533,6 +550,7 @@ export function ReviewReleaseSheet({
                 ? `Waiting on ${clientLabel} to acknowledge checkpoint ${checkpoint.checkpointCode}.`
                 : `Waiting on ${clientLabel} to acknowledge the current checkpoint.`}
             </p>
+            <p className="mt-1 text-[11.5px] text-[var(--color-charcoal)]">Ask {clientLabel} to review the published budget in their project&rsquo;s ledger and explicitly acknowledge the spending plan. Publishing another checkpoint will not acknowledge this one.</p>
             {!overrideOpen ? (
               <DocumentAction
                 actionKey="open-checkpoint-override"
@@ -617,15 +635,9 @@ export function ReviewReleaseSheet({
           {error}
         </p>
       )}
-      {error && releasedProposalId && (
-        <p className="mb-3 text-[11px] text-[var(--text-muted)]">
-          The authorization exists — retrying the send.
-        </p>
-      )}
 
       <p className="mb-2 text-[11px] text-[var(--text-muted)]">
-        Prices lock on release. To change one afterwards, void this
-        authorization and supersede it.
+        Saving creates a draft and reserves these items. Nothing is sent to the client.
       </p>
 
       <DocumentActionGroup
@@ -636,19 +648,19 @@ export function ReviewReleaseSheet({
         <DocumentAction
           actionKey="save-authorization-draft"
           variant="secondary"
-          disabled={busy || blocked || lineCount === 0 || Boolean(releasedProposalId)}
-          loading={release.isPending && !send.isPending}
+          disabled={busy || blocked || identityUnavailable || lineCount === 0 || Boolean(releasedProposalId)}
+          loading={release.isPending}
           loadingLabel="Drafting…"
-          onClick={saveDraft}
+          onClick={() => save(false)}
         >
           Save authorization draft
         </DocumentAction>
         <DocumentAction
           actionKey="send-authorization-for-signature"
           variant={oneVoice ? 'terminal' : 'primary'}
-          disabled={busy || blocked || lineCount === 0}
-          loading={send.isPending}
-          loadingLabel="Sending…"
+          disabled={busy || blocked || identityUnavailable || lineCount === 0}
+          loading={release.isPending}
+          loadingLabel="Saving…"
           title={
             blocked
               ? awaitingAcknowledgment
@@ -656,9 +668,9 @@ export function ReviewReleaseSheet({
                 : 'Publish a checkpoint covering these rooms before sending.'
               : undefined
           }
-          onClick={sendForSignature}
+          onClick={() => save(true)}
         >
-          {oneVoice ? 'Issue for purchasing authorization' : 'Send for signature'}
+          Save draft &amp; preview
         </DocumentAction>
       </DocumentActionGroup>
     </DocSheet>

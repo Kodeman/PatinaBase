@@ -272,6 +272,23 @@ describe('commercial document client adapter', () => {
     expect(JSON.stringify(summary)).not.toContain('Do not leak me');
   });
 
+  it('carries checkpoint project version and code but excludes live and internal planning values', () => {
+    const adapted = adaptProjectCommercialSummary({ workingBudget: {
+      version: { id: 'v1', projectId: 'p1', status: 'published', note: 'PRIVATE', liveAuthorizedTotalCents: 555 },
+      lines: [{ roomName: 'Room', category: 'Seating', liveAuthorizedCents: 444, tradePrice: 333 }],
+      checkpoint: { id: 'c1', projectId: 'p1', versionId: 'v1', checkpointCode: 'BC-001', status: 'open', snapshotFingerprint: 'fp' },
+    } }).workingBudget;
+    expect(adapted?.checkpoint).toMatchObject({ id: 'c1', projectId: 'p1', versionId: 'v1', checkpointCode: 'BC-001', evidenceFingerprint: 'fp' });
+    expect(JSON.stringify(adapted)).not.toMatch(/PRIVATE|liveAuthorized|tradePrice/);
+  });
+
+  it('does not turn an unknown checkpoint status into an open acknowledgement', () => {
+    const adapted = adaptProjectCommercialSummary({ workingBudget: {
+      version: { id: 'v1', status: 'published' }, checkpoint: { id: 'c1', status: 'invalid' },
+    } }).workingBudget;
+    expect(adapted?.checkpoint).toBeNull();
+  });
+
   it('adapts the nested working-budget RPC contract without zeroing the published version', () => {
     const summary = adaptProjectCommercialSummary({
       workingBudget: {
@@ -1130,5 +1147,22 @@ describe('a proposal whose row carries no project_id key at all', () => {
     } as never);
 
     expect(summary.projectId).toBe('project-1');
+  });
+});
+
+
+describe('authorization frozen image adapter', () => {
+  it.each([
+    [undefined, undefined],
+    [{ version: 1, url: 'https://images.example.test/saved.jpg', storagePath: 'PRIVATE' }, { version: 1, url: 'https://images.example.test/saved.jpg' }],
+    [{ version: 1, url: null }, { version: 1, url: null }],
+    [{ version: 1, url: 'https://user:pass@images.example.test/x' }, { version: 1, url: null }],
+    [{ version: 1, url: 'https://images.example.test/x?token=private' }, { version: 1, url: null }],
+    [{ version: 2, url: 'https://images.example.test/x' }, undefined],
+  ])('only carries validated versioned client media %j', (clientImage, expected) => {
+    const result = adaptCommercialDocumentBundle({ document: { id: 'saved', kind: 'furnishings_authorization' }, furnishings: { items: [{ name: 'Wallpaper', quantity: 1, clientImage, snapshot: { clientImage: { version: 1, url: 'https://live.test/x' } } }] } });
+    expect(result?.furnishings?.items[0].clientImage).toEqual(expected);
+    expect(JSON.stringify(result?.furnishings)).not.toContain('PRIVATE');
+    expect(result?.furnishings?.items[0]).not.toHaveProperty('snapshot');
   });
 });

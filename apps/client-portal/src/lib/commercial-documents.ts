@@ -12,7 +12,8 @@ import {
   type DesignServiceTerms,
   type FFEStageKey,
   type FfeLineUnit,
-  type FurnishingsAuthorizationItem as CanonicalFurnishingsAuthorizationItem,
+  type ClientFurnishingsAuthorizationItem,
+  authorizationClientImage,
   type ProjectBillingAuthoritySummary,
   type TradeScopeProgressState,
   type WorkingBudgetCheckpoint as CanonicalWorkingBudgetCheckpoint,
@@ -112,34 +113,9 @@ export type DesignServicesTerms = Omit<
 };
 
 /** One room a line is in, and that room's share of it (00745 `rooms`). */
-export type ClientLineRoom = NonNullable<CanonicalFurnishingsAuthorizationItem['rooms']>[number];
+export type ClientLineRoom = NonNullable<ClientFurnishingsAuthorizationItem['rooms']>[number];
 
-export type FurnishingsAuthorizationItem = Pick<
-  CanonicalFurnishingsAuthorizationItem,
-  'description' | 'quantity' | 'clientUnitPriceCents' | 'currency' | 'unit' | 'rooms'
-> & {
-  /**
-   * The room the line files under. The RPC has always projected it
-   * (`furnishing_authorization_items.room_name`); the portal was throwing it
-   * away, which is why the client's authorization read as one flat list of
-   * furniture with no idea which room anything went in.
-   */
-  roomName: string;
-  /**
-   * The authoritative per-line figure — NOT `quantity × clientUnitPriceCents`.
-   * An allowance is snapshotted at its ceiling and the unit price is that
-   * ceiling divided by quantity with integer truncation, so the product can
-   * fall up to (quantity − 1) cents short of what the client actually signed
-   * for. Σ clientLineTotalCents reconciles exactly to the document's
-   * totalAmountCents; the product does not.
-   */
-  clientLineTotalCents: number;
-  /**
-   * An allowance line (the RPC's `itemType`): its line total is a ceiling, so
-   * it prints as `Up to $X` (US-21 T-55b, F8). Absent on a legacy payload.
-   */
-  allowance?: boolean;
-};
+export type FurnishingsAuthorizationItem = ClientFurnishingsAuthorizationItem;
 
 export interface FurnishingsAuthorization {
   checkpointId: string | null;
@@ -370,8 +346,9 @@ export type WorkingBudgetLine = Pick<
 
 export interface WorkingBudgetCheckpoint extends Pick<
   CanonicalWorkingBudgetCheckpoint,
-  'id' | 'state' | 'publishedAt' | 'acknowledgedAt' | 'overrideReason'
+  'id' | 'projectId' | 'versionId' | 'state' | 'publishedAt' | 'acknowledgedAt' | 'overrideReason'
 > {
+  checkpointCode: string;
   evidenceFingerprint: string | null;
 }
 
@@ -477,27 +454,6 @@ function lineRooms(value: unknown, unit: FfeLineUnit): ClientLineRoom[] {
     const name = nullableText(row.name);
     return name ? [{ name, quantity: number(row.quantity), unit: oneOf(row.unit, LINE_UNITS, unit) }] : [];
   });
-}
-
-/** `913 sq ft`; an `each` line prints its bare count. `sq_ft` prints `sq ft`. */
-export function clientQuantityLabel(quantity: number, unit: FfeLineUnit = 'each'): string {
-  const count = quantity.toLocaleString('en-US');
-  return unit === 'each' ? count : `${count} ${unit.replace('_', ' ')}`;
-}
-
-/**
- * A line in more than one room, as the client reads it:
- * `White oak floor · 913 sq ft · Hall · Living Room · Dining · Kitchen` — the
- * line's whole quantity (waste included), then its rooms in placement order.
- * Null for a line in one room or none: that line prints as it always has.
- */
-export function clientRoomsLine(
-  name: string,
-  line: { quantity: number; unit?: FfeLineUnit; rooms?: ClientLineRoom[] },
-): string | null {
-  const rooms = line.rooms ?? [];
-  if (rooms.length < 2) return null;
-  return [name, clientQuantityLabel(line.quantity, line.unit), ...rooms.map((room) => room.name)].join(' · ');
 }
 
 export function legacyStatusToCommercialState(status: Proposal['status']): CommercialDocumentState {
@@ -997,6 +953,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
           quantity,
           unit,
           rooms: lineRooms(row.rooms, unit),
+          ...(row.clientImage === undefined ? {} : { clientImage: authorizationClientImage(row.clientImage) }),
           clientUnitPriceCents,
           // Fall back to the product only when the RPC sent no line total at
           // all (a legacy payload). Where both exist the line total wins.
@@ -1092,8 +1049,11 @@ export function adaptProjectCommercialSummary(value: unknown): ProjectCommercial
         notes: nullableText(row.notes),
       };
     }) : [],
-    checkpoint: Object.keys(checkpointRaw).length === 0 ? null : {
+    checkpoint: !['open', 'acknowledged', 'overridden'].includes(text(first(checkpointRaw, 'state', 'status'))) ? null : {
       id: text(checkpointRaw.id),
+      projectId: text(first(checkpointRaw, 'projectId', 'project_id')),
+      versionId: text(first(checkpointRaw, 'versionId', 'version_id', 'budget_version_id')),
+      checkpointCode: text(first(checkpointRaw, 'checkpointCode', 'checkpoint_code')),
       // project_budget_checkpoints.status (00412/00422) is exactly
       // 'open' | 'acknowledged' | 'overridden' — 'open' is the unacknowledged
       // default the moment a checkpoint publishes. Read it through, never

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 
 import type { Invoice, ProjectApprovalReview, Proposal } from '@patina/supabase';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
-import { adaptClientSelections, type ClientSelection } from '@/lib/commercial-documents';
+import { adaptClientSelections, adaptProjectCommercialSummary, type ClientSelection } from '@/lib/commercial-documents';
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
 
 const mockPresentation = jest.fn();
@@ -128,6 +128,7 @@ jest.mock('@/hooks/use-commercial-client', () => ({
   clientCommercialDocumentQueryOptions: jest.fn(),
   useAcceptTradeScope: jest.fn(),
   useProjectWorkingBudget: jest.fn(),
+  useAcknowledgeBudgetCheckpoint: () => ({ mutateAsync: jest.fn(), isPending: false }),
   invalidateSignedCommercialDocument: jest.fn().mockResolvedValue(undefined),
   // L6 — SelectionEditionAsk (review-ask.tsx) reads no edition id from any of
   // this file's fixtures (no `?review=` in jsdom's default URL), so it never
@@ -663,6 +664,18 @@ beforeEach(() => {
 });
 
 describe('Threshold — which house', () => {
+  it('mounts the published checkpoint review beside the existing ledger destination', () => {
+    (useProjectWorkingBudget as jest.Mock).mockReturnValue(settled(adaptProjectCommercialSummary({ workingBudget: {
+      version: { id: 'v-review', projectId: PROJECT_ID, version: 3, status: 'published', lowTotalCents: 10000, targetTotalCents: 20000, highTotalCents: 30000 },
+      lines: [{ roomName: 'Library', category: 'Seating', lowCents: 10000, targetCents: 20000, highCents: 30000 }],
+      checkpoint: { id: 'cp-review', projectId: PROJECT_ID, versionId: 'v-review', checkpointCode: 'BC-003', status: 'open', snapshotFingerprint: 'fp', publishedAt: '2026-10-19T10:00:00Z' },
+    } }).workingBudget));
+    const { container } = renderThreshold();
+    const review = screen.getByRole('region', { name: 'Published spending plan' });
+    expect(review).toHaveTextContent('BC-003');
+    expect(screen.getByRole('button', { name: 'Acknowledge this spending plan' })).toBeInTheDocument();
+    expect(container.querySelector('#ledger')!.compareDocumentPosition(review) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
   // Path B's sheet is two columns: a story-pole rail on the left and the house
   // on the right. The pole therefore comes FIRST in the DOM and is not part of
   // the reading order at all — so the order below is asserted over the house
