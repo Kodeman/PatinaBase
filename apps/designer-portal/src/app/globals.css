@@ -2639,6 +2639,9 @@ html:has(.document-route-shell) {
 .ln-item:last-child .foot { margin-top: auto; }
 .line { color: var(--text-muted); }
 .settled .line { color: var(--text-faint); }
+/* SQ-1518 — the Day Sheet sets --settle-lines only when her settled words
+   would outgrow the room the open line stood in. */
+.settled .line[style*="--settle-lines"] { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--settle-lines); overflow: hidden; }
 .od { color: var(--terracotta-ink); }
 .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; min-height: 44px; margin-top: 8px; margin-left: -6px; }
 /* US-43 R7 — "Later ▾": a disclosure whose items lie on a --paper-doc slip

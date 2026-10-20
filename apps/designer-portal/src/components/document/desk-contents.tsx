@@ -232,7 +232,7 @@ function ContentsRow({
             aria-hidden
           />
           <span
-            className={`shrink-0 font-heading ${labelSize} font-normal leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-aged-oak)] motion-reduce:transition-none`}
+            className={`min-w-0 font-heading ${labelSize} font-normal leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-aged-oak)] motion-reduce:transition-none`}
           >
             {label}
           </span>
