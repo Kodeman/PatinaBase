@@ -215,7 +215,7 @@ function ContentsRow({
       <button
         type="button"
         onClick={onOpen}
-        className="group flex min-h-11 w-full flex-col gap-0.5 rounded-[3px] py-[5px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="group flex min-h-11 w-full flex-col gap-0.5 rounded-[3px] py-[5px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
       >
         <span className="flex items-baseline gap-2">
           {variant === 'verb' && (

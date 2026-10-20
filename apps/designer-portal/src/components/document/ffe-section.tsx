@@ -1015,7 +1015,7 @@ function RoomHeading({
           data-room-chip={roomId}
           aria-pressed={held}
           onClick={() => toggleRoom(roomId as string)}
-          className="flex min-h-11 w-full items-baseline gap-2.5 pb-1 text-left underline-offset-4 hover:underline hover:decoration-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="flex min-h-11 w-full items-baseline gap-2.5 pb-1 text-left underline-offset-4 hover:underline hover:decoration-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         >
           {headingChildren}
         </button>
