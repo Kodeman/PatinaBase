@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoices, the list</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&amp;family=Inter:wght@400;500;600&amp;family=DM+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FAF7F2;color:#2C2926}
+a{color:#2C2926}a:hover{color:#2C2926}
+:focus-visible{outline:2px solid #7C5E30;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 3200px; box-sizing: border-box; padding: 0 24px 48px; background: #FAF7F2; color: #2C2926; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<div aria-hidden="true" style="display: flex; flex-direction: column; gap: 4px; padding: 32px 0">
+<div style="height: 1.5px; width: 60px; border-radius: 1px; background: #5C4A3C"></div>
+<div style="height: 1.5px; width: 48px; border-radius: 1px; background: #C4A57B; opacity: 0.7"></div>
+<div style="height: 1.5px; width: 36px; border-radius: 1px; background: #C4A57B; opacity: 0.35"></div>
+</div>
+<header id="doorplate" style="padding: 0 0 12px; border-bottom: 1px solid #E8E3DB">
+<p style="margin: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 18px; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43"><span>Birchwood Studio · Madison, Wisconsin</span><span>Prepared for June Brennan</span></p>
+<h1 style="margin: 12px 0 4px; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 34px; line-height: 1.15; font-weight: 500; color: #2C2926">Elm Street House</h1>
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; letter-spacing: .08em; color: #5A4E43">Procurement · October 2026</p>
+</header>
+<section id="letterbox" aria-labelledby="invoices-h" style="padding: 48px 0 0">
+<p style="margin: 0 0 12px; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">Elm Street House and studio</p>
+<h2 id="invoices-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 26px; line-height: 1.2; font-weight: 500; color: #2C2926">Invoices</h2>
+
+<div style="padding: 24px 0 0; display: flex; flex-direction: column; gap: 8px">
+<h3 id="to-pay-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.3; font-weight: 500; color: #2C2926">Invoices to pay</h3>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #4E4339">Six invoices, soonest due first.</p>
+</div>
+<ul aria-labelledby="to-pay-h" style="margin: 12px 0 0; padding: 0; border-top: 1px solid #E8E3DB">
+<sc-for list="{{ payRows }}" as="row" hint-placeholder-count="6">
+<li style="list-style: none; padding: 16px 0; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; row-gap: 4px">
+<p style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500; color: #2C2926">{{ row.name }}</p>
+<p style="margin: 0; text-align: right; white-space: nowrap; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">{{ row.amount }}</p>
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; color: #2C2926">{{ row.line2 }}</p>
+<p style="margin: 0; text-align: right; white-space: nowrap; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; letter-spacing: .08em; color: #5A4E43">{{ row.ofTotal }}</p>
+<p style="margin: 0; grid-column: 1 / -1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">{{ row.status }}</p>
+<div style="grid-column: 1 / -1">
+<button type="button" ref="{{ row.setBtn }}" aria-expanded="{{ row.expanded }}" aria-controls="{{ row.regionId }}" onClick="{{ row.toggle }}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; color: #5A4E43; text-decoration: underline; text-decoration-color: #8B7355; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#65594E" stroke-width="1.25"><path d="{{ row.chevron }}"></path></svg></button>
+<sc-if value="{{ row.open }}" hint-placeholder-val="{{ false }}">
+<div id="{{ row.regionId }}" role="region" aria-labelledby="{{ row.headId }}" style="margin: 12px 0 0; padding: 24px 16px; background: #FCFAF6; border-top: 1px solid rgba(44, 41, 38, .14); border-bottom: 1px solid rgba(44, 41, 38, .14); display: flex; flex-direction: column; gap: 16px">
+<h4 id="{{ row.headId }}" tabindex="-1" ref="{{ row.setHead }}" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500; color: #2C2926; outline: 2px solid #7C5E30; outline-offset: 2px">Payment details for {{ row.number }}</h4>
+<dl style="margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; row-gap: 8px; align-items: baseline">
+<sc-for list="{{ row.facts }}" as="fact" hint-placeholder-count="4">
+<dt style="margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; color: #4E4339">{{ fact.k }}</dt>
+<dd style="margin: 0; text-align: right; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.5; color: #2C2926">{{ fact.v }}</dd>
+</sc-for>
+<sc-for list="{{ row.sums }}" as="sum" hint-placeholder-count="2">
+<dt style="margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; color: #4E4339">{{ sum.k }}</dt>
+<dd style="margin: 0; text-align: right; white-space: nowrap; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">{{ sum.v }}</dd>
+</sc-for>
+<dt style="margin: 0; padding-top: 8px; border-top: 1px solid rgba(44, 41, 38, .14); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; font-weight: 500; color: #2C2926">Balance</dt>
+<dd style="margin: 0; padding-top: 8px; border-top: 1px solid rgba(44, 41, 38, .14); text-align: right; white-space: nowrap; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; font-weight: 500; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">{{ row.balance }}</dd>
+</dl>
+<a href="{{ row.printHref }}" style="display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0 2px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; font-weight: 400; color: #5A4E43; text-decoration: underline; text-decoration-color: #8B7355; text-decoration-thickness: 1px; text-underline-offset: 6px">Print invoice</a>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<sc-if value="{{ row.payLinked }}" hint-placeholder-val="{{ true }}">
+<a href="Invoices-Pay.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 4px 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; font-weight: 500; color: #2C2926; text-decoration: none; cursor: pointer"><span style="display: inline-block; padding-bottom: 2px; border-bottom: 1px solid #C4A57B"><span style="display: inline-block; padding-bottom: 2px; border-bottom: 1.5px solid #2C2926">Pay {{ row.amount }}</span></span></a>
+</sc-if>
+<sc-if value="{{ row.payInPlace }}" hint-placeholder-val="{{ false }}">
+<button type="button" style="display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 4px 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; font-weight: 500; color: #2C2926; text-decoration: none; cursor: pointer"><span style="display: inline-block; padding-bottom: 2px; border-bottom: 1px solid #C4A57B"><span style="display: inline-block; padding-bottom: 2px; border-bottom: 1.5px solid #2C2926">Pay {{ row.amount }}</span></span></button>
+</sc-if>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; color: #4E4339">Paying opens the payment choices. Nothing is charged yet.</p>
+</div>
+<button type="button" onClick="{{ row.close }}" style="display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; font-weight: 400; color: #5A4E43; text-decoration: underline; text-decoration-color: #8B7355; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">Close payment details</button>
+</div>
+</sc-if>
+</div>
+</li>
+</sc-for>
+</ul>
+
+<div style="margin: 24px 0 0; padding: 12px 0 0; border-top: 1px solid rgba(44, 41, 38, .14); display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; display: flex; justify-content: space-between; gap: 16px; align-items: baseline"><span style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; font-weight: 500; color: #2C2926">Total outstanding</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; font-weight: 500; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">$1,375.00</span></p>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">$1,375.00 across Elm Street House and your studio invoices.</p>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #4E4339">It counts only the invoices shown here. Lake Cottage invoices are on its own page.</p>
+</div>
+
+<div style="margin: 0; padding: 48px 0 0; display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.3; font-weight: 500; color: #2C2926"><button type="button" aria-expanded="{{ histExpanded }}" aria-controls="history-list" onClick="{{ toggleHistory }}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.3; font-weight: 500; color: #2C2926; text-decoration: underline; text-decoration-color: #8B7355; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">Payment history <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#65594E" stroke-width="1.25"><path d="{{ histChevron }}"></path></svg></button></h3>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #4E4339">Three invoices, newest first.</p>
+</div>
+<sc-if value="{{ histOpen }}" hint-placeholder-val="{{ false }}">
+<ul id="history-list" aria-label="Payment history" style="margin: 12px 0 0; padding: 0; border-top: 1px solid #E8E3DB">
+<sc-for list="{{ histRows }}" as="hrow" hint-placeholder-count="3">
+<li style="list-style: none; padding: 16px 0; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; row-gap: 4px">
+<p style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500; color: #2C2926">{{ hrow.name }}</p>
+<p style="margin: 0; text-align: right; white-space: nowrap; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">{{ hrow.amount }}</p>
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; color: #2C2926">{{ hrow.line2 }}</p>
+<p style="margin: 0; text-align: right; white-space: nowrap; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; letter-spacing: .08em; color: #5A4E43">{{ hrow.ofTotal }}</p>
+<p style="margin: 0; grid-column: 1 / -1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">{{ hrow.status }}</p>
+<div style="grid-column: 1 / -1">
+<button type="button" ref="{{ hrow.setBtn }}" aria-expanded="{{ hrow.expanded }}" aria-controls="{{ hrow.regionId }}" onClick="{{ hrow.toggle }}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; color: #5A4E43; text-decoration: underline; text-decoration-color: #8B7355; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#65594E" stroke-width="1.25"><path d="{{ hrow.chevron }}"></path></svg></button>
+<sc-if value="{{ hrow.open }}" hint-placeholder-val="{{ false }}">
+<div id="{{ hrow.regionId }}" role="region" aria-labelledby="{{ hrow.headId }}" style="margin: 12px 0 0; padding: 24px 16px; background: #FCFAF6; border-top: 1px solid rgba(44, 41, 38, .14); border-bottom: 1px solid rgba(44, 41, 38, .14); display: flex; flex-direction: column; gap: 16px">
+<h4 id="{{ hrow.headId }}" tabindex="-1" ref="{{ hrow.setHead }}" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500; color: #2C2926; outline: 2px solid #7C5E30; outline-offset: 2px">Invoice details for {{ hrow.number }}</h4>
+<dl style="margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; row-gap: 8px; align-items: baseline">
+<sc-for list="{{ hrow.facts }}" as="fact" hint-placeholder-count="4">
+<dt style="margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; color: #4E4339">{{ fact.k }}</dt>
+<dd style="margin: 0; text-align: right; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.5; color: #2C2926">{{ fact.v }}</dd>
+</sc-for>
+<sc-for list="{{ hrow.sums }}" as="sum" hint-placeholder-count="2">
+<dt style="margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; color: #4E4339">{{ sum.k }}</dt>
+<dd style="margin: 0; text-align: right; white-space: nowrap; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">{{ sum.v }}</dd>
+</sc-for>
+<dt style="margin: 0; padding-top: 8px; border-top: 1px solid rgba(44, 41, 38, .14); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; font-weight: 500; color: #2C2926">Balance</dt>
+<dd style="margin: 0; padding-top: 8px; border-top: 1px solid rgba(44, 41, 38, .14); text-align: right; white-space: nowrap; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; font-weight: 500; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">{{ hrow.balance }}</dd>
+</dl>
+<a href="{{ hrow.printHref }}" style="display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0 2px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; font-weight: 400; color: #5A4E43; text-decoration: underline; text-decoration-color: #8B7355; text-decoration-thickness: 1px; text-underline-offset: 6px">Print invoice</a>
+
+<button type="button" onClick="{{ hrow.close }}" style="display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; font-weight: 400; color: #5A4E43; text-decoration: underline; text-decoration-color: #8B7355; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">Close invoice details</button>
+</div>
+</sc-if>
+</div>
+</li>
+</sc-for>
+</ul>
+</sc-if>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":3200}}'>
+class Component extends DCLogic {
+  constructor(...args) {
+    super(...args);
+    // One open region per collection; history starts closed (CPUX-02).
+    this.state = { openPay: 'inv-2026-017', openHist: null, histOpen: false };
+    this.heads = {};
+    this.btns = {};
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    const was = prevState || {};
+    const now = this.state;
+    this.moveFocus(was.openPay, now.openPay);
+    this.moveFocus(was.openHist, now.openHist);
+  }
+
+  // Opening moves focus to the region heading; closing returns it to the row's View invoice.
+  moveFocus(was, now) {
+    if (was === now) return;
+    setTimeout(() => {
+      const target = now ? this.heads[now] : this.btns[was];
+      if (target && target.focus) target.focus();
+    }, 0);
+  }
+
+  rows(defs, key) {
+    const openId = this.state[key];
+    return defs.map((d) => {
+      const open = openId === d.id;
+      return Object.assign({}, d, {
+        open: open,
+        expanded: open ? 'true' : 'false',
+        chevron: open ? 'M2 7.5 6 3.5 10 7.5' : 'M2 4.5 6 8.5 10 4.5',
+        regionId: d.id + '-details',
+        headId: d.id + '-details-h',
+        printHref: '#' + d.id + '-print',
+        toggle: () => this.setState({ [key]: open ? null : d.id }),
+        close: () => this.setState({ [key]: null }),
+        setHead: (el) => { this.heads[d.id] = el; },
+        setBtn: (el) => { this.btns[d.id] = el; },
+      });
+    });
+  }
+
+  renderVals() {
+    const payee = { k: 'Payable to', v: 'Birchwood Studio' };
+    // Sorted due date ascending, undated last. Balances in cents: 60000 + 10000 + 30000 + 25000 + 5000 + 7500 = 137500.
+    const payDefs = [
+      { id: 'inv-2026-014', number: 'INV-2026-014', name: 'Design fee, September', line2: 'INV-2026-014 · Birchwood Studio', amount: '$600.00', ofTotal: '', status: 'Past due · 25 September 2026', balance: '$600.00',
+        facts: [{ k: 'Invoice', v: 'INV-2026-014' }, { k: 'Title', v: 'Design fee, September' }, { k: 'Invoice for', v: 'Birchwood Studio' }, payee, { k: 'Due', v: 'Past due · 25 September 2026' }],
+        sums: [{ k: 'Invoice total', v: '$600.00' }, { k: 'Paid so far', v: '$0.00' }], payLinked: false, payInPlace: true },
+      { id: 'inv-2026-019', number: 'INV-2026-019', name: 'Fabric samples and freight', line2: 'INV-2026-019 · Elm Street House', amount: '$100.00', ofTotal: '', status: 'Due today · 20 October 2026', balance: '$100.00',
+        facts: [{ k: 'Invoice', v: 'INV-2026-019' }, { k: 'Title', v: 'Fabric samples and freight' }, { k: 'Invoice for', v: 'Elm Street House' }, payee, { k: 'Due', v: 'Today · 20 October 2026' }],
+        sums: [{ k: 'Invoice total', v: '$100.00' }, { k: 'Paid so far', v: '$0.00' }], payLinked: false, payInPlace: true },
+      { id: 'inv-2026-017', number: 'INV-2026-017', name: 'Sofa deposit', line2: 'INV-2026-017 · Elm Street House', amount: '$300.00', ofTotal: 'of $800.00', status: 'Due 2 November 2026 · $500.00 paid', balance: '$300.00',
+        facts: [{ k: 'Invoice', v: 'INV-2026-017' }, { k: 'Title', v: 'Sofa deposit' }, { k: 'Invoice for', v: 'Elm Street House' }, payee, { k: 'Due', v: '2 November 2026' }],
+        sums: [{ k: 'Invoice total', v: '$800.00' }, { k: 'Paid so far', v: '$500.00' }], payLinked: true, payInPlace: false },
+      { id: 'inv-2026-022', number: 'INV-2026-022', name: 'Lighting deposit', line2: 'INV-2026-022 · Elm Street House', amount: '$250.00', ofTotal: '', status: 'Due 14 November 2026', balance: '$250.00',
+        facts: [{ k: 'Invoice', v: 'INV-2026-022' }, { k: 'Title', v: 'Lighting deposit' }, { k: 'Invoice for', v: 'Elm Street House' }, payee, { k: 'Due', v: '14 November 2026' }],
+        sums: [{ k: 'Invoice total', v: '$250.00' }, { k: 'Paid so far', v: '$0.00' }], payLinked: false, payInPlace: true },
+      { id: 'inv-2026-023', number: 'INV-2026-023', name: 'INV-2026-023', line2: 'Birchwood Studio', amount: '$50.00', ofTotal: '', status: 'Due 30 November 2026', balance: '$50.00',
+        facts: [{ k: 'Invoice', v: 'INV-2026-023' }, { k: 'Invoice for', v: 'Birchwood Studio' }, payee, { k: 'Due', v: '30 November 2026' }],
+        sums: [{ k: 'Invoice total', v: '$50.00' }, { k: 'Paid so far', v: '$0.00' }], payLinked: false, payInPlace: true },
+      { id: 'inv-2026-024', number: 'INV-2026-024', name: 'Site measure visit', line2: 'INV-2026-024 · Elm Street House', amount: '$75.00', ofTotal: '', status: 'No due date', balance: '$75.00',
+        facts: [{ k: 'Invoice', v: 'INV-2026-024' }, { k: 'Title', v: 'Site measure visit' }, { k: 'Invoice for', v: 'Elm Street House' }, payee, { k: 'Due', v: 'No due date' }],
+        sums: [{ k: 'Invoice total', v: '$75.00' }, { k: 'Paid so far', v: '$0.00' }], payLinked: false, payInPlace: true },
+    ];
+    // Paid/sent date descending. The zero-balance sent row is history, never a payable count; no receipt is claimed.
+    const histDefs = [
+      { id: 'inv-2026-016', number: 'INV-2026-016', name: 'Sample return credit', line2: 'INV-2026-016 · Elm Street House', amount: '$0.00', ofTotal: '', status: 'No balance due · sent 12 October 2026', balance: '$0.00',
+        facts: [{ k: 'Invoice', v: 'INV-2026-016' }, { k: 'Title', v: 'Sample return credit' }, { k: 'Invoice for', v: 'Elm Street House' }, payee, { k: 'Sent', v: '12 October 2026' }],
+        sums: [] },
+      { id: 'inv-2026-011', number: 'INV-2026-011', name: 'Rug deposit', line2: 'INV-2026-011 · Elm Street House', amount: '$450.00', ofTotal: '', status: 'Paid 22 September 2026', balance: '$0.00',
+        facts: [{ k: 'Invoice', v: 'INV-2026-011' }, { k: 'Title', v: 'Rug deposit' }, { k: 'Invoice for', v: 'Elm Street House' }, payee, { k: 'Paid', v: '22 September 2026' }],
+        sums: [{ k: 'Invoice total', v: '$450.00' }, { k: 'Paid', v: '$450.00' }] },
+      { id: 'inv-2026-009', number: 'INV-2026-009', name: 'Design retainer', line2: 'INV-2026-009 · Birchwood Studio', amount: '$1,200.00', ofTotal: '', status: 'Paid 3 September 2026', balance: '$0.00',
+        facts: [{ k: 'Invoice', v: 'INV-2026-009' }, { k: 'Title', v: 'Design retainer' }, { k: 'Invoice for', v: 'Birchwood Studio' }, payee, { k: 'Paid', v: '3 September 2026' }],
+        sums: [{ k: 'Invoice total', v: '$1,200.00' }, { k: 'Paid', v: '$1,200.00' }] },
+    ];
+    const s = this.state;
+    return {
+      payRows: this.rows(payDefs, 'openPay'),
+      histRows: this.rows(histDefs, 'openHist'),
+      histOpen: s.histOpen,
+      histExpanded: s.histOpen ? 'true' : 'false',
+      histChevron: s.histOpen ? 'M2 7.5 6 3.5 10 7.5' : 'M2 4.5 6 8.5 10 4.5',
+      toggleHistory: () => this.setState({ histOpen: !s.histOpen, openHist: s.histOpen ? null : s.openHist }),
+    };
+  }
+}
+</script>
+</body>
+</html>
