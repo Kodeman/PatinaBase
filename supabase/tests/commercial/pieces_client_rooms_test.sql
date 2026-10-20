@@ -34,6 +34,7 @@
 --      snapshot, never the live placements; roomName stays the primary and
 --      the iOS keys are unchanged.
 --   T. get_client_project_threshold: the authorized lines only, rooms frozen;
+--      name from the signed clientName (00840), else the working name;
 --      unit from the snapshot, else the live line; A3a its own line in roll;
 --      the trade line carries unit and its one room.
 --   B. get_client_commercial_document_bundle: furnishings.items carry unit
@@ -188,7 +189,7 @@ VALUES
    0),
   ('74500000-0000-4000-8000-000000000612', '74500000-0000-4000-8000-000000000600', '74500000-0000-4000-8000-000000000212',
    '74500000-0000-4000-8000-0000000000c2', 'A2 Side chairs', 'Dining', 'Seating', 'fixed', 2, 90000, 180000,
-   jsonb_build_object('docCode', 'SE-1'),
+   jsonb_build_object('docCode', 'SE-1', 'clientName', 'Signed dining chairs'),
    1),
   ('74500000-0000-4000-8000-000000000613', '74500000-0000-4000-8000-000000000600', '74500000-0000-4000-8000-000000000213',
    '74500000-0000-4000-8000-0000000000c4', 'A3 Wallpaper, hemp', 'Bedroom', 'Wallcovering', 'fixed', 9, 21000, 189000,
@@ -338,6 +339,13 @@ BEGIN
   IF v_line->'rooms' IS DISTINCT FROM '[{"name":"Dining","quantity":2,"unit":"each"}]'::jsonb
      OR v_line->>'unit' IS DISTINCT FROM 'each' THEN
     RAISE EXCEPTION 'T2: A2 has one frozen room; with no snapshot unit it reads the line''s, got %', v_line;
+  END IF;
+  -- 00840: the wall names a line as signed (00839 clientName), else its working name.
+  IF v_line->>'name' IS DISTINCT FROM 'Signed dining chairs'
+     OR (SELECT e->>'name' FROM jsonb_array_elements(v_thr->'selections') e
+         WHERE e->>'id' = '74500000-0000-4000-8000-000000000211')
+        IS DISTINCT FROM 'A1 White oak floor' THEN
+    RAISE EXCEPTION 'T5: the wall prints the signed clientName, else the working name, got %', v_thr->'selections';
   END IF;
 
   SELECT e INTO v_line FROM jsonb_array_elements(v_thr->'selections') e
