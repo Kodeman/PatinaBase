@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, type RefObject, type CSSProperties } from 
 import { FileSignature } from 'lucide-react';
 import { FurnishingsAuthorizationBody } from '@patina/design-system';
 import { useRetryProposalSend } from '@patina/supabase';
-import { useFurnishingsAuthorizationPreview, useSendFurnishingsAuthorization } from '@/hooks/use-commercial-documents';
+import { useFurnishingsAuthorizationPreview, useSendFurnishingsAuthorization, useWorkingBudget } from '@/hooks/use-commercial-documents';
+import { requestRegionUnfold } from '@/lib/document/document-index';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DocSheet } from './doc-sheet';
 
@@ -14,6 +15,7 @@ type Props = {
   clientName?: string;
   onClose: () => void;
   onSent?: () => void;
+  onOpenWorkingBudget?: () => void;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
 };
 
@@ -30,7 +32,36 @@ export function PurchasingAuthorizationPreviewSheet(props: Props) {
   return <SavedPreview key={`${props.projectId}:${props.proposalId}`} {...props} />;
 }
 
-function SavedPreview({ projectId, proposalId, clientName, onClose, onSent, fallbackFocusRef }: Props) {
+export function SavedAuthorizationBudgetRecovery({ projectId, onLeave }: { projectId: string; onLeave: () => void }) {
+  const budget = useWorkingBudget(projectId);
+  let guidance = 'Review the current spending plan in Working budget. This does not change the checkpoint frozen in this authorization.';
+  let setup = false;
+  if (budget.isLoading || budget.isFetching) guidance = 'Loading current budget status…';
+  else if (budget.error) guidance = 'Current budget status could not be loaded. Open Working budget to retry; publication history is unavailable.';
+  else if (!budget.data?.version) {
+    setup = true;
+    guidance = 'Set up a working budget in Money, sync from the schedule, then review before publishing a checkpoint.';
+  } else if (!budget.data.checkpoint) guidance = 'Review the working budget before publishing a first checkpoint. Publication is a separate explicit action.';
+  else if (budget.data.checkpoint.state === 'open') guidance = 'Waiting for the client to acknowledge the current published spending plan in their project’s ledger. Publishing another checkpoint will not acknowledge this one.';
+
+  const openBudget = () => {
+    onLeave();
+    requestRegionUnfold('money');
+    // Both nested sheets restore focus before the durable Money destination.
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const heading = document.getElementById('money-region-heading');
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    }));
+  };
+  return <section className="mt-4 type-body-small" aria-label="Working budget recovery">
+    <p>{guidance}</p>
+    <p>A budget checkpoint is planning alignment, not purchase approval, a signature or payment. Opening Working budget leaves this saved authorization and its reservations intact; it does not publish, acknowledge or send anything.</p>
+    <DocumentAction actionKey="open-saved-authorization-budget" surfaceKey="project" regionKey="purchasing-preview" variant="secondary" onClick={openBudget}>{setup ? 'Set up a working budget' : 'Open Working budget'}</DocumentAction>
+  </section>;
+}
+
+function SavedPreview({ projectId, proposalId, clientName, onClose, onSent, onOpenWorkingBudget, fallbackFocusRef }: Props) {
   const preview = useFurnishingsAuthorizationPreview(proposalId, projectId);
   const send = useSendFurnishingsAuthorization(projectId);
   const retryDelivery = useRetryProposalSend({ errorSurface: 'inline' });
@@ -105,6 +136,7 @@ function SavedPreview({ projectId, proposalId, clientName, onClose, onSent, fall
         {preview.isError && <p role="alert">The saved preview could not be loaded. The draft and its reservations are retained.</p>}
         {ready && data && <>
           <h2 className="mt-3 font-heading text-2xl">{data.title}</h2>
+          {data.state === 'draft' && !receipt && <SavedAuthorizationBudgetRecovery projectId={projectId} onLeave={onOpenWorkingBudget ?? onClose} />}
           <div className="mt-8"><FurnishingsAuthorizationBody {...data.body} /></div>
           {data.state !== 'draft' && !receipt && <p role="status" className="mt-4">This authorization is {data.state}. Sending is held. Use the existing authorization detail for delivery or Void.</p>}
         </>}

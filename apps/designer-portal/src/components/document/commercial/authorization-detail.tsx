@@ -31,7 +31,7 @@ import {
 } from "@/lib/document/project-commerce";
 import { DeliveryWord } from "../delivery-word";
 import { DocSheet } from "../overlays/doc-sheet";
-import { PurchasingAuthorizationPreviewSheet } from "../overlays/purchasing-authorization-preview-sheet";
+import { PurchasingAuthorizationPreviewSheet, SavedAuthorizationBudgetRecovery } from "../overlays/purchasing-authorization-preview-sheet";
 import {
   RECORD_ON_PAPER_ACT_LABEL,
   RecordOnPaperSheet,
@@ -317,6 +317,7 @@ function AuthorizationDetailContent({
           {instrument.depositInvoiceId ? " Deposit invoice on file." : ""}
         </p>
 
+        {open && instrument.state === 'draft' && !previewOpen && <SavedAuthorizationBudgetRecovery projectId={projectId} onLeave={onClose} />}
         <DispatchRetryBand instrument={instrument} />
 
         {instrument.state === "executed" && executedOnPaper && (
@@ -396,7 +397,7 @@ function AuthorizationDetailContent({
         )}
       </div>
 
-      {previewOpen && <PurchasingAuthorizationPreviewSheet projectId={projectId} proposalId={instrument.proposalId} clientName={clientName} fallbackFocusRef={previewTrigger} onClose={() => setPreviewOpen(false)} />}
+      {previewOpen && <PurchasingAuthorizationPreviewSheet projectId={projectId} proposalId={instrument.proposalId} clientName={clientName} fallbackFocusRef={previewTrigger} onClose={() => setPreviewOpen(false)} onOpenWorkingBudget={() => { setPreviewOpen(false); onClose(); }} />}
 
       <RecordOnPaperSheet
         kind="furnishings"

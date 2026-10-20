@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ProjectInstrumentView } from "@/lib/document/project-commerce";
 
@@ -7,6 +8,9 @@ let mockDrift: Record<string, unknown> = { data: new Map(), isLoading: false };
 let mockCommercialDocument: Record<string, unknown> = { data: undefined, isLoading: false };
 
 let mockEmailDeliveryByRef: Record<string, unknown> = {};
+let mockRealPreview = false;
+const mockUnfold = jest.fn();
+jest.mock('@/lib/document/document-index', () => ({ requestRegionUnfold: (...args: unknown[]) => mockUnfold(...args) }));
 
 jest.mock("@patina/supabase", () => ({
   useEmailDelivery: () => ({
@@ -37,6 +41,8 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
     mutateAsync: sendAuthorization,
     isPending: false,
   }),
+  useWorkingBudget: () => ({ data: { version: null, checkpoint: null }, isLoading: false }),
+  useFurnishingsAuthorizationPreview: () => ({ data: { proposalId: 'proposal-1', projectId: 'project-1', state: 'draft', title: 'Frozen draft', documentFingerprint: 'exact-v1', body: { items: [], totalAmountCents: 300000, depositPercent: 50 } }, isPending: false, isFetching: false, isError: false }),
   useAuthorizationLineDrift: () => mockDrift,
   useCommercialDocument: () => mockCommercialDocument,
   // RecordOnPaperSheet mounts unconditionally and calls all four paper
@@ -66,9 +72,10 @@ jest.mock("./void-supersede-act", () => ({
   ),
 }));
 
-jest.mock('../overlays/purchasing-authorization-preview-sheet', () => ({
-  PurchasingAuthorizationPreviewSheet: ({ proposalId, projectId, onClose }: any) => <div role="dialog" aria-label="Saved preview"><p>{projectId}:{proposalId}</p><button onClick={onClose}>Back from preview</button></div>,
-}));
+jest.mock('../overlays/purchasing-authorization-preview-sheet', () => {
+  const actual = jest.requireActual('../overlays/purchasing-authorization-preview-sheet');
+  return { ...actual, PurchasingAuthorizationPreviewSheet: (props: any) => mockRealPreview ? <actual.PurchasingAuthorizationPreviewSheet {...props} /> : <div role="dialog" aria-label="Saved preview"><p>{props.projectId}:{props.proposalId}</p><button onClick={props.onClose}>Back from preview</button></div> };
+});
 
 import { AuthorizationDetail } from "./authorization-detail";
 
@@ -126,6 +133,23 @@ describe("AuthorizationDetail", () => {
     mockDrift = { data: new Map(), isLoading: false };
     mockCommercialDocument = { data: undefined, isLoading: false };
     mockEmailDeliveryByRef = {};
+  });
+
+  it.each([false, true])('closes the saved detail and nested preview=%s before focusing Working budget without mutation', async (nested) => {
+    mockRealPreview = true;
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return <><h2 id="money-region-heading" tabIndex={-1}>Working budget destination</h2><AuthorizationDetail projectId="project-1" instrument={{ ...baseInstrument, state: 'draft' }} open={open} onClose={() => setOpen(false)} /></>;
+    }
+    render(<Harness />);
+    if (nested) fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set up a working budget' }));
+    await waitFor(() => expect(screen.getByText('Working budget destination')).toHaveFocus());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mockUnfold).toHaveBeenCalledWith('money');
+    expect(sendAuthorization).not.toHaveBeenCalled();
+    expect(executeFurnishingsOnPaper).not.toHaveBeenCalled();
+    mockRealPreview = false;
   });
 
   it("renders nothing when there is no instrument to show", () => {

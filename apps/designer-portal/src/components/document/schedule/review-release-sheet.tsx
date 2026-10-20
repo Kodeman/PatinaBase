@@ -332,7 +332,7 @@ function ReviewReleaseSheetContent({
       <p role="status">Draft saved. Nothing has been sent to the client. The saved lines and deposit are frozen; closing leaves their reservations intact.</p>
       <p className="mt-3">To revise, use the existing Void action with a reason, then prepare a new draft.</p>
       <DocumentAction ref={previewTrigger} actionKey="reopen-saved-purchasing-preview" surfaceKey="project" regionKey="release-review" onClick={() => setPreviewOpen(true)}>Preview</DocumentAction>
-      {previewOpen && <PurchasingAuthorizationPreviewSheet projectId={projectId} proposalId={releasedProposalId} clientName={clientName} fallbackFocusRef={previewTrigger} onClose={() => setPreviewOpen(false)} onSent={() => { if (active.current) onReleased(); }} />}
+      {previewOpen && <PurchasingAuthorizationPreviewSheet projectId={projectId} proposalId={releasedProposalId} clientName={clientName} fallbackFocusRef={previewTrigger} onClose={() => setPreviewOpen(false)} onOpenWorkingBudget={() => { setPreviewOpen(false); onClose(); }} onSent={() => { if (active.current) onReleased(); }} />}
     </DocSheet>
   );
 

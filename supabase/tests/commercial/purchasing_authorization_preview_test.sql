@@ -90,6 +90,68 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+-- Custom line-owned primary does not require a catalog product.
+INSERT INTO project_ffe_item_images (item_id,project_id,url,source,position,is_primary) VALUES
+('83614260-0000-4000-8000-000000000051','83614260-0000-4000-8000-000000000020','https://images.example.test/custom.jpg','upload',0,true);
+DO $$
+DECLARE line public.project_ffe_items;
+BEGIN
+  SELECT * INTO line FROM project_ffe_items WHERE id='83614260-0000-4000-8000-000000000051';
+  IF line.product_id IS NOT NULL OR public._furnishing_authorization_item_snapshot(line)->'clientImage' IS DISTINCT FROM '{"version":1,"url":"https://images.example.test/custom.jpg"}'::jsonb THEN
+    RAISE EXCEPTION 'P21 custom-owned primary with product_id null';
+  END IF;
+END $$;
+-- SET ROLE postgres deliberately exercises the canonical insert guard, not its
+-- direct-session fixture bypass. No guard is disabled or changed.
+SELECT pg_temp.preview_as('83614260-0000-4000-8000-000000000001');
+SELECT set_config('app.furnishing_authorization_project_id','83614260-0000-4000-8000-000000000020',true);
+SET LOCAL ROLE postgres;
+DO $$
+DECLARE source public.project_ffe_items; canonical jsonb; candidate jsonb; refusal text;
+BEGIN
+  SELECT * INTO source FROM project_ffe_items WHERE id='83614260-0000-4000-8000-000000000051';
+  canonical := public._furnishing_authorization_item_snapshot(source);
+  FOREACH candidate IN ARRAY ARRAY[canonical, jsonb_set(canonical,'{clientImage,url}','"https://images.example.test/forged.jpg"')] LOOP
+    BEGIN
+      INSERT INTO furnishing_authorization_items (source_ffe_item_id,commercial_document_id,project_room_id,product_id,name,room_name,category,item_type,quantity,client_unit_price_cents,client_line_total_cents,trade_unit_cost_cents,markup_percent,vendor_id,vendor_name,snapshot,sort_order)
+      VALUES (source.id,'83614260-0000-4000-8000-000000000040',source.project_room_id,source.product_id,source.name,null,COALESCE(source.ffe_category,'Uncategorized'),source.item_type,source.quantity,source.unit_price_cents,source.line_total_cents,source.trade_price_cents,source.markup_percent,source.vendor_id,source.vendor_name,candidate,source.sort_order);
+      IF candidate IS DISTINCT FROM canonical THEN RAISE EXCEPTION 'P22 forged image must be rejected'; END IF;
+      -- Roll back the successful canonical probe without changing frozen rows.
+      RAISE EXCEPTION SQLSTATE 'Z0001';
+    EXCEPTION WHEN SQLSTATE 'Z0001' THEN NULL;
+      WHEN unique_violation THEN
+        IF candidate IS DISTINCT FROM canonical THEN RAISE EXCEPTION 'P22 forgery reached uniqueness instead of canonical validation'; END IF;
+      WHEN check_violation THEN
+        GET STACKED DIAGNOSTICS refusal = MESSAGE_TEXT;
+        IF candidate = canonical OR refusal <> 'authorization item does not match its canonical draft/source' THEN RAISE; END IF;
+    END;
+  END LOOP;
+  RAISE NOTICE 'P21-P22 custom primary and canonical forged-image rejection passed';
+END $$;
+RESET ROLE;
+INSERT INTO project_ffe_items (id,project_id,name,status,item_type,quantity,unit,unit_price_cents,line_total_cents) SELECT ('83614260-0000-4000-8000-' || lpad((52+n)::text,12,'0'))::uuid,'83614260-0000-4000-8000-000000000020'::uuid,'Adversarial source','specified','fixed',1,'each',100,100 FROM generate_series(0,2) n;
+-- Adversarial historical snapshots are fixture inserts, never immutable updates.
+INSERT INTO proposals (id,project_id,designer_id,client_id,title,status,document_kind,commercial_state,total_amount,subtotal,deposit_percent) VALUES
+('83614260-0000-4000-8000-000000000032','83614260-0000-4000-8000-000000000020','83614260-0000-4000-8000-000000000001','83614260-0000-4000-8000-000000000003','Adversarial safe projection','sent','furnishings_authorization','sent',100,100,0);
+INSERT INTO project_commercial_documents (id,project_id,proposal_id,document_kind,wave_name,is_origin,bound_at,created_by) VALUES
+('83614260-0000-4000-8000-000000000042','83614260-0000-4000-8000-000000000020','83614260-0000-4000-8000-000000000032','furnishings_authorization','Private wave',false,now(),'83614260-0000-4000-8000-000000000001');
+INSERT INTO furnishing_authorization_items (source_ffe_item_id,commercial_document_id,name,item_type,quantity,client_unit_price_cents,client_line_total_cents,snapshot,sort_order)
+SELECT ('83614260-0000-4000-8000-' || lpad((52+ord)::text,12,'0'))::uuid, '83614260-0000-4000-8000-000000000042'::uuid, 'Adversarial photo', 'fixed',1,100,100,
+jsonb_build_object('internalNotes','SECRET_PROJECTION','clientImage',image), ord
+FROM (VALUES
+(0,'{"version":1,"url":"https://images.example.test/safe.jpg","storagePath":"SECRET_PROJECTION","notes":"SECRET_PROJECTION"}'::jsonb),
+(1,'{"version":1,"url":"https://images.example.test/storage/v1/object/sign/private/a.jpg?token=SECRET_PROJECTION"}'::jsonb),
+(2,'{"version":2,"url":"https://images.example.test/unknown.jpg"}'::jsonb)) cases(ord,image);
+CREATE FUNCTION pg_temp.assert_safe_images(body jsonb) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF body#>'{items,0,clientImage}' IS DISTINCT FROM '{"version":1,"url":"https://images.example.test/safe.jpg"}'::jsonb
+     OR body#>'{items,1,clientImage}' IS DISTINCT FROM '{"version":1,"url":null}'::jsonb
+     OR body#>'{items,2}' ? 'clientImage'
+     OR body::text LIKE '%SECRET_PROJECTION%' THEN
+    RAISE EXCEPTION 'P23 adversarial client/preview image allowlist: %',body;
+  END IF;
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assert_safe_images(jsonb) TO authenticated;
 CREATE TEMP TABLE before_preview AS
 SELECT (SELECT jsonb_agg(to_jsonb(p)) FROM proposals p WHERE id::text LIKE '83614260-%') proposals,
        (SELECT jsonb_agg(to_jsonb(d)) FROM project_commercial_documents d WHERE id::text LIKE '83614260-%') documents,
@@ -100,6 +162,7 @@ SET LOCAL ROLE authenticated;
 DO $$
 DECLARE s jsonb; b jsonb; item jsonb; needle text;
 BEGIN
+  PERFORM pg_temp.assert_safe_images(public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000032')#>'{furnishingsPreview,body}');
   s := public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000030');
   b := s #> '{furnishingsPreview,body}';
   IF s->>'proposalId' <> '83614260-0000-4000-8000-000000000030'
@@ -141,6 +204,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 SELECT pg_temp.preview_as('83614260-0000-4000-8000-000000000003');
+SELECT pg_temp.assert_safe_images(public.get_client_commercial_document_bundle('83614260-0000-4000-8000-000000000032')->'furnishings');
 DO $$ BEGIN
   BEGIN
     PERFORM public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000030');

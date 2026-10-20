@@ -5,7 +5,11 @@ const mockSend = jest.fn();
 const mockRetry = jest.fn();
 const mockRefetch = jest.fn();
 let mockRead: any;
+let mockBudget: any;
+const mockUnfold = jest.fn();
+jest.mock('@/lib/document/document-index', () => ({ requestRegionUnfold: (...args: unknown[]) => mockUnfold(...args) }));
 jest.mock('@/hooks/use-commercial-documents', () => ({
+  useWorkingBudget: () => mockBudget,
   useFurnishingsAuthorizationPreview: () => mockRead,
   useSendFurnishingsAuthorization: () => ({ mutateAsync: mockSend, isPending: false }),
 }));
@@ -25,6 +29,7 @@ const props = { projectId: 'project-1', proposalId: 'saved-1', onClose: jest.fn(
 const sendButton = () => screen.getByRole('button', { name: 'Send to client' });
 beforeEach(() => {
   jest.clearAllMocks();
+  mockBudget = { data: { version: null, checkpoint: null }, isLoading: false, isFetching: false, error: null };
   mockRead = { data: saved(), isPending: false, isFetching: false, isError: false, refetch: mockRefetch };
   mockRefetch.mockResolvedValue({ isError: false });
   mockSend.mockResolvedValue({ sentAt: '2026-10-19', proposalSendDispatchId: 'dispatch-1', _emailDispatched: true, _emailDeliveryState: 'delivered' });
@@ -32,6 +37,39 @@ beforeEach(() => {
 });
 
 describe('saved purchasing authorization preview', () => {
+  it.each([
+    ['missing', 'Set up a working budget'],
+    ['unpublished', 'Review the working budget before publishing a first checkpoint'],
+    ['awaiting', 'Waiting for the client to acknowledge the current published spending plan'],
+    ['loading', 'Loading current budget status'],
+    ['error', 'Current budget status could not be loaded'],
+  ])('explains saved draft budget %s without changing the reviewed document', (state, text) => {
+    if (state === 'unpublished') mockBudget.data.version = { id: 'budget-1' };
+    if (state === 'awaiting') mockBudget.data = { version: { id: 'budget-1' }, checkpoint: { id: 'check-1', state: 'open' } };
+    if (state === 'loading') mockBudget.isLoading = true;
+    if (state === 'error') mockBudget.error = new Error('offline');
+    render(<PurchasingAuthorizationPreviewSheet {...props} />);
+    expect(screen.getAllByText(new RegExp(text))[0]).toBeVisible();
+    expect(screen.getByText('Frozen chair')).toBeVisible();
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockRefetch).not.toHaveBeenCalled();
+  });
+
+  it('leaves the saved preview for Working budget with durable destination focus and exact ID intact', async () => {
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return <><h2 id="money-region-heading" tabIndex={-1}>Working budget destination</h2><button onClick={() => setOpen(true)}>Reopen saved</button>{open && <PurchasingAuthorizationPreviewSheet {...props} onOpenWorkingBudget={() => setOpen(false)} />}</>;
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Set up a working budget' }));
+    await waitFor(() => expect(screen.getByText('Working budget destination')).toHaveFocus());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mockUnfold).toHaveBeenCalledWith('money');
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen saved' }));
+    await act(async () => { fireEvent.click(sendButton()); });
+    expect(mockSend).toHaveBeenCalledWith({ proposalId: 'saved-1', expectedFingerprint: 'reviewed-v1' });
+    expect(mockRefetch).not.toHaveBeenCalled();
+  });
   it('shows the frozen shared body and sends only its displayed identity and reviewed token on explicit Send', async () => {
     render(<PurchasingAuthorizationPreviewSheet {...props} />);
     expect(screen.getByText('Preview · Not sent')).toBeVisible();
