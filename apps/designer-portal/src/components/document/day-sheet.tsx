@@ -139,6 +139,14 @@ function LaterMenu({
   const [open, setOpen] = useState(false);
   const menuId = useId();
   const toggleRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // SQ-1518 — below 1180px the menu can open under the fixed bottom bar. The
+  // document route's `scroll-padding-bottom` is that bar's height, so the
+  // nearest scroll lands the opened menu above it. Focus stays on "Later".
+  useEffect(() => {
+    if (open) menuRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [open]);
 
   return (
     <div
@@ -167,7 +175,7 @@ function LaterMenu({
       >
         Later
       </DocumentAction>
-      <div id={menuId} className="later-menu" hidden={!open}>
+      <div ref={menuRef} id={menuId} className="later-menu" hidden={!open}>
         {open && (
           <>
             {/* SQ-778 N5 — every line can be set aside for today: the line's
@@ -278,10 +286,27 @@ function SheetLine({
     if (!item) return;
     if (!isSettled) {
       item.style.minHeight = '';
+      lineRef.current?.style.removeProperty('--settle-lines');
       openHeight.current = item.offsetHeight;
-    } else if (openHeight.current > 0) {
-      item.style.minHeight = `${openHeight.current}px`;
+      return;
     }
+    if (openHeight.current <= 0) return;
+    item.style.minHeight = `${openHeight.current}px`;
+    // SQ-1518 — on a phone her settled words can wrap past the room the open
+    // line stood in. Clamp them to the lines that room holds, so the card
+    // keeps its height; the whole sentence stays in the DOM and was said in
+    // the status region.
+    const line = lineRef.current;
+    if (!line) return;
+    line.style.removeProperty('--settle-lines');
+    item.style.flex = '0 0 auto';
+    const excess = item.offsetHeight - openHeight.current;
+    item.style.flex = '';
+    const lineHeight = parseFloat(getComputedStyle(line).lineHeight);
+    if (excess <= 0 || !(lineHeight > 0)) return;
+    const shown = Math.round(line.offsetHeight / lineHeight);
+    const keep = Math.max(1, shown - Math.ceil(excess / lineHeight));
+    if (keep < shown) line.style.setProperty('--settle-lines', String(keep));
   });
 
   if (settled && words) {
