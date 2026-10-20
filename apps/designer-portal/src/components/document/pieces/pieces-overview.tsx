@@ -65,6 +65,12 @@ function readOpenRoom(projectId: string): string | null | undefined {
   }
 }
 
+/** The room she chose; until she chooses (`undefined`), a job with one room opens it. */
+function openRoomKey(chosenKey: string | null | undefined, rows: readonly OverviewRow[]): string | null {
+  if (chosenKey !== undefined) return chosenKey;
+  return rows.length === 1 ? rows[0].key : null;
+}
+
 function writeOpenRoom(projectId: string, key: string | null): void {
   try {
     window.localStorage.setItem(openRoomStorageKey(projectId), JSON.stringify(key));
@@ -107,7 +113,7 @@ export function PiecesOverview({
     const remembered = readOpenRoom(projectId);
     if (remembered !== undefined) setChosenKey(remembered);
   }, [projectId]);
-  const openKey = chosenKey === undefined ? (rows.length === 1 ? rows[0].key : null) : chosenKey;
+  const openKey = openRoomKey(chosenKey, rows);
   const choose = (key: string | null) => {
     setChosenKey(key);
     writeOpenRoom(projectId, key);

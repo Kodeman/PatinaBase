@@ -151,7 +151,12 @@ import {
   useReleaseCeremony,
 } from './schedule/release-ceremony-context';
 import type { NeedLine, SectionKey } from '@/lib/document/desk-derivation';
-import { electFfeLeader, ffeStateSentence } from '@/lib/document/ffe-leader';
+import {
+  electFfeLeader,
+  ffeStateSentence,
+  type FfeLeaderChoice,
+  type FfeLeaderKind,
+} from '@/lib/document/ffe-leader';
 import { DocumentAction } from './document-action';
 import { SectionLoadingLine } from './section-loading-line';
 import { RegionHead, type RegionLedgerEntry } from './region/region-head';
@@ -392,18 +397,120 @@ interface LineRow {
   tradeHold: TradeLineHold;
 }
 
-/** US-43 R4 — a specified, chosen line still owed the price it would release at. */
-function isUnpricedSelection(row: LineRow): boolean {
-  const { item } = row;
+/** A specified line nothing has happened to yet: no trade scope, no paper, no order. */
+function isUntouchedLine(row: LineRow): boolean {
   return (
-    item.removed_at == null &&
     row.stamp.kind !== 'placeholder' &&
     !row.tradeHold.onTradeScope &&
     row.auth.track === 'none' &&
-    !UNDERWAY.has(row.stamp.kind) &&
-    (!item.design_disposition || item.design_disposition === 'selected') &&
-    signableCents(item) === null
+    !UNDERWAY.has(row.stamp.kind)
   );
+}
+
+/** US-43 R4 — a specified, chosen line still owed the price it would release at. */
+function isUnpricedSelection(row: LineRow): boolean {
+  const disposition = row.item.design_disposition;
+  return (
+    row.item.removed_at == null &&
+    isUntouchedLine(row) &&
+    (!disposition || disposition === 'selected') &&
+    signableCents(row.item) === null
+  );
+}
+
+/** US-43 R4 — the job's standing for the head's election. */
+function ffeJobOf(projectStatus: string | null): 'open' | 'on-hold' | 'closed' {
+  if (projectStatus === 'on_hold') return 'on-hold';
+  return projectStatus === 'completed' ? 'closed' : 'open';
+}
+
+/**
+ * I141 — the release in this head: pressable here (the lift), or standing
+ * with lines ready but held by its prerequisite.
+ */
+function ffeReleaseStanding(release: {
+  inHead: boolean;
+  offered: boolean;
+  anyEligible: boolean;
+  canRelease: boolean;
+}): { releaseLift: boolean; releaseHeld: boolean } {
+  return {
+    releaseLift: release.inHead && release.offered,
+    releaseHeld: release.inHead && release.anyEligible && !release.canRelease,
+  };
+}
+
+/** What the head's elected lead may open; every one is a destination that already exists. */
+interface FfeLeadActs {
+  docId: string;
+  release: RegionLedgerEntry;
+  addItems: RegionLedgerEntry;
+  land: (detail: FfeActLandingDetail) => boolean;
+  bill: () => void;
+}
+
+/** US-43 R4 — the act each elected state leads with, given its exception count. */
+const FFE_LEAD_ENTRIES: Record<FfeLeaderKind, (count: number, acts: FfeLeadActs) => RegionLedgerEntry> = {
+  release: (_count, acts) => acts.release,
+  claim: (_count, acts) => ({
+    key: 'ffe-lead-claim',
+    label: NAMED_ACTS.fileClaim,
+    onClick: () => acts.land('claim'),
+  }),
+  po: (_count, acts) => ({
+    key: 'ffe-lead-follow-up',
+    label: NEED_ACT_LABELS.po_unacknowledged,
+    onClick: () => acts.land('follow-up'),
+  }),
+  spec: (count, acts) => ({
+    key: 'ffe-lead-spec',
+    label: `Fill the ${placeholderCount(count)}`,
+    onClick: () => acts.land('spec'),
+  }),
+  price: (count, acts) => ({
+    key: 'ffe-lead-price',
+    label: count === 1 ? 'Add the missing price' : 'Add the missing prices',
+    href: buildRoomHref(acts.docId, { lens: 'price', room: null }),
+    trailing: '→',
+  }),
+  bill: (count, acts) => ({ key: 'bill-project-ffe', label: `Bill ${count} uninvoiced`, onClick: acts.bill }),
+  'add-line': (_count, acts) => ({ ...acts.addItems, variant: undefined }),
+};
+
+function ffeLeadEntryFor(choice: FfeLeaderChoice, acts: FfeLeadActs): RegionLedgerEntry | null {
+  if (choice.kind === null) return null;
+  const count = choice.exceptions.find((exception) => exception.kind === choice.kind)?.count ?? 0;
+  return FFE_LEAD_ENTRIES[choice.kind](count, acts);
+}
+
+/**
+ * US-43 R4 — the head's ledger: the elected lead first; then the quiet tools,
+ * Edit selections and Add items; the release where it stands here unelected
+ * (held with its reason); the purchases and riders doors while something is
+ * owed a client line; and More, holding Record a selection change and the
+ * specification book.
+ */
+function ffeHeadLedger(parts: {
+  lead: RegionLedgerEntry | null;
+  kind: FfeLeaderKind | null;
+  editSelections: RegionLedgerEntry;
+  addItems: RegionLedgerEntry;
+  release: RegionLedgerEntry;
+  releaseInHead: boolean;
+  billDoors: readonly (RegionLedgerEntry | null)[];
+  more: RegionLedgerEntry;
+}): RegionLedgerEntry[] {
+  const { lead, kind } = parts;
+  return [
+    ...(lead ? [lead] : []),
+    parts.editSelections,
+    ...(kind === 'add-line' ? [] : [parts.addItems]),
+    ...(parts.releaseInHead && kind !== 'release'
+      ? [{ ...parts.release, variant: 'secondary' as const }]
+      : []),
+    ...parts.billDoors.filter((entry): entry is RegionLedgerEntry => entry !== null),
+    parts.more,
+  ];
 }
 
 /**
@@ -1996,18 +2103,16 @@ function FFESectionBody({
   // the one act that state asks for, elected from the work, never fixed.
   const liveRows = rows.filter((row) => row.item.removed_at == null);
   const ffeLeader = electFfeLeader({
-    releaseLift: releaseInHead && releaseOffered,
+    ...ffeReleaseStanding({ inHead: releaseInHead, offered: releaseOffered, anyEligible, canRelease }),
     needs,
     unspecifiedLineIds: liveRows
       .filter((row) => row.stamp.kind === 'placeholder')
       .map((row) => String(row.item.id)),
     unpricedLineIds: liveRows.filter(isUnpricedSelection).map((row) => String(row.item.id)),
     awaitingCount: ffeAwaitingCount,
-    releaseHeld: releaseInHead && anyEligible && !canRelease,
     uninvoicedLineIds: billableUninvoiced.map((item) => String(item.id)),
     emptySchedule: total === 0,
-    job:
-      projectStatus === 'on_hold' ? 'on-hold' : projectStatus === 'completed' ? 'closed' : 'open',
+    job: ffeJobOf(projectStatus),
   });
   const ffeStateLine = ffeStateSentence(ffeLeader, overviewJob.released);
 
@@ -2222,72 +2327,33 @@ function FFESectionBody({
           onClick: openRidersBill,
         }
       : null;
-  // US-43 R4 — the elected lead first, each opening a destination that
-  // already exists; then the quiet tools, Edit selections and Add items; the
-  // release where it stands here unelected (held with its reason); the
-  // purchases and riders doors while something is owed a client line; and
-  // More, holding Record a selection change and the specification book.
-  const leadCount =
-    ffeLeader.exceptions.find((exception) => exception.kind === ffeLeader.kind)?.count ?? 0;
-  const ffeLeadEntry: RegionLedgerEntry | null = (() => {
-    switch (ffeLeader.kind) {
-      case 'release':
-        return ffeReleaseEntry;
-      case 'claim':
-        return { key: 'ffe-lead-claim', label: NAMED_ACTS.fileClaim, onClick: () => landFfeAct('claim') };
-      case 'po':
-        return {
-          key: 'ffe-lead-follow-up',
-          label: NEED_ACT_LABELS.po_unacknowledged,
-          onClick: () => landFfeAct('follow-up'),
-        };
-      case 'spec':
-        return {
-          key: 'ffe-lead-spec',
-          label: `Fill the ${placeholderCount(leadCount)}`,
-          onClick: () => landFfeAct('spec'),
-        };
-      case 'price':
-        return {
-          key: 'ffe-lead-price',
-          label: leadCount === 1 ? 'Add the missing price' : 'Add the missing prices',
-          href: buildRoomHref(docId, { lens: 'price', room: null }),
-          trailing: '→',
-        };
-      case 'bill':
-        return {
-          key: 'bill-project-ffe',
-          label: `Bill ${leadCount} uninvoiced`,
-          onClick: () =>
-            openInvoiceComposer({
-              projectId,
-              initialFfeItemIds: billableUninvoiced.map((it) => it.id as string),
-            }),
-        };
-      case 'add-line':
-        return { ...ffeAddToProjectEntry, variant: undefined };
-      default:
-        return null;
-    }
-  })();
+  const ffeLeadEntry = ffeLeadEntryFor(ffeLeader, {
+    docId,
+    release: ffeReleaseEntry,
+    addItems: ffeAddToProjectEntry,
+    land: landFfeAct,
+    bill: () =>
+      openInvoiceComposer({
+        projectId,
+        initialFfeItemIds: billableUninvoiced.map((it) => it.id as string),
+      }),
+  });
   const ffeMoreId = `ffe-more-${projectId}`;
-  const ffeLedger: RegionLedgerEntry[] = [
-    ...(ffeLeadEntry ? [ffeLeadEntry] : []),
-    {
+  const ffeLedger = ffeHeadLedger({
+    lead: ffeLeadEntry,
+    kind: ffeLeader.kind,
+    editSelections: {
       key: 'work-the-pieces',
       label: 'Edit selections',
       href: buildRoomHref(docId, { lens: 'rough', room: null }),
       trailing: '→',
       variant: 'secondary',
     },
-    ...(ffeLeader.kind === 'add-line' ? [] : [ffeAddToProjectEntry]),
-    ...(releaseInHead && ffeLeader.kind !== 'release'
-      ? [{ ...ffeReleaseEntry, variant: 'secondary' as const }]
-      : []),
-    ...[ffeBillPurchasesEntry, ffeBillRidersEntry].filter(
-      (entry): entry is RegionLedgerEntry => entry !== null,
-    ),
-    {
+    addItems: ffeAddToProjectEntry,
+    release: ffeReleaseEntry,
+    releaseInHead,
+    billDoors: [ffeBillPurchasesEntry, ffeBillRidersEntry],
+    more: {
       key: 'ffe-more',
       label: 'More',
       variant: 'tertiary',
@@ -2297,7 +2363,7 @@ function FFESectionBody({
       'aria-controls': ffeMoreId,
       onClick: () => setFfeMoreOpen((open) => !open),
     },
-  ];
+  });
   const closeFfeMore = () => {
     ffeMoreRef.current?.focus();
     setFfeMoreOpen(false);

@@ -94,14 +94,7 @@ export function PiecesOverviewRow({
               className="inline-flex min-h-11 items-center gap-2 text-left underline-offset-4 hover:underline hover:decoration-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]"
             >
               {row.name}
-              <span
-                aria-hidden
-                className={`inline-block text-[16px] leading-none text-[var(--ink-faint)] motion-safe:transition-transform ${
-                  open ? 'rotate-180' : ''
-                }`}
-              >
-                ⌄
-              </span>
+              <DisclosureMark open={open} />
             </button>
           </h3>
           {wallSwatch?.hex && (
@@ -151,6 +144,20 @@ export function PiecesOverviewRow({
         </RoomBody>
       )}
     </li>
+  );
+}
+
+/** The visible ⌄ beside the room's name; it turns while the room is open. */
+function DisclosureMark({ open }: { open: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`inline-block text-[16px] leading-none text-[var(--ink-faint)] motion-safe:transition-transform ${
+        open ? 'rotate-180' : ''
+      }`}
+    >
+      ⌄
+    </span>
   );
 }
 

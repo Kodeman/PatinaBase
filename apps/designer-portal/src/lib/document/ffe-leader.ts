@@ -120,64 +120,87 @@ export function scanFfeExceptions(
   return exceptions;
 }
 
+type FfeLeaderPick = Omit<FfeLeaderChoice, 'exceptions'>;
+
+const pick = (
+  state: FfeStateKind,
+  kind: FfeLeaderKind | null,
+  highlightLineId: string | null = null,
+): FfeLeaderPick => ({ state, kind, highlightLineId });
+
+/** An exception's own act. Only the client's turn names none, and it never reaches here. */
+const pickException = (exception: FfeException): FfeLeaderPick =>
+  pick(exception.kind, exception.kind as FfeLeaderKind, exception.lineId);
+
+type FfeRung = (input: FfeLeaderInput, exceptions: readonly FfeException[]) => FfeLeaderPick | null;
+
+/** An open job's rungs, sharpest first (1–7 above); the first that stands elects. */
+const OPEN_JOB_RUNGS: readonly FfeRung[] = [
+  (input) => (input.releaseLift ? pick('release', 'release') : null),
+  // Billing is the last exception, so this is the sharpest one above it.
+  (_input, exceptions) => {
+    const sharpest = exceptions.find((e) => e.kind !== 'bill');
+    if (!sharpest) return null;
+    return sharpest.kind === 'waiting' ? pick('waiting', null) : pickException(sharpest);
+  },
+  (input) => (input.releaseHeld ? pick('held', null) : null),
+  (_input, exceptions) => {
+    const bill = exceptions.find((e) => e.kind === 'bill');
+    return bill ? pickException(bill) : null;
+  },
+];
+
+function electOpenJob(input: FfeLeaderInput, exceptions: readonly FfeException[]): FfeLeaderPick {
+  for (const rung of OPEN_JOB_RUNGS) {
+    const picked = rung(input, exceptions);
+    if (picked) return picked;
+  }
+  return pick(input.emptySchedule ? 'add-line' : 'settled', 'add-line');
+}
+
+/** A job on hold or closed: only a claim or an unanswered PO still leads. */
+function electStoppedJob(
+  job: 'on-hold' | 'closed',
+  exceptions: readonly FfeException[],
+): FfeLeaderPick {
+  const urgent = exceptions.find((e) => e.kind === 'claim' || e.kind === 'po');
+  return urgent ? pickException(urgent) : pick(job, null);
+}
+
 export function electFfeLeader(input: FfeLeaderInput): FfeLeaderChoice {
   const exceptions = scanFfeExceptions(input);
-  const choose = (
-    state: FfeStateKind,
-    kind: FfeLeaderKind | null,
-    highlightLineId: string | null = null,
-  ): FfeLeaderChoice => ({ state, kind, highlightLineId, exceptions });
-
   const job = input.job ?? 'open';
-  if (job !== 'open') {
-    const urgent = exceptions.find((e) => e.kind === 'claim' || e.kind === 'po');
-    return urgent ? choose(urgent.kind, urgent.kind as FfeLeaderKind, urgent.lineId) : choose(job, null);
-  }
-  if (input.releaseLift) return choose('release', 'release');
-
-  // Billing is the last exception, so this is the sharpest one above it.
-  const sharpest = exceptions.find((e) => e.kind !== 'bill');
-  if (sharpest?.kind === 'waiting') return choose('waiting', null);
-  if (sharpest) return choose(sharpest.kind, sharpest.kind as FfeLeaderKind, sharpest.lineId);
-  if (input.releaseHeld) return choose('held', null);
-  const bill = exceptions.find((e) => e.kind === 'bill');
-  if (bill) return choose('bill', 'bill', bill.lineId);
-  return choose(input.emptySchedule ? 'add-line' : 'settled', 'add-line');
+  const picked = job === 'open' ? electOpenJob(input, exceptions) : electStoppedJob(job, exceptions);
+  return { ...picked, exceptions };
 }
 
 const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
 
+/** Each state's sentence, given its exception count and the lines released. */
+const STATE_SENTENCES: Record<FfeStateKind, (n: number, released: number) => string> = {
+  release: (_n, released) =>
+    released > 0
+      ? 'Priced selections are ready for purchasing authorization.'
+      : 'The selections are priced. Nothing is released.',
+  claim: (n) => `${count(n, 'A damage claim is', 'damage claims are')} open.`,
+  po: (n) => `${count(n, 'A purchase order is', 'purchase orders are')} unanswered.`,
+  spec: (n) => `${count(n, 'One selection has', 'selections have')} no piece specified yet.`,
+  price: (n) => `${count(n, 'One selection still needs', 'selections still need')} a confirmed price.`,
+  waiting: (n) =>
+    `${count(n, 'One selection is', 'selections are')} with the client for purchasing approval.`,
+  bill: (n) => `${count(n, 'One priced selection is', 'priced selections are')} not yet invoiced.`,
+  'add-line': () => 'No selections yet.',
+  held: () => 'Selections are ready, but purchasing authorization is held.',
+  'on-hold': () => 'The job is on hold.',
+  closed: () => 'The job is closed.',
+  settled: (_n, released) =>
+    released > 0
+      ? `${count(released, 'One selection is', 'selections are')} released.`
+      : 'Nothing is released.',
+};
+
 /** The head's one plain sentence for the elected state. */
 export function ffeStateSentence(choice: FfeLeaderChoice, released: number): string {
   const n = choice.exceptions.find((e) => e.kind === choice.state)?.count ?? 0;
-  switch (choice.state) {
-    case 'release':
-      return released > 0
-        ? 'Priced selections are ready for purchasing authorization.'
-        : 'The selections are priced. Nothing is released.';
-    case 'claim':
-      return `${count(n, 'A damage claim is', 'damage claims are')} open.`;
-    case 'po':
-      return `${count(n, 'A purchase order is', 'purchase orders are')} unanswered.`;
-    case 'spec':
-      return `${count(n, 'One selection has', 'selections have')} no piece specified yet.`;
-    case 'price':
-      return `${count(n, 'One selection still needs', 'selections still need')} a confirmed price.`;
-    case 'waiting':
-      return `${count(n, 'One selection is', 'selections are')} with the client for purchasing approval.`;
-    case 'bill':
-      return `${count(n, 'One priced selection is', 'priced selections are')} not yet invoiced.`;
-    case 'add-line':
-      return 'No selections yet.';
-    case 'held':
-      return 'Selections are ready, but purchasing authorization is held.';
-    case 'on-hold':
-      return 'The job is on hold.';
-    case 'closed':
-      return 'The job is closed.';
-    case 'settled':
-      return released > 0
-        ? `${count(released, 'One selection is', 'selections are')} released.`
-        : 'Nothing is released.';
-  }
+  return STATE_SENTENCES[choice.state](n, released);
 }
