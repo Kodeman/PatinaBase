@@ -127,7 +127,10 @@ export function FurnishingsAuthorizationBody({ items, depositRequiredCents: exec
               </div>
             </div>
           ))}
-          <div className="flex items-baseline justify-between py-4">
+          {/* A cents total can outgrow 390px beside its label; it wraps below. */}
+          <div className={hasLeadTime
+            ? "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-4"
+            : "flex items-baseline justify-between py-4"}>
             <span className="type-body-small font-medium">Authorized furnishings</span>
             <span className="type-data-large">{money(total, currency, hasLeadTime)}</span>
           </div>

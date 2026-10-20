@@ -205,6 +205,8 @@ describe('authorization unit prices and lead times', () => {
     expect(within(legacyLine).getByText('$100')).toBeInTheDocument();
     expect(legacyLine).not.toHaveTextContent(/×|Lead time/);
     expect(screen.getByText('Authorized furnishings').parentElement?.textContent).toBe('Authorized furnishings$399.99');
+    // A cents total wraps below its label at 390 instead of colliding (SQ-1489 F3).
+    expect(screen.getByText('Authorized furnishings').parentElement).toHaveClass('flex-wrap', 'gap-x-4');
     expect(screen.getByText(consent + estimate)).toBeInTheDocument();
   });
 
