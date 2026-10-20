@@ -77,11 +77,11 @@ const WRAP_BASE_CLASS = `${BASE_CLASS.replace('shrink-0', 'min-w-0')} whitespace
    label reads as the words the studio would say. The terminal tier keeps its
    own grammar byte for byte: its label is already Inter 16px in globals.css. */
 const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
-  primary: 'da-primary font-body text-[15px] font-medium',
-  inked: 'da-inked font-body text-[15px] font-medium',
-  secondary: 'da-secondary font-body text-[14px] font-normal',
-  tertiary: 'da-tertiary font-body text-[14px] font-normal',
-  danger: 'da-danger font-body text-[15px] font-medium',
+  primary: 'da-primary font-body text-[15px] font-medium normal-case tracking-normal',
+  inked: 'da-inked font-body text-[15px] font-medium normal-case tracking-normal',
+  secondary: 'da-secondary font-body text-[14px] font-normal normal-case tracking-normal',
+  tertiary: 'da-tertiary font-body text-[14px] font-normal normal-case tracking-normal',
+  danger: 'da-danger font-body text-[15px] font-medium normal-case tracking-normal',
   terminal:
     'da-terminal whitespace-nowrap font-mono text-[12px] uppercase font-medium tracking-[0]',
 };
