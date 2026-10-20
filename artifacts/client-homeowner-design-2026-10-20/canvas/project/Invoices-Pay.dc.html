@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoices, paying one</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&amp;family=Inter:wght@400;500;600&amp;family=DM+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FAF7F2;color:#2C2926}
+a{color:#2C2926}a:hover{color:#2C2926}
+:focus-visible{outline:2px solid #7C5E30;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 2800px; box-sizing: border-box; padding: 0 24px 48px; background: #FAF7F2; color: #2C2926; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<div aria-hidden="true" style="display: flex; flex-direction: column; gap: 4px; padding: 32px 0">
+<div style="height: 1.5px; width: 60px; border-radius: 1px; background: #5C4A3C"></div>
+<div style="height: 1.5px; width: 48px; border-radius: 1px; background: #C4A57B; opacity: 0.7"></div>
+<div style="height: 1.5px; width: 36px; border-radius: 1px; background: #C4A57B; opacity: 0.35"></div>
+</div>
+<header id="doorplate" style="padding: 0 0 12px; border-bottom: 1px solid #E8E3DB">
+<p style="margin: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 18px; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43"><span>Birchwood Studio · Madison, Wisconsin</span><span>Prepared for June Brennan</span></p>
+<h1 style="margin: 12px 0 4px; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 34px; line-height: 1.15; font-weight: 500; color: #2C2926">Elm Street House</h1>
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; letter-spacing: .08em; color: #5A4E43">Procurement · October 2026</p>
+</header>
+<section id="letterbox" aria-labelledby="invoices-h" style="padding: 48px 0 0">
+<p style="margin: 0 0 12px; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">Elm Street House and studio</p>
+<h2 id="invoices-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 26px; line-height: 1.2; font-weight: 500; color: #2C2926">Invoices</h2>
+<ul aria-label="Invoices to pay" style="margin: 24px 0 0; padding: 0; border-top: 1px solid #E8E3DB">
+<li style="list-style: none; padding: 16px 0; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; row-gap: 4px">
+<p style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500; color: #2C2926">Sofa deposit</p>
+<p style="margin: 0; text-align: right; white-space: nowrap; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">$300.00</p>
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; color: #2C2926">INV-2026-017 · Elm Street House</p>
+<p style="margin: 0; text-align: right; white-space: nowrap; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; letter-spacing: .08em; color: #5A4E43">of $800.00</p>
+<p style="margin: 0; grid-column: 1 / -1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">Due 2 November 2026 · $500.00 paid</p>
+<sc-if value="{{ acked }}" hint-placeholder-val="{{ false }}">
+<p style="margin: 0; grid-column: 1 / -1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">Check expected · balance still $300.00</p>
+</sc-if>
+<div style="grid-column: 1 / -1">
+<button type="button" ref="{{ setToggle }}" aria-expanded="{{ expanded }}" aria-controls="inv-2026-017-details" onClick="{{ toggle }}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; color: #5A4E43; text-decoration: underline; text-decoration-color: #8B7355; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#65594E" stroke-width="1.25"><path d="{{ chevron }}"></path></svg></button>
+<sc-if value="{{ open }}" hint-placeholder-val="{{ true }}">
+<div id="inv-2026-017-details" role="region" aria-labelledby="inv-2026-017-details-h" style="margin: 12px 0 0; padding: 24px 16px; background: #FCFAF6; border-top: 1px solid rgba(44, 41, 38, .14); border-bottom: 1px solid rgba(44, 41, 38, .14); display: flex; flex-direction: column; gap: 16px; gap: 24px">
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 id="inv-2026-017-details-h" tabindex="-1" ref="{{ setHead }}" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500; color: #2C2926; outline: 2px solid #7C5E30; outline-offset: 2px">Payment details for INV-2026-017</h3>
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; letter-spacing: .08em; color: #5A4E43">Balance due</p>
+<p style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 26px; line-height: 1.2; font-weight: 500; font-variant-numeric: tabular-nums; color: #2C2926">$300.00</p>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">Due 2 November 2026 · $500.00 paid</p>
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #4E4339">Invoice total $800.00</p>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">Payable to Birchwood Studio</p>
+</div>
+
+<fieldset style="margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<legend style="padding: 0; margin: 0 0 8px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.4; font-weight: 500; color: #2C2926">How would you like to pay?</legend>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; color: #4E4339">Each option shows the full amount you would pay, with its fee underneath.</p>
+<div style="border-top: 1px solid #E8E3DB">
+<sc-for list="{{ methods }}" as="m" hint-placeholder-count="3">
+<label for="{{ m.inputId }}" style="display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: 12px; row-gap: 2px; align-items: start; min-height: 56px; padding: 12px 0; border-bottom: 1px solid #E8E3DB; cursor: pointer">
+<input type="radio" id="{{ m.inputId }}" name="pay-method-inv-2026-017" value="{{ m.id }}" ref="{{ m.setRef }}" checked="{{ m.checked }}" onChange="{{ m.pick }}" style="grid-row: 1 / span 3; width: 20px; height: 20px; margin: 2px 0 0; accent-color: #2C2926; cursor: pointer">
+<span style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 24px; font-weight: {{ m.weight }}; color: #2C2926">{{ m.label }}</span>
+<span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">{{ m.total }}</span>
+<span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #4E4339">{{ m.note }}</span>
+</label>
+</sc-for>
+</div>
+</fieldset>
+
+<sc-if value="{{ online }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap"><span style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; font-weight: 500; color: #2C2926">Total with {{ methodName }}</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: #2C2926">{{ methodTotal }}</span></p>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">The next screen shows the amount and asks you to confirm. Nothing is charged until you confirm there. Opening these details or choosing a method doesn’t pay anything.</p>
+<div><button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 48px; min-width: 44px; padding: 13px 22px; border: 0; border-radius: 3px; background: #2C2926; color: #FAF7F2; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: left; cursor: pointer">Continue to secure payment · {{ methodTotal }}</button></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ noMethod }}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">The next screen shows the amount and asks you to confirm. Nothing is charged until you confirm there. Opening these details or choosing a method doesn’t pay anything.</p>
+<div><button type="button" aria-disabled="true" aria-describedby="cont-why" onClick="{{ nudge }}" style="display: inline-flex; align-items: center; min-height: 48px; min-width: 44px; padding: 12px 21px; border: 1px solid rgba(44, 41, 38, .14); border-radius: 3px; background: #E8E3DB; color: #65594E; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; text-align: left; cursor: not-allowed">Continue to secure payment</button></div>
+<p id="cont-why" style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; color: #4E4339">Choose how you’d like to pay first. The full total, with any fee, then shows on this button.</p>
+</div>
+</sc-if>
+
+<sc-if value="{{ isCheck }}" hint-placeholder-val="{{ false }}">
+<div role="group" aria-labelledby="check-h" style="display: flex; flex-direction: column; gap: 12px">
+<h4 id="check-h" style="margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.4; font-weight: 500; color: #2C2926">Mail your check to Birchwood Studio</h4>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">[studio remit-to address]</p>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">Write invoice INV-2026-017 on the memo line. The amount is $300.00, with no fee.</p>
+<sc-if value="{{ ackPending }}" hint-placeholder-val="{{ true }}">
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">Telling Maren Holt a check is coming doesn’t pay the invoice. The balance stays $300.00 until the check arrives.</p>
+<div><button type="button" onClick="{{ acknowledge }}" style="display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 4px 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; font-weight: 500; color: #2C2926; text-decoration: none; cursor: pointer"><span style="display: inline-block; padding-bottom: 2px; border-bottom: 1px solid #C4A57B"><span style="display: inline-block; padding-bottom: 2px; border-bottom: 1.5px solid #2C2926">I’ll mail a check</span></span></button></div>
+</sc-if>
+<sc-if value="{{ acked }}" hint-placeholder-val="{{ false }}">
+<div role="status" style="margin: 0; padding: 12px 0 0; border-top: 1px solid rgba(44, 41, 38, .14); display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; font-weight: 500; color: #2C2926">Check expected</p>
+<p style="margin: 0; max-width: 56ch; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926">Maren Holt knows a check is coming. The balance stays $300.00 until the check arrives and is recorded. Nothing has been paid yet.</p>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<div><button type="button" onClick="{{ close }}" style="display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 20px; font-weight: 400; color: #5A4E43; text-decoration: underline; text-decoration-color: #8B7355; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">Close payment details</button></div>
+</div>
+</sc-if>
+</div>
+</li>
+</ul>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2800}}'>
+class Component extends DCLogic {
+  constructor(...args) {
+    super(...args);
+    // Nothing selected yet: the continuation stays unavailable and says why. No payment ever submits here.
+    this.state = { open: true, method: null, acked: false };
+    this.el = {};
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    const was = prevState || {};
+    if (was.open === this.state.open) return;
+    const open = this.state.open;
+    setTimeout(() => {
+      const target = open ? this.el.head : this.el.toggle;
+      if (target && target.focus) target.focus();
+    }, 0);
+  }
+
+  renderVals() {
+    const s = this.state;
+    // Fees are never guessed: bank and card show the quote's own figures as holes.
+    const defs = [
+      { id: 'us_bank_account', label: 'Bank transfer (ACH)', total: '[bank total from quote]', note: '$300.00 + [bank fee from quote]' },
+      { id: 'card', label: 'Card', total: '[card total from quote]', note: '$300.00 + [card fee from quote]' },
+      { id: 'check', label: 'Mail a check', total: '$300.00', note: 'No fee' },
+    ];
+    const sel = defs.find((d) => d.id === s.method) || null;
+    const methods = defs.map((d, i) => ({
+      id: d.id,
+      label: d.label,
+      total: d.total,
+      note: d.note,
+      inputId: 'method-' + d.id,
+      checked: s.method === d.id,
+      weight: s.method === d.id ? '500' : '400',
+      pick: () => this.setState({ method: d.id }),
+      setRef: i === 0 ? (node) => { this.el.first = node; } : null,
+    }));
+    const isCheck = !!sel && sel.id === 'check';
+    return {
+      open: s.open,
+      expanded: s.open ? 'true' : 'false',
+      chevron: s.open ? 'M2 7.5 6 3.5 10 7.5' : 'M2 4.5 6 8.5 10 4.5',
+      toggle: () => this.setState({ open: !s.open }),
+      close: () => this.setState({ open: false }),
+      setHead: (node) => { this.el.head = node; },
+      setToggle: (node) => { this.el.toggle = node; },
+      methods: methods,
+      noMethod: !sel,
+      online: !!sel && !isCheck,
+      isCheck: isCheck,
+      methodName: sel ? sel.label : '',
+      methodTotal: sel && !isCheck ? sel.total : '',
+      nudge: () => { if (this.el.first && this.el.first.focus) this.el.first.focus(); },
+      ackPending: isCheck && !s.acked,
+      acked: s.acked,
+      acknowledge: () => this.setState({ acked: true }),
+    };
+  }
+}
+</script>
+</body>
+</html>
