@@ -141,7 +141,8 @@ INSERT INTO project_commercial_documents (id,project_id,proposal_id,document_kin
 ('83614260-0000-4000-8000-000000000042','83614260-0000-4000-8000-000000000020','83614260-0000-4000-8000-000000000032','furnishings_authorization','Private wave',false,now(),'83614260-0000-4000-8000-000000000001');
 INSERT INTO furnishing_authorization_items (source_ffe_item_id,commercial_document_id,name,item_type,quantity,client_unit_price_cents,client_line_total_cents,snapshot,sort_order)
 SELECT ('83614260-0000-4000-8000-' || lpad((52+ord)::text,12,'0'))::uuid, '83614260-0000-4000-8000-000000000042'::uuid, 'Adversarial photo', 'fixed',1,100,100,
-jsonb_build_object('internalNotes','SECRET_PROJECTION','clientImage',image,'leadTime',lead), ord
+jsonb_build_object('internalNotes','SECRET_PROJECTION','clientImage',image,'leadTime',lead)
+  || CASE ord WHEN 0 THEN '{"clientName":"Window seat"}'::jsonb WHEN 1 THEN '{"clientName":null}'::jsonb ELSE '{}'::jsonb END, ord
 FROM (VALUES
 (0,'{"version":1,"url":"https://images.example.test/safe.jpg","storagePath":"SECRET_PROJECTION","notes":"SECRET_PROJECTION"}'::jsonb,'{"version":1,"weeks":6,"source":"SECRET_PROJECTION"}'::jsonb),
 (1,'{"version":1,"url":"https://images.example.test/storage/v1/object/sign/private/a.jpg?token=SECRET_PROJECTION"}'::jsonb,'{"version":1,"weeks":105}'::jsonb),
@@ -188,6 +189,13 @@ BEGIN
   IF (SELECT jsonb_agg(i->'leadTime' ORDER BY o) FROM jsonb_array_elements(public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000032')#>'{furnishingsPreview,body,items}') WITH ORDINALITY x(i,o))
      IS DISTINCT FROM (SELECT jsonb_agg(i->'leadTime' ORDER BY o) FROM jsonb_array_elements(public.get_client_commercial_document_bundle('83614260-0000-4000-8000-000000000032')#>'{furnishings,items}') WITH ORDINALITY x(i,o)) THEN
     RAISE EXCEPTION 'P26 preview and client bundle project the same lead times';
+  END IF;
+  -- US-41: a frozen clientName is the description; null or absent keeps the row name.
+  IF (SELECT jsonb_agg(i->'description' ORDER BY o) FROM jsonb_array_elements(public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000032')#>'{furnishingsPreview,body,items}') WITH ORDINALITY x(i,o))
+     IS DISTINCT FROM '["Window seat","Adversarial photo","Adversarial photo","Adversarial photo","Adversarial photo","Adversarial photo"]'::jsonb
+     OR (SELECT jsonb_agg(i->'name' ORDER BY o) FROM jsonb_array_elements(public.get_client_commercial_document_bundle('83614260-0000-4000-8000-000000000032')#>'{furnishings,items}') WITH ORDINALITY x(i,o))
+     IS DISTINCT FROM '["Window seat","Adversarial photo","Adversarial photo","Adversarial photo","Adversarial photo","Adversarial photo"]'::jsonb THEN
+    RAISE EXCEPTION 'P27 client name projects from the frozen clientName only';
   END IF;
   s := public.get_commercial_document_send_snapshot('83614260-0000-4000-8000-000000000030');
   b := s #> '{furnishingsPreview,body}';

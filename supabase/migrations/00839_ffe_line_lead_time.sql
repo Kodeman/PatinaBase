@@ -26,8 +26,8 @@
 --
 -- Redefined (bodies verbatim from their heads, delta grafted):
 --   set_project_ffe_line_build_fields   00730 → 00737 → 00758 → 00810 (+leadTimeWeeks)
---   _furnishing_authorization_item_snapshot   00744 → 00838 (+leadTime v1)
---   get_client_commercial_document_bundle   … → 00755 → 00838 (+gated leadTime)
+--   _furnishing_authorization_item_snapshot   00744 → 00838 (+leadTime v1, +clientName)
+--   get_client_commercial_document_bundle   … → 00755 → 00838 (+gated leadTime, clientName)
 --   get_commercial_document_send_snapshot   00836 → 00838 (+leadTime passthrough)
 -- Frozen rows are never touched: a legacy snapshot without 'leadTime' projects
 -- no key, and the document fingerprint (00577) still hashes the stored rows.
@@ -357,7 +357,15 @@ AS $$
     'leadTime', jsonb_build_object(
       'version', 1,
       'weeks', public.ffe_item_effective_lead_time_weeks(p_line)
-    )
+    ),
+    -- The client reads the line by the name the Pieces lens prints (rough-in-lens
+    -- lineName): its thread's need label, else its name. A filled line keeps the
+    -- product's name, so a rename there lands only on the need.
+    'clientName', COALESCE(
+      (SELECT NULLIF(btrim(t.need_label), '')
+       FROM public.project_ffe_selection_threads t
+       WHERE t.id = p_line.selection_thread_id),
+      p_line.name)
   );
 $$;
 REVOKE ALL ON FUNCTION public._furnishing_authorization_item_snapshot(public.project_ffe_items) FROM PUBLIC, anon, authenticated, service_role;
@@ -587,7 +595,9 @@ BEGIN
         'deposit_paid_cents', COALESCE((SELECT i.amount_paid_cents
           FROM public.invoices i WHERE i.id = v_document.deposit_invoice_id), 0),
         'items', COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'id', a.id, 'name', a.name, 'roomName', a.room_name,
+          -- A row frozen without clientName (before 00839) keeps its name.
+          'id', a.id, 'name', COALESCE(a.snapshot->>'clientName', a.name),
+          'roomName', a.room_name,
           'category', a.category, 'itemType', a.item_type, 'quantity', a.quantity,
           -- 00745: additive. The rooms on the paper, from this row's frozen
           -- snapshot (00744 placements), else its one frozen room.

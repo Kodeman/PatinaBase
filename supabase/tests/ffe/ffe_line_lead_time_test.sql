@@ -9,7 +9,8 @@
 --   K. catalog, P. proposal, N. nothing known → NULL weeks and NULL source.
 --   B. set_project_ffe_line_build_fields leadTimeWeeks: set, absent, clear,
 --      0 and 104, refusals; the override beats the suggestion.
---   S. the snapshot helper freezes leadTime {version:1, weeks:<effective>}.
+--   S. the snapshot helper freezes leadTime {version:1, weeks:<effective>} and
+--      clientName (need label, else line name).
 --   G. computed fields: STABLE, SECURITY INVOKER, authenticated only.
 --
 -- How to run (local stack, after applying 00839):
@@ -255,7 +256,17 @@ BEGIN
   ASSERT public._furnishing_authorization_item_snapshot(v_line) ?& ARRAY['budgetMinCents','budgetMaxCents','docCode',
     'customFields','notes','productImageUrl','clientImage','unit','needLabel','lineKind','parentFfeItemId','placements'],
     'S4: every earlier snapshot key remains';
-  RAISE NOTICE 'PASS S: the snapshot freezes leadTime {version:1, weeks}';
+  ASSERT public._furnishing_authorization_item_snapshot(v_line)->>'clientName' = 'Custom bench',
+    'S5: a line without a thread freezes its own name for the client';
+  INSERT INTO public.project_ffe_selection_threads (id, project_id, need_label)
+  VALUES ('83900000-0000-4000-8000-0000000000d1', '83900000-0000-4000-8000-000000000001', '  Window seat  ');
+  v_line.selection_thread_id := '83900000-0000-4000-8000-0000000000d1';
+  ASSERT public._furnishing_authorization_item_snapshot(v_line)->>'clientName' = 'Window seat',
+    'S6: a renamed need is the name the client reads, as the Pieces lens prints it';
+  UPDATE public.project_ffe_selection_threads SET need_label = ' ' WHERE id = '83900000-0000-4000-8000-0000000000d1';
+  ASSERT public._furnishing_authorization_item_snapshot(v_line)->>'clientName' = 'Custom bench',
+    'S7: a blank need label falls back to the line name';
+  RAISE NOTICE 'PASS S: the snapshot freezes leadTime {version:1, weeks} and the client name';
 END $$;
 
 -- ─── G. computed-field contract ───────────────────────────────────────────
