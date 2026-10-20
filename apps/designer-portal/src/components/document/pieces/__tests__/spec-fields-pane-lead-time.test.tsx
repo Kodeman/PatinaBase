@@ -11,20 +11,24 @@ const mockBuildFields = jest.fn();
 const mutation = (fn: jest.Mock) => ({ mutateAsync: fn, isPending: false });
 
 jest.mock("@patina/supabase", () => {
-  const { useState } = jest.requireActual("react");
+  const { useRef, useState } = jest.requireActual("react");
   return {
     useUpdateProjectFfeSpec: () => mutation(jest.fn()),
     useSetFfeLineCommercials: () => mutation(jest.fn()),
-    // Pending for as long as the save's promise is, like useMutation.
+    // Like useMutation's observer: isPending follows the LATEST call only, so
+    // a second call that settles first reads not-pending while the first is
+    // still out.
     useSetFfeLineBuildFields: () => {
       const [isPending, setPending] = useState(false);
+      const latest = useRef(0);
       return {
         isPending,
         mutateAsync: (input: unknown) => {
+          const call = ++latest.current;
           setPending(true);
-          return Promise.resolve(mockBuildFields(input)).finally(() =>
-            setPending(false),
-          );
+          return Promise.resolve(mockBuildFields(input)).finally(() => {
+            if (call === latest.current) setPending(false);
+          });
         },
       };
     },
@@ -93,6 +97,8 @@ const base = {
   suggested_lead_time_source: null,
 };
 
+const onAnnounce = jest.fn();
+
 const renderPane = (fields: Record<string, unknown> = {}) =>
   render(
     <SpecFieldsPane
@@ -106,8 +112,20 @@ const renderPane = (fields: Record<string, unknown> = {}) =>
       placements={[]}
       rooms={[]}
       onSpecSaved={jest.fn()}
+      onAnnounce={onAnnounce}
     />,
   );
+
+const deferred = () => {
+  let resolve: (value: unknown) => void = () => {};
+  const promise = new Promise((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+};
+
+const leadTimeCalls = () =>
+  mockBuildFields.mock.calls.filter(([input]) => "leadTimeWeeks" in input);
 
 const leadTime = () => screen.getByRole("group", { name: "Lead time" });
 const picker = () =>
@@ -206,6 +224,33 @@ describe("the Lead time row", () => {
     );
   });
 
+  it.each([
+    [
+      "a permission refusal",
+      { code: "42501", message: "permission denied for function set_project_ffe_line_build_fields" },
+      "This studio's book is not yours to write. Ask an owner or admin.",
+    ],
+    [
+      "a schema diagnostic",
+      {
+        code: "23503",
+        message:
+          'insert or update on table "project_ffe_items" violates foreign key constraint "project_ffe_items_vendor_id_fkey"',
+      },
+      "The lead time was not saved.",
+    ],
+  ])("never prints %s from a plain PostgREST error", async (_kind, err, shown) => {
+    mockBuildFields.mockRejectedValue({ details: null, hint: null, ...err });
+    renderPane();
+
+    await act(async () => {
+      fireEvent.change(picker(), { target: { value: "4" } });
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(shown);
+    expect(screen.getByRole("alert")).not.toHaveTextContent(err.message);
+  });
+
   it("prints the RPC's own words from a plain PostgREST error", async () => {
     mockBuildFields.mockRejectedValue({
       code: "23514",
@@ -261,6 +306,98 @@ describe("the Lead time row", () => {
     expect(picker()).toBeEnabled();
     expect(picker()).toHaveFocus();
     expect(useSuggested()).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("keeps the picker held when a Unit change settles first, until its own save does", async () => {
+    const a = deferred();
+    const b = deferred();
+    mockBuildFields
+      .mockReturnValueOnce(a.promise)
+      .mockReturnValueOnce(b.promise);
+    renderPane();
+
+    await act(async () => {
+      fireEvent.change(picker(), { target: { value: "16" } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByRole("combobox", { name: "Unit" }), {
+        target: { value: "box" },
+      });
+    });
+    expect(mockBuildFields).toHaveBeenCalledTimes(2);
+    expect(mockBuildFields.mock.calls[1][0]).toEqual({
+      projectId: "p1",
+      itemId: "l1",
+      unit: "box",
+    });
+
+    await act(async () => {
+      b.resolve({});
+    });
+
+    expect(picker()).toBeDisabled();
+    await act(async () => {
+      fireEvent.change(picker(), { target: { value: "4" } });
+    });
+    expect(leadTimeCalls()).toHaveLength(1);
+
+    await act(async () => {
+      a.resolve({});
+    });
+
+    expect(picker()).toBeEnabled();
+    await act(async () => {
+      fireEvent.change(picker(), { target: { value: "4" } });
+    });
+    expect(leadTimeCalls()).toHaveLength(2);
+    expect(leadTimeCalls()[1][0]).toEqual({
+      projectId: "p1",
+      itemId: "l1",
+      leadTimeWeeks: 4,
+    });
+  });
+
+  it("announces the save in the lens's status, even on a first choice with nothing suggested", async () => {
+    const a = deferred();
+    mockBuildFields.mockReturnValueOnce(a.promise);
+    renderPane();
+    expect(useSuggested()).toBeNull();
+
+    await act(async () => {
+      fireEvent.change(picker(), { target: { value: "8" } });
+    });
+    expect(onAnnounce).toHaveBeenLastCalledWith("Saving the lead time…");
+
+    await act(async () => {
+      a.resolve({});
+    });
+    expect(onAnnounce).toHaveBeenLastCalledWith("Lead time saved.");
+  });
+
+  it("leaves focus where the designer moved it during a slow USE SUGGESTED", async () => {
+    const a = deferred();
+    mockBuildFields.mockReturnValueOnce(a.promise);
+    renderPane({
+      lead_time_weeks: 8,
+      suggested_lead_time_weeks: 12,
+      suggested_lead_time_source: "quote",
+    });
+    const act_ = useSuggested()!;
+    act_.focus();
+
+    await act(async () => {
+      fireEvent.click(act_);
+    });
+    const unit = screen.getByRole("combobox", { name: "Unit" });
+    unit.focus();
+
+    await act(async () => {
+      a.resolve({});
+    });
+
+    expect(picker()).toBeEnabled();
+    expect(unit).toHaveFocus();
+    expect(picker()).not.toHaveFocus();
   });
 
   it.each([

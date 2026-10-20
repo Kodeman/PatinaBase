@@ -46,6 +46,7 @@ import type {
 import { LeadTimeSelect } from "@/components/portal/ffe/lead-time-select";
 import { ProductPickerModal } from "@/components/portal/proposals/product-picker-modal";
 import { leadTimeLabel } from "@/lib/scope/lead-time";
+import { writeErrorMessage } from "@/lib/document/write-error";
 import {
   LABOR_STAMP_LABEL,
   isLaborLine,
@@ -213,12 +214,6 @@ function errorText(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-/** An Error's message, or a plain PostgREST error's (`{code,message,…}`). */
-function refusalText(error: unknown, fallback: string): string {
-  const message = (error as { message?: unknown } | null)?.message;
-  return typeof message === "string" && message ? message : fallback;
-}
-
 function Field({
   label,
   wide,
@@ -355,6 +350,9 @@ export function SpecFieldsPane({
   const fillActRef = useRef<HTMLButtonElement>(null);
   const leadTimeRef = useRef<HTMLDivElement>(null);
   const [leadTimeFocus, setLeadTimeFocus] = useState(false);
+  // The lead time's own pending state: Unit writes through the same hook, and
+  // a Unit change mid-save must not free the picker while this write is out.
+  const [leadTimeSaving, setLeadTimeSaving] = useState(false);
   const ids = useId();
 
   // A chosen product opens the preview; its act takes focus (F4).
@@ -365,10 +363,10 @@ export function SpecFieldsPane({
   // The picker is disabled while its write is pending, so focus returns to it
   // only once it is live again.
   useEffect(() => {
-    if (!leadTimeFocus || buildFields.isPending) return;
+    if (!leadTimeFocus || leadTimeSaving) return;
     setLeadTimeFocus(false);
     leadTimeRef.current?.querySelector("select")?.focus();
-  }, [leadTimeFocus, buildFields.isPending]);
+  }, [leadTimeFocus, leadTimeSaving]);
 
   const labor = isLaborLine(line);
   const read = pieceLineStage(line, piece);
@@ -419,37 +417,48 @@ export function SpecFieldsPane({
   /** Resolves true once saved; a refusal prints in the pane's alert. */
   const saveLeadTime = (leadTimeWeeks: number | null): Promise<boolean> => {
     setError(null);
+    setLeadTimeSaving(true);
+    onAnnounce?.("Saving the lead time…");
     return buildFields
       .mutateAsync({ projectId, itemId: line.id, leadTimeWeeks })
       .then(
-        () => true,
+        () => {
+          onAnnounce?.("Lead time saved.");
+          return true;
+        },
         (err: unknown) => {
-          setError(refusalText(err, "The lead time was not saved."));
+          // The alert says why; clear the status so the next save is heard.
+          onAnnounce?.("");
+          setError(writeErrorMessage(err, "The lead time was not saved."));
           return false;
         },
-      );
+      )
+      .finally(() => setLeadTimeSaving(false));
+  };
+
+  /** Unless the designer moved on, the picker takes focus once it is live. */
+  const keepLeadTimeFocus = (origin: Element | null) => {
+    const active = document.activeElement;
+    if (
+      !active ||
+      active === document.body ||
+      active === origin ||
+      leadTimeRef.current?.contains(active)
+    ) {
+      setLeadTimeFocus(true);
+    }
   };
 
   const chooseLeadTime = (weeks: number | null) => {
-    if (locked || buildFields.isPending) return;
-    void saveLeadTime(weeks).then(() => {
-      // Unless the designer moved on, the picker keeps focus once it is live.
-      const active = document.activeElement;
-      if (
-        !active ||
-        active === document.body ||
-        leadTimeRef.current?.contains(active)
-      ) {
-        setLeadTimeFocus(true);
-      }
-    });
+    if (locked || leadTimeSaving) return;
+    void saveLeadTime(weeks).then(() => keepLeadTimeFocus(null));
   };
 
-  const revertLeadTime = () => {
-    if (locked || buildFields.isPending) return;
+  const revertLeadTime = (origin: Element) => {
+    if (locked || leadTimeSaving) return;
     // The act leaves with the override, so focus returns to the picker.
     void saveLeadTime(null).then((saved) => {
-      if (saved) setLeadTimeFocus(true);
+      if (saved) keepLeadTimeFocus(origin);
     });
   };
 
@@ -890,7 +899,7 @@ export function SpecFieldsPane({
           <div ref={leadTimeRef}>
             <LeadTimeSelect
               value={leadTimeOverride}
-              disabled={locked || buildFields.isPending}
+              disabled={locked || leadTimeSaving}
               onChange={chooseLeadTime}
             />
           </div>
@@ -907,10 +916,10 @@ export function SpecFieldsPane({
                 <button
                   type="button"
                   className={ACT_CLS}
-                  aria-disabled={locked || buildFields.isPending || undefined}
+                  aria-disabled={locked || leadTimeSaving || undefined}
                   aria-describedby={locked ? `${ids}-lead` : undefined}
-                  aria-busy={buildFields.isPending || undefined}
-                  onClick={revertLeadTime}
+                  aria-busy={leadTimeSaving || undefined}
+                  onClick={(e) => revertLeadTime(e.currentTarget)}
                 >
                   USE SUGGESTED
                 </button>
