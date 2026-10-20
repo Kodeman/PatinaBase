@@ -145,9 +145,12 @@ jest.mock('@/components/document/commercial/money-region', () => ({
 // root; the install spread's second mount is not (one root per stop).
 jest.mock('@/components/document/care-band', () => ({
   CareBand: ({ indexRoot }: { indexRoot?: boolean }) =>
-    indexRoot ? <div data-index-region="care" /> : null,
+    indexRoot ? <div data-index-region="care" /> : <div data-care-band />,
 }));
-jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
+jest.mock('@/components/document/account-band', () => ({
+  AccountBand: () => <div data-account-band />,
+}));
+jest.mock('@/components/document/quiet-sections', () => ({ CareSection: () => null }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
 jest.mock('@/components/document/shelves/document-shelves', () => ({
   DocumentShelves: () => null,
@@ -383,5 +386,50 @@ describe('the canonical paper order', () => {
     expect(nodes.indexOf(record as Element)).toBeGreaterThan(
       nodes.indexOf(lastRegion),
     );
+  });
+
+  // US-40 — the Working budget's recovery links land on the money region, so
+  // the Install and Care spreads carry it too. Its accounts are embedded
+  // headless, so the page's standalone AccountBand stands aside on all three.
+  it('prints no standalone AccountBand on the Project spread', () => {
+    const { container } = render(<DocumentPage params={params} />);
+
+    expect(container.querySelectorAll('[data-index-region="money"]')).toHaveLength(1);
+    expect(container.querySelector('[data-account-band]')).toBeNull();
+  });
+
+  describe.each(['install', 'care'] as const)('the %s spread', (section) => {
+    beforeEach(() => {
+      PROJECT_ROW.active_section = section;
+    });
+    afterEach(() => {
+      PROJECT_ROW.active_section = 'project';
+    });
+
+    it('mounts exactly one money region, after the Pieces and before closeout and the Record', () => {
+      const { container } = render(<DocumentPage params={params} />);
+
+      const moneyRoots = container.querySelectorAll('[data-index-region="money"]');
+      expect(moneyRoots).toHaveLength(1);
+
+      const nodes = Array.from(container.querySelectorAll('main *'));
+      const at = (selector: string) => {
+        const node = container.querySelector(selector);
+        expect(node).not.toBeNull();
+        return nodes.indexOf(node as Element);
+      };
+      const money = nodes.indexOf(moneyRoots[0]);
+      expect(money).toBeGreaterThan(at('[data-index-region="ffe"]'));
+      expect(money).toBeLessThan(at('[data-index-region="record"]'));
+      if (section === 'install') {
+        expect(money).toBeLessThan(at('[data-care-band]'));
+      }
+    });
+
+    it('prints no standalone AccountBand beside it', () => {
+      const { container } = render(<DocumentPage params={params} />);
+
+      expect(container.querySelector('[data-account-band]')).toBeNull();
+    });
   });
 });
