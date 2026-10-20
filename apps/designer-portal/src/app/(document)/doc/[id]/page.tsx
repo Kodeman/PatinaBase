@@ -3949,6 +3949,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     projectName={row.title}
                     clientName={row.client_name}
                     activeSection={spreadSection}
+                    accountsElsewhere
                   />
                 )}
                 {/* R80: at install the band opens unfolded — closing out IS the
@@ -3984,6 +3985,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     projectName={row.title}
                     clientName={row.client_name}
                     activeSection={spreadSection}
+                    accountsElsewhere
                   />
                 )}
               </>
@@ -3997,17 +3999,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           <>
             {/* Supporting project records follow the active work so a newly
                 opened document reaches the schedule before its reference material.
-                W2 — the accounts moved into the money region, which mounts on
-                the Project, Install and Care spreads; every other section keeps
-                the band here, where it has always been. */}
-            {/* F1 — the band and the money region are one either-or, so both
-                sides read the SAME section. The money region mounts inside the
-                pinned spread; a band gated on the live row would print the
-                accounts twice (or nowhere) for as long as an armed turn goes
-                unpressed. Off the flag `spreadSection` IS `row.active_section`. */}
-            {spreadSection !== 'project' &&
-              spreadSection !== 'install' &&
-              spreadSection !== 'care' && (
+                W2 — the accounts moved into the money region on the Project
+                spread; every other section keeps the band here, where it has
+                always been (Install and Care mount the region without them). */}
+            {/* F1 — the band and the money region's accounts are one
+                either-or, so both sides read the SAME section. The money region
+                mounts inside the pinned spread; a band gated on the live row
+                would print the accounts twice (or nowhere) for as long as an
+                armed turn goes unpressed. Off the flag `spreadSection` IS
+                `row.active_section`. */}
+            {spreadSection !== 'project' && (
               <AccountBand
                 projectId={row.project_id}
                 clientName={row.client_name}

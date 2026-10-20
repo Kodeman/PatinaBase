@@ -136,8 +136,12 @@ jest.mock('@/components/document/schedule/schedule-spine', () => ({
 jest.mock('@/components/document/ffe-section', () => ({
   FFESection: () => <div data-index-region="ffe" />,
 }));
+// The region's embedded accounts band, unless it leaves them to the page's
+// standalone one (US-40: Install and Care).
 jest.mock('@/components/document/commercial/money-region', () => ({
-  MoneyRegion: () => <div data-index-region="money" />,
+  MoneyRegion: ({ accountsElsewhere }: { accountsElsewhere?: boolean }) => (
+    <div data-index-region="money">{accountsElsewhere ? null : <div data-account-band />}</div>
+  ),
 }));
 
 /* Everything else the page mounts is another suite's subject. */
@@ -389,13 +393,17 @@ describe('the canonical paper order', () => {
   });
 
   // US-40 — the Working budget's recovery links land on the money region, so
-  // the Install and Care spreads carry it too. Its accounts are embedded
-  // headless, so the page's standalone AccountBand stands aside on all three.
-  it('prints no standalone AccountBand on the Project spread', () => {
+  // the Install and Care spreads carry it too, without its accounts: there the
+  // page's standalone AccountBand still states them, so the accounts print
+  // once on every spread.
+  it('prints the accounts once on the Project spread, inside the money region — no standalone band', () => {
     const { container } = render(<DocumentPage params={params} />);
 
-    expect(container.querySelectorAll('[data-index-region="money"]')).toHaveLength(1);
-    expect(container.querySelector('[data-account-band]')).toBeNull();
+    const moneyRoots = container.querySelectorAll('[data-index-region="money"]');
+    expect(moneyRoots).toHaveLength(1);
+    const bands = container.querySelectorAll('[data-account-band]');
+    expect(bands).toHaveLength(1);
+    expect(moneyRoots[0].contains(bands[0])).toBe(true);
   });
 
   describe.each(['install', 'care'] as const)('the %s spread', (section) => {
@@ -426,10 +434,14 @@ describe('the canonical paper order', () => {
       }
     });
 
-    it('prints no standalone AccountBand beside it', () => {
+    it('prints the accounts once, on the standalone AccountBand outside the money region', () => {
       const { container } = render(<DocumentPage params={params} />);
 
-      expect(container.querySelector('[data-account-band]')).toBeNull();
+      const bands = container.querySelectorAll('[data-account-band]');
+      expect(bands).toHaveLength(1);
+      expect(
+        container.querySelector('[data-index-region="money"]')!.contains(bands[0]),
+      ).toBe(false);
     });
   });
 });

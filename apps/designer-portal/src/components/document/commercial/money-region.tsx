@@ -23,7 +23,7 @@
  * region head now carries it.
  */
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { useProjectInvoices } from '@patina/supabase';
 import { useAccountPage } from '@/hooks/use-account-page';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
@@ -41,7 +41,6 @@ import { useRegionFold, type RegionFoldKey } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { NAMED_ACTS } from '@/lib/document/act-names';
-import { AmendmentSheet } from '../overlays/amendment-sheet';
 import { openRecordAChange } from '../overlays/record-a-change-sheet';
 import { ProjectAuthorityBandForProject } from './project-authority-band';
 import { ProjectCommerceSection } from './project-commerce-section';
@@ -106,6 +105,7 @@ export function MoneyRegion({
   clientName,
   activeSection,
   tableSeam = false,
+  accountsElsewhere = false,
 }: {
   projectId: string;
   projectName?: string;
@@ -114,6 +114,10 @@ export function MoneyRegion({
   /** W4b — on the Worktable's Delivery table money is reference, not the work:
    *  the region stands as its seam and unfolds in place to exactly this body. */
   tableSeam?: boolean;
+  /** US-40 — Install and Care keep the page's standalone AccountBand, the sole
+   *  owner of the change sheet at every Money posture, so the region leaves
+   *  out its own embedded band and the accounts print once. */
+  accountsElsewhere?: boolean;
 }) {
   // R108 — the one derivation the spine's running index also reads, so the
   // index can never summarise a ladder this region disagrees with.
@@ -269,30 +273,6 @@ export function MoneyRegion({
     money,
   });
 
-  // The accounts band owns the change sheet and its two events, but it mounts
-  // only in the full body. Folded or quiet, the region holds them instead, so
-  // ⌘K's `Add a change` and a line's change order still open the sheet.
-  const bandMounted = !folded && !quiet;
-  const [changeOpen, setChangeOpen] = useState(false);
-  useEffect(() => {
-    if (bandMounted) return;
-    const openChange = () => setChangeOpen(true);
-    if (changeOnly) window.addEventListener('document:open-project-change', openChange);
-    window.addEventListener('document:compose-amendment', openChange);
-    return () => {
-      window.removeEventListener('document:open-project-change', openChange);
-      window.removeEventListener('document:compose-amendment', openChange);
-    };
-  }, [bandMounted, changeOnly]);
-  const changeSheet = changeOpen ? (
-    <AmendmentSheet
-      projectId={projectId}
-      clientName={clientName ?? ''}
-      open
-      onClose={() => setChangeOpen(false)}
-    />
-  ) : null;
-
   const ledger: RegionLedgerEntry[] = [
     ...(receivableDue
       ? [
@@ -383,7 +363,6 @@ export function MoneyRegion({
           surfaceKey="accounts"
           regionKey="money-head"
         />
-        {changeSheet}
       </section>
     );
   }
@@ -471,16 +450,17 @@ export function MoneyRegion({
             projectName={projectName}
             clientName={clientName ?? undefined}
           />
-          <AccountBand
-            projectId={projectId}
-            clientName={clientName}
-            activeSection={activeSection}
-            headless
-          />
+          {!accountsElsewhere && (
+            <AccountBand
+              projectId={projectId}
+              clientName={clientName}
+              activeSection={activeSection}
+              headless
+            />
+          )}
         </div>
       </div>
       )}
-      {changeSheet}
     </section>
   );
 }

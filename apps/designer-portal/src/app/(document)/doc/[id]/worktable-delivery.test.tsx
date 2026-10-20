@@ -162,7 +162,13 @@ jest.mock('@/components/document/ffe-section', () => ({
 jest.mock('@/components/document/commercial/money-region', () => ({
   MoneyRegion: (props: Record<string, unknown>) => {
     mockMoneyProps.current = props;
-    return <div data-index-region="money" data-accounts-surface="money" />;
+    // The region states the accounts only when it embeds them (US-40).
+    return (
+      <div
+        data-index-region="money"
+        data-accounts-surface={props.accountsElsewhere ? undefined : 'money'}
+      />
+    );
   },
 }));
 
@@ -475,15 +481,15 @@ describe('the Delivery table, tooled', () => {
       // The install spread never mentions the lift at all; the prop defaults off.
       expect(mockFfeProps.current.releaseLeaderElsewhere).toBeUndefined();
       // The install spread stands as it did: FF&E at install grade, the window
-      // ceremony, the Care band — and, since US-40, one money region carrying
-      // the accounts in place of the standalone band.
+      // ceremony, the Care band, the accounts band stating the accounts — and,
+      // since US-40, one money region beside it that leaves the accounts to it.
       expect(container.querySelectorAll('[data-index-region="money"]')).toHaveLength(1);
       expect(container.querySelectorAll('[data-accounts-surface]')).toHaveLength(1);
       expect(
         container.querySelector('[data-accounts-surface]')!.getAttribute(
           'data-accounts-surface',
         ),
-      ).toBe('money');
+      ).toBe('band');
     });
   });
 });
