@@ -1343,7 +1343,12 @@ function previewItem(value: unknown): ClientFurnishingsAuthorizationItem {
 
 function previewProjectIdentity(snapshot: Record<string, unknown>, preview: Record<string, unknown>, proposalId: string, projectId: string | null): string {
   const returnedProjectId = previewText(preview.projectId);
-  if (![snapshot.proposalId, preview.proposalId].every(id => id === proposalId)) throw new Error("The saved preview does not match this authorization. Reload it before sending.");
+  const matchesProposal = [snapshot.proposalId, preview.proposalId].every(id => {
+    return id === proposalId;
+  });
+  if (!matchesProposal) {
+    throw new Error("The saved preview does not match this authorization. Reload it before sending.");
+  }
   if (!returnedProjectId) throw new Error("The saved preview does not match this authorization. Reload it before sending.");
   if (projectId !== null && returnedProjectId !== projectId) throw new Error("The saved preview does not match this authorization. Reload it before sending.");
   return returnedProjectId;
@@ -1384,6 +1389,18 @@ export function useFurnishingsAuthorizationPreview(proposalId: string | null, pr
   });
 }
 
+function reviewedFurnishingsSendArguments(proposalId: string, expectedFingerprint: string) {
+  if (!proposalId || !expectedFingerprint?.trim()) {
+    throw new Error("Review the saved authorization before sending.");
+  }
+  return {
+    p_proposal_id: proposalId,
+    p_expected_fingerprint: expectedFingerprint,
+    p_personal_message: null,
+    p_valid_until: null,
+  };
+}
+
 export function useSendFurnishingsAuthorization(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -1391,14 +1408,9 @@ export function useSendFurnishingsAuthorization(projectId: string) {
     retry: false,
     mutationKey: ["send-furnishings-authorization", projectId],
     mutationFn: async ({ proposalId, expectedFingerprint }: { proposalId: string; expectedFingerprint: string }) => {
-      if (!proposalId || !expectedFingerprint?.trim()) throw new Error("Review the saved authorization before sending.");
+      const args = reviewedFurnishingsSendArguments(proposalId, expectedFingerprint);
       const supabase = getSupabase();
-      const { data, error } = await supabase.rpc("send_commercial_document", {
-        p_proposal_id: proposalId,
-        p_expected_fingerprint: expectedFingerprint,
-        p_personal_message: null,
-        p_valid_until: null,
-      });
+      const { data, error } = await supabase.rpc("send_commercial_document", args);
       if (error) throw error;
 
       const sentAt = data?.sentAt ?? data?.sent_at;
