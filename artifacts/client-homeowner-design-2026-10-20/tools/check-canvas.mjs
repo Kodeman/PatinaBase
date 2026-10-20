@@ -57,6 +57,16 @@ const REQUIRED = {
     "We couldn't request a new link. Try again or contact your designer.",
   ],
   Progress: ['Project progress', 'Now', 'Next', 'Your designer will share the next step here.', 'Waiting on you'],
+  'Approval-Green-Ask': [
+    'Approve this edition',
+    'Request changes',
+    'Pause to discuss',
+    'Type your full name before approving.',
+    "Tell your designer what you'd like changed before sending.",
+    'Send change request',
+    'Confirm pause',
+  ],
+  'Approval-Green-Styles': ['Approve this edition', 'Request changes', 'Pause to discuss'],
   System: [],
   Words: ['A toll on the line', 'Settle the balance'],
 };
