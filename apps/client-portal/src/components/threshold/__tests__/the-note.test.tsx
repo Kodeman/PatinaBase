@@ -80,6 +80,7 @@ describe('TheNote', () => {
 
     expect(screen.getByTestId('note-body')).toHaveTextContent(BODY);
     expect(screen.getByTestId('note-dateline')).toHaveTextContent('yesterday');
+    expect(screen.getByTestId('note-dateline')).toHaveClass('text-[15px]');
     // The day the letter was sent is a term of it, so the signature spells
     // the year — never a date the reader has to place off her own calendar.
     expect(screen.getByTestId('note-signature')).toHaveTextContent(

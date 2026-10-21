@@ -293,7 +293,13 @@ export function Letterbox({
     pendingFocus.current = null;
     const ids = invoiceDomIds(pending.id);
     if (pending.target === 'reveal') {
+      const heading = document.getElementById(ids.heading);
+      if (!heading) {
+        pendingFocus.current = pending;
+        return;
+      }
       revealReturnAnchor(document.getElementById(ids.region));
+      heading.focus();
       return;
     }
     document.getElementById(pending.target === 'heading' ? ids.heading : ids.toggle)?.focus();

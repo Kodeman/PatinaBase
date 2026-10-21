@@ -430,6 +430,7 @@ describe('Letterbox — every invoice in plain view (US-45 CPUX-02, CPUX-03)', (
     expect(screen.getByRole('button', { name: 'Payment history' })).toHaveAttribute('aria-expanded', 'true');
     expect(viewInvoice('inv-p1')).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('region', { name: 'Invoice details for INV-2026-008' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Invoice details for INV-2026-008' })).toHaveFocus();
     expect(screen.getByRole('button', { name: 'Close invoice details' })).toBeInTheDocument();
   });
 

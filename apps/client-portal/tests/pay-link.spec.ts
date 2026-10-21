@@ -290,7 +290,7 @@ async function signInAsClient(page: Page, email: string): Promise<void> {
 
   const disclosure = page
     .getByRole("button", {
-      name: /sign in with email|use email and password instead/i,
+      name: /sign in with email|use (?:email and )?password instead|use a password instead/i,
     })
     .first();
   const password = page.getByLabel(/password/i).first();
@@ -631,7 +631,7 @@ test.describe("the standing invoice (00574)", () => {
     // below, which still drives it directly). Not a vacuous assertion: the
     // literal amount ties it to this fixture's own balance, matching
     // letterbox.test.tsx's `'Pay $9,125.00'` for the same $7,605-paid fixture.
-    const pay = page.getByRole("button", { name: "Pay $9,125.00" });
+    const pay = page.locator(`[data-invoice-id="${minted.invoiceId}"]`).getByRole("button", { name: "View invoice" });
     await expect(pay).toBeVisible();
     await expect(pay).toHaveAttribute("aria-expanded", "false");
 
