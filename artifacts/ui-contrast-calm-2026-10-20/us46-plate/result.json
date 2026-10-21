@@ -1,0 +1,784 @@
+{
+ "390": {
+  "overflow": 0,
+  "dark": [
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 222,
+    "w": 56,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 545,
+    "w": 154,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 980,
+    "w": 125,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 1106,
+    "w": 125,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 1382,
+    "w": 129,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 2569,
+    "w": 125,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 3233,
+    "w": 120,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 49,
+    "y": 5271,
+    "w": 129,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 157,
+    "y": 783,
+    "w": 133,
+    "h": 28
+   }
+  ],
+  "plate": null,
+  "heads": {
+   "approvals-head": {
+    "h": {
+     "x": 32,
+     "y": 428,
+     "w": 192,
+     "t": "Client approvals"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 241,
+      "y": 430,
+      "w": 85
+     },
+     {
+      "t": "Assign project client",
+      "x": 32,
+      "y": 537,
+      "w": 158
+     }
+    ],
+    "sw": 327,
+    "cw": 327
+   },
+   "schedule": {
+    "h": {
+     "x": 32,
+     "y": 1265,
+     "w": 194,
+     "t": "Project schedule"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 243,
+      "y": 1267,
+      "w": 85
+     },
+     {
+      "t": "+ New open item",
+      "x": 32,
+      "y": 1374,
+      "w": 133
+     }
+    ],
+    "sw": 327,
+    "cw": 327
+   },
+   "ffe": {
+    "h": {
+     "x": 32,
+     "y": 2451,
+     "w": 191,
+     "t": "FF&E selections"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 241,
+      "y": 2453,
+      "w": 85
+     },
+     {
+      "t": "Bill 2 uninvoiced",
+      "x": 32,
+      "y": 2561,
+      "w": 129
+     },
+     {
+      "t": "Edit selections→",
+      "x": 32,
+      "y": 2614,
+      "w": 132
+     },
+     {
+      "t": "Add items",
+      "x": 177,
+      "y": 2614,
+      "w": 78
+     },
+     {
+      "t": "Prepare purchasing autho",
+      "x": 32,
+      "y": 2667,
+      "w": 232
+     },
+     {
+      "t": "More⌄",
+      "x": 277,
+      "y": 2667,
+      "w": 64
+     }
+    ],
+    "sw": 327,
+    "cw": 327
+   },
+   "money-head": {
+    "h": {
+     "x": 32,
+     "y": 3116,
+     "w": 204,
+     "t": "Project financials"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 253,
+      "y": 3118,
+      "w": 85
+     },
+     {
+      "t": "Draft an invoice",
+      "x": 32,
+      "y": 3225,
+      "w": 124
+     },
+     {
+      "t": "Details",
+      "x": 32,
+      "y": 3278,
+      "w": 57
+     }
+    ],
+    "sw": 327,
+    "cw": 327
+   },
+   "closure": {
+    "h": {
+     "x": 188,
+     "y": 4096,
+     "w": 153,
+     "t": "Project closeout"
+    },
+    "actions": [
+     {
+      "t": "Close out project",
+      "x": 188,
+      "y": 4271,
+      "w": 134
+     }
+    ],
+    "sw": 153,
+    "cw": 153
+   },
+   "record": {
+    "h": {
+     "x": 32,
+     "y": 5343,
+     "w": 168,
+     "t": "Project record"
+    },
+    "actions": [],
+    "sw": 327,
+    "cw": 327
+   }
+  },
+  "focus": {
+   "t": "Add a room",
+   "outline": "rgb(124, 94, 48) solid 2px",
+   "boxShadow": "none",
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(92, 74, 60)",
+   "h": 44,
+   "w": 88.640625
+  }
+ },
+ "768": {
+  "overflow": 0,
+  "dark": [
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 222,
+    "w": 56,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 496,
+    "w": 154,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 610,
+    "y": 807,
+    "w": 125,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 610,
+    "y": 889,
+    "w": 125,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 1141,
+    "w": 129,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 2118,
+    "w": 125,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 34,
+    "y": 2654,
+    "w": 120,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 49,
+    "y": 4363,
+    "w": 129,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 333,
+    "y": 848,
+    "w": 335,
+    "h": 28
+   }
+  ],
+  "plate": null,
+  "heads": {
+   "approvals-head": {
+    "h": {
+     "x": 32,
+     "y": 404,
+     "w": 192,
+     "t": "Client approvals"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 241,
+      "y": 406,
+      "w": 85
+     },
+     {
+      "t": "Assign project client",
+      "x": 32,
+      "y": 488,
+      "w": 158
+     }
+    ],
+    "sw": 705,
+    "cw": 705
+   },
+   "schedule": {
+    "h": {
+     "x": 32,
+     "y": 1048,
+     "w": 194,
+     "t": "Project schedule"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 243,
+      "y": 1050,
+      "w": 85
+     },
+     {
+      "t": "+ New open item",
+      "x": 32,
+      "y": 1133,
+      "w": 133
+     }
+    ],
+    "sw": 705,
+    "cw": 705
+   },
+   "ffe": {
+    "h": {
+     "x": 32,
+     "y": 2026,
+     "w": 191,
+     "t": "FF&E selections"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 241,
+      "y": 2028,
+      "w": 85
+     },
+     {
+      "t": "Bill 2 uninvoiced",
+      "x": 32,
+      "y": 2110,
+      "w": 129
+     },
+     {
+      "t": "Edit selections→",
+      "x": 32,
+      "y": 2163,
+      "w": 132
+     },
+     {
+      "t": "Add items",
+      "x": 177,
+      "y": 2163,
+      "w": 78
+     },
+     {
+      "t": "Prepare purchasing autho",
+      "x": 269,
+      "y": 2163,
+      "w": 232
+     },
+     {
+      "t": "More⌄",
+      "x": 514,
+      "y": 2163,
+      "w": 64
+     }
+    ],
+    "sw": 705,
+    "cw": 705
+   },
+   "money-head": {
+    "h": {
+     "x": 32,
+     "y": 2562,
+     "w": 204,
+     "t": "Project financials"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 253,
+      "y": 2564,
+      "w": 85
+     },
+     {
+      "t": "Draft an invoice",
+      "x": 32,
+      "y": 2646,
+      "w": 124
+     },
+     {
+      "t": "Details",
+      "x": 32,
+      "y": 2699,
+      "w": 57
+     }
+    ],
+    "sw": 705,
+    "cw": 705
+   },
+   "closure": {
+    "h": {
+     "x": 188,
+     "y": 3382,
+     "w": 188,
+     "t": "Project closeout"
+    },
+    "actions": [
+     {
+      "t": "Close out project",
+      "x": 188,
+      "y": 3451,
+      "w": 134
+     }
+    ],
+    "sw": 531,
+    "cw": 531
+   },
+   "record": {
+    "h": {
+     "x": 32,
+     "y": 4434,
+     "w": 168,
+     "t": "Project record"
+    },
+    "actions": [],
+    "sw": 705,
+    "cw": 705
+   }
+  },
+  "focus": {
+   "t": "Add a room",
+   "outline": "rgb(124, 94, 48) solid 2px",
+   "boxShadow": "none",
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(92, 74, 60)",
+   "h": 44,
+   "w": 88.640625
+  }
+ },
+ "1440": {
+  "overflow": 0,
+  "dark": [
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 815,
+    "y": 155,
+    "w": 60,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 256,
+    "y": 443,
+    "w": 154,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 1027,
+    "y": 754,
+    "w": 125,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 1027,
+    "y": 836,
+    "w": 125,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 256,
+    "y": 1088,
+    "w": 129,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 256,
+    "y": 2065,
+    "w": 125,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 256,
+    "y": 2601,
+    "w": 120,
+    "h": 28
+   },
+   {
+    "tag": "SPAN",
+    "txt": "",
+    "bg": "rgb(44, 41, 38)",
+    "pos": "absolute",
+    "x": 854,
+    "y": 4263,
+    "w": 129,
+    "h": 28
+   }
+  ],
+  "plate": null,
+  "heads": {
+   "approvals-head": {
+    "h": {
+     "x": 254,
+     "y": 351,
+     "w": 192,
+     "t": "Client approvals"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 464,
+      "y": 353,
+      "w": 85
+     },
+     {
+      "t": "Assign project client",
+      "x": 254,
+      "y": 435,
+      "w": 158
+     }
+    ],
+    "sw": 900,
+    "cw": 900
+   },
+   "schedule": {
+    "h": {
+     "x": 254,
+     "y": 995,
+     "w": 194,
+     "t": "Project schedule"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 466,
+      "y": 997,
+      "w": 85
+     },
+     {
+      "t": "+ New open item",
+      "x": 254,
+      "y": 1080,
+      "w": 133
+     }
+    ],
+    "sw": 900,
+    "cw": 900
+   },
+   "ffe": {
+    "h": {
+     "x": 254,
+     "y": 1973,
+     "w": 191,
+     "t": "FF&E selections"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 463,
+      "y": 1975,
+      "w": 85
+     },
+     {
+      "t": "Bill 2 uninvoiced",
+      "x": 254,
+      "y": 2057,
+      "w": 129
+     },
+     {
+      "t": "Edit selections→",
+      "x": 254,
+      "y": 2110,
+      "w": 132
+     },
+     {
+      "t": "Add items",
+      "x": 400,
+      "y": 2110,
+      "w": 78
+     },
+     {
+      "t": "Prepare purchasing autho",
+      "x": 491,
+      "y": 2110,
+      "w": 232
+     },
+     {
+      "t": "More⌄",
+      "x": 737,
+      "y": 2110,
+      "w": 64
+     }
+    ],
+    "sw": 900,
+    "cw": 900
+   },
+   "money-head": {
+    "h": {
+     "x": 254,
+     "y": 2509,
+     "w": 204,
+     "t": "Project financials"
+    },
+    "actions": [
+     {
+      "t": "Collapse ↑",
+      "x": 476,
+      "y": 2511,
+      "w": 85
+     },
+     {
+      "t": "Draft an invoice",
+      "x": 254,
+      "y": 2593,
+      "w": 124
+     },
+     {
+      "t": "Details",
+      "x": 254,
+      "y": 2646,
+      "w": 57
+     }
+    ],
+    "sw": 900,
+    "cw": 900
+   },
+   "closure": {
+    "h": {
+     "x": 410,
+     "y": 3312,
+     "w": 188,
+     "t": "Project closeout"
+    },
+    "actions": [
+     {
+      "t": "Close out project",
+      "x": 410,
+      "y": 3382,
+      "w": 134
+     }
+    ],
+    "sw": 726,
+    "cw": 726
+   },
+   "record": {
+    "h": {
+     "x": 254,
+     "y": 4334,
+     "w": 168,
+     "t": "Project record"
+    },
+    "actions": [],
+    "sw": 900,
+    "cw": 900
+   }
+  },
+  "focus": {
+   "t": "Chase the approval",
+   "outline": "rgb(250, 247, 242) none 0px",
+   "boxShadow": "none",
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(250, 247, 242)",
+   "h": 44,
+   "w": 179.9375
+  }
+ },
+ "desk": {
+  "overflow": 0,
+  "dark": [],
+  "plate": null,
+  "heads": {}
+ }
+}
