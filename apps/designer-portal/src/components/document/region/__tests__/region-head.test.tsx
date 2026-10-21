@@ -168,29 +168,79 @@ describe('RegionHead', () => {
     expect(
       document.querySelectorAll('[data-action-variant="inked"], [data-action-variant="primary"]'),
     ).toHaveLength(0);
-    expect(
-      document.querySelectorAll('[role="group"] [data-action-key]'),
-    ).toHaveLength(1);
+    // The fold is the head's own disclosure, not a ledger act: with nothing
+    // in the ledger there is no empty, unnamed action group printed for it.
+    expect(document.querySelector('[role="group"]')).not.toBeInTheDocument();
   });
 
-  it('stacks the heading above its ledger below 1180 (F28)', () => {
+  // US-46 B — the Fold sits beside the name on its baseline, outside the
+  // ledger, still the region's tertiary disclosure with its telemetry key.
+  it('sets the fold beside the name, outside the ledger', () => {
+    renderHead({ bodyId: 'region-approvals-body', onFold: jest.fn() });
+    const heading = screen.getByRole('heading', { level: 2, name: 'Approvals' });
+    const fold = screen.getByRole('button', { name: 'Collapse ↑' });
+    const nameLine = heading.parentElement!;
+
+    expect(nameLine).toContainElement(fold);
+    expect(nameLine).toHaveClass('flex', 'flex-wrap', 'items-baseline');
+    expect(fold).toHaveAttribute('data-action-key', 'approvals-fold');
+    expect(fold.closest('[role="group"]')).toBeNull();
+    // `h2 + p` stays the status (prework-regions e2e), printed on its own
+    // line below the name line.
+    const status = document.querySelector('[data-region-head] h2 + p')!;
+    expect(status).toHaveTextContent('Two decisions waiting');
+    expect(status).toHaveClass('basis-full', 'order-last');
+    // Tab order runs the name line before the ledger.
+    const group = document.querySelector('[role="group"][data-action-region="approvals"]')!;
+    expect(
+      fold.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  // US-46 B — one left-justified column at every width: the lead alone on its
+  // own line, the remaining tools on a wrapping row beneath it.
+  it('stacks the lead on its own line over a left-justified tools row', () => {
     renderHead();
-    const head = document.querySelector('[data-region-head="approvals"]');
-    // The two-track grid — the one that put the leader over the heading
-    // at 390 — is now gated behind 1180; below it the head is one column.
+    const head = document.querySelector('[data-region-head="approvals"]')!;
+    const group = document.querySelector('[role="group"][data-action-region="approvals"]')!;
+    const lead = group.querySelector('[data-region-lead]')!;
+    const tools = group.querySelector('[data-region-tools]')!;
+
     expect(head).toHaveClass('grid-cols-1');
-    expect(head).toHaveClass('min-[1180px]:grid-cols-[minmax(20rem,1fr)_auto]');
-    expect(head).not.toHaveClass('grid-cols-[minmax(20rem,1fr)_auto]');
+    expect(lead).toHaveClass('basis-full');
+    expect(lead.querySelectorAll('[data-action-key]')).toHaveLength(1);
+    expect(lead).toContainElement(screen.getByRole('button', { name: 'Approve' }));
+    expect(tools).toHaveClass('basis-full', 'flex-wrap', 'justify-start');
     expect(
-      document.querySelector('[role="group"][data-action-region="approvals"]'),
-    ).toHaveClass('justify-start', 'min-[1180px]:justify-end');
+      Array.from(tools.querySelectorAll('[data-action-key]')).map((act) =>
+        act.getAttribute('data-action-key'),
+      ),
+    ).toEqual(['second-act', 'third-act', 'fourth-act']);
+    // Nothing at any width sets the head in two tracks or pushes acts right.
+    for (const element of [head, group, lead, tools]) {
+      expect(element.className).not.toMatch(/justify-end|text-right|grid-cols-\[/);
+    }
   });
 
-  // B5 — jsdom lays nothing out, so the fix is asserted as the tracks the
-  // browser is handed. Under the Pieces ledger at 1440 the `auto` column took
-  // its max-content and the status broke one word per line; the left track's
-  // floor caps that column, and the ledger wraps on its own `flex-wrap`.
-  it('floors the status track under a four-act ledger so the ACTS wrap, not the words', () => {
+  it('prints every act on the tools row when nothing leads', () => {
+    renderHead({ leaderless: true });
+    const group = document.querySelector('[role="group"][data-action-region="approvals"]')!;
+    expect(group.querySelector('[data-region-lead]')).toBeNull();
+    expect(
+      group.querySelectorAll('[data-region-tools] [data-action-key]'),
+    ).toHaveLength(4);
+  });
+
+  it('prints the lead alone at quiet, with no tools row', () => {
+    renderHead({ actsAtQuiet: 'leader' });
+    const group = document.querySelector('[role="group"][data-action-region="approvals"]')!;
+    expect(group.querySelectorAll('[data-region-lead] [data-action-key]')).toHaveLength(1);
+    expect(group.querySelector('[data-region-tools]')).toBeNull();
+  });
+
+  // The lead line and the tools row are two lines of ONE named action region:
+  // `action-visibility.spec.ts` and the one-leader guard query that element.
+  it('keeps one named ledger action region over both lines', () => {
     renderHead({
       status: 'the FF&E schedule, by room · 5 groups · 62 lines',
       actions: [
@@ -202,67 +252,20 @@ describe('RegionHead', () => {
       bodyId: 'region-approvals-body',
       onFold: jest.fn(),
     });
-    const head = document.querySelector('[data-region-head="approvals"]')!;
-    expect(head).toHaveClass('min-[1180px]:grid-cols-[minmax(20rem,1fr)_auto]');
-    expect(head).not.toHaveClass('min-[1180px]:grid-cols-[1fr_auto]');
-
-    const group = document.querySelector(
-      '[role="group"][data-action-region="approvals"]',
-    )!;
-    // Five acts on the ledger, and the ledger is the thing that wraps.
-    expect(group.querySelectorAll('[data-action-key]')).toHaveLength(5);
-    expect(group).toHaveClass('flex-wrap');
-    // The status keeps its own track and still never truncates.
+    const groups = document.querySelectorAll('[role="group"][data-action-region="approvals"]');
+    expect(groups).toHaveLength(1);
+    const group = groups[0];
+    expect(group).toHaveAttribute('aria-label', 'Approvals actions');
+    expect(group.querySelectorAll('[data-action-key]')).toHaveLength(4);
+    expect(group.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
     expect(
       screen.getByText('the FF&E schedule, by room · 5 groups · 62 lines'),
     ).not.toHaveClass('truncate');
-  });
-
-  // jsdom evaluates no media queries, so "at every width" is asserted
-  // structurally rather than by resizing: the ledger's action region rides ONE
-  // element, that element carries the whole contract unconditionally, and
-  // nothing on the path from the head to it is gated on a breakpoint — the
-  // only width-conditional classes are layout (grid tracks, justification).
-  it('keeps the ledger action region at <1180 and >=1180 alike', () => {
-    renderHead();
-    const head = document.querySelector('[data-region-head="approvals"]')!;
-    const group = document.querySelector(
-      '[role="group"][data-action-region="approvals"]',
-    )!;
-
-    // The three attributes the contract is made of, on the queried element.
-    expect(group).toHaveAttribute('role', 'group');
-    expect(group).toHaveAttribute('data-action-region', 'approvals');
-    expect(group).toHaveAttribute('aria-label', 'Approvals actions');
-    expect(group).toContainElement(
-      screen.getByRole('button', { name: 'Approve' }),
-    );
-
-    // <1180 — the stacked head. >=1180 — the two-track grid. Same element.
-    expect(head).toHaveClass('grid-cols-1');
-    expect(group).toHaveClass('justify-start');
-    expect(head).toHaveClass('min-[1180px]:grid-cols-[minmax(20rem,1fr)_auto]');
-    expect(group).toHaveClass('min-[1180px]:justify-end');
-
-    // No class on either the head or the ledger removes the region at a width.
-    for (const element of [head, group]) {
+    for (const element of [document.querySelector('[data-region-head]')!, group]) {
       expect(
-        Array.from(element.classList).filter((name) =>
-          /(?:^|:)hidden$/.test(name),
-        ),
+        Array.from(element.classList).filter((name) => /(?:^|:)hidden$/.test(name)),
       ).toEqual([]);
     }
-  });
-
-  it('names the ledger after the region even when the head only folds', () => {
-    renderHead({
-      actions: [],
-      bodyId: 'region-approvals-body',
-      onFold: jest.fn(),
-    });
-    expect(
-      document.querySelector('[role="group"][data-action-region="approvals"]'),
-    ).toHaveAttribute('aria-label', 'Approvals actions');
   });
 
   it('wraps a long status instead of truncating it (F87)', () => {
@@ -334,9 +337,12 @@ describe('RegionHead', () => {
     expect(held).not.toHaveAttribute('disabled');
     held.focus();
     expect(held).toHaveFocus();
-    expect(document.getElementById(held.getAttribute('aria-describedby')!)).toHaveTextContent(
-      'Nothing is ready.',
-    );
+    const reason = document.getElementById(held.getAttribute('aria-describedby')!)!;
+    expect(reason).toHaveTextContent('Nothing is ready.');
+    // US-46 B — the lead's reason prints left-aligned directly under the lead
+    // line, before the tools row.
+    expect(reason.className).not.toMatch(/text-right/);
+    expect(reason.previousElementSibling).toHaveAttribute('data-region-lead');
     held.click();
     expect(onClick).not.toHaveBeenCalled();
 

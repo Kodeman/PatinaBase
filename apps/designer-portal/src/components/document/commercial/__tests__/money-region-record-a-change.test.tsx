@@ -92,9 +92,12 @@ describe('The Money head with ask-the-paper on (F16, R33)', () => {
   it('prints Draft an invoice · Details · Fold, with Record a change and the time ledger in Details', () => {
     render(<MoneyRegion projectId="project-1" />);
     const acts = headActs();
+    // US-46 B — the Fold sits with the name, ahead of the ledger it no longer
+    // shares; the ledger's own order still leads with Draft an invoice.
+    const ledgerActs = actsIn('[data-action-region="money-head"]');
 
-    expect(acts.slice(0, 2)).toEqual(['Draft an invoice', 'Details']);
-    expect(acts.some((act) => /Collapse/.test(act))).toBe(true);
+    expect(ledgerActs.slice(0, 2)).toEqual(['Draft an invoice', 'Details']);
+    expect(acts[0]).toMatch(/Collapse/);
     expect(acts).not.toContain('Record a change');
     expect(detailsActs()).toEqual(['Record a change', 'Project time ledger ↗']);
     expect(
