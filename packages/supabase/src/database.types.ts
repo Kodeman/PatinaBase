@@ -3603,6 +3603,7 @@ export type Database = {
           project_id: string
           source_kind: string
           source_ref: Json
+          source_revision: string | null
           source_url: string
           status: string
           updated_at: string
@@ -3618,6 +3619,7 @@ export type Database = {
           project_id: string
           source_kind: string
           source_ref: Json
+          source_revision?: string | null
           source_url: string
           status?: string
           updated_at?: string
@@ -3633,6 +3635,7 @@ export type Database = {
           project_id?: string
           source_kind?: string
           source_ref?: Json
+          source_revision?: string | null
           source_url?: string
           status?: string
           updated_at?: string
@@ -36898,6 +36901,10 @@ export type Database = {
         }
         Returns: Json
       }
+      _client_plate_concept_revision: {
+        Args: { p_uploaded_at: string }
+        Returns: string
+      }
       _client_plate_scan_source: { Args: { p_url: string }; Returns: string }
       _clone_proposal_legacy_00399: {
         Args: {
@@ -37388,6 +37395,7 @@ export type Database = {
           p_id: string
           p_project_id: string
           p_source_kind: string
+          p_source_revision?: string
           p_source_url: string
           p_table: string
         }
@@ -40106,6 +40114,7 @@ export type Database = {
           project_id: string
           source_kind: string
           source_ref: Json
+          source_revision: string | null
           source_url: string
           status: string
           updated_at: string
@@ -40297,6 +40306,15 @@ export type Database = {
       client_pick: {
         Args: { p_ceremony_id: string; p_slot_id: string }
         Returns: Json
+      }
+      client_plate_source_owned: {
+        Args: {
+          p_id: string
+          p_project_id: string
+          p_source_url: string
+          p_table: string
+        }
+        Returns: boolean
       }
       clone_proposal: {
         Args: {

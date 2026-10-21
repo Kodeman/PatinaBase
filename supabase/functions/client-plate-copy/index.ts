@@ -5,15 +5,16 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller } from "../_shared/caller.ts";
 import {
+  fetchAddress,
   type IngestAsset,
   INGEST_TIMEOUT_MS,
   mapPool,
   parseJobRunId,
   type PlateRequest,
   recordPayload,
-  resolveSource,
   shortenError,
   SIGNED_URL_TTL_SECONDS,
+  type SourceAuthority,
   summarizeRun,
   validateIngestResponse,
 } from "./lib.ts";
@@ -32,21 +33,28 @@ interface CopyEnv {
   secret: string;
 }
 
-async function signedUrl(admin: Admin, bucket: string, path: string): Promise<string> {
-  const { data, error } = await admin.storage.from(bucket).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
-  if (error) throw new Error(`signing ${bucket} failed: ${error.message}`);
-  return data.signedUrl;
-}
-
-async function fetchUrl(admin: Admin, request: PlateRequest, supabaseUrl: string): Promise<string> {
-  const source = resolveSource(request, supabaseUrl);
-  if (!source) throw new Error(`no fetch address for a ${request.source_kind} source`);
-  if (source.kind === "direct") return source.url;
-  return await signedUrl(admin, source.bucket, source.path);
+function sourceAuthority(admin: Admin): SourceAuthority {
+  return {
+    async owned(request) {
+      const { data, error } = await admin.rpc("client_plate_source_owned", {
+        p_project_id: request.project_id,
+        p_table: request.source_ref?.table ?? null,
+        p_id: request.source_ref?.id ?? null,
+        p_source_url: request.source_url,
+      });
+      if (error) throw new Error(`ownership check failed: ${error.message}`);
+      return data === true;
+    },
+    async sign(bucket, path) {
+      const { data, error } = await admin.storage.from(bucket).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+      if (error) throw new Error(`signing ${bucket} failed: ${error.message}`);
+      return data.signedUrl;
+    },
+  };
 }
 
 async function ingest(admin: Admin, request: PlateRequest, env: CopyEnv): Promise<IngestAsset> {
-  const sourceUrl = await fetchUrl(admin, request, env.supabaseUrl);
+  const sourceUrl = await fetchAddress(request, env.supabaseUrl, sourceAuthority(admin));
   const response = await fetch(`${env.workerUrl}/plates/ingest`, {
     method: "POST",
     headers: { Authorization: `Bearer ${env.secret}`, "Content-Type": "application/json" },

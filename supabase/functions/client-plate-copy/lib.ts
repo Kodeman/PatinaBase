@@ -13,7 +13,24 @@ export interface PlateRequest {
 
 export type PlateSource =
   | { kind: "direct"; url: string }
-  | { kind: "signed"; bucket: string; path: string };
+  | { kind: "signed"; bucket: string; path: string }
+  | { kind: "not_owned" };
+
+/** The fetch address is not the request's project's to copy (fail reason source_not_owned). */
+export class SourceNotOwned extends Error {
+  constructor() {
+    super("source_not_owned");
+  }
+}
+
+/**
+ * The database half of the ownership check (client_plate_source_owned: the
+ * scan's owner folder, the board's proposal) and the service-role signer.
+ */
+export interface SourceAuthority {
+  owned(request: PlateRequest): Promise<boolean>;
+  sign(bucket: string, path: string): Promise<string>;
+}
 
 export interface IngestAsset {
   sha256: string;
@@ -53,27 +70,64 @@ function encodePath(path: string): string {
   return path.replace(/^\/+/, "").split("/").map(encodeURIComponent).join("/");
 }
 
+// An empty, "." or ".." segment, also %2e-encoded (client_plate_source_owned's rule).
+const DOT_OR_EMPTY_SEGMENT = /(^|\/)(\.|%2e){0,2}(\/|$)/i;
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+// room-renders/<project>/<room>/<file> (00580's policy shape).
+const ROOM_RENDER_PATH = new RegExp(`^(${UUID})/${UUID}/.+$`, "i");
+
+/** What the path alone settles: no dot segment, and a room render under the request's project. */
+function pathMayBelong(bucket: string, path: string, projectId: string): boolean {
+  if (DOT_OR_EMPTY_SEGMENT.test(path)) return false;
+  if (bucket !== "room-renders") return true;
+  const match = ROOM_RENDER_PATH.exec(path);
+  return match !== null && match[1].toLowerCase() === projectId.toLowerCase();
+}
+
 /**
  * Where to fetch a request's picture: a hotlink or outside address as it is;
- * an object path in a private bucket is signed by the caller; an upload in the
- * public item-images bucket gets its public object URL. Null when the source
- * table is unknown or the address is blank.
+ * an object path in a private bucket is signed by the caller, unless its path
+ * already shows it is not the request's project's; an upload in the public
+ * item-images bucket gets its public object URL. Null when the source table is
+ * unknown or the address is blank.
  */
 export function resolveSource(request: PlateRequest, supabaseUrl: string): PlateSource | null {
   const address = request.source_url.trim();
   if (!address) return null;
   if (/^https?:\/\//i.test(address)) return { kind: "direct", url: address };
-  return storageSource(request.source_ref?.table, address, supabaseUrl);
+  return storageSource(request, address, supabaseUrl);
 }
 
-function storageSource(table: string | undefined, path: string, supabaseUrl: string): PlateSource | null {
-  const key = table ?? "";
+function storageSource(request: PlateRequest, address: string, supabaseUrl: string): PlateSource | null {
+  const key = request.source_ref?.table ?? "";
   const privateBucket = PRIVATE_BUCKET_BY_TABLE[key];
-  if (privateBucket) return { kind: "signed", bucket: privateBucket, path: path.replace(/^\/+/, "") };
+  if (privateBucket) {
+    const path = address.replace(/^\/+/, "");
+    return pathMayBelong(privateBucket, path, request.project_id)
+      ? { kind: "signed", bucket: privateBucket, path }
+      : { kind: "not_owned" };
+  }
   const publicBucket = PUBLIC_BUCKET_BY_TABLE[key];
   if (!publicBucket) return null;
   const base = supabaseUrl.replace(/\/+$/, "");
-  return { kind: "direct", url: `${base}/storage/v1/object/public/${publicBucket}/${encodePath(path)}` };
+  return { kind: "direct", url: `${base}/storage/v1/object/public/${publicBucket}/${encodePath(address)}` };
+}
+
+/**
+ * The URL the media worker fetches. A private object is signed only once its
+ * path and the database both place it in the request's project; otherwise
+ * SourceNotOwned is thrown and nothing is signed.
+ */
+export async function fetchAddress(
+  request: PlateRequest,
+  supabaseUrl: string,
+  authority: SourceAuthority,
+): Promise<string> {
+  const source = resolveSource(request, supabaseUrl);
+  if (!source) throw new Error(`no fetch address for a ${request.source_kind} source`);
+  if (source.kind === "direct") return source.url;
+  if (source.kind === "not_owned" || !(await authority.owned(request))) throw new SourceNotOwned();
+  return await authority.sign(source.bucket, source.path);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

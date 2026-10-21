@@ -48,7 +48,10 @@
 -- while the new one is being copied. A source's plate is the asset its done
 -- request names (client_plate_requests.asset_id): two sources with the same
 -- bytes share one asset (UNIQUE project_id, sha256), and each still finds it.
--- An asset's sourceKind is the kind of the source its caption describes.
+-- An asset's sourceKind is the kind of the source its caption describes,
+-- except that bytes any of the project's sources produced as a concept render
+-- stay 'concept' (R142: a concept is never the hero), whichever source the
+-- caption describes. The alt's kind word follows sourceKind.
 --
 -- Captions are code: what = the line's name as signed (room name for a concept
 -- render or scan, board name, sheet title); whose = the maker when
@@ -343,7 +346,7 @@ BEGIN
       SELECT jsonb_agg(jsonb_build_object(
         'id', asset.id,
         'sha256', asset.sha256,
-        'sourceKind', caption.kind,
+        'sourceKind', provenance.kind,
         'width', asset.width,
         'height', asset.height,
         'ground', asset.ground,
@@ -358,7 +361,7 @@ BEGIN
           'when', caption.taken_on
         ),
         'alt', concat_ws(' · ', caption.what, caption.whose,
-          CASE caption.kind
+          CASE provenance.kind
             WHEN 'maker' THEN 'product photograph'
             WHEN 'upload' THEN 'studio photograph'
             WHEN 'installed' THEN 'installed photograph'
@@ -372,6 +375,15 @@ BEGIN
       JOIN public.client_plate_assets AS asset
         ON asset.id = caption.asset_id
        AND asset.project_id = p_project_id
+      CROSS JOIN LATERAL (
+        SELECT CASE
+                 WHEN asset.source_kind = 'concept'
+                   OR EXISTS (SELECT 1 FROM plate
+                              WHERE plate.id = asset.id AND plate.source_kind = 'concept')
+                 THEN 'concept'
+                 ELSE caption.kind
+               END AS kind
+      ) AS provenance
     ), '[]'::jsonb),
     'palette', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(

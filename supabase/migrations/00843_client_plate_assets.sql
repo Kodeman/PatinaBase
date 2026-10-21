@@ -14,13 +14,21 @@
 --                           source_kind, source_ref {table,id}); once done it
 --                           names the asset its copy produced (asset_id), so
 --                           every source of shared bytes finds its plate.
---   enqueue triggers        a new item picture (project_ffe_item_images), a
---                           concept render set on a room (project_rooms), a new
---                           scan still (room_scan_images), a board cover
+--   enqueue triggers        a new item picture, or one carried to another job
+--                           (project_ffe_item_images), a concept render set or
+--                           re-uploaded on a room (project_rooms), a new scan
+--                           still (room_scan_images), a board cover
 --                           (project_boards, on insert as well: activation
 --                           writes the frozen board with its cover, and the
 --                           snapshot is never otherwise updated). Each queues
---                           its source; a changed source address re-queues it.
+--                           its source; a changed source address or revision
+--                           re-queues it.
+--   client_plate_source_owned
+--                           whether a source's private object belongs to the
+--                           request's project, by its bucket's read policy. A
+--                           source that does not is recorded failed
+--                           (source_not_owned) and never queued; the edge
+--                           function asks again before it signs.
 --   backfill                every existing source of the four kinds.
 --   service-role RPCs       claim_client_plate_requests, record_client_plate_
 --                           asset, fail_client_plate_request (lease-checked),
@@ -39,15 +47,17 @@
 -- builds the fetchable URL.
 --
 -- Lock order (SQ-1143, 00807): client_plate_requests.project_id has NO foreign
--- key. The item-picture trigger runs while its inserter already holds the
--- item; a key check on projects there would take projects after the item, the
--- reverse of furnishings execution (projects FOR UPDATE, then the item). A
--- request of a job that no longer exists is never claimed.
+-- key. The item-picture trigger runs while its inserter (or the item mover,
+-- 00807 carry) already holds the item; a key check on projects there would
+-- take projects after the item, the reverse of furnishings execution
+-- (projects FOR UPDATE, then the item). For the same reason the ownership
+-- check reads no table for an item picture. A request of a job that no longer
+-- exists is never claimed.
 -- record_client_plate_asset takes the project before the request row for the
 -- same reason.
 --
 -- Retry: a failed or expired attempt goes back to the queue until its third
--- attempt, then stays failed until its source address changes.
+-- attempt, then stays failed until its source address or revision changes.
 --
 -- RLS on both tables with no policy: no API role reads or writes them
 -- directly; the reader is get_client_project_editorial (00842) and the plate
@@ -95,6 +105,10 @@ CREATE TABLE IF NOT EXISTS public.client_plate_requests (
     ('upload','installed','scan','board','sheet','maker','concept')),
   source_ref jsonb NOT NULL,
   source_url text NOT NULL CHECK (btrim(source_url) <> ''),
+  -- A replaced concept render keeps its object key (upsert) and moves only
+  -- concept_render_uploaded_at, so the address alone cannot tell a new
+  -- picture from the old one.
+  source_revision text,
   status text NOT NULL DEFAULT 'queued'
     CHECK (status IN ('queued','leased','done','failed')),
   lease_token uuid,
@@ -116,7 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_client_plate_requests_queue
   WHERE status IN ('queued', 'leased');
 
 COMMENT ON TABLE public.client_plate_requests IS
-  'US-49: the plate copy queue, one row per source (project, source_kind, source_ref {table,id}). queued → leased (claim_client_plate_requests) → done (record_client_plate_asset) | queued again or failed (fail_client_plate_request, lease expiry; failed after the third attempt). A changed source address re-queues the row. Service role only.';
+  'US-49: the plate copy queue, one row per source (project, source_kind, source_ref {table,id}). queued → leased (claim_client_plate_requests) → done (record_client_plate_asset) | queued again or failed (fail_client_plate_request, lease expiry; failed after the third attempt). A changed source address or revision re-queues the row; a source whose private object is not the project''s is recorded failed (source_not_owned). Service role only.';
 
 ALTER TABLE public.client_plate_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.client_plate_requests ENABLE ROW LEVEL SECURITY;
@@ -128,15 +142,73 @@ GRANT ALL ON TABLE public.client_plate_requests TO service_role;
 
 -- ─── 2. Enqueue ─────────────────────────────────────────────────────────────
 
+-- Whether the object a source address names belongs to p_project_id. The
+-- service role signs private objects, so the bucket's own read policy is the
+-- authority on whose an object is:
+--   room-renders          <project>/<room>/<file>; segment 1 is the project
+--                         (00580:83-109)
+--   room-scans            <artifact>/<owner>/<scan | legacy room>/<file>;
+--                         segments 2 and 3 name the source still's own scan
+--                         (00287, 00584:536-552), which must be in the project
+--   proposal-mood-boards  <proposal>/…; segment 1 is a proposal of the project
+--                         (00485:143-157; activation sets proposals.project_id)
+-- An empty, '.' or '..' segment (also %2e-encoded) never belongs. Addresses
+-- outside these buckets (hotlinks, outside covers, the public item-images
+-- bucket) are not signed with service-role authority and are not refused here.
+CREATE OR REPLACE FUNCTION public.client_plate_source_owned(
+  p_project_id uuid,
+  p_table text,
+  p_id uuid,
+  p_source_url text
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+  SELECT CASE
+    WHEN COALESCE(p_table, '') NOT IN ('project_rooms', 'room_scan_images', 'project_boards')
+      OR target.path ~* '^https?://' THEN true
+    WHEN p_project_id IS NULL
+      OR target.path ~* '(^|/)(\.|%2e){0,2}(/|$)' THEN false
+    WHEN p_table = 'project_rooms' THEN
+      target.path ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/.+$'
+      AND lower(target.folder[1]) = p_project_id::text
+    WHEN p_table = 'room_scan_images' THEN EXISTS (
+      SELECT 1
+      FROM public.room_scan_images AS still
+      JOIN public.room_scans AS scan ON scan.id = still.scan_id
+      WHERE still.id = p_id
+        AND scan.project_id = p_project_id
+        AND scan.user_id::text = target.folder[2]
+        AND (scan.id::text = target.folder[3] OR scan.room_id::text = target.folder[3])
+    )
+    ELSE EXISTS (
+      SELECT 1
+      FROM public.proposals AS proposal
+      WHERE proposal.id::text = target.folder[1]
+        AND proposal.project_id = p_project_id
+    )
+  END
+  FROM (
+    SELECT address.path, storage.foldername(address.path) AS folder
+    FROM (SELECT ltrim(btrim(COALESCE(p_source_url, '')), '/') AS path) AS address
+  ) AS target;
+$$;
+
 -- Queue one source. A source already queued is left alone unless its address
--- changed; a changed address re-queues it whatever its state (a lease in
--- flight then loses its token, so a stale copy is never recorded).
+-- or revision changed; a change re-queues it whatever its state (a lease in
+-- flight then loses its token, so a stale copy is never recorded). A source
+-- whose object is not the project's is recorded failed and never queued, and
+-- a done source moved onto such an object stops naming its old asset.
 CREATE OR REPLACE FUNCTION public._enqueue_client_plate_request(
   p_project_id uuid,
   p_source_kind text,
   p_table text,
   p_id uuid,
-  p_source_url text
+  p_source_url text,
+  p_source_revision text DEFAULT NULL
 )
 RETURNS void
 LANGUAGE sql
@@ -144,23 +216,29 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $$
   INSERT INTO public.client_plate_requests AS request
-    (project_id, source_kind, source_ref, source_url)
+    (project_id, source_kind, source_ref, source_url, source_revision, status, last_error)
   SELECT p_project_id, p_source_kind,
          jsonb_build_object('table', p_table, 'id', p_id),
-         btrim(p_source_url)
+         btrim(p_source_url),
+         p_source_revision,
+         CASE WHEN ownership.owned THEN 'queued' ELSE 'failed' END,
+         CASE WHEN ownership.owned THEN NULL ELSE 'source_not_owned' END
+  FROM (SELECT public.client_plate_source_owned(p_project_id, p_table, p_id, p_source_url) AS owned) AS ownership
   WHERE p_project_id IS NOT NULL
     AND p_id IS NOT NULL
     AND NULLIF(btrim(p_source_url), '') IS NOT NULL
   ON CONFLICT (project_id, source_kind, source_ref) DO UPDATE
-  SET status = 'queued',
+  SET status = EXCLUDED.status,
       source_url = EXCLUDED.source_url,
+      source_revision = EXCLUDED.source_revision,
       attempts = 0,
-      last_error = NULL,
+      last_error = EXCLUDED.last_error,
       lease_token = NULL,
       lease_expires_at = NULL,
       asset_id = NULL,
       updated_at = now()
-  WHERE request.source_url IS DISTINCT FROM EXCLUDED.source_url;
+  WHERE request.source_url IS DISTINCT FROM EXCLUDED.source_url
+     OR request.source_revision IS DISTINCT FROM EXCLUDED.source_revision;
 $$;
 
 -- The object key inside room-scans, split off the stored URL on the LAST
@@ -174,6 +252,17 @@ AS $$
   SELECT COALESCE(NULLIF(substring(p_url FROM '.*/room-scans/([^?]*)'), ''), p_url);
 $$;
 
+-- A concept render's revision: its upload time, written in UTC so the text
+-- never depends on the session's TimeZone or DateStyle.
+CREATE OR REPLACE FUNCTION public._client_plate_concept_revision(p_uploaded_at timestamptz)
+RETURNS text
+LANGUAGE sql
+STABLE
+SET search_path TO 'public', 'pg_temp'
+AS $$
+  SELECT to_char(p_uploaded_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
+$$;
+
 CREATE OR REPLACE FUNCTION public.client_plate_enqueue_item_image()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -181,6 +270,11 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $$
 BEGIN
+  -- A carried picture (00807 project_ffe_items_carry_images) is queued in its
+  -- new job; the old job's request stays its own.
+  IF TG_OP = 'UPDATE' AND NEW.project_id IS NOT DISTINCT FROM OLD.project_id THEN
+    RETURN NULL;
+  END IF;
   PERFORM public._enqueue_client_plate_request(
     NEW.project_id,
     CASE WHEN NEW.source = 'upload' THEN 'upload' ELSE 'maker' END,
@@ -200,7 +294,8 @@ SET search_path TO 'public', 'pg_temp'
 AS $$
 BEGIN
   PERFORM public._enqueue_client_plate_request(
-    NEW.project_id, 'concept', 'project_rooms', NEW.id, NEW.concept_render_url);
+    NEW.project_id, 'concept', 'project_rooms', NEW.id, NEW.concept_render_url,
+    public._client_plate_concept_revision(NEW.concept_render_uploaded_at));
   RETURN NULL;
 END;
 $$;
@@ -241,9 +336,14 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public._enqueue_client_plate_request(uuid, text, text, uuid, text)
+REVOKE ALL ON FUNCTION public.client_plate_source_owned(uuid, text, uuid, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.client_plate_source_owned(uuid, text, uuid, text) TO service_role;
+REVOKE ALL ON FUNCTION public._enqueue_client_plate_request(uuid, text, text, uuid, text, text)
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._client_plate_scan_source(text)
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._client_plate_concept_revision(timestamptz)
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.client_plate_enqueue_item_image()
   FROM PUBLIC, anon, authenticated;
@@ -256,15 +356,16 @@ REVOKE ALL ON FUNCTION public.client_plate_enqueue_board_cover()
 
 DROP TRIGGER IF EXISTS trg_client_plate_enqueue_item_image ON public.project_ffe_item_images;
 CREATE TRIGGER trg_client_plate_enqueue_item_image
-  AFTER INSERT ON public.project_ffe_item_images
+  AFTER INSERT OR UPDATE OF project_id ON public.project_ffe_item_images
   FOR EACH ROW EXECUTE FUNCTION public.client_plate_enqueue_item_image();
 
 DROP TRIGGER IF EXISTS trg_client_plate_enqueue_concept_render ON public.project_rooms;
 CREATE TRIGGER trg_client_plate_enqueue_concept_render
-  AFTER UPDATE OF concept_render_url ON public.project_rooms
+  AFTER UPDATE OF concept_render_url, concept_render_uploaded_at ON public.project_rooms
   FOR EACH ROW
   WHEN (NEW.concept_render_url IS NOT NULL
-        AND NEW.concept_render_url IS DISTINCT FROM OLD.concept_render_url)
+        AND (NEW.concept_render_url IS DISTINCT FROM OLD.concept_render_url
+             OR NEW.concept_render_uploaded_at IS DISTINCT FROM OLD.concept_render_uploaded_at))
   EXECUTE FUNCTION public.client_plate_enqueue_concept_render();
 
 DROP TRIGGER IF EXISTS trg_client_plate_enqueue_scan_image ON public.room_scan_images;
@@ -280,44 +381,38 @@ CREATE TRIGGER trg_client_plate_enqueue_board_cover
   EXECUTE FUNCTION public.client_plate_enqueue_board_cover();
 
 -- ─── 3. Backfill ────────────────────────────────────────────────────────────
+-- Through the enqueue function, so existing sources pass the same ownership
+-- check as new ones.
 
-INSERT INTO public.client_plate_requests (project_id, source_kind, source_ref, source_url)
-SELECT picture.project_id,
-       CASE WHEN picture.source = 'upload' THEN 'upload' ELSE 'maker' END,
-       jsonb_build_object('table', 'project_ffe_item_images', 'id', picture.id),
-       btrim(CASE WHEN picture.source = 'upload'
-                  THEN COALESCE(picture.storage_path, picture.url) ELSE picture.url END)
-FROM public.project_ffe_item_images AS picture
-WHERE NULLIF(btrim(CASE WHEN picture.source = 'upload'
-                        THEN COALESCE(picture.storage_path, picture.url) ELSE picture.url END), '') IS NOT NULL
-ON CONFLICT (project_id, source_kind, source_ref) DO NOTHING;
+DO $backfill$
+BEGIN
+  PERFORM public._enqueue_client_plate_request(
+    picture.project_id,
+    CASE WHEN picture.source = 'upload' THEN 'upload' ELSE 'maker' END,
+    'project_ffe_item_images',
+    picture.id,
+    CASE WHEN picture.source = 'upload' THEN COALESCE(picture.storage_path, picture.url) ELSE picture.url END)
+  FROM public.project_ffe_item_images AS picture;
 
-INSERT INTO public.client_plate_requests (project_id, source_kind, source_ref, source_url)
-SELECT room.project_id, 'concept',
-       jsonb_build_object('table', 'project_rooms', 'id', room.id),
-       btrim(room.concept_render_url)
-FROM public.project_rooms AS room
-WHERE NULLIF(btrim(room.concept_render_url), '') IS NOT NULL
-ON CONFLICT (project_id, source_kind, source_ref) DO NOTHING;
+  PERFORM public._enqueue_client_plate_request(
+    room.project_id, 'concept', 'project_rooms', room.id, room.concept_render_url,
+    public._client_plate_concept_revision(room.concept_render_uploaded_at))
+  FROM public.project_rooms AS room
+  WHERE room.concept_render_url IS NOT NULL;
 
-INSERT INTO public.client_plate_requests (project_id, source_kind, source_ref, source_url)
-SELECT scan.project_id, 'scan',
-       jsonb_build_object('table', 'room_scan_images', 'id', still.id),
-       btrim(public._client_plate_scan_source(COALESCE(still.preview_url, still.image_url)))
-FROM public.room_scan_images AS still
-JOIN public.room_scans AS scan ON scan.id = still.scan_id
-WHERE scan.project_id IS NOT NULL
-  AND NULLIF(btrim(public._client_plate_scan_source(COALESCE(still.preview_url, still.image_url))), '') IS NOT NULL
-ON CONFLICT (project_id, source_kind, source_ref) DO NOTHING;
+  PERFORM public._enqueue_client_plate_request(
+    scan.project_id, 'scan', 'room_scan_images', still.id,
+    public._client_plate_scan_source(COALESCE(still.preview_url, still.image_url)))
+  FROM public.room_scan_images AS still
+  JOIN public.room_scans AS scan ON scan.id = still.scan_id;
 
-INSERT INTO public.client_plate_requests (project_id, source_kind, source_ref, source_url)
-SELECT board.project_id, 'board',
-       jsonb_build_object('table', 'project_boards', 'id', board.id),
-       btrim(COALESCE(public.board_storage_reference_path(board.cover_image_url), board.cover_image_url))
-FROM public.project_boards AS board
-WHERE NULLIF(btrim(COALESCE(public.board_storage_reference_path(board.cover_image_url),
-                            board.cover_image_url)), '') IS NOT NULL
-ON CONFLICT (project_id, source_kind, source_ref) DO NOTHING;
+  PERFORM public._enqueue_client_plate_request(
+    board.project_id, 'board', 'project_boards', board.id,
+    COALESCE(public.board_storage_reference_path(board.cover_image_url), board.cover_image_url))
+  FROM public.project_boards AS board
+  WHERE board.cover_image_url IS NOT NULL;
+END
+$backfill$;
 
 -- ─── 4. The copy lane (service role) ────────────────────────────────────────
 
