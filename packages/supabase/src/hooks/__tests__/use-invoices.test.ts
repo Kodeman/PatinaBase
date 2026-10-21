@@ -900,7 +900,11 @@ describe('useStartCheckout payment_method body', () => {
 describe('useInvoicePaymentOptions', () => {
   interface OptionsConfig {
     queryKey: unknown[];
-    queryFn: () => Promise<{ card_surcharge_bps: number; check_remit_to: string | null }>;
+    queryFn: () => Promise<{
+      card_surcharge_bps: number;
+      check_remit_to: string | null;
+      card_surcharge_resolved: boolean;
+    }>;
     enabled: boolean;
   }
 
@@ -922,6 +926,7 @@ describe('useInvoicePaymentOptions', () => {
     await expect(config.queryFn()).resolves.toEqual({
       card_surcharge_bps: 250,
       check_remit_to: '123 Studio Way',
+      card_surcharge_resolved: true,
     });
     expect(supabaseClient.rpc).toHaveBeenCalledWith('get_invoice_payment_options', {
       p_invoice_id: 'invoice-1',
@@ -935,6 +940,7 @@ describe('useInvoicePaymentOptions', () => {
     await expect(config.queryFn()).resolves.toEqual({
       card_surcharge_bps: 300,
       check_remit_to: null,
+      card_surcharge_resolved: false,
     });
   });
 
@@ -945,6 +951,7 @@ describe('useInvoicePaymentOptions', () => {
     await expect(config.queryFn()).resolves.toEqual({
       card_surcharge_bps: 300,
       check_remit_to: null,
+      card_surcharge_resolved: false,
     });
   });
 
@@ -957,7 +964,45 @@ describe('useInvoicePaymentOptions', () => {
     await expect(config.queryFn()).resolves.toEqual({
       card_surcharge_bps: 300,
       check_remit_to: null,
+      card_surcharge_resolved: false,
     });
+  });
+
+  // CPUX-03: the fallback is still returned as data, so the answer itself has
+  // to say the card rate was not resolved, or a guessed card total would read
+  // as a verified quote.
+  it('marks a malformed card rate unresolved, keeping the remit-to it did answer', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: { card_surcharge_bps: '250', check_remit_to: '123 Studio Way' },
+      error: null,
+    });
+    const config = useInvoicePaymentOptions('invoice-1') as unknown as OptionsConfig;
+
+    await expect(config.queryFn()).resolves.toEqual({
+      card_surcharge_bps: 300,
+      check_remit_to: '123 Studio Way',
+      card_surcharge_resolved: false,
+    });
+  });
+
+  it('marks a missing card rate unresolved', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { check_remit_to: null }, error: null });
+    const config = useInvoicePaymentOptions('invoice-1') as unknown as OptionsConfig;
+
+    await expect(config.queryFn()).resolves.toMatchObject({
+      card_surcharge_bps: 300,
+      card_surcharge_resolved: false,
+    });
+  });
+
+  it("marks the server's own coalesced platform rate as resolved", async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: { card_surcharge_bps: 300, check_remit_to: null },
+      error: null,
+    });
+    const config = useInvoicePaymentOptions('invoice-1') as unknown as OptionsConfig;
+
+    await expect(config.queryFn()).resolves.toMatchObject({ card_surcharge_resolved: true });
   });
 });
 

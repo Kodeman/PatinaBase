@@ -478,10 +478,6 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   }
 
   const studioName = identityQuery.data?.name?.trim() || 'Your studio';
-  // W2-B's projection-reading props (SQ-1525). Spread until that slice lands:
-  // the compiler checks them against `LetterboxProps` from then on.
-  const letterboxReads = { projection, onHold: onInvoiceHold, projectName: null };
-
   // A sealed door's paper has already left `origins`; the door is still drawn
   // from it, so the lookup keeps it and a live paper always wins.
   const doors: SealedDoor[] = [
@@ -593,7 +589,9 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
           reader of a `?checkout=` return. */}
       <div className="mt-6">
         <Letterbox
-          {...letterboxReads}
+          projection={projection}
+          onHold={onInvoiceHold}
+          projectName={null}
           invoice={open.length > 0 ? toInvoiceModel(open[0]) : null}
           invoices={standing}
           designerName={identityQuery.data?.name ?? null}

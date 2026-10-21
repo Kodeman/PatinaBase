@@ -235,7 +235,17 @@ describe("the toggle moves the fee row, the total and the act together", () => {
     expect(
       within(screen.getByTestId("pay-total-row")).getByText("$9,130.00"),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("pay-act")).toHaveTextContent("Pay $9,130.00");
+    expect(screen.getByTestId("pay-act")).toHaveTextContent(
+      "Continue to secure payment · $9,130.00",
+    );
+    expect(screen.getByTestId("pay-act")).toHaveClass("da-terminal");
+    // US-45 CPUX-03: what the next screen does, above the act, and the payee.
+    expect(screen.getByTestId("pay-consequence")).toHaveClass("cp-note");
+    expect(screen.getByTestId("pay-consequence")).toHaveTextContent(
+      "Nothing is charged until you confirm there.",
+    );
+    expect(screen.getByTestId("pay-payee")).toHaveTextContent("Payable toQuist Interiors");
+    expect(document.querySelector("[data-pay-money]")).toHaveClass("cp-card");
   });
 
   it("moves all three to card", () => {
@@ -253,7 +263,9 @@ describe("the toggle moves the fee row, the total and the act together", () => {
     expect(
       within(screen.getByTestId("pay-total-row")).getByText("$9,398.75"),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("pay-act")).toHaveTextContent("Pay $9,398.75");
+    expect(screen.getByTestId("pay-act")).toHaveTextContent(
+      "Continue to secure payment · $9,398.75",
+    );
   });
 
   it("drops the fee row entirely on a check, and changes the act to a message", () => {
@@ -264,8 +276,9 @@ describe("the toggle moves the fee row, the total and the act together", () => {
     expect(
       within(screen.getByTestId("pay-total-row")).getByText("$9,125.00"),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("pay-act")).toHaveTextContent(
-      "Let Nora know a check is coming",
+    expect(screen.getByTestId("pay-act")).toHaveTextContent("I’ll mail a check");
+    expect(screen.getByTestId("pay-consequence")).toHaveTextContent(
+      "Telling Nora a check is coming doesn’t pay the invoice. The balance stays $9,125.00 until the check arrives.",
     );
 
     const panel = screen.getByTestId("pay-check-panel");
@@ -709,7 +722,10 @@ describe("the act", () => {
       `/pay/${TOKEN}/checkout`,
       expect.objectContaining({ body: JSON.stringify({ method: "check" }) }),
     );
-    expect(screen.getByText("Nora has been notified.")).toBeInTheDocument();
+    // Check expected follows the acknowledgement; the balance stands.
+    expect(screen.getByTestId("pay-check-expected")).toHaveTextContent(
+      "Check expectedNora knows a check is coming. The balance stays $9,125.00 until the check arrives and is recorded. Nothing has been paid yet.",
+    );
     expect(screen.queryByTestId("pay-act")).not.toBeInTheDocument();
   });
 

@@ -514,6 +514,15 @@ function settled<T>(data: T) {
  */
 let bundles: Record<string, unknown> = {};
 
+/** One invoice's row in the letterbox list (US-45 CPUX-02). */
+function invoiceRow(id: string): HTMLElement {
+  const row = document.querySelector<HTMLElement>(
+    `[data-testid="invoice-row"][data-invoice-id="${id}"]`,
+  );
+  if (!row) throw new Error(`no invoice row for ${id}`);
+  return row;
+}
+
 function renderThreshold(
   milestones: MilestoneDetail[] = MILESTONES,
   otherHouses: { id: string; name: string }[] = [],
@@ -817,9 +826,9 @@ describe('Threshold — the five facts', () => {
       'The draw of $1,440.00 releases on your acceptance.',
     );
     // 4 · the balance and the day it falls due
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent(
-      'Balance $9,125.00, due 15 August 2026',
-    );
+    const letter = invoiceRow('inv-4');
+    expect(within(letter).getByTestId('invoice-row-amount')).toHaveTextContent('$9,125.00');
+    expect(within(letter).getByTestId('invoice-row-status')).toHaveTextContent('15 August 2026');
     // 5 · the chapter the house stands in
     expect(screen.getByTestId('doorplate-sub')).toHaveTextContent('Procurement');
   });
@@ -2412,13 +2421,14 @@ describe("Threshold — the studio's own letters", () => {
 
     renderThreshold();
 
-    expect(screen.getByTestId('letterbox-from-studio')).toHaveTextContent(
-      'From the studio · not for a house',
-    );
-    expect(screen.getByTestId('letterbox-regarding')).toHaveTextContent(
+    const letter = invoiceRow('inv-31');
+    expect(within(letter).getByTestId('invoice-row-name')).toHaveTextContent(
       'Design consultation · 12 September 2026',
     );
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 31');
+    // Its origin is the studio that drew it, not a house.
+    expect(within(letter).getByTestId('invoice-row-reference')).toHaveTextContent(
+      'Invoice No. 31 · Quist Interiors',
+    );
   });
 
   it("keeps this house's own letter behind the studio's, not instead of it", () => {
@@ -2426,8 +2436,12 @@ describe("Threshold — the studio's own letters", () => {
 
     renderThreshold();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
-    expect(screen.getByText(/Invoice No\. 4/)).toBeInTheDocument();
+    // Both stand in plain view: no outstanding invoice waits behind a fold.
+    const toPay = screen.getByTestId('invoices-to-pay');
+    expect(within(toPay).getAllByTestId('invoice-row').map((row) => row.dataset.invoiceId)).toEqual(
+      expect.arrayContaining(['inv-4', 'inv-31']),
+    );
+    expect(screen.queryByRole('button', { name: 'Earlier invoices' })).not.toBeInTheDocument();
   });
 
   // The adopted house belongs to one studio; the letter standing in its
@@ -2436,7 +2450,7 @@ describe("Threshold — the studio's own letters", () => {
   it("makes the check out to the letter's studio while the plate keeps the house's", async () => {
     paymentOptionsMock.mockReturnValue({
       isPending: false,
-      data: { card_surcharge_bps: 300, check_remit_to: null },
+      data: { card_surcharge_bps: 300, check_remit_to: null, card_surcharge_resolved: true },
     });
     startCheckoutMock.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
     notifyCheckIntentMock.mockReturnValue({ mutateAsync: jest.fn() });
@@ -2454,17 +2468,14 @@ describe("Threshold — the studio's own letters", () => {
 
     expect(screen.getByTestId('doorplate-line')).toHaveTextContent('Quist Interiors');
 
-    fireEvent.click(screen.getByRole('button', { name: /open invoice details/i }));
+    fireEvent.click(within(invoiceRow('inv-31')).getByRole('button', { name: 'View invoice' }));
     fireEvent.click(screen.getByRole('radio', { name: /check/i }));
 
-    expect(
-      await screen.findByRole('button', {
-        name: 'Let The Ash Studio know a check is coming',
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Let Quist Interiors know/ }),
-    ).not.toBeInTheDocument();
+    const panel = await screen.findByTestId('threshold-check-panel');
+    expect(panel).toHaveTextContent('Mail your check to The Ash Studio');
+    expect(panel).toHaveTextContent('Telling The Ash Studio a check is coming');
+    expect(within(panel).getByRole('button', { name: 'I’ll mail a check' })).toBeInTheDocument();
+    expect(panel).not.toHaveTextContent('Quist Interiors');
   });
 
   it('leaves the studio letters out of a house that has not adopted them', () => {
@@ -2472,8 +2483,13 @@ describe("Threshold — the studio's own letters", () => {
 
     renderThreshold(MILESTONES, [{ id: 'proj-ash', name: 'The Ash cottage' }]);
 
-    expect(screen.queryByTestId('letterbox-from-studio')).not.toBeInTheDocument();
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 4');
+    expect(document.querySelector('[data-testid="invoice-row"][data-invoice-id="inv-31"]')).toBeNull();
+    expect(within(invoiceRow('inv-4')).getByTestId('invoice-row-name')).toHaveTextContent(
+      'Invoice No. 4',
+    );
+    expect(within(invoiceRow('inv-4')).getByTestId('invoice-row-reference')).not.toHaveTextContent(
+      'Quist Interiors',
+    );
   });
 
   // The letter is summed into this house's owed figure because it stands in
@@ -2504,8 +2520,13 @@ describe("Threshold — the studio's own letters", () => {
 
     renderThreshold();
 
-    expect(screen.queryByTestId('letterbox-from-studio')).not.toBeInTheDocument();
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 4');
+    expect(document.querySelector('[data-testid="invoice-row"][data-invoice-id="inv-31"]')).toBeNull();
+    expect(within(invoiceRow('inv-4')).getByTestId('invoice-row-name')).toHaveTextContent(
+      'Invoice No. 4',
+    );
+    expect(within(invoiceRow('inv-4')).getByTestId('invoice-row-reference')).not.toHaveTextContent(
+      'Quist Interiors',
+    );
   });
 });
 
@@ -2559,7 +2580,7 @@ describe('LetterboxDoor — the letterbox IS the front door', () => {
 
     expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
     expect(screen.getByText('You have one invoice to pay.')).toBeInTheDocument();
-    expect(screen.getByTestId('letterbox-regarding')).toHaveTextContent(
+    expect(screen.getByTestId('invoice-row-name')).toHaveTextContent(
       'Design consultation · 12 September 2026',
     );
     // No header (R135): the one navigation is the in-page ledger (R141), and
@@ -2693,7 +2714,14 @@ describe('LetterboxDoor — the letterbox IS the front door', () => {
       designerId: 'designer-nora',
     });
     expect(screen.getByTestId('doorplate-title')).toHaveTextContent('The Ash Studio');
-    expect(screen.getByTestId('letterbox-regarding')).toHaveTextContent('Retainer · October');
+    // The named letter stands open, with every other one still in plain view.
+    const named = invoiceRow('inv-32');
+    expect(within(named).getByTestId('invoice-row-name')).toHaveTextContent('Retainer · October');
+    expect(within(named).getByRole('button', { name: 'View invoice' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(invoiceRow('inv-31')).toBeInTheDocument();
   });
 
   it('holds rather than showing the empty state while the letters are still coming', () => {
@@ -2999,7 +3027,7 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     ).toBeInTheDocument();
     expect(screen.getByText('You have one invoice to pay.')).toBeInTheDocument();
     expect(theDoor()).not.toBeNull();
-    expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
+    expect(screen.getByTestId('invoice-row-name')).toBeInTheDocument();
   });
 
   /* R30 round-2 amendment: the studio invoice "renders beside the origin
@@ -3024,7 +3052,7 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     expect(screen.queryByTestId('letterbox-door-hold')).not.toBeInTheDocument();
     expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
     expect(screen.getByText('You have one invoice to pay.')).toBeInTheDocument();
-    expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
+    expect(screen.getByTestId('invoice-row-name')).toBeInTheDocument();
   });
 
   // An addendum amends a standing engagement, so it always has a house to be
@@ -3119,7 +3147,7 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
 
     renderDoor();
 
-    expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
+    expect(screen.getByTestId('invoice-row-name')).toBeInTheDocument();
     expect(screen.getByText('You have one invoice to pay.')).toBeInTheDocument();
     expect(screen.getByTestId('papers-unread')).toBeInTheDocument();
     expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();

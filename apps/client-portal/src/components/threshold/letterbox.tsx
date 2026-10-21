@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { type Invoice } from '@patina/supabase';
-import { formatCurrency, invoiceBalanceCents } from '@patina/shared';
+import { invoiceBalanceCents } from '@patina/shared';
 
+import { countInWords } from '@/components/threshold/instruments/standing-sentence';
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
-
 import { clientEvents } from '@/lib/analytics/events';
 import {
   revealReturnAnchor,
@@ -14,156 +14,221 @@ import {
   useCheckoutReturn,
   useNamedInvoice,
 } from '@/lib/threshold/checkout-return';
-import { legalDate } from '@/lib/threshold/dates';
+import type { InvoiceModel } from '@/lib/threshold/derive';
 import {
-  parseSourceDate,
-  toInvoiceModel,
-  type InvoiceModel,
-} from '@/lib/threshold/derive';
+  invoiceProjection,
+  type InvoiceFiguresWithheld,
+  type InvoiceProjection,
+  type InvoiceRow,
+  type InvoiceServerHold,
+} from '@/lib/threshold/invoice-rollup';
 
-import { EarlierInvoices } from './earlier-invoices';
-import { useLetterPayee } from './letter-payee';
-import { Settlement } from './settlement';
+import {
+  InvoiceGroupList,
+  invoiceDomIds,
+  invoiceMoney,
+  PaymentHistory,
+  type InvoiceListState,
+} from './earlier-invoices';
 
-/* ── The letterbox ──────────────────────────────────────────────────────────
-   One letter, standing half out of the slot. The drawing states the fact
-   before a word is read: something has come, and it has not been taken in.
+/* ── The invoices (US-45 CPUX-02 layout, CPUX-03) ────────────────────────────
+   Every invoice the house is holding, read from the one invoice projection:
+   what is to pay, what is in progress, what needs review, each in plain view,
+   then the total outstanding per currency and the payment history behind the
+   only fold. Each row's "View invoice" opens its details in place; one row is
+   open at a time, and opening never touches the server.
 
-   Opening it unfolds The Making's own toll — the same three figures in the
-   accountant's order and the same act to settle them — rather than a second
-   invoice grammar invented here. The letterbox is the envelope; the toll is
-   the letter, and there is only ever one of it on this surface. The toll does
-   its own date formatting; `today` is threaded through for the sentences that
-   still reckon against it. Both the toll and the summary line above it print
-   a due date in full — day, month and year — so the two cannot disagree and
-   neither leaves a client to guess the year off her own invoice.
+   Holds the checkout boundary returns, and checks the studio has been told
+   are coming, are kept here by invoice id and handed to the owner, so closing
+   a row, opening another or reopening it forgets none of them. A return from
+   the till confirms nothing by itself: the receipt line waits for the row.
 
-   An empty letterbox is drawn as an empty letterbox. It is not hidden, and it
-   carries no "no invoices" card: the slot with nothing in it IS the state.
-
-   Never `data-dimmable`, and marked `data-never-dim`: an ancestor's opacity
-   would take the open toll down with it, and money owed is exactly what the
-   since-yesterday reading must not hide. ─────────────────────────────────── */
+   Marked `data-never-dim`: an ancestor's opacity would take money owed down
+   with it, and that is exactly what the since-yesterday reading must not
+   hide. ─────────────────────────────────────────────────────────────────── */
 
 export interface LetterboxProps {
-  /** The soonest-due open invoice, or null when nothing has come. */
-  invoice: InvoiceModel | null;
-  /** Every invoice on the project — what is kept behind the one letter. */
+  /** The invoice projection the page reads. Built here from `invoices` when absent. */
+  projection?: InvoiceProjection;
+  /** Every invoice on the project — read only when no projection is handed in. */
   invoices?: Invoice[];
-  /** Last-resort payee name. The letter's own studio is resolved first. */
+  /** Retained for existing callers; the projection decides what is shown. */
+  invoice?: InvoiceModel | null;
+  /** The designer, as the studio's sentences name them. */
   designerName?: string | null;
   /**
    * Re-read the project's invoices. Polled while a return from the till is
-   * waiting for the webhook, and taken after a settle attempt that ended in a
-   * standing fact rather than a session.
+   * waiting for the webhook, taken after an attempt that ended in a standing
+   * fact, and behind every Retry.
    */
   onRefetch?: () => void | Promise<unknown>;
-  /** Today, for the toll's own reckoning. Omitted during SSR and the first
-   * client paint. The due date does not depend on it: it spells its year
-   * every time. */
+  /** Today, for due-state reckoning when the projection is built here. */
   today?: Date;
+  /** A hold the checkout boundary returned, for the owner's projection. Never cleared on refetch. */
+  onHold?: (invoiceId: string, hold: InvoiceServerHold) => void;
+  /** The house the list stands in: the eyebrow and the total's scope. */
+  projectName?: string | null;
 }
 
-/** "15 September 2026". A due date is a term of the letter, so it spells its
- * year every time — a client reading "due 15 September" on an invoice she is
- * looking at in January has to guess which September. */
-function formatDue(dueDate: string | null): string | null {
-  return legalDate(parseSourceDate(dueDate));
+const EPOCH = new Date(0);
+const NO_INVOICES: Invoice[] = [];
+
+type PendingFocus = { id: string; target: 'heading' | 'toggle' | 'reveal' };
+
+function capitalised(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function Drawing({ full }: { full: boolean }) {
+/** "Six invoices, soonest due first." Only a counted list says how many. */
+function countSentence(count: number | null | undefined, order: string): string | null {
+  if (count === null || count === undefined || count < 2) return null;
+  return `${capitalised(countInWords(count))} invoices, ${order}.`;
+}
+
+const READ_SENTENCE: Record<'failed' | 'partial' | 'stale', string> = {
+  failed: 'We couldn’t load your invoices.',
+  partial:
+    'Some invoices didn’t load, so this list may be incomplete. The total is hidden until everything loads.',
+  stale: 'We couldn’t refresh your invoices. These may be out of date.',
+};
+
+function ReadNotice({
+  read,
+  onRetry,
+}: {
+  read: InvoiceProjection['read'];
+  onRetry?: () => void | Promise<unknown>;
+}) {
+  if (read === 'complete') return null;
+  if (read === 'loading') {
+    return (
+      <p role="status" data-testid="letterbox-read-notice" data-read={read} className="t-body">
+        Loading your invoices.
+      </p>
+    );
+  }
+  const sentence = READ_SENTENCE[read];
   return (
-    <svg
-      role="img"
-      aria-label={
-        full ? 'A letterbox with an invoice standing half out of the slot' : 'An empty letterbox'
-      }
-      viewBox="0 0 300 96"
-      className="mb-2.5 block h-auto w-full max-w-[280px] fill-none stroke-current stroke-1 text-[var(--text-primary)]"
+    <div
+      role="status"
+      data-testid="letterbox-read-notice"
+      data-read={read}
+      className="cp-note flex flex-col items-start gap-2"
     >
-      {/* The box first, then the letter over it — the letter has to occlude the
-          slot to read as standing out of it. */}
-      <rect x="10" y="34" width="280" height="52" />
-      <line x1="26" y1="52" x2="274" y2="52" />
-      {full && (
-        <>
-          <rect
-            x="74"
-            y="6"
-            width="150"
-            height="44"
-            className="fill-[var(--bg-surface)] stroke-none"
-          />
-          <rect x="74" y="6" width="150" height="44" />
-          <line x1="86" y1="18" x2="196" y2="18" />
-          <line x1="86" y1="28" x2="176" y2="28" />
-          <line x1="86" y1="38" x2="150" y2="38" />
-        </>
+      <p className="text-[16px] leading-[1.55]">{sentence}</p>
+      {onRetry && (
+        <ScoredAction
+          actionKey="invoices_retry"
+          regionKey="letterbox"
+          surfaceKey="the_threshold"
+          variant="secondary"
+          onClick={() => void onRetry()}
+        >
+          Retry
+        </ScoredAction>
       )}
-    </svg>
+    </div>
+  );
+}
+
+function OutstandingTotal({
+  projection,
+  mixed,
+  scope,
+}: {
+  projection: InvoiceProjection;
+  mixed: boolean;
+  scope: string;
+}) {
+  if (projection.outstanding.length === 0) return null;
+  const totals = projection.outstandingTotals;
+  if (!totals) return <WithheldTotal withheld={projection.withheld} />;
+  const amounts = totals.map((total) =>
+    invoiceMoney(total.cents, total.currency, mixed),
+  );
+  const held = projection.processing.length + projection.review.length > 0;
+  return (
+    <div data-testid="letterbox-total" className="flex flex-col gap-1">
+      <p className="text-[16px] font-medium leading-[1.5] text-[var(--text-primary)]">Total outstanding</p>
+      {amounts.map((amount, index) => (
+        <p
+          key={totals[index].currency}
+          data-testid="letterbox-total-amount"
+          data-currency={totals[index].currency}
+          className="font-mono text-[20px] leading-[1.4] tabular-nums text-[var(--text-primary)]"
+        >
+          {amount}
+        </p>
+      ))}
+      <p className="text-[15px] leading-[1.5] text-[var(--text-body)]">{totalScope(amounts, scope, held)}</p>
+    </div>
+  );
+}
+
+/** What the total covers: its scope, and whether held payments are inside it. */
+function totalScope(amounts: readonly string[], scope: string, held: boolean): string {
+  const across =
+    amounts.length === 1
+      ? `${amounts[0]} across ${scope}.`
+      : `Across ${scope}. Each currency is totalled on its own.`;
+  const counted = held
+    ? 'Each invoice is counted once, including payments in progress and under review.'
+    : 'It counts only the invoices shown here.';
+  return `${across} ${counted}`;
+}
+
+const WITHHELD_REASON: Partial<Record<InvoiceFiguresWithheld, string>> = {
+  incomplete: 'The total is hidden until every invoice loads.',
+  contradictory: 'The total is hidden until every invoice’s payment status is confirmed.',
+};
+
+/** A total that cannot stand says why, where one can be given. */
+function WithheldTotal({ withheld }: { withheld: InvoiceFiguresWithheld | null }) {
+  const reason = withheld ? WITHHELD_REASON[withheld] : undefined;
+  if (!reason) return null;
+  return (
+    <div data-testid="letterbox-total" data-withheld={withheld} className="flex flex-col gap-1">
+      <p className="text-[16px] font-medium leading-[1.5] text-[var(--text-primary)]">Total outstanding</p>
+      <p className="text-[15px] leading-[1.5] text-[var(--text-body)]">{reason}</p>
+    </div>
   );
 }
 
 export function Letterbox({
-  invoice: soonestDue,
-  invoices = [],
+  projection: handed,
+  invoices = NO_INVOICES,
   designerName,
   onRefetch,
   today,
+  onHold,
+  projectName = null,
 }: LetterboxProps) {
-  const [open, setOpen] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [holds, setHolds] = useState<Record<string, InvoiceServerHold>>({});
+  const [checksExpected, setChecksExpected] = useState<Record<string, true>>({});
+  const [announcement, setAnnouncement] = useState('');
+  const pendingFocus = useRef<PendingFocus | null>(null);
 
-  // A mailed `/invoices/<id>` folds to `?invoice=<id>`, and the letter it
-  // names is the one the client came to read — not the soonest-due one the
-  // model would otherwise pick. An id this house is not holding names nothing
-  // and changes nothing: the slot never states a letter it has no row for.
-  const namedId = useNamedInvoice();
-  const namedRow = namedId ? (invoices.find((row) => row.id === namedId) ?? null) : null;
-  const invoice = namedRow ? toInvoiceModel(namedRow) : soonestDue;
-  const due = invoice ? formatDue(invoice.dueDate) : null;
-
-  /**
-   * THE TERMINAL ACT OPENS THE LETTER, NOT AN ADDRESS (W4 r2 MAJOR-3).
-   *
-   * This read `useInvoiceLink(invoice.id)` and gated both the consequence
-   * sentence and the terminal `Pay $X` act on the answer. Since 00636 froze
-   * `invoice_links.token` at NULL and `get_invoice_link` returns NULL for it
-   * unconditionally, `parseInvoiceLink` rejected every answer — so the act and
-   * its sentence were gone from the household's own house page for EVERY
-   * invoice, with nothing said. A shipped, ruled act cannot disappear quietly.
-   *
-   * The address itself may not be re-emitted: only a producer can mint one, and
-   * `ensure_invoice_link` REVOKES the standing link on the way, so a page-load
-   * mint would silently kill the `/pay/<token>` address the client already has
-   * in her email. This surface is a stable read, so it does not mint.
-   *
-   * So the act does what this surface can honestly do: it opens the letter,
-   * where `Settlement` — the settle-in-place till — already stands. The same
-   * move `door-gate.tsx` took for the deposit offer in W4 r1 B-1: name the
-   * letter, not a token. The emailed `/pay/<token>` sheet is untouched and
-   * still the ruled pay surface (K1).
-   *
-   * AND IT DOES NOT REMOVE ITSELF ON PRESS (W4 r3 MAJOR-3). `payHere` carried
-   * `&& !open`, so pressing "Pay $X" set `open`, which unmounted the very
-   * button under the caret: `ScoredAction` with no `href` renders a
-   * `<button>`, `revealReturnAnchor` only scrolls, and this surface had no
-   * live region — so focus fell to `document.body` and nothing was announced,
-   * on the terminal MONEY act. The act now keeps its place, says it is a
-   * disclosure (`aria-expanded`), moves the reader into the till it opened,
-   * and announces it — the shape `paperwork-sheet.tsx` took for the same
-   * defect class one round earlier.
-   */
-  const balanceCents = invoice?.balanceCents ?? 0;
-  const payHere = invoice !== null && balanceCents > 0;
+  const projection = useMemo(
+    () =>
+      handed ??
+      invoiceProjection(invoices, {
+        today: today ?? EPOCH,
+        read: 'complete',
+        serverHolds: holds,
+      }),
+    [handed, invoices, today, holds],
+  );
+  const rows = useMemo(() => [...projection.outstanding, ...projection.history], [projection]);
 
   // The return from the till. A return that names an order belongs to the road,
-  // not to the letterbox — and a return naming a letter this house is not
-  // holding is not spoken to at all: the address is the client's to type, and
-  // the house states no payment fact it cannot see a row for.
+  // and a return naming an invoice this house is not holding is not spoken to
+  // at all: the house states no payment fact it cannot see a row for.
   const returned = useCheckoutReturn();
   const returnedRow =
     returned && !returned.orderId && returned.invoiceId
-      ? (invoices.find((row) => row.id === returned.invoiceId) ?? null)
+      ? (rows.find((row) => row.invoice.id === returned.invoiceId)?.invoice ?? null)
       : null;
   const settlement = returnedRow ? returned : null;
 
@@ -171,26 +236,16 @@ export function Letterbox({
   const rowSettled = Boolean(
     returnedRow && (returnedRow.status === 'paid' || invoiceBalanceCents(returnedRow) <= 0),
   );
-  const confirm = useCheckoutConfirmation(
-    settlement?.outcome === 'settled',
-    rowSettled,
-    onRefetch,
-  );
+  const confirm = useCheckoutConfirmation(settlement?.outcome === 'settled', rowSettled, onRefetch);
 
   /* client_payment_completed counts money that MOVED, so it waits for the row
      — an abandoned ACH debit must never be counted as revenue. A cancellation
-     is reported on the return itself, with no amount: only exact attempt
-     evidence is authoritative, and this surface has none.
+     is reported on the return itself, with no amount.
 
-     J5 — THIS BLOCK IS CURRENTLY UNREACHABLE, deliberately. S10 put the return
-     nonce on BOTH rails, so a household paying from this letterbox now returns
-     to /pay/return/<nonce> and lands on the guest sheet, which is the ruled pay
-     surface (K1). `CARRIED_PARAMS` on that route carries no `invoice`, so
-     `useCheckoutReturn()` yields `invoiceId: null`, `settlement` stays null and
-     neither event fires. `payLinkEvents.paymentCompleted` on the guest sheet is
-     the successor. Left standing rather than deleted because W3b retires the
-     letterbox till outright and will take this with it; deleting it now would
-     be a second change to the same lines for no behaviour difference. */
+     J5 — currently unreachable, deliberately: both rails return through
+     /pay/return/<nonce> to the guest sheet, which carries no `invoice`, so
+     `settlement` stays null here and `payLinkEvents.paymentCompleted` on the
+     guest sheet is the successor. Kept until the letterbox till retires. */
   const reported = useRef(false);
   useEffect(() => {
     if (!settlement || reported.current || !settlement.invoiceId) return;
@@ -205,11 +260,6 @@ export function Letterbox({
   }, [confirm, settlement]);
 
   const slot = useRef<HTMLDivElement | null>(null);
-  // The till the money act opens. Focus lands here so the reader is where the
-  // act took her, and one polite region says so out loud.
-  const settlementRegion = useRef<HTMLDivElement | null>(null);
-  const [announcement, setAnnouncement] = useState('');
-  const moveToSettlement = useRef(false);
   const revealed = useRef(false);
   useEffect(() => {
     if (!settlement || revealed.current) return;
@@ -217,38 +267,109 @@ export function Letterbox({
     revealReturnAnchor(slot.current);
   }, [settlement]);
 
-  // The till mounts with `open`, so the focus move waits a render rather than
-  // reaching for a node that is not there yet.
+  // A mailed `/invoices/<id>` folds to `?invoice=<id>`: that row opens, in
+  // history too, and is brought into view. An id this house is not holding
+  // names nothing and changes nothing.
+  const namedId = useNamedInvoice();
+  const named = useRef(false);
   useEffect(() => {
-    if (!open || !moveToSettlement.current) return;
-    moveToSettlement.current = false;
-    settlementRegion.current?.focus();
-  }, [open]);
+    if (!namedId || named.current) return;
+    const row = rows.find(
+      (candidate) =>
+        candidate.invoice.id === namedId,
+    );
+    if (!row) return;
+    named.current = true;
+    if (row.group === 'history') setHistoryOpen(true);
+    pendingFocus.current = { id: namedId, target: 'reveal' };
+    setOpenId(namedId);
+  }, [namedId, rows]);
 
-  // The letter the address named is unfolded and brought into view: she asked
-  // for this one by following a link about it, and the letterbox sits well
-  // below the first viewport.
-  const opened = useRef(false);
+  // Focus moves after the render that mounted its target: into the details a
+  // row opened, back to the row's own "View invoice" when they close.
   useEffect(() => {
-    if (!namedRow || opened.current) return;
-    opened.current = true;
-    setOpen(true);
-    revealReturnAnchor(slot.current);
-  }, [namedRow]);
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    pendingFocus.current = null;
+    const ids = invoiceDomIds(pending.id);
+    if (pending.target === 'reveal') {
+      revealReturnAnchor(document.getElementById(ids.region));
+      return;
+    }
+    document.getElementById(pending.target === 'heading' ? ids.heading : ids.toggle)?.focus();
+  });
 
-  // The row behind the model: the currency the figures are quoted in, and the
-  // studio a check would be made out to. That studio is the LETTER's, not the
-  // surrounding house's: a studio invoice stands in the adopted house, which
-  // may belong to a different studio than the one that drew it.
-  const row = invoice ? (invoices.find((candidate) => candidate.id === invoice.id) ?? null) : null;
-  const studio = useLetterPayee(row, designerName);
+  const labelOf = (row: InvoiceRow) =>
+    row.invoice.invoice_number?.trim() || row.invoice.title?.trim() || 'this invoice';
+  const detailsOf = (row: InvoiceRow) =>
+    row.group === 'history' ? 'Invoice details' : 'Payment details';
 
-  // A letter for no house at all (ruling S1). It stands in this letterbox
-  // because this is the adopted house, not because the work is here, and it
-  // says so on its own line rather than letting the plate above imply it. Its
-  // regarding line stands where a house name would.
-  const fromTheStudio = row !== null && row.project_id === null;
-  const regarding = fromTheStudio ? row.title?.trim() || null : null;
+  const handleToggle = (row: InvoiceRow) => {
+    const id = row.invoice.id;
+    if (openId === id) {
+      setOpenId(null);
+      setAnnouncement(`${detailsOf(row)} for ${labelOf(row)} closed.`);
+      return;
+    }
+    pendingFocus.current = { id, target: 'heading' };
+    setOpenId(id);
+    setAnnouncement(`${detailsOf(row)} for ${labelOf(row)} open. Opening them doesn’t pay anything.`);
+  };
+
+  const handleClose = (row: InvoiceRow) => {
+    pendingFocus.current = { id: row.invoice.id, target: 'toggle' };
+    setOpenId(null);
+    setAnnouncement(`${detailsOf(row)} for ${labelOf(row)} closed.`);
+  };
+
+  const handleHold = useCallback(
+    (invoiceId: string, hold: InvoiceServerHold) => {
+      // The row may move to another group under the same id; focus follows it.
+      pendingFocus.current = { id: invoiceId, target: 'heading' };
+      setHolds(
+        (was) => ({ ...was, [invoiceId]: hold }),
+      );
+      onHold?.(invoiceId, hold);
+    },
+    [onHold],
+  );
+
+  const mixedCurrency = new Set(rows.map((row) => row.currency)).size > 1;
+  const house = projectName?.trim() || null;
+  const anyStudio = rows.some((row) => row.studio);
+  const outstandingStudio = projection.outstanding.some(
+    (row) => row.studio,
+  );
+  const outstandingHouse = projection.outstanding.some(
+    (row) => !row.studio,
+  );
+  const scope =
+    outstandingStudio && outstandingHouse
+      ? `${house ?? 'this house'} and your studio invoices`
+      : outstandingStudio
+        ? 'your studio invoices'
+        : (house ?? 'these invoices');
+
+  const state: InvoiceListState = {
+    openId,
+    onToggle: handleToggle,
+    onClose: handleClose,
+    holds,
+    onHold: handleHold,
+    checksExpected,
+    onCheckExpected: (invoiceId) =>
+      setChecksExpected(
+        (was) => ({ ...was, [invoiceId]: true }),
+      ),
+    checkoutHeldId:
+      confirm === 'confirming' || confirm === 'unconfirmed' ? (settlement?.invoiceId ?? null) : null,
+    designerName: designerName?.trim() || 'your designer',
+    projectName: house,
+    mixedCurrency,
+    onRefetch,
+  };
+
+  const { counts } = projection;
 
   return (
     <div
@@ -257,14 +378,24 @@ export function Letterbox({
       data-threshold-unit="letterbox"
       data-never-dim
       data-testid="letterbox"
-      className="border-t border-[var(--border-default)] pt-3"
+      className="flex flex-col gap-6"
     >
-      <p className="mb-2 font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
-        Invoices and payments
-      </p>
+      <div className="flex flex-col gap-1">
+        {house && (
+          <p data-testid="letterbox-eyebrow" className="text-[15px] leading-[1.5] text-[var(--text-body)]">
+            {anyStudio ? `${house} and studio` : house}
+          </p>
+        )}
+        <h2
+          id="letterbox-heading"
+          tabIndex={-1}
+          className="text-[24px] font-medium leading-[1.3] text-[var(--text-primary)] focus:outline-none"
+        >
+          Invoices
+        </h2>
+      </div>
 
-      {/* One polite region for the surface: an act that opens the till says so
-          out loud rather than only scrolling (W4 r3 MAJOR-3). */}
+      {/* One polite region for the surface: opening or closing a row says so. */}
       <p aria-live="polite" role="status" className="sr-only">
         {announcement}
       </p>
@@ -274,7 +405,7 @@ export function Letterbox({
           role="status"
           data-testid="letterbox-receipt"
           data-confirm={confirm ?? undefined}
-          className="mb-2 max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+          className="cp-note max-w-[56ch] text-[16px] leading-[1.55]"
         >
           {settlement.outcome !== 'settled'
             ? 'Nothing changed.'
@@ -286,169 +417,59 @@ export function Letterbox({
         </p>
       )}
 
-      <figure className="m-0" data-testid="letterbox-figure">
-        <Drawing full={invoice !== null} />
-        {invoice && (
-          <figcaption
-            data-testid="letterbox-gloss"
-            className="t-meta mb-2 text-[var(--text-muted)]"
-          >
-            Invoice
-          </figcaption>
-        )}
-      </figure>
+      <ReadNotice read={projection.read} onRetry={onRefetch} />
 
-      {invoice ? (
-        <>
-          {fromTheStudio && (
-            <p
-              data-testid="letterbox-from-studio"
-              className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-muted)]"
-            >
-              From the studio &middot; not for a house
-            </p>
-          )}
-          {regarding && (
-            <p
-              data-testid="letterbox-regarding"
-              className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
-            >
-              {regarding}
-            </p>
-          )}
-          {/* Every figure on the line is set in the money step, so the three
-              of them read as one column of arithmetic rather than as three
-              numbers inside a sentence. */}
-          <p
-            data-testid="letterbox-body"
-            className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
-          >
-            {`${invoice.number ?? 'Invoice'} · `}
-            <span className="t-money">{formatCurrency(invoice.totalCents)}</span>
-            {' total · '}
-            <span className="t-money">{formatCurrency(invoice.paidCents)}</span>
-            {' paid. Balance '}
-            <span className="t-money">{formatCurrency(invoice.balanceCents)}</span>
-            {due ? `, due ${due}` : ''}.
-          </p>
-
-          {/* The consequence belongs to the UNPRESSED act: once the till is
-              open the sentence has become the thing it described. */}
-          {payHere && !open && (
-            <p data-testid="letterbox-consequence" className="consequence mt-3.5">
-              This opens payment. Nothing is charged until you choose how to pay.
-            </p>
-          )}
-
-          <div className="mt-3 flex flex-wrap items-baseline gap-x-4">
-            {payHere && (
-              <ScoredAction
-                actionKey="invoice_open_link"
-                regionKey="letterbox"
-                surfaceKey="the_threshold"
-                // Money moves here, so the act takes the terminal tier and
-                // carries the figure it is for. H4 defines the variant.
-                variant="terminal"
-                aria-expanded={open}
-                aria-controls="letterbox-letter"
-                onClick={() => {
-                  moveToSettlement.current = true;
-                  setAnnouncement(
-                    `Payment for ${invoice.number ?? 'this invoice'} is open. Nothing is charged until you choose how to pay.`,
-                  );
-                  if (open) settlementRegion.current?.focus();
-                  else setOpen(true);
-                  revealReturnAnchor(slot.current);
-                }}
-              >
-                {`Pay ${formatCurrency(invoice.balanceCents)}`}
-              </ScoredAction>
-            )}
-            <ScoredAction
-              actionKey="letterbox_open"
-              regionKey="letterbox"
-              surfaceKey="the_threshold"
-              variant="secondary"
-              aria-expanded={open}
-              aria-controls="letterbox-letter"
-              onClick={() => setOpen((was) => !was)}
-            >
-              {open ? 'Close invoice details' : 'Open invoice details'}
-            </ScoredAction>
-            {/* The letter in the slot keeps its printable sheet too: the line
-                items, the tax, the memo and the payments live on it, and the
-                one invoice being paid must not be the only one that cannot be
-                read in full. */}
-            <ScoredAction
-              actionKey="invoice_print"
-              regionKey="letterbox"
-              surfaceKey="the_threshold"
-              variant="tertiary"
-              href={`/invoices/${invoice.id}/print`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Print
-            </ScoredAction>
-          </div>
-
-          {/* The unfold: a grid row opening from 0fr to 1fr, which is a real
-              height transition on content of unknown height. Stilled under
-              prefers-reduced-motion, where it simply appears. */}
-          <div
-            id="letterbox-letter"
-            className={`grid overflow-hidden motion-safe:transition-[grid-template-rows] motion-safe:duration-[420ms] ${
-              open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-            }`}
-          >
-            <div
-              className="min-h-0"
-              ref={settlementRegion}
-              tabIndex={-1}
-              role="group"
-              aria-label="Pay this invoice"
-            >
-              {open && (
-                <Settlement
-                  invoice={invoice}
-                  currency={row?.currency || 'USD'}
-                  designerName={studio}
-                  // The old detail page refused a second attempt while a return
-                  // was still unconfirmed. Same rule, same reason.
-                  hold={
-                    settlement?.invoiceId === invoice.id &&
-                    (confirm === 'confirming' || confirm === 'unconfirmed')
-                  }
-                  onRefetch={onRefetch}
-                  today={today}
-                />
-              )}
-            </div>
-          </div>
-        </>
+      {projection.payable.length > 0 ? (
+        <InvoiceGroupList
+          testId="invoices-to-pay"
+          heading="Invoices to pay"
+          summary={countSentence(counts?.payable, 'soonest due first')}
+          rows={projection.payable}
+          state={state}
+        />
       ) : (
-        <p
-          data-testid="letterbox-body"
-          className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
-        >
-          No current invoice.
-        </p>
+        projection.nothingToPay && (
+          <section data-testid="invoices-to-pay" aria-label="Invoices to pay" className="flex flex-col gap-1">
+            <h3 className="text-[18px] font-medium leading-[1.4] text-[var(--text-primary)]">
+              Invoices to pay
+            </h3>
+            <p data-testid="invoices-none" className="t-body text-[var(--text-primary)]">
+              No invoices to pay.
+            </p>
+          </section>
+        )
       )}
 
-      {/* The letter taken to the till may be one of these, not the one in the
-          slot: the same refusal has to reach the line that carries its act, or
-          the client is invited to press an act the edge function will refuse. */}
-      <EarlierInvoices
-        invoices={invoices}
-        exceptId={invoice?.id ?? null}
-        designerName={designerName}
-        heldInvoiceId={
-          confirm === 'confirming' || confirm === 'unconfirmed'
-            ? (settlement?.invoiceId ?? null)
-            : null
+      {projection.processing.length > 0 && (
+        <InvoiceGroupList
+          testId="invoices-in-progress"
+          heading="Payments in progress"
+          rows={projection.processing}
+          state={state}
+        />
+      )}
+
+      {projection.review.length > 0 && (
+        <InvoiceGroupList
+          testId="invoices-under-review"
+          heading="Payment needs review"
+          rows={projection.review}
+          state={state}
+        />
+      )}
+
+      <OutstandingTotal projection={projection} mixed={mixedCurrency} scope={scope} />
+
+      <PaymentHistory
+        rows={projection.history}
+        summary={countSentence(counts?.history, 'newest first')}
+        open={historyOpen}
+        onToggle={() =>
+          setHistoryOpen(
+            (was) => !was,
+          )
         }
-        onRefetch={onRefetch}
-        today={today}
+        state={state}
       />
     </div>
   );

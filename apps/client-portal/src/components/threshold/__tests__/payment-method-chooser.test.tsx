@@ -1,7 +1,8 @@
 /**
- * The letterbox's copy of the ACH / Card / Check chooser (migration 00428).
- * The arithmetic and the words are the invoice page's; only the chrome moved,
- * so the cases that guard the money are the same cases.
+ * The letterbox's ACH / Card / Check chooser (migration 00428), cut the way the
+ * guest chooser reads (US-45 CPUX-03 §3): each way to pay shows the full amount,
+ * with its fee underneath. The arithmetic is the shared helpers', so the cases
+ * that guard the money are the same cases.
  */
 
 import { useState } from 'react';
@@ -14,7 +15,9 @@ jest.mock('@/lib/analytics/events', () => ({
 }));
 
 import {
+  methodQuote,
   PaymentMethodChooser,
+  type CardFeeState,
   type InvoicePaymentUIMethod,
 } from '../payment-method-chooser';
 
@@ -31,8 +34,9 @@ type HarnessProps = {
   method?: InvoicePaymentUIMethod;
   balanceCents?: number;
   cardSurchargeBps?: number | null;
+  cardFeeState?: CardFeeState;
+  onRetryCardFee?: () => void;
   disabled?: boolean;
-  designerName?: string;
   invoiceNumber?: string | null;
   checkRemitTo?: string | null;
   onNotifyCheckIntent: () => Promise<unknown>;
@@ -42,13 +46,15 @@ function Harness({
   method,
   balanceCents = 100_000,
   cardSurchargeBps = 300,
+  cardFeeState = 'resolved',
+  onRetryCardFee,
   disabled = false,
-  designerName = 'Jordan',
   invoiceNumber = 'INV-1042',
   checkRemitTo = null,
   onNotifyCheckIntent,
 }: HarnessProps) {
   const [current, setCurrent] = useState<InvoicePaymentUIMethod>(method ?? 'us_bank_account');
+  const [expected, setExpected] = useState(false);
   return (
     <PaymentMethodChooser
       method={current}
@@ -56,61 +62,95 @@ function Harness({
       balanceCents={balanceCents}
       currency="USD"
       cardSurchargeBps={cardSurchargeBps}
+      cardFeeState={cardFeeState}
+      onRetryCardFee={onRetryCardFee}
       disabled={disabled}
-      designerName={designerName}
+      designerName="Jordan"
+      payeeName="Birchwood Studio"
       invoiceNumber={invoiceNumber}
       checkRemitTo={checkRemitTo}
+      checkExpected={expected}
       onNotifyCheckIntent={onNotifyCheckIntent}
+      onCheckExpected={() => setExpected(true)}
     />
   );
 }
 
-describe('PaymentMethodChooser — in the letterbox', () => {
-  it('previews the ACH cap and a non-default card bps, and toggling switches the checked option', () => {
-    render(
-      <Harness balanceCents={100_000} cardSurchargeBps={250} onNotifyCheckIntent={jest.fn()} />,
-    );
+describe('PaymentMethodChooser — in the payment sheet', () => {
+  it('shows each full total with its fee underneath, for a non-default card rate', () => {
+    render(<Harness balanceCents={100_000} cardSurchargeBps={250} onNotifyCheckIntent={jest.fn()} />);
 
+    expect(screen.getByText('How would you like to pay?').tagName).toBe('LEGEND');
+    expect(
+      screen.getByText('Each option shows the full amount you would pay, with its fee underneath.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /bank transfer \(ach\)/i })).toBeChecked();
-    expect(screen.getByText('+ $5.00 processing fee')).toBeInTheDocument();
-    expect(screen.getByText('+ $25.00 processing fee')).toBeInTheDocument();
-    expect(screen.getByText('Preferred · lowest fee')).toBeInTheDocument();
+    expect(screen.getByTestId('threshold-method-total-us_bank_account')).toHaveTextContent('$1,005.00');
+    expect(screen.getByText('$1,000.00 + $5.00 processing fee')).toBeInTheDocument();
+    expect(screen.getByTestId('threshold-method-total-card')).toHaveTextContent('$1,025.00');
+    expect(screen.getByText('$1,000.00 + $25.00 processing fee')).toBeInTheDocument();
+    expect(screen.getByTestId('threshold-method-total-check')).toHaveTextContent('$1,000.00');
+    // G3: check is $0, so "lowest fee" on the bank was never true.
+    expect(screen.queryByText(/preferred · lowest fee/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: /^card/i }));
     expect(screen.getByRole('radio', { name: /^card/i })).toBeChecked();
-    expect(screen.getByRole('radio', { name: /bank transfer \(ach\)/i })).not.toBeChecked();
-
     fireEvent.click(screen.getByRole('radio', { name: /^mail a check/i }));
     expect(screen.getByTestId('threshold-check-panel')).toBeInTheDocument();
   });
 
-  it('placeholders the card fee while the studio bps is still coming, but not the ACH fee', () => {
-    render(
-      <Harness balanceCents={100_000} cardSurchargeBps={null} onNotifyCheckIntent={jest.fn()} />,
-    );
-
-    expect(screen.getByText('—')).toBeInTheDocument();
-    expect(screen.queryByText('+ $30.00 processing fee')).not.toBeInTheDocument();
-    expect(screen.getByText('+ $5.00 processing fee')).toBeInTheDocument();
-  });
-
-  it('computes a sub-cap ACH fee from the formula rather than always the cap', () => {
-    render(<Harness balanceCents={5_000} onNotifyCheckIntent={jest.fn()} />);
-    expect(screen.getByText('+ $0.40 processing fee')).toBeInTheDocument();
-  });
-
-  it('falls back to the platform remit-to, and names the invoice on the memo line', () => {
+  it('withholds the card total until the rate is answered, and offers to read it again', () => {
+    const onRetryCardFee = jest.fn();
     render(
       <Harness
-        method="check"
-        checkRemitTo={null}
-        invoiceNumber="INV-2077"
+        cardSurchargeBps={null}
+        cardFeeState="unavailable"
+        onRetryCardFee={onRetryCardFee}
         onNotifyCheckIntent={jest.fn()}
       />,
     );
 
+    expect(screen.getByTestId('threshold-method-total-card')).toHaveTextContent('Total not confirmed');
+    expect(screen.getByText('Card fee not confirmed')).toBeInTheDocument();
+    expect(screen.queryByText('$1,030.00')).not.toBeInTheDocument();
+    // The bank rail is a platform formula and stays quoted.
+    expect(screen.getByTestId('threshold-method-total-us_bank_account')).toHaveTextContent('$1,005.00');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRetryCardFee).toHaveBeenCalledTimes(1);
+  });
+
+  it('never quotes a card total from a rate that is not resolved, whatever number it carries', () => {
+    render(
+      <Harness cardSurchargeBps={300} cardFeeState="loading" onNotifyCheckIntent={jest.fn()} />,
+    );
+    expect(screen.getByTestId('threshold-method-total-card')).toHaveTextContent('Total not confirmed');
+    expect(methodQuote('card', 100_000, null)).toBeNull();
+    expect(methodQuote('card', 100_000, 300)).toEqual({ feeCents: 3_000, totalCents: 103_000 });
+  });
+
+  it('computes a sub-cap ACH fee from the formula rather than always the cap', () => {
+    render(<Harness balanceCents={5_000} onNotifyCheckIntent={jest.fn()} />);
+    expect(screen.getByText('$50.00 + $0.40 processing fee')).toBeInTheDocument();
+  });
+
+  it('falls back to the platform remit-to, and names the invoice and the amount on the memo line', () => {
+    render(
+      <Harness method="check" invoiceNumber="INV-2077" onNotifyCheckIntent={jest.fn()} />,
+    );
+
     expect(screen.getByText('Contact your designer for mailing details')).toBeInTheDocument();
-    expect(screen.getByText(/write invoice inv-2077 on the memo line/i)).toBeInTheDocument();
+    expect(screen.getByText('Mail your check to').textContent).toBe('Mail your check to Birchwood Studio');
+    expect(
+      screen.getByText(
+        'Write invoice INV-2077 on the memo line. The amount is $1,000.00, with no fee.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Telling Jordan a check is coming doesn’t pay the invoice. The balance stays $1,000.00 until the check arrives.',
+      ),
+    ).toHaveClass('cp-note');
   });
 
   it('shows the studio-configured remit-to, and generic memo copy on an unnumbered invoice', () => {
@@ -128,44 +168,41 @@ describe('PaymentMethodChooser — in the letterbox', () => {
     expect(screen.getByText(/write this invoice on the memo line/i)).toBeInTheDocument();
   });
 
-  it('sends exactly one check notification, however many times it is pressed', async () => {
+  it('sends exactly one check notification, then says check expected and nothing paid', async () => {
     const { promise, resolve } = deferred<void>();
     const onNotifyCheckIntent = jest.fn(() => promise);
-    render(
-      <Harness method="check" designerName="Jordan" onNotifyCheckIntent={onNotifyCheckIntent} />,
-    );
+    render(<Harness method="check" onNotifyCheckIntent={onNotifyCheckIntent} />);
 
-    const act1 = screen.getByRole('button', { name: /let jordan know a check is coming/i });
+    const act1 = screen.getByRole('button', { name: 'I’ll mail a check' });
     fireEvent.click(act1);
     fireEvent.click(act1);
     expect(onNotifyCheckIntent).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('threshold-check-expected')).not.toBeInTheDocument();
 
     await act(async () => {
       resolve();
     });
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      /jordan knows a check is on its way/i,
+    const record = await screen.findByTestId('threshold-check-expected');
+    expect(record).toHaveClass('cp-record');
+    expect(record).toHaveTextContent(
+      'Check expectedJordan knows a check is coming. The balance stays $1,000.00 until the check arrives and is recorded. Nothing has been paid yet.',
     );
-
-    fireEvent.click(screen.getByRole('button', { name: /jordan has been notified/i }));
-    expect(onNotifyCheckIntent).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'I’ll mail a check' })).not.toBeInTheDocument();
   });
 
   it('states a notify failure and leaves the act takeable again', async () => {
     const onNotifyCheckIntent = jest.fn().mockRejectedValue(new Error('Network unreachable'));
     render(<Harness method="check" onNotifyCheckIntent={onNotifyCheckIntent} />);
 
-    const notify = screen.getByRole('button', { name: /let .+ know a check is coming/i });
     await act(async () => {
-      fireEvent.click(notify);
+      fireEvent.click(screen.getByRole('button', { name: 'I’ll mail a check' }));
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Unable to notify your designer.',
-    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to notify your designer.');
     expect(screen.getByRole('alert')).not.toHaveTextContent('Network unreachable');
-    expect(screen.getByRole('button', { name: /let .+ know a check is coming/i })).not.toBeDisabled();
+    expect(screen.queryByTestId('threshold-check-expected')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'I’ll mail a check' })).toBeEnabled();
   });
 
   it('locks every option while a pay-path mutation is in flight', () => {

@@ -131,8 +131,8 @@ export function PaymentMethodChooser({
       >
         How would you like to pay?
       </h2>
-      <p className="text-[13px] leading-[1.5] text-[var(--color-quiet-ink)]">
-        Each row shows what you would pay in full.
+      <p className="text-[15px] leading-[1.5] text-[var(--text-body)]">
+        Each option shows the full amount you would pay, with its fee underneath.
       </p>
 
       <div
@@ -154,9 +154,9 @@ export function PaymentMethodChooser({
                 // 15px dot, because the row is the control a keyboard user is
                 // standing on and this is a payment surface.
                 "relative -my-px block min-h-[56px] cursor-pointer border py-3.5 pl-10 pr-3.5",
-                "[&:has(:focus-visible)]:outline [&:has(:focus-visible)]:outline-2 [&:has(:focus-visible)]:outline-offset-[3px] [&:has(:focus-visible)]:outline-[var(--color-clay-ink)]",
+                "[&:has(:focus-visible)]:outline [&:has(:focus-visible)]:outline-2 [&:has(:focus-visible)]:outline-offset-[3px] [&:has(:focus-visible)]:outline-[var(--focus-ring)]",
                 checked
-                  ? "border-[var(--color-clay-ink)] bg-[var(--bg-surface)]"
+                  ? "border-[var(--color-forest)] bg-[var(--color-green-note)]"
                   : "border-transparent border-b-[var(--border-subtle)]",
               ].join(" ")}
               style={{ opacity: disabled ? 0.6 : 1 }}
@@ -175,7 +175,7 @@ export function PaymentMethodChooser({
                 className={[
                   "absolute left-3.5 top-[18px] block h-[15px] w-[15px] rounded-full border",
                   checked
-                    ? 'border-[var(--color-clay-ink)] after:absolute after:inset-[3px] after:rounded-full after:bg-[var(--color-clay-ink)] after:content-[""]'
+                    ? 'border-[var(--color-forest)] after:absolute after:inset-[3px] after:rounded-full after:bg-[var(--color-forest)] after:content-[""]'
                     : "border-[var(--text-muted)]",
                 ].join(" ")}
               />
@@ -189,11 +189,11 @@ export function PaymentMethodChooser({
                 >
                   {option.label}
                 </span>
-                <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                <span className="font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                   {formatCurrency(option.totalCents, currency)}
                 </span>
               </span>
-              <span className="mt-0.5 block text-[12.5px] leading-[1.45] text-[var(--color-quiet-ink)]">
+              <span className="mt-0.5 block text-[15px] leading-[1.45] text-[var(--text-body)]">
                 {option.note}
               </span>
             </label>
@@ -210,7 +210,7 @@ export function PaymentMethodChooser({
         >
           <h3
             id="pay-check-panel-head"
-            className="text-[13px] font-medium text-[var(--text-muted)]"
+            className="text-[15px] font-medium text-[var(--text-body)]"
           >
             Mail your check to{" "}
             <strong className="font-medium text-[var(--text-primary)]">
@@ -223,7 +223,7 @@ export function PaymentMethodChooser({
               <span className="mt-1 block">{remitFallbackWebsite}</span>
             )}
           </p>
-          <p className="text-[14px] text-[var(--text-body)]">
+          <p className="text-[15px] text-[var(--text-body)]">
             Write {invoiceLabel} on the memo line.
           </p>
         </div>

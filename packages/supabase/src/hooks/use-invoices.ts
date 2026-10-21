@@ -1453,11 +1453,19 @@ export function useStartCheckout() {
 export interface InvoicePaymentOptions {
   card_surcharge_bps: number;
   check_remit_to: string | null;
+  /**
+   * True only when the RPC itself answered the card rate (its own
+   * `coalesce(v_bps, 300)` included). False when `card_surcharge_bps` is the
+   * client-side fallback after an RPC failure or a malformed or missing field:
+   * a card total quoted from that figure is a guess, not a verified quote.
+   */
+  card_surcharge_resolved: boolean;
 }
 
 const DEFAULT_INVOICE_PAYMENT_OPTIONS: InvoicePaymentOptions = {
   card_surcharge_bps: 300,
   check_remit_to: null,
+  card_surcharge_resolved: false,
 };
 
 /**
@@ -1467,7 +1475,9 @@ const DEFAULT_INVOICE_PAYMENT_OPTIONS: InvoicePaymentOptions = {
  * draft invoice or a stranger raises `invoice_not_found` server-side). ANY
  * failure — RPC error, no settings row, a malformed/empty response — falls
  * back to the platform defaults (300 bps, no remit-to) rather than throwing:
- * a config read must never block the pay path.
+ * a config read must never block the pay path. A fallback answer says so with
+ * `card_surcharge_resolved: false`, so a card total is never quoted from it
+ * (CPUX-03); the bank and check rails do not depend on it.
  *
  * @deprecated The pay page reads its surcharge config from the resolved link
  * payload (00574 · K1) — settle-in-place is retired in W3b, and iOS moves to
@@ -1487,11 +1497,13 @@ export function useInvoicePaymentOptions(invoiceId: string | null | undefined) {
           return DEFAULT_INVOICE_PAYMENT_OPTIONS;
         }
         const row = data as Record<string, unknown>;
+        const resolved = Number.isInteger(row.card_surcharge_bps);
         return {
-          card_surcharge_bps: Number.isInteger(row.card_surcharge_bps)
+          card_surcharge_bps: resolved
             ? (row.card_surcharge_bps as number)
             : DEFAULT_INVOICE_PAYMENT_OPTIONS.card_surcharge_bps,
           check_remit_to: typeof row.check_remit_to === 'string' ? row.check_remit_to : null,
+          card_surcharge_resolved: resolved,
         };
       } catch {
         return DEFAULT_INVOICE_PAYMENT_OPTIONS;
