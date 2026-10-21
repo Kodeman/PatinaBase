@@ -13,6 +13,7 @@ import {
   invoiceReadState,
   visibleInvoices,
   type InvoiceReadSource,
+  type InvoiceReadState,
 } from '../invoice-rollup';
 
 const TODAY = new Date(2026, 9, 20, 9, 0);
@@ -395,6 +396,63 @@ describe('invoiceProjection — A05 one group per invoice, by evidence', () => {
     expect(held.review[0].reviewReasons).toEqual(['reconciliation_hold']);
     expect(ids(held.processing)).toEqual(['inv-busy']);
     expect(held.payable).toEqual([]);
+  });
+
+  describe('R8 — a processing hold yields to proven settlement, never to an inconclusive read', () => {
+    const hold = { 'inv-settled': 'payment_processing' } as const;
+    const settledRow = (overrides: Partial<Invoice> = {}) =>
+      makeInvoice({
+        id: 'inv-settled',
+        status: 'paid',
+        total_cents: 20000,
+        amount_paid_cents: 20000,
+        paid_at: '2026-10-20T08:00:00Z',
+        payments: [payment({ id: 'pay-done', status: 'succeeded', stripe_payment_intent_id: 'pi_done' })],
+        ...overrides,
+      });
+    const projectWith = (invoice: Invoice, read: InvoiceReadState) =>
+      invoiceProjection([invoice], { today: TODAY, read, serverHolds: hold });
+
+    it('a hold plus a complete paid read is history with a receipt, not processing', () => {
+      const settled = projectWith(settledRow(), 'complete');
+      expect(settled.processing).toEqual([]);
+      expect(ids(settled.history)).toEqual(['inv-settled']);
+      expect(settled.history[0].settled).toBe('paid');
+      expect(settled.history[0].paymentInFlight).toBe(false);
+      expect(settled.allClear).toBe(true);
+    });
+
+    it('yields to no balance and no pending payment, even before the status says paid', () => {
+      const settled = projectWith(settledRow({ status: 'sent' }), 'complete');
+      expect(ids(settled.history)).toEqual(['inv-settled']);
+      expect(settled.history[0].settled).toBe('no_balance_due');
+    });
+
+    it('stands while the read is inconclusive, a balance remains, or a payment is still pending', () => {
+      for (const read of ['stale', 'partial', 'failed', 'loading'] as const) {
+        expect(ids(projectWith(settledRow(), read).processing)).toEqual(['inv-settled']);
+      }
+      expect(ids(projectWith(settledRow({ amount_paid_cents: 5000 }), 'complete').review)).toEqual(['inv-settled']);
+      expect(ids(projectWith(settledRow({ status: 'sent', amount_paid_cents: 5000 }), 'complete').processing)).toEqual([
+        'inv-settled',
+      ]);
+      expect(ids(projectWith(settledRow({ status: 'sent', payments: [payment()] }), 'complete').processing)).toEqual([
+        'inv-settled',
+      ]);
+      expect(ids(projectWith(settledRow({ status: 'sent', payments: undefined }), 'complete').processing)).toEqual([
+        'inv-settled',
+      ]);
+    });
+
+    it('never releases a reconciliation hold on settlement', () => {
+      const held = invoiceProjection([settledRow()], {
+        today: TODAY,
+        read: 'complete',
+        serverHolds: { 'inv-settled': 'payment_reconciliation_required' },
+      });
+      expect(ids(held.review)).toEqual(['inv-settled']);
+      expect(held.review[0].reviewReasons).toEqual(['reconciliation_hold']);
+    });
   });
 
   it('holds contradictory evidence for review and withholds the total, keeping the counts', () => {

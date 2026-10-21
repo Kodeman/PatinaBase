@@ -9,6 +9,7 @@ function ledger(overrides: Partial<HouseLedgerModel> = {}): HouseLedgerModel {
     plannedCents: 8_500_000,
     agreedCents: 6_140_000,
     owedCents: 912_500,
+    owedCurrency: 'USD',
     paidCents: 0,
     owedInvoiceNumber: null,
     owedInvoiceCount: 1,
@@ -101,6 +102,21 @@ describe('HouseLedger — the house in figures, with its words', () => {
     expect(
       [...sentence.querySelectorAll('.t-money')].map((node) => node.textContent),
     ).toEqual(['$11,100.00', '$0.00', '$4,060.00']);
+  });
+
+  it('prints the owed and paid figures in the invoice’s own currency, never dollars by default', () => {
+    render(
+      <HouseLedger
+        ledger={ledger({ agreedCents: null, owedCents: 8_000, owedCurrency: 'EUR', paidCents: 2_000 })}
+      />,
+    );
+
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('€80.00');
+    const sentence = screen.getByTestId('house-ledger-reconcile');
+    expect(
+      [...sentence.querySelectorAll('.t-money')].map((node) => node.textContent),
+    ).toEqual(['€20.00', '€80.00']);
+    expect(screen.getByTestId('house-ledger').textContent).not.toMatch(/\$(80|20)\.00/);
   });
 
   it('says nothing to reconcile when nothing is owed', () => {

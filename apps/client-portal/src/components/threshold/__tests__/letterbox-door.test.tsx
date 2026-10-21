@@ -272,6 +272,25 @@ describe("LetterboxDoor — the studio-only arrival", () => {
     );
   });
 
+  it("stands on an empty cache whose refresh failed, keeping the retry — never an empty state", async () => {
+    const refetch = jest.fn();
+    invoicesMock.mockReturnValue({ ...settled([]), isError: true, refetch });
+    const { container } = renderDoor();
+
+    expect(
+      screen.queryByTestId("projects-empty-state"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("letterbox-stub")).toBeInTheDocument();
+    const props = letterboxProps.at(-1)!;
+    expect((props.projection as { read: string }).read).toBe("stale");
+    // The letterbox's Retry is this read again.
+    await (props.onRefetch as () => Promise<void>)();
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toMatch(
+      /invoices? to pay\.|Nothing is waiting for you\./,
+    );
+  });
+
   it("withholds the count when an invoice arrived without its payments", () => {
     invoicesMock.mockReturnValue(
       settled([

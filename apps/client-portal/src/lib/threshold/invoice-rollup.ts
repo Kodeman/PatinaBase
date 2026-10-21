@@ -143,7 +143,7 @@ export interface InvoiceRow {
   reviewReasons: InvoiceReviewReason[];
   /** Paid status with a balance, or a status this surface does not know. */
   contradictory: boolean;
-  /** A pending payment carries a PaymentIntent (00636), or checkout answered `payment_processing`. Kept as a fact on a review row too. */
+  /** A pending payment carries a PaymentIntent (00636), or checkout answered `payment_processing` and no complete read has yet proved the invoice settled. Kept as a fact on a review row too. */
   paymentInFlight: boolean;
   /** False when the row arrived without its payments: unknown, never "nothing in flight". */
   paymentsRead: boolean;
@@ -197,7 +197,7 @@ export interface InvoiceProjectionOptions {
   /** The calendar day due dates are read against. */
   today: Date;
   read: InvoiceReadState;
-  /** Holds the checkout boundary returned this session, by invoice id. */
+  /** Holds the checkout boundary returned this session, by invoice id. A complete read that proves the invoice settled outranks a `payment_processing` hold. */
   serverHolds?: Readonly<Record<string, InvoiceServerHold>>;
 }
 
@@ -237,6 +237,24 @@ function paymentFacts(invoice: Invoice, hold: InvoiceServerHold | undefined) {
   };
 }
 
+/**
+ * The hold this row still answers to. Its owner never clears a hold, so a
+ * `payment_processing` hold stands against every inconclusive read and yields
+ * only to proof the invoice settled: a complete read with nothing left owing
+ * whose status says paid, or whose payments show nothing pending.
+ */
+function standingHold(
+  invoice: Invoice,
+  balanceCents: number,
+  hold: InvoiceServerHold | undefined,
+  complete: boolean,
+): InvoiceServerHold | undefined {
+  if (hold !== 'payment_processing' || !complete || balanceCents > 0) return hold;
+  const nothingPending =
+    Array.isArray(invoice.payments) && !invoice.payments.some((payment) => payment.status === 'pending');
+  return invoice.status === 'paid' || nothingPending ? undefined : hold;
+}
+
 /** Evidence the status and the balance cannot both be true of. */
 function contradictionOf(invoice: Invoice, balanceCents: number): InvoiceReviewReason | null {
   if (!KNOWN_STATUSES.has(invoice.status)) return 'unknown_status';
@@ -272,8 +290,14 @@ function settledOf(invoice: Invoice): 'paid' | 'no_balance_due' {
   return invoice.status === 'paid' ? 'paid' : 'no_balance_due';
 }
 
-function toRow(invoice: Invoice, today: Date, hold: InvoiceServerHold | undefined): InvoiceRow {
+function toRow(
+  invoice: Invoice,
+  today: Date,
+  serverHold: InvoiceServerHold | undefined,
+  complete: boolean,
+): InvoiceRow {
   const balanceCents = invoiceBalanceCents(invoice);
+  const hold = standingHold(invoice, balanceCents, serverHold, complete);
   const facts = paymentFacts(invoice, hold);
   const contradiction = contradictionOf(invoice, balanceCents);
   const reviewReasons = reviewReasonsOf(facts.requiresRefund, hold, contradiction);
@@ -369,7 +393,7 @@ export function invoiceProjection(
   { today, read, serverHolds }: InvoiceProjectionOptions,
 ): InvoiceProjection {
   const rows = uniqueVisible(invoices).map((invoice) =>
-    toRow(invoice, today, serverHolds?.[invoice.id]),
+    toRow(invoice, today, serverHolds?.[invoice.id], read === 'complete'),
   );
   const inGroup = (group: InvoiceGroup) => rows.filter((row) => row.group === group);
   const review = inGroup('review').sort(outstandingOrder);

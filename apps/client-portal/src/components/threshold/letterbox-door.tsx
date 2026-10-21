@@ -440,9 +440,10 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   const anyoneWaiting = standing.length > 0 || origins.length > 0 || sealed.length > 0;
   // A signed agreement asks nothing of her, but it is still hers to find: the
   // door stands for the record as readily as for the ask.
-  // An unreadable invoice list is not an empty one: the door stands so the
-  // letterbox can say it could not load them and offer the read again.
-  const anythingHere = anyoneWaiting || kept.length > 0 || house.read === 'failed';
+  // An unreadable invoice list is not an empty one, and neither is an empty
+  // cache whose refresh failed: on any read short of complete the door stands
+  // so the letterbox can say what it could not read and offer the read again.
+  const anythingHere = anyoneWaiting || kept.length > 0 || house.read !== 'complete';
   /* THE PAPERS MAY NOT HOLD THE MONEY (R30 round-2 amendment: the studio
      invoice "renders beside the origin agreement, never blank behind it").
      The letters read first — a household with one standing is already
