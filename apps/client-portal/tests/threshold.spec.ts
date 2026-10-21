@@ -364,7 +364,7 @@ test.describe('The Threshold — the client page', () => {
     // The doorplate names the house she is standing in; the mat names the rest.
     const others = page.getByTestId('mat-other-houses');
     await expect(others).toBeVisible();
-    await expect(others.getByRole('heading', { name: 'Your other houses' })).toBeVisible();
+    await expect(others.getByRole('heading', { name: 'Your other projects' })).toBeVisible();
     await expect(others.locator('a[href^="/projects/"]')).toHaveCount(
       MULTI_OTHER_HOUSE_COUNT,
     );
