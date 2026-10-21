@@ -28,8 +28,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 const PROJECT_ID = 'b0000000-0000-0000-0000-00000000c0d1';
 /** Aspen Loft Refresh — the three-house client's house that carries a thread. */
 const MULTI_PROJECT_ID = 'b0000000-0000-0000-0000-0000000000d1';
-/** Every other house `client@patina.dev` keeps, so the mat's count is exact. */
-const MULTI_OTHER_HOUSE_COUNT = 2;
+/**
+ * The houses the seed gives `client@patina.dev`. Named, not counted: other
+ * specs in the same run (pay-link's `Pay E2E …` mints) add houses of their own
+ * to this client, so an exact total depends on which files ran first.
+ */
+const MULTI_SEEDED_HOUSES = ['Aspen Loft Refresh', 'Birch Hollow', 'Marrow & Vale Residence'];
 
 /* ── The five facts, read off the seed ──────────────────────────────────────
    1 · Authorization No. 1, signed — the FROZEN client figure on
@@ -364,17 +368,17 @@ test.describe('The Threshold — the client page', () => {
     // The doorplate names the house she is standing in; the mat names the rest.
     const others = page.getByTestId('mat-other-houses');
     await expect(others).toBeVisible();
-    await expect(others.getByRole('heading', { name: 'Your other houses' })).toBeVisible();
-    await expect(others.locator('a[href^="/projects/"]')).toHaveCount(
-      MULTI_OTHER_HOUSE_COUNT,
-    );
-    // Read as lines, never as acts — and never the house she is already in.
-    const standingIn = new URL(page.url()).pathname;
-    for (const href of await others.locator('a').evaluateAll((links) =>
-      links.map((link) => link.getAttribute('href')),
-    )) {
-      expect(href).not.toBe(standingIn);
+    await expect(others.getByRole('heading', { name: 'Your other projects' })).toBeVisible();
+    // Every seeded house but the one she stands in is named, as a line to it.
+    const standingIn = (await page.getByTestId('doorplate-title').textContent())?.trim() ?? '';
+    for (const name of MULTI_SEEDED_HOUSES.filter((house) => house !== standingIn)) {
+      await expect(
+        others.locator('a[href^="/projects/"]').filter({ hasText: name }),
+      ).toHaveCount(1);
     }
+    // Read as lines, never as acts — and never the house she is already in.
+    await expect(others.getByRole('button')).toHaveCount(0);
+    await expect(others.locator('a').filter({ hasText: standingIn })).toHaveCount(0);
   });
 
   /* ── Wave 2: the acts, in place ─────────────────────────────────────────── */

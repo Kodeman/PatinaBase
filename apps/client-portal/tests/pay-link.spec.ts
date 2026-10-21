@@ -363,7 +363,9 @@ test.describe("the standing invoice (00574)", () => {
     );
     await expect(page.getByTestId("pay-fee-row")).toContainText("$5.00");
     await expect(page.getByTestId("pay-total-row")).toContainText("$9,130.00");
-    await expect(page.getByTestId("pay-act")).toHaveText("Pay $9,130.00");
+    await expect(page.getByTestId("pay-act")).toHaveText(
+      "Continue to secure payment · $9,130.00",
+    );
 
     await chooser.getByRole("radio", { name: /^card/i }).check();
     await expect(page.getByTestId("pay-fee-row")).toContainText(
@@ -371,14 +373,14 @@ test.describe("the standing invoice (00574)", () => {
     );
     await expect(page.getByTestId("pay-fee-row")).toContainText("$273.75");
     await expect(page.getByTestId("pay-total-row")).toContainText("$9,398.75");
-    await expect(page.getByTestId("pay-act")).toHaveText("Pay $9,398.75");
+    await expect(page.getByTestId("pay-act")).toHaveText(
+      "Continue to secure payment · $9,398.75",
+    );
 
     await chooser.getByRole("radio", { name: /mail a check/i }).check();
     await expect(page.getByTestId("pay-fee-row")).toHaveCount(0);
     await expect(page.getByTestId("pay-total-row")).toContainText("$9,125.00");
-    await expect(page.getByTestId("pay-act")).toContainText(
-      "know a check is coming",
-    );
+    await expect(page.getByTestId("pay-act")).toHaveText("I’ll mail a check");
     await expect(page.getByTestId("pay-check-panel")).toBeVisible();
 
     // ── The one live region carries the figure that moved ──

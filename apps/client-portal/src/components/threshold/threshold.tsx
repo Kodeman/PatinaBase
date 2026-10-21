@@ -835,11 +835,10 @@ export function Threshold({
     messageSentAts: correspondence.sentAts,
   });
   // A complete read that proved a held invoice settled retires its hold, so a
-  // refund that reopens it this visit is judged on its own read.
-  const invoiceProjection = model.invoices;
-  useEffect(() => {
-    setInvoiceHolds((held) => retireSettledHolds(held, invoiceProjection));
-  }, [invoiceProjection]);
+  // refund that reopens it this visit is judged on its own read. Adjusted in
+  // render: the same holds come back when nothing retires.
+  const standingHolds = retireSettledHolds(invoiceHolds, model.invoices);
+  if (standingHolds !== invoiceHolds) setInvoiceHolds(standingHolds);
 
   const phases = useMemo(
     () => thresholdPhases(milestones, project.currentPhase, project.status),
