@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Oracle for the founders' plan page (doc/index.html). Node ESM, no dependencies.
 // v2 (SQ-1571) adds decision-card, rulings-ledger, reference-image, public-bucket and cost-table checks.
+// SQ-1574 adds contract checks against brief/PLAN.md (cost arithmetic, crop numbers, plate list,
+// C2 held-plate exception, Phase 1 read model, privacy sentences) and a seeded self-test of them,
+// which runs on every invocation.
 // Usage from the repo root: node artifacts/client-house-issue-2026-10-21/tools/check-doc.mjs [path]
 // The optional path checks another copy (a seeded fixture) instead of doc/index.html.
 import { readFileSync, statSync } from 'node:fs';
@@ -184,7 +187,7 @@ const textOf = (fragment, where) => oneLine(decode(fragment.replace(/<[^>]*>/g, 
 const firstMatch = (pattern) => withoutComments.match(pattern);
 
 // Decision cards: each expected id exactly once, each with a Recommendation line.
-const CARD_IDS = ['c1', 'c2', 'c3', 'q1', 'q2', 'q3', ...Array.from({ length: 8 }, (_, k) => `v2-${k + 1}`)];
+const CARD_IDS = ['c1', 'c2', 'c3', 'q1', 'q2', 'q3', ...Array.from({ length: 9 }, (_, k) => `v2-${k + 1}`)];
 const cardCounts = new Map(CARD_IDS.map((id) => [id, 0]));
 for (const m of withoutComments.matchAll(/<article\b[^>]*\bclass="[^"]*\bdcard\b[^"]*"[^>]*>([\s\S]*?)<\/article\s*>/gi)) {
   const id = (m[1].match(/<h3\b[^>]*\bid="([^"]+)"/i) || [])[1];
@@ -266,10 +269,174 @@ if (!cost) {
   }
 }
 
+// ---- contract checks against brief/PLAN.md (SQ-1574) ----
+// Pure functions of (doc source, plan source), so the self-test below can seed defects in memory.
+const planPath = resolve(here, '../brief/PLAN.md');
+let plan = '';
+try {
+  plan = readFileSync(planPath, 'utf8');
+} catch (err) {
+  problems.push(`cannot read ${planPath}: ${err.message}`);
+}
+
+const HELD_EXCEPTION = 'no image exceeds 72% of viewport height, except the single held plate per page, which may reach min(780px, 100svh − 72px)';
+const CONCEPT_STATE = 'Concept is a Room-plate state, not a type';
+const near = (a, b, tol = 0.0005) => Math.abs(a - b) < tol;
+const dollars = (text) => [...text.matchAll(/\$(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1]));
+// Visible text of an HTML fragment: comments, scripts and styles removed, tags dropped, entities decoded.
+const visible = (src) => oneLine(decode(src
+  .replace(/<!--[\s\S]*?-->/g, ' ')
+  .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, ' ')
+  .replace(/<[^>]*>/g, ' '), 0));
+const cellsOf = (row) => [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td\s*>/gi)].map((c) => visible(c[1]));
+const planSection = (planText, heading) => {
+  const start = planText.indexOf(heading);
+  if (start < 0) return '';
+  const next = planText.indexOf('\n#', start + heading.length);
+  return planText.slice(start, next < 0 ? planText.length : next);
+};
+const planBullet = (planText, lead) => (planText.split('\n').find((l) => l.startsWith(lead)) || '');
+
+function contractChecks(doc, planText) {
+  const out = [];
+  const docVisible = visible(doc);
+
+  // (a) cost arithmetic: range = first + n × later for n = 3 and 8, per column; per-call sums; 20 jobs.
+  const costTable = (doc.match(/<table\b[^>]*\bid="cost-v1-v2"[^>]*>([\s\S]*?)<\/table\s*>/i) || [])[1];
+  if (!costTable) {
+    out.push('cost: no <table id="cost-v1-v2"> to check');
+  } else {
+    const rows = [...costTable.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr\s*>/gi)].map((r) => cellsOf(r[1])).filter((c) => c.length >= 4);
+    const row = (lead) => rows.find((c) => c[0].startsWith(lead));
+    const first = row('First edition'); const later = row('Later edition');
+    const platesOnly = row('Plates only'); const month = row('Per active job-month');
+    if (!first || !later || !platesOnly || !month) {
+      out.push('cost: the first, later, plates-only and per-job-month rows are not all present');
+    } else {
+      const [f2] = dollars(first[3]); const [l2] = dollars(later[3]); const [p2] = dollars(platesOnly[3]);
+      const [f1] = dollars(first[2]); const [l1] = dollars(later[2]);
+      for (const [label, cells, total] of [['first edition', first, f2], ['later edition', later, l2]]) {
+        const sum = dollars(cells[1]).reduce((a, b) => a + b, 0);
+        if (!near(sum, total, 0.0015)) out.push(`cost: ${label} calls sum to $${sum.toFixed(3)} but the v2 total is $${total}`);
+      }
+      if (!(p2 <= l2)) out.push(`cost: plates-only edition $${p2} exceeds the later edition $${l2}`);
+      if (!/\b3–8\b/.test(month[1])) out.push('cost: the per-job-month row does not state the 3–8 later-edition workload');
+      for (const [col, cell, f, l] of [['v2', month[3], f2, l2], ['v1', month[2], f1, l1]]) {
+        const [lo, hi] = dollars(cell);
+        if (!near(lo, f + 3 * l) || !near(hi, f + 8 * l)) {
+          out.push(`cost: ${col} per-job-month range $${lo}–$${hi} is not first + 3 × later ($${(f + 3 * l).toFixed(3)}) to first + 8 × later ($${(f + 8 * l).toFixed(3)})`);
+        }
+      }
+      const jobs = docVisible.match(/twenty active jobs come to about \$(\d+\.\d+)–\$(\d+\.\d+)/i);
+      const [lo2, hi2] = dollars(month[3]);
+      if (!jobs) out.push('cost: no "twenty active jobs" monthly figure in the workload sentence');
+      else if (!near(Number(jobs[1]), 20 * lo2, 0.005) || !near(Number(jobs[2]), 20 * hi2, 0.005)) {
+        out.push(`cost: twenty jobs at $${jobs[1]}–$${jobs[2]} is not 20 × the per-job-month range`);
+      }
+      const planMonth = planBullet(planText, '| Per active job-month');
+      if (!planMonth.includes(`$${lo2}–$${hi2}`)) out.push(`cost: PLAN.md per-job-month row does not carry the doc's $${lo2}–$${hi2}`);
+    }
+  }
+
+  // (b) crop numbers: the settled phone crop present, the superseded one absent, in both files.
+  for (const [label, text] of [['doc', docVisible], ['PLAN.md', planText]]) {
+    for (const want of ['39:34', '780×680']) if (!text.includes(want)) out.push(`crop: ${label} lacks "${want}"`);
+    for (const stale of ['0.86', '780×907']) if (text.includes(stale)) out.push(`crop: ${label} still carries the superseded "${stale}"`);
+  }
+
+  // (c) plate enumeration: the doc's numbered plates equal PLAN.md's plate grammar, same order.
+  const grammar = planSection(planText, '### Image plate grammar');
+  const planNames = [...grammar.matchAll(/^\| (\d) \| ([^|]+?) \|/gm)].map((m) => `${m[1]} ${m[2].trim()}`);
+  const s05 = (doc.match(/<section\b[^>]*\bid="s05"[^>]*>([\s\S]*?)<\/section\s*>/i) || [])[1] || '';
+  const docNames = [...s05.matchAll(/<strong>\s*(\d)\s*·\s*([^<]+?)\s*<\/strong>/g)].map((m) => `${m[1]} ${decode(m[2], 0)}`);
+  if (planNames.length !== 9) out.push(`plates: PLAN.md plate grammar lists ${planNames.length} numbered plates, expected 9`);
+  if (docNames.join('|') !== planNames.join('|')) {
+    out.push(`plates: doc plate list [${docNames.join(', ')}] differs from PLAN.md [${planNames.join(', ')}]`);
+  }
+  if (!visible(s05).includes(CONCEPT_STATE)) out.push(`plates: doc section 05 does not say "${CONCEPT_STATE}"`);
+  if (!grammar.includes(CONCEPT_STATE)) out.push(`plates: PLAN.md plate grammar does not say "${CONCEPT_STATE}"`);
+
+  // (d) C2 carries the held-plate exception, in the card's proposed wording and in PLAN.md.
+  const c2 = (doc.match(/<article\b[^>]*aria-labelledby="c2"[^>]*>([\s\S]*?)<\/article\s*>/i) || [])[1] || '';
+  const c2Quote = visible((c2.match(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote\s*>/i) || [])[1] || '');
+  if (!c2Quote.includes(HELD_EXCEPTION)) out.push('C2: the proposed ruling in the doc lacks the held-plate exception');
+  if (!planBullet(planText, '- **C2').includes(HELD_EXCEPTION)) out.push('C2: the proposed ruling in PLAN.md lacks the held-plate exception');
+
+  // (e) Phase 1 reads today's tables through the editorial reader; no approved-edition dependency.
+  const delivery = (doc.match(/<section\b[^>]*\bid="s08"[^>]*>([\s\S]*?)<\/section\s*>/i) || [])[1] || '';
+  const phase1Row = [...delivery.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr\s*>/gi)].map((r) => cellsOf(r[1])).find((c) => /^1\b/.test(c[0] || ''));
+  const phase1Plan = planBullet(planText, '- **Phase 1');
+  for (const [label, text] of [['doc', phase1Row ? phase1Row.join(' ') : ''], ['PLAN.md', phase1Plan]]) {
+    if (!text) { out.push(`phase 1: no Phase 1 entry found in ${label}`); continue; }
+    if (/approved[\s-]+editions?/i.test(text)) out.push(`phase 1: ${label} Phase 1 depends on an approved edition`);
+    if (!text.includes('get_client_project_editorial') || !/project membership/i.test(text)) {
+      out.push(`phase 1: ${label} Phase 1 does not name get_client_project_editorial guarded by project membership`);
+    }
+  }
+
+  // (f) privacy: the specific sentences, not a bare "private" or "never" token.
+  const consentAt = doc.search(/<h3\b[^>]*\bid="consent"/i);
+  const consent = consentAt < 0 ? '' : visible(doc.slice(consentAt, doc.indexOf('</section>', consentAt)));
+  const sentences = consent.split(/(?<=[.;])\s+/);
+  const withheld = sentences.some((t) => /never sent/i.test(t)
+    && ['site address', 'household names', 'prices', 'notes'].every((w) => t.toLowerCase().includes(w)));
+  if (!withheld) out.push('privacy: no Consent sentence says the site address, household names, prices and notes are never sent to the model');
+  const homePhotos = sentences.some((t) => /photographs of her home/i.test(t) && /only after the client privacy page ships/i.test(t));
+  if (!homePhotos) out.push('privacy: no Consent sentence holds photographs of her home back until the client privacy page ships');
+
+  return out;
+}
+
+problems.push(...contractChecks(html, plan));
+
+// Seeded self-test: every probe must make contractChecks report its problem; the clean pair must pass.
+function selfTest() {
+  const swap = (from, to, all = false) => (text) => (all ? text.split(from).join(to) : text.replace(from, to));
+  const PROBES = [
+    ['cost range drifts from the arithmetic', 'cost:', swap('<td data-label="v2" class="num">$0.215–$0.44</td>', '<td data-label="v2" class="num">$0.15–$0.45</td>'), null],
+    ['later edition total no longer sums', 'cost:', swap('<td data-label="v2" class="num">about $0.045</td>', '<td data-label="v2" class="num">about $0.06</td>'), null],
+    ['twenty-jobs figure wrong', 'cost:', swap('about $4.30–$8.80', 'about $3.00–$9.00'), null],
+    ['PLAN.md cost row disagrees', 'cost:', null, swap('| $0.215–$0.44 |', '| $0.15–$0.45 |')],
+    ['superseded crop ratio returns', 'crop:', swap('cover_phone, 39:34', 'cover_phone, 0.86'), null],
+    ['settled floor removed', 'crop:', swap('780×680', '780×600', true), null],
+    ['superseded floor in PLAN.md', 'crop:', null, swap('| 780×680 |', '| 780×907 |')],
+    ['doc plate order swapped', 'plates:', (t) => t.replace('<strong>7 · Pair</strong>', '<strong>7 · PIECE</strong>').replace('<strong>8 · Piece</strong>', '<strong>8 · Pair</strong>').replace('7 · PIECE', '7 · Piece'), null],
+    ['PLAN.md plate renamed', 'plates:', null, swap('| 4 | Drawing or sheet |', '| 4 | Drawing / sheet |')],
+    ['doc concept-state sentence removed', 'plates:', swap(CONCEPT_STATE, 'Concept is a carried plate', true), null],
+    ['C2 loses the held-plate exception', 'C2:', (t) => t.replace(HELD_EXCEPTION, 'never taller than 72svh'), null],
+    ['PLAN.md C2 loses the exception', 'C2:', null, (t) => t.replace(HELD_EXCEPTION, 'never taller than 72svh')],
+    ['doc Phase 1 depends on an approved edition', 'phase 1:', swap('Phase 1 has no edition record. 00842', 'Phase 1 reads the approved edition only. 00842'), null],
+    ['PLAN.md Phase 1 depends on an approved edition', 'phase 1:', null, swap('Phase 1 has no edition record (R-v2-9)', 'Phase 1 serves the approved edition (R-v2-9)')],
+    ['privacy sentence loses household names', 'privacy:', swap('household names, project notes', 'project notes'), null],
+    ['home photographs released without the privacy page', 'privacy:', swap('only after the client privacy page ships', 'once the studio agrees'), null],
+  ];
+  const base = contractChecks(html, plan);
+  if (base.length) {
+    console.error('self-test: the clean doc and PLAN.md do not pass the contract checks');
+    return false;
+  }
+  let caught = 0;
+  for (const [name, expect, mutateDoc, mutatePlan] of PROBES) {
+    const doc2 = mutateDoc ? mutateDoc(html) : html;
+    const plan2 = mutatePlan ? mutatePlan(plan) : plan;
+    if (doc2 === html && plan2 === plan) { console.error(`self-test: probe "${name}" did not change its fixture`); continue; }
+    const found = contractChecks(doc2, plan2);
+    if (found.some((p) => p.startsWith(expect))) caught += 1;
+    else console.error(`self-test: probe "${name}" was not caught (expected a "${expect}" problem)`);
+  }
+  if (caught !== PROBES.length) {
+    console.error(`self-test: FAIL, ${caught} of ${PROBES.length} seeded problems caught`);
+    return false;
+  }
+  console.log(`self-test: ok, ${caught} of ${PROBES.length} seeded problems caught`);
+  return true;
+}
 
 if (problems.length) {
   console.error(`check-doc: ${problems.length} problem(s) in ${docPath}`);
   for (const p of problems) console.error(`  - ${p}`);
   process.exit(1);
 }
+if (!selfTest()) process.exit(1);
 console.log('check-doc: ok');
+console.log('check-doc: still owed to human review: a browser render at 390 and 1440, an assistive-technology pass, and re-verification of the Commons licences');

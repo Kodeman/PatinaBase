@@ -102,11 +102,11 @@ p { margin: 0; }
 .folio { font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em; color: var(--subtle); }
 .folio b { font-weight: 400; color: var(--ink); font-size: 28px; display: block; line-height: 1; margin-bottom: 8px; letter-spacing: 0; }
 .lede { font-family: var(--display); font-style: italic; font-size: clamp(20px, 2.2vw, 24px); line-height: 1.4; color: var(--oak-ink); }
-.meta { font-family: var(--mono); font-size: 13px; letter-spacing: 0.02em; color: var(--subtle); }
+.meta { font-family: var(--mono); font-size: 15px; letter-spacing: 0.02em; color: var(--subtle); }
 .id { font-family: var(--mono); font-size: 13px; letter-spacing: 0.02em; color: var(--forest); white-space: nowrap; }
 code { font-family: var(--mono); font-size: 0.86em; color: var(--oak-ink); background: var(--stock); border: 1px solid var(--hairline); border-radius: 3px; padding: 0 4px; overflow-wrap: anywhere; }
 blockquote { margin: 0; font-family: var(--display); font-style: italic; font-size: 21px; line-height: 1.45; color: var(--oak-ink); max-width: 60ch; }
-blockquote cite { display: block; font-family: var(--mono); font-style: normal; font-size: 13px; color: var(--subtle); margin-top: 8px; }
+blockquote cite { display: block; font-family: var(--mono); font-style: normal; font-size: 15px; color: var(--subtle); margin-top: 8px; }
 a { color: var(--forest); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 a:hover { color: var(--forest-press); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
@@ -145,30 +145,30 @@ li::marker { color: var(--subtle); }
 .captions li { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; padding-block: 10px; border-top: 1px solid var(--hairline); max-width: none; }
 .captions li span:first-child { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--subtle); padding-top: 3px; }
 .captions li span:last-child { font-family: var(--mono); font-size: 15px; line-height: 1.45; color: var(--oak-ink); }
-.captions li small { display: block; font-size: 13px; color: var(--subtle); margin-top: 4px; }
+.captions li small { display: block; font-size: 15px; color: var(--subtle); margin-top: 4px; }
 
 /* Callout: a corrected defect or an open point */
 .callout { border-left: 2px solid var(--forest); padding: 4px 0 4px 16px; display: grid; gap: 8px; max-width: 76ch; }
 .callout .eyebrow { color: var(--forest); }
 
 /* Tables */
-.tw { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tw { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table { border-collapse: collapse; width: 100%; font-size: 15px; line-height: 1.5; }
 caption { caption-side: top; text-align: left; font-family: var(--mono); font-size: 12px; letter-spacing: 0.02em; color: var(--subtle); padding-bottom: 10px; }
 th { font-family: var(--mono); font-weight: 500; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--subtle); text-align: left; padding: 10px 16px 10px 0; border-bottom: 1px solid var(--card-rule); vertical-align: bottom; }
 td { padding: 12px 16px 12px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
-td.mono, th.mono { font-family: var(--mono); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.mono, th.mono { font-family: var(--mono); font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 td em { font-family: var(--display); font-size: 17px; }
 td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.yn td.c, .yn th.c { text-align: center; padding-right: 8px; padding-left: 8px; font-family: var(--mono); font-size: 13px; }
+.yn td.c, .yn th.c { text-align: center; padding-right: 8px; padding-left: 8px; font-family: var(--mono); font-size: 14px; }
 .t-arrival { max-width: 760px; }
 .t-risks td:first-child { width: 34%; }
 .ledger td:first-child { font-family: var(--mono); font-size: 14px; color: var(--forest); white-space: nowrap; }
-.ledger td.status { font-family: var(--mono); font-size: 13px; color: var(--oak-ink); }
+.ledger td.status { font-family: var(--mono); font-size: 14px; color: var(--oak-ink); }
 
 /* Figures */
 figure { margin: 0; display: grid; gap: 12px; min-width: 0; }
-figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--subtle); max-width: 76ch; }
+figcaption { font-family: var(--mono); font-size: 15px; line-height: 1.55; color: var(--subtle); max-width: 76ch; }
 .dg-wrap { overflow-x: auto; background: var(--stock); border: 1px solid var(--hairline); border-radius: 8px; padding: 20px; }
 .dg { display: block; width: 100%; height: auto; }
 /* SVG text sizes are user units; each diagram's viewBox is sized so no label renders below
@@ -190,7 +190,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
 .refs { display: grid; grid-template-columns: 3.46fr 3.46fr 1fr; gap: 16px; align-items: start; }
 .refs figure { gap: 10px; }
 .refs img { display: block; width: 100%; height: auto; border: 1px solid var(--hairline); background: var(--stock); }
-.refs figcaption { font-size: 12.5px; }
+.refs figcaption { font-size: 15px; }
 .refs figcaption small { display: block; margin-top: 4px; }
 
 .dg .frame { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
@@ -276,7 +276,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
     <p>The promise to June:</p>
     <blockquote>“Open this and see your own house arriving, piece by piece, in the studio's own pictures, with every ask sitting exactly where it belongs.”</blockquote>
     <p><strong>What changed in version 2.</strong> Kody asked for a page led by imagery. The arrival now opens on the letterhead and purpose sentence, then the job's own photograph edge to edge, then three standing rows that state what is owed and what waits. Every chapter opens on the strongest image the job owns, with 20–70 words between pictures, and no ink ever sits on a photograph. Behind it is an image system that checks every picture before it is used, crops it for each screen and serves it privately. The change is reversible: the version 1 arrival is the recorded fallback (card Q1).</p>
-    <p>Nothing is built yet. Fourteen decisions in section 10 come before any code. The mockups are on <a href="https://claude.ai/artifact/BC9SpaY29bDbuzUUs4kmxY">the House Issue canvas</a>.</p>
+    <p>Nothing is built yet. Fifteen decisions in section 10 come before any code. The mockups are on <a href="https://claude.ai/artifact/BC9SpaY29bDbuzUUs4kmxY">the House Issue canvas</a>.</p>
   </div>
 </header>
 
@@ -381,7 +381,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
       <li><strong>A per-job edition record, composed in the background and approved by the designer.</strong> An edition is the hero pick, the chapter headlines and the standing sentences; the chapter order is fixed and never composed. What a picture shows (its subject, focal point and alt text) is stored once on the picture itself, so a later edition only looks at new photographs. It lands awaiting review in the designer's Document, and only an approved edition reaches the homeowner. What is deterministic stays code: image rank, quality floors, crops, the caption from record fields, palette, contrast and the layout template.</li>
       <li><strong>The page re-composes only when the job moves, and the ground never shifts.</strong> The letterhead, purpose sentence, standing rows, link row, anchors, invoice groups and chapter order stay put. The hero plate, a chapter headline and the plate tint may change, once a day at most and only on the designer's approval.</li>
     </ol>
-    <p><strong>No ink on photographs.</strong> Captions sit under each picture. At 390 the cover headline sits on an opaque paper tab cut 44px into the photograph's lower-left corner; the tab is page furniture, measured ink on paper, never a tint (card V2-2). At 1440 the headline sits under the photograph.</p>
+    <p><strong>No ink on photographs.</strong> Captions sit under each picture. At 390 the cover headline sits on an opaque paper tab cut 44px into the photograph's lower-left corner; the tab is page furniture, measured ink on paper, never a tint (card V2-2). At 1440 the same opaque paper tab is cut into the photograph's bottom edge and carries the eyebrow and a one-line 64px headline.</p>
 
     <h3>June's week</h3>
     <p>Elm Street House is in Procurement. <strong>Monday</strong>, an email says Birchwood Studio sent an invoice. She lands on the letterbox: the past-due card, its consequence note and Pay. She pays, and the page is the receipt. <strong>Tuesday</strong> she opens it out of habit: the letterhead, then her sideboard in the workshop, then three plain rows that say what is owed and what waits. “Since yesterday” dims only the opt-in units that did not change, such as the room bands and the road; the letterhead, the photographs, the invoices on the doorstep, the letterbox and every gate stay at full ink. The standing sentence says what it said yesterday: Now, Procurement. Next, the living room installation. Target, 22 January 2027. The sameness is the reassurance. <strong>Wednesday</strong> Maren's 16 October letter arrives with the forest tick. The unchanged opt-in units dim again; the letterhead, the invoices, the letterbox and the gates never do. June replies. <strong>Thursday</strong> a workshop photograph of the walnut sideboard arrives, captioned “Walnut top, planed · Harmon Bench Works · 15 October 2026”. The page re-leads with it and she shows Arlo. <strong>Friday</strong> nothing changed; she reads the caption again. <strong>Saturday</strong> she looks at the Lake Cottage from the documents and contact chapter. <strong>Sunday</strong> the sofa's second edition is still waiting. It was never urgent, so the page never said so. She approves it with the hold.</p>
@@ -417,7 +417,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
       <li>The purpose sentence below the photograph. It stays above it, because CPUX-01 puts orientation before the image.</li>
       <li>12px captions. Captions carry names and dates, so they take the spec's 15px floor.</li>
       <li>A <code>drawing</code> source kind. The systems designer's enumerated kinds, with <code>sheet</code>, and the vector key plan replace it.</li>
-      <li>Four new canvas boards. One, Drawings and Materials, is enough; the measured arrival becomes y-rulers on the main boards and the image ledger folds into Credits.</li>
+      <li>Four new canvas boards. One, Drawings and Materials, is enough; the measured arrival becomes y-rulers on the Main-A, Main-B and desktop boards (the Main board is split in two, Main-A from the arrival to the living room and Main-B from the study to the colophon), and the image ledger folds into Credits.</li>
       <li>A missing board placeholder. The canvas draws it as a CSS collage, with no fetch.</li>
       <li>“Maker photographs never bleed.” Narrowed to catalogue and brand photographs: a workshop photograph of her own piece is job imagery under R142.</li>
       <li>Version 1's 16:10 hero at every width and its standing-line-first 390 arrival. Superseded; see the rulings ledger in section 10.</li>
@@ -444,12 +444,12 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
           <tr><td class="mono">660–704</td><td>Standing row 2: “One approval waits: the living room sofa.” to <code>#approvals</code></td></tr>
           <tr><td class="mono">704–748</td><td>Standing row 3: “Six invoices are open, $1,375.00 together.” to <code>#ledger</code></td></tr>
           <tr><td class="mono">≈764–852</td><td>Link row after a 16px gap, two rows of 44px targets, in F3 order</td></tr>
-          <tr><td class="mono">≈876–</td><td><code>#doorstep</code>: its heading, the past-due card, its consequence note, and the forest 48px Pay act at about 1090–1140, on the second screen</td></tr>
+          <tr><td class="mono">≈876–</td><td><code>#doorstep</code>: its heading, the past-due card, its consequence note, and the forest 48px payment act, “Continue to secure payment”, at about 1090–1140, on the second screen</td></tr>
         </tbody>
       </table>
     </div>
 
-    <h4>Invariants the canvas check enforces at 390</h4>
+    <h3>Invariants the canvas check enforces at 390</h3>
     <ul>
       <li>Standing row 1 starts at 620 or above; it fails outright below 664, the Safari line.</li>
       <li>Standing row 3 starts at 740 or above. The hero is 340–380 tall.</li>
@@ -457,11 +457,12 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
       <li>At 360px the plate is 360×314. At 200% zoom, or in any container under 320 CSS px, the tab sits below the plate.</li>
       <li>The tab's placement is computed per picture from a 48px copy, in the 310×44 zone at its lower-left corner: <strong>notch</strong> by default; <strong>hairline</strong> (a 1px <code>#C9C7BD</code> rule on the tab's top and right edges) when that zone's contrast against paper is under 1.3:1, as with pale linen or plaster; <strong>below</strong> when the zone is busy, when the focal point falls inside it, or when the container is narrow.</li>
       <li>The standing rows are block links that wrap rather than truncate. They replace version 1's inline standing line, whose 24px line missed the 44px target.</li>
+      <li>Every arrival, at every width and in every phase, shows all three standing rows in the same role order: past due, approvals, invoices open. A row with nothing to report says so in words: “Nothing new since your last visit”, “Nothing waiting on you”, “No invoices open”. The roles and their order never change by phase.</li>
     </ul>
 
     <figure class="wide">
       <div class="dg-wrap">
-        <svg class="dg dg-arrival" viewBox="0 0 425 1180" role="img" aria-label="Wireframe of the 390 pixel arrival, version 2. From the top: the studio letterhead to 96, the purpose sentence on two lines to 140, the hero photograph edge to edge from 140 to 480, an opaque paper tab cut into its lower-left corner from 436 to 552 holding the eyebrow and two-line headline, the caption from 564 to 608, then three 44 pixel standing rows from 616 to 748. The Safari toolbar line at 664 falls inside standing row 2 and the first screen ends at 740. The link row follows at about 764 to 852, then the doorstep from about 876 with the forest Pay act at about 1090 on the second screen.">
+        <svg class="dg dg-arrival" viewBox="0 0 425 1180" role="img" aria-label="Wireframe of the 390 pixel arrival, version 2. From the top: the studio letterhead to 96, the purpose sentence on two lines to 140, the hero photograph edge to edge from 140 to 480, an opaque paper tab cut into its lower-left corner from 436 to 552 holding the eyebrow and two-line headline, the caption from 564 to 608, then three 44 pixel standing rows from 616 to 748. The Safari toolbar line at 664 falls inside standing row 2 and the first screen ends at 740. The link row follows at about 764 to 852, then the doorstep from about 876: the past-due card, the note that the next screen shows the amount and nothing is charged until she confirms there, and the forest act “Continue to secure payment” at about 1090 on the second screen.">
           <rect class="frame" x="34.5" y="10" width="390" height="1160" fill="none"/>
           <g>
             <line class="tick" x1="29" y1="10" x2="34" y2="10"/><text class="m" x="28" y="15" text-anchor="end">0</text>
@@ -532,18 +533,19 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
           <text class="tb" x="66" y="968">$600.00</text>
           <text class="t" x="66" y="994">Past due since 25 September</text>
           <rect class="note" x="66" y="1010" width="326" height="72" rx="6"/>
-          <text class="t" x="78" y="1040">Consequence note</text>
-          <text class="m" x="78" y="1064">above the act it explains</text>
+          <text class="t" x="78" y="1032">The next screen shows the amount</text>
+          <text class="t" x="78" y="1052">and asks you to confirm. Nothing</text>
+          <text class="t" x="78" y="1072">is charged until you confirm there.</text>
           <rect class="act" x="66" y="1100" width="326" height="48" rx="3"/>
-          <text class="at" x="229" y="1130" text-anchor="middle">Pay $600.00</text>
+          <text class="at" x="229" y="1130" text-anchor="middle">Continue to secure payment</text>
         </svg>
       </div>
-      <figcaption>The arrival at 390px, drawn to the version 2 y ranges. The letterhead and the purpose sentence on two lines come first, then her photograph edge to edge with the paper tab cut into its corner, then the caption and three standing rows. Row 1 starts at about 616, above the 620 gate and the 664 Safari line, and the first screen ends at 740, inside row 3. The forest Pay act sits on the second screen at about 1090. Hatching marks where the job's photograph goes.</figcaption>
+      <figcaption>The arrival at 390px, drawn to the version 2 y ranges. The letterhead and the purpose sentence on two lines come first, then her photograph edge to edge with the paper tab cut into its corner, then the caption and three standing rows. Row 1 starts at about 616, above the 620 gate and the 664 Safari line, and the first screen ends at 740, inside row 3. The forest payment act, “Continue to secure payment”, sits on the second screen at about 1090, under the canvas's note that the next screen shows the amount and nothing is charged until she confirms there (F6, CPUX-03). Hatching marks where the job's photograph goes.</figcaption>
     </figure>
 
     <div class="callout">
-      <p class="eyebrow">An open point for the review</p>
-      <p><strong>The phone crop was sized for a taller box.</strong> The systems designer sized the phone cover crop (ratio 0.86, floor 780×907) for a 390×452 plate. This plan's plate is 390×340, a ratio of about 1.15. Either the phone crop is re-cut to about 1.15, or the 0.86 crop stays and the browser trims it further within the 50% discard rule. This plan carries both numbers and records the mismatch rather than choosing.</p>
+      <p class="eyebrow">Settled in review</p>
+      <p><strong>The phone crop matches the plate.</strong> The phone cover crop is cut at 39:34, about 1.147, the shape of the 390×340 plate, with a twice-size floor of 780×680.</p>
     </div>
 
     <h3>The arrival at 1440</h3>
@@ -553,14 +555,15 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         <thead><tr><th scope="col" class="mono">y</th><th scope="col">Element</th></tr></thead>
         <tbody>
           <tr><td class="mono">0–96</td><td>Top band: the letterhead on the left; the purpose sentence and the link row (44px targets) on the right; a hairline at 96</td></tr>
-          <tr><td class="mono">104–752</td><td>Hero edge to edge, 1440 wide and the smaller of 72svh or 648 tall; cropped 16:10, positioned on the stored focal point</td></tr>
-          <tr><td class="mono">≈768–864</td><td>Under the photograph: the eyebrow and the display headline at 72px on a 72px line, left; the caption in 15px DM Mono in the right column</td></tr>
-          <tr><td class="mono">≈872–916</td><td>One-row standing line: the three standing links side by side, each a 44px target</td></tr>
-          <tr><td class="mono">≈930</td><td>Chapter 02 begins</td></tr>
+          <tr><td class="mono">104–752</td><td>Hero edge to edge, 1440 wide and the smaller of 72svh or 648 tall; cropped 16:10, positioned on the stored focal point. If the standing rows cannot meet the rule below, the hero shortens to 1440×600 before anything else moves.</td></tr>
+          <tr><td class="mono">plate edge</td><td>The paper tab, the same opaque device as at 390, cut into the plate's bottom edge: the eyebrow and a one-line Playfair headline at 64px</td></tr>
+          <tr><td class="mono">below</td><td>The caption in 15px DM Mono</td></tr>
+          <tr><td class="mono">top ≤ 880</td><td>The three standing rows in their fixed order, each a 44px target</td></tr>
+          <tr><td class="mono">after</td><td>Chapter 02 begins</td></tr>
         </tbody>
       </table>
     </div>
-    <p>The y values below 752 are estimates from the type sizes; the desktop canvas board measures them, and the standing line's top must sit above the 900px fold. A <strong>portrait-only hero</strong> never letterboxes, blur-fills or upscales: on desktop it takes the portrait template, a 4:5 plate across five of twelve columns, about 520×650, beside the headline (the source must be at least 1040 wide); on the phone it takes the tall crop.</p>
+    <p><strong>The rule at 1440:</strong> the standing rows' top sits at 880px or above, measured from the top of the page, and fails outright below 900. The positions under the hero are measured on the canvas board, not estimated here. A <strong>portrait-only hero</strong> never letterboxes, blur-fills or upscales: on desktop it takes the portrait template, a 4:5 plate across five of twelve columns, about 520×650, beside the headline (the source must be at least 1040 wide); on the phone it takes the tall crop.</p>
 
     <h3>Chapters</h3>
     <p>Chapters keep every existing anchor, because emails, payment returns and retired-route redirects point at them. Each chapter carries a bare DM Mono numeral as wayfinding. The eyebrows carry the spec's literal heads, which satisfies A7's adoption of F1's literal heads, while the Playfair headline beneath keeps the studio's voice. The chapter order never moves. Status in words sits above every plate, in reading order and on screen; the caption sits below.</p>
@@ -575,7 +578,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
           <tr><td data-label="Anchor"><code>#key</code></td><td data-label="Eyebrow" class="mono">04 · THE HOUSE</td><td data-label="Headline"><em>Three rooms, read from the front door</em></td><td data-label="Opens on, then">The floor plan drawing, never cropped, with the room names as links in a column beside it. The drawn plan is the fallback.</td></tr>
           <tr><td data-label="Anchor">RoomBand ids</td><td data-label="Eyebrow" class="mono">05 · LIVING ROOM</td><td data-label="Headline"><em>Walnut, linen, and a lot of light</em></td><td data-label="Opens on, then">Chapter plate “as measured”, about 40 words, the material run (walnut, linen, morning light), about 20 words, the piece run with a status word on every piece, then the concept render at six columns with its chip. The page's one held plate lives here.</td></tr>
           <tr><td data-label="Anchor">RoomBand ids</td><td data-label="Eyebrow" class="mono">06 · STUDY</td><td data-label="Headline"><em>Oak, brass and lime plaster</em></td><td data-label="Opens on, then">Material run from the studio's study board.</td></tr>
-          <tr><td data-label="Anchor">RoomBand ids</td><td data-label="Eyebrow" class="mono">07 · ENTRY</td><td data-label="Headline"><em>A pale wall and a dark door</em></td><td data-label="Opens on, then">One line of words and the swatch strip (Halvorsen, Larkin Prairie).</td></tr>
+          <tr><td data-label="Anchor">RoomBand ids</td><td data-label="Eyebrow" class="mono">07 · ENTRY</td><td data-label="Headline"><em>One line</em></td><td data-label="Opens on, then">One line of words and the swatch strip (Halvorsen, Larkin Prairie).</td></tr>
           <tr><td data-label="Anchor"><code>#road</code></td><td data-label="Eyebrow" class="mono">08 · PROGRESS</td><td data-label="Headline"><em>In production, then on the truck, then here</em></td><td data-label="Opens on, then">Pair: the maker's shop drawing beside the workshop. Labels in words: NOW In production · MAKER Harmon Bench Works, Dayton · TARGET 22 January 2027. No counts.</td></tr>
           <tr><td data-label="Anchor"><code>#note</code></td><td data-label="Eyebrow" class="mono">09 · UPDATES</td><td data-label="Headline"><em>A note from the studio, 16 October</em></td><td data-label="Opens on, then">Maren's lead line, then the photograph she mentions at 4:5, then the reply.</td></tr>
           <tr><td data-label="Anchor"><code>#previously</code> <code>#changed</code></td><td data-label="Eyebrow" class="mono">10 · EARLIER</td><td data-label="Headline"><em>What has already been settled</em></td><td data-label="Opens on, then">Text only; “Edition 4 · approved by Maren · 21 October” lines.</td></tr>
@@ -583,7 +586,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         </tbody>
       </table>
     </div>
-    <p><strong>The rhythm rule:</strong> never two plates in a row, and 20–70 words or a chapter head between any two pictures. Scroll budget: the cover within the first 740px; a room chapter within two and a half screens; Progress within one and a half; Invoices, Approvals, Updates and Earlier as long as their content needs, with no plate taller than 7:5.</p>
+    <p><strong>The rhythm rule:</strong> never two plates in a row, and 20–70 words or a chapter head between any two pictures. Scroll budget: the cover within the first 740px; a room chapter within two and a half screens, except the one chapter carrying the held plate, which may run three and three-quarter screens, 3,375px at 390 (card V2-9); Progress within one and a half; Invoices, Approvals, Updates and Earlier as long as their content needs, with no plate taller than 7:5.</p>
   </div>
 </section>
 
@@ -591,7 +594,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
   <p class="folio"><b>05</b>Plates</p>
   <h2 id="h05">Image plate grammar</h2>
   <div class="sec-body">
-    <p>Every plate is a <code>figure</code> with an <code>img alt</code> and a <code>figcaption</code>, framed by a 1px <code>#E8E3DB</code> hairline. The caption is DM Mono 15px in oak ink (card V2-4 raises it from 12px), stored as three fields, and set under the plate, never on the photograph. The job's palette tints only a 4px rule under the frame, never the ground behind the image. Plates never dim with “since yesterday” and never sit inside a padded since-yesterday unit; the hero renders between the doorplate and the since-yesterday block, so it never dims (card V2-7). Version 2 has nine plate types, plus three carried from version 1.</p>
+    <p>Every plate is a <code>figure</code> with an <code>img alt</code> and a <code>figcaption</code>, framed by a 1px <code>#E8E3DB</code> hairline. The caption is DM Mono 15px in oak ink (card V2-4 raises it from 12px), stored as three fields, and set under the plate, never on the photograph. The job's palette tints only a 4px rule under the frame, never the ground behind the image. Plates never dim with “since yesterday” and never sit inside a padded since-yesterday unit; the hero renders between the doorplate and the since-yesterday block, so it never dims (card V2-7). Version 2 has nine plate types, in this order: Hero, Chapter plate, Held plate, Drawing or sheet, Board, Material run, Pair, Piece, Document cover; three more are carried from version 1. Concept is a Room-plate state, not a type. The plan's plate grammar in <code>brief/PLAN.md</code> is the authority for this list.</p>
     <div class="tw">
       <table class="stack">
         <caption>The nine plates, their sizes at 1440 and 390, and their rules.</caption>
@@ -606,16 +609,16 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
           <tr><td data-label="Plate"><strong>7 · Pair</strong></td><td data-label="1440" class="num">784×560 + 440×560</td><td data-label="390" class="num">390×279 + 140×175</td><td data-label="Rules">Only in <code>#approvals</code>, scope-change asks and the Progress pair, so an ask reads as material rather than as a form.</td></tr>
           <tr><td data-label="Plate"><strong>8 · Piece</strong></td><td data-label="1440" class="num">four across at 282</td><td data-label="390" class="num">two across at 171</td><td data-label="Rules">A white-ground photograph sits whole with a 10% inset, so the white reads as a clipping pasted on stock. A 16px name and status line sits under every tile, never only in a caption.</td></tr>
           <tr><td data-label="Plate"><strong>9 · Document cover</strong></td><td data-label="1440" class="num">282×376</td><td data-label="390" class="num">171×228</td><td data-label="Rules">The whole cover is the link.</td></tr>
-          <tr><td data-label="Plate">Concept render (carried)</td><td data-label="1440" class="num">612 wide at most</td><td data-label="390" class="num">358, inset</td><td data-label="Rules">The “Concept · not installed” chip at 14px or larger on an opaque <code>#FFFDF9</code> ground, the one R142 exception to no ink on images.</td></tr>
+          <tr><td data-label="Plate">Concept render (carried)</td><td data-label="1440" class="num">612 wide at most</td><td data-label="390" class="num">358, inset</td><td data-label="Rules">Concept is a Room-plate state, not a type: a room's concept render carries the “Concept · not installed” chip at 14px or larger on an opaque <code>#FFFDF9</code> ground, the one R142 exception to no ink on images.</td></tr>
           <tr><td data-label="Plate">Swatch strip (carried)</td><td data-label="1440" class="num">40×40 swatches</td><td data-label="390" class="num">40×40 swatches</td><td data-label="Rules">From <code>project_palettes</code>, labelled with paint maker and name. The one place palette appears as colour, because it is a record of real paint.</td></tr>
           <tr><td data-label="Plate">Silhouette (carried)</td><td data-label="1440">as version 1</td><td data-label="390">as version 1</td><td data-label="Rules">The drawn footprint, with “Photograph to follow.” as a second line. Also the load-failure fallback.</td></tr>
         </tbody>
       </table>
     </div>
-    <p><strong>Word budget:</strong> a headline of eight words or fewer; 20–70 words between pictures; the three standing rows 30 words or fewer together. <strong>Type, 1440 then 390:</strong> display 72px and 34px, each on a line equal to its size; chapter head 48px and 30px; lead 24px and 18px; eyebrow 12px DM Mono 500 tracked 0.12em; caption 15px on a 1.45 line; body 16px on a 1.55 line.</p>
+    <p><strong>Word budget:</strong> a headline of eight words or fewer; 20–70 words between pictures; the three standing rows 30 words or fewer together. <strong>Type, 1440 then 390:</strong> display 64px and 34px, each on a line equal to its size (one line on the 1440 tab); chapter head 48px and 30px; lead 24px and 18px; eyebrow 12px DM Mono 500 tracked 0.12em; caption 15px on a 1.45 line; body 16px on a 1.55 line. This document's own tables use a smaller monospace than the product floor; the floor governs the homeowner page.</p>
 
     <h3>Caption grammar: what · whose · when</h3>
-    <p>Sentence case, exactly three stored segments separated by middle dots, each a plain noun phrase with no adjectives of praise. Any qualification is a separate second line or the on-image chip, never a fourth segment. Code fills the segments from structured fields: item name, source party, date. Nothing invents a segment; a plate with a segment that cannot be filled is not shown, and the silhouette stands in.</p>
+    <p>Sentence case, exactly three stored segments separated by middle dots, each a plain noun phrase with no adjectives of praise. Captions are exactly three segments; a qualifier is a separate second line in its own <code>plate-note</code> element, never a fourth segment, and the concept mark is the on-image chip. Code fills the segments from structured fields: item name, source party, date. Nothing invents a segment; a plate with a segment that cannot be filled is not shown, and the silhouette stands in.</p>
     <ul class="captions">
       <li><span>Installed</span><span>Reading chair, installed in the living room · photographed by Birchwood Studio · 3 September 2026</span></li>
       <li><span>Workshop</span><span>Walnut sideboard, in the workshop · photographed by Harmon Bench Works · 15 October 2026</span></li>
@@ -654,7 +657,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         <ul>
           <li>The letterhead</li>
           <li>The purpose sentence</li>
-          <li>The three standing rows and their order</li>
+          <li>The three standing rows and their order, in every phase, each with its zero state in words</li>
           <li>The link row's order and labels</li>
           <li>Every anchor</li>
           <li>The four invoice groups and their order</li>
@@ -707,7 +710,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
 
     <h3>The edition record</h3>
     <p>Each composition is an edition, stored per project. An edition moves from drafting to awaiting review to approved, and is superseded when a newer one is approved. A new draft supersedes an unreviewed one, so the designer never sees two. Identical inputs are skipped by a source hash, requests wait 30 minutes so a burst of changes becomes one edition, and a project gets at most two editions a day. The designer's edits to a chapter opener, a headline or standing sentence, a caption's whose and when, or a focal point are kept as overrides and applied when the page is read, never written over the composition.</p>
-    <p>The homeowner's reader returns only the approved edition, with overrides merged and every picture as a private plate address. It allowlists the piece's name as signed, maker name, where it is made, material, finish, dimensions and the description as signed, trimmed to 280 characters. It never returns prices, SKUs or notes.</p>
+    <p>From Phase 2, the homeowner's reader <code>get_client_project_edition</code> returns only the approved edition, with overrides merged and every picture as a private plate address. It allowlists the piece's name as signed, maker name, where it is made, material, finish, dimensions and the description as signed, trimmed to 280 characters. It never returns prices, SKUs or notes.</p>
     <p>Editions are triggered by an item image added or made primary, an item delivered or installed, a phase change, a concept render set, a palette change, an authorization signed, or the project closing.</p>
 
     <figure class="wide bleed">
@@ -893,7 +896,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
     </figure>
 
     <h3>The designer loop</h3>
-    <p>A Press band in the job's Document sits between the client mirror and the note composer, and the edition's preview renders inside the mirror. The designer can Approve, Hold, or Edit: pick the opening image for any chapter from a picker that offers only eligible sources, each labelled; change a headline or standing sentence inline; change a caption's whose and when fields; or drag the focal point on two frames side by side, the desktop 16:10 and the phone crop. A dragged focal point is kept for that picture and code recomputes its crops. The chapter order never moves, so the Edit tray has no way to reorder chapters. There is no regenerate button. The Desk job card gets one line, not a card. The band says “A new edition is ready”, never why. When no photograph meets the hero floor, the band says “The cover is a drawing until a photograph arrives” and offers one upload slot.</p>
+    <p>A Press band in the job's Document sits between the client mirror and the note composer, and the edition's preview renders inside the mirror. The designer can Approve, Hold, or Edit: pick the opening image for any chapter from a picker that offers only eligible sources, each labelled; change a headline or standing sentence inline; change a caption's whose and when fields; or drag the focal point on two frames side by side, the desktop 16:10 and the phone 39:34. A dragged focal point is kept for that picture and code recomputes its crops. The chapter order never moves, so the Edit tray has no way to reorder chapters. There is no regenerate button. The Desk job card gets one line, not a card. The band says “A new edition is ready”, never why. When no photograph meets the hero floor, the band says “The cover is a drawing until a photograph arrives” and offers one upload slot.</p>
 
     <h3 id="image-system">The image system</h3>
     <p>Version 2 stands or falls on its pictures, so the plan now says where every picture comes from, how good it must be, how it is cropped and how it reaches June's phone. Source kinds are upload, installed, scan, board, sheet, maker and concept. The rank follows R142: an installed photograph, then studio-made images (scans, boards, sheets and uploads), then a maker's photograph of the specified piece, then a catalogue photograph (piece and pair plates only), then the silhouette.</p>
@@ -927,7 +930,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         <thead><tr><th scope="col">Role</th><th scope="col">Target</th><th scope="col">Hard floor</th><th scope="col">Crop</th></tr></thead>
         <tbody>
           <tr><td data-label="Role">Hero, desktop, edge to edge</td><td data-label="Target" class="num">2048×1280</td><td data-label="Hard floor">1600×1000; a source 1248–1600 wide takes the 1248 measure instead; under 1248 it is not a hero</td><td data-label="Crop" class="mono">wide, 1.6</td></tr>
-          <tr><td data-label="Role">Hero, phone cover</td><td data-label="Target" class="num">1080×1256</td><td data-label="Hard floor">780×907 (the open point in section 04)</td><td data-label="Crop" class="mono">cover_phone, 0.86</td></tr>
+          <tr><td data-label="Role">Hero, phone cover</td><td data-label="Target" class="num">1080×942</td><td data-label="Hard floor">780×680</td><td data-label="Crop" class="mono">cover_phone, 39:34</td></tr>
           <tr><td data-label="Role">Held plate, phone</td><td data-label="Target" class="num">1080×2348</td><td data-label="Hard floor">780×1696</td><td data-label="Crop" class="mono">tall, 0.46</td></tr>
           <tr><td data-label="Role">Chapter or room plate</td><td data-label="Target" class="num">2048×1365</td><td data-label="Hard floor">1248×832</td><td data-label="Crop" class="mono">wide32</td></tr>
           <tr><td data-label="Role">Pair plate</td><td data-label="Target" class="num">1224 wide</td><td data-label="Hard floor">716 wide</td><td data-label="Crop" class="mono">pair</td></tr>
@@ -965,7 +968,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
     <p><strong>Never sent to the model:</strong> drawing sheets, whose title blocks carry the site address and household names (their alt is built in code); boards, whose alt is the board's name; and photographs of her home (scans and installed photographs) until the client privacy page ships, per card V2-5. Until then those pictures are cropped by code, centred with a thirds bias, and the designer can drag the focal point.</p>
 
     <h4>Serving</h4>
-    <p>Each picture has one private copy in R2 under <code>plates/{project_id}/{sha256}/</code>, with every crop and width beside it in AVIF and WebP. The media worker makes the crops and reports back through a lease-checked function. June's browser asks the client portal's own Worker for <code>/plates/{assetId}/{crop}-{w}.avif</code>; the Worker checks her session and calls <code>client_can_read_plate</code>, which allows only pictures in an approved edition of her project, then streams the file with a private, year-long immutable cache. Nothing is public, addresses stay stable between visits, and R2 egress is free.</p>
+    <p>Each picture has one private copy in R2 under <code>plates/{project_id}/{sha256}/</code>, with every crop and width beside it in AVIF and WebP. The media worker makes the crops and reports back through a lease-checked function. June's browser asks the client portal's own Worker, through its R2 binding, for <code>/plates/{editionId}/{sha256}/{crop}-{w}.avif</code>: the path carries the edition id and the picture's content hash (in Phase 1, which has no edition record, the project id stands in the edition segment). On every request the Worker checks her session and calls <code>client_can_read_plate</code>: in Phase 1 that is her membership of the project, through <code>get_client_project_editorial</code>; from Phase 2 only pictures in the approved edition, through <code>get_client_project_edition</code>. It streams the file with <code>Cache-Control: private, max-age=3600</code>, never immutable and never for a year. A superseded or revoked edition's paths stop resolving at the next request, and her browser's copy expires within the hour. After she signs out, or when her access is revoked, every plate request fails the session or membership check, so nothing new is served and what her browser already holds is gone within the hour. Nothing is public, and R2 egress is free.</p>
     <div class="tw">
       <table class="stack">
         <caption>The width ladder for each plate.</caption>
@@ -978,7 +981,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         </tbody>
       </table>
     </div>
-    <p>A <code>picture</code> element switches to the phone crop below 600px. Width and height are always set, so nothing shifts. The frame shows the dominant colour and a blurred 24px placeholder inlined in the page. The edition is read on the server, so the hero's preload is in the first HTML. <strong>Targets,</strong> on a mid-range phone at 390 over slow 4G: the largest picture painted within 2.5 seconds on a first visit and 1.0 second on a return. <strong>Budget:</strong> the hero 120 KB or less, the critical HTML and CSS 60 KB or less, the display face subset 40 KB or less, and every other plate loaded lazily. These are estimates, measured on the Phase 1 build. Supabase's image transform is not used: its billing on Strata is unverified and it cannot crop to a focal point.</p>
+    <p>A <code>picture</code> element switches to the phone crop below 600px. Width and height are always set, so nothing shifts. The frame shows the dominant colour and a blurred 24px placeholder inlined in the page. The plate read (the editorial read in Phase 1, the approved edition from Phase 2) runs on the server, so the hero's preload is in the first HTML. <strong>Targets,</strong> on a mid-range phone at 390 over slow 4G: the largest picture painted within 2.5 seconds on a first visit and 1.0 second on a return. <strong>Budget:</strong> the hero 120 KB or less, the critical HTML and CSS 60 KB or less, the display face subset 40 KB or less, and every other plate loaded lazily. These are estimates, measured on the Phase 1 build. Supabase's image transform is not used: its billing on Strata is unverified and it cannot crop to a focal point.</p>
 
     <div class="callout" id="v1-defect">
       <p class="eyebrow">A version 1 defect, corrected</p>
@@ -1005,14 +1008,15 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
           <tr><td data-label="Edition">First edition, 15 images</td><td data-label="Calls">A1 $0.045, A2 $0.010, B $0.024, C $0.001</td><td data-label="v1" class="num">about $0.08</td><td data-label="v2" class="num">about $0.08</td></tr>
           <tr><td data-label="Edition">Later edition, 3 new images</td><td data-label="Calls">A1 $0.009, A2 $0.010, B $0.024, C $0.001</td><td data-label="v1" class="num">about $0.08, every image re-sent</td><td data-label="v2" class="num">about $0.045</td></tr>
           <tr><td data-label="Edition">Plates only, no prose call</td><td data-label="Calls">A1 and A2</td><td data-label="v1" class="num">not separate</td><td data-label="v2" class="num">about $0.02</td></tr>
-          <tr><td data-label="Edition">Per active job-month</td><td data-label="Calls">3–8 editions</td><td data-label="v1" class="num">$0.25–$1.00</td><td data-label="v2" class="num">$0.15–$0.45</td></tr>
+          <tr><td data-label="Edition">Per active job-month</td><td data-label="Calls">1 first edition and 3–8 later editions</td><td data-label="v1" class="num">$0.32–$0.72</td><td data-label="v2" class="num">$0.215–$0.44</td></tr>
           <tr><td data-label="Edition">Infrastructure per job-month</td><td data-label="Calls">Storage, writes and crop time</td><td data-label="v1" class="num">image transform, billing unverified</td><td data-label="v2" class="num">under $0.01: about 70 MB of R2, 300 writes, 30 vCPU-seconds</td></tr>
         </tbody>
       </table>
     </div>
+    <p><strong>The workload:</strong> an active job-month is one first edition at about $0.08 and three to eight later editions at about $0.045 each, so $0.08 + 3 × $0.045 = $0.215 up to $0.08 + 8 × $0.045 = $0.44; twenty active jobs come to about $4.30–$8.80 a month. The version 1 column is recomputed on the same workload, four to nine editions at about $0.08.</p>
     <p>The <code>client-edition-compose</code> feature row carries a $5 daily cap under the $25 a day global cap, and the $50 per studio per month cap still holds. The kill switch stops composition while approved editions keep rendering.</p>
 
-    <h3>Consent</h3>
+    <h3 id="consent">Consent</h3>
     <p>Maker names appear to the homeowner only when the studio turns on a per-project <code>show_makers</code> switch in the Document; it defaults off. Item names, room names and product photographs are sent to the Anthropic API for composition. The site address, household names, project notes, prices, internal notes, drawing sheets and boards are never sent, and the allowlist test enforces it. Photographs of her home are sent for perception only after the client privacy page ships (card V2-5). The client portal has no privacy page today, only the designer portal does, so Phase 2 includes a client-portal privacy page as a branch for Kody to read before anything ships, per V23 R4.</p>
   </div>
 </section>
@@ -1028,8 +1032,8 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         <thead><tr><th scope="col">Phase</th><th scope="col" class="mono">Size</th><th scope="col">Ships</th><th scope="col">Gate</th></tr></thead>
         <tbody>
           <tr><td data-label="Phase"><strong>Before 1</strong> Pre-measurement (card V2-8)</td><td data-label="Size" class="mono">S</td><td data-label="Ships">One aggregate over <code>project_ffe_item_images</code> by source and address host, and the real dimensions through <code>project-review-media</code> in a dry run. It sizes Phase 1's floors and the share of jobs that open on the drawn cover.</td><td data-label="Gate">A read-only report reviewed before Phase 1 is sized</td></tr>
-          <tr><td data-label="Phase"><strong>1</strong> Editorial restyle on today's data, plus the crop and serving lane, no model calls</td><td data-label="Size" class="mono">M to L</td><td data-label="Ships">00842 <code>get_client_project_editorial</code> reader (facts allowlist, gated on <code>show_makers</code>) and a designer RPC for the switch; 00843 <code>client_plate_assets</code> with code-computed fields only, <code>client_can_read_plate</code> and the crop callback; the media-worker crop lane into private R2 and the client-portal Worker route (card V2-6); the edition read on the server for the hero preload; <code>threshold/editorial/</code> components (the nine plates, the paper tab, three standing rows, 15px captions, the provenance line); code crops; chapters keyed on rooms; anchors unchanged; flag <code>client-edition-page</code>. Plate copies never go to <code>project-item-images</code>. Tests: jest on rank, floors, ground, crop geometry, tab fallback, caption and contrast; <code>threshold.spec</code> anchors; <code>homeowner-usability.spec</code> plus the hero, standing row 1 at 620 or above at 390, the first Tab stop, and the tab below the plate at 200% zoom.</td><td data-label="Gate"><code>pnpm --filter @patina/client-portal type-check &amp;&amp; pnpm --filter @patina/client-portal test &amp;&amp; pnpm --filter @patina/client-portal test:e2e</code>, plus the media worker's crop tests, named at build</td></tr>
-          <tr><td data-label="Phase"><strong>2</strong> Edition record, composition and approval; perception moves onto the asset record</td><td data-label="Size" class="mono">L</td><td data-label="Ships">00844–00846 tables, triggers and requests, the asset columns on edition images, lease RPCs, dispatcher and feature row, reader and designer RPCs; edge function <code>client-edition-compose</code> (<code>callClaude</code>, <code>promptVersion 'e1'</code>) with Calls A1, A2, B and C, A1 writing to the asset; Press band, mirror preview, focal drag and Desk line; board re-render at twice size on Approve; client reader hook; client-portal privacy page branch (R4). Tests: Deno on builder, validator, lint and allowlist (sheets and boards never in a prompt); jest for the band; e2e from approve to the homeowner seeing it.</td><td data-label="Gate">The Phase 1 gate, plus the <code>supabase/functions</code> Deno tests and the designer-portal gate</td></tr>
+          <tr><td data-label="Phase"><strong>1</strong> Editorial restyle on today's data, plus the crop and serving lane, no model calls</td><td data-label="Size" class="mono">M to L</td><td data-label="Ships">Phase 1 has no edition record. 00842 <code>get_client_project_editorial</code> is the plate reader, guarded by project membership, reading today's tables (item images, concept render, scans, palette, board covers) with the facts allowlist (gated on <code>show_makers</code>), and a designer RPC for the switch; 00843 <code>client_plate_assets</code> with code-computed fields only, <code>client_can_read_plate</code> (project membership) and the crop callback; the media-worker crop lane into private R2 and the client-portal Worker route (card V2-6); the editorial read on the server for the hero preload; <code>threshold/editorial/</code> components (the nine plates, the paper tab, three standing rows, 15px captions, the provenance line); code crops; chapters keyed on rooms; anchors unchanged; flag <code>client-edition-page</code>. Plate copies never go to <code>project-item-images</code>. Tests: jest on rank, floors, ground, crop geometry, tab fallback, caption and contrast; <code>threshold.spec</code> anchors; <code>homeowner-usability.spec</code> plus the hero, standing row 1 at 620 or above at 390, the first Tab stop, and the tab below the plate at 200% zoom.</td><td data-label="Gate"><code>pnpm --filter @patina/client-portal type-check &amp;&amp; pnpm --filter @patina/client-portal test &amp;&amp; pnpm --filter @patina/client-portal test:e2e</code>, plus the media worker's crop tests, named at build</td></tr>
+          <tr><td data-label="Phase"><strong>2</strong> Edition record, composition and approval; perception moves onto the asset record</td><td data-label="Size" class="mono">L</td><td data-label="Ships">00844–00846 tables, triggers and requests, the asset columns on edition images, lease RPCs, dispatcher and feature row, the reader <code>get_client_project_edition</code> (the approved-edition-only read begins here) and designer RPCs; edge function <code>client-edition-compose</code> (<code>callClaude</code>, <code>promptVersion 'e1'</code>) with Calls A1, A2, B and C, A1 writing to the asset; Press band, mirror preview, focal drag and Desk line; board re-render at twice size on Approve; client reader hook; client-portal privacy page branch (R4). Tests: Deno on builder, validator, lint and allowlist (sheets and boards never in a prompt); jest for the band; e2e from approve to the homeowner seeing it.</td><td data-label="Gate">The Phase 1 gate, plus the <code>supabase/functions</code> Deno tests and the designer-portal gate</td></tr>
           <tr><td data-label="Phase"><strong>3</strong> Installed photograph, close-out</td><td data-label="Size" class="mono">M</td><td data-label="Ships">The installed source kind from Field uploads; the closing edition frozen with <code>portfolio_snapshot</code>; an optional 2560px scan derivative.</td><td data-label="Gate">Tests named in the plan: broken link to silhouette, 403 to silhouette, close-out immutability</td></tr>
         </tbody>
       </table>
@@ -1053,7 +1057,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         <tbody>
           <tr><td>Retailer image licensing</td><td>Private R2 copies, never <code>project-item-images</code>; catalogue photographs never bleed (card V2-1); the maker named in every caption; the <code>show_makers</code> consent switch; studio uploads preferred; a maker takedown list</td></tr>
           <tr><td>Voice drift</td><td>Regex lint, a small judge model and a deterministic fallback headline; pinned prompt version; a weekly sample reviewed on the admin model-usage page</td></tr>
-          <tr><td>Approval fatigue</td><td>Two editions a day at most, the 30-minute debounce, a delta diff, Hold; Phase 1 needs no approval</td></tr>
+          <tr><td>Approval fatigue</td><td>Two editions a day at most, the 30-minute debounce, a delta diff, Hold; Phase 1 has no edition record, so it has no approval step</td></tr>
           <tr><td>Cost runaway</td><td>Content-hash dedupe, perception once per picture, the $5 feature daily cap, the $50 studio cap, the kill switch, a lease that prevents double runs</td></tr>
           <tr><td>Homeowner disorientation</td><td>Changes only on approval, Maren's notice, an edition line in Earlier, the hero changing at most once a day</td></tr>
           <tr><td>Misreading a site photograph or render as her finished room</td><td>The “as measured” caption on site photographs; renders capped at six columns with the “Concept · not installed” chip; renders never at hero scale</td></tr>
@@ -1072,7 +1076,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
   <p class="folio"><b>10</b>Decisions</p>
   <h2 id="h10">Decisions for the founders</h2>
   <div class="sec-body">
-    <p>Fourteen places where the concept strains a ruling or needs one: the six from version 1, two of them restated for version 2, and eight new ones. The designers recommend; you decide. Nothing is built until these are ruled.</p>
+    <p>Fifteen places where the concept strains a ruling or needs one: the six from version 1, two of them restated for version 2, and nine new ones (V2-9 from the version 2 review). The designers recommend; you decide. Nothing is built until these are ruled.</p>
     <div class="cards">
       <article class="dcard" aria-labelledby="c1">
         <p class="eyebrow">C1</p>
@@ -1085,7 +1089,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         <p class="eyebrow">C2 · amended in version 2</p>
         <h3 id="c2">May photography bleed edge to edge?</h3>
         <p><span class="k">What the documents say</span>The house sheet §A10 caps plates at 120px. Version 1 asked for one plate per page at the full measure; version 2 needs an edge-to-edge hero and one chapter plate per chapter.</p>
-        <div class="rec"><span class="k">Recommendation</span><p>Yes, with this wording:</p><blockquote>“Photography on the homeowner page may bleed edge to edge, never taller than 72svh, with the letterhead and purpose sentence above the first image; a shared sheet or the key plan may be the cover when no photograph meets the floor; one hero per page and at most one chapter plate per chapter; eligible only job-made images (V2-1); concept renders stay 612px wide or less with the mark; the 120px cap continues to govern designer and admin surfaces.”</blockquote></div>
+        <div class="rec"><span class="k">Recommendation</span><p>Yes, with this wording:</p><blockquote>“Photography on the homeowner page may bleed edge to edge; no image exceeds 72% of viewport height, except the single held plate per page, which may reach min(780px, 100svh − 72px); the letterhead and purpose sentence sit above the first image; a shared sheet or the key plan may be the cover when no photograph meets the floor; one hero per page and at most one chapter plate per chapter; eligible only job-made images (V2-1); concept renders stay 612px wide or less with the mark; the 120px cap continues to govern designer and admin surfaces.”</blockquote></div>
         <p class="ruling">Ruling:<span></span></p>
       </article>
       <article class="dcard" aria-labelledby="c3">
@@ -1099,7 +1103,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         <p class="eyebrow">Q1 · version 2 form</p>
         <h3 id="q1">May her photograph sit above the first money fact?</h3>
         <p><span class="k">What the documents say</span>The spec opens on the purpose sentence and link row. The homeowner designer warns that a page opening on a photograph reads as the wrong website to someone arriving from an invoice email.</p>
-        <p><span class="k">The fact being ruled on</span>At 390 a 340px hero (140–480) sits above the first money fact. Standing row 1, “$600.00 is past due”, starts at about 616, on the first screen and above the 664 Safari line. The forest Pay act sits at about 1090, on the second screen.</p>
+        <p><span class="k">The fact being ruled on</span>At 390 a 340px hero (140–480) sits above the first money fact. Standing row 1, “$600.00 is past due”, starts at about 616, on the first screen and above the 664 Safari line. The forest payment act, “Continue to secure payment”, sits at about 1090, on the second screen.</p>
         <div class="rec"><span class="k">Recommendation</span><p>Yes, with standing row 1 starting at 620 or above as a hard gate that fails below 664. The version 1 order, the standing line at 228–276 above a smaller hero with Pay at about 905, is the recorded fallback.</p></div>
         <p class="ruling">Ruling:<span></span></p>
       </article>
@@ -1127,7 +1131,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
       <article class="dcard" aria-labelledby="v2-2">
         <p class="eyebrow">V2-2</p>
         <h3 id="v2-2">Is the paper tab a scrim?</h3>
-        <p><span class="k">The question</span>At 390 the cover headline sits on an opaque paper tab cut 44px into the photograph. The rules forbid scrims and type on photographs.</p>
+        <p><span class="k">The question</span>At 390 and at 1440 the cover headline sits on an opaque paper tab cut into the photograph. The rules forbid scrims and type on photographs.</p>
         <div class="rec"><span class="k">Recommendation</span><p>It is page furniture, not a scrim: fully opaque paper with ink measured on paper, placed notch, hairline or below per picture, and always below at 200% zoom.</p></div>
         <p class="ruling">Ruling:<span></span></p>
       </article>
@@ -1156,7 +1160,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         <p class="eyebrow">V2-6</p>
         <h3 id="v2-6">Build the crop and serving lane now?</h3>
         <p><span class="k">The question</span>Real crops need the media worker, private R2 and an R2 binding on the client portal, a medium-sized addition to Phase 1. The alternative is crops in CSS only until the media service's records are reconciled.</p>
-        <div class="rec"><span class="k">Recommendation</span><p>Build it now. CSS-only crops would ship full-size originals to phones and could not hold the focal point.</p></div>
+        <div class="rec"><span class="k">Recommendation</span><p>Build it now. CSS <code>object-position</code> can hold a stored focal point, so that is not the reason. The server lane earns its place by the bytes it saves, since CSS-only crops ship full-size originals to phones, and by cutting each picture to the 39:34 and 20:9 boxes at source.</p></div>
         <p class="ruling">Ruling:<span></span></p>
       </article>
       <article class="dcard" aria-labelledby="v2-7">
@@ -1171,6 +1175,13 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
         <h3 id="v2-8">Measure the pictures before sizing Phase 1?</h3>
         <p><span class="k">The question</span>Nobody knows how many jobs own a photograph that meets the hero floor. The answer decides how often June sees the drawn cover.</p>
         <div class="rec"><span class="k">Recommendation</span><p>Yes: one read-only aggregate by source and host, and real dimensions through a dry run, before Phase 1 is sized.</p></div>
+        <p class="ruling">Ruling:<span></span></p>
+      </article>
+      <article class="dcard" aria-labelledby="v2-9">
+        <p class="eyebrow">V2-9 · from the version 2 review</p>
+        <h3 id="v2-9">May the held-plate chapter run longer?</h3>
+        <p><span class="k">The question</span>Each chapter has a budget of two and a half screens. The held plate, up to 780px tall, was ruled in card V2-7 after that budget was written, and the living room cannot carry it, its words, its material run and its pieces in two and a half screens.</p>
+        <div class="rec"><span class="k">Recommendation</span><p>Yes. Two and a half screens per chapter stands, except the one chapter carrying the held plate, which may run three and three-quarter screens: 3,375px at 390.</p></div>
         <p class="ruling">Ruling:<span></span></p>
       </article>
     </div>
@@ -1201,6 +1212,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
       </table>
     </div>
     <p>The canvas review's F-rulings that version 2 touches: F2 (four invoice groups), F3 and F4 (staged approval consent), F5 (forest links), F6 (the Pay act's wording), F9 (the fictional paint makers Halvorsen and Larkin Prairie), F10 (the pair plate), F13 (the Credits board, which now holds the image ledger), F14 (the picker, now for every chapter opener) and F18 stand. F7 and F8, the version 1 arrival values and the 1248×648 desktop hero, are superseded by v2 §1 and §2. The closeout record names F1, F11, F12, F15–F17 and F19–F22 only as applied, without their content, so they are not restated here.</p>
+    <p>The version 2 review (SQ-1572) added rulings R-v2-1 to R-v2-13: the Main board split into Main-A and Main-B, the desktop arrival rule, the chapter budget (card V2-9), one plate list, the C2 wording, the phone crop, caption qualifiers, plate caching, the Phase 1 read, the cost workload and the three standing rows. This page applies them; the plan in <code>brief/PLAN.md</code> lists each with its reason.</p>
   </div>
 </section>
 
@@ -1247,7 +1259,7 @@ figcaption { font-family: var(--mono); font-size: 13px; line-height: 1.55; color
       <li>No measuring June: no counts, streaks, percentages or numerals over a total.</li>
       <li>No model name anywhere in either portal.</li>
       <li>No app code, migration, flag or deploy in this story. It produces a canvas, this page and a brief.</li>
-      <li>Nothing is built until the fourteen rulings in section 10 are made.</li>
+      <li>Nothing is built until the fifteen rulings in section 10 are made.</li>
     </ul>
   </div>
 </section>
