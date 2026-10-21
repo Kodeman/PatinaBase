@@ -7,7 +7,7 @@ import {
   resolveActiveHouse,
   resolveHouseForInstrument,
 } from '@/lib/data/active-project';
-import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
+import { fetchClientProjectView, fetchClientProjects, fetchClientUser } from '@/lib/data/projects';
 import { clientEditionEnabled } from '@/lib/server-feature-flag';
 import { toOtherHouses } from '@/lib/threshold/other-houses';
 
@@ -24,6 +24,9 @@ import { toOtherHouses } from '@/lib/threshold/other-houses';
 export default async function HomePage(props: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const editionDecision = fetchClientUser()
+    .then((user) => clientEditionEnabled(user?.id))
+    .catch(() => false);
   const projects = await fetchClientProjects();
   const projectIds = projects.map((project) => project.id);
   const query = (await props?.searchParams) ?? {};
@@ -54,7 +57,6 @@ export default async function HomePage(props: {
     ? [activeProjectId, ...projectIds.filter((id) => id !== activeProjectId)]
     : projectIds;
 
-  const editionEnabled = await clientEditionEnabled();
   let projectView: Awaited<ReturnType<typeof fetchClientProjectView>> = null;
   let editorial: Awaited<ReturnType<typeof fetchEnabledClientEditorial>> = null;
   for (const candidateId of candidates) {
@@ -62,7 +64,7 @@ export default async function HomePage(props: {
     // preload is in this HTML. Null never blocks the house (it is today's page).
     [projectView, editorial] = await Promise.all([
       fetchClientProjectView(candidateId),
-      fetchEnabledClientEditorial(candidateId, editionEnabled),
+      editionDecision.then((enabled) => fetchEnabledClientEditorial(candidateId, enabled)),
     ]);
     if (projectView) break;
   }
@@ -101,6 +103,7 @@ export default async function HomePage(props: {
     );
   }
 
+  const editionEnabled = await editionDecision;
   const { project, milestones } = projectView;
 
   return (

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, renderHook, screen } from "@testing-library/react";
 
 import { heroPreloads } from "@/lib/data/client-editorial";
 import type {
@@ -11,6 +11,7 @@ import type {
 } from "@/lib/threshold/invoice-rollup";
 
 import {
+  useEditionIssue,
   HeroPreloadLinks,
   HouseIssueHead,
   RoomOpening,
@@ -509,4 +510,19 @@ describe("the standing rows, in words", () => {
       ).sentence,
     ).toBe("Your invoices are being checked.");
   });
+});
+
+// Exercise the real query so a default-open gate would construct its browser client.
+jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => ({ value: true, isLoading: false }) }));
+jest.mock('@patina/supabase/client', () => ({ createBrowserClient: jest.fn() }));
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createBrowserClient } from '@patina/supabase/client';
+
+it.each([undefined, false])('server gate %p is closed despite a resolved true client flag', (serverEnabled) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { result } = renderHook(() => useEditionIssue(PROJECT, editorial([asset('cover')]), serverEnabled), {
+    wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  expect(result.current).toBeNull();
+  expect(createBrowserClient).not.toHaveBeenCalled();
 });

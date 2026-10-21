@@ -6,6 +6,7 @@ import {
   resolveHouseForInstrument,
 } from '@/lib/data/active-project';
 import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
+import { fetchClientUser } from '@/lib/data/projects';
 
 /* ── The front door ─────────────────────────────────────────────────────────
    `/` is a protected route: middleware owns the signed-out redirect and the
@@ -16,7 +17,7 @@ import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects
 jest.mock('@/lib/server-feature-flag', () => ({ clientEditionEnabled: jest.fn().mockResolvedValue(false) }));
 
 jest.mock('@/lib/data/projects', () => ({
-  fetchClientProjects: jest.fn(),
+  fetchClientUser: jest.fn(), fetchClientProjects: jest.fn(),
   fetchClientProjectView: jest.fn(),
 }));
 
@@ -76,6 +77,7 @@ const view = (id: string) => ({
 
 describe('the front door', () => {
   beforeEach(() => {
+  (fetchClientUser as jest.Mock).mockResolvedValue({ id: 'authenticated-user-uuid' });
     mockInstrumentHouse.mockResolvedValue(null);
   });
 

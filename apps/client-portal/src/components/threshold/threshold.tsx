@@ -380,7 +380,7 @@ export interface ThresholdProps {
    */
   editorial?: ClientProjectEditorial | null;
   /** Server rollout authority: false also disables the browser editorial read. */
-  editionEnabled?: boolean;
+  editionEnabled: boolean;
 }
 
 export function Threshold({

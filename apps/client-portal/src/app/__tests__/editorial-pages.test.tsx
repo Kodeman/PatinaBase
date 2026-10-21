@@ -4,12 +4,13 @@ import { createServerClient } from '@patina/supabase/server';
 import HomePage from '../page';
 import ProjectPage from '../projects/[projectId]/page';
 import { fetchClientProjects, fetchClientProjectView } from '@/lib/data/projects';
+import { fetchClientUser } from '@/lib/data/projects';
 import { resolveActiveHouse, resolveHouseForInstrument } from '@/lib/data/active-project';
 import { clientEditionEnabled } from '@/lib/server-feature-flag';
 
 jest.mock('@patina/supabase/server', () => ({ createServerClient: jest.fn() }));
 jest.mock('@/lib/server-feature-flag', () => ({ clientEditionEnabled: jest.fn() }));
-jest.mock('@/lib/data/projects', () => ({ fetchClientProjects: jest.fn(), fetchClientProjectView: jest.fn() }));
+jest.mock('@/lib/data/projects', () => ({ fetchClientUser: jest.fn(), fetchClientProjects: jest.fn(), fetchClientProjectView: jest.fn() }));
 jest.mock('@/lib/data/active-project', () => ({ resolveActiveHouse: jest.fn(), resolveHouseForInstrument: jest.fn() }));
 jest.mock('@/components/threshold/threshold', () => ({
   Threshold: ({ editorial, editionEnabled }: { editorial: unknown; editionEnabled: boolean }) => (
@@ -35,6 +36,7 @@ const editorial = {
 };
 
 beforeEach(() => {
+  (fetchClientUser as jest.Mock).mockResolvedValue({ id: 'authenticated-user-uuid' });
   (fetchClientProjects as jest.Mock).mockResolvedValue([{ id: 'p1', name: 'The house' }]);
   (fetchClientProjectView as jest.Mock).mockResolvedValue({ project: { id: 'p1', name: 'The house' }, milestones: [] });
   (resolveActiveHouse as jest.Mock).mockResolvedValue('p1');
@@ -67,4 +69,32 @@ it.each([
   for (const link of preloads) expect(link.getAttribute('imagesrcset')).toContain('/plates/p1/');
   expect(screen.getByTestId('surface')).toHaveAttribute('data-editorial', 'present');
   expect(screen.getByTestId('surface')).toHaveAttribute('data-enabled', 'true');
+});
+
+const pages = [
+  ['front door', () => HomePage({})],
+  ['named project', () => ProjectPage({ params: Promise.resolve({ projectId: 'p1' }) })],
+] as const;
+
+it.each(pages)('%s reads the house before a pending flag resolves and reuses the validated id', async (_name, page) => {
+  let resolveDecision!: (enabled: boolean) => void;
+  (clientEditionEnabled as jest.Mock).mockReturnValue(new Promise<boolean>((resolve) => { resolveDecision = resolve; }));
+  const rendering = page();
+  // Drain the finite page-resolution chain without releasing the flag decision.
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  expect(fetchClientProjects).toHaveBeenCalledTimes(1);
+  expect(fetchClientProjectView).toHaveBeenCalledWith('p1');
+  expect(clientEditionEnabled).toHaveBeenCalledTimes(1);
+  expect(clientEditionEnabled).toHaveBeenCalledWith('authenticated-user-uuid');
+  expect(rpc).not.toHaveBeenCalled();
+  resolveDecision(true);
+  render(await rendering);
+  expect(rpc).toHaveBeenCalledTimes(1);
+});
+
+it.each(pages)('%s keeps the page closed when the decision rejects', async (_name, page) => {
+  (clientEditionEnabled as jest.Mock).mockRejectedValue(new Error('aborted'));
+  render(await page());
+  expect(rpc).not.toHaveBeenCalled();
+  expect(screen.getByTestId('surface')).toHaveAttribute('data-enabled', 'false');
 });

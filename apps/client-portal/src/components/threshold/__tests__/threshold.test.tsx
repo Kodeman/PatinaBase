@@ -545,7 +545,7 @@ function renderThreshold(
   milestones: MilestoneDetail[] = MILESTONES,
   otherHouses: { id: string; name: string }[] = [],
   editorial?: ClientProjectEditorial | null,
-  editionEnabled?: boolean,
+  editionEnabled = true,
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

@@ -153,7 +153,7 @@ export function useHouseIssue(
 export function useEditionIssue(
   projectId: string,
   editorial: ClientProjectEditorial | null,
-  serverEnabled = true,
+  serverEnabled = false,
 ): HouseIssue | null {
   const flag = useFeatureFlag("client-edition-page");
   const on = serverEnabled && flag.value && !flag.isLoading;
