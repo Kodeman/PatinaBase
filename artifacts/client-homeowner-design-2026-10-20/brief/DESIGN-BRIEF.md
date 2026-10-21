@@ -65,6 +65,17 @@ Real weights only (Playfair 400/500 + italic 400, Inter 400/500/600, DM Mono 400
 - **F7** The §13 click-to-confirm comparison stays deferred. Commission the separate prototype test?
 - **F8** Italic names move from the DS's Aged Oak to Mocha (C3). Is Mocha still the accent wanted?
 
+**Ruled 2026-10-20 (US-45)**
+
+- **F1:** Use the literal section heads Invoices, Approvals, and Progress; house wording stays in composition, not section titles.
+- **F2:** Rule in 15px quiet tools and 16px ledger links on client pages.
+- **F3:** Keep the canvas order: Invoices · Approvals · Progress · Updates · Documents · Contact Maren Holt.
+- **F4:** Use the framed card and payment sheet treatment from A3: `#FFFDF9` fill, `#C9C7BD` rule, 8px radius, soft shadow.
+- **F5:** Terminal acts use forest with `#FFFDF9` ink; choices outline in green and fill when selected. Keep the 900 ms hold for binding acts.
+- **F6:** Use the studio-only purpose sentence: “Pay invoices, review approvals, and follow your project here.”
+- **F7:** Keep click-to-confirm deferred; retain the 900 ms hold.
+- **F8:** Use forest instead of clay for client-page links, italic party names, focus, and selected states. Studio branding is unchanged.
+
 The canvas carries these as one "For the founders" sticky per row, plus row-specific questions the
 screen designers will meet (history open by default, wording of `Total outstanding`, note placement
 on the invitation, `Target date`, where `Waiting on you` appears).

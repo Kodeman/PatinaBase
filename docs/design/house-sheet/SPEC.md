@@ -68,6 +68,13 @@ literal anywhere else in the file.
   --golden:           #E8C547;   --golden-ink:    #79651E;
   --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
   --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+  /* — client-page green direction (R202) — */
+  --forest:            #3E5145;   --forest-ink:   #FFFDF9;
+  --green-note:        #F0F3ED;
+  --green-record:      #E8EEE7;   --green-record-rule: #B6C3B7;
+  --unavailable-edge:  #6E7B71;   --unavailable-ink: #4A574D;
+  --card:              #FFFDF9;   --card-rule:    #C9C7BD;
+  --shadow-card: soft;
 
   /* — the seven stage plates (white label 5.22–8.20:1) — */
   --tab-brief:     #497093;
@@ -610,7 +617,7 @@ sits a slim meta strip:
 **Do not** (all three specimens): no shadows · no pills · no status dots · no
 badges · no state chips or coloured state edges on the reading paper (A15
 stamps stay on the drafting stock) · no translucent sticky heads · no sheet
-over a sheet *(amended §G-11)* · no olive · no green success fill · no ✓ glyph · no spinner · no
+over a sheet *(amended §G-11)* · no olive · no green success fill (both superseded by R202 on client pages) · no ✓ glyph · no spinner · no
 `disabled` · no PATINA wordmark on client pages · no truncation · no
 placeholder text · no `opacity: .5` on a state.
 
@@ -970,7 +977,7 @@ act keyboard-operable; the state switcher works; all three states reachable.
 
 ## Do not
 
-No shadows · no pills · no status dots · no olive · no ✓ glyph · no spinner ·
+No shadows · no pills · no status dots · no olive (superseded by R202 on client pages) · no ✓ glyph · no spinner ·
 no `disabled` attribute on the gate · no PATINA wordmark · no truncation · no
 second photograph · no "$0" placeholder · no per-room "ask for a change"
 repeated four times.
@@ -1030,7 +1037,7 @@ layout change.
 
 No shadows · no badges or count chips · no tinted band behind a stage group
 (the 3px card edge and the 2px row tick are the colour, V19; the row stays on
-its stock) *(amended §G-12)* · no pills · no olive · no
+its stock) *(amended §G-12)* · no pills · no olive (superseded by R202 on client pages) · no
 ✓ glyph · no spinner · no `disabled` · no truncation · no hero photograph · no
 "Ready for your hand" second queue · no dwell timer · no inline search field
 replacing ⌘K.
@@ -1146,7 +1153,7 @@ act keyboard-operable; the state switcher works; all four states reachable;
 
 ## Do not
 
-No shadows · no pills · no status dots · no green success fill · no ✓ glyph ·
+No shadows · no pills · no status dots · no green success fill (superseded by R202 on client pages) · no ✓ glyph ·
 no checkbox standing in for a signature · no spinner · no `disabled` · no
 PATINA wordmark · no truncation · no tax line · no allowance row inside the
 ledger · no colour swatch standing in for a finish · no photograph.
