@@ -30,8 +30,8 @@ export const FLOORS = {
   room: { crop: 'wide32', aspect: 3 / 2, target: { w: 2048, h: 1365 }, floor: { w: 1248, h: 832 } },
   pair: { crop: 'pair', aspect: 7 / 5, target: { w: 1224, h: 0 }, floor: { w: 716, h: 0 } },
   piece: { crop: 'piece', aspect: null, target: { w: 564, h: 0 }, floor: { w: 330, h: 0 } },
-  sheet: { crop: 'none', aspect: null, target: { w: 2496, h: 0 }, floor: { w: 2048, h: 0 } },
-  board: { crop: 'none', aspect: null, target: { w: 2400, h: 1600 }, floor: { w: 1600, h: 0 } },
+  sheet: { crop: 'sheet', aspect: null, target: { w: 2496, h: 0 }, floor: { w: 2048, h: 0 } },
+  board: { crop: 'board', aspect: null, target: { w: 2400, h: 1600 }, floor: { w: 1600, h: 0 } },
 } as const satisfies Record<string, FloorSpec>;
 
 /** The desktop hero's narrower measure plate: 1248–1600 wide. */

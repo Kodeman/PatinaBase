@@ -26,7 +26,7 @@ export function SheetPlate({ scopeId, asset, caption, alt, href, hrefLabel, pale
       className="ed-sheet"
       scopeId={scopeId}
       asset={asset}
-      cropKey="none"
+      cropKey="sheet"
       sizes={SIZES.measure}
       width={772}
       height={648}

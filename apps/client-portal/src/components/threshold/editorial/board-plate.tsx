@@ -23,7 +23,7 @@ export function BoardPlate({ scopeId, asset, caption, alt, paletteHex, fallback 
       className="ed-board"
       scopeId={scopeId}
       asset={asset}
-      cropKey="none"
+      cropKey="board"
       sizes={SIZES.measure}
       width={832}
       height={624}

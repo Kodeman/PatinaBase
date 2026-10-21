@@ -5,8 +5,8 @@ export type SourceKind = 'upload' | 'installed' | 'scan' | 'board' | 'sheet' | '
 
 /** Crop keys the plate route serves (`/plates/[scope]/[sha256]/[file]`). */
 export type CropKey = 'wide' | 'cover_phone' | 'tall' | 'wide32' | 'pair' | 'piece';
-/** `none` is an uncropped rendition (sheet, board). */
-export type PlateCropKey = CropKey | 'none';
+/** `sheet` and `board` are the uncropped renditions the route also serves. */
+export type PlateCropKey = CropKey | 'sheet' | 'board';
 
 export type Ground = 'white' | 'scene' | 'drawing';
 

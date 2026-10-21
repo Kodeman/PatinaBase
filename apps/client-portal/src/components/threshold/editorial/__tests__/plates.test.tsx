@@ -24,7 +24,8 @@ const ALL_CROPS: EditorialAsset['crops'] = {
   wide32: { rect: [0, 0, 4000, 2666], widths: [768, 1024, 1600, 2048] },
   pair: { rect: [0, 0, 4000, 2857], widths: [768, 1024, 1600, 2048] },
   piece: { rect: [0, 0, 3000, 3000], widths: [256, 512, 768] },
-  none: { rect: [0, 0, 4000, 3000], widths: [768, 1024, 1600, 2048] },
+  sheet: { rect: [0, 0, 4000, 3000], widths: [768, 1024, 1600, 2048] },
+  board: { rect: [0, 0, 4000, 3000], widths: [768, 1024, 1600, 2048] },
 };
 
 let n = 0;
@@ -217,6 +218,12 @@ describe('editorial plates', () => {
   it('links the whole sheet to its document', () => {
     render(<SheetPlate scopeId={SCOPE} asset={asset({ sourceKind: 'sheet' })} alt="Sheet A-101" href="#mat" hrefLabel="Open sheet A-101 in Documents" fallback={fallback} />);
     expect(screen.getByRole('link', { name: 'Open sheet A-101 in Documents' })).toHaveAttribute('href', '#mat');
+    expect(screen.getByRole('img', { name: 'Sheet A-101' }).getAttribute('src')).toMatch(/\/sheet-\d+\.webp$/);
+  });
+
+  it('serves a board from its uncropped board rendition', () => {
+    render(<BoardPlate scopeId={SCOPE} asset={asset({ sourceKind: 'board' })} alt="Living room board" fallback={fallback} />);
+    expect(screen.getByRole('img', { name: 'Living room board' }).getAttribute('src')).toMatch(/\/board-\d+\.webp$/);
   });
 
   it('names each swatch by brand and colour', () => {
