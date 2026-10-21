@@ -128,7 +128,8 @@ export function Mat({
             would make the id disappear. */}
         {(papers.length > 0 || onOpenPapers) && (
           <div id="mat-papers" data-testid="mat-papers">
-            <h2 className={COLUMN_HEAD_CLASS}>The papers</h2>
+            {/* The ledger's "Documents" lands here under the same name (A7 · F1). */}
+            <h2 className={COLUMN_HEAD_CLASS}>Documents</h2>
             {papers.map((paper, index) => (
               <Paper key={`${paper.label}-${index}`} paper={paper} />
             ))}

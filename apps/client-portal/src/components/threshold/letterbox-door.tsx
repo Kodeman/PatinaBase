@@ -8,6 +8,7 @@ import { invoiceBalanceCents } from '@patina/shared';
 import type { Invoice } from '@patina/supabase';
 import { useClientInvoices, useStudioIdentity } from '@patina/supabase';
 
+import { ContactDesigner } from '@/components/presented-by';
 import { ProjectsEmptyState, EmptyStateActs } from '@/components/projects/ProjectsEmptyState';
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { Doorplate } from '@/components/threshold/doorplate';
@@ -32,10 +33,20 @@ import {
   type PreviouslyEntry,
   type ThresholdMark,
 } from '@/lib/threshold/derive';
-import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
+import {
+  houseInvoices,
+  invoiceProjection,
+  type InvoiceServerHold,
+} from '@/lib/threshold/invoice-rollup';
 
 import { KIND_LABEL } from './consent-copy';
 import { DoorGate, type DoorProposal } from './door-gate';
+import {
+  ARRIVAL_PURPOSE,
+  ArrivalLine,
+  LandmarkLedger,
+  invoiceArrivalLines,
+} from './landmark-ledger';
 import { Previously } from './previously';
 
 /* ── The front door, when there is no house ─────────────────────────────────
@@ -89,6 +100,9 @@ import { Previously } from './previously';
 
 const OPEN_STATUSES = new Set<Invoice['status']>(['sent', 'partially_paid']);
 
+/** The projection reads no date until hydration supplies one. */
+const EPOCH = new Date(0);
+
 /** A door and everything the plate and the leaf still need after it is signed. */
 interface SealedDoor {
   mark: ThresholdMark;
@@ -131,6 +145,9 @@ function clientSignedAt(bundle: CommercialDocumentBundle | null | undefined): Da
   const signature = (bundle?.signatures ?? []).find((row) => row.party === 'client');
   return parseSourceDate(signature?.signedAt);
 }
+
+const SECTION_HEAD_CLASS =
+  'font-heading text-[1.35rem] font-medium tracking-[-0.012em] text-[var(--text-primary)]';
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -233,19 +250,30 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   const invoicesQuery = useClientInvoices();
   const proposalsQuery = useClientProposals();
 
-  // Drafts are pre-issue and are not hers to read; RLS already withholds them
-  // and this withholds them again.
-  const letters = useMemo(
+  // The studio invoices (project_id null), drafts and voids withheld, through
+  // the same reading the house uses — so a failed read reaches the letterbox
+  // as a failure rather than as an empty list. A household whose only studio
+  // invoice was voided meets the empty state.
+  const house = useMemo(
     () =>
-      (invoicesQuery.data ?? []).filter(
-        (row) => row.project_id === null && row.status !== 'draft',
-      ),
-    [invoicesQuery.data],
+      houseInvoices({
+        projectId: null,
+        client: {
+          data: invoicesQuery.data,
+          isPending: invoicesQuery.isPending,
+          isError: invoicesQuery.isError,
+        },
+      }),
+    [invoicesQuery.data, invoicesQuery.isPending, invoicesQuery.isError],
   );
-  // Void letters are cancelled: they are neither owed nor kept, so a household
-  // whose only studio invoice was voided meets the empty state rather than a
-  // letterbox with nothing readable in it.
-  const standing = useMemo(() => visibleInvoices(letters), [letters]);
+  const standing = house.invoices;
+  // Holds the checkout boundary returned this visit; a refetch never clears one.
+  const [invoiceHolds, setInvoiceHolds] = useState<Record<string, InvoiceServerHold>>({});
+  const onInvoiceHold = useCallback(
+    (invoiceId: string, hold: InvoiceServerHold) =>
+      setInvoiceHolds((held) => (held[invoiceId] === hold ? held : { ...held, [invoiceId]: hold })),
+    [],
+  );
 
   const open = useMemo(
     () =>
@@ -360,12 +388,12 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   // The plate has to name the studio whose letter is actually standing in the
   // slot, and `Letterbox` chooses that letter itself: the one the address
   // named, else the soonest-due open one. Repeating the choice here (over the
-  // same `letters` list it is handed) is what keeps a household holding
+  // same list it is handed) is what keeps a household holding
   // letters from two studios from reading one studio's plate over the other
   // studio's letter.
   const namedId = useNamedInvoice();
   const inSlot =
-    (namedId ? (letters.find((row) => row.id === namedId) ?? null) : null) ??
+    (namedId ? (standing.find((row) => row.id === namedId) ?? null) : null) ??
     open[0] ??
     standing[0] ??
     null;
@@ -390,6 +418,15 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   const plateAsked = plateStudioId !== null || plateDesignerId !== null;
 
   const today = useMemo(() => (hydrated ? new Date() : undefined), [hydrated]);
+  const projection = useMemo(
+    () =>
+      invoiceProjection(standing, {
+        today: today ?? EPOCH,
+        read: house.read,
+        serverHolds: invoiceHolds,
+      }),
+    [standing, today, house.read, invoiceHolds],
+  );
 
   const refetch = invoicesQuery.refetch;
   // Stable: the confirmation poll holds this in an effect's dependency list.
@@ -403,7 +440,9 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   const anyoneWaiting = standing.length > 0 || origins.length > 0 || sealed.length > 0;
   // A signed agreement asks nothing of her, but it is still hers to find: the
   // door stands for the record as readily as for the ask.
-  const anythingHere = anyoneWaiting || kept.length > 0;
+  // An unreadable invoice list is not an empty one: the door stands so the
+  // letterbox can say it could not load them and offer the read again.
+  const anythingHere = anyoneWaiting || kept.length > 0 || house.read === 'failed';
   /* THE PAPERS MAY NOT HOLD THE MONEY (R30 round-2 amendment: the studio
      invoice "renders beside the origin agreement, never blank behind it").
      The letters read first — a household with one standing is already
@@ -439,6 +478,9 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   }
 
   const studioName = identityQuery.data?.name?.trim() || 'Your studio';
+  // W2-B's projection-reading props (SQ-1525). Spread until that slice lands:
+  // the compiler checks them against `LetterboxProps` from then on.
+  const letterboxReads = { projection, onHold: onInvoiceHold, projectName: null };
 
   // A sealed door's paper has already left `origins`; the door is still drawn
   // from it, so the lookup keeps it and a live paper always wins.
@@ -470,19 +512,16 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
     doors[0]?.mark.id ??
     null;
 
-  // Two standings, one voice. The agreement is named first because it is what
-  // the relationship turns on; the letters keep the sentence they had.
+  // Two standings, each counted for what it is. The agreement is named first
+  // because it is what the relationship turns on; the invoices are counted
+  // from the projection, and print no number while it withholds one.
   const standings = [
     origins.length > 0
       ? `${capitalize(countInWords(origins.length))} ${
           origins.length === 1 ? 'agreement is' : 'agreements are'
         } waiting for you.`
       : null,
-    open.length > 0
-      ? `${capitalize(countInWords(open.length))} ${
-          open.length === 1 ? 'letter is' : 'letters are'
-        } waiting for you.`
-      : null,
+    ...invoiceArrivalLines(projection),
   ].filter((line): line is string => line !== null);
   // A door she has just signed is still standing on the page, carrying her
   // name and the studio's receipt for it — and "Nothing is waiting for you."
@@ -491,15 +530,15 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   // that already says so, so it steps aside until the door does. A page with
   // no door at all (the record alone, on the next visit) keeps it.
   //
-  // And a page that could not read the papers may not say "Nothing is waiting
-  // for you" either: it does not know. The notice below the sentence says what
-  // it does know instead (R30 · N2).
+  // And a page that could not read the papers, or every invoice, may not say
+  // "Nothing is waiting for you" either: it does not know. The notices below
+  // say what it does know instead (R30 · N2, CPUX-01.6).
   const waiting =
     standings.length > 0
-      ? standings.join(' ')
-      : doors.length > 0 || papersUnread
-        ? null
-        : 'Nothing is waiting for you.';
+      ? standings
+      : doors.length > 0 || papersUnread || !projection.allClear
+        ? []
+        : ['Nothing is waiting for you.'];
 
   return (
     <div className="min-w-0" data-testid="letterbox-door">
@@ -508,41 +547,84 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
         preparedFor={user?.name ?? null}
         monthLabel={today ? monthAndYear(today) : null}
       />
+      <ArrivalLine>{ARRIVAL_PURPOSE}</ArrivalLine>
+      <LandmarkLedger
+        invoices
+        approvals={firstDoorId ? 'door' : 'approvals'}
+        progress
+        contact={{ anchor: 'contact', label: 'Contact your designer' }}
+      />
 
-      {waiting !== null && (
-        <p className="mt-6 max-w-[52ch] text-[17px] leading-[1.62] text-[var(--text-primary)]">
-          {waiting}
-        </p>
-      )}
-
-      {/* A letter standing in the slot draws the page, but it says nothing
-          about the papers — so a failed papers read is still said out loud
-          here rather than read as "no agreements". */}
-      {papersUnread && <PapersUnread onRetry={() => void proposalsQuery.refetch()} />}
-
-      {doors.map((door) => (
-        <OriginDoor
-          key={door.mark.id}
-          door={door}
-          first={door.mark.id === firstDoorId}
-          onSigned={() => sealDoor(door)}
-        />
+      {waiting.map((line) => (
+        <ArrivalLine key={line} testId="arrival-line">
+          {line}
+        </ArrivalLine>
       ))}
 
-      {standing.length > 0 && (
-        <div className="mt-6">
-          <Letterbox
-            invoice={open.length > 0 ? toInvoiceModel(open[0]) : null}
-            invoices={letters}
-            designerName={identityQuery.data?.name ?? null}
-            onRefetch={onRefetch}
-            today={today}
+      <section
+        id="approvals"
+        aria-labelledby="approvals-title"
+        data-testid="approvals"
+        className="mt-8 border-t border-[var(--border-subtle)] pt-2.5"
+      >
+        <h2 id="approvals-title" className={SECTION_HEAD_CLASS}>
+          Approvals
+        </h2>
+        {/* A failed papers read is said out loud rather than read as "no
+            agreements", whatever the invoices say. */}
+        {papersUnread && <PapersUnread onRetry={() => void proposalsQuery.refetch()} />}
+        {doors.map((door) => (
+          <OriginDoor
+            key={door.mark.id}
+            door={door}
+            first={door.mark.id === firstDoorId}
+            onSigned={() => sealDoor(door)}
           />
-        </div>
-      )}
+        ))}
+        {doors.length === 0 && !papersUnread && (
+          <p data-testid="approvals-empty" className="t-body mt-3 max-w-[56ch] text-[var(--text-body)]">
+            Nothing is waiting for your approval.
+          </p>
+        )}
+      </section>
+
+      {/* Always mounted while the door stands: it draws its own loading,
+          failed, partial and "No invoices to pay." states, and it is the only
+          reader of a `?checkout=` return. */}
+      <div className="mt-6">
+        <Letterbox
+          {...letterboxReads}
+          invoice={open.length > 0 ? toInvoiceModel(open[0]) : null}
+          invoices={standing}
+          designerName={identityQuery.data?.name ?? null}
+          onRefetch={onRefetch}
+          today={today}
+        />
+      </div>
 
       {/* Renders nothing until something has closed — the house's own rule. */}
       <Previously entries={keptEntries} />
+
+      {/* CPUX-01.5 — Progress lands on what the page knows: no project is
+          connected here. It does not say the project has not started. */}
+      <section
+        id="road"
+        aria-labelledby="road-title"
+        data-testid="door-progress"
+        className="mt-8 border-t border-[var(--border-subtle)] pt-2.5"
+      >
+        <h2 id="road-title" className={SECTION_HEAD_CLASS}>
+          Progress
+        </h2>
+        <p className="t-body mt-3 max-w-[56ch] text-[var(--text-primary)]">
+          Your project isn&rsquo;t connected to this page yet. You can still view and pay your
+          studio invoices.
+        </p>
+      </section>
+
+      {/* No designer contact reaches a studio-only page (StudioIdentity holds
+          no phone or email), so help is the honest fallback line. */}
+      <ContactDesigner identity={null} className="mt-8 border-t border-[var(--border-subtle)] pt-2.5" />
 
       <EmptyStateActs />
     </div>

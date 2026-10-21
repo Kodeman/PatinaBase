@@ -440,6 +440,8 @@ const PAINTWORK: ClientSelection = {
 
 const INVOICE = {
   id: 'inv-4',
+  // `useProjectInvoices` reads by project, so its rows always carry the id.
+  project_id: PROJECT_ID,
   invoice_number: 'Invoice No. 4',
   status: 'partially_paid',
   total_cents: 1825000,
@@ -457,6 +459,8 @@ const STUDIO_INVOICE = {
   client_id: 'client-1',
   invoice_number: 'Invoice No. 31',
   title: 'Design consultation · 12 September 2026',
+  // The client read joins payments as the project read does (CPUX-02 parity).
+  payments: [],
   status: 'sent',
   currency: 'USD',
   total_cents: 45_000,
@@ -2554,11 +2558,18 @@ describe('LetterboxDoor — the letterbox IS the front door', () => {
     renderDoor();
 
     expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
-    expect(screen.getByText('One letter is waiting for you.')).toBeInTheDocument();
+    expect(screen.getByText('You have one invoice to pay.')).toBeInTheDocument();
     expect(screen.getByTestId('letterbox-regarding')).toHaveTextContent(
       'Design consultation · 12 September 2026',
     );
-    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    // No header (R135): the one navigation is the in-page ledger (R141), and
+    // every entry in it is an anchor on this page.
+    const [nav, ...others] = screen.getAllByRole('navigation');
+    expect(others).toHaveLength(0);
+    expect(nav).toHaveAccessibleName('On this page');
+    for (const link of within(nav).getAllByRole('link')) {
+      expect(link.getAttribute('href')).toMatch(/^#/);
+    }
   });
 
   // 00571 gives `p_studio_id` precedence over both derivations. A designer who
@@ -2984,8 +2995,9 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
 
     expect(screen.getAllByTestId('doorplate-title')).toHaveLength(1);
     expect(
-      screen.getByText('One agreement is waiting for you. One letter is waiting for you.'),
+      screen.getByText('One agreement is waiting for you.'),
     ).toBeInTheDocument();
+    expect(screen.getByText('You have one invoice to pay.')).toBeInTheDocument();
     expect(theDoor()).not.toBeNull();
     expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
   });
@@ -3011,7 +3023,7 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
 
     expect(screen.queryByTestId('letterbox-door-hold')).not.toBeInTheDocument();
     expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
-    expect(screen.getByText('One letter is waiting for you.')).toBeInTheDocument();
+    expect(screen.getByText('You have one invoice to pay.')).toBeInTheDocument();
     expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
   });
 
@@ -3108,7 +3120,7 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     renderDoor();
 
     expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
-    expect(screen.getByText('One letter is waiting for you.')).toBeInTheDocument();
+    expect(screen.getByText('You have one invoice to pay.')).toBeInTheDocument();
     expect(screen.getByTestId('papers-unread')).toBeInTheDocument();
     expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
   });
@@ -3293,14 +3305,14 @@ describe('Threshold — the landmark ledger and the story pole’s sections', ()
     }
   });
 
-  it('sends "What needs you" to the first gate that drew, and keeps the money undimmable', () => {
+  it('sends Approvals to the first gate that drew, and keeps the money undimmable', () => {
     const { container } = renderThreshold();
 
     expect(landmarks(container)).toEqual(
       expect.arrayContaining([
-        ['Project status', '#doorstep'],
-        ['What you owe', '#letterbox'],
-        ['What needs you', '#wall'],
+        ['Invoices', '#letterbox'],
+        ['Approvals', '#wall'],
+        ['Progress', '#road'],
         ['Documents', '#mat-papers'],
       ]),
     );
@@ -3399,6 +3411,112 @@ describe('Threshold — the landmark ledger and the story pole’s sections', ()
         value: original,
       });
     }
+  });
+});
+
+/* ── CPUX-01 · the arrival and its wayfinding ───────────────────────────────
+   Literal links under the doorplate, each landing on content, an honest empty
+   state, or a recovery message; arrival counts read from the one invoice
+   projection and withheld whenever it withholds them. ───────────────────── */
+describe('Threshold — the arrival and its wayfinding (CPUX-01)', () => {
+  function landmarks(container: HTMLElement): Array<[string, string | null]> {
+    return Array.from(
+      container.querySelectorAll('[data-testid="landmark-ledger"] a'),
+    ).map((link) => [link.textContent?.trim() ?? '', link.getAttribute('href')]);
+  }
+
+  it('says what the page is for between the doorplate and the ledger', () => {
+    const { container } = renderThreshold();
+
+    const purpose = screen.getByText(
+      'Pay invoices, review approvals, and follow your project here.',
+    );
+    const doorplate = container.querySelector('#doorplate')!;
+    const ledger = screen.getByTestId('landmark-ledger');
+    expect(doorplate.compareDocumentPosition(purpose) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(purpose.compareDocumentPosition(ledger) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+  });
+
+  it('strikes Invoices, Approvals and Progress first, then Updates, Documents and help', () => {
+    const { container } = renderThreshold();
+
+    expect(landmarks(container)).toEqual([
+      ['Invoices', '#letterbox'],
+      ['Approvals', '#wall'],
+      ['Progress', '#road'],
+      ['Updates', '#note'],
+      ['Documents', '#mat-papers'],
+      ['Contact your designer', '#contact'],
+    ]);
+    for (const [, href] of landmarks(container)) {
+      expect(container.querySelector(href!)).not.toBeNull();
+    }
+  });
+
+  it('keeps the empty line away while an ask waits anywhere on the page', () => {
+    // The wall waits in its room band, so the ledger names it and the asks
+    // section claims nothing.
+    renderThreshold();
+
+    expect(screen.getByTestId('approvals')).toHaveAttribute('id', 'approvals');
+    expect(screen.queryByTestId('approvals-empty')).not.toBeInTheDocument();
+  });
+
+  it('lands Approvals on an honest empty line when nothing is asking', () => {
+    proposalsMock.mockReturnValue(settled([SIGNED_AGREEMENT]));
+    selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [] }));
+    const { container } = renderThreshold();
+
+    expect(landmarks(container)).toContainEqual(['Approvals', '#approvals']);
+    const approvals = screen.getByTestId('approvals');
+    expect(within(approvals).getByRole('heading', { name: 'Approvals' })).toBeInTheDocument();
+    expect(screen.getByTestId('approvals-empty')).toHaveTextContent(
+      'Nothing is waiting for your approval.',
+    );
+  });
+
+  it('keeps the failed-read notice, not an empty line, when the approvals did not read', () => {
+    proposalsMock.mockReturnValue(settled([SIGNED_AGREEMENT]));
+    selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [] }));
+    approvalsMock.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    renderThreshold();
+
+    const approvals = screen.getByTestId('approvals');
+    expect(within(approvals).getByTestId('threshold-approvals-error')).toBeInTheDocument();
+  });
+
+  it('counts the invoices to pay at the arrival from the projection', () => {
+    invoicesMock.mockReturnValue(settled([{ ...INVOICE, payments: [] }]));
+    renderThreshold();
+
+    expect(screen.getByTestId('arrival-invoices')).toHaveTextContent(
+      'You have one invoice to pay.',
+    );
+  });
+
+  it('withholds the count when one half of the adopted read failed', () => {
+    invoicesMock.mockReturnValue(settled([{ ...INVOICE, payments: [] }]));
+    clientInvoicesMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+      refetch: jest.fn(),
+    });
+    const { container } = renderThreshold();
+
+    expect(screen.queryByTestId('arrival-invoices')).not.toBeInTheDocument();
+    // The letterbox still stands for the rows that did read.
+    expect(container.querySelector('#letterbox')).not.toBeNull();
+    expect(landmarks(container)).toContainEqual(['Invoices', '#letterbox']);
+  });
+
+  it('never says letters are waiting', () => {
+    const { container } = renderThreshold();
+
+    expect(container.textContent).not.toMatch(/letters? (is|are) waiting/);
   });
 });
 
