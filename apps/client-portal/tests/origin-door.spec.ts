@@ -312,8 +312,21 @@ test.describe('R30 — the household door with no house', () => {
     await expect(door.getByText(CONSENT_LINE)).toBeVisible();
     await expect(door.getByRole('button', { name: /^Sign and accept/ })).toBeVisible();
 
-    // R135: no header, no nav — every act she has is on this page.
-    await expect(page.getByRole('navigation')).toHaveCount(0);
+    // R135: no site header, no site nav — every act she has is on this page.
+    // The one navigation landmark allowed is CPUX-01's labelled "On this
+    // page" ledger, and it only jumps within this page: it is not a site nav.
+    await expect(page.locator('[data-testid^="header-"]')).toHaveCount(0);
+    await expect(
+      page
+        .getByRole('navigation')
+        .and(page.locator(':not([data-testid="landmark-ledger"])')),
+    ).toHaveCount(0);
+    const ledger = page.getByRole('navigation', { name: 'On this page' });
+    for (const href of await ledger.locator('a').evaluateAll((links) =>
+      links.map((link) => link.getAttribute('href') ?? ''),
+    )) {
+      expect(href).toMatch(/^#/);
+    }
   });
 
   test('lands on that door from the retired /proposals/<id> address', async ({ page }) => {

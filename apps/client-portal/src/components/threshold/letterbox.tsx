@@ -286,20 +286,21 @@ export function Letterbox({
   // A mailed `/invoices/<id>` folds to `?invoice=<id>`: that row opens, in
   // history too, and is brought into view. An id this house is not holding
   // names nothing and changes nothing.
+  // It opens once, in the render that first holds its row, so the row never
+  // paints closed first.
   const namedId = useNamedInvoice();
-  const named = useRef(false);
+  const [namedOpened, setNamedOpened] = useState<string | null>(null);
+  if (namedId && namedOpened === null) {
+    const row = rows.find((candidate) => candidate.invoice.id === namedId);
+    if (row) {
+      setNamedOpened(namedId);
+      if (row.group === 'history') setHistoryOpen(true);
+      setOpenId(namedId);
+    }
+  }
   useEffect(() => {
-    if (!namedId || named.current) return;
-    const row = rows.find(
-      (candidate) =>
-        candidate.invoice.id === namedId,
-    );
-    if (!row) return;
-    named.current = true;
-    if (row.group === 'history') setHistoryOpen(true);
-    pendingFocus.current = { id: namedId, target: 'reveal' };
-    setOpenId(namedId);
-  }, [namedId, rows]);
+    if (namedOpened) pendingFocus.current = { id: namedOpened, target: 'reveal' };
+  }, [namedOpened]);
 
   // Focus moves after the render that mounted its target: into the details a
   // row opened, back to the row's own "View invoice" when they close.

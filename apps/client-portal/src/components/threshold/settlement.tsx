@@ -74,8 +74,8 @@ export function PayeeUnknown({ payee }: { payee: LetterPayee }) {
 export function useCheckoutAttempt() {
   const startCheckout = useStartCheckout();
   // State lands after the render; the ref closes a second press in the same tick.
-  const starting = useRef(false);
-  return { startCheckout, starting };
+  const startingRef = useRef(false);
+  return { startCheckout, startingRef };
 }
 
 export type CheckoutAttempt = ReturnType<typeof useCheckoutAttempt>;
@@ -137,7 +137,7 @@ export function Settlement({
   onRefetch,
 }: SettlementProps) {
   const { invoice, balanceCents, currency } = row;
-  const { startCheckout, starting } = attempt;
+  const { startCheckout, startingRef } = attempt;
   const [method, setMethod] = useState<InvoicePaymentUIMethod>('us_bank_account');
   const [payError, setPayError] = useState<string | null>(null);
   // Kept here as well as handed up, so the sheet never offers a second charge
@@ -187,9 +187,9 @@ export function Settlement({
     // One press, at most one Checkout session: a second press while the first
     // is being claimed, with the check panel open, or while the act has a
     // reason it can't be taken (no confirmed total among them), does nothing.
-    if (starting.current || startCheckout.isPending || method === 'check') return;
+    if (startingRef.current || startCheckout.isPending || method === 'check') return;
     if (actReason || activeHold) return;
-    starting.current = true;
+    startingRef.current = true;
     setPayError(null);
     try {
       const receipt = await startCheckout.mutateAsync({
@@ -199,7 +199,7 @@ export function Settlement({
       if (!open.current) {
         // Closed, or another row opened, while the claim was out: she is no
         // longer looking at this sheet, so nothing leaves for the till.
-        starting.current = false;
+        startingRef.current = false;
         return;
       }
       clientEvents.paymentStarted({
@@ -221,7 +221,7 @@ export function Settlement({
         await onRefetch?.();
         return;
       }
-      starting.current = false;
+      startingRef.current = false;
       // Every other cause reads in the house's words, never a raw error.
       setPayError(refusalSentence(err, 'Unable to start payment.'));
     }

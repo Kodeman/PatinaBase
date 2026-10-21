@@ -1,7 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { forwardRef, useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type {
   AnchorHTMLAttributes,
   ButtonHTMLAttributes,
@@ -454,14 +462,30 @@ function retainModality(): () => void {
   };
 }
 
+const STILL_QUERY = '(prefers-reduced-motion: reduce)';
+
 function stilled(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return false;
   }
   // A stubbed matchMedia can answer with nothing at all; a missing answer is
   // not a request for stillness.
-  return !!window.matchMedia('(prefers-reduced-motion: reduce)')?.matches;
+  return !!window.matchMedia(STILL_QUERY)?.matches;
 }
+
+function subscribeStillness(onChange: () => void): () => void {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return () => {};
+  }
+  const query = window.matchMedia(STILL_QUERY);
+  if (typeof query?.addEventListener !== 'function') return () => {};
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
+/* The server has no media query to answer with, so it — and hydration —
+   reads "not stilled"; the client's own answer follows straight after. */
+const serverStillness = () => false;
 
 export interface HoldActionProps
   extends Omit<
@@ -537,10 +561,9 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     const [said, setSaid] = useState('');
     const [holding, setHolding] = useState(false);
     const [keyboardHint, setKeyboardHint] = useState(false);
-    // Read after mount, never during render: the server has no media query to
-    // answer with, and a class that appears only on the client is a hydration
-    // mismatch.
-    const [still, setStill] = useState(false);
+    // Never read during the server render or hydration: a class that appears
+    // only on the client is a hydration mismatch.
+    const still = useSyncExternalStore(subscribeStillness, stilled, serverStillness);
     const control = useRef<HTMLButtonElement | null>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const running = useRef(false);
@@ -550,7 +573,6 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     const saidId = `hold-${useId().replace(/:/g, '')}`;
 
     useEffect(() => retainModality(), []);
-    useEffect(() => setStill(stilled()), []);
     /* An armed act has nothing to refuse, so the line it refused with clears
        itself rather than being cleared by an effect. */
     const saying = disabled ? said : '';
@@ -588,12 +610,17 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       running.current = false;
       ink(0);
       setHolding(false);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('scroll', stop, true);
-      }
     }, [ink]);
 
     useEffect(() => stop, [stop]);
+
+    /* A page that scrolls under the thumb was not held. The listener lives
+       exactly as long as the hold does. */
+    useEffect(() => {
+      if (!holding) return;
+      window.addEventListener('scroll', stop, true);
+      return () => window.removeEventListener('scroll', stop, true);
+    }, [holding, stop]);
 
     /** The act itself, reported once and always the same way. */
     const take = useCallback(() => {
@@ -626,20 +653,14 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       // frame in a browser and immediately in jsdom; either way the timer,
       // not the paint, is what decides when the act is taken.
       ink(1);
-      if (typeof window !== 'undefined') {
-        window.addEventListener('scroll', stop, true);
-      }
       timer.current = setTimeout(() => {
         timer.current = null;
         running.current = false;
         setHolding(false);
         ink(0);
-        if (typeof window !== 'undefined') {
-          window.removeEventListener('scroll', stop, true);
-        }
         take();
       }, holdMs);
-    }, [holdMs, ink, stop, take, unavailable]);
+    }, [holdMs, ink, take, unavailable]);
 
     function onKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
