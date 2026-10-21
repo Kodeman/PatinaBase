@@ -1059,18 +1059,27 @@ html[data-loading-register] [data-register-off] {
    R139). A fill on the paper is either the terminal (forest: it commits) or
    this plate (charcoal: your next step, it never commits). The sign-in
    button's shape: no scores, no mono; the label is Inter 15 semibold in
-   sentence case (document-action.tsx). Hover and press deepen value only. ── */
+   sentence case (document-action.tsx). Hover and press deepen value only.
+   The control keeps its honest 44px target, but the paint is 32px: it is
+   inset 6px top and bottom on ::after, the way .da-pool keeps a scored word's
+   ink close to the word, so the plate sits inside the 56px band (R127). ── */
 .da-plate {
   min-height: 44px;
   padding: 0 20px;
-  border-radius: 2px;
-  background-color: var(--ink);
   color: var(--ink-paper);
 }
-.da-plate .da-pool {
-  inset: 0;
+.da-plate::after {
+  content: '';
+  position: absolute;
+  inset: 6px 0;
+  z-index: 0;
   border-radius: 2px;
-  background-color: #1F1D1A;
+  background-color: var(--ink);
+  pointer-events: none;
+  transition: background-color 150ms var(--ease-editorial);
+}
+.da-plate .da-pool {
+  display: none;
 }
 .da-plate .da-label::before,
 .da-plate .da-label::after {
@@ -1080,8 +1089,8 @@ html[data-loading-register] [data-register-off] {
 .da-plate .da-trailing {
   color: var(--ink-paper);
 }
-.da-plate:hover,
-.da-plate:active {
+.da-plate:hover::after,
+.da-plate:active::after {
   background-color: #1F1D1A;
 }
 
@@ -1216,8 +1225,8 @@ html[data-loading-register] [data-register-off] {
 }
 /* the held or disabled plate retreats the same way: rail stock, its edge drawn
    back in, the word and its glyphs in faint ink beside the reason it names */
-.da-plate:disabled,
-.da-plate[aria-disabled='true'] {
+.da-plate:disabled::after,
+.da-plate[aria-disabled='true']::after {
   background-color: var(--doc-rail-stock);
   border: 1px solid var(--doc-ink-border);
 }
@@ -1279,12 +1288,18 @@ html[data-loading-register] [data-register-off] {
 .da-inked:focus-visible .da-label::before {
   background-color: var(--color-off-white);
 }
-/* the plate stands on paper, so its ring is the shared paper ring at a 2px
-   offset, drawn on the paper beyond the fill; the caret inside the fill
-   inverts as the terminal's does */
-.da-plate:focus-visible {
+/* the plate's ring is drawn on the PAINT, not on the 44px target, so it stays
+   inside the band: the shared paper ring, hugging the 32px plate, reads on
+   the paper around it. The caret inside the fill inverts as the terminal's
+   does. A held plate's activation cue takes the same ring. */
+.da-plate:focus-visible,
+.da-plate[data-held-focus-cue] {
+  outline: none !important;
+}
+.da-plate:focus-visible::after,
+.da-plate[data-held-focus-cue]::after {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 .da-plate:focus-visible::before {
   color: var(--ink-paper);
@@ -1307,7 +1322,7 @@ html[data-loading-register] [data-register-off] {
   .da-terminal {
     border: 1px solid ButtonText;
   }
-  .da-plate {
+  .da-plate::after {
     border: 1px solid ButtonText;
   }
   .da-act:focus-visible {
@@ -1315,6 +1330,14 @@ html[data-loading-register] [data-register-off] {
   }
   [data-held-focus-cue] {
     outline: 2px solid Highlight !important;
+  }
+  .da-plate:focus-visible,
+  .da-plate[data-held-focus-cue] {
+    outline: none !important;
+  }
+  .da-plate:focus-visible::after,
+  .da-plate[data-held-focus-cue]::after {
+    outline: 2px solid Highlight;
   }
 }
 

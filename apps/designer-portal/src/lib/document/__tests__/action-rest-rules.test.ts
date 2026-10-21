@@ -215,9 +215,10 @@ describe("PP-3 · the rest rule is unconditional", () => {
 
   it("keeps a held or disabled Next plate legible as the plate (US-46 R203)", () => {
     // Faint ink on a charcoal fill would vanish, so the plate retreats to rail
-    // stock with its edge drawn back in, exactly as the terminal does.
+    // stock with its edge drawn back in, exactly as the terminal does. The
+    // paint lives on ::after (32px inside the 44px target), so the rule does too.
     const unavailable = ALL_RULES.find((rule) =>
-      /^\.da-plate:disabled, ?\.da-plate\[aria-disabled='true'\]$/.test(
+      /^\.da-plate:disabled::after, ?\.da-plate\[aria-disabled='true'\]::after$/.test(
         rule.selector,
       ),
     );

@@ -479,8 +479,10 @@ export function LensBand({
             aria-atomic="true"
             // While a rung is on trial the line holds to one row, so the
             // sentence (not the act) is what the measure sees overflow; the
-            // last rung wraps (U-Q19).
-            className={`flex items-center gap-x-2 gap-y-1 text-[15px] leading-[1.3] ${
+            // last rung wraps (U-Q19). US-46 R203 — the 10px row gap keeps a
+            // wrapped plate's 32px paint (6px past its inset 19.5px line)
+            // clear of the sentence row above it.
+            className={`flex items-center gap-x-2 gap-y-[10px] text-[15px] leading-[1.3] ${
               dropped < lastRung ? 'flex-nowrap' : 'flex-wrap'
             } ${
               nextIsException
@@ -578,7 +580,7 @@ export function LensBand({
           data-lens-line2-form={printed.form}
           aria-live="polite"
           aria-atomic="true"
-          className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[16px] leading-[1.3] ${
+          className={`flex flex-wrap items-center gap-x-2 gap-y-[10px] text-[16px] leading-[1.3] ${
             standing
               ? 'text-[var(--color-terracotta-ink)]'
               : 'text-[var(--text-primary)]'

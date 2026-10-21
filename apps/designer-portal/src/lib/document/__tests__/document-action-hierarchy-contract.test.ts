@@ -238,24 +238,31 @@ describe("US-43 R5 scored-word grammar (globals.css)", () => {
     expect(scoredInkBlock).toMatch(/\n\.da-label::after \{\s*bottom:\s*-\d/);
   });
 
-  it("fills the Next plate charcoal, unscored, 44px, 2px radius — never forest (US-46 R203)", () => {
+  it("paints the Next plate charcoal, 32px on a 44px target, unscored, 2px radius — never forest (US-46 R203)", () => {
+    // the control: the honest 44px target, no paint of its own
     const plate = cssRule(".da-plate {");
-    expect(plate).toContain("background-color: var(--ink)");
     expect(plate).toContain("color: var(--ink-paper)");
     expect(plate).toContain("min-height: 44px");
     expect(plate).toContain("padding: 0 20px");
-    expect(plate).toContain("border-radius: 2px");
-    expect(plate).not.toContain("forest");
+    expect(plate).not.toContain("background");
+    // the paint: inset 6px top and bottom, so 44 − 12 = 32px visible
+    const paint = cssRule(".da-plate::after {");
+    expect(paint).toContain("inset: 6px 0");
+    expect(paint).toContain("background-color: var(--ink)");
+    expect(paint).toContain("border-radius: 2px");
+    expect(paint).toContain("pointer-events: none");
+    expect(`${plate}${paint}`).not.toContain("forest");
     // no clay score: both of the label's scores are switched off
     expect(scoredInkBlock).toMatch(/\.da-plate \.da-label::before,\s*\.da-plate \.da-label::after\s*\{\s*content:\s*none;/);
-    // hover and press deepen value to the deck's #1F1D1A
-    expect(cssRule(".da-plate:hover,")).toContain("background-color: #1F1D1A");
-    // focus: the shared paper ring, 2px out
-    const focus = cssRule(".da-plate:focus-visible {");
+    // hover and press deepen the paint to the deck's #1F1D1A
+    expect(cssRule(".da-plate:hover::after,")).toContain("background-color: #1F1D1A");
+    // focus: the box's ring is off, and the shared ring is drawn on the paint
+    expect(cssRule(".da-plate:focus-visible,")).toContain("outline: none !important");
+    const focus = cssRule(".da-plate:focus-visible::after,");
     expect(focus).toContain("outline: 2px solid var(--focus-ring)");
-    expect(focus).toContain("outline-offset: 2px");
+    expect(focus).toContain("outline-offset: 0");
     // held or disabled: rail stock with its edge drawn back in, as the terminal
-    expect(cssRule(".da-plate:disabled,")).toContain("background-color: var(--doc-rail-stock)");
+    expect(cssRule(".da-plate:disabled::after,")).toContain("background-color: var(--doc-rail-stock)");
     // the forest terminal is untouched by the plate
     expect(cssRule(".da-terminal {")).toContain("background-color: var(--color-forest)");
   });
@@ -286,7 +293,8 @@ describe("US-43 R5 scored-word grammar (globals.css)", () => {
     expect(cssRule(".da-label::after {", block)).toContain("background-color: CanvasText");
     expect(cssRule(".da-terminal {", block)).toContain("border: 1px solid ButtonText");
     expect(block).toMatch(/\.da-inked,\s*\.da-terminal\s*\{/);
-    expect(cssRule(".da-plate {", block)).toContain("border: 1px solid ButtonText");
+    expect(cssRule(".da-plate::after {", block)).toContain("border: 1px solid ButtonText");
+    expect(cssRule(".da-plate:focus-visible::after,", block)).toContain("outline: 2px solid Highlight");
     expect(block).toMatch(/\.da-act:focus-visible[^{]*\{\s*outline: 2px solid Highlight/);
     // only the scores opt out — never the act or its word
     expect(block.match(/forced-color-adjust:\s*none/g) ?? []).toHaveLength(1);

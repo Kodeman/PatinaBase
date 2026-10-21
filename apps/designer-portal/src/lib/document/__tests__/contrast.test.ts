@@ -896,18 +896,27 @@ jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
  * US-46 R203 — the band's Next plate.
  *
  * The plate is the one filled charcoal shape on the paper: ink-paper words on
- * the --ink ground, read as text (4.5:1), with the shared --focus-ring drawn at
- * a 2px offset on the paper around it (a non-text indicator, 3:1). It is
- * charcoal, never forest: forest is the terminal fill, which commits.
+ * the --ink paint, read as text (4.5:1). The control keeps its honest 44px
+ * target, but the paint is 32px (inset 6px top and bottom on ::after), so it
+ * and its focus ring sit inside the 56px band. The shared --focus-ring hugs
+ * the paint and reads on the paper around it (a non-text indicator, 3:1). It
+ * is charcoal, never forest: forest is the terminal fill, which commits.
  */
 describe('US-46 R203 · the Next plate reads on its own ground and focuses on paper', () => {
   const plateRule = css.match(/\n\.da-plate\s*\{([^}]*)\}/)?.[1] ?? '';
-  const plateFocus = css.match(/\n\.da-plate:focus-visible\s*\{([^}]*)\}/)?.[1] ?? '';
+  const paintRule = css.match(/\n\.da-plate::after\s*\{([^}]*)\}/)?.[1] ?? '';
+  const plateFocus =
+    css.match(/\n\.da-plate:focus-visible::after,[^{]*\{([^}]*)\}/)?.[1] ?? '';
+  const px = (body: string, prop: string): number => {
+    const value = body.match(new RegExp(`${prop}:\\s*(\\d+)(?:px)?`))?.[1];
+    expect(value).toBeDefined();
+    return Number(value);
+  };
 
-  it('paints --ink-paper words on the --ink ground, never forest', () => {
-    expect(plateRule).toMatch(/background-color:\s*var\(--ink\);/);
+  it('paints --ink-paper words on the --ink paint, never forest', () => {
+    expect(paintRule).toMatch(/background-color:\s*var\(--ink\);/);
     expect(plateRule).toMatch(/color:\s*var\(--ink-paper\);/);
-    expect(plateRule).not.toContain('forest');
+    expect(`${plateRule}${paintRule}`).not.toContain('forest');
   });
 
   it('holds ink-paper on ink at 4.5:1', () => {
@@ -916,16 +925,27 @@ describe('US-46 R203 · the Next plate reads on its own ground and focuses on pa
     );
   });
 
-  it('holds its hover ground #1F1D1A under ink-paper at 4.5:1', () => {
-    expect(css).toMatch(/\.da-plate:hover,\s*\.da-plate:active\s*\{\s*background-color:\s*#1F1D1A;/);
+  it('holds its hover paint #1F1D1A under ink-paper at 4.5:1', () => {
+    expect(css).toMatch(
+      /\.da-plate:hover::after,\s*\.da-plate:active::after\s*\{\s*background-color:\s*#1F1D1A;/,
+    );
     expect(contrastRatio(resolveToken('--ink-paper'), '#1F1D1A')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
   });
 
+  it('paints 32px on a 44px target, and its ring stays inside the target', () => {
+    const target = px(plateRule, 'min-height');
+    const inset = px(paintRule, 'inset');
+    expect(target).toBe(44);
+    expect(target - 2 * inset).toBe(32);
+    // the ring hugs the paint: width + offset must not reach the target's edge
+    const ring = px(plateFocus, 'outline') + px(plateFocus, 'outline-offset');
+    expect(target - 2 * inset + 2 * ring).toBeLessThanOrEqual(target);
+  });
+
   it.each(['--paper', '--paper-doc'] as const)(
-    'draws the shared focus ring at a 2px offset, at 3:1 on %s',
+    'draws the shared focus ring on the paint, at 3:1 on %s',
     (ground) => {
       expect(plateFocus).toMatch(/outline:\s*2px solid var\(--focus-ring\);/);
-      expect(plateFocus).toMatch(/outline-offset:\s*2px;/);
       expect(contrastRatio(resolveToken('--focus-ring'), resolveToken(ground))).toBeGreaterThanOrEqual(3);
     },
   );
