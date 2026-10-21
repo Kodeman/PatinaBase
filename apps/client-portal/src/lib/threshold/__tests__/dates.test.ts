@@ -1,5 +1,6 @@
 import {
   DAY_MONTH_FORMAT,
+  calendarDayOrdinal,
   MONTH_NAME_FORMAT,
   dayMonth,
   legalDate,
@@ -89,5 +90,24 @@ describe('parseSourceDate', () => {
     expect(parseSourceDate(undefined)).toBeNull();
     expect(parseSourceDate('')).toBeNull();
     expect(parseSourceDate('nope')).toBeNull();
+  });
+});
+
+describe('calendarDayOrdinal', () => {
+  it('is one value for every moment of a local day', () => {
+    expect(calendarDayOrdinal(new Date(2026, 9, 20, 0, 0))).toBe(
+      calendarDayOrdinal(new Date(2026, 9, 20, 23, 59, 59)),
+    );
+  });
+
+  it('steps by one across midnight, a month end and a year end', () => {
+    expect(calendarDayOrdinal(new Date(2026, 9, 21, 0, 1)) - calendarDayOrdinal(new Date(2026, 9, 20, 23, 59))).toBe(1);
+    expect(calendarDayOrdinal(new Date(2026, 10, 1)) - calendarDayOrdinal(new Date(2026, 9, 31))).toBe(1);
+    expect(calendarDayOrdinal(new Date(2027, 0, 1)) - calendarDayOrdinal(new Date(2026, 11, 31))).toBe(1);
+  });
+
+  it('reads a date-only due date as its own day, not the UTC day before', () => {
+    const due = parseSourceDate('2026-10-20') as Date;
+    expect(calendarDayOrdinal(due)).toBe(calendarDayOrdinal(new Date(2026, 9, 20, 18, 0)));
   });
 });

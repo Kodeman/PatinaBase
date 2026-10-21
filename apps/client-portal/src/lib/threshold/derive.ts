@@ -21,10 +21,16 @@ import { invoiceBalanceCents } from '@patina/shared';
 
 import { DAY_MONTH_FORMAT, parseSourceDate } from './dates';
 
-// The ledger rollup owns which invoices count at all (drafts are pre-issue,
-// voids are cancelled). Imported rather than restated so the ledger and the
-// letterbox can never disagree about what is open.
-import { computeInvoiceRollup, visibleInvoices } from '@/lib/threshold/invoice-rollup';
+// The invoice projection owns which invoices count at all, which group each
+// stands in, and what they total. Imported rather than restated so the ledger
+// and the letterbox can never disagree about what is open.
+import {
+  invoiceProjection,
+  type InvoiceProjection,
+  type InvoiceReadState,
+  type InvoiceRow,
+  type InvoiceServerHold,
+} from '@/lib/threshold/invoice-rollup';
 import { journeyStageIndexForStatus } from '@/components/commercial/journey-stepper';
 import type { ClientProjectSelections, ClientSelection } from '@/lib/commercial-documents';
 
@@ -33,8 +39,6 @@ import { houseOverageLine, roomVarianceLine } from './standing';
 
 /** A piece is still on the road until it has reached the house. */
 const DELIVERED_STOP = journeyStageIndexForStatus('delivered');
-
-const OPEN_INVOICE_STATUSES = new Set<Invoice['status']>(['sent', 'partially_paid']);
 
 // ── input ────────────────────────────────────────────────────────────────────
 
@@ -122,6 +126,14 @@ export interface ThresholdInput {
     instrumentReceipts: ThresholdReceipt[];
   };
   invoices: Invoice[];
+  /**
+   * How complete the reads behind `invoices` are — `houseInvoices(...).read`.
+   * Omitted, the rows are taken as one complete read; a caller holding query
+   * state must pass it, or a failed read reads as nothing owed.
+   */
+  invoiceRead?: InvoiceReadState;
+  /** Holds the checkout boundary returned, by invoice id. */
+  invoiceHolds?: Readonly<Record<string, InvoiceServerHold>> | null;
   approvals: ThresholdApproval[];
   notes: ThresholdNote[];
   /** When the client last read this page, from `mark_project_read`. */
@@ -187,12 +199,16 @@ export interface HouseLedgerModel {
    */
   agreedCents: number | null;
   /**
-   * Σ balance across EVERY open invoice, or null when none is open — not the
-   * letterbox's one figure. The Making sums all of them and so does /budget;
-   * a page that owed less than the budget page said would be a disagreement
-   * the client has no way to resolve.
+   * Σ balance across EVERY outstanding invoice (payable, in progress and held),
+   * or null when none is owed — not the letterbox's one figure. The Making sums
+   * all of them and so does /budget; a page that owed less than the budget page
+   * said would be a disagreement the client has no way to resolve. Also null
+   * when the projection withholds its totals or the balances span more than
+   * one currency: no figure is printed rather than a wrong or mixed one.
    */
   owedCents: number | null;
+  /** The currency `owedCents` and `paidCents` are in; null with them. */
+  owedCurrency: string | null;
   /**
    * Σ settled across those same open invoices — the middle term of the
    * reconciling sentence, and the reason "$0.00 paid" is a fact rather than a
@@ -265,7 +281,10 @@ export interface ThresholdModel {
   bands: RoomBandModel[];
   road: RoadPieceModel[];
   ledger: HouseLedgerModel;
+  /** The first invoice to pay; never one in progress, held, or with no balance. */
   letterbox: InvoiceModel | null;
+  /** The one invoice projection (CPUX-02) the letterbox and ledger read from. */
+  invoices: InvoiceProjection;
   note: NoteModel | null;
   previously: PreviouslyEntry[];
   /** Phase approvals carry no room, so they always stand on the Doorstep. */
@@ -300,13 +319,6 @@ export const DAY_MONTH = DAY_MONTH_FORMAT;
 
 function parseMoment(value: string | null | undefined): number | null {
   return parseSourceDate(value)?.getTime() ?? null;
-}
-
-/** Soonest due first; an invoice with no due date waits at the back. */
-function byDueDate(a: Invoice, b: Invoice): number {
-  const left = parseMoment(a.due_date) ?? Number.POSITIVE_INFINITY;
-  const right = parseMoment(b.due_date) ?? Number.POSITIVE_INFINITY;
-  return left - right;
 }
 
 /**
@@ -356,6 +368,62 @@ export function toInvoiceModel(invoice: Invoice): InvoiceModel {
     balanceCents: invoiceBalanceCents(invoice),
     dueDate: invoice.due_date,
   };
+}
+
+function invoicesOf(input: ThresholdInput): InvoiceProjection {
+  return invoiceProjection(input.invoices ?? [], {
+    today: input.today,
+    read: input.invoiceRead ?? 'complete',
+    serverHolds: input.invoiceHolds ?? undefined,
+  });
+}
+
+type OwedFigures = Pick<
+  HouseLedgerModel,
+  | 'owedCents'
+  | 'owedCurrency'
+  | 'paidCents'
+  | 'owedInvoiceNumber'
+  | 'owedInvoiceCount'
+  | 'owedStudioCount'
+  | 'owedDueDate'
+  | 'owedDatedCount'
+>;
+
+/** What is owed: every outstanding row with a balance, counted once. */
+function owedFigures(invoices: InvoiceProjection): OwedFigures {
+  const owed = invoices.outstanding.filter((row) => row.balanceCents > 0);
+  return {
+    ...owedTotalFigures(invoices, owed),
+    owedInvoiceNumber: owed.length === 1 ? owedNumber(owed[0]) : null,
+    owedInvoiceCount: owed.length,
+    owedStudioCount: owed.filter((row) => row.studio).length,
+    owedDueDate: owedDueDate(owed[0]),
+    owedDatedCount: owed.filter((row) => row.dueDate !== null).length,
+  };
+}
+
+/** One printed figure only when it is authoritative and in one currency. */
+function owedTotalFigures(
+  invoices: InvoiceProjection,
+  owed: readonly InvoiceRow[],
+): Pick<OwedFigures, 'owedCents' | 'owedCurrency' | 'paidCents'> {
+  const totals = invoices.outstandingTotals;
+  if (totals?.length !== 1) return { owedCents: null, owedCurrency: null, paidCents: null };
+  return {
+    owedCents: totals[0].cents,
+    owedCurrency: totals[0].currency,
+    paidCents: owed.reduce((sum, row) => sum + (row.invoice.amount_paid_cents || 0), 0),
+  };
+}
+
+function owedNumber(row: InvoiceRow): string | null {
+  return row.invoice.invoice_number?.trim() || null;
+}
+
+/** The first due date as the source wrote it, only when it is a real date. */
+function owedDueDate(row: InvoiceRow | undefined): string | null {
+  return row?.dueDate ? row.invoice.due_date : null;
 }
 
 // ── the join ─────────────────────────────────────────────────────────────────
@@ -535,11 +603,11 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
   }
 
   // ── the letterbox and the ledger ───────────────────────────────────────────
-  const openInvoices = visibleInvoices(input.invoices ?? [])
-    .filter((invoice) => OPEN_INVOICE_STATUSES.has(invoice.status))
-    .sort(byDueDate);
-  const letterbox = openInvoices.length > 0 ? toInvoiceModel(openInvoices[0]) : null;
-  if (openInvoices.length > 0 && movedSince(openInvoices[0].updated_at)) changed.add('letterbox');
+  const invoices = invoicesOf(input);
+  // The slot carries an act to pay, so only a payable invoice may stand in it.
+  const featured = invoices.payable[0];
+  const letterbox = featured ? toInvoiceModel(featured.invoice) : null;
+  if (featured && movedSince(featured.invoice.updated_at)) changed.add('letterbox');
 
   const targets = rooms
     .map((room) => room.targetCents)
@@ -559,19 +627,10 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
   const liveAuthorized = positive(input.liveAuthorizedTotalCents);
   const bandsAgreed = bands.reduce((sum, band) => sum + band.agreedCents, 0);
 
-  const openRollup = openInvoices.length > 0 ? computeInvoiceRollup(openInvoices) : null;
-
   const ledger: HouseLedgerModel = {
     plannedCents: planTotal ?? roomTargetTotal,
     agreedCents: liveAuthorized ?? (bandsAgreed > 0 ? bandsAgreed : null),
-    owedCents: openRollup ? openRollup.outstandingCents : null,
-    paidCents: openRollup ? openRollup.paidCents : null,
-    owedInvoiceNumber:
-      openInvoices.length === 1 ? (openInvoices[0].invoice_number?.trim() || null) : null,
-    owedInvoiceCount: openInvoices.length,
-    owedStudioCount: openInvoices.filter((invoice) => invoice.project_id === null).length,
-    owedDueDate: openInvoices[0]?.due_date ?? null,
-    owedDatedCount: openInvoices.filter((invoice) => !!invoice.due_date).length,
+    ...owedFigures(invoices),
     heldCents: heldDraws
       ? [...heldInstruments].reduce((sum, proposalId) => sum + (heldDraws[proposalId] ?? 0), 0)
       : null,
@@ -654,6 +713,7 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     road,
     ledger,
     letterbox,
+    invoices,
     note,
     previously,
     doorstepAsks: input.approvals ?? [],
