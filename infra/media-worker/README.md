@@ -49,10 +49,15 @@ boards also get an uncropped `sheet` / `board` plate) as AVIF q50 + WebP q72.
 | --- | --- | --- |
 | any `sourceUrl` | `https:` only | 400 |
 | any hop | `https:` only; no `user:pass@` | 403 |
-| `maker` (hotlinks; 00843 enqueues library item pictures as `maker`) | any public host; never a literal IPv4/IPv6 address, a single-label name, `localhost`, `*.local`, `*.internal`, `*.workers.dev`, `patina.cloud` or `*.patina.cloud` | 403 |
-| every other kind (`upload`, `concept`, `scan`, `board`, `sheet`, `installed`) | origin equals `SUPABASE_STORAGE_ORIGIN`; refused while that var is empty or not https | 403 |
+| any kind whose initial URL origin equals `SUPABASE_STORAGE_ORIGIN` | private path: every hop must keep that origin | 403 |
+| outside `maker` or `board` hotlink | public path: every hop must be a public host; never a literal IPv4/IPv6 address, a single-label name, `localhost`, `*.local`, `*.internal`, `*.workers.dev`, `patina.cloud` or `*.patina.cloud` | 403 |
+| private-only kinds (`upload`, `concept`, `scan`, `sheet`, `installed`) | origin equals `SUPABASE_STORAGE_ORIGIN`; refused while that var is empty or not https | 403 |
 
-Retailer hotlinks are open by design (no host allowlist).
+Fetch provenance is selected from the initial URL, not its rendition role, and
+kept through redirects. Storage URLs (including signed URLs forwarded by the
+edge) retain the origin pin; the worker never adds credentials. Retailer and
+board-cover hotlinks are open by design (no host allowlist). Source kind still
+drives crop requirements unchanged.
 
 **Deadline.** The Worker gives the container 25 s (the edge abandons the call at
 30 s); past that it answers 504 and aborts the container request, and the container

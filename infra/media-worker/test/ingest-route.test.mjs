@@ -388,7 +388,7 @@ test('a hotlink may be any public https host, never an IP, local name, worker or
 
 test('a private source must come from the Supabase storage origin', async () => {
   const h = harness();
-  for (const sourceKind of ['upload', 'concept', 'scan', 'board', 'sheet', 'installed']) {
+  for (const sourceKind of ['upload', 'concept', 'scan', 'sheet', 'installed']) {
     for (const sourceUrl of [
       'https://cdn.example.com/a.jpg',
       'https://abcdefghijklmnop.supabase.co.evil.example/a.jpg',
@@ -546,4 +546,81 @@ test('a processor that stalls is abandoned at 25 s with a 504 and sees the abort
       mock.timers.reset();
     }
   }
+});
+
+// Public board covers are queued as-is by client-plate-copy, not signed storage URLs.
+const publicBoard = { ...valid, sourceKind: 'board', sourceUrl: 'https://img.test/us49-board-cover.jpg' };
+
+test('a queue-shaped public board cover reaches fetch without credentials and keeps board crops', async () => {
+  const h = harness({
+    processor: (_, job) => {
+      const crops = planCrops({ width: 2400, height: 1800, ground: 'scene', ...job });
+      const outputs = outputJobs(crops).map((o) => ({ key: o.key, contentType: o.contentType, dataB64: btoa(o.key) }));
+      return Response.json(processorResult({ width: 2400, height: 1800, crops, outputs }));
+    },
+  });
+  const res = await h.ingest(publicBoard);
+  assert.equal(res.status, 200);
+  assert.equal(h.fetches[0].url, publicBoard.sourceUrl);
+  assert.deepEqual(h.fetches[0].init.headers, { Accept: 'image/*' });
+  assert.equal(h.fetches[0].init.credentials, undefined);
+  assert.equal(h.fetches[0].init.redirect, 'manual');
+  assert.equal(h.jobs[0].job.sourceKind, 'board');
+  assert.ok((await res.json()).crops.board);
+});
+
+test('storage-origin board and maker sources stay pinned through redirects', async () => {
+  for (const sourceKind of ['board', 'maker']) {
+    const signed = STORAGE + '/storage/v1/object/sign/proposal-mood-boards/p/cover.jpg?token=t';
+    const sameOrigin = STORAGE + '/storage/v1/object/sign/proposal-mood-boards/p/next.jpg?token=t';
+    const h = harness({ source: (_, url) => url === signed ? redirect(sameOrigin) : image() });
+    const body = { ...valid, sourceKind, sourceUrl: signed };
+    assert.equal((await h.ingest(body)).status, 200);
+    assert.deepEqual(h.fetches.map((f) => f.url), [signed, sameOrigin]);
+    const rejected = harness({ source: () => redirect(publicBoard.sourceUrl) });
+    assert.match(await expectError(await rejected.ingest(body), 403), /storage origin/);
+    assert.equal(rejected.fetches.length, 1);
+    assert.equal(rejected.jobs.length, 0);
+  }
+});
+
+test('public board covers refuse HTTP, IP literals, credentials and forbidden hosts before fetch', async () => {
+  const h = harness();
+  await expectError(await h.ingest({ ...publicBoard, sourceUrl: 'http://img.test/cover.jpg' }), 400);
+  for (const sourceUrl of [
+    'https://203.0.113.7/cover.jpg', 'https://2130706433/cover.jpg', 'https://[::1]/cover.jpg',
+    'https://user:pw@img.test/cover.jpg', 'https://localhost/cover.jpg',
+    'https://metadata.internal/cover.jpg', 'https://printer.local/cover.jpg',
+    'https://media.workers.dev/cover.jpg', 'https://client.patina.cloud/cover.jpg',
+  ]) {
+    assert.match(await expectError(await h.ingest({ ...publicBoard, sourceUrl }), 403), /hotlink|credentials/);
+  }
+  assert.equal(h.fetches.length, 0);
+});
+
+test('public board redirects follow validated hops manually without credentials', async () => {
+  const destination = 'https://cdn.example.net/cover.jpg';
+  const h = harness({ source: (_, url) => url === publicBoard.sourceUrl ? redirect(destination) : image() });
+  assert.equal((await h.ingest(publicBoard)).status, 200);
+  assert.deepEqual(h.fetches.map((f) => f.url), [publicBoard.sourceUrl, destination]);
+  for (const { init } of h.fetches) {
+    assert.equal(init.redirect, 'manual');
+    assert.deepEqual(init.headers, { Accept: 'image/*' });
+    assert.equal(init.credentials, undefined);
+  }
+});
+
+test('public board redirect targets are validated before fetch and retain the hop limit', async () => {
+  for (const location of [
+    'http://img.test/cover.jpg', 'https://10.0.0.5/cover.jpg',
+    'https://user:pw@img.test/cover.jpg', 'https://metadata.internal/cover.jpg',
+  ]) {
+    const h = harness({ source: () => redirect(location) });
+    assert.match(await expectError(await h.ingest(publicBoard), 403), /https|IP address|credentials|internal/);
+    assert.equal(h.fetches.length, 1);
+    assert.equal(h.jobs.length, 0);
+  }
+  const looping = harness({ source: () => redirect(publicBoard.sourceUrl) });
+  assert.match(await expectError(await looping.ingest(publicBoard), 502), /more than 3/);
+  assert.equal(looping.fetches.length, 4);
 });

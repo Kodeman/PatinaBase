@@ -23,10 +23,9 @@ export const MAX_REDIRECTS = 3;
 // The edge abandons the ingest call at 30 s.
 export const PROCESSOR_TIMEOUT_MS = 25_000;
 
-// The kinds the edge sends as an outside hotlink; every other kind is a Supabase
-// storage address. 00843 enqueues every non-upload item picture (the library
-// rows) as 'maker'.
-const HOTLINK_KINDS = new Set(['maker']);
+// Only maker pictures and board covers may be outside hotlinks. Their storage
+// URLs still use the private-origin pin, independently of their rendition role.
+const HOTLINK_KINDS = new Set(['maker', 'board']);
 // A hotlink never targets these names or anything under them.
 const REFUSED_DOMAINS = ['localhost', 'local', 'internal', 'workers.dev', 'patina.cloud'];
 // URL parsing normalises every numeric IPv4 form (2130706433, 0x7f.1) to dotted quads.
@@ -202,12 +201,14 @@ function privateRefusal(target: URL, sourceKind: string, storage: string | null)
 }
 
 /** The rule every fetch target (the sourceUrl and each redirect Location) must pass. */
-function originPolicy(sourceKind: string, configuredStorage: string | undefined): OriginPolicy {
+function originPolicy(sourceKind: string, sourceUrl: string, configuredStorage: string | undefined): OriginPolicy {
   const storage = storageOrigin(configuredStorage);
+  // Select provenance once: a storage source cannot escape its pin via redirect.
+  const privateSource = new URL(sourceUrl).origin === storage || !HOTLINK_KINDS.has(sourceKind);
   return (target) => {
     if (target.protocol !== 'https:') return 'source must be an https URL';
     if (target.username || target.password) return 'source URL may not carry credentials';
-    return HOTLINK_KINDS.has(sourceKind) ? hotlinkRefusal(target.hostname) : privateRefusal(target, sourceKind, storage);
+    return privateSource ? privateRefusal(target, sourceKind, storage) : hotlinkRefusal(target.hostname);
   };
 }
 
@@ -470,7 +471,7 @@ async function addCrops(
 }
 
 async function ingest(env: PlatesEnv, deps: PlateIngestDeps, body: IngestBody): Promise<PlateRecord> {
-  const source = await readSource(body.sourceUrl, originPolicy(body.sourceKind, env.SUPABASE_STORAGE_ORIGIN), deps);
+  const source = await readSource(body.sourceUrl, originPolicy(body.sourceKind, body.sourceUrl, env.SUPABASE_STORAGE_ORIGIN), deps);
   const sha256 = await sha256Hex(source.bytes);
   const prefix = `plates/${body.projectId}/${sha256}`;
   const stored = await storedPlate(env, prefix, body);
