@@ -22,7 +22,12 @@ import {
   useStudioIdentity,
   usePresentationIdentity,
 } from "@patina/supabase";
-import type { ProjectApprovalReview, ProjectNote } from "@patina/supabase";
+import type {
+  ClientPendingReview,
+  Invoice,
+  ProjectApprovalReview,
+  ProjectNote,
+} from "@patina/supabase";
 import { getFieldTradeLabel } from "@patina/types";
 
 import { Colophon } from '@/components/threshold/instruments/colophon';
@@ -34,6 +39,7 @@ import { useAuth } from '@/hooks/use-auth';
 import {
   clientCommercialDocumentQueryOptions,
   useClientPlan,
+  useClientProjectReviewBundle,
   useClientSelections,
 } from '@/hooks/use-commercial-client';
 import { useHoldCeiling } from '@/hooks/use-hold-ceiling';
@@ -46,6 +52,7 @@ import {
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { isClientActionableProjectApproval } from '@/lib/client-attention';
 import { commercialSummaryFromProposal, isOriginKind } from '@/lib/commercial-documents';
+import type { ClientProjectReviewBundle } from '@/lib/project-review';
 import { standsUnfiled } from '@/lib/threshold/adopted-house';
 import { thresholdPhases } from '@/lib/threshold/canonical-phases';
 import {
@@ -95,6 +102,7 @@ import {
   SelectionEditionAsk,
   StudioReviewAsk,
   SubmittedReviewsPrevious,
+  useReviewEditionId,
   useSelectionEditionPending,
 } from './review-ask';
 import { RoomBand } from './room-band';
@@ -108,7 +116,7 @@ import {
 import { SinceYesterday } from './since-yesterday';
 import { StoryPole } from './story-pole';
 import { TheNote, type NoteEnclosure } from './the-note';
-import { TheRoad, type ProjectProgressProps } from './the-road';
+import { TheRoad, type ProgressAsk, type ProjectProgressProps } from './the-road';
 import { WallGate } from './wall-gate';
 
 /* ── THE THRESHOLD ──────────────────────────────────────────────────────────
@@ -164,6 +172,73 @@ function words(value: string | null | undefined): string | null {
 function givenName(value: string | null | undefined): string | null {
   const first = value?.trim().split(/\s+/)[0];
   return first ? first : null;
+}
+
+/* ── what is waiting on her (CPUX-06) ─────────────────────────────────────────
+   Each ask Project progress can name, found by the rule its own component draws
+   by and named as the page prints it. Null when the ask is not owed her answer,
+   or when the page has no name to print for it. */
+
+function progressAsk(anchor: string, label: string | null | undefined): ProgressAsk | null {
+  const named = words(label);
+  return named ? { anchor, label: named } : null;
+}
+
+/** A door or wall the page draws, under its own element id. */
+function waitingGate(mark: ThresholdMark | undefined, anchorOf: (mark: ThresholdMark) => string) {
+  return mark ? progressAsk(anchorOf(mark), mark.label) : null;
+}
+
+/** An approval still owed her answer: one waiting on the studio to issue it is not. */
+function waitingApproval(asks: readonly ProjectApprovalReview[]) {
+  const owed = asks.find(isClientActionableProjectApproval);
+  return owed ? progressAsk(`approval-${owed.decisionId}`, owed.artifactTitle) : null;
+}
+
+/** `StudioReviewAsk`'s first card. */
+function waitingReviewRequest(
+  requests: readonly ClientPendingReview[] | undefined,
+  projectId: string,
+  standsUnfiled: boolean,
+) {
+  const request = (requests ?? []).find(
+    (row) =>
+      row.request_status === 'sent' &&
+      (row.project === null ? standsUnfiled : row.project.id === projectId),
+  );
+  if (!request) return null;
+  const studio = request.designer;
+  const designer = words(studio?.full_name) ?? words(studio?.business_name) ?? 'your designer';
+  return progressAsk(`review-${request.id}`, `A few words about working with ${designer}`);
+}
+
+/** `SelectionEditionAsk`, while an item in the published edition is unanswered. */
+function waitingEdition(editionId: string | null, edition: ClientProjectReviewBundle | null | undefined) {
+  if (!editionId || edition?.status !== 'published') return null;
+  const unanswered = edition.items.some(
+    (item) => !item.verdict,
+  );
+  return unanswered
+    ? progressAsk(`review-edition-${edition.editionId}`, 'Share a preference with your studio')
+    : null;
+}
+
+/** `PendingScopeChangeAsk`'s first card: a change the studio sent, not one she asked for. */
+function waitingScopeChange(
+  rows: readonly { id: string; title: string | null; status: string; request_origin: string | null }[] | undefined,
+) {
+  const change = (rows ?? []).find(
+    (row) => row.request_origin !== 'client_request' && (row.status === 'sent' || row.status === 'viewed'),
+  );
+  return change ? progressAsk(`scope-change-${change.id}`, change.title) : null;
+}
+
+/** The studio rows an adopted house owns: every one past draft, void included. */
+function ownedStudioInvoiceIds(adopted: boolean, rows: readonly Invoice[] | undefined): string[] {
+  if (!adopted) return [];
+  return (rows ?? [])
+    .filter((invoice) => invoice.project_id === null && invoice.status !== 'draft')
+    .map((invoice) => invoice.id);
 }
 
 /**
@@ -395,10 +470,11 @@ export function Threshold({
     ...(proposalsQuery.data ?? [])
       .filter((proposal) => commercialSummaryFromProposal(proposal).projectId === projectId)
       .map((proposal) => proposal.id),
-    // The raw project rows too: a voided invoice leaves the list, not the
-    // notices filed about it.
+    // The raw rows, not the payable list: a voided invoice leaves the list,
+    // not the notices filed about it. The house owns its own rows and, once
+    // adopted, every studio row past draft.
     ...(invoicesQuery.data ?? []).map((invoice) => invoice.id),
-    ...invoices.map((invoice) => invoice.id),
+    ...ownedStudioInvoiceIds(adopted, clientInvoicesQuery.data),
     ...projectApprovals.map((approval) => approval.decisionId),
   ]
     .sort()
@@ -421,6 +497,10 @@ export function Threshold({
   const scopeChangesQuery = useScopeChangeRequests(projectId);
   // The ask that arrives from a studio `?review=` link, held the same way.
   const editionAskPending = useSelectionEditionPending(projectId);
+  // …and read again for Project progress, which must know whether that ask is
+  // open or its read failed. The same query key, so still one fetch.
+  const editionId = useReviewEditionId();
+  const editionQuery = useClientProjectReviewBundle(editionId ?? '', projectId);
   // Destructured: `mutate` is stable, the mutation OBJECT is not, and an
   // effect depending on the object would re-run every render for the ref-guard
   // below to swallow.
@@ -1159,34 +1239,43 @@ export function Threshold({
       (model.road.length > 0 || roadOrders.length > 0 || closedOrders.length > 0));
   // CPUX-06 — the Project progress summary stands at #road on every house,
   // read line by line off sources this page already holds.
-  const firstAskLabel =
-    firstGateAnchor === 'door'
-      ? doorMarks.find((mark) => mark.id === firstDoorId)?.label
-      : firstGateAnchor === 'wall'
-        ? wallMarks.find((mark) => mark.id === firstWallId)?.label
-        : doorstepAsks[0]?.artifactTitle;
-  const asksUnread = projectApprovalsError || papersUnread;
+  //
+  // "Waiting on you" names only an ask still owed her answer, by the id it is
+  // drawn under. A door kept on the page as the receipt of her signature, or an
+  // approval waiting on the studio, is owed nothing (R9); the review, edition
+  // and scope-change asks drawn beside the approvals are owed like any other (R1).
+  const waitingAsk = [
+    waitingGate(wallMarks.find((mark) => mark.id === firstWallId), gateAnchor),
+    waitingGate(drawnDoors.find((mark) => openDoorIds.has(mark.id)), gateAnchor),
+    waitingApproval(doorstepAsks),
+    waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks),
+    waitingEdition(editionId, editionQuery.data),
+    waitingScopeChange(scopeChangesQuery.data),
+  ].find(Boolean);
+  // Every read an ask is drawn from. Nothing is said to wait, or not, until
+  // each has answered; one that failed says so, and Retry re-reads it.
+  const unreadAsks = [
+    { enabled: true, query: approvalsQuery },
+    { enabled: true, query: proposalsQuery },
+    { enabled: hasProject, query: selectionsQuery },
+    { enabled: hasUser, query: pendingReviewQuery },
+    { enabled: hasProject, query: scopeChangesQuery },
+    { enabled: !!editionId, query: editionQuery },
+  ].filter((read) => read.enabled && read.query.isError);
   const progress: ProjectProgressProps = {
     now: openChapter.label ?? null,
     nextMilestone: project.nextMilestone ?? null,
     projectedCompletionDate: project.projectedCompletionDate ?? null,
-    waiting: asksUnread
+    waiting: unreadAsks.length > 0
       ? {
           status: 'error',
           onRetry: () => {
-            void approvalsQuery.refetch();
-            void proposalsQuery.refetch();
+            for (const read of unreadAsks) void read.query.refetch();
           },
         }
       : projectApprovalsLoading || proposalsQuery.isPending
         ? { status: 'loading' }
-        : {
-            status: 'ready',
-            value:
-              whatNeedsYou && words(firstAskLabel)
-                ? { anchor: whatNeedsYou, label: words(firstAskLabel)! }
-                : null,
-          },
+        : { status: 'ready', value: waitingAsk ?? null },
     update: notesQuery.isError
       ? { status: 'error', onRetry: () => void notesQuery.refetch() }
       : holds(hasProject, notesQuery.isPending)

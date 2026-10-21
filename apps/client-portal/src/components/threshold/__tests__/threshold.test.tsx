@@ -3,10 +3,11 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 
-import type { Invoice, ProjectApprovalReview, Proposal } from '@patina/supabase';
+import type { InboxNotification, Invoice, ProjectApprovalReview, Proposal } from '@patina/supabase';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 import { adaptClientSelections, adaptProjectCommercialSummary, type ClientSelection } from '@/lib/commercial-documents';
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
+import { toNotices } from '@/lib/threshold/correspondence';
 
 const mockPresentation = jest.fn();
 
@@ -2515,6 +2516,48 @@ describe("Threshold — the studio's own letters", () => {
     expect(sentence).not.toHaveTextContent('studio');
   });
 
+  // R13 — voiding a studio letter takes it off the list, not out of the house:
+  // the notice about it names only the invoice, and is still this house's.
+  describe('a voided studio letter', () => {
+    const VOIDED_NOTICE = {
+      id: 'n-void',
+      user_id: 'client-1',
+      type: 'invoice_voided',
+      channel: 'in_app',
+      status: 'sent',
+      template_id: null,
+      metadata: { invoice_id: 'inv-31' },
+      opened_at: null,
+      clicked_at: null,
+      sent_at: '2026-08-06T10:00:00Z',
+      created_at: '2026-08-06T10:00:00Z',
+    } as unknown as InboxNotification;
+    function houseIdsHanded(): ReadonlySet<string> {
+      const calls = correspondenceMock.mock.calls;
+      return calls[calls.length - 1][1] as ReadonlySet<string>;
+    }
+
+    it('keeps its id in the adopted house, so its notice is kept', () => {
+      clientInvoicesMock.mockReturnValue(settled([{ ...STUDIO_INVOICE, status: 'void' }]));
+
+      renderThreshold();
+
+      expect(document.querySelector('[data-testid="invoice-row"][data-invoice-id="inv-31"]')).toBeNull();
+      expect(houseIdsHanded().has('inv-31')).toBe(true);
+      expect(toNotices([VOIDED_NOTICE], PROJECT_ID, houseIdsHanded()).map((notice) => notice.id)).toEqual([
+        'n-void',
+      ]);
+    });
+
+    it('is not claimed by a house that has not adopted the studio letters', () => {
+      clientInvoicesMock.mockReturnValue(settled([{ ...STUDIO_INVOICE, status: 'void' }]));
+
+      renderThreshold(MILESTONES, [{ id: 'proj-ash', name: 'The Ash cottage' }]);
+
+      expect(houseIdsHanded().has('inv-31')).toBe(false);
+    });
+  });
+
   it('never mistakes a house invoice for a studio one', () => {
     clientInvoicesMock.mockReturnValue(settled([{ ...INVOICE, project_id: 'proj-other' }]));
 
@@ -3598,5 +3641,168 @@ describe('Threshold — Project progress and designer help (CPUX-06)', () => {
     expect(within(help).getByTestId('contact-write')).toHaveAttribute('href', '#write-back');
     expect(container.querySelector('#write-back')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Write to Maren Holt' })).toBeInTheDocument();
+  });
+
+  /* "Waiting on you" names an ask only while one is owed her answer, and says
+     nothing waits only once every read an ask is drawn from has answered. */
+  describe('Waiting on you', () => {
+    /** No open paper, no finished work to review, no approval: every ask is the test's. */
+    function quietHouse() {
+      proposalsMock.mockReturnValue(settled([SIGNED_AGREEMENT]));
+      selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [CREDENZA] }));
+    }
+    function progressRow(container: HTMLElement, testId: string): HTMLElement {
+      return within(container.querySelector<HTMLElement>('#road')!).getByTestId(testId);
+    }
+
+    it('says nothing waits on a quiet house whose every read answered', () => {
+      quietHouse();
+      const { container } = renderThreshold();
+
+      expect(progressRow(container, 'progress-waiting')).toHaveTextContent(
+        'Nothing is waiting on you right now.',
+      );
+    });
+
+    // R1 — the scope change stands on the doorstep, so the summary names it.
+    it('names a studio-sent scope change when no paper or approval asks', () => {
+      quietHouse();
+      scopeChangesMock.mockReturnValue({
+        data: [
+          {
+            id: 'sc-1',
+            title: 'Add a runner to the stair hall',
+            description: 'A runner underfoot in the stair hall.',
+            status: 'sent',
+            request_origin: 'designer_amendment',
+          },
+        ],
+        isLoading: false,
+        isPending: false,
+        isError: false,
+      });
+      const { container } = renderThreshold();
+      const waiting = progressRow(container, 'progress-waiting');
+
+      expect(waiting).not.toHaveTextContent('Nothing is waiting on you');
+      expect(
+        within(waiting).getByRole('link', { name: 'Add a runner to the stair hall' }),
+      ).toHaveAttribute('href', '#scope-change-sc-1');
+      expect(container.querySelector('#scope-change-sc-1')).not.toBeNull();
+    });
+
+    it('names a studio review request and an open selection review by their own ids', () => {
+      quietHouse();
+      pendingReviewMock.mockReturnValue({
+        data: [
+          {
+            id: 'rev-1',
+            request_status: 'sent',
+            project: { id: PROJECT_ID, name: 'Vale Residence' },
+            designer: { full_name: 'Nora Quist', business_name: null, avatar_url: null },
+            custom_message: null,
+          },
+        ],
+        isLoading: false,
+        isPending: false,
+        isError: false,
+      });
+      const first = renderThreshold();
+
+      expect(
+        within(progressRow(first.container, 'progress-waiting')).getByRole('link', {
+          name: 'A few words about working with Nora Quist',
+        }),
+      ).toHaveAttribute('href', '#review-rev-1');
+      first.unmount();
+
+      pendingReviewMock.mockReturnValue({ data: [], isLoading: false, isPending: false });
+      window.history.pushState({}, '', `/projects/${PROJECT_ID}?review=ed-1`);
+      reviewBundleMock.mockReturnValue({
+        data: {
+          projectId: PROJECT_ID,
+          editionId: 'ed-1',
+          publishedAt: null,
+          status: 'published',
+          items: [{ id: 'item-1', name: 'Wingback chair', roomName: 'Library', imageUrl: null, clientPriceCents: null, currency: 'USD', verdict: null, comment: null, mediaAssetIds: [] }],
+        },
+        isLoading: false,
+        isPending: false,
+        isError: false,
+      });
+      const second = renderThreshold();
+      window.history.pushState({}, '', `/projects/${PROJECT_ID}`);
+
+      expect(
+        within(progressRow(second.container, 'progress-waiting')).getByRole('link', {
+          name: 'Share a preference with your studio',
+        }),
+      ).toHaveAttribute('href', '#review-edition-ed-1');
+      expect(second.container.querySelector('#review-edition-ed-1')).not.toBeNull();
+    });
+
+    // R1 — a read that failed is not an all-clear.
+    it('says it could not check when the review requests did not read, and Retry re-reads them', () => {
+      quietHouse();
+      const refetch = jest.fn();
+      pendingReviewMock.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isPending: false,
+        isError: true,
+        refetch,
+      });
+      const { container } = renderThreshold();
+      const waiting = progressRow(container, 'progress-waiting');
+
+      expect(within(waiting).getByTestId('progress-waiting-error')).toHaveTextContent(
+        'We couldn’t check what is waiting on you.',
+      );
+      expect(waiting).not.toHaveTextContent('Nothing is waiting on you');
+      fireEvent.click(within(waiting).getByRole('button', { name: 'Retry' }));
+      expect(refetch).toHaveBeenCalled();
+    });
+
+    // R9 — an approval she has already reviewed waits on the studio, not on her.
+    it('names an open approval, and not one waiting on the studio to issue it', () => {
+      quietHouse();
+      const open = renderWithApprovals([PHASE_APPROVAL]);
+
+      expect(
+        within(progressRow(open.container, 'progress-waiting')).getByRole('link', {
+          name: 'Library elevations',
+        }),
+      ).toHaveAttribute('href', '#approval-dec-1');
+      open.unmount();
+
+      const issuing = renderWithApprovals([
+        {
+          ...PHASE_APPROVAL,
+          lifecycleStatus: 'draft',
+          completedReviewCount: 1,
+          requiredReviewCount: 1,
+        } as ProjectApprovalReview,
+      ]);
+
+      expect(screen.getByTestId('approval-awaiting-studio-issue')).toBeInTheDocument();
+      expect(progressRow(issuing.container, 'progress-waiting')).toHaveTextContent(
+        'Nothing is waiting on you right now.',
+      );
+    });
+
+    // R9 — the door stays as the receipt of her signature; it asks for nothing.
+    it('does not count a signed paper kept at its door as waiting on her', () => {
+      proposalsMock.mockReturnValue(
+        settled([{ ...SIGNED_AGREEMENT, commercial_state: 'client_signed' } as unknown as Proposal]),
+      );
+      selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [CREDENZA] }));
+      const { container } = renderThreshold();
+
+      expect(container.querySelector('#door')).not.toBeNull();
+      const waiting = progressRow(container, 'progress-waiting');
+      expect(waiting).toHaveTextContent('Nothing is waiting on you right now.');
+      expect(within(waiting).queryByRole('link')).toBeNull();
+      expect(progressRow(container, 'progress-next')).not.toHaveTextContent('Your response to');
+    });
   });
 });
