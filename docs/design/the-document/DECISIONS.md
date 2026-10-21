@@ -10780,6 +10780,8 @@ That clause is retired. A tertiary act carries a resting rule **at all times**, 
 
 Carried with the tier, all from PP-3: one consequence sentence stands above every terminal act in every state (R141); `aria-disabled` with a named reason, never `disabled` — **IX02** sampled the wall gate's accept act at full primary ink (44, 41, 38) while `wall-gate.tsx:279` intends it disabled, which is a control lying about whether it can be pressed; the press-and-hold announced to pointer users, not only to the keyboard; and the act replaced by its dated record once taken (R51's discipline — the surface answers by being true).
 
+*Amended by R202.*
+
 *Entries add: R139 · last id = R139*
 
 ### R140 · R126 amended — the type contract, plate sizes, and the owed figure outranks the agreed figure — 2026-09-08
@@ -10793,6 +10795,8 @@ Carried with the tier, all from PP-3: one consequence sentence stands above ever
 **Three. The owed figure outranks the agreed figure.** On the house page the figure a homeowner came to read is what she owes now, not what the project totals. The owed amount takes the block's one announced step, Playfair 26 (`.t-d2`); the agreed total sits under it in `.t-money`. The reconciling sentence between them is `.t-body` with its figures in `.t-money` spans, so the arithmetic reads as a sentence and not as a second table.
 
 **What this amendment does NOT touch, stated so nobody reopens it.** R126's **colour-at-three-sites** clause (`:9992`) stands word for word: the filled stamps at ~1.18:1 with a charcoal word, the six saturated stage tabs printing as a small plate on a roster head, and 48px product crops on catalog-linked lines — three sites and nowhere else. R126's **elevation clause** (`:10023-10036`) stands entirely: one `--elevation-sheet` token at exactly three code sites, the CSS-level `lib/document/__tests__/shadow-gate.test.ts` with its frozen per-stylesheet inventory, and the `no-restricted-syntax` D4 rules in `eslint.config.mjs`. **No depth is adopted anywhere in this program** — PP-6 says so in as many words, and the shadow gate stays. R126's carve-out for THE STUDIO contents block on the desk (*"the currently deployed studio at the bottom of the desk looks great, dont change the typography"*) also survives: the sheet is applied surface by surface as each is touched, and that block is not being touched.
+
+*Amended by R202.*
 
 *Entries add: R140 · last id = R140*
 
@@ -10820,7 +10824,23 @@ apps/client-portal/src/components/account/AvatarUploadField.tsx:130:            
 
 Two of those four lines are not consumers: `open-chapter.test.tsx:242` asserts the token's **absence** from rendered markup, and `AvatarUploadField.tsx:130` is the prose comment recording R135's own removal. The declaration at `globals.css:58` therefore has **exactly one consumer left in the app** — `.da-danger:hover { color: var(--color-error) }` at `:373-375`. The condition this ruling set is met: **the token is removed at `:58`, and the `.da-danger:hover` rule that is its only reader is removed with it** rather than left pointing at a name that no longer resolves. A danger act rests and hovers in the same scored grammar as every other act (I107, as amended by R139); a refusal is body ink under a hairline. `--color-terracotta-ink` is not needed and is not adopted here. The CSS edit belongs to the house-page lane; this entry only rules it.
 
+*Amended by R202.*
+
 *Entries add: R141 · last id = R141*
+
+### R202 · Green direction (US-45, 2026-10-20, Kody)
+
+The founders' amendments A1–A7 in `docs/specs/_active/client-portal-homeowner-usability.md` §3a amend R139, R140/R126 and R141 on client pages, and R139 on the designer portal, as follows.
+
+**Terminal acts.** The terminal tier is forest `#3E5145` with `#FFFDF9` ink on both client and designer surfaces. R139's “never olive” restriction does not apply to forest. Charcoal remains ink; other terminal-tier rules, including the amount in the label and its use only for money or signed acts, stand.
+
+**Client-page colour sites.** R140/R126's three named colour sites remain, and forest is added as a fourth: the action and record colour on client pages. Forest is also the client-page colour for links, italic party names, focus, and selected states; clay leaves client surfaces. Designer navigation and non-terminal tiers are unchanged.
+
+**Consequence note.** On client pages, the consequence sentence sits in the pale green note `#F0F3ED` above the terminal act. The 900 ms hold remains on every binding act. The client-page cards, recorded-response and unavailable treatments follow A3 in §3a.
+
+**Canvas rulings.** The founders' F1–F8 questions are resolved in the client design brief: literal section heads, the specified type sizes and order, the studio-only purpose sentence, deferred click-to-confirm, forest in place of clay, framed cards, and the existing hold.
+
+*Entries add: R202 · last id = R202*
 
 ### R142 · The client imagery doctrine — the source hierarchy, and a labeled concept render may lead a room — 2026-09-08
 
