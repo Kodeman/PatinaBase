@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 
 import type { Invoice, Proposal } from "@patina/supabase";
 
@@ -63,6 +63,8 @@ jest.mock("../door-gate", () => ({
 
 import { useClientInvoices, useStudioIdentity } from "@patina/supabase";
 import { useClientProposals } from "@/hooks/use-proposals-client";
+
+import type { InvoiceProjection, InvoiceServerHold } from "@/lib/threshold/invoice-rollup";
 
 import { LetterboxDoor } from "../letterbox-door";
 
@@ -310,5 +312,84 @@ describe("LetterboxDoor — the studio-only arrival", () => {
 
     expect(screen.getByTestId("projects-empty-state")).toBeInTheDocument();
     expect(screen.queryByTestId("landmark-ledger")).not.toBeInTheDocument();
+  });
+});
+
+describe("LetterboxDoor — a held invoice yields only to a read newer than the hold (SQ-1546 F1)", () => {
+  const paid = studioInvoice("014", {
+    status: "paid",
+    amount_paid_cents: 60_000,
+    paid_at: "2026-10-20T08:00:00Z",
+    payments: [
+      {
+        id: "pay-014",
+        invoice_id: "014",
+        amount_cents: 60_000,
+        status: "succeeded",
+        stripe_payment_intent_id: "pi_014",
+      },
+    ],
+  } as Partial<Invoice>);
+  const refunded = studioInvoice("014", {
+    payments: [
+      {
+        id: "pay-014",
+        invoice_id: "014",
+        amount_cents: 60_000,
+        status: "refunded",
+        stripe_payment_intent_id: "pi_014",
+      },
+    ],
+  } as Partial<Invoice>);
+  const readAt = (rows: Invoice[], dataUpdatedAt: number) => ({ ...settled(rows), dataUpdatedAt });
+  const last = () => letterboxProps[letterboxProps.length - 1] as {
+    projection: InvoiceProjection;
+    onHold: (invoiceId: string, hold: InvoiceServerHold) => void;
+  };
+  const groupOf = (id: string) => {
+    const { projection } = last();
+    return (["review", "processing", "payable", "history"] as const).find((group) =>
+      projection[group].some((row) => row.invoice.id === id),
+    );
+  };
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it("keeps a late processing hold over the cached paid read, and retires it on a later paid read", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const door = () => (
+      <QueryClientProvider client={client}>
+        <LetterboxDoor />
+      </QueryClientProvider>
+    );
+    // The cached read: paid, its rows from t=500.
+    invoicesMock.mockReturnValue(readAt([paid], 500));
+    const { rerender } = render(door());
+    expect(groupOf("014")).toBe("history");
+
+    // A late checkout answer lands at t=1000, after that read.
+    jest.spyOn(Date, "now").mockReturnValue(1_000);
+    act(() => last().onHold("014", "payment_processing"));
+    expect(groupOf("014")).toBe("processing");
+
+    // The same cached read, re-rendered while a refetch is out, still proves nothing.
+    rerender(door());
+    expect(groupOf("014")).toBe("processing");
+
+    // A refund the cached read never saw: the kept hold still stands in front of payment.
+    invoicesMock.mockReturnValue(readAt([refunded], 500));
+    rerender(door());
+    expect(groupOf("014")).toBe("processing");
+
+    // A paid read that arrived after the hold proves it settled and retires it…
+    invoicesMock.mockReturnValue(readAt([paid], 2_000));
+    rerender(door());
+    expect(groupOf("014")).toBe("history");
+
+    // …so a later refund reopen is judged on its own read: payable, nothing in flight.
+    invoicesMock.mockReturnValue(readAt([refunded], 3_000));
+    rerender(door());
+    expect(groupOf("014")).toBe("payable");
+    expect(last().projection.payable[0].paymentInFlight).toBe(false);
   });
 });

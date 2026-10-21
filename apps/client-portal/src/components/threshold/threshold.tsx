@@ -64,7 +64,13 @@ import {
   type ThresholdReceipt,
   type ThresholdRoom,
 } from '@/lib/threshold/derive';
-import { houseInvoices, retireSettledHolds, type InvoiceServerHold } from '@/lib/threshold/invoice-rollup';
+import {
+  houseInvoices,
+  retireSettledHolds,
+  withHold,
+  type InvoiceHolds,
+  type InvoiceServerHold,
+} from '@/lib/threshold/invoice-rollup';
 import { planKeyGeometry } from '@/lib/threshold/plan-key';
 import { toClosedOrders, toRoadOrders } from '@/lib/threshold/road-orders';
 import {
@@ -425,11 +431,13 @@ export function Threshold({
           data: invoicesQuery.data,
           isPending: invoicesQuery.isPending,
           isError: invoicesQuery.isError,
+          dataUpdatedAt: invoicesQuery.dataUpdatedAt,
         },
         client: {
           data: clientInvoicesQuery.data,
           isPending: clientInvoicesQuery.isPending,
           isError: clientInvoicesQuery.isError,
+          dataUpdatedAt: clientInvoicesQuery.dataUpdatedAt,
         },
       }),
     [
@@ -438,18 +446,21 @@ export function Threshold({
       invoicesQuery.data,
       invoicesQuery.isPending,
       invoicesQuery.isError,
+      invoicesQuery.dataUpdatedAt,
       clientInvoicesQuery.data,
       clientInvoicesQuery.isPending,
       clientInvoicesQuery.isError,
+      clientInvoicesQuery.dataUpdatedAt,
     ],
   );
   const invoices = house.invoices;
   // Holds the checkout boundary returned this visit. Only an authoritative
-  // resolution releases one, so a refetch never clears an entry.
-  const [invoiceHolds, setInvoiceHolds] = useState<Record<string, InvoiceServerHold>>({});
+  // resolution releases one, so a refetch never clears an entry. Each is
+  // stamped as it arrives: only a read newer than the hold can retire it.
+  const [invoiceHolds, setInvoiceHolds] = useState<InvoiceHolds>({});
   const onInvoiceHold = useCallback(
     (invoiceId: string, hold: InvoiceServerHold) =>
-      setInvoiceHolds((held) => (held[invoiceId] === hold ? held : { ...held, [invoiceId]: hold })),
+      setInvoiceHolds((held) => withHold(held, invoiceId, hold, Date.now())),
     [],
   );
   const clientInvoicesRefetch = clientInvoicesQuery.refetch;
@@ -820,6 +831,7 @@ export function Threshold({
     proposals: { signatureGates, instrumentReceipts },
     invoices,
     invoiceRead: house.read,
+    invoiceReadAt: house.readAt,
     invoiceHolds,
     approvals,
     notes: (notesQuery.data ?? []).map(toThresholdNote),

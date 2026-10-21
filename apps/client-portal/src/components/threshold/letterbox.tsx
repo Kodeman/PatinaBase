@@ -21,6 +21,8 @@ import {
   type InvoiceFiguresWithheld,
   type InvoiceProjection,
   type InvoiceRow,
+  withHold,
+  type InvoiceHolds,
   type InvoiceServerHold,
 } from '@/lib/threshold/invoice-rollup';
 
@@ -222,7 +224,7 @@ export function Letterbox({
 }: LetterboxProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [holds, setHolds] = useState<Record<string, InvoiceServerHold>>({});
+  const [holds, setHolds] = useState<InvoiceHolds>({});
   const [checksExpected, setChecksExpected] = useState<Record<string, true>>({});
   const [announcement, setAnnouncement] = useState('');
   const pendingFocus = useRef<PendingFocus | null>(null);
@@ -241,6 +243,10 @@ export function Letterbox({
   // Adjusted in render: the same holds come back when nothing retires.
   const standingHolds = retireSettledHolds(holds, projection);
   if (standingHolds !== holds) setHolds(standingHolds);
+  const holdCodes = useMemo(
+    () => Object.fromEntries(Object.entries(holds).map(([id, { hold }]) => [id, hold])),
+    [holds],
+  );
   const rows = useMemo(() => [...projection.outstanding, ...projection.history], [projection]);
 
   // The return from the till. A return that names an order belongs to the road,
@@ -354,9 +360,7 @@ export function Letterbox({
     (invoiceId: string, hold: InvoiceServerHold) => {
       // The row may move to another group under the same id; focus follows it.
       pendingFocus.current = { id: invoiceId, target: 'heading' };
-      setHolds(
-        (was) => ({ ...was, [invoiceId]: hold }),
-      );
+      setHolds((was) => withHold(was, invoiceId, hold, Date.now()));
       onHold?.(invoiceId, hold);
     },
     [onHold],
@@ -382,7 +386,7 @@ export function Letterbox({
     openId,
     onToggle: handleToggle,
     onClose: handleClose,
-    holds,
+    holds: holdCodes,
     onHold: handleHold,
     checksExpected,
     onCheckExpected: (invoiceId) =>

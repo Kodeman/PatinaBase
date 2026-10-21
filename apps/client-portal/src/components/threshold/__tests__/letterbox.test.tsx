@@ -1,10 +1,16 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Invoice } from '@patina/supabase';
 
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
-import { invoiceProjection, type InvoiceReadState } from '@/lib/threshold/invoice-rollup';
+import {
+  invoiceProjection,
+  retireSettledHolds,
+  withHold,
+  type InvoiceHolds,
+  type InvoiceReadState,
+} from '@/lib/threshold/invoice-rollup';
 
 // ── Boundaries ──────────────────────────────────────────────────────────────
 // Opening a payable row lays in the payment sheet, which owns the pay path's
@@ -504,10 +510,28 @@ describe('Letterbox — every invoice in plain view (US-45 CPUX-02, CPUX-03)', (
     expect(checkout).toHaveBeenCalledTimes(1);
   });
 
+  /** The owners' hold contract (threshold.tsx, letterbox-door.tsx): stamp each hold, retire on a newer read. */
+  function HoldingOwner({ invoices, readAt }: { invoices: Invoice[]; readAt: number }) {
+    const [holds, setHolds] = useState<InvoiceHolds>({});
+    const projection = invoiceProjection(invoices, { today: TODAY, read: 'complete', readAt, serverHolds: holds });
+    const standing = retireSettledHolds(holds, projection);
+    if (standing !== holds) setHolds(standing);
+    return (
+      <Letterbox
+        projection={projection}
+        today={TODAY}
+        onHold={(id, hold) => setHolds((was) => withHold(was, id, hold, Date.now()))}
+      />
+    );
+  }
+
   it('R8a · drops a processing hold once a complete read proves it paid, so a same-visit refund reopen is payable', async () => {
     checkout.mockRejectedValue(new InvoiceCheckoutError('payment_processing', 'clearing'));
     const open = invoiceRow({ id: 'inv-r', invoice_number: 'INV-2026-030', total_cents: 20_000 });
-    const { rerender } = render(<Letterbox invoices={[open]} today={TODAY} />);
+    // Rows that arrived before the hold, and rows that arrived after it.
+    const before = Date.now();
+    const after = before + 60_000;
+    const { rerender } = render(<HoldingOwner invoices={[open]} readAt={before} />);
 
     await userEvent.click(viewInvoice('inv-r'));
     await act(async () => {
@@ -516,7 +540,7 @@ describe('Letterbox — every invoice in plain view (US-45 CPUX-02, CPUX-03)', (
     expect(rowIds('invoices-in-progress')).toEqual(['inv-r']);
 
     // The open read stands behind the hold until a complete read proves it settled.
-    rerender(<Letterbox invoices={[{ ...open }]} today={TODAY} />);
+    rerender(<HoldingOwner invoices={[{ ...open }]} readAt={after} />);
     expect(rowIds('invoices-in-progress')).toEqual(['inv-r']);
 
     const paidPayment = {
@@ -526,18 +550,18 @@ describe('Letterbox — every invoice in plain view (US-45 CPUX-02, CPUX-03)', (
       status: 'succeeded',
       stripe_payment_intent_id: 'pi_r',
     } as NonNullable<Invoice['payments']>[number];
-    rerender(
-      <Letterbox
-        invoices={[{ ...open, status: 'paid', amount_paid_cents: 20_000, paid_at: '2026-08-04T10:00:00Z', payments: [paidPayment] }]}
-        today={TODAY}
-      />,
-    );
+    const paidRow = { ...open, status: 'paid', amount_paid_cents: 20_000, paid_at: '2026-08-04T10:00:00Z', payments: [paidPayment] } as Invoice;
+    // SQ-1546 F1: a cached paid read from before the hold proves nothing about it.
+    rerender(<HoldingOwner invoices={[paidRow]} readAt={before} />);
+    expect(rowIds('invoices-in-progress')).toEqual(['inv-r']);
+
+    rerender(<HoldingOwner invoices={[paidRow]} readAt={after} />);
     expect(screen.queryByTestId('invoices-in-progress')).not.toBeInTheDocument();
     expect(screen.getByTestId('payment-history')).toBeInTheDocument();
 
     // A full refund reopens it in the same visit: judged on its own read, it can be paid again.
     rerender(
-      <Letterbox invoices={[{ ...open, payments: [{ ...paidPayment, status: 'refunded' }] }]} today={TODAY} />,
+      <HoldingOwner invoices={[{ ...open, payments: [{ ...paidPayment, status: 'refunded' }] }]} readAt={after + 1} />,
     );
     expect(screen.queryByTestId('invoices-in-progress')).not.toBeInTheDocument();
     expect(rowIds('invoices-to-pay')).toEqual(['inv-r']);

@@ -15,7 +15,7 @@ import {
   visibleInvoices,
   type InvoiceReadSource,
   type InvoiceReadState,
-  type InvoiceServerHold,
+  type InvoiceHolds,
 } from '../invoice-rollup';
 
 const TODAY = new Date(2026, 9, 20, 9, 0);
@@ -292,6 +292,34 @@ describe('A03 — each invoice once, studio invoices only in the adopted house',
     expect(house.invoices.map((invoice) => invoice.id)).toEqual(['inv-studio']);
   });
 
+  it('dates the house by the oldest required read, and by nothing while one has no rows', () => {
+    expect(
+      houseInvoices({
+        projectId: 'proj-a',
+        adopted: true,
+        project: project({ data: [own], dataUpdatedAt: 3_000 }),
+        client: project({ data: [studio], dataUpdatedAt: 2_000 }),
+      }).readAt,
+    ).toBe(2_000);
+    // A read this house does not need does not date it.
+    expect(
+      houseInvoices({
+        projectId: 'proj-b',
+        project: project({ data: [own], dataUpdatedAt: 3_000 }),
+        client: project({ data: [studio], dataUpdatedAt: 1 }),
+      }).readAt,
+    ).toBe(3_000);
+    expect(
+      houseInvoices({
+        projectId: 'proj-a',
+        adopted: true,
+        project: project({ data: [own], dataUpdatedAt: 3_000 }),
+        client: project({ data: undefined, isError: true }),
+      }).readAt,
+    ).toBeNull();
+    expect(houseInvoices({ projectId: null, client: project({ data: [studio] }) }).readAt).toBeNull();
+  });
+
   it('a required read that was never handed in is still loading', () => {
     expect(houseInvoices({ projectId: 'proj-a', adopted: true, project: project() }).read).toBe(
       'loading',
@@ -390,8 +418,8 @@ describe('invoiceProjection — A05 one group per invoice, by evidence', () => {
       today: TODAY,
       read: 'complete',
       serverHolds: {
-        'inv-claim': 'payment_reconciliation_required',
-        'inv-busy': 'payment_processing',
+        'inv-claim': { hold: 'payment_reconciliation_required', heldAt: 1 },
+        'inv-busy': { hold: 'payment_processing', heldAt: 1 },
       },
     });
     expect(ids(held.review)).toEqual(['inv-claim']);
@@ -401,7 +429,10 @@ describe('invoiceProjection — A05 one group per invoice, by evidence', () => {
   });
 
   describe('R8 — a processing hold yields to proven settlement, never to an inconclusive read', () => {
-    const hold = { 'inv-settled': 'payment_processing' } as const;
+    // When the hold was recorded, and a read whose rows arrived after it.
+    const HELD_AT = 1_000;
+    const FRESH = 2_000;
+    const hold: InvoiceHolds = { 'inv-settled': { hold: 'payment_processing', heldAt: HELD_AT } };
     const settledRow = (overrides: Partial<Invoice> = {}) =>
       makeInvoice({
         id: 'inv-settled',
@@ -413,7 +444,7 @@ describe('invoiceProjection — A05 one group per invoice, by evidence', () => {
         ...overrides,
       });
     const projectWith = (invoice: Invoice, read: InvoiceReadState) =>
-      invoiceProjection([invoice], { today: TODAY, read, serverHolds: hold });
+      invoiceProjection([invoice], { today: TODAY, read, readAt: FRESH, serverHolds: hold });
 
     it('a hold plus a complete paid read is history with a receipt, not processing', () => {
       const settled = projectWith(settledRow(), 'complete');
@@ -447,21 +478,22 @@ describe('invoiceProjection — A05 one group per invoice, by evidence', () => {
     });
 
     it('never releases a reconciliation hold on settlement', () => {
+      const kept: InvoiceHolds = { 'inv-settled': { hold: 'payment_reconciliation_required', heldAt: HELD_AT } };
       const held = invoiceProjection([settledRow()], {
         today: TODAY,
         read: 'complete',
-        serverHolds: { 'inv-settled': 'payment_reconciliation_required' },
+        readAt: FRESH,
+        serverHolds: kept,
       });
       expect(ids(held.review)).toEqual(['inv-settled']);
       expect(held.review[0].reviewReasons).toEqual(['reconciliation_hold']);
-      const kept = { 'inv-settled': 'payment_reconciliation_required' } as const;
       expect(retireSettledHolds(kept, held)).toBe(kept);
     });
 
     it('R8a — hold, then paid, then a full refund in the same visit: the reopened invoice is payable', () => {
-      let holds: Record<string, InvoiceServerHold> = { ...hold };
+      let holds: InvoiceHolds = { ...hold };
       const read = (invoice: Invoice, state: InvoiceReadState = 'complete') => {
-        const projection = invoiceProjection([invoice], { today: TODAY, read: state, serverHolds: holds });
+        const projection = invoiceProjection([invoice], { today: TODAY, read: state, readAt: FRESH, serverHolds: holds });
         holds = retireSettledHolds(holds, projection);
         return projection;
       };
@@ -494,12 +526,56 @@ describe('invoiceProjection — A05 one group per invoice, by evidence', () => {
       expect(reopened.counts).toEqual({ review: 0, processing: 0, payable: 1, history: 0 });
 
       // The retained hold is what had kept it unpayable.
-      const unretired = invoiceProjection([refunded], { today: TODAY, read: 'complete', serverHolds: hold });
+      const unretired = invoiceProjection([refunded], { today: TODAY, read: 'complete', readAt: FRESH, serverHolds: hold });
       expect(unretired.payable).toEqual([]);
     });
 
+    it('SQ-1546 F1 — a hold recorded after a cached paid read is not retired by that read, and is by a later paid read', () => {
+      const CACHED = 500;
+      let holds: InvoiceHolds = {};
+      const read = (invoice: Invoice, readAt: number | null) => {
+        const projection = invoiceProjection([invoice], { today: TODAY, read: 'complete', readAt, serverHolds: holds });
+        holds = retireSettledHolds(holds, projection);
+        return projection;
+      };
+      const refunded = settledRow({
+        status: 'sent',
+        amount_paid_cents: 0,
+        paid_at: null,
+        payments: [payment({ id: 'pay-done', status: 'refunded', stripe_payment_intent_id: 'pi_done' })],
+      });
+
+      // The cached paid read (rows from CACHED) stands while a late checkout answer lands at HELD_AT.
+      expect(ids(read(settledRow(), CACHED).history)).toEqual(['inv-settled']);
+      holds = { ...hold };
+
+      // That cached read is older than the hold: it proves nothing, so the hold stands — same object back.
+      const before = holds;
+      const cached = read(settledRow(), CACHED);
+      expect(holds).toBe(before);
+      expect(ids(cached.processing)).toEqual(['inv-settled']);
+      // Nor does a read with no arrival time, or one that arrived in the same instant.
+      expect(ids(read(settledRow(), null).processing)).toEqual(['inv-settled']);
+      expect(ids(read(settledRow(), HELD_AT).processing)).toEqual(['inv-settled']);
+      expect(holds).toBe(before);
+
+      // The refund the stale read could not see: the hold still keeps it unpayable.
+      expect(ids(read(refunded, CACHED).processing)).toEqual(['inv-settled']);
+      expect(holds).toBe(before);
+
+      // A paid read that arrived after the hold proves it settled and retires it.
+      const paid = read(settledRow(), FRESH);
+      expect(ids(paid.history)).toEqual(['inv-settled']);
+      expect(holds).toEqual({});
+    });
+
+    it('carries the read arrival onto the projection; a missing one is null', () => {
+      expect(projectWith(settledRow(), 'complete').readAt).toBe(FRESH);
+      expect(invoiceProjection([], { today: TODAY, read: 'complete' }).readAt).toBeNull();
+    });
+
     it('a pending PaymentIntent still outranks a retired hold on the reopened read', () => {
-      const paid = invoiceProjection([settledRow()], { today: TODAY, read: 'complete', serverHolds: hold });
+      const paid = invoiceProjection([settledRow()], { today: TODAY, read: 'complete', readAt: FRESH, serverHolds: hold });
       const holds = retireSettledHolds({ ...hold }, paid);
       expect(holds).toEqual({});
       const inFlight = invoiceProjection(
@@ -510,7 +586,7 @@ describe('invoiceProjection — A05 one group per invoice, by evidence', () => {
             payments: [payment({ id: 'pay-next', stripe_payment_intent_id: 'pi_next' })],
           }),
         ],
-        { today: TODAY, read: 'complete', serverHolds: holds },
+        { today: TODAY, read: 'complete', readAt: FRESH, serverHolds: holds },
       );
       expect(ids(inFlight.processing)).toEqual(['inv-settled']);
       expect(inFlight.payable).toEqual([]);

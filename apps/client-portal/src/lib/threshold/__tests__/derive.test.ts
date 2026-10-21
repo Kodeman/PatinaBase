@@ -1181,7 +1181,7 @@ describe('deriveThreshold — the ledger and letterbox read the one invoice proj
     const model = deriveThreshold(
       input({
         invoices: [payable],
-        invoiceHolds: { 'inv-pay': 'payment_reconciliation_required' },
+        invoiceHolds: { 'inv-pay': { hold: 'payment_reconciliation_required', heldAt: 1 } },
       }),
     );
     expect(model.letterbox).toBeNull();

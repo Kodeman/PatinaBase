@@ -29,7 +29,7 @@ import {
   type InvoiceProjection,
   type InvoiceReadState,
   type InvoiceRow,
-  type InvoiceServerHold,
+  type InvoiceHolds,
 } from '@/lib/threshold/invoice-rollup';
 import { journeyStageIndexForStatus } from '@/components/commercial/journey-stepper';
 import type { ClientProjectSelections, ClientSelection } from '@/lib/commercial-documents';
@@ -132,8 +132,10 @@ export interface ThresholdInput {
    * state must pass it, or a failed read reads as nothing owed.
    */
   invoiceRead?: InvoiceReadState;
+  /** When those rows arrived — `houseInvoices(...).readAt`. Only a read newer than a hold can prove it settled. */
+  invoiceReadAt?: number | null;
   /** Holds the checkout boundary returned, by invoice id. */
-  invoiceHolds?: Readonly<Record<string, InvoiceServerHold>> | null;
+  invoiceHolds?: InvoiceHolds | null;
   approvals: ThresholdApproval[];
   notes: ThresholdNote[];
   /** When the client last read this page, from `mark_project_read`. */
@@ -374,6 +376,7 @@ function invoicesOf(input: ThresholdInput): InvoiceProjection {
   return invoiceProjection(input.invoices ?? [], {
     today: input.today,
     read: input.invoiceRead ?? 'complete',
+    readAt: input.invoiceReadAt ?? null,
     serverHolds: input.invoiceHolds ?? undefined,
   });
 }
