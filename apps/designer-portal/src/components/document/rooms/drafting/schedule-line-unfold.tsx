@@ -804,7 +804,7 @@ function LineFeedbackBlock({
     <div className="mb-3 rounded-[4px] border border-[var(--color-pearl)] bg-[rgba(196,165,123,0.04)] px-3 py-2.5">
       <div className="mb-1.5 flex items-center gap-2">
         <CellLabel>Client feedback</CellLabel>
-        {spec && <StatusChip label={spec.label} color={spec.color} />}
+        {spec && <StatusChip {...spec} />}
       </div>
 
       {feedback.body && (

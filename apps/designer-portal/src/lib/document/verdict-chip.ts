@@ -6,7 +6,7 @@
  * and the line unfold read the same mapping. Null when there is no verdict — the
  * caller renders no chip (a blank line is the calm default).
  *
- *   approved → "Approved"     · calm green (--color-sage)
+ *   approved → "Approved"     · green record (--color-forest)
  *   rejected → "Flagged"      · clay (--color-clay) — the client raised a concern
  *   rejected + resolved → "Flag cleared" · muted (the designer handled it)
  *   comment  → "Noted"        · muted (a note, not a gate)
@@ -18,6 +18,7 @@ export interface VerdictChipSpec {
   label: string;
   /** CSS var string for the StatusChip dot. */
   color: string;
+  tone?: 'record';
 }
 
 export function verdictChipSpec(
@@ -26,7 +27,7 @@ export function verdictChipSpec(
 ): VerdictChipSpec | null {
   switch (verdict) {
     case 'approved':
-      return { label: 'Approved', color: 'var(--color-sage)' };
+      return { label: 'Approved', color: 'var(--color-forest)', tone: 'record' };
     case 'rejected':
       return resolvedAt
         ? { label: 'Flag cleared', color: 'var(--text-muted)' }

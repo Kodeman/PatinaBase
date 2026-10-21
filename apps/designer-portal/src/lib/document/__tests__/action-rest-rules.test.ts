@@ -175,7 +175,7 @@ describe("PP-3 · the rest rule is unconditional", () => {
 
     const box = ALL_RULES.find((rule) => rule.selector === ".da-terminal");
     expect(box).toBeDefined();
-    expect(box!.body).toMatch(/background-color:\s*var\(--color-charcoal\)/);
+    expect(box!.body).toMatch(/background-color:\s*var\(--color-forest\)/);
     expect(box!.body).toMatch(/min-height:\s*48px/);
     expect(box!.body).toMatch(/border-radius:\s*3px/);
     expect(box!.body).not.toMatch(/box-shadow/);

@@ -316,7 +316,7 @@ function DraftingRoomEditor({
     const v = latestVerdict.get(item.id);
     if (!v) return null;
     const spec = verdictChipSpec(v.verdict, v.resolvedAt);
-    return spec ? <StatusChip label={spec.label} color={spec.color} /> : null;
+    return spec ? <StatusChip {...spec} /> : null;
   };
 
   // Payments needs the running total (Σ FF&E estimate + Σ design fees), like the
