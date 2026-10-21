@@ -685,3 +685,10 @@ Both start with a design spike: specimens, then the build.
 Ships to everyone, with no flag. Dark mode stays deferred (U-Q9). Leah: “I need the contrast that I see on the sign-in page. It helps my eyes know where to go.”
 
 **Source:** Kody, 2026-10-20; `artifacts/ui-contrast-calm-2026-10-20/reviews/direction.md` §6; deck https://claude.ai/artifact/8qh87CuK6waMgWe1GLyHLb.
+
+
+## Operational rulings — 2026-10-21
+
+### V2-5 / C3 — The House Issue build (US-49)
+
+For The House Issue, C3 is always on for plate-only editions: when the prose is unchanged from the current approved edition, the edition auto-publishes; the designer’s Press band lists every published edition with Undo. V2-5 remains open operationally: scans and installed photographs may reach the composition model only after the client privacy page ships, with the live setting enabled only after that page is available. This records the build rulings and does not resolve V1–V5.

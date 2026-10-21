@@ -524,3 +524,14 @@ All references below were checked against the source baseline. Prefer symbol nam
 - `correspondence.tsx`, `use-project-correspondence.ts`, `presented-by.tsx`: actual message and contact capabilities.
 
 If the checkout changes a load-bearing contract, re-establish the current invariant before editing. Preserve financial/access/consent safeguards and adapt the presentation layer; do not guess new business behavior to make the mockup look complete.
+
+
+### US-49 homeowner-page amendments — 2026-10-21
+
+These dated amendments apply to the homeowner page and do not rewrite the existing rules above.
+
+- **C2 — photography measure.** Photography may fill the page measure, but never exceeds 72svh; one full-measure plate per page. The 120px cap continues to govern designer and admin surfaces.
+- **C1 — depth.** No shadows on the homeowner page; hairline and stock-on-paper are the only depth. A3 and F4 are amended accordingly.
+- **Q1 — arrival.** The hero may sit above the first money act at every viewport; the standing rows follow immediately.
+- **Q3 — motion.** Scroll-triggered reveals are allowed: opacity and a 12px rise over 360 ms, no more than three staggered children per chapter, and none under reduced motion.
+- **V2-4 — captions.** Captions are 15px.

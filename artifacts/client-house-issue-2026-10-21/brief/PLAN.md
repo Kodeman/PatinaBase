@@ -2,6 +2,8 @@
 
 > **v2, 21 October 2026 (SQ-1571).** Kody asked for the image-led direction on 2026-10-21 (US-48 decision #1): the arrival leads with the job's own photograph, and the money facts follow at once. v2 is merged from three new designer proposals (`inputs/designers/v2-designer-{a-editorial,b-systems,c-homeowner}.md`) and the inspiration sheet (`inputs/inspiration/INSPIRATION.md`). Spine: Designer A (editorial). Grafts: Designer C (390 arrival, standing rows, paper tab, accessibility) and Designer B (image system). Everything in v1 that v2 does not change stays as it was. The change to the arrival applies founder question Q1 in the image-first direction and is reversible: the v1 order is the recorded fallback (card Q1). Each v1 review ruling is marked "stands" or "superseded" in the **Rulings ledger** below.
 
+Build rulings (US-49, 2026-10-21) are in the Rulings ledger; where they conflict with the body, the ledger wins.
+
 ## Context
 
 Kody asked a team of designers to reconceptualize the client portal so it both drives the homeowner's engagement with the job and reads like a polished website promoting *their* job, leaning heavily on imagery of the products specified on it (reference: fitosauna.com, awwwards nominee Oct 2026), using Anthropic API credits so each page's imagery and design is built for, and adjusts with, the job. Deliverables: a concept mockup and an HTML plan document for the founding team. On 2026-10-21 Kody asked for a v2 that is led by imagery; the inspiration sheet (SQ-1568) measured Fitosauna, ERA Residence and Stanzza, and three designers proposed against it.
@@ -23,7 +25,7 @@ This is a **design-and-plan story**: it produces a canvas, an HTML document, and
 - **Spec** `docs/specs/_active/client-portal-homeowner-usability.md` (CPUX-01–07, R139–R141, R202, A1–A7, F1–F8): purpose sentence on arrival; link row "Invoices · Approvals · Progress · Updates · Documents · Contact Maren Holt" as page furniture (no fixed header/tabs/bottom bar); all invoices visible in four groups; 16px body, ≥15px money/dates/names, 44px targets, 48px final act; status in words, no red; 360/390 + 200% zoom; forest fill on final acts carrying an amount and on selected approval choices (A1), consequence note above; forest ink for links, focus and selected states (A2); Send change request and Confirm pause are covered by A1; framed cards `#FFFDF9` / 1px `#C9C7BD` / 8px. Non-goals: no new route tree, dashboard, nav shell; nothing invented.
 - **Brand voice**: no curated/luxury/seamless/elevated/bespoke/shop/AI-powered; no exclamation, emoji, testimonials, guarantees, sales CTAs; sensory material words; Midwest places.
 - **v2 holds, unchanged**: no scrims, gradients or translucency over photographs; no preloader, carousel, parallax, pinned section or video; anchors and chapter order never move; no red; status in words.
-- **Strains to put before the founders, not resolve in code**: (C1) shadows — A3/F4 allow, VISION §6/V9/V20 forbid; (C2) full-bleed photography — house sheet §A10 caps plates at 120px (amended in v2); (C3) delta-only auto-approve of editions whose prose did not change vs V22's "a person confirms every send"; (Q1) imagery above the first money/approval act (v2 form); (Q2) may maker names/provenance appear on the homeowner page (consent switch); (Q3) scroll-triggered reveals vs on-mount only; plus v2's **V2-1…V2-9** (decision cards below; V2-9 from review SQ-1572).
+- **Strains resolved by the US-49 build rulings below**: C1 shadows, C2 full-measure photography, C3 plate-only auto-publish, Q1 image-first arrival and Q3 scroll-triggered reveals. Q2 and v2's **V2-1…V2-9** remain recorded in the decision cards below; V2-9 came from review SQ-1572.
 - **Fixtures (US-44 brief; no real people)**: Birchwood Studio, Madison WI · Maren Holt (608) 555-0148 · June & Arlo Brennan ("Prepared for June Brennan") · Elm Street House (Procurement; next Living room installation; target 22 January 2027) · Lake Cottage · six invoices $1,375.00 (INV-2026-014 $600 past due 25 Sep; -019 $100 due today; -017 $300 of $800 due 2 Nov; -022 $250 due 14 Nov; -023 $50 due 30 Nov; -024 $75) · "Living room sofa, edition 2" $7,480.00 (oatmeal performance linen replaces wool bouclé; arm 26→24 in; +2 weeks; nine weeks from fabric order) · walnut sideboard "In production" at a fictional maker (Harmon Bench Works, Dayton OH — reuse from the Single Pane fixture) · Maren's update 16 October 2026 · paint makers Halvorsen and Larkin Prairie (fictional, F9).
 
 ## The concept: The House Issue
@@ -109,7 +111,7 @@ All plates: `figure` + `img alt` + `figcaption`; 1px hairline `#E8E3DB`; caption
 
 | # | Plate | 1440 | 390 | Rules |
 |---|---|---|---|---|
-| 1 | Hero | 1440×648 bleed | 390×340 bleed | One per page. Eligible: installed photograph, scan ≥ floor, studio board (re-rendered 2400×1600), shared sheet or key plan (drawn cover), photograph of her own piece wherever taken. Never a concept render, never a catalogue or brand photograph. |
+| 1 | Hero | 1440×648 bleed | 390×340 bleed | One per page. Eligible: any job-owned image that passes the floors, including maker or catalogue photography of a specified or proposed piece. Never a concept render (R142). |
 | 2 | Chapter plate | 1248×648 | 390×488 | At most one per chapter. |
 | 3 | Held plate | — | 390 × min(780, 100svh − 72) | One per page, living-room chapter only, never sticky, never dimmed, never in Invoices or Approvals. The −72 keeps the plate's bottom edge and first caption line on screen together. |
 | 4 | Drawing or sheet | 772×648 whole on stock | 358×300 | Never cropped (a cropped drawing misstates its scale); the whole drawing links to the PDF in `#mat`; alt built in code ("Sheet A-201, living room elevations"). |
@@ -214,16 +216,16 @@ v1's per-image `blurhash`, `dominant_hex` and `focal` move off `client_edition_i
 6. Reader failure or slow network → the page renders without the cover; letterhead, standing rows and money acts stay, so a picture never blocks a payment.
 
 ### Motion
-Image settle on load (scale 1.015→1 + opacity, 400ms, caption +120ms); chapter head reveal **on mount only** (opacity + 12px rise, 360ms, max three staggered children); easings `cubic-bezier(0.16,1,0.3,1)` 300–400ms (B11); hold stays 900ms. **Reduced motion (v2):** no scale settle, no plate fades (the image appears when it loads), no reveals; the hold timing is kept. **Refusals R1–R11** from the inspiration sheet stand: no preloader, smooth-scroll hijack, pinned scenes, scrubbed parallax, carousels/marquees, counters, type on photographs over a scrim, sub-floor sizes, fixed/hide-on-scroll headers, video heroes, renders or lifestyle people at hero scale, sales calls to action, script faces or lettered lockups.
+Image settle on load (scale 1.015→1 + opacity, 400ms, caption +120ms); chapter head reveal **on mount or scroll-triggered** (opacity + 12px rise, 360ms, max three staggered children); easings `cubic-bezier(0.16,1,0.3,1)` 300–400ms (B11); hold stays 900ms. **Reduced motion (v2):** no scale settle, no plate fades (the image appears when it loads), no reveals; the hold timing is kept. **Refusals R1–R11** from the inspiration sheet stand: no preloader, smooth-scroll hijack, pinned scenes, scrubbed parallax, carousels/marquees, counters, type on photographs over a scrim, sub-floor sizes, fixed/hide-on-scroll headers, video heroes, renders or lifestyle people at hero scale, sales calls to action, script faces or lettered lockups.
 
 ### Founder decision cards (the HTML doc presents these; this plan recommends)
 - **C1 shadow** — recommend none; hairline + stock-on-paper step is the only depth; amend A3/F4.
 - **C2 full-bleed photography (amended in v2)** — proposed ruling (R-v2-5): "Photography on the homeowner page may bleed edge to edge; no image exceeds 72% of viewport height, except the single held plate per page, which may reach min(780px, 100svh − 72px); the letterhead and purpose sentence above the first image; a shared sheet or the key plan may be the cover when no photograph meets the floor; one hero per page and at most one chapter plate per chapter; eligible only job-made images (V2-1); concept renders stay ≤612px with the mark; the 120px cap continues to govern designer and admin surfaces." Recommend yes.
-- **C3 delta-only auto-approve** — recommend allowed only when no prose call ran (plates changed, words unchanged), per project opt-in; otherwise V22 holds.
+- **C3 plate-only auto-publish** — always auto-publish an edition whose prose is unchanged from the current approved edition; the Press band lists every published edition with Undo.
 - **Q1 imagery above the first money act (v2 form)** — the fact being ruled on: at 390 a 340px hero (140–480) sits above the first money fact; standing row 1 at ≈616; the forest Pay act at ≈1090 on screen two. Recommend yes, with standing row 1 top ≤ 620 as a hard gate (fail > 664). The v1 order (standing line at 228–276 above a 358×224 hero; Pay ≈905) is the recorded fallback.
 - **Q2 maker names on the homeowner page** — recommend one provenance line (maker · town · in production since · photographed when) behind a per-project `show_makers` switch; no brand stories (a third voice on Maren's letterhead).
-- **Q3 scroll reveals** — recommend on-mount only (motion above).
-- **V2-1 which images may bleed** — only job-made images bleed (uploads, installed, scans, boards, sheets, photographs of her own piece wherever taken); catalogue and brand photographs stop at pair and piece plates (licensing; the page reads as her house, not a catalogue). Recommend yes.
+- **Q3 scroll reveals** — allowed within the motion limits above.
+- **V2-1 which images may bleed** — any job-owned image that passes the floors may bleed, including maker or catalogue photography of a specified or proposed piece; concept renders never hero (R142). Recommend yes.
 - **V2-2 the paper tab** — the opaque paper tab at 390 and 1440 (R-v2-2) is page furniture, not a scrim (`notch` | `hairline` | `below`). Recommend yes.
 - **V2-3 link row below the standing rows at 390** — amends CPUX-01.2/F3; the purpose sentence stays under the doorplate. Recommend yes.
 - **V2-4 captions 15px** — supersedes the brief's 12px; at 390 captions run two lines. Recommend yes.
@@ -260,7 +262,7 @@ Request shape copies `buildDraftRequest` (cached system block = voice rules + le
 | Infrastructure per job-month | | | | | ≈70 MB R2 + ~300 writes + ~30 vCPU-s < $0.01 | Supabase `render/image`, billing unverified |
 **Workload (R-v2-10):** one active job-month is 1 first edition (≈$0.08) plus 3–8 later editions (≈$0.045 each), so $0.08 + 3 × $0.045 = $0.215 to $0.08 + 8 × $0.045 = $0.44 per job-month; 20 active jobs ≈ $4.30–$8.80 a month. The v1 column is recomputed on the same workload (4–9 editions at ≈$0.08).
 `llm_feature_controls` row `client-edition-compose` daily cap $5 under the $25 global cap; the $50/studio/month cap holds.
-**Flag + rollout**: PostHog `client-edition-page` via `useFeatureFlag` (fail-closed); target by distinct_id, not email_domain (client accounts are gmail aliases); server side `llm_feature_controls` disabled by default, `llm_studio_overrides` enables Middle West Studio first; kill switch stops composition while approved editions keep rendering.
+**Flag + rollout**: PostHog `client-edition-page` via `useFeatureFlag` (fail-closed); target by distinct_id, not email_domain (client accounts are gmail aliases); flag at 100 percent for every client after each phase’s e2e gate + prod probe; `client-edition-compose` is enabled for every studio with a $5 daily cap; kill switch stops composition while approved editions keep rendering.
 
 ### Delivery phases (v2; recorded in the doc; none built in this story)
 Migration numbers are indicative; reserve them at build time.
@@ -269,11 +271,28 @@ Migration numbers are indicative; reserve them at build time.
 - **Phase 2 — edition record, composition, approval; perception moves onto the asset record (L).** 00844–00846 tables/triggers/requests, `client_edition_images` asset columns, lease RPCs + dispatcher + feature row, reader `get_client_project_edition` (the approved-edition-only read begins here) + designer RPCs; edge fn `client-edition-compose` (`callClaude`, `promptVersion 'e1'`) with Calls A1 (writes `subject_box`/`focal`/`flags`/alt/`perceived_prompt_version` on the asset), A2, B, C; Press band + mirror preview + focal drag + Desk line; board re-render at 2× at Approve; client reader hook; client-portal privacy page branch (R4; photographs of her home reach A1 only after it ships, V2-5). Deno tests for builder/validator/lint/allowlist (sheets and boards never in a prompt); jest for the band; e2e approve → homeowner sees. Gate adds `supabase/functions` deno test + designer gate.
 - **Phase 3 — installed photo, close-out (M).** `installed` source kind from Field uploads; closing edition frozen with `portfolio_snapshot`; broken-link/403 → silhouette tests; close-out immutability; optional 2560px scan derivative in `derive-scan-photo-media`.
 - **3-week cut**: pre-measurement + Phase 1 whole (including the crop/serving lane, if V2-6 is ruled "build now"; otherwise CSS-only crops) + Phase 2 narrowed to Call B only, hero by code (rank + floors, no A1/A2), code crops + designer drag, deterministic captions, Approve/Hold only, Middle West only. Copy-once into private R2 stays in.
-- **Risks** (in the doc): retailer image licensing (private R2 copies, never `project-item-images`; catalogue photos never bleed, V2-1; maker named, consent switch, takedown list); voice drift (lint + judge + pinned prompt version + weekly sample); approval fatigue (2/day, debounce, delta diff, Hold); cost runaway (sha256 dedupe, caps, kill switch, lease); homeowner disorientation (approve-only changes, Maren's notice, edition line in Earlier); misreading a site photograph or render as her finished room ("as measured" caption, 6-column render cap); page weight (ladders, lazy plates, hero ≤120 KB, measured on the Phase 1 build); tab legibility on busy photographs (`hairline`/`below` fallback, measured on paper); accessibility regressions (computed contrast, validated alt, reduced motion, e2e a11y gate); prompt data leak (allowlist test; sheets and boards never sent); hotlink rot (copy-once at add/compose, silhouette on failure).
+- **Risks** (in the doc): retailer image licensing (private R2 copies, never `project-item-images`; any eligible job-owned image may bleed under V2-1; maker named, consent switch, takedown list); voice drift (lint + judge + pinned prompt version + weekly sample); approval fatigue (2/day, debounce, delta diff, Hold); cost runaway (sha256 dedupe, caps, kill switch, lease); homeowner disorientation (approve-only changes, Maren's notice, edition line in Earlier); misreading a site photograph or render as her finished room ("as measured" caption, 6-column render cap); page weight (ladders, lazy plates, hero ≤120 KB, measured on the Phase 1 build); tab legibility on busy photographs (`hairline`/`below` fallback, measured on paper); accessibility regressions (computed contrast, validated alt, reduced motion, e2e a11y gate); prompt data leak (allowlist test; sheets and boards never sent); hotlink rot (copy-once at add/compose, silhouette on failure).
 
 ## Rulings ledger
 
 The fifteen v1 review rulings were issued on SQ-1564's review and applied in SQ-1565 (commit 5ebb268d7, delivered as 74440353e). Their labels and content are recovered from the SQ-1565 closeout comment (c_mvi3edrz), which names each R-label with the finding it answers. All fifteen labels were recovered; none is reconstructed by guesswork. Review items 14–16 had no R-label, and items 18, 20 and 21 had no ruling.
+
+### US-49 build rulings (Kody, 2026-10-21)
+
+| Ruling | Decision | Superseded text / operational note |
+|---|---|---|
+| Scope | All three phases, shipped as each lands. | — |
+| Rollout | Every client; `client-edition-page` at 100 percent after each phase’s e2e gate + prod probe. | — |
+| Model calls | Enabled for every studio; `client-edition-compose` daily cap $5. | “Middle West first” is withdrawn. |
+| C2 | Yes, as worded in the plan. | — |
+| Q1 | Yes; v2 image-first order. | — |
+| C3 | ALWAYS for plate-only editions: auto-publish; Press band lists every published edition with Undo. | — |
+| Q3 | Scroll-triggered reveals allowed: opacity + 12px rise, 360 ms, ≤3 staggered children per chapter; none under reduced motion. | — |
+| V2-4, C1, V2-2, V2-3, V2-9, Q2, V2-7 | Accepted as recommended. | — |
+| V2-1 | Any job-owned image may be full bleed, including maker or catalogue photography of a specified piece or a proposed-piece image, when it passes the floors. Concept renders still never hero per R142. | superseded: “Catalogue never bleeds.” |
+| V2-5 | Scans and installed photographs reach the model only after the client privacy page ships. | Open operational ruling; do not resolve V1–V5. |
+| V2-6 | R2 lane now. Images live in Cloudflare R2, never Supabase Storage. | — |
+| V2-8 | Measure first. | — |
 
 | Label | v1 ruling (as applied in SQ-1565) | v2 status |
 |---|---|---|
