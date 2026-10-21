@@ -47,6 +47,28 @@ describe('thresholdStanding — what is asked of the client', () => {
   });
 });
 
+describe('thresholdStanding — the asks under Approvals', () => {
+  const none = { doors: 0, walls: 0, balanceCents: 912_500, nothingOwed: false };
+
+  it('counts an approval owed her answer instead of saying nothing waits', () => {
+    expect(thresholdStanding({ ...none, approvals: 1 })).toBe('One approval needs your answer.');
+    expect(thresholdStanding({ ...none, approvals: 3 })).toBe('Three approvals need your answer.');
+  });
+
+  it('names the other asks once, without summing them into the approvals', () => {
+    expect(thresholdStanding({ ...none, otherAsks: true })).toBe('A request waits for your answer.');
+    expect(thresholdStanding({ ...none, approvals: 2, otherAsks: true })).toBe(
+      'Two approvals need your answer.',
+    );
+  });
+
+  it('joins the asks after the gates', () => {
+    expect(thresholdStanding({ ...none, doors: 1, approvals: 1 })).toBe(
+      'One document needs your signature, and one approval needs your answer.',
+    );
+  });
+});
+
 describe('thresholdStanding — when nothing waits', () => {
   it('says so plainly', () => {
     expect(

@@ -93,6 +93,8 @@ const SENTENCE_OBJECTS: ReadonlyArray<{ pattern: RegExp; anchor: string }> = [
   { pattern: /finished work/i, anchor: 'wall' },
   { pattern: /(?:one document|[a-z0-9]+ documents)(?= needs? your signature)/i, anchor: 'door' },
   { pattern: /a balance of \S+(?= stands open)/i, anchor: 'letterbox' },
+  { pattern: /(?:one approval|[a-z0-9]+ approvals)(?= needs? your answer)/i, anchor: 'approvals' },
+  { pattern: /a request(?= waits for your answer)/i, anchor: 'approvals' },
 ];
 
 interface SentenceParts {

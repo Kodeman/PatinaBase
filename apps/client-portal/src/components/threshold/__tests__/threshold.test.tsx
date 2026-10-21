@@ -1350,6 +1350,60 @@ describe('Threshold — the doorstep’s own asks', () => {
   });
 });
 
+/* US-45 FX-I (SQ-1531 finding 3) — the arrival printed "Nothing waits for your
+   name." over an open approval whose act asks for her typed full name. The
+   doorstep counted only doors and walls; an ask under Approvals is owed her
+   answer too, and the sentence links to it. */
+describe('Threshold — the doorstep sentence names the asks under Approvals', () => {
+  function withNoGates() {
+    proposalsMock.mockReturnValue(settled([SIGNED_AGREEMENT]));
+    selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [] }));
+  }
+
+  it('never says nothing waits while an approval is owed her answer, and points at Approvals', () => {
+    withNoGates();
+    renderWithApprovals([PHASE_APPROVAL]);
+
+    const sentence = screen.getByTestId('doorstep-sentence');
+    expect(sentence).toHaveTextContent('One approval needs your answer.');
+    expect(sentence).not.toHaveTextContent('Nothing waits for your name.');
+    expect(screen.getByTestId('doorstep-sentence-object')).toHaveAttribute('href', '#approvals');
+    expect(screen.getByTestId('approvals')).toHaveAttribute('id', 'approvals');
+  });
+
+  it('counts a change the studio sent as a request waiting for her answer', () => {
+    withNoGates();
+    scopeChangesMock.mockReturnValue({
+      data: [
+        {
+          id: 'sc-1',
+          title: 'Add a runner to the stair hall',
+          description: 'A runner underfoot in the stair hall.',
+          status: 'sent',
+          request_origin: 'designer_amendment',
+        },
+      ],
+      isLoading: false,
+      isPending: false,
+    });
+    renderWithApprovals([]);
+
+    const sentence = screen.getByTestId('doorstep-sentence');
+    expect(sentence).toHaveTextContent('A request waits for your answer.');
+    expect(sentence).not.toHaveTextContent('Nothing waits for your name.');
+    expect(screen.getByTestId('doorstep-sentence-object')).toHaveAttribute('href', '#approvals');
+  });
+
+  it('still says nothing waits when no ask and no gate stands', () => {
+    withNoGates();
+    renderWithApprovals([]);
+
+    expect(screen.getByTestId('doorstep-sentence')).toHaveTextContent(
+      /^Nothing waits for your name\./,
+    );
+  });
+});
+
 describe('Threshold — the acts the house owes', () => {
   it('turns the since reading on and off from the doorstep', () => {
     previousMarkMock.mockReturnValue({
