@@ -60,6 +60,23 @@
   --focus-ring: var(--color-forest);
   /* — green direction tokens:end — */
 
+  /* ── The House Issue (US-49 · PLAN v2 plate grammar) ─────────────────────
+     Plates, captions, the paper tab and the reveal. Aliases onto existing
+     tokens where the value already lives here. */
+  /* — house issue tokens:start — */
+  --plate-hairline: var(--hairline);
+  --plate-caption-ink: var(--color-oak-ink);
+  --plate-stock: var(--paper-doc);
+  --plate-tab: var(--paper);
+  --plate-chip: var(--color-card);
+  --plate-tab-rule: var(--color-card-rule);
+  --plate-rule-height: 4px;
+  --plate-tab-cut: 44px;
+  --reveal-rise: 12px;
+  --reveal-duration: 360ms;
+  --reveal-stagger: 60ms;
+  /* — house issue tokens:end — */
+
   /* Semantic aliases */
   --bg-primary: var(--color-off-white);
   --bg-surface: #FFFFFF;

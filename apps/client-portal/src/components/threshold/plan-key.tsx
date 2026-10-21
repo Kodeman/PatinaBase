@@ -110,7 +110,8 @@ function markSentence(mark: ThresholdMark): string {
     : `${mark.label} — ${money}held back until you accept it.`;
 }
 
-export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
+/** The drawing alone, without the section, sentence or key list around it. */
+export function PlanKeyDrawing({ geometry }: Pick<PlanKeyProps, 'geometry'>) {
   // The crop is an ATTRIBUTE, so CSS cannot do it — the mock swaps it in
   // script for the same reason (`cropDrawings`). The type bump rides along
   // rather than living in a second stylesheet that could disagree.
@@ -118,6 +119,85 @@ export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
   const phoneViewBox = planPhoneViewBox(geometry.viewBox);
   const type = phone ? PLAN_PHONE_TYPE : LEADER_TYPE;
 
+  return (
+    <svg
+      role="group"
+      aria-label="Project rooms"
+      viewBox={phone ? phoneViewBox : geometry.viewBox}
+      data-vb-phone={phoneViewBox}
+      className="block h-auto w-full max-w-[560px] fill-none stroke-current stroke-1 text-[var(--text-primary)]"
+    >
+      {geometry.rects.map((rect, index) => {
+        const label = geometry.labels[index];
+        return (
+          <a
+            key={rect.roomId}
+            href={`#${rect.anchor}`}
+            aria-label={label?.text ?? 'Room'}
+            className={ANCHOR_CLASS}
+          >
+            <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} />
+            {label && (
+              <text x={label.x} y={label.y} fontSize={type} className={TEXT_CLASS}>
+                {label.text}
+              </text>
+            )}
+          </a>
+        );
+      })}
+
+      <a href={`#${geometry.road.anchor}`} aria-label="Orders in progress" className={ANCHOR_CLASS}>
+        <line
+          x1={geometry.road.x1}
+          y1={geometry.road.y}
+          x2={geometry.road.x2}
+          y2={geometry.road.y}
+          strokeDasharray="6 5"
+        />
+        {/* On the room labels' own baseline, under the dash: at the
+            road's mid-height the words sat across the dashes they name. */}
+        <text
+          x={geometry.road.x2}
+          y={geometry.roadLabelY}
+          textAnchor="end"
+          fontSize={type}
+          className={TEXT_CLASS}
+        >
+          Orders in progress
+        </text>
+      </a>
+
+      {geometry.doorMarks.map((mark) => (
+        <line
+          key={`${mark.anchor}-${mark.roomId}-${mark.y1}`}
+          data-plan-mark={mark.kind}
+          x1={mark.x}
+          y1={mark.y1}
+          x2={mark.x}
+          y2={mark.y2}
+          stroke="var(--threshold-accent, var(--color-forest))"
+          strokeWidth={PLAN_MARK_STROKE}
+        />
+      ))}
+
+      {geometry.leaders.map((leader) => (
+        <g key={`${leader.text}-${leader.toX}-${leader.toY}`}>
+          <line x1={leader.fromX} y1={leader.fromY} x2={leader.toX} y2={leader.toY} />
+          <text
+            x={leader.toX + LEADER_TEXT_DX}
+            y={leader.toY + 4}
+            fontSize={type}
+            className={TEXT_CLASS}
+          >
+            {leader.text}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
   return (
     <section
       id="key"
@@ -140,80 +220,7 @@ export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
       </div>
 
       <div className="mt-2.5 grid items-start gap-[clamp(18px,2.6vw,36px)] [grid-template-columns:minmax(0,1.45fr)_minmax(230px,1fr)] max-[960px]:[grid-template-columns:minmax(0,1fr)]">
-        <svg
-          role="group"
-          aria-label="Project rooms"
-          viewBox={phone ? phoneViewBox : geometry.viewBox}
-          data-vb-phone={phoneViewBox}
-          className="block h-auto w-full max-w-[560px] fill-none stroke-current stroke-1 text-[var(--text-primary)]"
-        >
-          {geometry.rects.map((rect, index) => {
-            const label = geometry.labels[index];
-            return (
-              <a
-                key={rect.roomId}
-                href={`#${rect.anchor}`}
-                aria-label={label?.text ?? 'Room'}
-                className={ANCHOR_CLASS}
-              >
-                <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} />
-                {label && (
-                  <text x={label.x} y={label.y} fontSize={type} className={TEXT_CLASS}>
-                    {label.text}
-                  </text>
-                )}
-              </a>
-            );
-          })}
-
-          <a href={`#${geometry.road.anchor}`} aria-label="Orders in progress" className={ANCHOR_CLASS}>
-            <line
-              x1={geometry.road.x1}
-              y1={geometry.road.y}
-              x2={geometry.road.x2}
-              y2={geometry.road.y}
-              strokeDasharray="6 5"
-            />
-            {/* On the room labels' own baseline, under the dash: at the
-                road's mid-height the words sat across the dashes they name. */}
-            <text
-              x={geometry.road.x2}
-              y={geometry.roadLabelY}
-              textAnchor="end"
-              fontSize={type}
-              className={TEXT_CLASS}
-            >
-              Orders in progress
-            </text>
-          </a>
-
-          {geometry.doorMarks.map((mark) => (
-            <line
-              key={`${mark.anchor}-${mark.roomId}-${mark.y1}`}
-              data-plan-mark={mark.kind}
-              x1={mark.x}
-              y1={mark.y1}
-              x2={mark.x}
-              y2={mark.y2}
-              stroke="var(--threshold-accent, var(--color-forest))"
-              strokeWidth={PLAN_MARK_STROKE}
-            />
-          ))}
-
-          {geometry.leaders.map((leader) => (
-            <g key={`${leader.text}-${leader.toX}-${leader.toY}`}>
-              <line x1={leader.fromX} y1={leader.fromY} x2={leader.toX} y2={leader.toY} />
-              <text
-                x={leader.toX + LEADER_TEXT_DX}
-                y={leader.toY + 4}
-                fontSize={type}
-                className={TEXT_CLASS}
-              >
-                {leader.text}
-              </text>
-            </g>
-          ))}
-        </svg>
+        <PlanKeyDrawing geometry={geometry} />
 
         <div className="grid max-w-[46ch] gap-[11px] pt-0.5" data-testid="plan-key-list">
           {marks.map((mark) => (

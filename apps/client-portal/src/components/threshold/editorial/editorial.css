@@ -1,0 +1,457 @@
+/* The House Issue: plates, captions, the paper tab, standing rows, chapter heads.
+   Measured from the canvas boards (Main-A, Issue-Cover-Desktop, Plate-Grammar).
+   No shadows, no scrims, no ink on photograph pixels; the palette tints only the
+   4px rule under a frame. The phone gutter is 16px; a bleed plate cancels it. */
+
+.ed-plate {
+  margin: 0;
+  min-width: 0;
+}
+
+.ed-plate__frame {
+  position: relative;
+  overflow: hidden;
+}
+
+.ed-plate__frame > picture,
+.ed-plate__frame > a,
+.ed-plate__frame > a > picture {
+  display: block;
+  height: 100%;
+}
+
+.ed-plate__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  background-size: cover;
+}
+
+.ed-plate--framed .ed-plate__frame {
+  border: 1px solid var(--plate-hairline);
+  box-sizing: border-box;
+}
+
+.ed-plate__rule {
+  height: var(--plate-rule-height);
+}
+
+.ed-caption {
+  margin: 8px 0 0;
+  font-family: var(--font-meta);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--plate-caption-ink);
+}
+
+.ed-caption .plate-note {
+  display: block;
+  margin: 2px 0 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.ed-stock {
+  background: var(--plate-stock);
+  border: 1px solid var(--plate-hairline);
+  box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+  .ed-plate--bleed {
+    margin-inline: -16px;
+  }
+  .ed-plate--bleed > .ed-caption {
+    padding: 0 16px;
+  }
+}
+
+/* ── Eyebrow, chapter head, arrival, provenance ─────────────────────────── */
+
+.ed-eyebrow {
+  margin: 0;
+  font-family: var(--font-meta);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+.ed-chapter-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ed-chapter-head__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+@media (min-width: 601px) {
+  .ed-chapter-head__title {
+    font-size: 48px;
+    line-height: 1.08;
+  }
+}
+
+.ed-arrival {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  color: var(--color-oak-ink);
+}
+
+.ed-provenance {
+  margin: 4px 0 0;
+  font-family: var(--font-meta);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--plate-caption-ink);
+}
+
+/* ── Hero and paper tab ─────────────────────────────────────────────────── */
+
+.ed-hero {
+  margin: 0 -16px;
+  display: grid;
+  grid-template-columns: minmax(0, 310px) minmax(0, 1fr);
+  grid-template-rows: auto var(--plate-tab-cut) var(--plate-rule-height) auto auto;
+}
+
+.ed-hero > .ed-plate__frame {
+  grid-column: 1 / 3;
+  grid-row: 1 / 3;
+}
+
+.ed-hero .ed-plate__img {
+  aspect-ratio: 39 / 34;
+}
+
+.ed-hero > .ed-plate__rule {
+  grid-column: 1 / 3;
+  grid-row: 3;
+}
+
+.ed-hero > .ed-caption {
+  grid-column: 1 / 3;
+  grid-row: 5;
+  padding: 0 16px;
+}
+
+.ed-tab {
+  grid-column: 1;
+  grid-row: 2 / 5;
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  box-sizing: border-box;
+  padding: 10px 12px 0 16px;
+  background: var(--plate-tab);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ed-tab[data-tab-mode='hairline'] {
+  border-top: 1px solid var(--plate-tab-rule);
+  border-right: 1px solid var(--plate-tab-rule);
+}
+
+.ed-tab[data-tab-mode='below'] {
+  grid-column: 1 / 3;
+  grid-row: 4;
+}
+
+.ed-tab__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 34px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+@media (min-width: 601px) {
+  .ed-hero {
+    margin: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 336px);
+  }
+  .ed-hero .ed-plate__img {
+    aspect-ratio: auto;
+    height: min(72svh, 648px);
+  }
+  .ed-hero > .ed-caption {
+    padding: 0 96px;
+  }
+  .ed-tab {
+    padding: 16px 32px 0 96px;
+    gap: 8px;
+  }
+  .ed-tab__title {
+    font-size: 64px;
+    line-height: 64px;
+  }
+}
+
+/* ── Room (3:2) with the concept state, held, pair ──────────────────────── */
+
+.ed-room .ed-plate__img {
+  aspect-ratio: 3 / 2;
+}
+
+.ed-room[data-concept] {
+  max-width: 612px;
+}
+
+.ed-chip {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 4px 8px;
+  background: var(--plate-chip);
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.ed-held .ed-plate__img {
+  height: min(780px, calc(100svh - 72px));
+}
+
+@media (min-width: 601px) {
+  .ed-held .ed-plate__img {
+    height: auto;
+    aspect-ratio: 3 / 2;
+  }
+}
+
+.ed-pair .ed-plate__img {
+  aspect-ratio: 7 / 5;
+}
+
+/* ── Piece, silhouette, sheet, board, plan ──────────────────────────────── */
+
+.ed-piece {
+  width: 171px;
+}
+
+@media (min-width: 601px) {
+  .ed-piece {
+    width: 282px;
+  }
+}
+
+.ed-piece .ed-plate__frame,
+.ed-silhouette .ed-plate__frame {
+  aspect-ratio: 1 / 1;
+}
+
+.ed-piece[data-ground='white'] .ed-plate__frame {
+  padding: 10%;
+}
+
+.ed-piece[data-ground='white'] .ed-plate__img {
+  height: 100%;
+  object-fit: contain;
+}
+
+.ed-piece:not([data-ground='white']) .ed-plate__img {
+  aspect-ratio: 1 / 1;
+}
+
+.ed-piece__name {
+  margin: 8px 0 0;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.ed-piece__status {
+  margin: 2px 0 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.ed-silhouette .ed-plate__frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ed-silhouette__drawing {
+  width: 60%;
+  height: 60%;
+}
+
+.ed-sheet .ed-plate__frame,
+.ed-board .ed-plate__frame,
+.ed-plan .ed-plate__frame {
+  padding: 10px;
+}
+
+.ed-sheet .ed-plate__frame {
+  aspect-ratio: 358 / 300;
+}
+
+.ed-plan svg {
+  max-width: none;
+}
+
+.ed-board .ed-plate__frame {
+  aspect-ratio: 4 / 3;
+}
+
+.ed-sheet .ed-plate__img,
+.ed-board .ed-plate__img {
+  height: 100%;
+  object-fit: contain;
+}
+
+.ed-sheet a {
+  display: block;
+  color: var(--color-forest);
+}
+
+@media (min-width: 601px) {
+  .ed-sheet .ed-plate__frame,
+  .ed-board .ed-plate__frame,
+  .ed-plan .ed-plate__frame {
+    padding: 24px;
+  }
+  .ed-sheet .ed-plate__frame {
+    aspect-ratio: 772 / 648;
+  }
+}
+
+/* ── Swatch strip ───────────────────────────────────────────────────────── */
+
+.ed-swatches {
+  margin: 0;
+  padding: 14px 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border-top: 1px solid var(--plate-hairline);
+  border-bottom: 1px solid var(--plate-hairline);
+}
+
+@media (min-width: 601px) {
+  .ed-swatches {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.ed-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ed-swatch__chip {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--plate-hairline);
+  box-sizing: border-box;
+}
+
+.ed-swatch__label {
+  font-family: var(--font-meta);
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--plate-caption-ink);
+}
+
+/* ── Standing rows ──────────────────────────────────────────────────────── */
+
+.ed-standing {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--plate-hairline);
+}
+
+.ed-standing__row {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--plate-hairline);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--color-forest);
+  text-decoration: underline;
+  text-decoration-color: var(--color-forest);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 5px;
+}
+
+.ed-standing__row[data-act='amount'] {
+  padding: 10px 12px;
+  background: var(--color-forest);
+  color: var(--color-card);
+  text-decoration-color: var(--color-card);
+}
+
+.ed-standing__row:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (min-width: 601px) {
+  .ed-standing {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 32px;
+    border-bottom: 1px solid var(--plate-hairline);
+  }
+  .ed-standing__row {
+    border-bottom: 0;
+  }
+}
+
+/* ── Scroll reveal: opacity + 12px rise, first three children only ──────── */
+
+.ed-reveal[data-reveal='pending'] > :nth-child(-n + 3) {
+  opacity: 0;
+  transform: translateY(var(--reveal-rise));
+}
+
+.ed-reveal[data-reveal='shown'] > :nth-child(-n + 3) {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--reveal-duration) var(--ease-editorial),
+    transform var(--reveal-duration) var(--ease-editorial);
+}
+
+.ed-reveal[data-reveal='shown'] > :nth-child(2) {
+  transition-delay: var(--reveal-stagger);
+}
+
+.ed-reveal[data-reveal='shown'] > :nth-child(3) {
+  transition-delay: calc(var(--reveal-stagger) * 2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ed-reveal[data-reveal] > :nth-child(n) {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

@@ -1,0 +1,315 @@
+import { act, fireEvent, render, screen } from '@testing-library/react';
+
+import type { EditorialAsset, EditorialItem } from '@/lib/editorial/types';
+
+import { BoardPlate } from '../board-plate';
+import { HeldPlate } from '../held-plate';
+import { HeroPlate, preloadLink } from '../hero-plate';
+import { PairPlate } from '../pair-plate';
+import { PiecePlate } from '../piece-plate';
+import { PlanPlate } from '../plan-plate';
+import { CONCEPT_CHIP, RoomPlate } from '../room-plate';
+import { SheetPlate } from '../sheet-plate';
+import { SilhouettePlate } from '../silhouette-plate';
+import { SwatchStrip } from '../swatch-strip';
+import { ProvenanceLine } from '../provenance-line';
+import { ChapterHead } from '../chapter-head';
+import { Reveal } from '../reveal';
+
+const SCOPE = 'project-1';
+const ALL_CROPS: EditorialAsset['crops'] = {
+  wide: { rect: [0, 0, 4000, 2500], widths: [1280, 1600, 2048, 2560] },
+  cover_phone: { rect: [500, 0, 3440, 3000], widths: [640, 828, 1080, 1242] },
+  tall: { rect: [1300, 0, 1380, 3000], widths: [640, 828, 1080, 1242] },
+  wide32: { rect: [0, 0, 4000, 2666], widths: [768, 1024, 1600, 2048] },
+  pair: { rect: [0, 0, 4000, 2857], widths: [768, 1024, 1600, 2048] },
+  piece: { rect: [0, 0, 3000, 3000], widths: [256, 512, 768] },
+  none: { rect: [0, 0, 4000, 3000], widths: [768, 1024, 1600, 2048] },
+};
+
+let n = 0;
+function asset(over: Partial<EditorialAsset> = {}): EditorialAsset {
+  n += 1;
+  return {
+    id: `asset-${n}`,
+    sha256: n.toString(16).padStart(64, '0'),
+    sourceKind: 'upload',
+    width: 4000,
+    height: 3000,
+    ground: 'scene',
+    dominantHex: '#8C7356',
+    lqip: null,
+    focal: null,
+    subjectBox: null,
+    crops: ALL_CROPS,
+    caption: { what: 'Walnut top, planed', whose: 'Harmon Bench Works', when: '15 October 2026' },
+    alt: 'A hand plane on a workbench, pale shavings around it',
+    ...over,
+  };
+}
+
+const item: EditorialItem = {
+  id: 'sideboard',
+  nameAsSigned: 'Walnut sideboard',
+  category: 'furniture',
+  status: 'in_production',
+  makerName: 'Harmon Bench Works',
+  material: null,
+  finish: null,
+  dimensions: null,
+  descriptionAsSigned: null,
+  assetIds: [],
+  silhouetteKind: 'case',
+};
+
+const fallback = { name: 'Walnut sideboard', silhouetteKind: 'case' };
+
+function everyPlate() {
+  return (
+    <>
+      <HeroPlate scopeId={SCOPE} asset={asset({ sourceKind: 'installed' })} eyebrow="01 · Elm Street House · Procurement" headline="The living room is on its way" fallback={fallback} paletteHex="#6B4F3A" />
+      <RoomPlate scopeId={SCOPE} asset={asset({ sourceKind: 'scan' })} fallback={fallback} />
+      <RoomPlate scopeId={SCOPE} asset={asset({ sourceKind: 'concept' })} fallback={fallback} />
+      <HeldPlate scopeId={SCOPE} asset={asset()} fallback={fallback} />
+      <PairPlate scopeId={SCOPE} asset={asset({ sourceKind: 'maker' })} swatches={[{ hex: '#E3DACB', brand: 'Halvorsen', name: 'Morning Oat' }]} fallback={fallback} />
+      <PiecePlate scopeId={SCOPE} item={item} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="In production" />
+      <SheetPlate scopeId={SCOPE} asset={asset({ sourceKind: 'sheet', ground: 'drawing' })} alt="Sheet A-101, first-floor plan" fallback={fallback} />
+      <BoardPlate scopeId={SCOPE} asset={asset({ sourceKind: 'board' })} alt="Living room board" fallback={fallback} />
+      <SilhouettePlate name="Floor lamp" silhouetteKind="light" />
+      <SwatchStrip swatches={[{ hex: '#3B4A40', brand: 'Halvorsen', name: 'Bur Oak Green' }]} caption={{ what: 'Living room paint', whose: "from Birchwood Studio's palette", when: '2 September 2026' }} />
+      <PlanPlate
+        geometry={{
+          viewBox: '0 0 100 50',
+          rects: [{ roomId: 'r', x: 0, y: 0, w: 50, h: 50, anchor: 'room-r' }],
+          labels: [],
+          road: { x1: 50, x2: 100, y: 25, anchor: 'road' },
+          roadLabelY: 40,
+          doorMarks: [],
+          leaders: [],
+        }}
+        caption={{ what: 'Elm Street House, the key plan', whose: 'drawn by Birchwood Studio', when: '2 June 2026' }}
+      />
+    </>
+  );
+}
+
+describe('editorial plates', () => {
+  it('captions every plate with exactly three segments, a note never making a fourth', () => {
+    const { container } = render(everyPlate());
+    const captions = container.querySelectorAll('figcaption');
+    expect(captions.length).toBeGreaterThanOrEqual(11);
+    captions.forEach((caption) => {
+      expect(caption.querySelectorAll('[data-caption-field]')).toHaveLength(3);
+      const note = caption.querySelector('.plate-note')?.textContent ?? '';
+      const triplet = (caption.textContent ?? '').slice(0, (caption.textContent ?? '').length - note.length);
+      expect(triplet.split(' · ')).toHaveLength(3);
+    });
+  });
+
+  it('never marks a plate dimmable, and keeps every plate inked', () => {
+    const { container } = render(everyPlate());
+    expect(container.querySelector('[data-dimmable]')).toBeNull();
+    container.querySelectorAll('figure').forEach((figure) => {
+      expect(figure).toHaveAttribute('data-never-dim');
+    });
+  });
+
+  it('loads the hero eagerly at high priority and every other plate lazily', () => {
+    const { container } = render(everyPlate());
+    const images = Array.from(container.querySelectorAll('img'));
+    const hero = container.querySelector('[data-plate="hero"] img')!;
+    expect(hero).not.toHaveAttribute('loading', 'lazy');
+    expect(hero).toHaveAttribute('fetchpriority', 'high');
+    images
+      .filter((img) => img !== hero)
+      .forEach((img) => expect(img).toHaveAttribute('loading', 'lazy'));
+  });
+
+  it('sets width and height on every image', () => {
+    const { container } = render(everyPlate());
+    container.querySelectorAll('img').forEach((img) => {
+      expect(Number(img.getAttribute('width'))).toBeGreaterThan(0);
+      expect(Number(img.getAttribute('height'))).toBeGreaterThan(0);
+    });
+  });
+
+  it('offers AVIF before WebP, the phone crop first on the hero', () => {
+    const { container } = render(
+      <HeroPlate scopeId={SCOPE} asset={asset()} eyebrow="01 · House" headline="The house" fallback={fallback} />,
+    );
+    const sources = Array.from(container.querySelectorAll('source'));
+    expect(sources.map((s) => [s.getAttribute('type'), s.getAttribute('media')])).toEqual([
+      ['image/avif', '(max-width: 600px)'],
+      ['image/webp', '(max-width: 600px)'],
+      ['image/avif', null],
+      ['image/webp', null],
+    ]);
+    expect(sources[0].getAttribute('srcset')).toContain('cover_phone-640.avif 640w');
+    expect(container.querySelector('img')).toHaveStyle({ objectPosition: '50% 41.7%' });
+  });
+
+  it('swaps a picture that fails to load for the silhouette and says so', () => {
+    const { container } = render(<RoomPlate scopeId={SCOPE} asset={asset({ sourceKind: 'scan' })} fallback={fallback} />);
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByTestId('piece-silhouette')).toHaveAttribute('data-silhouette', 'case');
+    expect(container.querySelector('.plate-note')).toHaveTextContent('Picture did not load.');
+    expect(container.querySelectorAll('[data-caption-field]')).toHaveLength(3);
+  });
+
+  it('keeps the hero headline when the hero picture fails', () => {
+    render(<HeroPlate scopeId={SCOPE} asset={asset()} eyebrow="01 · House" headline="The house is on its way" fallback={fallback} />);
+    fireEvent.error(screen.getByRole('img', { name: /hand plane/ }));
+    expect(screen.getByRole('heading', { name: 'The house is on its way' })).toBeInTheDocument();
+    expect(screen.getByText('Picture did not load.')).toBeInTheDocument();
+  });
+
+  it('chips a concept render on the image and only a concept render', () => {
+    const { container, rerender } = render(<RoomPlate scopeId={SCOPE} asset={asset({ sourceKind: 'concept' })} fallback={fallback} />);
+    expect(screen.getByText(CONCEPT_CHIP).closest('.ed-plate__frame')).not.toBeNull();
+    expect(container.querySelector('figure')).toHaveAttribute('data-concept');
+    rerender(<RoomPlate scopeId={SCOPE} asset={asset({ sourceKind: 'scan' })} fallback={fallback} />);
+    expect(screen.queryByText(CONCEPT_CHIP)).toBeNull();
+  });
+
+  it('captions a catalogue photograph as the same model, not her piece', () => {
+    const { container } = render(
+      <PiecePlate scopeId={SCOPE} item={item} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="In production" />,
+    );
+    expect(container.querySelector('[data-caption-field="what"]')).toHaveTextContent('Walnut sideboard, the same model');
+    expect(container.querySelector('[data-caption-field="whose"]')).toHaveTextContent("from Harmon Bench Works' catalogue");
+    expect(container.querySelector('.plate-note')).toHaveTextContent('Not her piece; hers is in production.');
+    expect(container.querySelector('figure')).toHaveAttribute('data-ground', 'white');
+    expect(screen.getByText('In production')).toBeInTheDocument();
+  });
+
+  it('drops the catalogue note once the piece is installed', () => {
+    const { container } = render(
+      <PiecePlate scopeId={SCOPE} item={{ ...item, status: 'installed' }} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="Installed" />,
+    );
+    expect(container.querySelector('.plate-note')).toBeNull();
+  });
+
+  it('draws a piece with no photograph, captioned from the specification', () => {
+    const { container } = render(<PiecePlate scopeId={SCOPE} item={{ ...item, nameAsSigned: 'Floor lamp', silhouetteKind: null, category: 'lighting' }} asset={null} statusWords="Ordered" />);
+    expect(screen.getByTestId('piece-silhouette')).toHaveAttribute('data-silhouette', 'light');
+    expect(Array.from(container.querySelectorAll('[data-caption-field]')).map((s) => s.textContent)).toEqual([
+      'Floor lamp',
+      'drawn from the specification',
+      'photograph to follow',
+    ]);
+  });
+
+  it('draws the silhouette when the asset holds no rendition of the crop', () => {
+    const { container } = render(<RoomPlate scopeId={SCOPE} asset={asset({ crops: {} })} fallback={fallback} />);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('.plate-note')).toBeNull();
+  });
+
+  it('refuses a caption carrying banned wording by drawing instead', () => {
+    const { container } = render(
+      <RoomPlate scopeId={SCOPE} asset={asset({ caption: { what: 'AI render', whose: 'Studio', when: '2026' } })} fallback={fallback} />,
+    );
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.textContent).not.toMatch(/\bAI\b/);
+  });
+
+  it('links the whole sheet to its document', () => {
+    render(<SheetPlate scopeId={SCOPE} asset={asset({ sourceKind: 'sheet' })} alt="Sheet A-101" href="#mat" hrefLabel="Open sheet A-101 in Documents" fallback={fallback} />);
+    expect(screen.getByRole('link', { name: 'Open sheet A-101 in Documents' })).toHaveAttribute('href', '#mat');
+  });
+
+  it('names each swatch by brand and colour', () => {
+    render(<SwatchStrip swatches={[{ hex: '#E3DACB', brand: 'Halvorsen', name: 'Morning Oat' }]} />);
+    expect(screen.getByText('Halvorsen, Morning Oat')).toBeInTheDocument();
+  });
+});
+
+describe('preloadLink', () => {
+  it('gives one AVIF preload per art-directed hero source', () => {
+    const links = preloadLink(SCOPE, asset());
+    expect(links).toHaveLength(2);
+    expect(links[0]).toMatchObject({ rel: 'preload', as: 'image', type: 'image/avif', imageSizes: '100vw', fetchPriority: 'high', media: '(max-width: 600px)' });
+    expect(links[0].imageSrcSet).toContain('/cover_phone-1242.avif 1242w');
+    expect(links[1].imageSrcSet).toContain('/wide-2560.avif 2560w');
+  });
+
+  it('gives nothing when the hero has no rendition', () => {
+    expect(preloadLink(SCOPE, asset({ crops: {} }))).toEqual([]);
+  });
+});
+
+describe('ProvenanceLine', () => {
+  it('appears only when the studio shows makers', () => {
+    const { container, rerender } = render(
+      <ProvenanceLine showMakers={false} maker="Harmon Bench Works" town="Dayton" inProductionSince="12 September 2026" />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    rerender(<ProvenanceLine showMakers maker="Harmon Bench Works" town="Dayton" inProductionSince="12 September 2026" photographed="15 October 2026" />);
+    expect(container).toHaveTextContent('Harmon Bench Works · Dayton · in production since 12 September 2026 · photographed 15 October 2026');
+  });
+});
+
+describe('ChapterHead', () => {
+  it('sets the numeral, eyebrow and headline', () => {
+    render(<ChapterHead number="05" label="Living room" headline="Walnut, linen and wool" headingId="living-h" />);
+    expect(screen.getByText('05')).toHaveClass('ed-numeral');
+    expect(screen.getByRole('heading', { level: 2, name: 'Walnut, linen and wool' })).toHaveAttribute('id', 'living-h');
+  });
+});
+
+describe('Reveal', () => {
+  let trigger: ((entries: Array<{ isIntersecting: boolean }>) => void) | null = null;
+  const originalIO = window.IntersectionObserver;
+  const originalMatchMedia = window.matchMedia;
+
+  beforeEach(() => {
+    trigger = null;
+    window.IntersectionObserver = class {
+      constructor(cb: (entries: Array<{ isIntersecting: boolean }>) => void) {
+        trigger = cb;
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+      takeRecords() {
+        return [];
+      }
+    } as unknown as typeof IntersectionObserver;
+    jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: 5000 } as DOMRect);
+  });
+
+  afterEach(() => {
+    window.IntersectionObserver = originalIO;
+    window.matchMedia = originalMatchMedia;
+  });
+
+  const tree = (
+    <Reveal>
+      <p>One</p>
+      <p>Two</p>
+    </Reveal>
+  );
+
+  it('holds a chapter below the fold, then shows it once it scrolls in', () => {
+    window.matchMedia = jest.fn(() => ({ matches: false })) as unknown as typeof window.matchMedia;
+    const { container } = render(tree);
+    expect(container.firstChild).toHaveAttribute('data-reveal', 'pending');
+    act(() => trigger!([{ isIntersecting: true }]));
+    expect(container.firstChild).toHaveAttribute('data-reveal', 'shown');
+  });
+
+  it('does nothing under reduced motion', () => {
+    window.matchMedia = jest.fn(() => ({ matches: true })) as unknown as typeof window.matchMedia;
+    const { container } = render(tree);
+    expect(container.firstChild).toHaveAttribute('data-reveal', 'idle');
+    expect(trigger).toBeNull();
+  });
+
+  it('never hides a chapter already on screen', () => {
+    window.matchMedia = jest.fn(() => ({ matches: false })) as unknown as typeof window.matchMedia;
+    (HTMLElement.prototype.getBoundingClientRect as jest.Mock).mockReturnValue({ top: 10 } as DOMRect);
+    const { container } = render(tree);
+    expect(container.firstChild).toHaveAttribute('data-reveal', 'idle');
+  });
+});
