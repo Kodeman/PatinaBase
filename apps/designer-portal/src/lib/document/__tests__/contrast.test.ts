@@ -910,6 +910,36 @@ describe('US-43 F-F · --focus-ring clears 3:1 on every ground it draws on', () 
   });
 });
 
+describe('US-45 · terminal forest and client-response records', () => {
+  it.each(['--color-forest', '--color-forest-press'])('%s holds terminal ivory ink at 8:1', (fill) => {
+    expect(contrastRatio(resolveToken(fill), '#FFFDF9')).toBeGreaterThanOrEqual(8);
+  });
+
+  it('darkens forest on hover and press and keeps the terminal ivory ink', () => {
+    expect(relativeLuminance(resolveToken('--color-forest-press'))).toBeLessThan(relativeLuminance(resolveToken('--color-forest')));
+    expect(css).toMatch(/\.da-terminal\s*\{[^}]*background-color:\s*var\(--color-forest\);\s*color:\s*#FFFDF9;/);
+    expect(css).toMatch(/\.da-terminal:hover,\s*\.da-terminal:active\s*\{[^}]*background-color:\s*var\(--color-forest-press\)/);
+    expect(css).toMatch(/\.da-terminal \.da-pool\s*\{[^}]*background-color:\s*var\(--color-forest-press\)/);
+    expect(css).toMatch(/\.da-terminal \.da-leading,\s*\.da-terminal \.da-trailing\s*\{\s*color:\s*#FFFDF9;/);
+  });
+
+  it('holds forest record text at 4.5:1 and success notices use forest', () => {
+    expect(tokens.get('--color-forest')).toBe('#3E5145');
+    expect(tokens.get('--color-green-record')).toBe('#E8EEE7');
+    expect(contrastRatio(resolveToken('--color-forest'), resolveToken('--color-green-record'))).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    expect(aliases.get('--color-success')).toBe('--color-forest');
+  });
+
+  it('measures the record rule on paper and uses forest when it falls below 3:1', () => {
+    expect(tokens.get('--color-green-record-rule')).toBe('#B6C3B7');
+    const paper = resolveToken('--doc-paper');
+    const ratio = contrastRatio(resolveToken('--color-green-record-rule'), paper);
+    expect(Number(ratio.toFixed(2))).toBe(1.75);
+    expect(ratio).toBeLessThan(3);
+    expect(contrastRatio(resolveToken('--color-forest'), paper)).toBeGreaterThanOrEqual(3);
+  });
+});
+
 jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
   useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
   useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),

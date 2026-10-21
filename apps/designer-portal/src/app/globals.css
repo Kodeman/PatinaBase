@@ -57,6 +57,10 @@
 
   /* — Extended Palette — */
   --color-sage: #A8B5A0;
+  --color-forest: #3E5145;
+  --color-forest-press: #334539;
+  --color-green-record: #E8EEE7;
+  --color-green-record-rule: #B6C3B7;
   --color-dusty-blue: #8B9CAD;
   --color-terracotta: #D4A090;
   --color-golden-hour: #E8C547;
@@ -136,7 +140,7 @@
   --border-warm: #DDD4C8;   /* warm hairline border, below --border-default */
 
   /* — Functional Colors — */
-  --color-success: #7A9B76;
+  --color-success: var(--color-forest);
   --color-warning: #D4A574;
   --color-error: #C77B6E;
   --color-info: #8B9CAD;
@@ -1031,14 +1035,13 @@ html[data-loading-register] [data-register-off] {
   min-height: 48px;
   padding: 13px 22px;
   border-radius: 3px;
-  background-color: var(--color-charcoal);
-  color: var(--color-off-white);
+  background-color: var(--color-forest);
+  color: #FFFDF9;
 }
 .da-terminal .da-pool {
   inset: 0;
   border-radius: 3px;
-  /* the sheet's terminal hover value; charcoal has no deeper token */
-  background-color: #1f1d1a;
+  background-color: var(--color-forest-press);
 }
 .da-terminal .da-label {
   font-family: var(--font-body);
@@ -1055,10 +1058,11 @@ html[data-loading-register] [data-register-off] {
 }
 .da-terminal .da-leading,
 .da-terminal .da-trailing {
-  color: var(--color-off-white);
+  color: #FFFDF9;
 }
-.da-terminal:hover {
-  background-color: #1f1d1a;
+.da-terminal:hover,
+.da-terminal:active {
+  background-color: var(--color-forest-press);
 }
 
 /* ── hover · the scoring answers, and a 3.5px bead gathers under the finger ─ */
