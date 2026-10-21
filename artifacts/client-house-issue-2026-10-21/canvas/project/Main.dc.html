@@ -12,124 +12,164 @@
 <style>
 body{margin:0;background:#FAF7F2;color:#2C2926}
 a{color:#3E5145}a:hover{color:#3E5145}
-a:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid #3E5145;outline-offset:2px}
+a:focus-visible,button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid #3E5145;outline-offset:2px}
+.m{font-family:'DM Mono','SF Mono',ui-monospace,monospace}
+.s{font-family:'Playfair Display',Georgia,'Times New Roman',serif}
+.eb{margin:0;font-family:'DM Mono','SF Mono',ui-monospace,monospace;font-size:12px;line-height:16px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:#5A4E43}
+.ch{margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:30px;line-height:1.1;font-weight:400;color:#2C2926}
+.cap{margin:8px 0 0;font-family:'DM Mono','SF Mono',ui-monospace,monospace;font-size:15px;line-height:1.45;color:#4E4339}
+.lead{margin:0;font-size:18px;line-height:1.45;color:#2C2926}
+.p{margin:0;font-size:16px;line-height:1.55}
+.lk{display:inline-flex;align-items:center;min-height:44px;color:#3E5145;text-decoration:underline;text-decoration-color:#3E5145;text-decoration-thickness:1px;text-underline-offset:6px}
+.bl{display:inline-flex;align-items:center;min-height:44px;padding:0 2px;border:0;background:none;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;line-height:20px;color:#3E5145;text-decoration:underline;text-decoration-color:#3E5145;text-decoration-thickness:1px;text-underline-offset:6px;cursor:pointer}
+.row{display:flex;align-items:center;min-height:44px;box-sizing:border-box;padding:10px 0;border-bottom:1px solid #E8E3DB;font-size:16px;line-height:22px;font-weight:500;color:#3E5145;text-decoration:underline;text-decoration-color:#3E5145;text-decoration-thickness:1px;text-underline-offset:5px}
+.inv{padding:10px 0 2px;border-bottom:1px solid #E8E3DB;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:2px;align-items:center}
+.nm{font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:17px;line-height:24px;font-weight:500}
+.amt{font-family:'DM Mono','SF Mono',ui-monospace,monospace;font-size:15px;line-height:24px;font-variant-numeric:tabular-nums;text-align:right}
+.meta{grid-column:1/-1;font-family:'DM Mono','SF Mono',ui-monospace,monospace;font-size:15px;line-height:1.5;color:#5A4E43}
+.st{font-size:15px;line-height:1.5;color:#2C2926}
+.vi{justify-self:end;display:inline-flex;align-items:center;padding:0 2px;border:0;background:none;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;line-height:20px;color:#3E5145;text-decoration:underline;text-decoration-color:#3E5145;text-decoration-thickness:1px;text-underline-offset:6px;cursor:pointer}
+.card{padding:16px;background:#FFFDF9;border:1px solid #C9C7BD;border-radius:8px;display:flex;flex-direction:column;gap:12px}
+.note{margin:0;padding:12px 14px;background:#F0F3ED;border-radius:4px;font-size:16px;line-height:1.55}
+.h3{margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:20px;line-height:1.3;font-weight:500}
+.g3{margin:0 0 4px;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:20px;line-height:1.3;font-weight:500}
+.stock{background:#FCFAF6;border:1px solid #E8E3DB;box-sizing:border-box}
+.pn{margin:8px 0 0;font-size:16px;line-height:1.4;font-weight:500;color:#2C2926}
+.ps{margin:2px 0 0;font-size:15px;line-height:1.45;color:#2C2926}
+.sw{display:flex;flex-direction:column;gap:4px}
+.sw span{font-family:'DM Mono','SF Mono',ui-monospace,monospace;font-size:15px;line-height:1.35;color:#4E4339}
+.ruler{position:absolute;left:0;width:390px;height:0;border-top:1px dashed #8A7C6D;pointer-events:none;z-index:2}
+.ruler span{position:absolute;right:0;top:1px;padding:0 3px;background:#FAF7F2;font-family:'DM Mono','SF Mono',ui-monospace,monospace;font-size:11px;line-height:14px;color:#5A4E43}
 </style>
 </helmet>
 <div style="position: relative; width: 390px; min-height: 8000px; box-sizing: border-box; padding: 0 16px 48px; background: #FAF7F2; color: #2C2926; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; overflow-wrap: break-word">
 
-<div aria-hidden="true" style="position: absolute; left: 0; top: 740px; width: 390px; border-top: 1px dashed #C9C7BD; pointer-events: none">
-<span style="position: absolute; right: 0; top: -17px; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; color: #5A4E43; background: #FAF7F2; padding: 0 4px">740</span>
-</div>
+<div aria-hidden="true" class="ruler" style="top: 0px"><span>y 0</span></div>
+<div aria-hidden="true" class="ruler" style="top: 96px"><span>96</span></div>
+<div aria-hidden="true" class="ruler" style="top: 140px"><span>140</span></div>
+<div aria-hidden="true" class="ruler" style="top: 480px"><span>480</span></div>
+<div aria-hidden="true" class="ruler" style="top: 552px"><span>552</span></div>
+<div aria-hidden="true" class="ruler" style="top: 613px"><span>613 row 1</span></div>
+<div aria-hidden="true" class="ruler" style="top: 664px"><span>664 toolbar line</span></div>
+<div aria-hidden="true" class="ruler" style="top: 740px"><span>740</span></div>
 
 <header id="doorplate" style="height: 96px; box-sizing: border-box; padding: 10px 0 6px; border-bottom: 1px solid #E8E3DB; display: flex; flex-direction: column; gap: 4px">
 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 22px; letter-spacing: .02em; color: #5A4E43">Birchwood Studio</p>
+<p class="m" style="margin: 0; font-size: 15px; line-height: 22px; letter-spacing: .02em; color: #5A4E43">Birchwood Studio</p>
 <div aria-hidden="true" style="display: flex; flex-direction: column; gap: 3px; flex: none">
 <div style="height: 1.5px; width: 28px; background: #5C4A3C"></div>
 <div style="height: 1.5px; width: 22px; background: #C4A57B; opacity: .7"></div>
 <div style="height: 1.5px; width: 16px; background: #C4A57B; opacity: .35"></div>
 </div>
 </div>
-<h1 style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 24px; line-height: 28px; font-weight: 500; color: #2C2926">Elm Street House</h1>
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 22px; letter-spacing: .02em; color: #5A4E43">Prepared for June Brennan</p>
+<h1 class="s" style="margin: 0; font-size: 24px; line-height: 28px; font-weight: 500; color: #2C2926">Elm Street House</h1>
+<p class="m" style="margin: 0; font-size: 15px; line-height: 22px; letter-spacing: .02em; color: #5A4E43">Prepared for June Brennan</p>
 </header>
 
 <p style="margin: 0; font-size: 16px; line-height: 22px; color: #4E4339">Pay invoices, review approvals, and follow your project here.</p>
 
-<nav aria-label="On this page" style="margin: 0; display: flex; flex-wrap: wrap; column-gap: 20px; row-gap: 0">
-<a href="#letterbox" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; line-height: 20px; font-weight: 500; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px">Invoices</a>
-<a href="#approvals" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; line-height: 20px; font-weight: 500; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px">Approvals</a>
-<a href="#road" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; line-height: 20px; font-weight: 500; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px">Progress</a>
-<a href="#note" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; line-height: 20px; font-weight: 500; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px">Updates</a>
-<a href="#mat-papers" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; line-height: 20px; font-weight: 500; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px">Documents</a>
-<a href="#contact" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; line-height: 20px; font-weight: 500; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px">Contact Maren Holt</a>
-</nav>
-
-<p style="margin: 0; font-size: 16px; line-height: 24px; color: #2C2926"><a href="#letterbox" style="color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 4px">Six invoices are open; $600.00 is past due.</a> <a href="#approvals" style="color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 4px">One edition awaits your approval.</a></p>
-
-<section id="cover" aria-labelledby="cover-h" style="position: relative; margin: 12px 0 0">
-<p style="margin: 0 0 8px; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">01 · Elm Street House · Procurement</p>
-<h2 id="cover-h" style="position: absolute; left: 0; top: 204px; margin: 0; max-width: 300px; padding: 10px 16px 0 0; background: #FAF7F2; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 34px; line-height: 1.0; font-weight: 400; letter-spacing: -0.01em; color: #2C2926">The living room is on its way</h2>
-<figure style="margin: 0">
-<img src="/_blob/415b92f4b388fc2702b95bf2dab638cb" alt="Walnut sideboard in the workshop, placeholder photograph standing in for Harmon Bench Works" style="display: block; width: 358px; height: 224px; object-fit: cover; object-position: 50% 55%">
-<div aria-hidden="true" style="height: 4px; width: 358px; background: #6B4F3A"></div>
-<figcaption style="margin: 38px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Walnut sideboard, in the workshop · photographed by Harmon Bench Works · 9 October 2026<span style="display: block; margin: 2px 0 0">Placeholder, not job imagery.</span></figcaption>
+<section id="cover" aria-labelledby="cover-h" style="margin: 0">
+<figure data-hero style="margin: 0 -16px; display: grid; grid-template-columns: 310px 80px; grid-template-rows: 296px 44px 4px auto auto">
+<div style="grid-column: 1; grid-row: 2 / 5; position: relative; z-index: 1; align-self: start; box-sizing: border-box; padding: 10px 12px 0 16px; background: #FAF7F2; display: flex; flex-direction: column; gap: 6px">
+<p class="eb">01 · Elm Street House · Procurement</p>
+<h2 id="cover-h" class="s" style="margin: 0; font-size: 34px; line-height: 34px; font-weight: 400; letter-spacing: -0.01em; color: #2C2926">The living room is on its way</h2>
+</div>
+<img src="/_blob/54a9b93d307b5444e4fc060d22adaf6a" width="390" height="340" fetchpriority="high" loading="eager" alt="A wooden hand plane on a workbench, curled pale shavings around it" style="grid-column: 1 / 3; grid-row: 1 / 3; display: block; width: 390px; height: 340px; object-fit: cover; object-position: 50% 45%; background: #8C7356">
+<div aria-hidden="true" style="grid-column: 1 / 3; grid-row: 3; height: 4px; background: #6B4F3A"></div>
+<figcaption class="cap" style="grid-column: 1 / 3; grid-row: 5; padding: 0 16px">Walnut top, planed · Harmon Bench Works · 15 October 2026</figcaption>
 </figure>
 </section>
+
+<ul aria-label="Where things stand" style="margin: 8px 0 0; padding: 0; list-style: none; border-top: 1px solid #E8E3DB">
+<li><a class="row" data-standing-row="1" href="#letterbox">$600.00 is past due since 25 September.</a></li>
+<li><a class="row" data-standing-row="2" href="#approvals">One approval waits: the living room sofa.</a></li>
+<li><a class="row" data-standing-row="3" href="#ledger">Six invoices are open, $1,375.00 together.</a></li>
+</ul>
+
+<nav aria-label="On this page" style="margin: 16px 0 0; display: flex; flex-wrap: wrap; column-gap: 20px; row-gap: 0">
+<a class="lk" href="#letterbox" style="font-size: 16px; line-height: 20px; font-weight: 500">Invoices</a>
+<a class="lk" href="#approvals" style="font-size: 16px; line-height: 20px; font-weight: 500">Approvals</a>
+<a class="lk" href="#road" style="font-size: 16px; line-height: 20px; font-weight: 500">Progress</a>
+<a class="lk" href="#note" style="font-size: 16px; line-height: 20px; font-weight: 500">Updates</a>
+<a class="lk" href="#mat-papers" style="font-size: 16px; line-height: 20px; font-weight: 500">Documents</a>
+<a class="lk" href="#contact" style="font-size: 16px; line-height: 20px; font-weight: 500">Contact Maren Holt</a>
+</nav>
 
 <section id="doorstep" aria-labelledby="doorstep-h" style="margin: 24px 0 0; display: flex; flex-direction: column; gap: 12px">
 <h2 id="doorstep-h" style="margin: 0; font-size: 16px; line-height: 1.55; font-weight: 500; color: #2C2926">$600.00 is past due since 25 September.</h2>
-<article aria-labelledby="first-h" style="padding: 16px; background: #FFFDF9; border: 1px solid #C9C7BD; border-radius: 8px; display: flex; flex-direction: column; gap: 12px">
+<article aria-labelledby="first-h" class="card">
 <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px">
-<h3 id="first-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500">Design fee, September</h3>
-<p style="margin: 0; text-align: right; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; font-variant-numeric: tabular-nums">$600.00</p>
-<p style="margin: 0; grid-column: 1 / -1; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; color: #5A4E43">INV-2026-014 · Past due · 25 September 2026</p>
+<h3 id="first-h" class="nm" style="margin: 0">Design fee, September</h3>
+<p class="amt" style="margin: 0">$600.00</p>
+<p class="meta" style="margin: 0">INV-2026-014 · Past due · 25 September 2026</p>
 </div>
-<p id="pay-consequence" style="margin: 0; padding: 12px 14px; background: #F0F3ED; border-radius: 4px; font-size: 16px; line-height: 1.55">Payable to Birchwood Studio by bank transfer. The next screen shows the amount and asks you to confirm. Nothing is charged until you confirm there.</p>
+<p id="pay-consequence" class="note">Payable to Birchwood Studio by bank transfer. The next screen shows the amount and asks you to confirm. Nothing is charged until you confirm there.</p>
 <button type="button" aria-describedby="pay-consequence" style="align-self: flex-start; display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 11px 19px; border: 1px solid #3E5145; border-radius: 5px; background: #3E5145; color: #FFFDF9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: left; cursor: pointer">Continue to secure payment · [bank total from quote]</button>
-<button type="button" style="align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice</button>
+<button type="button" class="bl" style="align-self: flex-start">View invoice</button>
 </article>
 
 <div id="ledger" style="margin: 36px 0 0; display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">02 · Invoices</p>
-<h2 style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.08; font-weight: 400; color: #2C2926">Six invoices, $1,375.00 together</h2>
+<p class="eb">02 · Invoices</p>
+<h2 class="ch">Six invoices, $1,375.00 together</h2>
 </div>
 <div id="letterbox" style="display: flex; flex-direction: column; gap: 20px">
 <div>
-<h3 style="margin: 0 0 4px; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.3; font-weight: 500">Invoices to pay</h3>
+<h3 class="g3">Invoices to pay</h3>
 <ul style="margin: 0; padding: 0; list-style: none; border-top: 1px solid #E8E3DB">
-<li style="padding: 10px 0 2px; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center"><span style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500">Design fee, September</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; font-variant-numeric: tabular-nums; text-align: right">$600.00</span><span style="grid-column: 1 / -1; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; color: #5A4E43">INV-2026-014 · Birchwood Studio</span><span style="font-size: 15px; line-height: 1.5; color: #2C2926">Past due · 25 September 2026</span><button type="button" aria-label="View invoice INV-2026-014" style="justify-self: end; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice</button></li>
-<li style="padding: 10px 0 2px; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center"><span style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500">Fabric samples and freight</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; font-variant-numeric: tabular-nums; text-align: right">$100.00</span><span style="grid-column: 1 / -1; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; color: #5A4E43">INV-2026-019 · Elm Street House</span><span style="font-size: 15px; line-height: 1.5; color: #2C2926">Due today · 20 October 2026</span><button type="button" aria-label="View invoice INV-2026-019" style="justify-self: end; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice</button></li>
-<li style="padding: 10px 0 2px; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center"><span style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500">Sofa deposit</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; font-variant-numeric: tabular-nums; text-align: right">$300.00</span><span style="grid-column: 1 / -1; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; color: #5A4E43">INV-2026-017 · Elm Street House</span><span style="font-size: 15px; line-height: 1.5; color: #2C2926">Due 2 November 2026 · $500.00 paid</span><button type="button" aria-label="View invoice INV-2026-017" style="justify-self: end; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice</button></li>
-<li style="padding: 10px 0 2px; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center"><span style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500">Lighting deposit</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; font-variant-numeric: tabular-nums; text-align: right">$250.00</span><span style="grid-column: 1 / -1; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; color: #5A4E43">INV-2026-022 · Elm Street House</span><span style="font-size: 15px; line-height: 1.5; color: #2C2926">Due 14 November 2026</span><button type="button" aria-label="View invoice INV-2026-022" style="justify-self: end; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice</button></li>
-<li style="padding: 10px 0 2px; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center"><span style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500">INV-2026-023</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; font-variant-numeric: tabular-nums; text-align: right">$50.00</span><span style="grid-column: 1 / -1; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; color: #5A4E43">INV-2026-023 · Birchwood Studio</span><span style="font-size: 15px; line-height: 1.5; color: #2C2926">Due 30 November 2026</span><button type="button" aria-label="View invoice INV-2026-023" style="justify-self: end; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice</button></li>
-<li style="padding: 10px 0 2px; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center"><span style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500">Site measure visit</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; font-variant-numeric: tabular-nums; text-align: right">$75.00</span><span style="grid-column: 1 / -1; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; color: #5A4E43">INV-2026-024 · Elm Street House</span><span style="font-size: 15px; line-height: 1.5; color: #2C2926">No due date</span><button type="button" aria-label="View invoice INV-2026-024" style="justify-self: end; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice</button></li>
+<li class="inv"><span class="nm">Design fee, September</span><span class="amt">$600.00</span><span class="meta">INV-2026-014 · Birchwood Studio</span><span class="st">Past due · 25 September 2026</span><button type="button" class="vi" aria-label="View invoice INV-2026-014" style="min-height: 44px">View invoice</button></li>
+<li class="inv"><span class="nm">Fabric samples and freight</span><span class="amt">$100.00</span><span class="meta">INV-2026-019 · Elm Street House</span><span class="st">Due today · 20 October 2026</span><button type="button" class="vi" aria-label="View invoice INV-2026-019" style="min-height: 44px">View invoice</button></li>
+<li class="inv"><span class="nm">Sofa deposit</span><span class="amt">$300.00</span><span class="meta">INV-2026-017 · Elm Street House</span><span class="st">Due 2 November 2026 · $500.00 paid</span><button type="button" class="vi" aria-label="View invoice INV-2026-017" style="min-height: 44px">View invoice</button></li>
+<li class="inv"><span class="nm">Lighting deposit</span><span class="amt">$250.00</span><span class="meta">INV-2026-022 · Elm Street House</span><span class="st">Due 14 November 2026</span><button type="button" class="vi" aria-label="View invoice INV-2026-022" style="min-height: 44px">View invoice</button></li>
+<li class="inv"><span class="nm">INV-2026-023</span><span class="amt">$50.00</span><span class="meta">INV-2026-023 · Birchwood Studio</span><span class="st">Due 30 November 2026</span><button type="button" class="vi" aria-label="View invoice INV-2026-023" style="min-height: 44px">View invoice</button></li>
+<li class="inv"><span class="nm">Site measure visit</span><span class="amt">$75.00</span><span class="meta">INV-2026-024 · Elm Street House</span><span class="st">No due date</span><button type="button" class="vi" aria-label="View invoice INV-2026-024" style="min-height: 44px">View invoice</button></li>
 </ul>
 </div>
 <div>
-<h3 style="margin: 0 0 4px; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.3; font-weight: 500">Payments in progress</h3>
-<p style="margin: 0; font-size: 16px; line-height: 1.55; color: #4E4339">No payment is in progress.</p>
+<h3 class="g3">Payments in progress</h3>
+<p class="p" style="color: #4E4339">No payment is in progress.</p>
 </div>
 <div>
-<h3 style="margin: 0 0 4px; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.3; font-weight: 500">Payment needs review</h3>
-<p style="margin: 0; font-size: 16px; line-height: 1.55; color: #4E4339">No payment needs review.</p>
+<h3 class="g3">Payment needs review</h3>
+<p class="p" style="color: #4E4339">No payment needs review.</p>
 </div>
 <div style="display: flex; flex-direction: column; gap: 2px; padding: 12px 0 0; border-top: 1px solid #C9C7BD">
-<p style="margin: 0; display: flex; justify-content: space-between; font-weight: 500"><span>Total outstanding</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; font-variant-numeric: tabular-nums">$1,375.00</span></p>
+<p style="margin: 0; display: flex; justify-content: space-between; font-weight: 500"><span>Total outstanding</span> <span class="m" style="font-size: 15px; font-variant-numeric: tabular-nums">$1,375.00</span></p>
 <p style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339">$1,375.00 across Elm Street House and your studio invoices.</p>
 </div>
 <div>
-<h3 style="margin: 0 0 4px"><button type="button" aria-expanded="false" aria-controls="history-phone" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.3; font-weight: 500; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">Payment history</button></h3>
+<h3 style="margin: 0 0 4px"><button type="button" class="bl s" aria-expanded="false" aria-controls="history-phone" style="font-size: 20px; line-height: 1.3; font-weight: 500">Payment history</button></h3>
 <ul id="history-phone" hidden style="margin: 0; padding: 0; list-style: none; border-top: 1px solid #E8E3DB">
-<li style="padding: 10px 0 2px; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center"><span style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500">Sample return credit</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; font-variant-numeric: tabular-nums; text-align: right">$0.00</span><span style="grid-column: 1 / -1; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; color: #5A4E43">INV-2026-016 · Elm Street House</span><span style="font-size: 15px; line-height: 1.5; color: #2C2926">No balance due</span><button type="button" aria-label="View invoice INV-2026-016" style="justify-self: end; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice</button></li>
-<li style="padding: 10px 0 2px; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center"><span style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500">Rug deposit</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; font-variant-numeric: tabular-nums; text-align: right">$450.00</span><span style="grid-column: 1 / -1; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; color: #5A4E43">INV-2026-011 · Elm Street House</span><span style="font-size: 15px; line-height: 1.5; color: #2C2926">Paid 22 September 2026</span><button type="button" aria-label="View invoice INV-2026-011" style="justify-self: end; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice</button></li>
-<li style="padding: 10px 0 2px; border-bottom: 1px solid #E8E3DB; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center"><span style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 24px; font-weight: 500">Design retainer</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 24px; font-variant-numeric: tabular-nums; text-align: right">$1,200.00</span><span style="grid-column: 1 / -1; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; color: #5A4E43">INV-2026-009 · Birchwood Studio</span><span style="font-size: 15px; line-height: 1.5; color: #2C2926">Paid 3 September 2026</span><button type="button" aria-label="View invoice INV-2026-009" style="justify-self: end; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">View invoice</button></li>
+<li class="inv"><span class="nm">Sample return credit</span><span class="amt">$0.00</span><span class="meta">INV-2026-016 · Elm Street House</span><span class="st">No balance due</span><button type="button" class="vi" aria-label="View invoice INV-2026-016" style="min-height: 44px">View invoice</button></li>
+<li class="inv"><span class="nm">Rug deposit</span><span class="amt">$450.00</span><span class="meta">INV-2026-011 · Elm Street House</span><span class="st">Paid 22 September 2026</span><button type="button" class="vi" aria-label="View invoice INV-2026-011" style="min-height: 44px">View invoice</button></li>
+<li class="inv"><span class="nm">Design retainer</span><span class="amt">$1,200.00</span><span class="meta">INV-2026-009 · Birchwood Studio</span><span class="st">Paid 3 September 2026</span><button type="button" class="vi" aria-label="View invoice INV-2026-009" style="min-height: 44px">View invoice</button></li>
 </ul>
 </div>
 </div>
 </section>
 
-<section id="approvals" aria-labelledby="approvals-h" style="margin: 56px 0 0; display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">03 · Approvals</p>
-<h2 id="approvals-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.08; font-weight: 400; color: #2C2926">The sofa, second edition</h2>
-<article id="approval-appr-sofa-e2" aria-labelledby="ask-h" style="margin: 8px 0 0; padding: 16px; background: #FFFDF9; border: 1px solid #C9C7BD; border-radius: 8px; display: flex; flex-direction: column; gap: 12px">
-<h3 id="ask-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.3; font-weight: 500">Living room sofa, edition 2</h3>
+<section id="approvals" data-chapter="03" aria-labelledby="approvals-h" style="margin: 56px 0 0; display: flex; flex-direction: column; gap: 8px">
+<p class="eb">03 · Approvals</p>
+<h2 id="approvals-h" class="ch">Waiting for your approval</h2>
+<article id="approval-appr-sofa-e2" aria-labelledby="ask-h" style="margin: 8px -16px 0; padding: 0 0 20px; background: #FFFDF9; border-top: 1px solid #C9C7BD; border-bottom: 1px solid #C9C7BD; display: flex; flex-direction: column; gap: 12px">
+<h3 id="ask-h" class="h3" style="padding: 14px 16px 0">Living room sofa, edition 2</h3>
+<p style="margin: 0; padding: 0 16px; font-size: 15px; line-height: 1.5; color: #2C2926">Waiting for you since 16 October 2026</p>
 <figure style="margin: 0">
-<img src="/_blob/be06be484a922b7284be4317ee5c71a9" alt="Living room sofa in pale linen, maker's photograph, placeholder photograph" style="display: block; width: 324px; height: 231px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box">
-<div aria-hidden="true" style="height: 4px; width: 324px; background: #C9BBA5"></div>
-<figcaption style="margin: 8px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Living room sofa · maker's photograph · 14 October 2026<span style="display: block; margin: 2px 0 0">Placeholder, not job imagery.</span></figcaption>
+<img src="/_blob/be06be484a922b7284be4317ee5c71a9" width="390" height="279" alt="A low sofa in pale linen with loose seat cushions" style="display: block; width: 390px; height: 279px; object-fit: cover; background: #CFC6B8">
+<div aria-hidden="true" style="height: 4px; background: #C9BBA5"></div>
+<figcaption class="cap" style="padding: 0 16px">Living room sofa · maker's photograph · 14 October 2026</figcaption>
 </figure>
-<figure style="margin: 0; max-width: 324px; display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid #E8E3DB; border-bottom: 1px solid #E8E3DB">
-<img src="/_blob/c9c72d856094c1848b7601f5abf7c9b7" alt="Oatmeal performance linen, maker's sample, placeholder photograph" style="display: block; width: 64px; height: 64px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box">
-<figcaption style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Oatmeal performance linen · maker's sample · 14 October 2026<span style="display: block; margin: 2px 0 0">Placeholder, not job imagery.</span></figcaption>
+<figure style="margin: 0 16px; display: grid; grid-template-columns: 140px minmax(0, 1fr); column-gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid #E8E3DB; border-bottom: 1px solid #E8E3DB">
+<img src="/_blob/c9c72d856094c1848b7601f5abf7c9b7" width="140" height="175" alt="Close weave of pale oatmeal linen" style="display: block; width: 140px; height: 175px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box; background: #D9CFBF">
+<figcaption class="cap" style="margin: 0">Oatmeal performance linen · maker's sample · 14 October 2026</figcaption>
 </figure>
-<p style="margin: 0; font-size: 16px; color: #4E4339">Maren changed two things since edition 1, after your note of 3 October.</p>
+<div style="padding: 0 16px; display: flex; flex-direction: column; gap: 12px">
+<p class="p" style="color: #4E4339">Maren changed three things since edition 1, after your note of 3 October.</p>
 <ul style="margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 4px">
 <li>Oatmeal performance linen replaces wool bouclé.</li>
 <li>Arm height lowered from 26 to 24 inches.</li>
 <li>The linen adds two weeks: nine weeks from the fabric order.</li>
 </ul>
-<p style="margin: 0; display: flex; justify-content: space-between; border-top: 1px solid #E8E3DB; padding: 10px 0 0"><span>Edition 2</span><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; font-variant-numeric: tabular-nums">$7,480.00</span></p>
+<p style="margin: 0; display: flex; justify-content: space-between; border-top: 1px solid #E8E3DB; padding: 10px 0 0"><span>Edition 2</span> <span class="m" style="font-size: 15px; font-variant-numeric: tabular-nums">$7,480.00</span></p>
 <div role="group" aria-label="Your response" style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #E8E3DB; padding: 12px 0 0">
 <div style="display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px">
 <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; background: #3E5145; color: #FFFDF9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; text-align: left; cursor: pointer">Approve</button>
@@ -139,173 +179,208 @@ a:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid #3
 </div>
 <div style="display: flex; flex-direction: column; gap: 6px">
 <label for="sig-name" style="font-size: 16px; line-height: 1.55; font-weight: 500">Your full name</label>
-<input id="sig-name" type="text" autocomplete="name" aria-required="true" aria-describedby="sig-help" value="June Brennan" style="box-sizing: border-box; width: 100%; min-height: 48px; margin: 0; padding: 12px; background: #FAF7F2; border: 1px solid #C9C7BD; border-bottom: 1px solid #65594E; border-radius: 4px; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-style: italic; font-size: 20px; line-height: 1.3; color: #2C2926">
+<input id="sig-name" type="text" autocomplete="name" aria-required="true" aria-describedby="sig-help" value="June Brennan" class="s" style="box-sizing: border-box; width: 100%; min-height: 48px; margin: 0; padding: 12px; background: #FAF7F2; border: 1px solid #C9C7BD; border-bottom: 1px solid #65594E; border-radius: 4px; font-style: italic; font-size: 20px; line-height: 1.3; color: #2C2926">
 <p id="sig-help" style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339">Type your full name before approving.</p>
 </div>
-<p id="approve-consequence" style="margin: 0; padding: 12px 14px; background: #F0F3ED; border-radius: 4px; font-size: 16px; line-height: 1.55">Approving signs edition 2 at $7,480.00 so Maren Holt can order the linen. Nothing is charged here.</p>
+<p id="approve-consequence" class="note">Approving signs edition 2 at $7,480.00 so Maren Holt can order the linen. Nothing is charged here.</p>
 <div style="display: flex; flex-direction: column; gap: 6px">
 <button type="button" aria-describedby="approve-consequence approve-hold" style="align-self: flex-start; display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 11px 19px; border: 1px solid #3E5145; border-radius: 5px; background: #3E5145; color: #FFFDF9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; font-variant-numeric: tabular-nums; cursor: pointer">Approve this edition · $7,480.00</button>
 <p id="approve-hold" style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339">Press and hold to approve this edition. With a keyboard, press and hold Enter.</p>
 </div>
+</div>
 </article>
-<a href="#contact" style="align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; margin: 8px 0 0; font-size: 15px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px">Ask Maren a question</a>
+<a class="lk" href="#contact" style="align-self: flex-start; margin: 8px 0 0; font-size: 15px; line-height: 20px">Ask Maren a question</a>
 </section>
 
 <section id="key" aria-labelledby="key-h" style="margin: 56px 0 0; display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">04 · The house</p>
-<h2 id="key-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.08; font-weight: 400; color: #2C2926">Three rooms, read from the front door</h2>
+<p class="eb">04 · The house</p>
+<h2 id="key-h" class="ch">Three rooms, read from the front door</h2>
 <figure style="margin: 8px 0 0">
-<svg role="img" aria-label="Plan of Elm Street House: the entry at the front door, the living room to the left, the study to the right" width="358" height="230" viewBox="0 0 358 230" fill="none" stroke="#4E4339" stroke-width="1">
-<rect x="8.5" y="8.5" width="341" height="200"></rect>
-<line x1="200.5" y1="8.5" x2="200.5" y2="208.5"></line>
-<line x1="200.5" y1="130.5" x2="349.5" y2="130.5"></line>
-<line x1="150.5" y1="208.5" x2="200.5" y2="208.5" stroke="#FAF7F2" stroke-width="3"></line>
-<path d="M150.5 208.5 A 30 30 0 0 1 180.5 178.5"></path>
-<line x1="200.5" y1="160.5" x2="200.5" y2="190.5" stroke="#FAF7F2" stroke-width="3"></line>
-<line x1="250.5" y1="130.5" x2="285.5" y2="130.5" stroke="#FAF7F2" stroke-width="3"></line>
-<line x1="60.5" y1="8.5" x2="140.5" y2="8.5" stroke-width="3"></line>
-<line x1="230.5" y1="8.5" x2="320.5" y2="8.5" stroke-width="3"></line>
-<text x="30" y="100" fill="#4E4339" stroke="none" font-family="DM Mono, ui-monospace, monospace" font-size="12">Living room</text>
-<text x="246" y="74" fill="#4E4339" stroke="none" font-family="DM Mono, ui-monospace, monospace" font-size="12">Study</text>
-<text x="252" y="174" fill="#4E4339" stroke="none" font-family="DM Mono, ui-monospace, monospace" font-size="12">Entry</text>
-<text x="128" y="226" fill="#4E4339" stroke="none" font-family="DM Mono, ui-monospace, monospace" font-size="12">front door</text>
-</svg>
-<figcaption style="margin: 8px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Plan of Elm Street House · drawn by Birchwood Studio · 2 June 2026</figcaption>
+<a href="#mat" aria-label="Open the floor plan, sheet A-101, in Documents" style="display: block; color: #3E5145">
+<div class="stock" style="width: 358px; height: 300px; padding: 10px"><img src="/_blob/569271616888b2f0c26f860f0b149016" width="336" height="278" alt="Sheet A-101, first-floor plan with room names and dimensions" style="display: block; width: 336px; height: 278px; object-fit: contain"></div>
+</a>
+<figcaption class="cap">First-floor plan, sheet A-101 · drawn by Birchwood Studio · 2 June 2026</figcaption>
 </figure>
-<nav aria-label="Rooms" style="display: flex; flex-wrap: wrap; column-gap: 20px">
-<a href="#room-entry" style="display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; font-size: 16px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-underline-offset: 6px">Entry</a>
-<a href="#room-living" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-underline-offset: 6px">Living room</a>
-<a href="#room-study" style="display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; font-size: 16px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-underline-offset: 6px">Study</a>
+<p style="margin: 4px 0 0; font-size: 15px; line-height: 1.5; color: #4E4339">The whole sheet opens in Documents. Each room below opens its chapter.</p>
+<nav aria-label="Rooms" style="display: flex; flex-direction: column; border-top: 1px solid #E8E3DB">
+<a class="lk" href="#room-living" style="border-bottom: 1px solid #E8E3DB; font-size: 16px">Living room</a>
+<a class="lk" href="#room-study" style="border-bottom: 1px solid #E8E3DB; font-size: 16px">Study</a>
+<a class="lk" href="#room-entry" style="border-bottom: 1px solid #E8E3DB; font-size: 16px">Entry</a>
 </nav>
 </section>
 
 <section id="room-living" aria-labelledby="living-h" style="margin: 56px 0 0; display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">05 · Living room</p>
-<h2 id="living-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.08; font-weight: 400; color: #2C2926">Walnut, linen, and a lot of light</h2>
-<figure style="margin: 8px 0 0">
+<p class="eb">05 · Living room</p>
+<h2 id="living-h" class="ch">Walnut, linen, and a lot of light</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #2C2926">In production: the sideboard. Waiting for you: the sofa.</p>
+<figure style="margin: 8px -16px 0">
+<img src="/_blob/341943f54f6db82eb4f8a1c8fc19e794" width="390" height="780" alt="A long room with a full-height window wall, a daybed and two chairs, trees outside" style="display: block; width: 390px; height: min(780px, calc(100svh - 72px)); object-fit: cover; object-position: 40% 50%; background: #9A9580">
+<div aria-hidden="true" style="height: 4px; background: #6B4F3A"></div>
+<figcaption class="cap" style="padding: 0 16px">Living room as measured · photographed by Birchwood Studio · 2 June 2026</figcaption>
+</figure>
+<p class="lead" style="margin: 16px 0 0">The room faces the garden through one long window. Maren kept everything low so the light reaches the back wall: a walnut sideboard under the window, the linen sofa across from it, a wool rug between, and one lamp for the evening.</p>
+<figure style="margin: 16px 0 0">
+<div style="display: grid; grid-template-columns: 171px 171px; gap: 16px">
+<img src="/_blob/09c3628263fd2b19100d211910bc5923" width="171" height="171" alt="Close walnut grain, dark brown with lighter streaks" style="display: block; width: 171px; height: 171px; object-fit: cover; background: #5E4430">
+<img src="/_blob/c9c72d856094c1848b7601f5abf7c9b7" width="171" height="171" alt="Close weave of pale oatmeal linen" style="display: block; width: 171px; height: 171px; object-fit: cover; background: #D9CFBF">
+<img src="/_blob/8159783471a78c90d9e6e38a3f0a6c97" width="358" height="171" alt="Window light and leaf shadows across a pale stone floor" style="grid-column: 1 / 3; display: block; width: 358px; height: 171px; object-fit: cover; background: #B9AF9F">
+</div>
+<div aria-hidden="true" style="height: 4px; background: #C9BBA5"></div>
+<figcaption class="cap">Walnut, linen and morning light · from Birchwood Studio's living room board · 2 June 2026</figcaption>
+</figure>
+<p class="p" style="margin: 16px 0 0">Four pieces for the room, each with where it stands today. The sofa waits for your approval above.</p>
+<div style="margin: 8px 0 0; display: grid; grid-template-columns: 171px 171px; column-gap: 16px; row-gap: 24px; align-items: start">
+<figure style="margin: 0">
+<div class="stock" style="width: 171px; height: 171px; padding: 17px"><img src="/_blob/415b92f4b388fc2702b95bf2dab638cb" width="137" height="137" alt="A long low sideboard in dark wood with sliding doors" style="display: block; width: 137px; height: 137px; object-fit: contain"></div>
+<p class="pn">Walnut sideboard</p>
+<p class="ps">In production</p>
+<figcaption class="cap">Walnut sideboard, this design · from Harmon Bench Works' catalogue · photographed 2025</figcaption>
+</figure>
+<figure style="margin: 0">
+<img src="/_blob/be06be484a922b7284be4317ee5c71a9" width="171" height="171" alt="A low sofa in pale linen" style="display: block; width: 171px; height: 171px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box; background: #CFC6B8">
+<p class="pn">Sofa</p>
+<p class="ps"><a class="lk" href="#approvals" style="min-height: 44px">Waiting for your approval</a></p>
+<figcaption class="cap">Living room sofa · maker's photograph · 14 October 2026</figcaption>
+</figure>
+<figure style="margin: 0">
+<div class="stock" style="width: 171px; height: 171px; display: flex; align-items: center; justify-content: center"><svg role="img" aria-label="Drawing of a floor lamp from the specification" width="80" height="130" viewBox="0 0 80 130" fill="none" stroke="#4E4339" stroke-width="1.25"><path d="M22 6h36l10 26H12z"></path><line x1="40" y1="32" x2="40" y2="118"></line><path d="M22 124h36"></path><path d="M28 118h24"></path></svg></div>
+<p class="pn">Floor lamp</p>
+<p class="ps">Ordered · photograph to follow</p>
+<figcaption class="cap">Floor lamp · drawn by Birchwood Studio from the specification · 12 May 2026</figcaption>
+</figure>
+<figure style="margin: 0">
+<img src="/_blob/6a7757a64b5c86c7e193a8a73df647b8" width="171" height="171" alt="Close weave of a cream wool rug" style="display: block; width: 171px; height: 171px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box; background: #D5CBBB">
+<p class="pn">Wool rug</p>
+<p class="ps">Chosen · not yet ordered</p>
+<figcaption class="cap">Wool rug, the sample · photographed by Birchwood Studio · 30 September 2026</figcaption>
+</figure>
+</div>
+<p class="p" style="margin: 20px 0 0">Maren drew the room before anything was ordered, so you could see the pieces together. It is a drawing of intent, not a photograph of your room.</p>
+<figure style="margin: 12px 0 0">
 <div style="position: relative; width: 358px; height: 239px; border: 1px solid #E8E3DB; box-sizing: border-box">
-<img src="/_blob/bedee857d00494f6430cb6cf9fc0d7e5" alt="Living room concept, placeholder photograph standing in for Birchwood Studio's render" style="display: block; width: 356px; height: 237px; object-fit: cover">
-<span style="position: absolute; left: 10px; top: 10px; padding: 4px 8px; background: #FFFDF9; border-radius: 3px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 18px; font-weight: 500; color: #2C2926">Concept · not installed</span>
+<img src="/_blob/bedee857d00494f6430cb6cf9fc0d7e5" width="356" height="237" alt="A calm living room in daylight with low furniture and a long window" style="display: block; width: 356px; height: 237px; object-fit: cover; background: #B7AE9E">
+<span style="position: absolute; left: 10px; top: 10px; padding: 4px 8px; background: #FFFDF9; border-radius: 3px; font-size: 14px; line-height: 18px; font-weight: 500; color: #2C2926">Concept · not installed</span>
 </div>
 <div aria-hidden="true" style="height: 4px; width: 358px; background: #6B4F3A"></div>
-<figcaption style="margin: 8px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Concept render of the living room · by Birchwood Studio · 12 May 2026<span style="display: block; margin: 2px 0 0">Placeholder, not job imagery.</span></figcaption>
+<figcaption class="cap">Concept render of the living room · by Birchwood Studio · 12 May 2026</figcaption>
 </figure>
-<div style="margin: 16px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; row-gap: 24px">
-<div style="display: flex; flex-direction: column; gap: 6px">
-<figure style="margin: 0">
-<div style="width: 165px; height: 165px; box-sizing: border-box; padding: 16px; background: #FCFAF6; border: 1px solid #E8E3DB"><img src="/_blob/415b92f4b388fc2702b95bf2dab638cb" alt="Walnut sideboard of the same design, placeholder for Harmon Bench Works' catalogue photograph" style="display: block; width: 131px; height: 131px; object-fit: contain"></div>
-<div aria-hidden="true" style="height: 4px; width: 165px; background: #6B4F3A"></div>
-<figcaption style="margin: 6px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Walnut sideboard, the same model · from Harmon Bench Works' catalogue · photographed 2025<span style="display: block; margin: 2px 0 0">Not her piece; hers is in production. Placeholder, not job imagery.</span></figcaption>
+<p class="p" style="margin: 16px 0 0">The walls take four paints from the same family, pale to dark, so the room reads as one colour in changing light.</p>
+<figure style="margin: 8px 0 0">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px 0; border-top: 1px solid #E8E3DB; border-bottom: 1px solid #E8E3DB">
+<div class="sw"><div style="width: 40px; height: 40px; background: #E3DACB; border: 1px solid #E8E3DB"></div><span>Halvorsen, Morning Oat</span></div>
+<div class="sw"><div style="width: 40px; height: 40px; background: #DDD5C8; border: 1px solid #E8E3DB"></div><span>Larkin Prairie, Pale Birch</span></div>
+<div class="sw"><div style="width: 40px; height: 40px; background: #6E584B; border: 1px solid #E8E3DB"></div><span>Halvorsen, Kettle Clay</span></div>
+<div class="sw"><div style="width: 40px; height: 40px; background: #3B4A40; border: 1px solid #E8E3DB"></div><span>Halvorsen, Bur Oak Green</span></div>
+</div>
+<figcaption class="cap">Living room paint · from Birchwood Studio's palette · 2 September 2026</figcaption>
 </figure>
-<p style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 17px; line-height: 1.3; font-weight: 500">Walnut sideboard</p>
-<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339">In production · Harmon Bench Works, Dayton, Ohio</p>
-</div>
-<div style="display: flex; flex-direction: column; gap: 6px">
-<figure style="margin: 0">
-<div style="width: 165px; height: 165px; box-sizing: border-box; background: #FCFAF6; border: 1px solid #E8E3DB"><img src="/_blob/be06be484a922b7284be4317ee5c71a9" alt="Living room sofa, placeholder for the maker's photograph" style="display: block; width: 163px; height: 163px; object-fit: cover"></div>
-<div aria-hidden="true" style="height: 4px; width: 165px; background: #C9BBA5"></div>
-<figcaption style="margin: 6px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Living room sofa · maker's photograph · 14 October 2026<span style="display: block; margin: 2px 0 0">Placeholder, not job imagery.</span></figcaption>
-</figure>
-<p style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 17px; line-height: 1.3; font-weight: 500">Sofa</p>
-<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339"><a href="#approvals" style="display: inline-flex; align-items: center; min-height: 44px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-underline-offset: 4px">Edition 2 waits for your approval</a></p>
-</div>
-<div style="display: flex; flex-direction: column; gap: 6px">
-<figure style="margin: 0">
-<div style="width: 165px; height: 165px; box-sizing: border-box; background: #FCFAF6; border: 1px solid #E8E3DB; display: flex; align-items: center; justify-content: center">
-<svg role="img" aria-label="Drawing of a floor lamp from the specification" width="80" height="130" viewBox="0 0 80 130" fill="none" stroke="#4E4339" stroke-width="1.25"><path d="M22 6h36l10 26H12z"></path><line x1="40" y1="32" x2="40" y2="118"></line><path d="M22 124h36"></path><path d="M28 118h24"></path></svg>
-</div>
-<div aria-hidden="true" style="height: 4px; width: 165px; background: #C9BBA5"></div>
-<figcaption style="margin: 6px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Floor lamp · drawn by Birchwood Studio from the specification · 12 May 2026<span style="display: block; margin: 2px 0 0">Photograph to follow.</span></figcaption>
-</figure>
-<p style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 17px; line-height: 1.3; font-weight: 500">Floor lamp</p>
-<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339">Ordered · deposit due 14 November</p>
-</div>
-<div style="display: flex; flex-direction: column; gap: 6px">
-<figure style="margin: 0">
-<div style="width: 165px; height: 165px; box-sizing: border-box; background: #FCFAF6; border: 1px solid #E8E3DB"><img src="/_blob/6a7757a64b5c86c7e193a8a73df647b8" alt="Wool rug, close weave, placeholder photograph" style="display: block; width: 163px; height: 163px; object-fit: cover"></div>
-<div aria-hidden="true" style="height: 4px; width: 165px; background: #C9BBA5"></div>
-<figcaption style="margin: 6px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Wool rug, the sample · photographed by Birchwood Studio · 30 September 2026<span style="display: block; margin: 2px 0 0">Placeholder, not job imagery.</span></figcaption>
-</figure>
-<p style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 17px; line-height: 1.3; font-weight: 500">Wool rug</p>
-<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339">Chosen · not yet ordered</p>
-</div>
-</div>
-<div style="margin: 24px 0 0">
-<figure style="margin: 0;">
-<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 14px 0; border-top: 1px solid #E8E3DB; border-bottom: 1px solid #E8E3DB">
-<div style="display: flex; flex-direction: column; gap: 4px"><div style="width: 40px; height: 40px; background: #E3DACB; border: 1px solid #E8E3DB"></div><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.4; color: #4E4339">Halvorsen, Morning Oat</span></div>
-<div style="display: flex; flex-direction: column; gap: 4px"><div style="width: 40px; height: 40px; background: #DDD5C8; border: 1px solid #E8E3DB"></div><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.4; color: #4E4339">Larkin Prairie, Pale Birch</span></div>
-<div style="display: flex; flex-direction: column; gap: 4px"><div style="width: 40px; height: 40px; background: #6E584B; border: 1px solid #E8E3DB"></div><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.4; color: #4E4339">Halvorsen, Kettle Clay</span></div>
-<div style="display: flex; flex-direction: column; gap: 4px"><div style="width: 40px; height: 40px; background: #3B4A40; border: 1px solid #E8E3DB"></div><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.4; color: #4E4339">Halvorsen, Bur Oak Green</span></div>
-</div>
-<figcaption style="margin: 8px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Living room paint · from Birchwood Studio's palette · 2 September 2026</figcaption>
-</figure>
-</div>
 </section>
 
 <section id="room-study" aria-labelledby="study-h" style="margin: 56px 0 0; display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">06 · Study</p>
-<h2 id="study-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.08; font-weight: 400">The study, still on the board</h2>
-<p style="margin: 0">Maren is still choosing for this room. Pieces appear here once they are ordered.</p>
+<p class="eb">06 · Study</p>
+<h2 id="study-h" class="ch">The study, still on the board</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #2C2926">Being chosen. Nothing is ordered yet.</p>
+<figure style="margin: 8px 0 0">
+<div style="display: grid; grid-template-columns: 171px 171px; gap: 16px">
+<img src="/_blob/532e23870e5360569cafad4400fb76af" width="171" height="171" alt="Flat-sawn oak grain with an arched figure" style="display: block; width: 171px; height: 171px; object-fit: cover; background: #B08C62">
+<img src="/_blob/963d4f0b8e987b7e3e34bc2dfc49ae72" width="171" height="171" alt="An aged brass lever handle on a long backplate" style="display: block; width: 171px; height: 171px; object-fit: cover; object-position: 50% 40%; background: #A08A63">
+<img src="/_blob/a684a1f256521b7dc79a310d6559ec96" width="358" height="171" alt="A white lime-plaster wall with a soft uneven surface" style="grid-column: 1 / 3; display: block; width: 358px; height: 171px; object-fit: cover; background: #E6E2DA">
+</div>
+<div aria-hidden="true" style="height: 4px; background: #B08C62"></div>
+<figcaption class="cap">Oak, brass and lime plaster · from Birchwood Studio's study board · 2 September 2026</figcaption>
+</figure>
+<p class="p" style="margin: 12px 0 0">Maren is still choosing for this room: oak shelving, brass hardware, plastered walls. Pieces appear here once they are ordered.</p>
 </section>
 
 <section id="room-entry" aria-labelledby="entry-h" style="margin: 48px 0 0; display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">07 · Entry</p>
-<h2 id="entry-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.08; font-weight: 400">The entry, nothing ordered yet</h2>
-<p style="margin: 0">The entry follows the living room. Maren will add it here when the first piece is ordered.</p>
-</section>
-
-<section id="road" aria-labelledby="road-h" style="margin: 56px 0 0; display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">08 · Progress</p>
-<h2 id="road-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.08; font-weight: 400">In production, then on the truck, then here</h2>
-<dl style="margin: 8px 0 0; display: grid; grid-template-columns: 72px minmax(0, 1fr); column-gap: 12px; row-gap: 10px">
-<dt style="font-family: 'DM Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.55; color: #5A4E43">Now</dt>
-<dd style="margin: 0">Procurement. The walnut sideboard is in production at Harmon Bench Works.</dd>
-<dt style="font-family: 'DM Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.55; color: #5A4E43">Next</dt>
-<dd style="margin: 0">Living room installation.</dd>
-<dt style="font-family: 'DM Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.55; color: #5A4E43">Aiming</dt>
-<dd style="margin: 0">22 January 2027, the date Maren is working toward.</dd>
-</dl>
-<figure style="margin: 12px 0 0; display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 12px; align-items: start">
-<img src="/_blob/8918ba43d43b2ddc8243b2500da76b63" alt="The workshop floor, placeholder photograph standing in for Harmon Bench Works" style="display: block; width: 96px; height: 96px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box">
-<figcaption style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Harmon Bench Works, the workshop · photographed by Harmon Bench Works · 15 October 2026<span style="display: block; margin: 2px 0 0">Placeholder, not job imagery.</span></figcaption>
+<p class="eb">07 · Entry</p>
+<h2 id="entry-h" class="ch">The entry, nothing ordered yet</h2>
+<p class="p">The entry follows the living room, in the same pale paint.</p>
+<figure style="margin: 4px 0 0">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px 0; border-top: 1px solid #E8E3DB; border-bottom: 1px solid #E8E3DB">
+<div class="sw"><div style="width: 40px; height: 40px; background: #E3DACB; border: 1px solid #E8E3DB"></div><span>Halvorsen, Morning Oat</span></div>
+<div class="sw"><div style="width: 40px; height: 40px; background: #DDD5C8; border: 1px solid #E8E3DB"></div><span>Larkin Prairie, Pale Birch</span></div>
+</div>
+<figcaption class="cap">Entry paint · from Birchwood Studio's palette · 2 September 2026</figcaption>
 </figure>
 </section>
 
+<section id="road" aria-labelledby="road-h" style="margin: 56px 0 0; display: flex; flex-direction: column; gap: 8px">
+<p class="eb">08 · Progress</p>
+<h2 id="road-h" class="ch">In production, then on the truck, then here</h2>
+<dl style="margin: 8px 0 0; display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 12px; row-gap: 8px">
+<dt class="m" style="font-size: 15px; line-height: 1.55; letter-spacing: .08em; color: #5A4E43">NOW</dt>
+<dd style="margin: 0">In production</dd>
+<dt class="m" style="font-size: 15px; line-height: 1.55; letter-spacing: .08em; color: #5A4E43">MAKER</dt>
+<dd style="margin: 0">Harmon Bench Works, Dayton</dd>
+<dt class="m" style="font-size: 15px; line-height: 1.55; letter-spacing: .08em; color: #5A4E43">TARGET</dt>
+<dd style="margin: 0">22 January 2027, the date Maren is working toward</dd>
+<dt class="m" style="font-size: 15px; line-height: 1.55; letter-spacing: .08em; color: #5A4E43">UPDATE</dt>
+<dd style="margin: 0">Designer update 16 October 2026</dd>
+</dl>
+<figure style="margin: 12px 0 0">
+<div style="display: grid; grid-template-columns: 171px 171px; gap: 16px; align-items: start">
+<div class="stock" style="width: 171px; height: 214px; padding: 8px"><img src="/_blob/97a2ea25daee570c4398e2c6b3ee74bc" width="155" height="198" alt="Shop drawing of a cabinet in front, side and plan views with dimensions" style="display: block; width: 155px; height: 198px; object-fit: contain"></div>
+<img src="/_blob/8918ba43d43b2ddc8243b2500da76b63" width="171" height="214" alt="A woodworking shop with benches, clamps and timber stacked along the wall" style="display: block; width: 171px; height: 214px; object-fit: cover; background: #7D6B57">
+</div>
+<div aria-hidden="true" style="height: 4px; background: #6B4F3A"></div>
+<figcaption class="cap">Shop drawing and the workshop · from Harmon Bench Works · 15 October 2026</figcaption>
+</figure>
+<p class="p" style="margin: 12px 0 0">Next: living room installation, once the sideboard and the sofa are both in.</p>
+</section>
+
 <section id="note" aria-labelledby="note-h" style="margin: 56px 0 0; display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">09 · Updates</p>
-<h2 id="note-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.08; font-weight: 400">A note from the studio, 16 October</h2>
-<p style="margin: 8px 0 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-style: italic; font-size: 20px; line-height: 1.4; color: #2C2926">The page now opens on your sideboard; the workshop sent photographs on 15 October. Everything else is where it was.</p>
-<p style="margin: 0">Edition 2 of the sofa is ready for you: oatmeal linen in place of the bouclé, and the arms two inches lower. The linen adds two weeks, and we are still working toward 22 January.</p>
-<p style="margin: 0; font-family: 'DM Mono', ui-monospace, monospace; font-size: 15px; color: #5A4E43">Maren Holt</p>
+<p class="eb">09 · Updates</p>
+<h2 id="note-h" class="ch">A note from the studio, 16 October</h2>
+<p class="s" style="margin: 8px 0 0; font-style: italic; font-size: 20px; line-height: 1.4; color: #2C2926">The page now opens on your sideboard; the workshop sent photographs on 15 October. Everything else is where it was.</p>
+<figure style="margin: 8px 0 0">
+<img src="/_blob/54a9b93d307b5444e4fc060d22adaf6a" width="358" height="448" alt="Curled pale shavings beside a wooden hand plane, close" style="display: block; width: 358px; height: 448px; object-fit: cover; object-position: 60% 50%; background: #8C7356">
+<div aria-hidden="true" style="height: 4px; background: #6B4F3A"></div>
+<figcaption class="cap">Walnut top, planed · Harmon Bench Works · 15 October 2026</figcaption>
+</figure>
+<p class="p" style="margin: 8px 0 0">Edition 2 of the sofa is ready for you: oatmeal linen in place of the bouclé, and the arms two inches lower. The linen adds two weeks, and we are still working toward 22 January.</p>
+<p class="m" style="margin: 0; font-size: 15px; color: #5A4E43">Maren Holt</p>
 <label for="reply" style="margin: 12px 0 0; font-size: 16px; font-weight: 500">Reply to Maren</label>
 <textarea id="reply" rows="3" style="box-sizing: border-box; width: 358px; padding: 10px 12px; border: 1px solid #C9C7BD; border-radius: 6px; background: #FFFDF9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55; color: #2C2926"></textarea>
-<button type="button" style="align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">Send reply</button>
+<button type="button" class="bl" style="align-self: flex-start">Send reply</button>
 </section>
 
 <section id="previously" aria-labelledby="prev-h" style="margin: 56px 0 0; display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">10 · Earlier</p>
-<h2 id="prev-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.08; font-weight: 400">What has already been settled</h2>
+<p class="eb">10 · Earlier</p>
+<h2 id="prev-h" class="ch">What has already been settled</h2>
 <ul id="changed" style="margin: 8px 0 0; padding: 0; list-style: none; border-top: 1px solid #E8E3DB">
-<li style="padding: 10px 0; border-bottom: 1px solid #E8E3DB; font-family: 'DM Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5">Edition 4 · approved by Maren · 21 October</li>
-<li style="padding: 10px 0; border-bottom: 1px solid #E8E3DB; font-family: 'DM Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5">Sofa, edition 1 · changes requested by June Brennan</li>
-<li style="padding: 10px 0; border-bottom: 1px solid #E8E3DB; font-family: 'DM Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5">Sofa deposit · $500.00 of $800.00 paid · INV-2026-017</li>
+<li class="m" style="padding: 10px 0; border-bottom: 1px solid #E8E3DB; font-size: 15px; line-height: 1.5">Edition 4 · approved by Maren · 21 October</li>
+<li class="m" style="padding: 10px 0; border-bottom: 1px solid #E8E3DB; font-size: 15px; line-height: 1.5">Sofa, edition 1 · changes requested by June Brennan</li>
+<li class="m" style="padding: 10px 0; border-bottom: 1px solid #E8E3DB; font-size: 15px; line-height: 1.5">Sofa deposit · $500.00 of $800.00 paid · INV-2026-017</li>
 </ul>
 </section>
 
 <section id="mat" aria-labelledby="mat-h" style="margin: 56px 0 0; display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">11 · Documents and contact</p>
-<h2 id="mat-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.08; font-weight: 400">Who to call, and the documents</h2>
+<p class="eb">11 · Documents and contact</p>
+<h2 id="mat-h" class="ch">Who to call, and the documents</h2>
 <div id="contact" style="margin: 8px 0 0; display: flex; flex-direction: column">
-<p style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 500">Maren Holt · Birchwood Studio</p>
-<a href="tel:+16085550148" style="align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; font-family: 'DM Mono', ui-monospace, monospace; font-size: 15px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-underline-offset: 4px">(608) 555-0148</a>
+<p class="s" style="margin: 0; font-size: 17px; font-weight: 500">Maren Holt · Birchwood Studio</p>
+<a class="lk m" href="tel:+16085550148" style="align-self: flex-start; font-size: 15px; text-underline-offset: 4px">(608) 555-0148</a>
 </div>
-<div id="mat-papers" style="border-top: 1px solid #E8E3DB; padding: 4px 0 0">
-<button type="button" aria-haspopup="dialog" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-underline-offset: 6px; cursor: pointer">All documents</button>
+<div id="mat-papers" style="margin: 8px 0 0; border-top: 1px solid #E8E3DB; padding: 16px 0 0; display: grid; grid-template-columns: 171px 171px; column-gap: 16px; align-items: start">
+<figure style="margin: 0">
+<a href="#mat-papers" aria-label="Open the drawing set" style="display: block; color: #3E5145"><div class="stock" style="width: 171px; height: 228px; padding: 8px"><img src="/_blob/569271616888b2f0c26f860f0b149016" width="155" height="212" alt="Cover of the drawing set: a first-floor plan" style="display: block; width: 155px; height: 212px; object-fit: contain"></div></a>
+<figcaption class="cap">Drawing set · Birchwood Studio · 2 June 2026</figcaption>
+</figure>
+<figure style="margin: 0">
+<a href="#mat-papers" aria-label="Open the sideboard shop drawing" style="display: block; color: #3E5145"><div class="stock" style="width: 171px; height: 228px; padding: 8px"><img src="/_blob/97a2ea25daee570c4398e2c6b3ee74bc" width="155" height="212" alt="Cover of the shop drawing: a cabinet in three views" style="display: block; width: 155px; height: 212px; object-fit: contain"></div></a>
+<figcaption class="cap">Sideboard shop drawing · Harmon Bench Works · 9 October 2026</figcaption>
+</figure>
 </div>
-<div style="border-top: 1px solid #E8E3DB; padding: 4px 0 0; display: flex; flex-direction: column">
-<a href="/projects/proj-0587" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-underline-offset: 6px">Lake Cottage</a>
-<button type="button" style="align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-underline-offset: 6px; cursor: pointer">Sign out</button>
+<div style="border-top: 1px solid #E8E3DB; padding: 4px 0 0">
+<button type="button" class="bl" aria-haspopup="dialog">All documents</button>
+</div>
+<div style="border-top: 1px solid #E8E3DB; padding: 16px 0 0; display: flex; flex-direction: column; gap: 4px">
+<figure style="margin: 0">
+<a href="/projects/proj-0587" aria-label="Lake Cottage, the next issue" style="display: block; width: 171px; color: #3E5145"><img src="/_blob/3b8f4f2d229e7c02d734acadf36cc225" width="171" height="228" alt="A bedroom with white linen on a low wooden bed and a garden window" style="display: block; width: 171px; height: 228px; object-fit: cover; background: #C9C3B4"></a>
+<figcaption class="cap">Lake Cottage, the next issue · Birchwood Studio · 3 October 2026</figcaption>
+</figure>
+<button type="button" class="bl" style="align-self: flex-start; font-size: 15px">Sign out</button>
 </div>
 </section>
 
@@ -314,7 +389,7 @@ a:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid #3
 <div style="height: 2px; width: 286px; background: #C4A57B; opacity: .7"></div>
 <div style="height: 2px; width: 214px; background: #C4A57B; opacity: .35"></div>
 </div>
-<p style="margin: 0; padding: 20px 0 0; border-top: 1px solid #E8E3DB; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5; letter-spacing: .02em; color: #5A4E43">Prepared by Birchwood Studio · Sent through Patina</p>
+<p class="m" style="margin: 0; padding: 20px 0 0; border-top: 1px solid #E8E3DB; font-size: 15px; line-height: 1.5; letter-spacing: .02em; color: #5A4E43">Prepared by Birchwood Studio · Sent through Patina</p>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":8000}}'>

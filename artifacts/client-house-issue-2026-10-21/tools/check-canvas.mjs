@@ -5,6 +5,12 @@
 // percent, denominators, required and retired copy), its colours, shadows, fragment links and
 // captions. Browser checks load each board in Chromium (Playwright) at its native width:
 // figcaption contrast >= 4.5:1, interactive targets >= 44px, no horizontal overflow.
+// v2 (SQ-1570) adds: every <img> carries width and height; no figure is data-dimmable; a photo
+// caption ends with its placeholder qualifier; every chapter-03 frame holds the signature step;
+// chapter-order lists match; and in Chromium, captions at 15px or more, no text box over an <img>
+// box unless an opaque paper/stock ancestor sits between them, and the 390 arrival (standing
+// row 1 top at most 620, row 3 top at most 740, hero 340 to 380 tall, hero not focusable, first
+// Tab stop after the letterhead is standing row 1).
 // --self-test seeds bad fixtures in memory and fails unless every probe catches its problem.
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -233,27 +239,68 @@ function checkBoard(file, src, frame, boardIds, fail) {
       const s = attr(g, 'src') || '';
       if (alt === undefined) fail(`<img> without alt: ${g.slice(0, 70)}`);
       if (!s.startsWith('/_blob/')) fail(`<img> src must be an uploaded asset (/_blob/…): ${s.slice(0, 60)}`);
+      if (!/^\d+$/.test(attr(g, 'width') || '') || !/^\d+$/.test(attr(g, 'height') || '')) fail(`<img> needs width and height attributes: ${g.slice(0, 70)}`);
     }
+    if (/^<figure\b/i.test(g) && hasAttr(g, 'data-dimmable')) fail(`data-dimmable on a figure (plates never dim): ${g.slice(0, 70)}`);
     if (/^<a\b/i.test(g)) {
       const color = ((attr(g, 'style') || '').match(/(?:^|;)\s*color\s*:\s*([^;]+)/i) || [])[1];
       if (color && color.trim().toUpperCase() !== FOREST) fail(`link colour ${color.trim()} is not forest ${FOREST}`);
     }
   }
 
-  // Captions: decoded, exactly what · whose · when; qualifications on a second line without " · ".
+  // Captions: decoded, exactly what · whose · when, plus at most one trailing qualifier field
+  // (v2: "· placeholder, not job imagery" on a placeholder photograph; "· placeholder composition"
+  // on the CSS board collage). A plate holding an uploaded photograph must carry a qualifier.
   const figs = code.match(/<figure\b[\s\S]*?<\/figure>/gi) || [];
   if ((code.match(/<figure\b/gi) || []).length !== figs.length) fail('unbalanced <figure> markup');
+  // Arrival boards (Main, Issue-Cover-Desktop) carry the placeholder declaration once, as a canvas
+  // note beside the frame, so in-frame photo captions there are the bare three segments.
+  const arrival = /^(Main|Issue-Cover-Desktop)\.dc\.html$/.test(file) || /\sdata-arrival-board\b/.test(src);
   for (const fig of figs) {
     const cap = fig.match(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i);
     if (!cap) { fail(`<figure> without <figcaption>: ${fig.slice(0, 70)}`); continue; }
-    const text = squash(render(cap[1]));
-    if ((text.match(/ · /g) || []).length !== 2) fail(`figcaption must be exactly what · whose · when: "${text.slice(0, 90)}"`);
+    const fields = squash(render(cap[1])).split(' · ');
+    const qualified = QUALIFIERS.includes(fields[fields.length - 1]);
+    const core = qualified ? fields.length - 1 : fields.length;
+    if (core !== 3) fail(`figcaption must be exactly what · whose · when (plus one qualifier): "${fields.join(' · ').slice(0, 90)}"`);
+    if (arrival && fields[fields.length - 1] === QUALIFIERS[0]) fail(`placeholder suffix in-frame on an arrival board (it lives in the board note): "${fields.join(' · ').slice(0, 90)}"`);
+    else if (!arrival && /<img\b[^>]*\ssrc\s*=\s*["']?\/_blob\//i.test(fig) && !qualified) fail(`photo caption must end "· ${QUALIFIERS[0]}": "${fields.join(' · ').slice(0, 90)}"`);
   }
+
+  // Chapter 03 (v2): every frame of the approvals chapter holds the staged consent, the signature
+  // field, before its forest act. A frame is a <section> whose text opens on "03 · Approvals" or
+  // that carries data-chapter="03".
+  for (const sec of sections(code)) {
+    if (!(hasAttr(sec.tag, 'data-chapter') && attr(sec.tag, 'data-chapter') === '03') && !squash(render(sec.body)).startsWith('03 · Approvals')) continue;
+    const sig = sec.body.search(/<input\b[^>]*\sid\s*=\s*["']sig-name/i);
+    const act = sec.body.search(/<button\b[^>]*>\s*Approve this edition/i);
+    if (sig < 0) fail(`chapter 03 frame without the signature step (an input id="sig-name…"): ${sec.tag.slice(0, 70)}`);
+    else if (act < 0 || act < sig) fail(`chapter 03 frame: the Approve act must follow the signature step: ${sec.tag.slice(0, 70)}`);
+  }
+
+  // Chapter order (v2): every list marked data-chapter-order on a board names the same chapters
+  // in the same order.
+  const orders = [...code.matchAll(/<ol\b[^>]*\sdata-chapter-order\b[^>]*>([\s\S]*?)<\/ol>/gi)].map((m) => [...m[1].matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map((li) => squash(render(li[1])).split(' ')[0]).join(' '));
+  for (const o of orders.slice(1)) if (o !== orders[0]) fail(`chapter order differs between frames: "${orders[0]}" vs "${o}"`);
+}
+const QUALIFIERS = ['placeholder, not job imagery', 'placeholder composition'];
+// Balanced <section> blocks (nested sections each reported).
+function sections(code) {
+  const out = [];
+  const re = /<section\b[^>]*>|<\/section\s*>/gi;
+  const stack = [];
+  for (const m of code.matchAll(re)) {
+    if (m[0][1] !== '/') stack.push({ tag: m[0], start: m.index + m[0].length });
+    else if (stack.length) { const s = stack.pop(); out.push({ tag: s.tag, body: code.slice(s.start, m.index) }); }
+  }
+  return out;
 }
 
 // ---------- per-board required and retired copy (the SQ-1566 rulings) ----------
+// v2: the one-line standing line became three 44px standing rows (contract §1).
+const STANDING = ['$600.00 is past due since 25 September.', 'One approval waits: the living room sofa.', 'Six invoices are open, $1,375.00 together.'];
 const ARRIVAL = ['Pay invoices, review approvals, and follow your project here.', 'Invoices', 'Approvals', 'Progress', 'Updates',
-  'Documents', 'Contact Maren Holt', 'Six invoices are open; $600.00 is past due. One edition awaits your approval.'];
+  'Documents', 'Contact Maren Holt', ...STANDING];
 const COLOPHON = 'Prepared by Birchwood Studio · Sent through Patina';
 const APPROVE = 'Approve this edition · $7,480.00';
 const CHIP = 'Concept · not installed';
@@ -262,23 +309,31 @@ const GROUPS = ['Invoices to pay', 'Payments in progress', 'Payment needs review
 const PAY = 'Continue to secure payment';
 const EYEBROWS = ['01 · Elm Street House · Procurement', '02 · Invoices', '03 · Approvals', '04 · The house', '05 · Living room', '08 · Progress', '09 · Updates', '11 · Documents and contact'];
 const PAINT = ['Halvorsen, Morning Oat', 'Larkin Prairie, Pale Birch', 'Halvorsen, Kettle Clay', 'Halvorsen, Bur Oak Green'];
-const AUTHORS = ['Tangerineduel', 'Antti Leppänen', 'JohanahoJ', 'Estate Lookup Interiors', 'Mike Duchstein', 'Phadzim', 'ambientCG.com / Lennart Demes', 'Cyril5555'];
+const AUTHORS = ['Tangerineduel', 'Antti Leppänen', 'JohanahoJ', 'Estate Lookup Interiors', 'Mike Duchstein', 'Phadzim', 'ambientCG.com / Lennart Demes', 'Cyril5555',
+  'Carol M. Highsmith', 'Stilfehler', 'Frank R. Leslie', 'Cooper Hewitt, Smithsonian Design Museum', 'Terasaface', 'William Warby', 'KaiKemmann', 'Jules Verne Times Two'];
 const LICENCES = {
   'CC BY-SA 4.0': 'https://creativecommons.org/licenses/by-sa/4.0/', 'CC BY 4.0': 'https://creativecommons.org/licenses/by/4.0/',
   CC0: 'https://creativecommons.org/publicdomain/zero/1.0/', 'CC BY-SA 3.0': 'https://creativecommons.org/licenses/by-sa/3.0/',
+  'CC BY 2.0': 'https://creativecommons.org/licenses/by/2.0/',
 };
+const HERO_CAPTION = 'Walnut top, planed · Harmon Bench Works · 15 October 2026';
+const PLACEHOLDER_NOTE = 'All photographs are placeholders, not job imagery; see Credits';
+const BOARD_CAPTION = 'Living room board · Birchwood Studio · 2 June 2026 · placeholder composition';
+const SETTLED = 'Approved by June Brennan · 21 October 2026';
 const REQUIRED = {
   Main: [...ARRIVAL, ...EYEBROWS, '10 · Earlier', APPROVE, CHIP, COLOPHON, ...GROUPS, 'View invoice', PAY, LINEN, 'Your full name',
-    'Type your full name before approving.', 'Edition 4 · approved by Maren · 21 October', ...PAINT],
-  'Issue-Cover-Desktop': [...ARRIVAL, ...EYEBROWS, COLOPHON, ...GROUPS, 'View invoice', PAY],
+    'Type your full name before approving.', 'Edition 4 · approved by Maren · 21 October', ...PAINT, HERO_CAPTION, 'Total outstanding $1,375.00',
+    'Living room as measured · photographed by Birchwood Studio · 2 June 2026', 'Lake Cottage, the next issue', 'Harmon Bench Works, Dayton', '22 January 2027'],
+  'Issue-Cover-Desktop': [...ARRIVAL, ...EYEBROWS, COLOPHON, ...GROUPS, 'View invoice', PAY, HERO_CAPTION, APPROVE, 'Your full name', 'Portrait template'],
   'Approval-Pair': [APPROVE, LINEN, 'Your full name', 'Send change request', "What you'd like changed", 'Confirm pause',
-    "This records that you want to pause and talk it through. It doesn't approve or reject the edition.", 'Edition 2 is approved'],
-  'Living-Room-Band': [CHIP, ...PAINT],
-  'Plate-Grammar': [LINEN, '1248 × 648', '72vh'],
+    "This records that you want to pause and talk it through. It doesn't approve or reject the edition.", 'Edition 2 is approved', SETTLED],
+  'Living-Room-Band': [CHIP, ...PAINT, 'Living room as measured · photographed by Birchwood Studio · 2 June 2026'],
+  'Plate-Grammar': [LINEN, '1440 × 648', '1248 × 648', '390 × 352', '72svh', 'Held plate', 'Drawing', 'Material run', 'Document cover', 'Concept render', 'Clipping study'],
+  'Drawings-and-Materials': [BOARD_CAPTION, 'Sheet A-201, living room elevations', 'notch', 'hairline', 'below'],
   'Phase-Strip': ['nothing moves under Earlier', '02 · Invoices', '09 · Updates'],
-  'Press-Band-Designer': ['A new edition is ready', 'placeholder, not job imagery'],
-  'Type-and-Rhythm': ['INV-2026-017 · $300.00 of $800.00 · due 2 November'],
-  'Motion-Storyboard': ['400 ms', '520 ms'],
+  'Press-Band-Designer': ['A new edition is ready', 'placeholder, not job imagery', 'The cover is a drawing until a photograph arrives', '16:10', '0.86'],
+  'Type-and-Rhythm': ['INV-2026-017 · $300.00 of $800.00 · due 2 November', '200 percent zoom'],
+  'Motion-Storyboard': ['400 ms', '520 ms', 'Reduced motion'],
   'Empty-Issue': [COLOPHON, 'photograph to follow'],
   Credits: [...AUTHORS, 'Cropped from a living-room photograph', 'cropped in layout'],
 };
@@ -290,6 +345,7 @@ const indexOf = (hay, s) => hay.toLowerCase().indexOf(squash(s).toLowerCase());
 function checkCopy(stem, src, fail) {
   const t = boardText(src);
   const flat = squash(t.all);
+  const tags = blankCode(src).match(TAG) || [];
   for (const s of REQUIRED[stem] || []) if (indexOf(flat, s) < 0) fail(`required copy missing: "${s}"`);
   for (const s of RETIRED) if (indexOf(flat, s) >= 0) fail(`retired copy present: "${s}"`);
   if (SETTLES.test(flat)) fail(`copy claims pressing settles the invoice: "${flat.match(SETTLES)[0]}"`);
@@ -331,7 +387,19 @@ function checkCopy(stem, src, fail) {
     const opts = (group.match(/<button\b/g) || []).length;
     const labels = (squash(render(group)).match(/placeholder, not job imagery/g) || []).length;
     if (!opts || labels !== opts) fail(`hero picker: ${opts} options but ${labels} "placeholder, not job imagery" labels`);
-    for (const ineligible of ['8918ba43d43b2ddc8243b2500da76b63', 'c9c72d856094c1848b7601f5abf7c9b7', '09c3628263fd2b19100d211910bc5923']) if (group.includes(ineligible)) fail(`hero picker offers an ineligible source (${ineligible.slice(0, 8)})`);
+    // Never the cover: workshop scene (02), samples and grain (03, 08), the catalogue sideboard (01, V2-1)
+    // and the concept render (05).
+    for (const ineligible of ['8918ba43d43b2ddc8243b2500da76b63', 'c9c72d856094c1848b7601f5abf7c9b7', '09c3628263fd2b19100d211910bc5923',
+      '415b92f4b388fc2702b95bf2dab638cb', 'bedee857d00494f6430cb6cf9fc0d7e5']) if (group.includes(ineligible)) fail(`hero picker offers an ineligible source (${ineligible.slice(0, 8)})`);
+  }
+  if (stem === 'Phase-Strip' && (code.match(/<ol\b[^>]*\sdata-chapter-order\b/gi) || []).length !== 4) fail('each of the four phase frames needs its data-chapter-order list');
+  if (stem === 'Main') {
+    for (const [n, href] of [['1', '#letterbox'], ['2', '#approvals'], ['3', '#ledger']]) {
+      const row = tags.find((g) => /^<a\b/i.test(g) && attr(g, 'data-standing-row') === n);
+      if (!row) fail(`standing row ${n} missing (an <a data-standing-row="${n}">)`);
+      else if (attr(row, 'href') !== href) fail(`standing row ${n} must link to ${href}`);
+    }
+    if ((code.match(/<figure\b[^>]*\sdata-hero\b/gi) || []).length !== 1) fail('exactly one hero plate (figure data-hero) required');
   }
   if (stem === 'Empty-Issue') {
     const fig = (code.match(/<figure\b(?:(?!<\/figure>)[\s\S])*Window seat cushion(?:(?!<\/figure>)[\s\S])*<\/figure>/) || [''])[0];
@@ -344,7 +412,7 @@ function checkCopy(stem, src, fail) {
   if (stem === 'Credits') {
     for (const [name, url] of Object.entries(LICENCES)) if (src.includes(`>${name}</a>`) && !src.includes(`href="${url}" style`)) fail(`licence ${name} not linked to ${url}`);
     const links = (src.match(/href="https:\/\/commons\.wikimedia\.org\/wiki\/File:/g) || []).length;
-    if (links !== 8) fail(`expected 8 source links, found ${links}`);
+    if (links !== 18) fail(`expected 18 source links, found ${links}`);
   }
 }
 
@@ -368,8 +436,15 @@ function checkIndex(index, files, fail) {
     if (n.fill && !['gray', 'red', 'orange', 'green', 'teal', 'blue', 'purple', 'pink'].includes(n.fill)) fail(`note ${id} fill ${n.fill} invalid`);
   }
   const notes = Object.values(index.notes || {}).map((n) => n.text || '').join('\n');
-  for (const s of ['Below chapter 03 the desktop page matches the Main board one-to-one; not redrawn.', '228–276', '905', '1248 × 648']) if (!notes.includes(s)) fail(`board note missing: "${s}"`);
+  for (const s of ['Below chapter 03 the desktop page matches the Main board one-to-one; not redrawn.', 'Standing row 1', '664', '1440 × 648',
+    'Q1', 'C2', 'V2-1', 'V2-2', 'V2-3', 'V2-4', 'V2-5', 'V2-6', 'V2-7', 'V2-8']) if (!notes.includes(s)) fail(`board note missing: "${s}"`);
   if (/first act inside 740/i.test(notes)) fail('board note claims the first act is inside 740px');
+  for (const b of ['Main.dc.html', 'Issue-Cover-Desktop.dc.html']) {
+    const f = (index.boards || {})[b];
+    if (!f) continue;
+    const near = Object.values(index.notes || {}).some((n) => (n.text || '').includes(PLACEHOLDER_NOTE) && n.y >= f.y - 400 && n.y <= f.y + f.h && (n.x + (n.w || 0) <= f.x || n.x >= f.x + f.w));
+    if (!near) fail(`${b}: no note outside the frame saying "${PLACEHOLDER_NOTE}"`);
+  }
 }
 
 // ---------- browser ----------
@@ -427,11 +502,73 @@ async function measure(browser, w, load, fail) {
         const r = el.getBoundingClientRect();
         if (r.height < 44 || r.width < 44) small.push(`${Math.round(r.width)}x${Math.round(r.height)} ${el.tagName.toLowerCase()} "${(el.getAttribute('aria-label') || el.textContent).trim().slice(0, 40)}"`);
       }
-      return { contrast, small, sw: document.documentElement.scrollWidth };
+      // v2: caption size floor (names and dates in captions take the spec's 15px floor).
+      const capSize = [];
+      for (const cap of document.querySelectorAll('figcaption')) for (const el of [cap, ...cap.querySelectorAll('*')]) {
+        if (!visible(el) || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+        const px = parseFloat(getComputedStyle(el).fontSize);
+        if (px < 15) capSize.push(`${px}px "${el.textContent.trim().slice(0, 50)}"`);
+      }
+      // v2: no ink on photograph pixels. A text box may cross an <img> box only when an element
+      // between the text and their nearest common ancestor is opaque paper, stock or card.
+      const PAPER = ['rgb(250, 247, 242)', 'rgb(252, 250, 246)', 'rgb(255, 253, 249)'];
+      const imgs = [...document.querySelectorAll('img')].filter(visible).map((img) => [img, img.getBoundingClientRect()]);
+      const onImage = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (!n.textContent.trim() || !n.parentElement || !visible(n.parentElement)) continue;
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        const boxes = [...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0);
+        for (const [img, ib] of imgs) {
+          const hit = boxes.some((b) => Math.min(b.right, ib.right) - Math.max(b.left, ib.left) > 0.5 && Math.min(b.bottom, ib.bottom) - Math.max(b.top, ib.top) > 0.5);
+          if (!hit) continue;
+          let shielded = false;
+          for (let el = n.parentElement; el && !el.contains(img); el = el.parentElement) {
+            const cs = getComputedStyle(el);
+            if (PAPER.includes(cs.backgroundColor) && cs.opacity === '1') { shielded = true; break; }
+          }
+          if (!shielded) onImage.push(`"${n.textContent.trim().slice(0, 40)}" over ${img.getAttribute('src')?.slice(7, 15)}`);
+        }
+      }
+      // v2: the 390 arrival (boards that mark standing rows and a hero plate).
+      const arrival = {};
+      const row = (k) => document.querySelector(`[data-standing-row="${k}"]`);
+      const top0 = document.body.getBoundingClientRect().top;
+      if (row('1')) {
+        arrival.row1 = row('1').getBoundingClientRect().top - top0;
+        arrival.row3 = row('3') ? row('3').getBoundingClientRect().top - top0 : null;
+        const tabbable = [...document.querySelectorAll('a[href], button, input:not([type=hidden]), textarea, select, summary, [tabindex]')]
+          .filter((el) => el.tabIndex >= 0 && !el.disabled && visible(el));
+        const head = document.getElementById('doorplate');
+        const after = head ? tabbable.find((el) => head.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING && !head.contains(el)) : null;
+        arrival.firstTab = !head ? 'no #doorplate letterhead' : after === row('1') ? null : `"${(after?.textContent || 'nothing').trim().slice(0, 40)}"`;
+      }
+      const hero = document.querySelector('figure[data-hero]');
+      if (hero) {
+        const img = hero.querySelector('img');
+        arrival.heroH = img ? img.getBoundingClientRect().height : 0;
+        const focusable = (el) => el.tabIndex >= 0 || el.closest('a[href], button, [tabindex]:not([tabindex="-1"])');
+        arrival.heroFocus = Boolean(focusable(hero) || (img && focusable(img)));
+      }
+      return { contrast, small, sw: document.documentElement.scrollWidth, capSize, onImage, arrival };
     });
     for (const c of r.contrast) fail(`figcaption contrast ${c} (needs 4.5:1)`);
     for (const s of r.small) fail(`target under 44px: ${s}`);
     if (r.sw > w) fail(`horizontal overflow: scrollWidth ${r.sw} > ${w}`);
+    for (const c of r.capSize) fail(`caption under 15px: ${c}`);
+    for (const t of r.onImage) fail(`text on photograph pixels: ${t}`);
+    const a = r.arrival;
+    if (a.row1 !== undefined) {
+      if (a.row1 > 620) fail(`standing row 1 top ${Math.round(a.row1)} > 620${a.row1 > 664 ? ' (past the 664 toolbar line)' : ''}`);
+      if (a.row3 === null) fail('standing row 3 missing');
+      else if (a.row3 > 740) fail(`standing row 3 top ${Math.round(a.row3)} > 740`);
+      if (a.firstTab) fail(`first Tab stop after the letterhead is not standing row 1: ${a.firstTab}`);
+    }
+    if (a.heroH !== undefined) {
+      if (w <= 430 && (a.heroH < 340 || a.heroH > 380)) fail(`hero height ${Math.round(a.heroH)} outside 340–380 at ${w}`);
+      if (a.heroFocus) fail('hero plate is focusable');
+    }
   } finally {
     await page.close();
   }
@@ -467,6 +604,11 @@ async function main(only) {
     checkCopy(f.replace(/\.dc\.html$/, ''), src, at(f));
   }
   const confirms = srcs.filter(([f]) => /^(Main|Approval-Pair)\.dc\.html$/.test(f)).reduce((n, [, s]) => n + (squash(boardText(s).all).match(/Edition 2 is approved/g) || []).length, 0);
+  const credits = srcs.find(([f]) => f === 'Credits.dc.html');
+  if (credits) {
+    const used = new Set(srcs.filter(([f]) => f !== 'Credits.dc.html').flatMap(([, s]) => [...s.matchAll(/\/_blob\/([0-9a-f]{32})/g)].map((m) => m[1])));
+    for (const id of used) if (!credits[1].includes(`/_blob/${id}`)) at('Credits.dc.html')(`placeholder photo /_blob/${id} used on a board but not declared on Credits`);
+  }
   if (!only && confirms !== 1) at('Main + Approval-Pair')(`the selected confirmation state must show once, found ${confirms}`);
   let browser;
   try {
@@ -505,10 +647,13 @@ const GOOD = `<!doctype html>
 <button type="button" aria-describedby="note" style="min-height: 48px; padding: 0 16px; background: #3E5145; color: #FFFDF9; border: 0">Continue</button>
 <p id="note">Nothing is charged until you confirm.</p>
 <div data-c1-alternative style="width: 60px; height: 40px; background: #FCFAF6; box-shadow: 0 2px 8px rgba(44,41,38,.08)"></div>
-<figure style="margin: 0"><img src="/_blob/0123" alt="A walnut sideboard" style="display: block; width: 120px; height: 80px">
-<figcaption style="margin: 8px 0 0; font-size: 12px; color: #4E4339">Walnut sideboard · photographed by Harmon Bench Works · 9 October 2026<span style="display: block">Placeholder, not job imagery.</span></figcaption></figure>
-<figure style="margin: 0"><img src="/_blob/0124" alt="The catalogue sideboard" style="display: block; width: 120px; height: 80px">
-<figcaption style="margin: 8px 0 0; font-size: 12px; color: #4E4339">Walnut sideboard, the same model · from Harmon Bench Works' catalogue · photographed 2025</figcaption></figure>
+<figure style="margin: 0; position: relative"><img src="/_blob/0123" width="120" height="80" alt="A walnut sideboard" style="display: block; width: 120px; height: 80px">
+<p style="position: absolute; left: 0; top: 60px; margin: 0; padding: 2px 4px; background: #FAF7F2">Tab</p>
+<figcaption style="margin: 8px 0 0; font-size: 15px; color: #4E4339">Walnut sideboard · photographed by Harmon Bench Works · 9 October 2026 · placeholder, not job imagery</figcaption></figure>
+<figure style="margin: 0"><img src="/_blob/0124" width="120" height="80" alt="The catalogue sideboard" style="display: block; width: 120px; height: 80px">
+<figcaption style="margin: 8px 0 0; font-size: 15px; color: #4E4339">Walnut sideboard, the same model · from Harmon Bench Works' catalogue · photographed 2025 · placeholder, not job imagery</figcaption></figure>
+<ol data-chapter-order style="margin: 0"><li>02 · Invoices</li><li>03 · Approvals</li></ol>
+<ol data-chapter-order style="margin: 0"><li>02 · Invoices</li><li>03 · Approvals</li></ol>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":400,"height":300}}'>
@@ -555,9 +700,30 @@ const PROBES = [
   ['retired clay link', add('<a href="#top" style="display: inline-flex; min-height: 44px; min-width: 44px; color: #8B7355">Clay</a>'), /#8B7355/],
   ['support.js outside head', (s) => s.replace('<script src="./support.js"></script>\n</head>', '</head>\n<script src="./support.js"></script>'), /support\.js line missing/],
   ['external script', (s) => s.replace('</head>', '<script src="https://cdn.example/x.js"></script>\n</head>'), /external script/],
-  ['figcaption contrast', (s) => s.replace('font-size: 12px; color: #4E4339">Walnut sideboard ·', 'font-size: 12px; color: #B8B2A8">Walnut sideboard ·'), /figcaption contrast/],
+  ['figcaption contrast', (s) => s.replace('font-size: 15px; color: #4E4339">Walnut sideboard ·', 'font-size: 15px; color: #B8B2A8">Walnut sideboard ·'), /figcaption contrast/],
   ['target under 44px', add('<button type="button" style="height: 24px; padding: 0 8px">Tiny</button>'), /target under 44px/],
   ['horizontal overflow', add('<div style="width: 640px; height: 10px"></div>'), /horizontal overflow/],
+  // v2 probes (SQ-1570), one per new check.
+  ['fourth caption field that is not a qualifier', (s) => s.replace('9 October 2026 · placeholder, not job imagery', '9 October 2026 · oiled'), /figcaption must be exactly/],
+  ['photo caption without its placeholder qualifier', (s) => s.replace("photographed 2025 · placeholder, not job imagery", 'photographed 2025'), /photo caption must end/],
+  ['standing row 1 below 620', add(`<header id="doorplate" style="height: 96px"><p style="margin: 0">Letterhead</p></header><div style="height: 560px"></div>
+<a data-standing-row="1" href="#top" style="display: block; min-height: 44px; color: #3E5145">Row one</a><a data-standing-row="3" href="#top" style="display: block; min-height: 44px; color: #3E5145">Row three</a>`), /standing row 1 top \d+ > 620/],
+  ['standing row 3 below 740', add(`<header id="doorplate" style="height: 96px"><p style="margin: 0">Letterhead</p></header>
+<a data-standing-row="1" href="#top" style="display: block; min-height: 44px; color: #3E5145">Row one</a><div style="height: 700px"></div><a data-standing-row="3" href="#top" style="display: block; min-height: 44px; color: #3E5145">Row three</a>`), /standing row 3 top \d+ > 740/],
+  ['first Tab stop after the letterhead is not row 1', (s) => s.replace('<div id="top"', `<header id="doorplate" style="height: 96px"><p style="margin: 0">Letterhead</p></header>
+<a data-standing-row="1" href="#top" style="display: block; min-height: 44px; color: #3E5145">Row one</a><a data-standing-row="3" href="#top" style="display: block; min-height: 44px; color: #3E5145">Row three</a>
+<div id="top"`).replace('<header id="doorplate"', '<a href="#top" style="display: block; min-height: 44px; color: #3E5145">Skip</a><header id="doorplate"').replace('Letterhead</p></header>', 'Letterhead</p></header><button type="button" style="min-height: 48px; min-width: 48px">First</button>'), /first Tab stop after the letterhead is not standing row 1: "First"/],
+  ['hero height outside 340–380', add('<figure data-hero style="margin: 0"><img src="/_blob/0126" width="390" height="300" alt="Hero" style="display: block; width: 390px; height: 300px"><figcaption style="font-size: 15px; color: #4E4339">Hero · photographed by Birchwood Studio · 2 June 2026 · placeholder, not job imagery</figcaption></figure>'), /hero height 300 outside 340–380/],
+  ['hero plate focusable', add('<figure data-hero style="margin: 0"><a href="#top" style="display: block; color: #3E5145"><img src="/_blob/0127" width="390" height="352" alt="Hero" style="display: block; width: 390px; height: 352px"></a><figcaption style="font-size: 15px; color: #4E4339">Hero · photographed by Birchwood Studio · 2 June 2026 · placeholder, not job imagery</figcaption></figure>'), /hero plate is focusable/],
+  ['caption under 15px', (s) => s.replace('font-size: 15px; color: #4E4339">Walnut sideboard ·', 'font-size: 12px; color: #4E4339">Walnut sideboard ·'), /caption under 15px/],
+  ['text on photograph pixels', (s) => s.replace('padding: 2px 4px; background: #FAF7F2">Tab', 'padding: 2px 4px">Tab'), /text on photograph pixels: "Tab"/],
+  ['translucent tab over a photograph', (s) => s.replace('padding: 2px 4px; background: #FAF7F2">Tab', 'padding: 2px 4px; background: rgba(250, 247, 242, 0.8)">Tab'), /text on photograph pixels: "Tab"/],
+  ['data-dimmable on a figure', (s) => s.replace('<figure style="margin: 0; position: relative">', '<figure data-dimmable style="margin: 0; position: relative">'), /data-dimmable on a figure/],
+  ['img without width and height', (s) => s.replace('<img src="/_blob/0124" width="120" height="80"', '<img src="/_blob/0124"'), /needs width and height/],
+  ['chapter 03 frame without the signature step', add(`<section><p>03 · Approvals</p><button type="button" style="min-height: 48px; background: #3E5145; color: #FFFDF9">Approve this edition · $7,480.00</button></section>`), /chapter 03 frame without the signature step/],
+  ['chapter 03 act before the signature step', add(`<section data-chapter="03"><p>The sofa</p><button type="button" style="min-height: 48px; background: #3E5145; color: #FFFDF9">Approve this edition · $7,480.00</button><label for="sig-name-x">Your full name</label><input id="sig-name-x" type="text" style="min-height: 48px"></section>`), /Approve act must follow the signature step/],
+  ['placeholder suffix in-frame on an arrival board', (s) => s.replace('<body>', '<body data-arrival-board>'), /placeholder suffix in-frame on an arrival board/],
+  ['chapter order differs between frames', (s) => s.replace('<ol data-chapter-order style="margin: 0"><li>02 · Invoices</li><li>03 · Approvals</li></ol>\n</div>', '<ol data-chapter-order style="margin: 0"><li>03 · Approvals</li><li>02 · Invoices</li></ol>\n</div>'), /chapter order differs/],
 ];
 async function selfTest() {
   const other = '<div id="here"></div>';

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Press band, designer</title>
+<title>Press band, the designer's Document</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -10,83 +10,129 @@
 <helmet>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&amp;family=Inter:wght@400;500&amp;family=DM+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
 <style>
-body{margin:0;background:#FAF7F2;color:#2C2926}
+body{margin:0;background:#F2EEE7;color:#2C2926}
 button:focus-visible,input:focus-visible{outline:2px solid #3E5145;outline-offset:2px}
 </style>
 </helmet>
-<div style="width: 1440px; min-height: 960px; box-sizing: border-box; padding: 0 96px 64px; background: #FAF7F2; color: #2C2926; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55">
-<header style="height: 72px; border-bottom: 1px solid #E8E3DB; display: flex; align-items: center; justify-content: space-between">
+<div style="width: 1440px; min-height: 1480px; box-sizing: border-box; padding: 0 0 64px; background: #F2EEE7; color: #2C2926; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55">
+<header style="padding: 20px 64px 16px; display: flex; justify-content: space-between; border-bottom: 1px solid #E8E3DB; background: #FAF7F2">
 <p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #5A4E43">The Document · Elm Street House</p>
 <p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #5A4E43">Maren Holt · Birchwood Studio</p>
 </header>
-
-<section aria-labelledby="press-h" style="margin: 28px 0 0; padding: 18px 24px; background: #FFFDF9; border: 1px solid #C9C7BD; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 32px">
+<section aria-labelledby="press-h" style="margin: 24px 64px 0; padding: 20px 24px; background: #FFFDF9; border: 1px solid #C9C7BD; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 24px">
 <div>
-<h2 id="press-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 22px; line-height: 1.3; font-weight: 500">A new edition is ready</h2>
-<p style="margin: 2px 0 0; font-size: 15px; color: #2C2926">Elm Street House · waiting for you</p>
-<p style="margin: 2px 0 0; font-size: 15px; color: #4E4339">Approve puts it on June's page. Hold keeps the current edition there.</p>
+<h2 id="press-h" style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 28px; line-height: 1.1; font-weight: 400">A new edition is ready</h2>
+<p style="margin: 4px 0 0; font-size: 15px; color: #4E4339">Elm Street House · waiting for you. Approve puts it on June's page. Hold keeps the current edition there.</p>
 </div>
-<div style="display: flex; align-items: center; gap: 20px; flex: none">
-<button type="button" style="min-height: 48px; padding: 11px 22px; border: 1px solid #3E5145; border-radius: 5px; background: #3E5145; color: #FFFDF9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer">Approve</button>
-<button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 4px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">Hold</button>
-<button type="button" aria-expanded="true" aria-controls="edit-tray" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 4px; border: 0; background: none; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; color: #3E5145; text-decoration: underline; text-decoration-color: #3E5145; text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer">Edit</button>
+<div style="display: flex; gap: 8px">
+<button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer; background: #3E5145; color: #FFFDF9">Approve</button>
+<button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer; background: #FFFDF9; color: #3E5145">Hold</button>
+<button type="button" aria-expanded="true" aria-controls="edit-tray" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer; background: #FFFDF9; color: #3E5145">Edit</button>
 </div>
 </section>
 
-<div style="margin: 32px 0 0; display: grid; grid-template-columns: 420px minmax(0, 1fr); column-gap: 56px; align-items: start">
-<div>
-<p style="margin: 0 0 10px; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">What June sees</p>
-<div style="box-sizing: border-box; width: 420px; padding: 0 16px 24px; background: #FAF7F2; border: 1px solid #C9C7BD; border-radius: 8px; display: flex; flex-direction: column; gap: 10px">
-<div style="height: 64px; border-bottom: 1px solid #E8E3DB; display: flex; align-items: center; justify-content: space-between">
-<span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #5A4E43">Birchwood Studio</span>
-<span style="font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 20px; font-weight: 500">Elm Street House</span>
-</div>
-<p style="margin: 0">Six invoices are open; $600.00 is past due. One edition awaits your approval.</p>
-<p style="margin: 4px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #5A4E43">01 · Elm Street House · Procurement</p>
-<figure style="margin: 0">
-<img src="/_blob/415b92f4b388fc2702b95bf2dab638cb" alt="Walnut sideboard in the workshop, placeholder photograph standing in for Harmon Bench Works" style="display: block; width: 386px; height: 241px; object-fit: cover; object-position: 50% 55%">
-<div aria-hidden="true" style="height: 4px; background: #6B4F3A"></div>
-<figcaption style="margin: 8px 0 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #4E4339">Walnut sideboard, in the workshop · photographed by Harmon Bench Works · 9 October 2026<span style="display: block; margin: 2px 0 0">Placeholder, not job imagery.</span></figcaption>
-</figure>
-<p style="margin: 0; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-size: 34px; line-height: 1.0; letter-spacing: -0.01em">The living room is on its way</p>
-</div>
+<div id="edit-tray" style="margin: 24px 64px 0; display: grid; grid-template-columns: minmax(0, 1fr) 520px; column-gap: 48px; align-items: start">
+<div style="display: flex; flex-direction: column; gap: 28px">
+<div role="group" aria-labelledby="picker-h" style="display: flex; flex-direction: column; gap: 10px">
+<p id="picker-h" style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #5A4E43">Cover · 01 · the opening photograph</p>
+<ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 16px">
+<li style="display: flex; flex-direction: column; gap: 6px; width: 150px">
+<button type="button" aria-pressed="true" aria-label="The hand plane and the planed walnut top, Her piece, in the workshop" style="display: block; padding: 0; width: 150px; height: 94px; border: 3px solid #3E5145; border-radius: 4px; background: #FCFAF6; box-sizing: border-box; overflow: hidden; cursor: pointer"><img src="/_blob/54a9b93d307b5444e4fc060d22adaf6a" width="144" height="88" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%"></button>
+<span style="font-size: 15px; line-height: 1.4">Her piece, in the workshop<span style="display: block; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #4E4339">· placeholder, not job imagery</span></span>
+</li>
+<li style="display: flex; flex-direction: column; gap: 6px; width: 150px">
+<button type="button" aria-pressed="false" aria-label="The living room as measured, Installed room" style="display: block; padding: 0; width: 150px; height: 94px; border: 1px solid #C9C7BD; border-radius: 4px; background: #FCFAF6; box-sizing: border-box; overflow: hidden; cursor: pointer"><img src="/_blob/341943f54f6db82eb4f8a1c8fc19e794" width="144" height="88" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 40% 55%"></button>
+<span style="font-size: 15px; line-height: 1.4">Installed room<span style="display: block; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #4E4339">· placeholder, not job imagery</span></span>
+</li>
+<li style="display: flex; flex-direction: column; gap: 6px; width: 150px">
+<button type="button" aria-pressed="false" aria-label="The kitchen joinery, Installed room" style="display: block; padding: 0; width: 150px; height: 94px; border: 1px solid #C9C7BD; border-radius: 4px; background: #FCFAF6; box-sizing: border-box; overflow: hidden; cursor: pointer"><img src="/_blob/f381529122c04e5661766fe69d2a05bf" width="144" height="88" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 50%"></button>
+<span style="font-size: 15px; line-height: 1.4">Installed room<span style="display: block; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #4E4339">· placeholder, not job imagery</span></span>
+</li>
+<li style="display: flex; flex-direction: column; gap: 6px; width: 150px">
+<button type="button" aria-pressed="false" aria-label="The finished bedroom, Studio's finished photograph" style="display: block; padding: 0; width: 150px; height: 94px; border: 1px solid #C9C7BD; border-radius: 4px; background: #FCFAF6; box-sizing: border-box; overflow: hidden; cursor: pointer"><img src="/_blob/3b8f4f2d229e7c02d734acadf36cc225" width="144" height="88" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 50%"></button>
+<span style="font-size: 15px; line-height: 1.4">Studio's finished photograph<span style="display: block; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #4E4339">· placeholder, not job imagery</span></span>
+</li>
+<li style="display: flex; flex-direction: column; gap: 6px; width: 150px">
+<button type="button" aria-pressed="false" aria-label="The first-floor plan, sheet A-101, Key plan, the drawn cover" style="display: block; padding: 0; width: 150px; height: 94px; border: 1px solid #C9C7BD; border-radius: 4px; background: #FCFAF6; box-sizing: border-box; overflow: hidden; cursor: pointer"><img src="/_blob/569271616888b2f0c26f860f0b149016" width="144" height="88" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 50%"></button>
+<span style="font-size: 15px; line-height: 1.4">Key plan, the drawn cover<span style="display: block; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #4E4339">· placeholder, not job imagery</span></span>
+</li>
+</ul>
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339; max-width: 760px">Only job-made sources bleed: installed rooms, studio boards and sheets, scans above the floor, and photographs of her own piece wherever taken. Catalogue photographs, workshop scenes, samples and concept renders are not offered for the cover.</p>
 </div>
 
-<div id="edit-tray" style="display: flex; flex-direction: column; gap: 24px">
-<div role="group" aria-labelledby="picker-h" style="display: flex; flex-direction: column; gap: 10px">
-<p id="picker-h" style="margin: 0; font-size: 15px; font-weight: 500">Opening photograph</p>
-<ul style="margin: 0; padding: 0; list-style: none; display: flex; gap: 16px">
-<li style="display: flex; flex-direction: column; gap: 6px; width: 134px"><button type="button" aria-pressed="true" aria-label="Walnut sideboard in the workshop, Maker's photograph of the specified piece" style="padding: 0; border: 2px solid #3E5145; border-radius: 4px; background: #FFFDF9; cursor: pointer; line-height: 0"><img src="/_blob/415b92f4b388fc2702b95bf2dab638cb" alt="" style="display: block; width: 130px; height: 82px; object-fit: cover; border-radius: 3px"></button><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.4; color: #4E4339">Maker's photograph of the specified piece<span style="display: block">· placeholder, not job imagery</span></span></li>
-<li style="display: flex; flex-direction: column; gap: 6px; width: 134px"><button type="button" aria-pressed="false" aria-label="Living room sofa in pale linen, Maker's photograph of the specified piece" style="padding: 0; border: 1px solid #C9C7BD; border-radius: 4px; background: #FFFDF9; cursor: pointer; line-height: 0"><img src="/_blob/be06be484a922b7284be4317ee5c71a9" alt="" style="display: block; width: 132px; height: 84px; object-fit: cover; border-radius: 3px"></button><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.4; color: #4E4339">Maker's photograph of the specified piece<span style="display: block">· placeholder, not job imagery</span></span></li>
-<li style="display: flex; flex-direction: column; gap: 6px; width: 134px"><button type="button" aria-pressed="false" aria-label="A finished living room, Installed photograph" style="padding: 0; border: 1px solid #C9C7BD; border-radius: 4px; background: #FFFDF9; cursor: pointer; line-height: 0"><img src="/_blob/bedee857d00494f6430cb6cf9fc0d7e5" alt="" style="display: block; width: 132px; height: 84px; object-fit: cover; border-radius: 3px"></button><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.4; color: #4E4339">Installed photograph<span style="display: block">· placeholder, not job imagery</span></span></li>
-<li style="display: flex; flex-direction: column; gap: 6px; width: 134px"><button type="button" aria-pressed="false" aria-label="Wool rug, close weave, Studio board" style="padding: 0; border: 1px solid #C9C7BD; border-radius: 4px; background: #FFFDF9; cursor: pointer; line-height: 0"><img src="/_blob/6a7757a64b5c86c7e193a8a73df647b8" alt="" style="display: block; width: 132px; height: 84px; object-fit: cover; border-radius: 3px"></button><span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.4; color: #4E4339">Studio board<span style="display: block">· placeholder, not job imagery</span></span></li>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #5A4E43">Every chapter opener</p>
+<ul aria-label="Chapter openers" style="margin: 0; padding: 0; list-style: none; border-top: 1px solid #C9C7BD">
+<li style="display: grid; grid-template-columns: 180px 96px minmax(0, 1fr) auto; column-gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid #E8E3DB">
+<span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #5A4E43">04 · The house</span>
+<img src="/_blob/569271616888b2f0c26f860f0b149016" width="96" height="60" alt="First-floor plan" style="display: block; width: 96px; height: 60px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box">
+<span style="font-size: 15px; line-height: 1.45">Drawing plate, sheet A-101<span style="display: block; color: #4E4339">Offered: sheets and key plans, shown whole</span></span>
+<button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer; background: #FFFDF9; color: #3E5145">Change</button>
+</li>
+<li style="display: grid; grid-template-columns: 180px 96px minmax(0, 1fr) auto; column-gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid #E8E3DB">
+<span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #5A4E43">05 · Living room</span>
+<img src="/_blob/341943f54f6db82eb4f8a1c8fc19e794" width="96" height="60" alt="The living room as measured" style="display: block; width: 96px; height: 60px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box">
+<span style="font-size: 15px; line-height: 1.45">Chapter plate and the held plate<span style="display: block; color: #4E4339">Offered: installed photographs and scans of this room</span></span>
+<button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer; background: #FFFDF9; color: #3E5145">Change</button>
+</li>
+<li style="display: grid; grid-template-columns: 180px 96px minmax(0, 1fr) auto; column-gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid #E8E3DB">
+<span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #5A4E43">06 · Study</span>
+<img src="/_blob/532e23870e5360569cafad4400fb76af" width="96" height="60" alt="Oak grain sample" style="display: block; width: 96px; height: 60px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box">
+<span style="font-size: 15px; line-height: 1.45">Material run, oak, brass, plaster<span style="display: block; color: #4E4339">Offered: the room's own samples until a photograph arrives</span></span>
+<button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer; background: #FFFDF9; color: #3E5145">Change</button>
+</li>
+<li style="display: grid; grid-template-columns: 180px 96px minmax(0, 1fr) auto; column-gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid #E8E3DB">
+<span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #5A4E43">08 · Progress</span>
+<img src="/_blob/97a2ea25daee570c4398e2c6b3ee74bc" width="96" height="60" alt="The shop drawing" style="display: block; width: 96px; height: 60px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box">
+<span style="font-size: 15px; line-height: 1.45">Progress pair, sheet and workshop<span style="display: block; color: #4E4339">Offered: the maker's sheets and photographs of her piece</span></span>
+<button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer; background: #FFFDF9; color: #3E5145">Change</button>
+</li>
+<li style="display: grid; grid-template-columns: 180px 96px minmax(0, 1fr) auto; column-gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid #E8E3DB">
+<span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #5A4E43">09 · Updates</span>
+<img src="/_blob/54a9b93d307b5444e4fc060d22adaf6a" width="96" height="60" alt="The planed walnut top" style="display: block; width: 96px; height: 60px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box">
+<span style="font-size: 15px; line-height: 1.45">The letter plate at 4:5<span style="display: block; color: #4E4339">Offered: the photograph the note is about</span></span>
+<button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer; background: #FFFDF9; color: #3E5145">Change</button>
+</li>
+<li style="display: grid; grid-template-columns: 180px 96px minmax(0, 1fr) auto; column-gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid #E8E3DB">
+<span style="font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; color: #5A4E43">11 · Documents</span>
+<img src="/_blob/3b8f4f2d229e7c02d734acadf36cc225" width="96" height="60" alt="The next issue cover" style="display: block; width: 96px; height: 60px; object-fit: cover; border: 1px solid #E8E3DB; box-sizing: border-box">
+<span style="font-size: 15px; line-height: 1.45">Document covers and the next issue<span style="display: block; color: #4E4339">Offered: covers of shared documents</span></span>
+<button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer; background: #FFFDF9; color: #3E5145">Change</button>
+</li>
 </ul>
-<p style="margin: 0; font-size: 15px; color: #4E4339">Only sources the page may open on: installed photographs, studio boards, qualifying scans, and makers' photographs of the specified piece. Concept renders, workshop scenes and samples are not offered here.</p>
 </div>
-<div style="display: flex; flex-direction: column; gap: 6px">
-<label for="edit-headline" style="font-size: 15px; font-weight: 500">Headline</label>
-<input id="edit-headline" type="text" value="The living room is on its way" style="box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #C9C7BD; border-radius: 6px; background: #FFFDF9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; color: #2C2926">
+
+<section aria-labelledby="empty-h" style="padding: 20px; background: #FAF7F2; border: 1px dashed #8A7C6D; border-radius: 6px; display: flex; flex-direction: column; gap: 10px; max-width: 760px">
+<p id="empty-h" style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #5A4E43">When no photograph meets the floor</p>
+<p style="margin: 0; font-size: 16px">The cover is a drawing until a photograph arrives. The key plan opens the issue at full measure, on stock, with the swatch strip beneath it.</p>
+<button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #3E5145; border-radius: 5px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 20px; font-weight: 500; cursor: pointer; align-self: flex-start; background: #FFFDF9; color: #3E5145">Add a photograph for the cover</button>
+</section>
 </div>
-<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px">
-<div style="display: flex; flex-direction: column; gap: 6px">
-<label for="edit-whose" style="font-size: 15px; font-weight: 500">Caption · whose</label>
-<input id="edit-whose" type="text" value="photographed by Harmon Bench Works" style="box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #C9C7BD; border-radius: 6px; background: #FFFDF9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; color: #2C2926">
+
+<div style="display: flex; flex-direction: column; gap: 24px">
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #5A4E43">Focal point · one drag, two crops</p>
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339">The point is stored once per photograph. Both delivered crops keep the whole subject and discard at most half the source.</p>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #5A4E43">16:10</p>
+<div style="position: relative; width: 480px; height: 300px">
+<img src="/_blob/54a9b93d307b5444e4fc060d22adaf6a" width="480" height="300" alt="The hand plane and shavings, cropped 16:10" style="display: block; width: 480px; height: 300px; object-fit: cover; object-position: 50% 45%; background: #8C7356">
+<button type="button" aria-label="Focal point at 50 across, 45 down. Drag, or use the arrow keys" style="position: absolute; left: 218px; top: 113px; width: 44px; height: 44px; padding: 0; border: 2px solid #FFFDF9; border-radius: 50%; background: transparent; outline: 1px solid #2C2926; cursor: grab"></button>
 </div>
-<div style="display: flex; flex-direction: column; gap: 6px">
-<label for="edit-when" style="font-size: 15px; font-weight: 500">Caption · when</label>
-<input id="edit-when" type="text" value="9 October 2026" style="box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #C9C7BD; border-radius: 6px; background: #FFFDF9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; color: #2C2926">
+<p style="margin: 0; font-size: 15px; line-height: 1.45; color: #4E4339; max-width: 480px">The desktop cover, 1440 × 648 from a 16:10 crop; the 72svh cap moves object-position toward this point.</p>
 </div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #5A4E43">0.86</p>
+<div style="position: relative; width: 258px; height: 300px">
+<img src="/_blob/54a9b93d307b5444e4fc060d22adaf6a" width="258" height="300" alt="The hand plane and shavings, cropped 0.86" style="display: block; width: 258px; height: 300px; object-fit: cover; object-position: 56% 48%; background: #8C7356">
+<button type="button" aria-label="Focal point at 56 across, 48 down. Drag, or use the arrow keys" style="position: absolute; left: 122px; top: 122px; width: 44px; height: 44px; padding: 0; border: 2px solid #FFFDF9; border-radius: 50%; background: transparent; outline: 1px solid #2C2926; cursor: grab"></button>
 </div>
-<div style="padding: 14px 16px; background: #F0F3ED; border-radius: 4px; display: flex; flex-direction: column; gap: 4px">
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #4A574D">Since the last edition</p>
-<p style="margin: 0; font-family: 'DM Mono', 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.5">Added: Study · photographed by you · 21 October — plates changed, words unchanged</p>
+<p style="margin: 0; font-size: 15px; line-height: 1.45; color: #4E4339; max-width: 260px">The phone cover, 0.86 wide to tall, delivered at 780 × 907 or more.</p>
 </div>
-<p style="margin: 0; font-size: 15px; color: #4E4339">The chapters keep their order on every edition, so the tray has nothing to rearrange.</p>
 </div>
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1480}}'>
 class Component extends DCLogic {
   renderVals() {
     return {};
