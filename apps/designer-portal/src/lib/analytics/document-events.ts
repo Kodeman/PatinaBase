@@ -355,7 +355,8 @@ export const documentEvents = {
       | "secondary"
       | "tertiary"
       | "danger"
-      | "terminal";
+      | "terminal"
+      | "plate";
     presentation: "inline" | "mobile_dock";
   }) => track("document_action_shown", props),
 
@@ -369,7 +370,8 @@ export const documentEvents = {
       | "secondary"
       | "tertiary"
       | "danger"
-      | "terminal";
+      | "terminal"
+      | "plate";
     presentation: "inline" | "mobile_dock";
   }) => track("document_action_selected", props),
 

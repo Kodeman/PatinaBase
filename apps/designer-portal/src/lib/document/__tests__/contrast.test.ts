@@ -129,9 +129,7 @@ describe('F56 · text-grade ink tokens clear WCAG AA', () => {
     for (const name of PIGMENT_INKS) expect(tokens.get(name)).toBeDefined();
     // An alias-form ink (`--x-ink: var(--color-clay)`) parses to no hex. It
     // would keep the count healthy and ship unmeasured, so name it here.
-    // The on-dark inks are aliases by design and are measured on charcoal in
-    // their own block below (US-43 R5).
-    expect(aliasedInkNames(css).filter((name) => !name.startsWith('--on-dark-'))).toEqual([]);
+    expect(aliasedInkNames(css)).toEqual([]);
   });
 
   it.each(inkTokens)('%s reaches 4.5:1 on every light ground', (name, hex) => {
@@ -732,47 +730,6 @@ describe('F56 · the base pigments are not spent as text', () => {
  * shadow that would rescue it. R144 amends "no new token" exactly once, for
  * this one value, on Claim cards only.
  */
-describe('US-43 R5 · the on-dark inks clear AA on the charcoal ground', () => {
-  /** One alias hop at a time (`--on-dark-ink` → `--ink-paper` →
-   *  `--color-off-white`) until a hex is reached. */
-  const aliases = new Map<string, string>();
-  for (const match of css.matchAll(/(--[a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)\s*;/g)) {
-    aliases.set(match[1]!, match[2]!);
-  }
-  const resolve = (name: string): string | undefined => {
-    for (let hop = name, depth = 0; depth < 5; depth += 1) {
-      const hex = tokens.get(hop);
-      if (hex) return hex;
-      const next = aliases.get(hop);
-      if (!next) return undefined;
-      hop = next;
-    }
-    return undefined;
-  };
-  const onDark = (name: string) => Number(contrastRatio(resolve(name)!, DARK_GROUND).toFixed(2));
-
-  it('resolves every on-dark token to a hex', () => {
-    for (const name of [
-      '--on-dark-ink',
-      '--on-dark-muted',
-      '--on-dark-clay',
-      '--on-dark-terracotta',
-      '--focus-on-dark',
-    ]) {
-      expect(resolve(name)).toMatch(/^#[0-9a-fA-F]{6}$/);
-    }
-  });
-
-  it('reads at the ratios the house sheet records', () => {
-    expect(onDark('--on-dark-ink')).toBeGreaterThanOrEqual(13);
-    expect(onDark('--on-dark-muted')).toBeGreaterThanOrEqual(11);
-    expect(onDark('--on-dark-clay')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
-    expect(onDark('--on-dark-terracotta')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
-    // a focus ring is a non-text indicator, but it gets the text floor here
-    expect(onDark('--focus-on-dark')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
-  });
-});
-
 describe('D4 · --color-card-edge is the one boundary grey', () => {
   it('is declared, and at the ruled value', () => {
     // A retune has to be a ruling, not an edit.
@@ -871,22 +828,18 @@ describe('T-22 · the drafting stock inks clear AA on their own grounds', () => 
  *
  * Every focus outline and ring draws `--focus-ring`. Base clay drew it at
  * 2.23:1 on paper and 1.82:1 on the rail, under WCAG 1.4.11's 3:1 for a
- * non-text indicator. The :root value is clay-ink; a [data-ground='dark']
- * surface swaps in --focus-on-dark. The two declarations are read from their
- * own blocks: the shared alias map keeps only the last one it sees.
+ * non-text indicator. The :root value is clay-ink, and since US-46 R203 no
+ * surface swaps it: the band and the dock are paper at every width.
  */
 describe('US-43 F-F · --focus-ring clears 3:1 on every ground it draws on', () => {
   const NON_TEXT_CONTRAST = 3;
   const declaredIn = (block: RegExp): string | undefined =>
     css.match(block)?.[1];
   const rootValue = declaredIn(/:root\s*\{[^}]*?--focus-ring\s*:\s*var\((--[a-z0-9-]+)\)\s*;/);
-  const darkValue = declaredIn(
-    /\[data-ground='dark'\]\s*\{[^}]*?--focus-ring\s*:\s*var\((--[a-z0-9-]+)\)\s*;/,
-  );
 
-  it('is clay-ink on :root and --focus-on-dark on a dark ground', () => {
+  it('is clay-ink on :root, declared once and swapped by no ground', () => {
     expect(rootValue).toBe('--color-clay-ink');
-    expect(darkValue).toBe('--focus-on-dark');
+    expect(css.match(/--focus-ring\s*:/g) ?? []).toHaveLength(1);
   });
 
   it.each(['--paper', '--paper-doc', '--doc-rail-stock'] as const)(
@@ -896,12 +849,6 @@ describe('US-43 F-F · --focus-ring clears 3:1 on every ground it draws on', () 
       expect(ratio).toBeGreaterThanOrEqual(NON_TEXT_CONTRAST);
     },
   );
-
-  it('holds the dark-ground ring at 3:1 on charcoal', () => {
-    expect(contrastRatio(resolveToken(darkValue!), DARK_GROUND)).toBeGreaterThanOrEqual(
-      NON_TEXT_CONTRAST,
-    );
-  });
 
   it('is what base clay was not: under 3:1 on paper and on the rail', () => {
     const clay = resolveToken('--color-clay');
@@ -944,3 +891,62 @@ jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
   useProjectPurchasingAgreement: () => ({ data: { state: 'missing', evidence: null }, isPending: false, isError: false }),
   useRecordProjectSignedAgreement: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
+
+/**
+ * US-46 R203 — the band's Next plate.
+ *
+ * The plate is the one filled charcoal shape on the paper: ink-paper words on
+ * the --ink paint, read as text (4.5:1). The control keeps its honest 44px
+ * target, but the paint is 32px (inset 6px top and bottom on ::after), so it
+ * and its focus ring sit inside the 56px band. The shared --focus-ring hugs
+ * the paint and reads on the paper around it (a non-text indicator, 3:1). It
+ * is charcoal, never forest: forest is the terminal fill, which commits.
+ */
+describe('US-46 R203 · the Next plate reads on its own ground and focuses on paper', () => {
+  const plateRule = css.match(/\n\.da-plate\s*\{([^}]*)\}/)?.[1] ?? '';
+  const paintRule = css.match(/\n\.da-plate::after\s*\{([^}]*)\}/)?.[1] ?? '';
+  const plateFocus =
+    css.match(/\n\.da-plate:focus-visible::after,[^{]*\{([^}]*)\}/)?.[1] ?? '';
+  const px = (body: string, prop: string): number => {
+    const value = body.match(new RegExp(`${prop}:\\s*(\\d+)(?:px)?`))?.[1];
+    expect(value).toBeDefined();
+    return Number(value);
+  };
+
+  it('paints --ink-paper words on the --ink paint, never forest', () => {
+    expect(paintRule).toMatch(/background-color:\s*var\(--ink\);/);
+    expect(plateRule).toMatch(/color:\s*var\(--ink-paper\);/);
+    expect(`${plateRule}${paintRule}`).not.toContain('forest');
+  });
+
+  it('holds ink-paper on ink at 4.5:1', () => {
+    expect(contrastRatio(resolveToken('--ink-paper'), resolveToken('--ink'))).toBeGreaterThanOrEqual(
+      AA_NORMAL_TEXT,
+    );
+  });
+
+  it('holds its hover paint #1F1D1A under ink-paper at 4.5:1', () => {
+    expect(css).toMatch(
+      /\.da-plate:hover::after,\s*\.da-plate:active::after\s*\{\s*background-color:\s*#1F1D1A;/,
+    );
+    expect(contrastRatio(resolveToken('--ink-paper'), '#1F1D1A')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+
+  it('paints 32px on a 44px target, and its ring stays inside the target', () => {
+    const target = px(plateRule, 'min-height');
+    const inset = px(paintRule, 'inset');
+    expect(target).toBe(44);
+    expect(target - 2 * inset).toBe(32);
+    // the ring hugs the paint: width + offset must not reach the target's edge
+    const ring = px(plateFocus, 'outline') + px(plateFocus, 'outline-offset');
+    expect(target - 2 * inset + 2 * ring).toBeLessThanOrEqual(target);
+  });
+
+  it.each(['--paper', '--paper-doc'] as const)(
+    'draws the shared focus ring on the paint, at 3:1 on %s',
+    (ground) => {
+      expect(plateFocus).toMatch(/outline:\s*2px solid var\(--focus-ring\);/);
+      expect(contrastRatio(resolveToken('--focus-ring'), resolveToken(ground))).toBeGreaterThanOrEqual(3);
+    },
+  );
+});

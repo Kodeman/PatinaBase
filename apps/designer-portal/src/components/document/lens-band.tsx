@@ -9,9 +9,9 @@
  * nothing stands. US-28 S7 (V20 U-Q19): nothing in the band truncates. The
  * box is a 56px MINIMUM; the rungs still pick the form that fits one line, and
  * when even the last rung cannot, the sentence wraps onto a second line and
- * the act keeps its score. US-43: from 600 the band is a charcoal ground
- * (R1-A); below 600 it is paper and prints its sentence only, and the
- * charcoal dock prints the act (R6).
+ * the act keeps its box. US-46 R203: the band is paper at every width and its
+ * act is a filled charcoal plate; below 600 the band prints its sentence only,
+ * and the dock prints the act (US-43 R6).
  *
  * It publishes nothing: no `ResizeObserver`, no CSS variable, no measured
  * height. `--doc-band-height` is a declared constant (D-1), and a name that no
@@ -53,23 +53,6 @@ import { StandingSheet } from './standing-sheet';
 /** Slice 2 — the dock (SQ-2C) opens the band's standing sheet with this when
  *  the 390 measure has moved the `Standing · N` door into More (D2). */
 export const OPEN_STANDING_SHEET_EVENT = 'document:open-standing-sheet';
-
-/** US-43 R6 — the 600 break in script, for the one thing CSS cannot gate by
- *  width: the `data-ground` hook. Below it the band is paper and the dock is
- *  the charcoal ground, so each takes the hook only on its own side. */
-const PHONE_QUERY = '(max-width: 599px)';
-function subscribePhone(onChange: () => void) {
-  if (typeof window.matchMedia !== 'function') return () => {};
-  const query = window.matchMedia(PHONE_QUERY);
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
-}
-const readPhone = () =>
-  typeof window.matchMedia === 'function' && window.matchMedia(PHONE_QUERY).matches;
-const readPhoneOnServer = () => false;
-export function usePhoneWidth(): boolean {
-  return useSyncExternalStore(subscribePhone, readPhone, readPhoneOnServer);
-}
 
 /** US-43 R6 (review F5) — below 600 the dock prints the band's Next, so the
  *  band does not. While the log offer owns the thumb edge the dock is not
@@ -374,7 +357,6 @@ export function LensBand({
   const nextIsException =
     spokenRow !== null && (spoken?.standing.some((item) => item.key === spokenRow) ?? false);
   const door = spoken && spoken.standingCount > 0 && !spoken.doorInDock ? spoken : null;
-  const phone = usePhoneWidth();
   const dockYielded = useSyncExternalStore(
     subscribeDockYield,
     readDockYield,
@@ -398,13 +380,10 @@ export function LensBand({
         tabIndex={-1}
         data-lens-band=""
         data-lens-open={open ? 'true' : 'false'}
-        // US-43 R1-A — from 600 the band is a charcoal ground, and its edge is
-        // the rule: the charcoal `--rule-mid` stays only on the paper band
-        // below 600. The ground bleeds 20px past the paper's measure so the
-        // words keep their column. Below 600 the band is paper, so the hook
-        // comes off: any act it prints there takes the paper inks (review F1).
-        data-ground={phone ? undefined : 'dark'}
-        className="sticky top-0 z-[4] box-border flex min-h-[var(--doc-band-height,56px)] flex-col justify-center gap-[2px] bg-[var(--doc-paper)] max-[599px]:[border-bottom:var(--rule-mid)] min-[600px]:-mx-5 min-[600px]:bg-[var(--ink)] min-[600px]:px-5 min-[600px]:text-[var(--on-dark-ink)]"
+        // US-46 R203 (supersedes R201's charcoal ground) — the band is paper
+        // at every width and closes on its paper rule, `--rule-mid`. Its one
+        // dark shape is the Next act's charcoal plate.
+        className="sticky top-0 z-[4] box-border flex min-h-[var(--doc-band-height,56px)] flex-col justify-center gap-[2px] bg-[var(--doc-paper)] [border-bottom:var(--rule-mid)]"
       >
         <p
           data-lens-line="1"
@@ -416,7 +395,7 @@ export function LensBand({
           // what D-B34's cause gate caught. `min-h` is the ONE line of 11px mono
           // at `leading-[1.4]` (11 × 1.4 = 15.4px, a literal because the root is
           // 18px and `rem` would not land on the same number).
-          className={`flex min-h-[15.4px] flex-wrap items-baseline justify-between gap-x-4 font-mono text-[11px] uppercase leading-[1.4] tracking-[0.08em] text-[var(--text-muted)] min-[600px]:text-[var(--on-dark-muted)] ${LINE_WRAP}`}
+          className={`flex min-h-[15.4px] flex-wrap items-baseline justify-between gap-x-4 font-mono text-[11px] uppercase leading-[1.4] tracking-[0.08em] text-[var(--text-muted)] ${LINE_WRAP}`}
         >
           {/* At s0 the letterhead 60px above prints the household at 40px, the
               stage as its arc and the date in its vitals, so both yield; the
@@ -434,7 +413,7 @@ export function LensBand({
                   type="button"
                   onClick={onToTop}
                   data-lens-to-top
-                  className="flex min-w-0 items-baseline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline min-[600px]:text-[var(--on-dark-muted)] min-[600px]:hover:text-[var(--on-dark-ink)]"
+                  className="flex min-w-0 items-baseline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline"
                 >
                   <Eyebrow voice={spoken} />
                 </button>
@@ -448,7 +427,7 @@ export function LensBand({
                     type="button"
                     onClick={onToTop}
                     data-lens-to-top
-                    className="inline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline min-[600px]:text-[var(--on-dark-muted)] min-[600px]:hover:text-[var(--on-dark-ink)]"
+                    className="inline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline"
                   >
                     {line1.identity}
                   </button>
@@ -500,19 +479,21 @@ export function LensBand({
             aria-atomic="true"
             // While a rung is on trial the line holds to one row, so the
             // sentence (not the act) is what the measure sees overflow; the
-            // last rung wraps (U-Q19).
-            className={`flex items-center gap-x-2 gap-y-1 text-[15px] leading-[1.3] ${
+            // last rung wraps (U-Q19). US-46 R203 — the 10px row gap keeps a
+            // wrapped plate's 32px paint (6px past its inset 19.5px line)
+            // clear of the sentence row above it.
+            className={`flex items-center gap-x-2 gap-y-[10px] text-[15px] leading-[1.3] ${
               dropped < lastRung ? 'flex-nowrap' : 'flex-wrap'
             } ${
               nextIsException
-                ? 'text-[var(--color-terracotta-ink)] min-[600px]:text-[var(--on-dark-terracotta)]'
-                : 'text-[var(--text-primary)] min-[600px]:text-[var(--on-dark-ink)]'
+                ? 'text-[var(--color-terracotta-ink)]'
+                : 'text-[var(--text-primary)]'
             }`}
           >
             {rung.lead && (
               <span
                 data-lens-next-lead
-                className="shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)] min-[600px]:text-[var(--on-dark-clay)]"
+                className="shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
               >
                 {rung.lead}
               </span>
@@ -544,12 +525,12 @@ export function LensBand({
                 actionKey="lens-band-next"
                 surfaceKey="open-document"
                 regionKey="lens-band"
-                // D2 — the band's act is a scored word whatever its rest tier:
-                // a filled act owes a consequence sentence the 56px band has
-                // no room for (D3, R141).
-                variant="primary"
+                // US-46 R203 (amends R139) — the band's act is its one filled
+                // charcoal plate: your next step, never a commit (the forest
+                // terminal is the fill that commits, inside its sheet).
+                variant="plate"
                 data-part="act"
-                // US-43 R6 (revises U-Q19) — below 600 the charcoal dock is
+                // US-43 R6 (revises U-Q19) — below 600 the dock is
                 // Next's one printing, so the band prints its sentence only:
                 // display:none takes the act out of the accessibility tree,
                 // and its 44px box no longer grows the phone band past the
@@ -581,8 +562,8 @@ export function LensBand({
                 // money or a signature behind it, clay otherwise.
                 className={`ml-auto shrink-0 font-mono text-[11px] tracking-[0.04em] underline underline-offset-[3px] ${
                   door.doorClassOne
-                    ? 'text-[var(--color-terracotta-ink)] min-[600px]:text-[var(--on-dark-terracotta)]'
-                    : 'text-[var(--color-clay-ink)] min-[600px]:text-[var(--on-dark-clay)]'
+                    ? 'text-[var(--color-terracotta-ink)]'
+                    : 'text-[var(--color-clay-ink)]'
                 }`}
               >
                 {standingDoorLabel(door.standingCount)}
@@ -599,10 +580,10 @@ export function LensBand({
           data-lens-line2-form={printed.form}
           aria-live="polite"
           aria-atomic="true"
-          className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[16px] leading-[1.3] ${
+          className={`flex flex-wrap items-center gap-x-2 gap-y-[10px] text-[16px] leading-[1.3] ${
             standing
-              ? 'text-[var(--color-terracotta-ink)] min-[600px]:text-[var(--on-dark-terracotta)]'
-              : 'text-[var(--text-primary)] min-[600px]:text-[var(--on-dark-ink)]'
+              ? 'text-[var(--color-terracotta-ink)]'
+              : 'text-[var(--text-primary)]'
           }`}
         >
           <span
@@ -629,12 +610,12 @@ export function LensBand({
               actionKey={`lens-band-${printed.kind}`}
               surfaceKey="open-document"
               regionKey="lens-band"
-              variant="primary"
+              variant="plate"
               data-part="act"
               // The 44px target the Scored Ink owns must not grow the declared
               // 56px box, so the control is inset into the 19.5px line. The
               // dock never takes this act (flag off), so the band is its one
-              // printing at every width — on paper below 600 (review F1).
+              // printing at every width.
               className="my-[-12px] shrink-0"
               disabled={printed.act.disabled}
               onClick={() => {
@@ -660,8 +641,8 @@ export function LensBand({
               // clay, and terracotta returns the moment one of them is.
               className={`shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] underline underline-offset-[3px] ${
                 printed.withheldHasException
-                  ? 'text-[var(--color-terracotta-ink)] min-[600px]:text-[var(--on-dark-terracotta)]'
-                  : 'text-[var(--color-clay-ink)] min-[600px]:text-[var(--on-dark-clay)]'
+                  ? 'text-[var(--color-terracotta-ink)]'
+                  : 'text-[var(--color-clay-ink)]'
               }`}
             >
               +{withheld} MORE

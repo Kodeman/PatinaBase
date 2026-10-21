@@ -864,8 +864,8 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
     expect(within(bar).queryByRole('button', { name: 'Open the project' })).toBeNull();
   });
 
-  // US-43 R6 (revises the US-28 walk-fix filter) — below 600 the charcoal dock
-  // is the band's Next's one printing (the band hides its own act there); from
+  // US-43 R6 (revises the US-28 walk-fix filter) — below 600 the dock is the
+  // band's Next's one printing (the band hides its own act there); from
   // 600 the band prints it, so the dock's slot is display:none. Exactly one
   // Next in the accessibility tree at each width.
   function mountBandNext() {
@@ -887,7 +887,10 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
     const bar = mountBandNext();
     const act = within(bar).getByRole('button', { name: 'Send reminder' });
     expect(act).toHaveAttribute('data-action-key', 'next:remind');
-    expect(act).toHaveAttribute('data-action-variant', 'primary');
+    // US-46 R203 — the dock prints the band's Next as the band's charcoal
+    // plate, full width in its slot.
+    expect(act).toHaveAttribute('data-action-variant', 'plate');
+    expect(act).toHaveClass('da-plate', 'w-full');
     expect(act.parentElement).toHaveClass('min-[600px]:hidden');
   });
 
@@ -897,44 +900,22 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
       name: 'Record the payment',
     });
     expect(act.parentElement).not.toHaveClass('min-[600px]:hidden');
+    // Only the band's Next is the plate; any other centre act stays scored.
+    expect(act).toHaveAttribute('data-action-variant', 'primary');
   });
 
-  describe('the ground by width (US-43 R6)', () => {
-    const original = window.matchMedia;
-    const phoneWidth = (matches: boolean) => {
-      window.matchMedia = jest.fn().mockImplementation((query: string) => ({
-        matches: query === '(max-width: 599px)' ? matches : false,
-        media: query,
-        onchange: null,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        dispatchEvent: jest.fn(),
-      })) as unknown as typeof window.matchMedia;
-    };
-    afterEach(() => {
-      window.matchMedia = original;
-    });
-
-    it('below 600 the dock is a charcoal ground, its words on-dark', () => {
-      phoneWidth(true);
-      const bar = mountBandNext();
-      expect(bar).toHaveAttribute('data-ground', 'dark');
-      expect(bar).toHaveClass('max-[599px]:bg-[var(--ink)]');
-      expect(within(bar).getByText('Project file sections')).toHaveClass(
-        'max-[599px]:text-[var(--on-dark-muted)]',
-      );
-      expect(within(bar).getByRole('button', { name: 'More studio actions' })).toHaveClass(
-        'max-[599px]:text-[var(--on-dark-ink)]',
-        'max-[599px]:focus-visible:outline-[var(--focus-on-dark)]',
-      );
-    });
-
-    it('from 600 the dock is paper: no dark-ground hook for its acts', () => {
-      phoneWidth(false);
+  describe('paper at every width (US-46 R203, supersedes US-43 R6’s charcoal dock)', () => {
+    it('the dock is paper: no dark-ground hook, its words in the paper inks', () => {
       const bar = mountBandNext();
       expect(bar).not.toHaveAttribute('data-ground');
+      expect(bar).toHaveClass('bg-[var(--paper-doc)]');
+      expect(bar.className).not.toMatch(/max-\[599px\]:(bg|border)-/);
+      expect(within(bar).getByText('Project file sections')).toHaveClass('text-[var(--text-subtle)]');
+      const more = within(bar).getByRole('button', { name: 'More studio actions' });
+      expect(more).toHaveClass('text-[var(--text-primary)]', 'focus-visible:outline-[var(--clay-ink)]');
+      for (const el of [bar, ...Array.from(bar.querySelectorAll('*'))]) {
+        expect(el.getAttribute('class') ?? '').not.toMatch(/on-dark|focus-on-dark/);
+      }
     });
 
     // Review F5 (SQ-1514) — the band's Next and the dock together, below 600:
@@ -990,17 +971,16 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
     }
 
     it('offer owning the edge below 600: exactly one Next, the band’s, on paper', () => {
-      phoneWidth(true);
       mockOffer = { entryId: 'entry-a', projectId: 'proj-1' };
       const printed = mountBandAndDock();
       expect(screen.queryByTestId('mobile-bar')).toBeNull();
       expect(printed()).toHaveLength(1);
       expect(printed()[0].closest('[data-lens-band]')).not.toBeNull();
-      expect(printed()[0].closest('[data-ground="dark"]')).toBeNull();
+      expect(printed()[0].closest('[data-ground]')).toBeNull();
+      expect(printed()[0]).toHaveAttribute('data-action-variant', 'plate');
     });
 
     it('with no offer below 600: exactly one Next, the dock’s', () => {
-      phoneWidth(true);
       mockOffer = null;
       const printed = mountBandAndDock();
       expect(printed()).toHaveLength(1);

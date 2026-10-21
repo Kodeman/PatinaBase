@@ -568,7 +568,8 @@ test.describe('the letterhead grid', () => {
  * hit-testing. At 390, DL-05 made line 2 the ONLY printing of that act, so the
  * phone's primary act was shipping a ~20px target against a 44px contract.
  *
- * US-43 R6 — below 600 the charcoal dock is Next's one printing and the band's
+ * US-43 R6 — below 600 the dock is Next's one printing (US-46 R203: paper, the
+ * act a charcoal plate) and the band's
  * act is display:none, so at 390 the 44px target measured is the dock's. The
  * band's own act (the `one-voice`-off band, which registers nothing in the
  * dock) is measured where it still prints. Either way Next is in the
