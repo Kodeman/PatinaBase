@@ -66,6 +66,11 @@ Fixture strings the boards reuse:
 | Maren's re-composition notice | The page now opens on your sideboard; the workshop sent photographs on 15 October. Everything else is where it was. |
 | Press band (designer) | A new edition is ready |
 | Earlier ledger line | Edition 4 · approved by Maren · 21 October |
+| Paint brands (fictional; no real brand names on any board) | Halvorsen and Larkin Prairie, both invented Midwest paint makers |
+| Elm Street House living room paint | Halvorsen, Morning Oat · Larkin Prairie, Pale Birch · Halvorsen, Kettle Clay · Halvorsen, Bur Oak Green |
+| Oak Hollow Cottage kitchen paint (Empty-Issue board) | Halvorsen, Quarry Chalk · Larkin Prairie, Sandbar · Halvorsen, Fence Post · Halvorsen, Spruce Smoke |
+| Sofa pair plate sample | Oatmeal performance linen · maker's sample · 14 October 2026 |
+| Hero caption date | 9 October 2026 (every board) |
 
 ---
 
