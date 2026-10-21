@@ -218,6 +218,7 @@ for (const outcome of ['approved', 'changes_requested', 'needs_discussion'] as c
       await expect(terminal).toHaveAttribute('aria-disabled', 'true');
       await field.fill(outcome === 'approved' ? 'Synthetic Homeowner' : 'Please widen the synthetic shelf.');
     }
+    await expect(terminal).toBeEnabled();
     const before = await checked(house.client.rpc('get_project_decision_review', { p_decision_id: id }));
     expect(before.outcome).toBeNull();
     await terminal.focus();
