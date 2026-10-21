@@ -366,7 +366,7 @@ export function RequestChangeAct({
         rows={4}
         placeholder="Describe the change you have in mind."
         data-testid="scope-change-description"
-        className="mt-1.5 w-full resize-y border border-[var(--border-default)] bg-transparent px-3 py-2 text-[15px] leading-relaxed text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]"
+        className="mt-1.5 w-full resize-y border border-[var(--border-default)] bg-transparent px-3 py-2 text-[15px] leading-relaxed text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--focus-ring)]"
       />
 
       {error && (

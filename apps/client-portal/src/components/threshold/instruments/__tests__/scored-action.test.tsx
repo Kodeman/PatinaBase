@@ -110,7 +110,9 @@ describe('The Scored Ink block — the rest rules', () => {
       GLOBALS.indexOf('.da-tertiary .da-label::before'),
       GLOBALS.indexOf('.da-tertiary .da-label::after'),
     );
-    expect(tertiary).toContain('var(--color-aged-oak)');
+    // forest, not oak: green replaces clay on what a client acts on (US-45 A2)
+    expect(tertiary).toContain('var(--color-forest)');
+    expect(tertiary).not.toContain('aged-oak');
     expect(tertiary).not.toContain('scaleX(0)');
     expect(GLOBALS).not.toContain('@media (hover: none)');
   });
@@ -140,6 +142,17 @@ describe('The Scored Ink block — the rest rules', () => {
     expect(GLOBALS).toContain('outline-offset: 2px');
     // the caret is not replaced by the ring
     expect(GLOBALS).toContain(".da-act:focus-visible::before {\n  opacity: 1;\n}");
+    // ...except on the terminal, where the glyph read as a stray mark on the
+    // forest face during a hold (SQ-1531 finding 4); its ring is the mark
+    expect(GLOBALS).toContain(".da-terminal::before {\n  content: none;\n}");
+  });
+
+  it('rings every text field in forest, not the browser blue (SQ-1531 finding 2)', () => {
+    // in the base layer, so a field's own outline utility still wins
+    const base = GLOBALS.slice(GLOBALS.indexOf('@layer base {'));
+    expect(base).toMatch(
+      /:where\(input:not\(\[type='radio'\], \[type='checkbox'\], \[type='file'\]\), textarea, select\):focus-visible \{\n    outline: 2px solid var\(--focus-ring\);/,
+    );
   });
 
   it('has no --color-error token and nothing reading one', () => {

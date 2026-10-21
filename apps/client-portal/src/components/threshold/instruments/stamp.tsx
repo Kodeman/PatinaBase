@@ -10,7 +10,10 @@ import type { CSSProperties, ReactNode } from 'react';
    pigment and a green mark on the most consequential state is the traffic
    light VISION §6 refuses. `--color-terracotta-ink` appears exactly once, on
    DECLINED, and never opposite a sage counterpart, so no red/green pair is
-   available to read.
+   available to read. US-45 A2 ("green replaces clay") moved APPROVED and its
+   sibling CHOSEN to forest — the single action and record colour of the
+   client page — so the mark matches the green record it sits in; forest is
+   not sage, and SIGNED stays mocha.
 
    AWAITING carries no word. It is the un-stamped state: an upright hairline
    outline, deliberately not yet pressed. Screen readers are told what it is —
@@ -62,6 +65,9 @@ export interface StampDial {
 }
 
 const MOCHA = 'var(--color-mocha)';
+/* US-45 A2 (green replaces clay): an approval is recorded in forest, the same
+   ink as the green record block it is pressed into. */
+const FOREST = 'var(--color-forest)';
 const CHARCOAL = 'var(--color-charcoal)';
 const MUTED = 'var(--text-muted)';
 
@@ -80,8 +86,8 @@ export const STAMP_DIALS: Record<StampState, StampDial> = {
   approved: {
     word: 'APPROVED',
     underWord: null,
-    border: MOCHA,
-    ink: MOCHA,
+    border: FOREST,
+    ink: FOREST,
     weight: 'doubled',
     rotation: -1.1,
     ages: true,
@@ -91,8 +97,8 @@ export const STAMP_DIALS: Record<StampState, StampDial> = {
   chosen: {
     word: 'CHOSEN',
     underWord: null,
-    border: MOCHA,
-    ink: MOCHA,
+    border: FOREST,
+    ink: FOREST,
     weight: 'doubled',
     rotation: -1.1,
     ages: true,

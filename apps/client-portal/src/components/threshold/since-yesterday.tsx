@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 /* ── Since yesterday ────────────────────────────────────────────────────────
    The house quieted down to what moved. Not a filter and not a feed: nothing
    is removed, nothing is re-ordered, and every room stays exactly where it
-   was — the ink simply drops away from parts she has already read, and a brass
+   was — the ink simply drops away from parts she has already read, and a forest
    tick stands in the margin beside the parts she has not.
 
    ── THE CROSS-LANE CONTRACT (Lanes 3A, 3B, 4 all write to it) ──────────────
@@ -46,7 +46,7 @@ const SHEET = `
   top: 14px;
   width: 2px;
   height: 30px;
-  background: var(--threshold-accent, #8A5F19);
+  background: var(--threshold-accent, var(--color-forest));
 }
 @media (max-width: 860px) {
   .threshold-since [data-dimmable][data-dimmed] {

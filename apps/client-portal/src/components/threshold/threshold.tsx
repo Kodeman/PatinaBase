@@ -145,8 +145,9 @@ import { WallGate } from './wall-gate';
 /** `deriveThreshold` takes a Date it does not read; this is the pre-hydration one. */
 const EPOCH = new Date(0);
 
-/** The house's brass. Every leaf reads it as `var(--threshold-accent, #8A5F19)`. */
-const ACCENT_STYLE = { "--threshold-accent": "#8A5F19" } as CSSProperties;
+/** The house's accent: forest, since green replaced brass and clay (US-45 A2).
+ *  Every leaf reads it as `var(--threshold-accent, var(--color-forest))`. */
+const ACCENT_STYLE = { "--threshold-accent": "var(--color-forest)" } as CSSProperties;
 
 /** Team roles, in the house's own voice rather than the internal vocabulary. */
 const ROLE_WORD: Record<string, string> = {

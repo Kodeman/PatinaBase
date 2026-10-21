@@ -49,7 +49,7 @@ const SECTION_HEAD_CLASS =
 const FIELD_LABEL_CLASS =
   "block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)] mb-1.5";
 const TEXT_INPUT_CLASS =
-  "w-full max-w-[36ch] border-0 border-b border-current bg-transparent px-0.5 py-1.5 text-[15px] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]";
+  "w-full max-w-[36ch] border-0 border-b border-current bg-transparent px-0.5 py-1.5 text-[15px] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--focus-ring)]";
 const ROW_CLASS =
   "flex items-start justify-between gap-4 border-t border-[var(--border-subtle)] py-2.5";
 

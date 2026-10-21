@@ -87,4 +87,18 @@ describe('Doorplate — the letterhead, minus the corner links', () => {
 
     expect(screen.queryByText(/patina/i)).not.toBeInTheDocument();
   });
+
+  // US-45 A2: green replaces clay, so the doorplate's strata lines are forest.
+  it('draws its strata mark in forest, not mocha and clay', () => {
+    const { container } = render(<Doorplate {...vale()} />);
+
+    const mark = container.querySelector('[data-strata-tone]');
+    expect(mark).toHaveAttribute('data-strata-tone', 'forest');
+    const rows = Array.from(mark?.children ?? []);
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row).toHaveClass('bg-patina-forest');
+      expect(row.className).not.toMatch(/patina-(mocha|clay)/);
+    }
+  });
 });

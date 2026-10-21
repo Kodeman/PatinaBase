@@ -100,7 +100,7 @@ const STATE_WORD: Record<ThresholdMark['kind'], string> = {
 
 const TEXT_CLASS = 'fill-current stroke-none font-mono tracking-[0.4px]';
 const ANCHOR_CLASS =
-  'text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]';
+  'text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--focus-ring)]';
 
 /** The mark, said in words: what it is, what it is worth, what it wants. */
 function markSentence(mark: ThresholdMark): string {
@@ -195,7 +195,7 @@ export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
               y1={mark.y1}
               x2={mark.x}
               y2={mark.y2}
-              stroke="var(--threshold-accent, #8A5F19)"
+              stroke="var(--threshold-accent, var(--color-forest))"
               strokeWidth={PLAN_MARK_STROKE}
             />
           ))}

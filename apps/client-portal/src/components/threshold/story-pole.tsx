@@ -268,7 +268,7 @@ export function StoryPole({ phases, sections, firstBandAnchor = null }: StoryPol
               // every label starts at the same 7px gap off the rail — the
               // sheet's own pole (`.pole-mark` is a fixed column with one
               // gap). The held mark is told apart by its weight and its
-              // brass, not by running into the word beside it.
+              // forest, not by running into the word beside it.
               className={
                 graduation.held
                   ? 'absolute -left-4 top-1.5 h-0.5 w-[9px]'

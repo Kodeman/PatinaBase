@@ -98,7 +98,7 @@ describe('PlanKey — a key on a drawing', () => {
     expect(hrefs).toEqual(['#room-r1', '#room-r2', '#room-r3', '#road']);
   });
 
-  it('strikes the marks at the plan stroke, in the brass accent', () => {
+  it('strikes the marks at the plan stroke, in the forest accent', () => {
     const { container } = render(
       <PlanKey
         geometry={geometry()}
@@ -111,7 +111,7 @@ describe('PlanKey — a key on a drawing', () => {
     expect(struck).toHaveLength(2);
     for (const mark of struck) {
       expect(mark).toHaveAttribute('stroke-width', String(PLAN_MARK_STROKE));
-      expect(mark).toHaveAttribute('stroke', 'var(--threshold-accent, #8A5F19)');
+      expect(mark).toHaveAttribute('stroke', 'var(--threshold-accent, var(--color-forest))');
     }
   });
 
