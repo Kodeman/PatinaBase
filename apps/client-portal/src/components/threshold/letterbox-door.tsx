@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { useQueries } from '@tanstack/react-query';
 
@@ -429,10 +429,10 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
     [standing, today, house.read, invoiceHolds],
   );
   // A complete read that proved a held invoice settled retires its hold, so a
-  // refund that reopens it this visit is judged on its own read.
-  useEffect(() => {
-    setInvoiceHolds((held) => retireSettledHolds(held, projection));
-  }, [projection]);
+  // refund that reopens it this visit is judged on its own read. Adjusted in
+  // render: the same holds come back when nothing retires.
+  const standingHolds = retireSettledHolds(invoiceHolds, projection);
+  if (standingHolds !== invoiceHolds) setInvoiceHolds(standingHolds);
 
   const refetch = invoicesQuery.refetch;
   // Stable: the confirmation poll holds this in an effect's dependency list.
