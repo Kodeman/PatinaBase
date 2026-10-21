@@ -39,7 +39,10 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
  * when the dev server starts, so "on" and "off" cannot share one server. :3002
  * stays the shipped surface with no override; :3102 carries the override and
  * its own NEXT_DIST_DIR (next.config.js) so the two copies of the app never
- * share one `.next`. The `edition` project runs only what must see the flag on:
+ * share one build directory. That directory sits INSIDE `.next` because the
+ * webpack watcher ignores `.next/**` but not a sibling like `.next-edition`:
+ * outside it, each server watched the other's writes and forced browser full
+ * reloads mid-test. The `edition` project runs only what must see the flag on:
  * every test tagged `@edition` (house-issue.spec.ts and the flag-on anchor
  * check in threshold.spec.ts); `edition-usability` runs the whole of
  * homeowner-usability.spec.ts there too, so it holds both ways.
@@ -104,7 +107,7 @@ export default defineConfig({
       env: {
         ...LOCAL_SUPABASE_ENV,
         NEXT_PUBLIC_FLAG_OVERRIDES: 'client-edition-page:true',
-        NEXT_DIST_DIR: '.next-edition',
+        NEXT_DIST_DIR: '.next/edition',
       },
     },
   ],
