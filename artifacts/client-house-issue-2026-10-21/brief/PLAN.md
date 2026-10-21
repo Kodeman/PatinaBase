@@ -322,7 +322,7 @@ F1, F11, F12, F15–F17 and F19–F22 are named in the SQ-1567 closeout only as 
 | R-v2-8 | Plates are served through the client-portal Worker binding with `Cache-Control: private, max-age=3600` (never `immutable`, never a year); the path carries the edition id and content hash; superseded or revoked paths stop resolving at the next request | A year-long browser cache would outlive revocation and approval changes |
 | R-v2-9 | Phase 1 has no edition record: the plate reader is `get_client_project_editorial`, guarded by project membership, on today's tables; the approved-edition-only read begins in Phase 2 with `get_client_project_edition` | Phase 1 promised a read whose record ships in Phase 2 |
 | R-v2-10 | One workload: 1 first edition (≈$0.08) + 3–8 later editions (≈$0.045) = $0.215–$0.44 per job-month; 20 active jobs ≈ $4.30–$8.80/month | The old range did not follow from the per-edition totals |
-| R-v2-11 | Canvas-lane ruling, pinned in SQ-1573; not restated here | Not part of the doc lane's contract |
+| R-v2-11 | Number not used: the orchestrator's ruling list skipped from R-v2-10 to R-v2-12 | Recorded so the gap is not read as a missing ruling |
 | R-v2-12 | Empty-Issue keeps every chapter and anchor, including 04 The House and 10 Earlier, with empty states in words (canvas lane) | The drawn empty issue had dropped two chapters |
 | R-v2-13 | Every arrival shows three standing rows in fixed role order with zero states in words ("Nothing new since your last visit" / "Nothing waiting on you" / "No invoices open"); roles and order never change by phase | Phase frames had dropped or reordered rows |
 
