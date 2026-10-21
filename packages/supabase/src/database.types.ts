@@ -3515,6 +3515,7 @@ export type Database = {
       }
       client_plate_assets: {
         Row: {
+          concept_seen: boolean
           created_at: string
           crops: Json
           dominant_hex: string | null
@@ -3535,6 +3536,7 @@ export type Database = {
           width: number
         }
         Insert: {
+          concept_seen?: boolean
           created_at?: string
           crops?: Json
           dominant_hex?: string | null
@@ -3555,6 +3557,7 @@ export type Database = {
           width: number
         }
         Update: {
+          concept_seen?: boolean
           created_at?: string
           crops?: Json
           dominant_hex?: string | null

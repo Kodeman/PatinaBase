@@ -7,8 +7,8 @@
 -- migration is the database side of that lane:
 --
 --   client_plate_assets     one row per (project, sha256): the code-computed
---                           facts of a copy (PLAN DDL verbatim + created_at/
---                           updated_at). Written only by
+--                           facts of a copy (PLAN DDL verbatim + concept_seen
+--                           + created_at/updated_at). Written only by
 --                           record_client_plate_asset.
 --   client_plate_requests   the copy queue: one row per source (project,
 --                           source_kind, source_ref {table,id}); once done it
@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS public.client_plate_assets (
   source_kind text NOT NULL CHECK (source_kind IN
     ('upload','installed','scan','board','sheet','maker','concept')),
   source_ref jsonb NOT NULL,            -- {table,id}: item image | scan | board | plan_print
+  -- Set once any concept source records these bytes, never cleared: a later
+  -- source, a re-queued render or a move cannot turn a concept into a photograph.
+  concept_seen boolean NOT NULL DEFAULT false,
   original_key text NOT NULL,           -- private, copy-once
   width int NOT NULL CHECK (width > 0), height int NOT NULL CHECK (height > 0),
   ground text CHECK (ground IN ('white','scene','drawing')),   -- code
@@ -95,7 +98,7 @@ CREATE INDEX IF NOT EXISTS idx_client_plate_assets_source
   ON public.client_plate_assets (project_id, source_kind, source_ref);
 
 COMMENT ON TABLE public.client_plate_assets IS
-  'US-49: one private R2 copy of a picture a homeowner page may show, per (project, sha256). Code-computed facts only in Phase 1 (dimensions, ground, dominant colour, LQIP, crops); subject_box/focal/flags/perceived_prompt_version arrive with Phase 2. source_kind/source_ref name the first source that produced the bytes. Written by record_client_plate_asset; read through get_client_project_editorial and client_can_read_plate. No API role reads it directly.';
+  'US-49: one private R2 copy of a picture a homeowner page may show, per (project, sha256). Code-computed facts only in Phase 1 (dimensions, ground, dominant colour, LQIP, crops); subject_box/focal/flags/perceived_prompt_version arrive with Phase 2. source_kind/source_ref name the first source that produced the bytes; concept_seen is true once any concept render produced them and is never cleared. Written by record_client_plate_asset; read through get_client_project_editorial and client_can_read_plate. No API role reads it directly.';
 
 CREATE TABLE IF NOT EXISTS public.client_plate_requests (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
@@ -497,17 +500,19 @@ BEGIN
   END IF;
 
   INSERT INTO public.client_plate_assets AS asset (
-    project_id, sha256, source_kind, source_ref, original_key,
+    project_id, sha256, source_kind, source_ref, concept_seen, original_key,
     width, height, ground, dominant_hex, lqip, crops
   ) VALUES (
     v_request.project_id, v_sha256, v_request.source_kind, v_request.source_ref,
+    v_request.source_kind = 'concept',
     p_asset ->> 'originalKey',
     (p_asset ->> 'width')::int, (p_asset ->> 'height')::int,
     p_asset ->> 'ground', p_asset ->> 'dominantHex', p_asset ->> 'lqip',
     COALESCE(p_asset -> 'crops', '{}'::jsonb)
   )
   ON CONFLICT (project_id, sha256) DO UPDATE
-  SET original_key = EXCLUDED.original_key,
+  SET concept_seen = asset.concept_seen OR EXCLUDED.concept_seen,
+      original_key = EXCLUDED.original_key,
       width = EXCLUDED.width,
       height = EXCLUDED.height,
       ground = EXCLUDED.ground,
