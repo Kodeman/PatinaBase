@@ -64,7 +64,7 @@ import {
   type ThresholdReceipt,
   type ThresholdRoom,
 } from '@/lib/threshold/derive';
-import { houseInvoices, type InvoiceServerHold } from '@/lib/threshold/invoice-rollup';
+import { houseInvoices, retireSettledHolds, type InvoiceServerHold } from '@/lib/threshold/invoice-rollup';
 import { planKeyGeometry } from '@/lib/threshold/plan-key';
 import { toClosedOrders, toRoadOrders } from '@/lib/threshold/road-orders';
 import {
@@ -834,6 +834,12 @@ export function Threshold({
     selectionUpdatedAt,
     messageSentAts: correspondence.sentAts,
   });
+  // A complete read that proved a held invoice settled retires its hold, so a
+  // refund that reopens it this visit is judged on its own read.
+  const invoiceProjection = model.invoices;
+  useEffect(() => {
+    setInvoiceHolds((held) => retireSettledHolds(held, invoiceProjection));
+  }, [invoiceProjection]);
 
   const phases = useMemo(
     () => thresholdPhases(milestones, project.currentPhase, project.status),

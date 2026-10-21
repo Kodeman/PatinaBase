@@ -11,9 +11,11 @@ import {
   houseInvoices,
   invoiceProjection,
   invoiceReadState,
+  retireSettledHolds,
   visibleInvoices,
   type InvoiceReadSource,
   type InvoiceReadState,
+  type InvoiceServerHold,
 } from '../invoice-rollup';
 
 const TODAY = new Date(2026, 9, 20, 9, 0);
@@ -452,6 +454,66 @@ describe('invoiceProjection — A05 one group per invoice, by evidence', () => {
       });
       expect(ids(held.review)).toEqual(['inv-settled']);
       expect(held.review[0].reviewReasons).toEqual(['reconciliation_hold']);
+      const kept = { 'inv-settled': 'payment_reconciliation_required' } as const;
+      expect(retireSettledHolds(kept, held)).toBe(kept);
+    });
+
+    it('R8a — hold, then paid, then a full refund in the same visit: the reopened invoice is payable', () => {
+      let holds: Record<string, InvoiceServerHold> = { ...hold };
+      const read = (invoice: Invoice, state: InvoiceReadState = 'complete') => {
+        const projection = invoiceProjection([invoice], { today: TODAY, read: state, serverHolds: holds });
+        holds = retireSettledHolds(holds, projection);
+        return projection;
+      };
+      const open = settledRow({ status: 'sent', amount_paid_cents: 0, paid_at: null, payments: [] });
+      const refunded = settledRow({
+        status: 'sent',
+        amount_paid_cents: 0,
+        paid_at: null,
+        payments: [payment({ id: 'pay-done', status: 'refunded', stripe_payment_intent_id: 'pi_done' })],
+      });
+
+      // 1. Checkout answered payment_processing; the open read and every inconclusive one keep the hold.
+      expect(ids(read(open).processing)).toEqual(['inv-settled']);
+      for (const state of ['stale', 'partial', 'failed', 'loading'] as const) {
+        expect(ids(read(settledRow(), state).processing)).toEqual(['inv-settled']);
+      }
+      expect(holds).toEqual(hold);
+
+      // 2. A complete paid read proves it settled: receipt shown, hold retired.
+      const paid = read(settledRow());
+      expect(ids(paid.history)).toEqual(['inv-settled']);
+      expect(paid.history[0].settled).toBe('paid');
+      expect(holds).toEqual({});
+
+      // 3–4. A full refund reopens it: judged on its own read, it is payable again.
+      const reopened = read(refunded);
+      expect(reopened.processing).toEqual([]);
+      expect(ids(reopened.payable)).toEqual(['inv-settled']);
+      expect(reopened.payable[0].paymentInFlight).toBe(false);
+      expect(reopened.counts).toEqual({ review: 0, processing: 0, payable: 1, history: 0 });
+
+      // The retained hold is what had kept it unpayable.
+      const unretired = invoiceProjection([refunded], { today: TODAY, read: 'complete', serverHolds: hold });
+      expect(unretired.payable).toEqual([]);
+    });
+
+    it('a pending PaymentIntent still outranks a retired hold on the reopened read', () => {
+      const paid = invoiceProjection([settledRow()], { today: TODAY, read: 'complete', serverHolds: hold });
+      const holds = retireSettledHolds({ ...hold }, paid);
+      expect(holds).toEqual({});
+      const inFlight = invoiceProjection(
+        [
+          settledRow({
+            status: 'sent',
+            amount_paid_cents: 0,
+            payments: [payment({ id: 'pay-next', stripe_payment_intent_id: 'pi_next' })],
+          }),
+        ],
+        { today: TODAY, read: 'complete', serverHolds: holds },
+      );
+      expect(ids(inFlight.processing)).toEqual(['inv-settled']);
+      expect(inFlight.payable).toEqual([]);
     });
   });
 

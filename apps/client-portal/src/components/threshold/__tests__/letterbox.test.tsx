@@ -504,6 +504,48 @@ describe('Letterbox — every invoice in plain view (US-45 CPUX-02, CPUX-03)', (
     expect(checkout).toHaveBeenCalledTimes(1);
   });
 
+  it('R8a · drops a processing hold once a complete read proves it paid, so a same-visit refund reopen is payable', async () => {
+    checkout.mockRejectedValue(new InvoiceCheckoutError('payment_processing', 'clearing'));
+    const open = invoiceRow({ id: 'inv-r', invoice_number: 'INV-2026-030', total_cents: 20_000 });
+    const { rerender } = render(<Letterbox invoices={[open]} today={TODAY} />);
+
+    await userEvent.click(viewInvoice('inv-r'));
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: /continue to secure payment/i }));
+    });
+    expect(rowIds('invoices-in-progress')).toEqual(['inv-r']);
+
+    // The open read stands behind the hold until a complete read proves it settled.
+    rerender(<Letterbox invoices={[{ ...open }]} today={TODAY} />);
+    expect(rowIds('invoices-in-progress')).toEqual(['inv-r']);
+
+    const paidPayment = {
+      id: 'pay-r',
+      invoice_id: 'inv-r',
+      amount_cents: 20_000,
+      status: 'succeeded',
+      stripe_payment_intent_id: 'pi_r',
+    } as NonNullable<Invoice['payments']>[number];
+    rerender(
+      <Letterbox
+        invoices={[{ ...open, status: 'paid', amount_paid_cents: 20_000, paid_at: '2026-08-04T10:00:00Z', payments: [paidPayment] }]}
+        today={TODAY}
+      />,
+    );
+    expect(screen.queryByTestId('invoices-in-progress')).not.toBeInTheDocument();
+    expect(screen.getByTestId('payment-history')).toBeInTheDocument();
+
+    // A full refund reopens it in the same visit: judged on its own read, it can be paid again.
+    rerender(
+      <Letterbox invoices={[{ ...open, payments: [{ ...paidPayment, status: 'refunded' }] }]} today={TODAY} />,
+    );
+    expect(screen.queryByTestId('invoices-in-progress')).not.toBeInTheDocument();
+    expect(rowIds('invoices-to-pay')).toEqual(['inv-r']);
+    expect(within(row('inv-r')).queryByTestId('invoice-row-note')).not.toBeInTheDocument();
+    // Its details stayed open under the same id; the act is offered again.
+    expect(screen.getByRole('button', { name: /continue to secure payment/i })).toBeEnabled();
+  });
+
   it('A08 · keeps a reconciliation hold under review after switching away and back', async () => {
     checkout.mockRejectedValue(new InvoiceCheckoutError('payment_reconciliation_required', 'review'));
     render(<Letterbox invoices={MIXED} today={TODAY} />);
