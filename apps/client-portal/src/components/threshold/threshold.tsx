@@ -459,8 +459,11 @@ export function Threshold({
   // stamped as it arrives: only a read newer than the hold can retire it.
   const [invoiceHolds, setInvoiceHolds] = useState<InvoiceHolds>({});
   const onInvoiceHold = useCallback(
-    (invoiceId: string, hold: InvoiceServerHold) =>
-      setInvoiceHolds((held) => withHold(held, invoiceId, hold, Date.now())),
+    (invoiceId: string, hold: InvoiceServerHold) => {
+      // Stamped when the word arrives, not when React runs the updater.
+      const heldAt = Date.now();
+      setInvoiceHolds((held) => withHold(held, invoiceId, hold, heldAt));
+    },
     [],
   );
   const clientInvoicesRefetch = clientInvoicesQuery.refetch;

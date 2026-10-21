@@ -360,7 +360,8 @@ export function Letterbox({
     (invoiceId: string, hold: InvoiceServerHold) => {
       // The row may move to another group under the same id; focus follows it.
       pendingFocus.current = { id: invoiceId, target: 'heading' };
-      setHolds((was) => withHold(was, invoiceId, hold, Date.now()));
+      const heldAt = Date.now();
+      setHolds((was) => withHold(was, invoiceId, hold, heldAt));
       onHold?.(invoiceId, hold);
     },
     [onHold],
