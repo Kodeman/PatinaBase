@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
 
@@ -43,17 +43,13 @@ import {
   useClientSelections,
 } from '@/hooks/use-commercial-client';
 import {
-  HouseIssueArrival,
-  RoomOpening,
-  approvalsRow,
-  editionChapters,
-  ledgerRow,
-  letterboxRow,
-  useHouseIssue,
+  HouseIssueHead,
+  groundFloorChapters,
+  sheetChapters,
+  useEditionIssue,
   withChapter,
+  withRoomOpening,
 } from '@/components/threshold/editorial/house-issue';
-import { useClientEditorial } from '@/hooks/use-client-editorial';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useHoldCeiling } from '@/hooks/use-hold-ceiling';
 import { useHydrated } from '@/hooks/use-hydrated';
 import type { ClientProjectEditorial } from '@/lib/editorial/types';
@@ -106,7 +102,6 @@ import { GroundFloor } from './ground-floor';
 import { HouseLedger } from './house-ledger';
 import { BudgetCheckpointReview } from './budget-checkpoint-review';
 import {
-  ARRIVAL_PURPOSE,
   ArrivalLine,
   LandmarkLedger,
   invoiceArrivalLines,
@@ -425,12 +420,9 @@ export function Threshold({
   const partiesQuery = useProjectParties(projectId);
   const ordersQuery = useDirectOrders();
   useProjectNotesRealtime(projectId);
-  // The House Issue. Fail-closed: off, or still loading, is today's house and
-  // makes no plate read.
-  const editionFlag = useFeatureFlag('client-edition-page');
-  const editionOn = editionFlag.value && !editionFlag.isLoading;
-  const editorialQuery = useClientEditorial(projectId, editorial, editionOn);
-  const issue = useHouseIssue(editionOn ? editorialQuery.data : null);
+  // The House Issue: null with `client-edition-page` off or loading, and then
+  // every edition helper below hands back today's page.
+  const issue = useEditionIssue(projectId, editorial);
 
   // ── the studio's own letters ───────────────────────────────────────────────
   // An invoice drawn against no house at all (ruling S1) belongs to the
@@ -1589,8 +1581,8 @@ export function Threshold({
   // The House Issue's chapter heads, numbered in the order each branch prints
   // its sections. Null with the edition off: `withChapter` hands back the
   // section itself and the page is today's tree.
-  let chapters: ReturnType<typeof editionChapters> | null = null;
-  const earlierShown = model.previously.length > 0 || hasRecord;
+  let chapters: ReturnType<typeof sheetChapters> = null;
+  const printed = { note: model.note, previously: model.previously.length, hasRecord };
 
   // NEVER REVERSE. The house speaks only once every source it speaks FROM has
   // answered — the papers, the goods, the ledger, the rooms and the letter.
@@ -1627,9 +1619,7 @@ export function Threshold({
       </>
     );
   } else if (model.groundFloor && !roomsUnread) {
-    chapters = issue
-      ? editionChapters(issue, ['doorstep', model.note && 'note', 'approvals', 'road', earlierShown && 'previously', 'mat'])
-      : null;
+    chapters = groundFloorChapters(issue, printed);
     body = (
       <GroundFloor
         doorstep={withChapter(chapters, 'doorstep', doorstep)}
@@ -1682,18 +1672,11 @@ export function Threshold({
         : []),
       { id: "mat", label: "Project details and documents", short: "project details and documents" },
     ];
-    chapters = issue
-      ? editionChapters(issue, [
-          'doorstep',
-          'approvals',
-          !roomsUnread && 'key',
-          ...model.bands.map((band) => band.anchor),
-          'road',
-          model.note && 'note',
-          earlierShown && 'previously',
-          'mat',
-        ])
-      : null;
+    chapters = sheetChapters(issue, {
+      ...printed,
+      roomsUnread,
+      roomAnchors: model.bands.map((band) => band.anchor),
+    });
 
     body = (
       // Path B's sheet: a 170px pole rail on the LEFT, sticky, standing beside
@@ -1734,8 +1717,8 @@ export function Threshold({
             )
           )}
 
-          {model.bands.map((band) => {
-            const bandNode = (
+          {model.bands.map((band) =>
+            withRoomOpening(issue, chapters, band.roomId,
             <RoomBand
               key={band.roomId}
               band={band}
@@ -1762,19 +1745,9 @@ export function Threshold({
                 roomName={band.name}
                 projectStatus={project.status}
               />
-            </RoomBand>
-            );
-            // The room's plates stand above its band, never inside it: the
-            // band is a dimmable unit and a plate never dims.
-            return issue ? (
-              <Fragment key={band.roomId}>
-                <RoomOpening issue={issue} chapters={chapters} roomId={band.roomId} />
-                {bandNode}
-              </Fragment>
-            ) : (
-              bandNode
-            );
-          })}
+            </RoomBand>,
+            ),
+          )}
 
           {user?.id && (
             <StrayCaptures
@@ -1796,56 +1769,54 @@ export function Threshold({
 
   return (
     <div className="min-w-0" data-testid="the-threshold" style={ACCENT_STYLE}>
-      {doorplate}
       {/* Under the doorplate and OUTSIDE the since-yesterday dimming: an index
           that faded with the page would be an index of nothing. Every landmark
-          is answered from what the branches below actually drew. */}
-      <ArrivalLine>{ARRIVAL_PURPOSE}</ArrivalLine>
-      {/* The House Issue's cover and its three standing rows, outside the
-          dimming like the index under them. The rows wait for the house to
-          speak: an early "Nothing waiting on you" would be taken back. */}
-      {issue && (
-        <HouseIssueArrival
-          issue={issue}
-          chapters={chapters ?? new Map()}
-          rows={
-            houseHasSpoken
-              ? {
-                  letterbox: letterboxRow(model.invoices),
-                  approvals: approvalsRow({ asks: doorstepAsks, gate: firstGateAnchor, readFailed: projectApprovalsError }),
-                  ledger: ledgerRow(model.invoices),
-                }
-              : null
-          }
-          plan={roomsUnread ? null : planKeyGeometry(rooms ?? [], model.marks)}
-          studioName={studioName}
-          today={today}
-        />
-      )}
-      <LandmarkLedger
-        invoices={houseHasSpoken}
-        approvals={houseHasSpoken ? (whatNeedsYou ?? 'approvals') : null}
-        progress={houseHasSpoken}
-        updates={houseHasSpoken ? updatesAnchor : null}
-        whatChanged={
-          houseHasSpoken &&
-          hasChangedBlock({
-            showSince,
-            changedCount: model.changed.size,
-            readingMark: readingMarkLine(parseSourceDate(previousReadAt)),
-          })
+          is answered from what the branches below actually drew. With the
+          edition on, the cover and its three standing rows stand here too,
+          and the rows wait for the house to speak: an early "Nothing waiting
+          on you" would be taken back. */}
+      <HouseIssueHead
+        issue={issue}
+        chapters={chapters}
+        doorplate={doorplate}
+        letterhead={{ studioName, projectName: project.name, preparedFor }}
+        ledger={
+          <LandmarkLedger
+            invoices={houseHasSpoken}
+            approvals={houseHasSpoken ? (whatNeedsYou ?? 'approvals') : null}
+            progress={houseHasSpoken}
+            updates={houseHasSpoken ? updatesAnchor : null}
+            whatChanged={
+              houseHasSpoken &&
+              hasChangedBlock({
+                showSince,
+                changedCount: model.changed.size,
+                readingMark: readingMarkLine(parseSourceDate(previousReadAt)),
+              })
+            }
+            documents={houseHasSpoken}
+            contact={houseHasSpoken ? contactLandmark : null}
+          />
         }
-        documents={houseHasSpoken}
-        contact={houseHasSpoken ? contactLandmark : null}
+        todayLines={
+          houseHasSpoken &&
+          invoiceArrivalLines(model.invoices).map((line) => (
+            <ArrivalLine key={line} testId="arrival-invoices">
+              {line}
+            </ArrivalLine>
+          ))
+        }
+        rows={{
+          spoken: houseHasSpoken,
+          invoices: model.invoices,
+          asks: doorstepAsks,
+          gate: firstGateAnchor,
+          readFailed: projectApprovalsError,
+        }}
+        plan={{ unread: roomsUnread, rooms, marks: model.marks }}
+        studioName={studioName}
+        today={today}
       />
-      {/* The standing rows say this in the edition; twice would be noise. */}
-      {houseHasSpoken &&
-        !issue &&
-        invoiceArrivalLines(model.invoices).map((line) => (
-          <ArrivalLine key={line} testId="arrival-invoices">
-            {line}
-          </ArrivalLine>
-        ))}
       <SinceYesterday active={sinceActive} changed={model.changed}>
         {body}
       </SinceYesterday>

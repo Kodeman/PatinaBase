@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { CAPTION_SEPARATOR, NOTE_LOAD_FAILED, captionTriplet, plateAlt } from '@/lib/editorial/caption';
 import { platePicture, type PhoneCrop } from '@/lib/editorial/crop';
@@ -98,6 +98,12 @@ function PlatePictureEl({
   onError: () => void;
 }) {
   const priority = Boolean(props.priority);
+  const imgRef = useRef<HTMLImageElement>(null);
+  // An eager (preloaded) picture can fail before hydration attaches onError; catch that on mount.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth === 0) onError();
+  }, [onError]);
   return (
     <picture>
       {picture.sources.map((s) => (
@@ -105,6 +111,7 @@ function PlatePictureEl({
       ))}
       {/* eslint-disable-next-line @next/next/no-img-element -- sized at source; no optimizer on Workers */}
       <img
+        ref={imgRef}
         className="ed-plate__img"
         src={picture.src}
         alt={props.alt ?? plateAlt(props.asset)}
