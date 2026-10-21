@@ -100,6 +100,66 @@ for (const m of markup.matchAll(/\saria-controls="([^"]*)"/g)) {
 // 10. R124: never re-propose the removed index.
 if (/thumb\s+index/i.test(html)) fail('"Thumb Index" appears (R124)');
 
+// ── SQ-1560 review regressions (static; the runtime side is a Chromium probe) ──
+const css = (html.match(/<style\b[^>]*>([\s\S]*?)<\/style>/i) || [, ''])[1].replace(/\/\*[\s\S]*?\*\//g, '');
+const script = (html.match(/<script\b[^>]*>([\s\S]*?)<\/script>/i) || [, ''])[1];
+const rules = [...css.matchAll(/([^{}@]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+const px = (decl, body) => {
+  // px, or a unitless 0 ("min-height:0" is the classic way to undo a target)
+  const m = body.match(new RegExp(`(?:^|;)\\s*${decl}\\s*:\\s*([0-9.]+)(?:px)?\\s*(?:;|$|!)`, 'i'));
+  return m ? parseFloat(m[1]) : null;
+};
+const fontPx = (body) => {
+  const size = px('font-size', body);
+  if (size !== null) return size;
+  const m = body.match(/(?:^|;)\s*font\s*:[^;]*?([0-9.]+)px/i);
+  return m ? parseFloat(m[1]) : null;
+};
+
+// 12. F13: no specimen text under 12px. Specimen CSS runs from the portal reconstruction to the end;
+// today's replica (.c-*) is exempt because it shows the 11.5px defect on purpose.
+const specCss = css.slice(css.indexOf('.pg{'));
+if (!specCss.length || !/\.pg\{/.test(css)) fail('specimen CSS block (.pg{) not found');
+for (const r of [...specCss.matchAll(/([^{}@]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }))) {
+  if (r.sel.split(',').every((s) => /\.c-/.test(s))) continue;
+  const f = fontPx(r.body);
+  if (f !== null && f < 12) fail(`F13: ${r.sel} sets ${f}px text (floor is 12px)`);
+}
+
+// 13. F02: every control class gets a real 44px box, and no later rule lowers it.
+const CONTROLS = ['.ctl', '.seg button', '.tog', '.outline button', '.a-lead', '.a-tool', '.a-held', '.a-inline',
+  '.r-back', '.r-find', '.r-ch', '.r-rung', '.r-chooser', '.r-opt', '.r-door', '.r-kb', '.r-tile', '.mbar-l'];
+for (const c of CONTROLS) {
+  const own = rules.filter((r) => r.sel.split(',').map((s) => s.trim()).includes(c));
+  const mh = own.map((r) => px('min-height', r.body) ?? px('height', r.body)).filter((v) => v !== null);
+  if (!mh.length || Math.max(...mh) < 44) fail(`F02: ${c} has no min-height of at least 44px`);
+}
+const ctlRe = new RegExp(`(${CONTROLS.map((c) => c.replace('.', '\\.').replace(' ', '\\s+')).join('|')})(?![\\w-])`);
+for (const r of rules) {
+  const mh = px('min-height', r.body);
+  if (mh !== null && mh < 44 && ctlRe.test(r.sel)) fail(`F02: ${r.sel} lowers a control's min-height to ${mh}px`);
+  if (/\.fold\b/.test(r.sel) && /(^|;)\s*width\s*:\s*44px/.test(r.body) && px('height', r.body) < 44) fail('F02: .fold under 44px');
+}
+
+// 14. F03: every fold toggle names the section body; the body carries that id.
+const foldTags = [...script.matchAll(/<button\b[^<]*?data-fold[\s\S]*?<\/button>/g)].map((m) => m[0]);
+if (foldTags.length < 4) fail(`F03: expected at least 4 fold/Expand button templates, found ${foldTags.length}`);
+foldTags.forEach((t) => { if (!/aria-controls|bodyRef\(/.test(t)) fail(`F03: fold toggle without aria-controls: ${t.slice(0, 90)}`); });
+if (!/function bodyRef\(uid\)\{[^}]*aria-controls="' \+ uid \+ '-body"/.test(script)) fail('F03: bodyRef must emit aria-controls="<uid>-body"');
+if (!/class="body-ghost" id="' \+ uid \+ '-body"/.test(script)) fail('F03: the section body must carry id="<uid>-body"');
+
+// 15. F01: click routing never matches an ancestor by a state attribute the holder also stores.
+for (const m of script.matchAll(/closest\(\s*'\[data-(room|fold|ch|launch|why|say|set|squint|disclose)\]'\s*\)/g)) {
+  fail(`F01: ancestor match ${m[0]} can hit the state-bearing holder; route by the pressed button`);
+}
+
+// 16. F05/F12/F15 copy, F14 ruling.
+const text = decode(markup.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ');
+for (const p of ['biggest saving', 'largest saving', 'largest height saving', 'nothing hidden', 'every control is visible', 'every control in view', 'dots or counts', 'dots, counts']) {
+  if (text.toLowerCase().includes(p)) fail(`copy: "${p}" contradicts the replica or the ban wording`);
+}
+if (!/class="rid">R-10</.test(markup)) fail('F14: ruling R-10 (doors are two taps below 1180) missing from the rulings slide');
+
 // 11. Size.
 const LIMIT = 2.5 * 1024 * 1024;
 if (bytes >= LIMIT) fail(`file is ${bytes} bytes; limit is ${LIMIT}`);

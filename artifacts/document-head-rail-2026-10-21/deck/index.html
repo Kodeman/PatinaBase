@@ -64,14 +64,14 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .brand{font:500 12px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink);white-space:nowrap;overflow:hidden;min-width:0;flex:1;margin:0}
 .brand span{color:var(--ink-faint)}
-.ctl{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;min-width:36px;padding:0 10px;background:transparent;border:1px solid var(--hairline-strong);
+.ctl{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;min-width:44px;padding:0 10px;background:transparent;border:1px solid var(--hairline-strong);
   border-radius:2px;font:400 13px/1 var(--f-body);color:var(--ink);cursor:pointer;white-space:nowrap}
 .ctl:hover{border-color:var(--oak)}
 .count{font:400 12px/1 var(--f-mono);letter-spacing:.06em;color:var(--ink-subtle);font-variant-numeric:tabular-nums;min-width:56px;text-align:center}
 .outline{position:fixed;top:calc(var(--bar) + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));z-index:45;width:min(380px,calc(100vw - 32px));
   max-height:calc(100vh - var(--bar) - 24px);overflow:auto;background:var(--paper-doc);border:1px solid var(--card-edge);border-radius:2px;padding:12px}
 .outline ol{list-style:none;margin:0;padding:0}
-.outline button{display:flex;gap:12px;width:100%;text-align:left;background:none;border:0;padding:8px;min-height:40px;cursor:pointer;font:400 15px/1.35 var(--f-body);color:var(--ink);border-radius:2px}
+.outline button{display:flex;gap:12px;width:100%;text-align:left;background:none;border:0;padding:8px;min-height:44px;cursor:pointer;font:400 15px/1.35 var(--f-body);color:var(--ink);border-radius:2px}
 .outline button:hover,.outline button[aria-current="true"]{background:var(--rail)}
 .outline .n{font:400 12px/1.6 var(--f-mono);color:var(--ink-faint);min-width:22px}
 
@@ -162,7 +162,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 .spec{margin:0;display:flex;flex-direction:column;gap:12px;min-width:0}
 .spec-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
 .seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--oak);border-radius:2px;max-width:100%}
-.seg button,.tog{min-height:36px;padding:0 12px;border:0;background:transparent;cursor:pointer;font:400 13px/1.2 var(--f-body);color:var(--ink)}
+.seg button,.tog{min-height:44px;padding:0 12px;border:0;background:transparent;cursor:pointer;font:400 13px/1.2 var(--f-body);color:var(--ink)}
 .seg button+button{border-left:1px solid var(--oak)}
 .seg button[aria-pressed="true"],.tog[aria-pressed="true"]{background:var(--ink);color:var(--ink-paper)}
 .tog{border:1px solid var(--oak);border-radius:2px}
@@ -244,7 +244,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 .pg :focus-visible{outline:2px solid var(--sp-clay-ink);outline-offset:2px}
 .sq-stage[data-w="1440"] .pg{width:1008px;padding:40px 64px 44px 88px}
 .sq-stage[data-w="390"] .pg{width:390px;padding:24px 16px 32px}
-.pg-cap{font:400 11px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sp-quiet);margin:0 0 20px}
+.pg-cap{font:400 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sp-quiet);margin:0 0 20px}
 .body-ghost{margin-top:24px;display:flex;flex-direction:column;gap:10px}
 .body-ghost .bg-line{height:10px;background:var(--sp-hair)}
 .body-ghost .bg-room{font:500 20px/1.3 var(--f-display);color:var(--sp-quiet)}
@@ -266,7 +266,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 .hd-held{font:400 14px/1.5 var(--f-body);color:var(--sp-muted);margin:2px 0 0;max-width:72ch}
 .hd-held+.hd-held{margin-top:0}
 .hd-control{display:flex;flex-wrap:wrap;align-items:center;column-gap:16px;margin-top:8px}
-.hd-confirm{display:inline-block;margin-left:8px;font:400 11px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sp-clay-ink)}
+.hd-confirm{display:inline-block;margin-left:8px;font:400 12px/1.5 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sp-clay-ink)}
 .fold{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:0;background:none;cursor:pointer;color:var(--sp-muted);border-radius:2px;flex:none}
 .fold:hover{color:var(--sp-ink)}
 .fold svg{transition:transform .2s ease}
@@ -287,11 +287,11 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 .a-tool:hover::before{background:var(--sp-ink);height:1.5px}
 .a-held{font:500 15px/1.3 var(--f-body);color:var(--sp-quiet)!important;cursor:not-allowed}
 .a-held.tl{font:400 14px/1.3 var(--f-body)}
-.a-held.sm{font:400 14px/1.5 var(--f-body);min-height:0;padding:0 2px;display:inline}
-.a-inline{display:inline;border:0;background:none;padding:0 1px 5px;margin:0;cursor:pointer;font:500 16px/1.55 var(--f-body);color:var(--sp-ink);
-  background-image:linear-gradient(var(--sp-ink),var(--sp-ink)),linear-gradient(var(--sp-clay),var(--sp-clay));
+.a-held.sm{font:400 14px/1.5 var(--f-body);padding:0 2px;vertical-align:baseline}
+.a-inline{display:inline-flex;align-items:center;min-height:44px;vertical-align:baseline;border:0;background:none;padding:0 1px;margin:0;cursor:pointer;font:500 16px/1.55 var(--f-body);color:var(--sp-ink)}
+.a-inline>span{padding-bottom:5px;background-image:linear-gradient(var(--sp-ink),var(--sp-ink)),linear-gradient(var(--sp-clay),var(--sp-clay));
   background-size:100% 1.5px,100% 1px;background-position:0 calc(100% - 3px),0 100%;background-repeat:no-repeat;-webkit-box-decoration-break:clone;box-decoration-break:clone}
-.a-inline:hover{background-size:100% 1.5px,100% 2px}
+.a-inline:hover>span{background-size:100% 1.5px,100% 2px}
 .chev-s{display:inline-block;margin-left:6px;font-size:12px}
 @media (forced-colors:active){.a-lead::before,.a-lead::after,.a-tool::before{background:CanvasText}}
 
@@ -358,7 +358,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 .r-find:hover{border-bottom-color:var(--sp-oak);color:var(--sp-ink)!important}
 .r-find kbd,.r-kb kbd{font:400 12px/1 var(--f-mono);color:var(--sp-muted)}
 .r-eb{font:500 12px/18px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sp-muted);margin:0}
-.r-ebrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px}
+.r-ebrow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 8px;margin-top:16px}
 .r-ebrow .r-find{width:auto;border-bottom:0;padding:0 6px;font-size:13px}
 .r-ebrow .r-find span{border-bottom:1px solid var(--sp-oak)}
 .r-list{list-style:none;margin:8px 0 0;padding:0}
@@ -384,7 +384,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 .r-contents:focus-within .r-teach{visibility:visible}
 .r-rungs{list-style:none;margin:0 0 4px;padding:0 0 0 24px}
 .r-rung{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;min-height:44px;padding:0 4px 0 0;border:0;background:none;cursor:pointer;text-align:left;font:400 14px/1.3 var(--f-body)}
-.r-rung .hint{font:400 11px/1 var(--f-mono);letter-spacing:.06em;color:var(--sp-muted);visibility:hidden}
+.r-rung .hint{font:400 12px/1 var(--f-mono);letter-spacing:.06em;color:var(--sp-muted);visibility:hidden}
 .r-rung:hover .hint,.r-rung:focus-visible .hint{visibility:visible}
 .r-rung:hover .rn{text-decoration:underline;text-decoration-color:var(--sp-oak);text-underline-offset:4px}
 .r-rung[aria-pressed="true"]{font-weight:500}
@@ -404,8 +404,12 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 .r-door svg{flex:none;color:var(--sp-muted)}
 .r-door:hover .dlab{text-decoration:underline;text-decoration-color:var(--sp-oak);text-underline-offset:4px}
 .r-door .ar{margin-left:auto;color:var(--sp-muted)}
-.r-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-.r-tile{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;min-height:64px;padding:8px 10px;border:1px solid var(--sp-rail-hair);border-radius:2px;background:none;cursor:pointer;text-align:left;font:400 13px/1.25 var(--f-body)}
+.r-door .dlab{min-width:0;overflow-wrap:break-word}
+.r-door .dlab .ar{margin-left:0}
+.r-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+.rl.w192 .r-tiles{gap:6px}
+.rl.w192 .r-tile{padding:8px}
+.r-tile{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;min-height:64px;min-width:0;padding:8px 10px;border:1px solid var(--sp-rail-hair);border-radius:2px;background:none;cursor:pointer;text-align:left;font:400 13px/1.25 var(--f-body);overflow-wrap:break-word}
 .r-tile:hover{border-color:var(--sp-oak)}
 .r-tile svg{color:var(--sp-muted)}
 .r-gap24{height:24px;flex:none}
@@ -418,13 +422,15 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 .phone .ph-page{padding:24px 16px;display:flex;flex-direction:column;gap:10px}
 .phone .ph-page .pn{font:500 24px/29px var(--f-display);margin:0}
 .phone .ph-page .pl{height:10px;background:var(--sp-hair)}
+.phone .ph-page .ps{font:400 15px/1.5 var(--f-body);color:var(--sp-muted)}
+.rf-paper :focus-visible,.ph-page :focus-visible{outline:2px solid var(--sp-clay-ink);outline-offset:2px}
 .ph-scrim{position:absolute;inset:0;background:rgba(44,41,38,.32)}
 .ph-sheet{position:absolute;left:0;right:0;bottom:72px;max-height:calc(100% - 96px);overflow-y:auto;background:var(--sp-rail);border-top:1px solid var(--sp-ink);border-radius:8px 8px 0 0;padding:12px 16px 16px;display:flex;flex-direction:column}
 .ph-grab{width:36px;height:4px;border-radius:2px;background:rgba(44,41,38,.25);margin:0 auto 6px}
 .ph-sheet .r-flex{display:none}
 .mbar{position:absolute;left:0;right:0;bottom:0;min-height:72px;background:var(--sp-paper);border-top:1px solid var(--sp-hair-strong);display:flex;align-items:stretch}
 .mbar-l{flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:72px;padding:10px 16px;border:0;background:none;cursor:pointer;text-align:left}
-.mbar-l .l1{display:block;font:500 12px/1.4 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sp-muted)}
+.mbar-l .l1{display:block;font:500 14px/1.4 var(--f-body);color:var(--sp-muted)}
 .mbar-l .l2{display:block;font:400 15px/1.35 var(--f-body);color:var(--sp-ink);overflow-wrap:anywhere}
 .mbar-l svg{flex:none;transition:transform .2s ease}
 .mbar-l[aria-expanded="true"] svg{transform:rotate(180deg)}
@@ -441,8 +447,8 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 .pair-lh .t{font:500 34px/1.15 var(--f-display);margin:0}
 .pair-lh .m{font:400 12px/1.5 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sp-muted)}
 .pair-margin{border-left:1px solid var(--sp-hair);padding:40px 20px}
-.pair-margin p{font:400 11px/1.5 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sp-quiet);margin:0}
-.dims{display:grid;grid-template-columns:200fr 1008fr 232fr;font:400 11px/1 var(--f-mono);letter-spacing:.06em;color:var(--ink-faint);text-align:center}
+.pair-margin p{font:400 12px/1.5 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sp-quiet);margin:0}
+.dims{display:grid;grid-template-columns:200fr 1008fr 232fr;font:400 12px/1 var(--f-mono);letter-spacing:.06em;color:var(--ink-faint);text-align:center}
 .dims span{border-top:1px solid var(--hairline-strong);padding-top:6px}
 
 @media (max-width:760px){
@@ -510,7 +516,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
     <div class="heard">
       <p><strong>The head.</strong> One header bar that repeats across FF&amp;E selections, Client approvals, Project financials, Project closeout and Project record, so a glance tells you what the section is, where it stands, what to do next and where everything else lives.</p>
       <p><strong>The rail.</strong> The rail already jumps, follows your reading, takes a room in hand and opens the job's files. Designers don't see that. It should look like a tool before anyone hovers.</p>
-      <p><strong>The limit.</strong> The studio shouldn't notice Patina. Weight here means legible and findable, never louder: no fills, badges, dots or counts.</p>
+      <p><strong>The limit.</strong> The studio shouldn't notice Patina. Weight here means legible and findable, never louder: no fills, badges, dots or overflow counts.</p>
     </div>
   </div>
 </section>
@@ -611,7 +617,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
       <li><div><strong>One left edge.</strong><span>Nothing goes in a right-hand column (R203). One state-elected lead, unfilled (R201).</span></div></li>
       <li><div><strong>The rail names the job.</strong><span>Title, household, stage. Then sections that look pressable at rest, with 12px values.</span></div></li>
       <li><div><strong>One name everywhere.</strong><span>FF&amp;E selections and Project record on the head, the rail, the sheet and ⌘K (R-4).</span></div></li>
-      <li><div><strong>Show it without badges.</strong><span>No fills, dots, counts or tabs (VISION §6, V18 Q1). Colour orients and never grades. 44px targets; focus in clay-ink only.</span></div></li>
+      <li><div><strong>Show it without badges.</strong><span>No fills, dots, overflow counts or tabs (VISION §6, V18 Q1). Colour orients and never grades. 44px targets; focus in clay-ink only.</span></div></li>
     </ol>
   </div>
 </section>
@@ -620,7 +626,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 <section class="slide" id="dir-H-A" data-title="H-A · The working divider" aria-labelledby="h2-6" tabindex="-1">
   <div class="frame">
     <p class="eyebrow">06 · Head direction A · safe · from the Astra seats</p>
-    <h2 id="h2-6">H-A "The working divider": two rows, nothing hidden.</h2>
+    <h2 id="h2-6">H-A "The working divider": two rows, and More says where the rest live.</h2>
     <p class="lede">Today's head, reordered. The lead gets its own row; the tools row ends in More, then Collapse. A held tool moves into More with its reason. The money line stays in the body.</p>
     <figure class="spec head-spec" id="spec-H-A" data-dir="H-A" data-sec="ffe" data-view="proposed" data-w="1440">
       <div class="spec-bar">
@@ -636,11 +642,11 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
     </figure>
     <div class="ptr">
       <div><h3>Passes</h3><ul>
-        <li><b>Glance:</b> every control is visible on two rows; Collapse is last on the tools row.</li>
+        <li><b>Glance:</b> the frequent controls, and where the rest live, are visible on two rows; Collapse is last on the tools row.</li>
         <li><b>One anatomy:</b> all five sections and the held closeout fill the same slots.</li>
         <li><b>Held acts honest:</b> a held lead prints its 14px reason beneath it; a held tool sits in More, paired with its reason.</li>
         <li><b>Disclosure in the head:</b> More opens under the tools row, inset 12px on a 1px rule.</li>
-        <li><b>Height:</b> about 204px for FF&amp;E (−22%); the specimen measures itself.</li>
+        <li><b>Height:</b> 199px for FF&amp;E in this replica, against today's 268px (−26%). The panel estimated about 204px. The specimen re-measures itself.</li>
         <li><b>390:</b> the same order with full labels; tools wrap at 44px.</li>
       </ul></div>
       <div><h3>Trade-off</h3><ul>
@@ -682,11 +688,11 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
         <li><b>Glance:</b> one bar with fixed slots; the lead is first, More is last, Fold is always in the margin.</li>
         <li><b>Held acts honest:</b> the held line prints at rest: the act, unscored, then why it waits. It answers the new hire's "why can't I order?"</li>
         <li><b>Disclosure in the head:</b> the More tray opens under the act line, between hairlines, 44px rows.</li>
-        <li><b>Height:</b> about 150–170px for FF&amp;E (−35 to −42%).</li>
+        <li><b>Height:</b> 188px for FF&amp;E in this replica (−30%). The panel estimated 150–170px; the 44px target on the held line costs most of the difference.</li>
         <li><b>390:</b> the chevron moves inline; the act line keeps only the lead and More. Everything else is under More. The held line still prints.</li>
       </ul></div>
       <div><h3>Trade-off</h3><ul>
-        <li>The true "header bar" Kody asked for: the biggest saving and one place to look.</li>
+        <li>The true "header bar" Kody asked for: one place to look, with the tools and the held reason in view at rest. H-C is about 30px shorter; H-B spends that height on showing what H-C keeps in a drawer.</li>
         <li>The margin chevron is a new convention for Collapse. Its label ("Fold FF&amp;E selections") and focus ring must teach it.</li>
         <li>It costs a few px of left margin at 1180.</li>
       </ul></div>
@@ -723,7 +729,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
       <div><h3>Passes</h3><ul>
         <li><b>One anatomy:</b> name, sentence-with-lead, tally, one control line, in every section.</li>
         <li><b>Disclosure in the head:</b> the drawer opens in flow, grouped by how often you reach for things.</li>
-        <li><b>Height:</b> about 110–120px for FF&amp;E (−55%), the calmest head.</li>
+        <li><b>Height:</b> 157px for FF&amp;E in this replica (−41%), the shortest and calmest head. The panel estimated 110–120px.</li>
         <li><b>390:</b> the same, with the drawer at full width.</li>
       </ul></div>
       <div><h3>Trade-off</h3><ul>
@@ -753,18 +759,18 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
     <div>
       <p class="eyebrow" style="margin-bottom:10px">Measured head height in these replicas (FF&amp;E, 1440)</p>
       <div class="heights" id="cmp-heights" role="list" aria-label="Measured head heights"></div>
-      <p class="note" style="margin-top:8px">Today's replica runs from the double rule to the money line. Each proposal runs from the name to its last head line. The panel's estimates: H-A about 204px, H-B 150–170px, H-C 110–120px, against about 260px today.</p>
+      <p class="note" style="margin-top:8px">Today's replica runs from the double rule to the money line. Each proposal runs from the name to its last head line. In Chromium with the deck's fonts: today 268px, H-A 199px, H-B 188px, H-C 157px; the chart re-measures in your browser. The panel's estimates, made before the 44px targets were drawn: H-A about 204px, H-B 150–170px, H-C 110–120px, against about 260px in Kody's screenshot.</p>
     </div>
     <div class="tbl-wrap">
       <table class="tbl">
         <caption class="vh">Brief success tests for the three head directions</caption>
         <thead><tr><th scope="col">Success test (brief §6)</th><th scope="col">H-A</th><th scope="col">H-B</th><th scope="col">H-C</th></tr></thead>
         <tbody>
-          <tr><td>1 · Glance: section, state, next act, where every other control lives</td><td class="y">Passes. Every control in view on two rows.</td><td class="y">Passes. One bar; Fold always in the margin.</td><td class="p">Partly. "Tools ⌄" tells you where; it doesn't show what.</td></tr>
+          <tr><td>1 · Glance: section, state, next act, where every other control lives</td><td class="y">Passes. Frequent controls, and where the rest live, are in view on two rows.</td><td class="y">Passes. One bar; Fold always in the margin.</td><td class="p">Partly. "Tools ⌄" tells you where; it doesn't show what.</td></tr>
           <tr><td>2 · One anatomy across five sections</td><td class="y">Passes</td><td class="y">Passes</td><td class="y">Passes</td></tr>
           <tr><td>3 · Held acts honest, reason on the scale</td><td class="y">Passes. Held tools pair with their reasons inside More.</td><td class="y">Passes. The held line prints at rest.</td><td class="p">Partly. Honest inside the drawer, out of view at rest.</td></tr>
           <tr><td>4 · Disclosure lives in the head</td><td class="y">Passes. Inset under the tools row.</td><td class="y">Passes. Tray under the act line.</td><td class="y">Passes. The drawer is the head.</td></tr>
-          <tr><td>5 · Height budget against ~260px</td><td class="y">~204px (−22%)</td><td class="y">~150–170px (−35 to −42%)</td><td class="y">~110–120px (−55%)</td></tr>
+          <tr><td>5 · Height against today's 268px replica</td><td class="y">199px (−26%)</td><td class="y">188px (−30%)</td><td class="y">157px (−41%)</td></tr>
           <tr><td>8 · 390 works</td><td class="y">Same order, tools wrap</td><td class="y">Lead + More; held line stays</td><td class="y">Same, drawer full width</td></tr>
         </tbody>
       </table>
@@ -802,7 +808,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
       <div><h3>Rulings touched</h3><ul>
         <li><b>R-5:</b> D-B52's flex gap goes (all six seats).</li>
         <li><b>R-4:</b> FF&amp;E selections, Project record.</li>
-        <li><b>Keeps</b> R127 (≤14 labels, rungs at 1440 only) and R124 B1.</li>
+        <li><b>Keeps</b> R127 (≤14 labels, rungs at 1440 only) and R124 B1 at 1180 and up. Below 1180 a door is two taps: R-10 asks you.</li>
       </ul></div>
     </div>
   </div>
@@ -896,11 +902,11 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
           <tr><td>7 · ⌘K and shortcuts</td><td class="y">"Find anything ⌘K" row; shortcuts foot</td><td class="y">"Find ⌘K" on the Contents line; shortcuts foot</td><td class="y">As S-A</td></tr>
           <tr><td>8 · Below 1180</td><td>"Contents" two-line bar; sheet in the same order</td><td>"Sections and files"; doors one press inside</td><td>"Contents"; the same blocks in the sheet</td></tr>
           <tr><td>Risk</td><td>May still read as a list</td><td>One more label within 14; new order to learn</td><td>Dashboard drift (V19 Q1); costs paper width</td></tr>
-          <tr><td>Rulings</td><td>R-5</td><td>R-5, R-8 (revises R127 rooms)</td><td>R-5, R-8, R127, SPEC A3</td></tr>
+          <tr><td>Rulings</td><td>R-5, R-10</td><td>R-5, R-8 (revises R127 rooms), R-10</td><td>R-5, R-8, R127, SPEC A3, R-10</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="note">All three name the job, set the back link in sentence case, raise values to 12px, delete "+N more", lift rungs to 44px and stop the MobileBar truncating.</p>
+    <p class="note">All three name the job, set the back link in sentence case, raise values to 12px, delete "+N more", lift rungs to 44px and stop the MobileBar truncating. Below 1180 all three put a door two taps away (the MobileBar, then the door); R-10 asks whether that reading of R124 B1 holds on the phone.</p>
   </div>
 </section>
 
@@ -922,7 +928,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
       <p class="spec-out" data-out aria-live="polite"></p>
     </figure>
     <div class="pair-reasons">
-      <div><b>H-B, the head</b>The largest height saving (about 40%) and one bar per section with fixed slots, so the glance test passes in every section. It keeps R203's left edge. The held line answers "why can't I order?" without hiding the act.</div>
+      <div><b>H-B, the head</b>One bar per section with fixed slots, so the glance test passes in every section, and the tools and the held reason stay in view at rest. H-C is shorter (157px against 188px); H-B spends those 30px on showing what H-C puts in a drawer. It keeps R203's left edge. The held line answers "why can't I order?" without hiding the act.</div>
       <div><b>S-B, the rail</b>The four doors and Room in hand are in view at rest: exactly what Kody says designers overlook. No fills, no badges, no extra width.</div>
       <div><b>Fallback</b>H-A with S-A, if you want the smallest change to what Leah already knows.</div>
     </div>
@@ -957,7 +963,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 <section class="slide" id="s16" data-title="Rulings asked of you" aria-labelledby="h2-16" tabindex="-1">
   <div class="frame">
     <p class="eyebrow">16 · For Kody and Leah</p>
-    <h2 id="h2-16">Nine rulings. Each has a default if you leave it.</h2>
+    <h2 id="h2-16">Ten rulings. Each has a default if you leave it.</h2>
     <div class="rulings">
       <div class="rul"><span class="rid">R-1</span><h3>Which head direction</h3><p>H-A, H-B or H-C.</p><p class="rec"><b>Default:</b> H-B</p></div>
       <div class="rul"><span class="rid">R-2</span><h3>Which rail direction</h3><p>S-A, S-B or S-C.</p><p class="rec"><b>Default:</b> S-B</p></div>
@@ -968,6 +974,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
       <div class="rul"><span class="rid">R-7</span><h3>FF&amp;E "1 ready"</h3><p>It sits beside "No selections are ready for purchasing authorization yet." and reads as a contradiction to a new hire. Kept verbatim in every mockup.</p><p class="rec"><b>Default:</b> reword, in a separate ticket</p></div>
       <div class="rul"><span class="rid">R-8</span><h3>Room in hand beyond 1440</h3><p>Allow the room chooser at 1180 and in the spine sheet. Revises R127.</p><p class="rec"><b>Default:</b> only with S-B or S-C</p></div>
       <div class="rul"><span class="rid">R-9</span><h3>Where the money line lives</h3><p>In the head tally (H-B, H-C) or in the body (H-A).</p><p class="rec"><b>Default:</b> follows R-1</p></div>
+      <div class="rul"><span class="rid">R-10</span><h3>Doors on the phone</h3><p>Below 1180, doors are two taps (Contents or Sections and files, then the door). Accept that as the R124 B1 reading on the phone, or require a one-tap door.</p><p class="rec"><b>Default:</b> accept two taps below 1180</p></div>
     </div>
   </div>
 </section>
@@ -1041,7 +1048,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
     { k: 'ffe', n: 'FF&E selections', v: '21 LINES · 4 ROOMS', next: 'Bill 21 uninvoiced', short: '21 lines', state: '21 priced selections are not yet invoiced.' },
     { k: 'money', n: 'Project financials', v: '$23,132 RECEIVABLE', next: 'Record the payment', short: '$23,132 receivable', state: 'Client budget $48,000, $24,868 remaining. $23,132 authorized.' },
     { k: 'closeout', n: 'Project closeout', v: 'NOTHING YET', plain: 'Nothing yet', short: 'nothing yet', state: 'Nothing yet' },
-    { k: 'record', n: 'Project record', v: '4 COMPLETE', plain: '4 complete', short: '4 complete', state: '4 complete' }
+    { k: 'record', n: 'Project record', v: '4 COMPLETE', next: 'Open project record', plain: '4 complete', short: '4 complete', state: '4 complete' }
   ];
   var ROOMS = ['Living', 'Primary bedroom', 'Dining', 'Study'];
   function chapter(k){ for (var i = 0; i < CH.length; i++) if (CH[i].k === k) return CH[i]; return CH[0]; }
@@ -1058,7 +1065,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 
   /* ════════ head acts ════════ */
   function leadB(t){ return '<button type="button" class="a-lead" data-k="lead" data-say="' + attr('“' + t + '” is the elected lead. In the portal it runs; here it only reports.') + '">' + esc(t) + '</button>'; }
-  function inlineB(t){ return '<button type="button" class="a-inline" data-k="lead" data-say="' + attr('“' + t + '” is the lead, set inline at the end of the sentence.') + '">' + esc(t) + '</button>'; }
+  function inlineB(t){ return '<button type="button" class="a-inline" data-k="lead" data-say="' + attr('“' + t + '” is the lead, set inline at the end of the sentence.') + '"><span>' + esc(t) + '</span></button>'; }
   function toolB(tl, i){
     var t = tl[0], nav = tl[1];
     return '<button type="button" class="a-tool" data-k="tool-' + i + '" data-say="' + attr(nav ? '“' + t + ' →” leaves the paper for its own page. Only acts that leave carry the arrow.' : '“' + t + '”: in the portal it runs; here it only reports.') + '">' + esc(t) + (nav ? ' →' : '') + '</button>';
@@ -1067,20 +1074,22 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
   function moreB(id, label){ return '<button type="button" class="a-tool" data-k="more" data-disclose="' + id + '" aria-expanded="false" aria-controls="' + id + '">' + (label || 'More') + '<span class="chev-s" aria-hidden="true">⌄</span></button>'; }
   function heldB(t, why, rid, kind){ return '<button type="button" class="a-held ' + (kind || '') + '" aria-disabled="true" aria-describedby="' + rid + '" data-why="' + attr(why) + '" data-k="held-' + rid + '">' + esc(t) + '</button>'; }
   function confirmTag(s){ return s.confirm ? '<span class="hd-confirm">copy to confirm · R-6</span>' : ''; }
-  function expandB(){ return '<div class="hd-row"><button type="button" class="a-tool" data-fold data-k="fold" aria-expanded="false">Expand</button></div>'; }
+  /* every fold toggle names the section body it hides (#uid-body, always in the DOM) */
+  function bodyRef(uid){ return ' aria-controls="' + uid + '-body"'; }
+  function expandB(uid){ return '<div class="hd-row"><button type="button" class="a-tool" data-fold data-k="fold" aria-expanded="false"' + bodyRef(uid) + '>Expand</button></div>'; }
   function tallyOf(s, withMoney){ return [s.tally, withMoney ? s.money : ''].filter(Boolean).join(' · '); }
 
   var HEAD = {};
-  /* H-A: two rows, nothing hidden */
+  /* H-A: two rows; More says where the rest live */
   HEAD['H-A'] = function(s, w, uid, folded){
     var h = '<div class="hd hd-a" data-headbox><h3 class="hd-name">' + esc(s.name) + '</h3><p class="hd-state">' + esc(s.state) + '</p>';
-    if (folded) return h + expandB() + '</div>';
+    if (folded) return h + expandB(uid) + '</div>';
     if (s.tally) h += '<p class="hd-tally">' + esc(s.tally) + '</p>';
     if (s.lead) h += '<div class="hd-row">' + leadB(s.lead) + '</div>';
     if (s.heldLead){ var rl = uid + '-hl'; h += '<div class="hd-row">' + heldB(s.heldLead[0], s.heldLead[1], rl, '') + '</div><p class="hd-why" id="' + rl + '">' + esc(s.heldLead[1]) + confirmTag(s) + '</p>'; }
     var held = s.held || [], more = s.more || [], id = uid + '-more';
     h += '<div class="hd-row">' + (s.tools || []).map(toolB).join('') + (held.length || more.length ? moreB(id) : '') +
-      '<button type="button" class="a-tool" data-fold data-k="fold" aria-expanded="true">Collapse</button></div>';
+      '<button type="button" class="a-tool" data-fold data-k="fold" aria-expanded="true"' + bodyRef(uid) + '>Collapse</button></div>';
     if (held.length || more.length){
       h += '<div class="disc" id="' + id + '" hidden>';
       held.forEach(function(x, i){ var r = uid + '-h' + i; h += heldB(x[0], x[1], r, 'tl') + '<p class="hd-why" id="' + r + '">' + esc(x[1]) + '</p>'; });
@@ -1091,8 +1100,8 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
   };
   /* H-B: one act line, fold in the margin, held line */
   HEAD['H-B'] = function(s, w, uid, folded){
-    var h = '<div class="hd hd-b" data-headbox><div class="hd-top"><button type="button" class="fold" data-fold data-k="fold" aria-expanded="' + !folded + '" aria-label="' + (folded ? 'Unfold ' : 'Fold ') + attr(s.name) + '">' + CHEV + '</button><h3 class="hd-name">' + esc(s.name) + '</h3></div><p class="hd-state">' + esc(s.state) + '</p>';
-    if (folded) return h + expandB() + '</div>';
+    var h = '<div class="hd hd-b" data-headbox><div class="hd-top"><button type="button" class="fold" data-fold data-k="fold" aria-expanded="' + !folded + '"' + bodyRef(uid) + ' aria-label="' + (folded ? 'Unfold ' : 'Fold ') + attr(s.name) + '">' + CHEV + '</button><h3 class="hd-name">' + esc(s.name) + '</h3></div><p class="hd-state">' + esc(s.state) + '</p>';
+    if (folded) return h + expandB(uid) + '</div>';
     var t = tallyOf(s, true); if (t) h += '<p class="hd-tally">' + esc(t) + '</p>';
     var tools = s.tools || [], more = s.more || [], id = uid + '-more', line = '', tray = '';
     if (s.lead){
@@ -1113,7 +1122,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
   /* H-C: a sentence ending in the lead, and one drawer */
   HEAD['H-C'] = function(s, w, uid, folded){
     var h = '<div class="hd hd-c" data-headbox><h3 class="hd-name">' + esc(s.name) + '</h3>';
-    if (folded) return h + '<p class="hd-state">' + esc(s.state) + '</p>' + expandB() + '</div>';
+    if (folded) return h + '<p class="hd-state">' + esc(s.state) + '</p>' + expandB(uid) + '</div>';
     var st = esc(s.state);
     if (s.lead){ var base = s.state.replace(/\.$/, ''); st = esc(base) + (base.indexOf('—') >= 0 ? '. ' : ' — ') + inlineB(s.lead); }
     h += '<p class="hd-state">' + st + '</p>';
@@ -1122,7 +1131,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
     if (s.heldLead) helds.push(s.heldLead);
     var any = tools.length || more.length || helds.length;
     h += '<div class="hd-control">' + (any ? moreB(id, 'Tools') + '<span aria-hidden="true" style="color:var(--sp-quiet)">·</span>' : '') +
-      '<button type="button" class="a-tool" data-fold data-k="fold" aria-expanded="true">Collapse</button></div>';
+      '<button type="button" class="a-tool" data-fold data-k="fold" aria-expanded="true"' + bodyRef(uid) + '>Collapse</button></div>';
     if (any){
       h += '<div class="drawer" id="' + id + '" hidden>';
       if (tools.length) h += '<div class="grp"><p class="gcap">Often</p>' + tools.map(toolB).join('') + '</div>';
@@ -1173,8 +1182,9 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
       '<button type="button" class="c-monolink" data-say="' + attr('Today this cross-reference is a mono caps link under the lead.') + '">Client approvals · 2 awaiting publish →</button></div>';
   }
   function ladder(){ return '<div class="c-ladder"><span>Client budget <b>$48,000</b></span><span>Authorized <b>$23,132</b></span><span>Remaining <b>$24,868</b></span></div>'; }
-  function ghost(dir, k, cur){
-    var h = '<div class="body-ghost">';
+  /* the section body: folding hides it with the head's controls */
+  function ghost(dir, k, cur, uid, folded){
+    var h = '<div class="body-ghost" id="' + uid + '-body"' + (folded ? ' hidden' : '') + '>';
     if (!cur && dir === 'H-A' && k === 'ffe') h += '<p class="bg-money">$404 priced · $23,132 released</p>';
     if (!cur && k === 'money') h += ladder();
     return h + '<div class="bg-line" style="width:72%" aria-hidden="true"></div><div class="bg-line" style="width:54%" aria-hidden="true"></div></div>';
@@ -1201,7 +1211,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
     var d = el.dataset, k = d.sec, s = SEC[k], w = d.w, stage = $('[data-stage]', el), uid = el.id, cur = d.view === 'current';
     stage.dataset.w = w;
     var head = cur ? currentHTML(k, uid) : HEAD[d.dir](s, w, uid, d.fold === '1');
-    stage.innerHTML = '<div class="pg ' + (w === '390' ? 'narrow' : 'wide') + '"><p class="pg-cap">' + (cur ? 'Today' : d.dir) + ' · ' + esc(s.name) + (k === 'closeheld' ? ' · held' : '') + ' · ' + w + '</p>' + head + ghost(d.dir, k, cur) + '</div>';
+    stage.innerHTML = '<div class="pg ' + (w === '390' ? 'narrow' : 'wide') + '"><p class="pg-cap">' + (cur ? 'Today' : d.dir) + ' · ' + esc(s.name) + (k === 'closeheld' ? ' · held' : '') + ' · ' + w + '</p>' + head + ghost(d.dir, k, cur, uid, !cur && d.fold === '1') + '</div>';
     var hb = $('[data-headbox]', stage), h = Math.round(hb.getBoundingClientRect().height), today = measureHead(currentHTML(k, 'mz'), w), msg;
     if (cur){
       msg = '<b>Today · ' + esc(s.name) + (k === 'closeheld' ? ', held' : '') + '.</b> This replica measures ' + h + 'px at ' + w + '.';
@@ -1218,26 +1228,27 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 
   /* ════════ rail ════════ */
   function railInner(o){
-    var sheet = o.w === 'sheet', narrow = o.w === '1180', dir = o.dir, h = '';
+    var narrow = o.w === '1180', dir = o.dir, h = '';
     h += '<button type="button" class="r-back" data-k="back" data-say="' + attr('Back to Studio overview: an action, so sentence case and 44px.') + '"><span aria-hidden="true">←</span><span>Studio overview</span></button>';
     h += '<div class="r-title"><p class="t">Hartwell residence</p><p class="hh">The Hartwells</p><p class="st">Ordering</p>' +
       (dir !== 'S-A' && o.room ? '<p class="rih">Room in hand: ' + esc(o.room) + '</p>' : '') + '</div><div class="r-rule"></div>';
-    var find = function(label){ return '<button type="button" class="r-find" data-k="find" data-say="' + attr('Opens ⌘K: type a section, a room or a file to jump to it.') + '"><span>' + label + '</span>' + (sheet ? '' : '<kbd>⌘K</kbd>') + '</button>'; };
+    var find = function(label){ return '<button type="button" class="r-find" data-k="find" data-say="' + attr('Opens ⌘K: type a section, a room or a file to jump to it.') + '"><span>' + label + '</span><kbd>⌘K</kbd></button>'; };
     if (dir === 'S-A'){
-      h += find(narrow ? 'Find' : 'Find anything') + contents(o) + '<div class="r-gap24"></div><p class="r-eb">Filed with this job</p>' + doors();
+      h += find(narrow ? 'Find' : 'Find anything') + contents(o) + '<div class="r-gap24"></div><p class="r-eb">Filed with this job</p>' + doors(narrow);
     } else if (dir === 'S-B'){
-      h += '<p class="r-eb">Filed with this job</p>' + doors() + '<div class="r-ebrow"><p class="r-eb">Contents</p>' + find('Find') + '</div>' + contents(o);
+      h += '<p class="r-eb">Filed with this job</p>' + doors(narrow) + '<div class="r-ebrow"><p class="r-eb">Contents</p>' + find('Find') + '</div>' + contents(o);
     } else {
       h += tiles() + '<div style="height:8px"></div>' + find(narrow ? 'Find' : 'Find anything') + contents(o);
     }
-    if (!sheet) h += '<div class="r-flex"></div><button type="button" class="r-kb" data-k="kb" data-say="' + attr('Opens the keyboard shortcuts sheet: g + letter jumps, t logs time.') + '"><span>Keyboard shortcuts</span><kbd>?</kbd></button>';
+    /* the sheet keeps Find's shortcut and this foot too: a narrow window can still have a keyboard */
+    h += '<div class="r-flex"></div><button type="button" class="r-kb" data-k="kb" data-say="' + attr('Opens the keyboard shortcuts sheet: g + letter jumps, t logs time.') + '"><span>Keyboard shortcuts</span><kbd>?</kbd></button>';
     return h;
   }
   function contents(o){
     var h = '<div class="r-contents"><ul class="r-list" data-chlist aria-label="Contents">';
     CH.forEach(function(c){
       var line2 = o.dir === 'S-C' ? '<span class="nx' + (c.next ? ' act' : '') + '">' + esc(c.next || c.plain) + '</span>' : '<span class="v">' + esc(c.v) + '</span>';
-      h += '<li><button type="button" class="r-ch" data-ch="' + c.k + '" data-k="ch-' + c.k + '" aria-current="' + (c.k === o.cur) + '"><span class="n">' + esc(c.n) + '</span>' + line2 + '</button>';
+      h += '<li><button type="button" class="r-ch" data-ch="' + c.k + '" data-k="ch-' + c.k + '" aria-current="' + (c.k === o.cur) + '" tabindex="' + (c.k === o.cur ? '0' : '-1') + '"><span class="n">' + esc(c.n) + '</span>' + line2 + '</button>';
       if (c.k === 'ffe') h += rooms(o);
       h += '</li>';
     });
@@ -1259,9 +1270,11 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
       [''].concat(ROOMS).map(function(r){ return '<li><button type="button" class="r-opt" data-room="' + r + '" data-k="opt-' + (r || 'all') + '" aria-pressed="' + (o.room === r) + '">' + (r || 'All rooms') + '</button></li>'; }).join('') +
       '</ul></div></div>';
   }
-  function doors(){
+  /* at 136px the arrow rides at the end of the label so the label can wrap; it never clips */
+  function doors(narrow){
     return '<ul class="r-doors">' + DOORS.map(function(d, i){
-      return '<li><button type="button" class="r-door" data-k="door-' + i + '" data-say="' + attr(d.say) + '">' + d.i + '<span class="dlab">' + esc(d.l) + '</span>' + (d.go ? '<span class="ar" aria-hidden="true">→</span>' : '') + '</button></li>';
+      var ar = d.go ? '<span class="ar" aria-hidden="true">→</span>' : '';
+      return '<li><button type="button" class="r-door" data-k="door-' + i + '" data-say="' + attr(d.say) + '">' + d.i + '<span class="dlab">' + esc(d.l) + (narrow && ar ? ' ' + ar : '') + '</span>' + (narrow ? '' : ar) + '</button></li>';
     }).join('') + '</ul>';
   }
   function tiles(){
@@ -1274,21 +1287,25 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
     var narrow = o.w === '1180', wcls = o.dir === 'S-C' ? (narrow ? 'w192' : 'w240') : (narrow ? 'w136' : 'w200');
     return '<div class="rl ' + wcls + ' ' + dirCls(o.dir) + '" role="navigation" aria-label="' + o.dir + ' rail">' + railInner(o) + '</div>';
   }
+  /* the jump's destination: a focusable section heading, its state and its elected lead */
+  function destHTML(c){
+    return '<h3 class="pn" tabindex="-1" data-dest>' + esc(c.n) + '</h3><p class="ps">' + esc(c.state) + '</p>' + (c.next ? '<div>' + leadB(c.next) + '</div>' : '');
+  }
   function paperHTML(o){
-    var c = chapter(o.cur), h = '<div class="rf-paper" aria-hidden="true"><p class="pn">' + esc(c.n) + '</p><p class="ps">' + esc(c.state) + '</p>';
+    var c = chapter(o.cur), h = '<div class="rf-paper">' + destHTML(c);
     if (c.k === 'ffe'){
       var order = o.room ? [o.room].concat(ROOMS.filter(function(r){ return r !== o.room; })) : ROOMS;
       order.forEach(function(r, i){
-        h += '<p class="ps" style="margin-top:14px;font:500 20px/1.3 var(--f-display);color:var(--sp-ink)">' + r + '</p>' + (i === 0 && o.room ? '<p class="pr">In hand: its items lead every list</p>' : '') + '<div class="pl" style="width:' + (70 - i * 8) + '%"></div>';
+        h += '<p class="ps" style="margin-top:14px;font:500 20px/1.3 var(--f-display);color:var(--sp-ink)">' + r + '</p>' + (i === 0 && o.room ? '<p class="pr">In hand: its items lead every list</p>' : '') + '<div class="pl" aria-hidden="true" style="width:' + (70 - i * 8) + '%"></div>';
       });
     } else {
-      h += '<div class="pl" style="width:72%;margin-top:14px"></div><div class="pl" style="width:58%"></div><div class="pl" style="width:64%"></div>';
+      h += '<div aria-hidden="true"><div class="pl" style="width:72%;margin-top:14px"></div><div class="pl" style="width:58%;margin-top:10px"></div><div class="pl" style="width:64%;margin-top:10px"></div></div>';
     }
     return h + '</div>';
   }
   function phoneHTML(o, open){
     var c = chapter(o.cur), sid = o.uid + '-sheet', l1 = o.dir === 'S-B' ? 'Sections and files' : 'Contents';
-    var h = '<div class="phone"><div class="ph-page" aria-hidden="true"><p class="pn">' + esc(c.n) + '</p><div class="pl" style="width:84%"></div><div class="pl" style="width:62%"></div><div class="pl" style="width:74%"></div></div>';
+    var h = '<div class="phone"><div class="ph-page"' + (open ? ' aria-hidden="true"' : '') + '>' + destHTML(c) + '<div class="pl" aria-hidden="true" style="width:84%"></div><div class="pl" aria-hidden="true" style="width:62%"></div><div class="pl" aria-hidden="true" style="width:74%"></div></div>';
     if (open) h += '<div class="ph-scrim" aria-hidden="true"></div><div class="ph-sheet ' + dirCls(o.dir) + '" id="' + sid + '" role="region" aria-label="Spine sheet"><div class="ph-grab" aria-hidden="true"></div>' + railInner(o) + '</div>';
     else h += '<div id="' + sid + '" hidden></div>';
     return h + '<div class="mbar"><button type="button" class="mbar-l" data-launch data-k="launch" aria-expanded="' + open + '" aria-controls="' + sid + '"><span><span class="l1">' + l1 + '</span><span class="l2">' + esc(c.n) + ' · ' + esc(c.short) + '</span></span>' + CHEV_UP + '</button></div></div>';
@@ -1319,7 +1336,7 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
     var o = { dir: 'S-B', w: '1440', cur: CH_OF[d.sec], room: d.room || '', uid: el.id };
     wrap.innerHTML = '<div class="pair-sizer"><div class="pair">' + railHTML(o) +
       '<div class="pair-paper"><div class="pair-lh"><p class="t">Hartwell residence</p><span class="m">Ordering · The Hartwells</span></div>' +
-      '<div class="pg wide pair-pg">' + HEAD['H-B'](s, '1440', el.id, d.fold === '1') + ghost('H-B', d.sec, false) + '</div></div>' +
+      '<div class="pg wide pair-pg">' + HEAD['H-B'](s, '1440', el.id, d.fold === '1') + ghost('H-B', d.sec, false, el.id, d.fold === '1') + '</div></div>' +
       '<div class="pair-margin" aria-hidden="true"></div></div></div>';
     fitPair(el);
     say(el, '<b>H-B + S-B · ' + esc(s.name) + (d.sec === 'closeheld' ? ', held' : '') + '.</b> Switch sections above or press a chapter in the rail; the head keeps its slots.');
@@ -1336,7 +1353,8 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
 
   /* ════════ comparison ════════ */
   function renderCmp(el){
-    el.innerHTML = '<div class="cmp-scale"><div class="pg wide cmpg">' + HEAD[el.dataset.dir](SEC.ffe, '1440', 'cmp-' + el.dataset.dir, el.dataset.fold === '1') + '</div></div>';
+    var uid = 'cmp-' + el.dataset.dir, folded = el.dataset.fold === '1';
+    el.innerHTML = '<div class="cmp-scale"><div class="pg wide cmpg">' + HEAD[el.dataset.dir](SEC.ffe, '1440', uid, folded) + ghost(el.dataset.dir, 'ffe', false, uid, folded) + '</div></div>';
     fitCmp(el);
   }
   function fitCmp(el){
@@ -1378,13 +1396,16 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
     else if (e.key === 'ArrowUp') n = Math.max(0, i - 1);
     else if (e.key === 'Home') n = 0;
     else if (e.key === 'End') n = items.length - 1;
-    if (n >= 0){ e.preventDefault(); items[n].focus(); }
+    /* roving tabindex: the list is one tab stop, and it follows the arrow keys */
+    if (n >= 0){ e.preventDefault(); items.forEach(function(x){ x.tabIndex = -1; }); items[n].tabIndex = 0; items[n].focus(); }
   });
 
-  /* specimen controls */
+  /* specimen controls. Route by the pressed BUTTON's own attributes: the holder figure stores its
+     state in data-* too (data-room, data-fold), so an ancestor match would hijack every click. */
   document.addEventListener('click', function(e){
-    var t = e.target, el = t.closest('[data-kind]');
-    var set = t.closest('[data-set]');
+    var b = e.target.closest && e.target.closest('button');
+    if (!b) return;
+    var bd = b.dataset, el = b.closest('[data-kind]'), set = bd.set ? b : null;
     if (set && el){
       var kv = set.dataset.set.split(':');
       el.dataset[kv[0]] = kv[1];
@@ -1394,9 +1415,8 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
       if (kv[0] === 'w' && el.dataset.kind === 'rail') el.dataset.sheet = '1';
       render(el); return;
     }
-    var sq = t.closest('[data-squint]');
-    if (sq && el){ var on = !el.classList.contains('is-squint'); el.classList.toggle('is-squint', on); sq.setAttribute('aria-pressed', String(on)); return; }
-    var dis = t.closest('[data-disclose]');
+    if (bd.squint !== undefined && el){ var on = !el.classList.contains('is-squint'); el.classList.toggle('is-squint', on); b.setAttribute('aria-pressed', String(on)); return; }
+    var dis = bd.disclose ? b : null;
     if (dis){
       var open = dis.getAttribute('aria-expanded') !== 'true', tg = document.getElementById(dis.dataset.disclose);
       dis.setAttribute('aria-expanded', String(open)); if (tg) tg.hidden = !open;
@@ -1406,33 +1426,35 @@ ul.plain li::marker,ol.plain li::marker{color:var(--oak)}
       return;
     }
     if (!el) return;
-    if (t.closest('[data-fold]')){ el.dataset.fold = el.dataset.fold === '1' ? '' : '1'; render(el); refocus(el, 'fold'); return; }
-    var ch = t.closest('[data-ch]');
-    if (ch){
-      var c = chapter(ch.dataset.ch);
+    if (bd.fold !== undefined){ el.dataset.fold = el.dataset.fold === '1' ? '' : '1'; render(el); refocus(el, 'fold'); return; }
+    if (bd.ch){
+      var c = chapter(bd.ch);
       if (el.dataset.kind === 'pair'){
         if (c.k === 'schedule'){ say(el, 'Project schedule jumps to its own section; its head is not drawn in this specimen.'); return; }
         if (!(c.k === 'closeout' && el.dataset.sec === 'closeheld')) el.dataset.sec = c.k;
         delete el.dataset.fold; syncSec(el); render(el); refocus(el, 'ch-' + c.k); return;
       }
-      el.dataset.cur = c.k; render(el); refocus(el, 'ch-' + c.k);
-      say(el, el.dataset.dir === 'S-C' ? 'Jumps to ' + esc(c.n) + (c.next ? ' and focuses its lead, “' + esc(c.next) + '”.' : '.') : 'Jumps to ' + esc(c.n) + ', unfolds it if folded and focuses its heading.');
+      /* the jump lands: S-C on the section's elected lead, S-A/S-B (and leads-less sections) on its heading */
+      var inSheet = el.dataset.w === 'm', toLead = el.dataset.dir === 'S-C' && c.next;
+      el.dataset.cur = c.k; if (inSheet) el.dataset.sheet = '0';
+      render(el);
+      var dest = $(toLead ? '.ph-page [data-k="lead"], .rf-paper [data-k="lead"]' : '[data-dest]', el);
+      if (dest) dest.focus({ preventScroll: true });
+      say(el, 'Jumps to ' + esc(c.n) + (inSheet ? ', closes the sheet' : '') + (toLead ? ' and moves focus to its lead, “' + esc(c.next) + '”. The row only takes you there; pressing the lead runs it.' : ' and moves focus to its heading. In the portal it also unfolds a folded section.'));
       return;
     }
-    var rm = t.closest('[data-room]');
-    if (rm){
-      var r = rm.dataset.room, rung = rm.classList.contains('r-rung');
-      el.dataset.room = rung && el.dataset.room === r ? '' : r;
+    if (bd.room !== undefined){
+      var prev = el.dataset.room || '', r = bd.room, rung = b.classList.contains('r-rung');
+      el.dataset.room = rung && prev === r ? '' : r;
       if (el.dataset.room && el.dataset.kind === 'rail') el.dataset.cur = 'ffe';
-      render(el); refocus(el, rung ? rm.dataset.k : 'chooser');
-      say(el, el.dataset.room ? esc(el.dataset.room) + ' is in hand: its items rise to the top of every list.' : 'Room focus cleared: every room back in its usual order.');
+      render(el); refocus(el, rung ? bd.k : 'chooser');
+      say(el, el.dataset.room ? esc(el.dataset.room) + ' is in hand: its items rise to the top of every list.' :
+        prev ? 'Room focus cleared: every room back in its usual order.' : 'All rooms: no room is in hand, so every list keeps its usual order.');
       return;
     }
-    if (t.closest('[data-launch]')){ el.dataset.sheet = el.dataset.sheet === '0' ? '1' : '0'; render(el); refocus(el, 'launch'); return; }
-    var held = t.closest('[data-why]');
-    if (held){ say(el, '<b>Held:</b> “' + esc(held.textContent) + '” — ' + esc(held.dataset.why)); return; }
-    var sy = t.closest('[data-say]');
-    if (sy) say(el, esc(sy.dataset.say));
+    if (bd.launch !== undefined){ el.dataset.sheet = el.dataset.sheet === '0' ? '1' : '0'; render(el); refocus(el, 'launch'); return; }
+    if (bd.why){ say(el, '<b>Held:</b> “' + esc(b.textContent) + '” — ' + esc(bd.why)); return; }
+    if (bd.say) say(el, esc(bd.say));
   });
 
   /* ── slides, counter, keyboard ── */
