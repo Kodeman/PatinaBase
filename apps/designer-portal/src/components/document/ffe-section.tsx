@@ -2616,7 +2616,7 @@ function FFESectionBody({
                   hidden={!ffeMoreOpen}
                   className={
                     ffeMoreOpen
-                      ? 'mt-1 flex flex-wrap justify-start gap-x-4 min-[1180px]:justify-end'
+                      ? 'mt-1 flex flex-wrap justify-start gap-x-4'
                       : undefined
                   }
                 >

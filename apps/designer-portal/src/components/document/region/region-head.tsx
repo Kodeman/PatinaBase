@@ -1,27 +1,33 @@
 'use client';
 
 /**
- * The head of a Project region: the region's name as a `.t-d2` heading
- * (US-43 R2, 26px Playfair, sentence case as authored) over one `.t-body`
- * status sentence on the left, its ledger of acts on the right (Scored Ink
- * words, never boxes).
+ * The head of a Project region (US-46 B, the US-42 deck's slide 10), one
+ * left-justified column at every width, read down the left edge:
+ *
+ *   1. the region's name as a `.t-d2` heading (US-43 R2, 26px Playfair,
+ *      sentence case as authored), with the quiet Fold toggle beside it on
+ *      the same baseline, wrapping under the name when the line is short;
+ *   2. one `.t-body` ink status sentence, plus its exceptions;
+ *   3. the single scored lead, alone on its own line;
+ *   4. the remaining tools on one wrapping row beneath it.
+ *
+ * The mono eyebrow, when a head has one, still prints above the name: `h2 + p`
+ * must stay the status (prework-regions e2e), and the W5-C5 reserve below
+ * holds that line's box open from the first commit.
  *
  * The ledger's ORDER is its hierarchy (US-43 R4): entry 0 is the section's one
  * scored lead and renders `primary` (ink over clay scores, unfilled) unless the
  * caller declares its variant; every later entry keeps its declared variant,
  * `secondary` by default. A caller cannot promote a second lead.
  *
- * F28/F87 and direction-b §6 M4 — the head is a two-track grid only from
- * 1180px. Below that the heading stacks ABOVE its ledger, because a two-track
- * grid at 390 puts the inked leader over the region's own name. The status
- * carries direction-b's wrap discipline: line one is identity and never
- * elides; line two is the worst two exceptions in tie-break order; a third is
- * dropped whole, never abbreviated; nothing cuts mid-word.
+ * The status carries direction-b's wrap discipline: line one is identity and
+ * never elides; line two is the worst two exceptions in tie-break order; a
+ * third is dropped whole, never abbreviated; nothing cuts mid-word.
  *
- * What the breakpoint moves is LAYOUT only. The ledger's action region —
- * role="group" + an accessible name + data-action-region — is the contract
- * `action-visibility.spec.ts` and DocumentActionGroup's one-leader guard
- * query, and it rides the same element at every width, stacked or two-track.
+ * The lead line and the tools row are two lines of ONE action region —
+ * role="group" + an accessible name + data-action-region — because that is
+ * the contract `action-visibility.spec.ts` and DocumentActionGroup's
+ * one-leader guard query: one named group per head, leader inside it.
  */
 
 import type { ReactNode } from 'react';
@@ -159,7 +165,10 @@ export function RegionHead({
   const reasonId = (entry: RegionLedgerEntry) => `${reasonIdBase}-${entry.key}-reason`;
   const isHeld = (entry: RegionLedgerEntry) =>
     Boolean(entry.disabled && entry.reason);
-  const heldActions = printedActions.filter(isHeld);
+  // The elected lead stands alone on its own line; every other act sits on the
+  // tools row beneath it. A head that does not lead puts entry 0 on that row.
+  const leadEntry = leads ? printedActions[0] : undefined;
+  const toolEntries = leadEntry ? printedActions.slice(1) : printedActions;
   // The ledger is a NAMED action region, not an anonymous box. The Room heads
   // that predate this primitive name theirs by hand ("Library actions",
   // "People actions", "Drafting actions"); a RegionHead's ledger carried
@@ -189,19 +198,49 @@ export function RegionHead({
     }
   }, [actions, allowNoActs, bodyId, regionKey, surfaceKey]);
 
+  const renderEntry = (entry: RegionLedgerEntry, variant: DocumentActionVariant) => {
+    const shared = {
+      actionKey: entry.key,
+      variant,
+      disabled: entry.disabled,
+      held: isHeld(entry),
+      holds: entry.holds,
+      'aria-describedby': isHeld(entry) ? reasonId(entry) : undefined,
+      loading: entry.loading,
+      loadingLabel: entry.loadingLabel,
+      trailing: entry.trailing,
+      'aria-expanded': entry['aria-expanded'],
+      'aria-controls': entry['aria-controls'],
+    };
+    return entry.href ? (
+      <DocumentAction key={entry.key} {...shared} href={entry.href}>
+        {entry.label}
+      </DocumentAction>
+    ) : (
+      <DocumentAction key={entry.key} ref={entry.actionRef} {...shared} onClick={entry.onClick}>
+        {entry.label}
+      </DocumentAction>
+    );
+  };
+
+  // D3 Gated — a held act's reason prints directly under the line its act
+  // stands on, left-aligned, and is linked to it by `aria-describedby`.
+  const renderReasons = (entries: readonly RegionLedgerEntry[]) =>
+    entries.filter(isHeld).map((entry) => (
+      <p
+        key={entry.key}
+        id={reasonId(entry)}
+        className="basis-full text-[11.5px] text-[var(--text-muted)]"
+      >
+        {entry.reason}
+      </p>
+    ));
+
   return (
-    <div
-      data-region-head={regionKey}
-      // B4/B5 — the left track carries a FLOOR, not a bare `1fr`. `auto` sizes
-      // the ledger column to its max-content (the acts are `whitespace-nowrap`
-      // and `shrink-0`, so that is the whole ledger on one line) and `1fr`
-      // takes only what is left: under the four-act Pieces ledger at 1440 that
-      // left ~60px and the status broke one word per line. A `minmax(0,1fr)`
-      // would change nothing — the left column already carries `min-w-0`, so
-      // its automatic minimum is 0 either way. The floor is what caps the
-      // ledger column, and the ledger's own `flex-wrap` does the rest.
-      className="grid grid-cols-1 items-start gap-x-4 gap-y-2 min-[1180px]:grid-cols-[minmax(20rem,1fr)_auto]"
-    >
+    // US-46 B — one left-justified column at every width. The two-track grid
+    // that set the ledger in a right-hand column from 1180 is gone: the acts
+    // read down the left edge under the status, as the deck's slide 10 shows.
+    <div data-region-head={regionKey} className="grid grid-cols-1 items-start gap-y-2">
       <div className="min-w-0">
         {/* W5-C5 — a head whose eyebrow ARRIVES (the proposal's version, the
             brief's `Respond by`, discovery's `Ready`) reserves the line from
@@ -223,74 +262,51 @@ export function RegionHead({
             {eyebrow}
           </p>
         )}
-        <h2
-          id={headingId}
-          tabIndex={-1}
-          // US-43 R2 — the region's name is a real heading level: 26px
-          // Playfair in ink, sentence case as authored, wrapping at 390. The
-          // ring is clay-ink (5.75:1); clay drew 2.18:1, under 1.4.11. A -1
-          // tabindex heading that a rail jump focuses must draw its ring.
-          className={
-            silent
-              ? 'sr-only'
-              : 't-d2 text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]'
-          }
-        >
-          {name}
-        </h2>
-        {/* US-43 — one status sentence in ink, on the paper and never on the
-            rail. The exceptions follow it in the same line, each in whatever
-            state ink its caller gives it. `h2 + p` stays the status
-            (prework-regions e2e). */}
-        {!silent && (
-          <p className="t-body mt-1 text-[var(--ink)]">
-            {status}
-            {printedExceptions.map((exception, index) => (
-              <span key={index}>
-                {' · '}
-                {exception}
-              </span>
-            ))}
-          </p>
-        )}
-      </div>
-
-      {(printedActions.length > 0 || showFold) && (
-        <DocumentActionGroup
-          surfaceKey={surfaceKey}
-          regionKey={regionKey}
-          aria-label={ledgerLabel}
-          className="justify-start min-[1180px]:justify-end"
-        >
-          {printedActions.map((entry, index) => {
-            const variant: DocumentActionVariant =
-              entry.variant ?? (index === 0 && leads ? 'primary' : 'secondary');
-            const shared = {
-              actionKey: entry.key,
-              variant,
-              disabled: entry.disabled,
-              held: isHeld(entry),
-              holds: entry.holds,
-              'aria-describedby': isHeld(entry) ? reasonId(entry) : undefined,
-              loading: entry.loading,
-              loadingLabel: entry.loadingLabel,
-              trailing: entry.trailing,
-              'aria-expanded': entry['aria-expanded'],
-              'aria-controls': entry['aria-controls'],
-            };
-            return entry.href ? (
-              <DocumentAction key={entry.key} {...shared} href={entry.href}>
-                {entry.label}
-              </DocumentAction>
-            ) : (
-              <DocumentAction key={entry.key} ref={entry.actionRef} {...shared} onClick={entry.onClick}>
-                {entry.label}
-              </DocumentAction>
-            );
-          })}
+        {/* The name line. The Fold toggle sits beside the name on its
+            baseline and wraps under it when the line runs out (390). The
+            status follows the `<h2>` in the DOM — `h2 + p` stays the status
+            (prework-regions e2e) — and `order-last` + `basis-full` print it
+            on its own line below the toggle. Only the toggle is focusable, so
+            the tab order still runs name line, lead, tools, top to bottom. */}
+        <div className="flex flex-wrap items-baseline gap-x-4">
+          <h2
+            id={headingId}
+            tabIndex={-1}
+            // US-43 R2 — the region's name is a real heading level: 26px
+            // Playfair in ink, sentence case as authored, wrapping at 390. The
+            // ring is clay-ink (5.75:1); clay drew 2.18:1, under 1.4.11. A -1
+            // tabindex heading that a rail jump focuses must draw its ring.
+            className={
+              silent
+                ? 'sr-only'
+                : 't-d2 min-w-0 text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]'
+            }
+          >
+            {name}
+          </h2>
+          {/* US-43 — one status sentence in ink, on the paper and never on
+              the rail. The exceptions follow it in the same line, each in
+              whatever state ink its caller gives it. */}
+          {!silent && (
+            <p className="t-body order-last mt-1 basis-full text-[var(--ink)]">
+              {status}
+              {printedExceptions.map((exception, index) => (
+                <span key={index}>
+                  {' · '}
+                  {exception}
+                </span>
+              ))}
+            </p>
+          )}
+          {/* The region's own disclosure control, not one of the ledger's
+              acts: it keeps naming its body (W4-C7) at quiet and open alike,
+              and it is never the lead. Outside the ledger's group it names
+              its region for telemetry by hand. */}
           {showFold && (
             <DocumentAction
               actionKey={`${regionKey}-fold`}
+              surfaceKey={surfaceKey}
+              regionKey={regionKey}
               variant="tertiary"
               aria-expanded
               aria-controls={bodyId}
@@ -299,15 +315,35 @@ export function RegionHead({
               Collapse ↑
             </DocumentAction>
           )}
-          {heldActions.map((entry) => (
-            <p
-              key={entry.key}
-              id={reasonId(entry)}
-              className="basis-full text-[11.5px] text-[var(--text-muted)] min-[1180px]:text-right"
-            >
-              {entry.reason}
-            </p>
-          ))}
+        </div>
+      </div>
+
+      {printedActions.length > 0 && (
+        <DocumentActionGroup
+          surfaceKey={surfaceKey}
+          regionKey={regionKey}
+          aria-label={ledgerLabel}
+          className="justify-start"
+        >
+          {leadEntry && (
+            <>
+              <div data-region-lead="" className="flex basis-full justify-start">
+                {renderEntry(leadEntry, leadEntry.variant ?? 'primary')}
+              </div>
+              {renderReasons([leadEntry])}
+            </>
+          )}
+          {toolEntries.length > 0 && (
+            <>
+              <div
+                data-region-tools=""
+                className="flex basis-full flex-wrap items-center justify-start gap-x-3 gap-y-2"
+              >
+                {toolEntries.map((entry) => renderEntry(entry, entry.variant ?? 'secondary'))}
+              </div>
+              {renderReasons(toolEntries)}
+            </>
+          )}
         </DocumentActionGroup>
       )}
     </div>
