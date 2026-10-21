@@ -3513,6 +3513,140 @@ export type Database = {
           },
         ]
       }
+      client_plate_assets: {
+        Row: {
+          created_at: string
+          crops: Json
+          dominant_hex: string | null
+          flags: string[]
+          focal: number[] | null
+          ground: string | null
+          height: number
+          id: string
+          lqip: string | null
+          original_key: string
+          perceived_prompt_version: string | null
+          project_id: string
+          sha256: string
+          source_kind: string
+          source_ref: Json
+          subject_box: number[] | null
+          updated_at: string
+          width: number
+        }
+        Insert: {
+          created_at?: string
+          crops?: Json
+          dominant_hex?: string | null
+          flags?: string[]
+          focal?: number[] | null
+          ground?: string | null
+          height: number
+          id?: string
+          lqip?: string | null
+          original_key: string
+          perceived_prompt_version?: string | null
+          project_id: string
+          sha256: string
+          source_kind: string
+          source_ref: Json
+          subject_box?: number[] | null
+          updated_at?: string
+          width: number
+        }
+        Update: {
+          created_at?: string
+          crops?: Json
+          dominant_hex?: string | null
+          flags?: string[]
+          focal?: number[] | null
+          ground?: string | null
+          height?: number
+          id?: string
+          lqip?: string | null
+          original_key?: string
+          perceived_prompt_version?: string | null
+          project_id?: string
+          sha256?: string
+          source_kind?: string
+          source_ref?: Json
+          subject_box?: number[] | null
+          updated_at?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_plate_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "client_plate_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_plate_requests: {
+        Row: {
+          asset_id: string | null
+          attempts: number
+          created_at: string
+          id: string
+          last_error: string | null
+          lease_expires_at: string | null
+          lease_token: string | null
+          project_id: string
+          source_kind: string
+          source_ref: Json
+          source_url: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          asset_id?: string | null
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          project_id: string
+          source_kind: string
+          source_ref: Json
+          source_url: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string | null
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          project_id?: string
+          source_kind?: string
+          source_ref?: Json
+          source_url?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_plate_requests_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "client_plate_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_profiles: {
         Row: {
           archetype: string | null
@@ -21901,6 +22035,7 @@ export type Database = {
           proposal_id: string | null
           scope_boundaries: Json | null
           share_token: string | null
+          show_makers: boolean
           site_address: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
@@ -21941,6 +22076,7 @@ export type Database = {
           proposal_id?: string | null
           scope_boundaries?: Json | null
           share_token?: string | null
+          show_makers?: boolean
           site_address?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
@@ -21981,6 +22117,7 @@ export type Database = {
           proposal_id?: string | null
           scope_boundaries?: Json | null
           share_token?: string | null
+          show_makers?: boolean
           site_address?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
@@ -36761,6 +36898,7 @@ export type Database = {
         }
         Returns: Json
       }
+      _client_plate_scan_source: { Args: { p_url: string }; Returns: string }
       _clone_proposal_legacy_00399: {
         Args: {
           p_mode?: string
@@ -37245,6 +37383,16 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      _enqueue_client_plate_request: {
+        Args: {
+          p_id: string
+          p_project_id: string
+          p_source_kind: string
+          p_source_url: string
+          p_table: string
+        }
+        Returns: undefined
+      }
       _enqueue_decision_notification: {
         Args: {
           p_decision_id: string
@@ -37462,6 +37610,7 @@ export type Database = {
           proposal_id: string | null
           scope_boundaries: Json | null
           share_token: string | null
+          show_makers: boolean
           site_address: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
@@ -39359,6 +39508,7 @@ export type Database = {
           proposal_id: string | null
           scope_boundaries: Json | null
           share_token: string | null
+          show_makers: boolean
           site_address: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
@@ -39521,6 +39671,7 @@ export type Database = {
         Args: { p_import_id: string }
         Returns: number
       }
+      begin_client_plate_copy_run: { Args: never; Returns: number }
       begin_direction_from_discovery: {
         Args: { p_designer_client_id: string }
         Returns: string
@@ -39942,6 +40093,30 @@ export type Database = {
         Args: { p_content_revision: number; p_run_id: string }
         Returns: string
       }
+      claim_client_plate_requests: {
+        Args: { p_limit?: number }
+        Returns: {
+          asset_id: string | null
+          attempts: number
+          created_at: string
+          id: string
+          last_error: string | null
+          lease_expires_at: string | null
+          lease_token: string | null
+          project_id: string
+          source_kind: string
+          source_ref: Json
+          source_url: string
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_plate_requests"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_design_request: { Args: { p_lead_id: string }; Returns: Json }
       claim_invoice_checkout_attempt: {
         Args: {
@@ -40106,6 +40281,10 @@ export type Database = {
         Args: { p_entry_ids: string[]; p_invoice_id: string }
         Returns: string[]
       }
+      client_can_read_plate: {
+        Args: { p_scope_id: string; p_sha256: string }
+        Returns: string
+      }
       client_invitation_status: {
         Args: { p_designer_client_id: string }
         Returns: {
@@ -40158,6 +40337,7 @@ export type Database = {
           proposal_id: string | null
           scope_boundaries: Json | null
           share_token: string | null
+          show_makers: boolean
           site_address: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
@@ -41276,6 +41456,7 @@ export type Database = {
         Returns: number
       }
       dispatch_board_deck_import_resolve: { Args: never; Returns: number }
+      dispatch_client_plate_copy: { Args: never; Returns: number }
       document_client_link_hold: {
         Args: { p_project_id: string }
         Returns: string
@@ -41720,6 +41901,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      fail_client_plate_request: {
+        Args: { p_error: string; p_lease_token: string; p_request_id: string }
+        Returns: undefined
+      }
       fail_invoice_checkout_attempt: {
         Args: {
           p_attempt_id: string
@@ -41900,6 +42085,15 @@ export type Database = {
       finish_board_deck_import_resolve_run: {
         Args: {
           p_cost_usd?: number
+          p_detail?: Json
+          p_error?: string
+          p_run_id: number
+          p_status: string
+        }
+        Returns: undefined
+      }
+      finish_client_plate_copy_run: {
+        Args: {
           p_detail?: Json
           p_error?: string
           p_run_id: number
@@ -42128,6 +42322,10 @@ export type Database = {
       }
       get_client_presentation_identity: {
         Args: { p_project_id?: string; p_proposal_id?: string }
+        Returns: Json
+      }
+      get_client_project_editorial: {
+        Args: { p_project_id: string }
         Returns: Json
       }
       get_client_project_review_bundle: {
@@ -44091,6 +44289,7 @@ export type Database = {
           proposal_id: string | null
           scope_boundaries: Json | null
           share_token: string | null
+          show_makers: boolean
           site_address: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
@@ -44266,6 +44465,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      record_client_plate_asset: {
+        Args: { p_asset: Json; p_lease_token: string; p_request_id: string }
+        Returns: string
       }
       record_custom_commission_milestone: {
         Args: {
@@ -46750,6 +46953,7 @@ export type Database = {
           proposal_id: string | null
           scope_boundaries: Json | null
           share_token: string | null
+          show_makers: boolean
           site_address: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
@@ -46775,6 +46979,10 @@ export type Database = {
           p_sales_tax_rate: number
         }
         Returns: Json
+      }
+      set_project_show_makers: {
+        Args: { p_project_id: string; p_show: boolean }
+        Returns: undefined
       }
       set_purchase_order_eta: {
         Args: {

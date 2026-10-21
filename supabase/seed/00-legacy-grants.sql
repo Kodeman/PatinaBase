@@ -23460,6 +23460,198 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00840_client_wall_signed_name.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_threshold(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00840_client_wall_signed_name.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_threshold(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00841_client_selections_signed_name.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_selections(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00841_client_selections_signed_name.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid) TO authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00842_client_editorial_reader.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_show_makers(uuid, boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00842_client_editorial_reader.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_project_show_makers(uuid, boolean) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00842_client_editorial_reader.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_editorial(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00842_client_editorial_reader.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_editorial(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.client_plate_assets FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.client_plate_requests FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.client_plate_assets TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.client_plate_requests TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._enqueue_client_plate_request(uuid, text, text, uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_plate_scan_source(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_plate_enqueue_item_image() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_plate_enqueue_concept_render() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_plate_enqueue_scan_image() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_plate_enqueue_board_cover() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_client_plate_requests(int) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_client_plate_asset(uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fail_client_plate_request(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_client_plate_requests(int) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_client_plate_asset(uuid, uuid, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fail_client_plate_request(uuid, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_can_read_plate(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.client_can_read_plate(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.begin_client_plate_copy_run() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.finish_client_plate_copy_run(bigint, text, jsonb, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.dispatch_client_plate_copy() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.begin_client_plate_copy_run() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.finish_client_plate_copy_run(bigint, text, jsonb, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.dispatch_client_plate_copy() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
