@@ -146,6 +146,10 @@ Deno.test("shortenError: one line, at most 200 characters", () => {
   assert(long.endsWith("…"));
   assertEquals(shortenError({ code: "E1" }), '{"code":"E1"}');
   assertEquals(shortenError(""), "copy failed");
+  assertEquals(shortenError(undefined), "undefined");
+  const circular: Record<string, unknown> = {};
+  circular.self = circular;
+  assertEquals(shortenError(circular), "[object Object]");
 });
 
 Deno.test("shortenError: a signed URL's token never reaches the queue", () => {

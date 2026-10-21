@@ -60,20 +60,20 @@ function encodePath(path: string): string {
  * table is unknown or the address is blank.
  */
 export function resolveSource(request: PlateRequest, supabaseUrl: string): PlateSource | null {
-  const address = (request.source_url ?? "").trim();
+  const address = request.source_url.trim();
   if (!address) return null;
   if (/^https?:\/\//i.test(address)) return { kind: "direct", url: address };
+  return storageSource(request.source_ref?.table, address, supabaseUrl);
+}
 
-  const table = request.source_ref?.table ?? "";
-  const privateBucket = PRIVATE_BUCKET_BY_TABLE[table];
-  if (privateBucket) return { kind: "signed", bucket: privateBucket, path: address.replace(/^\/+/, "") };
-
-  const publicBucket = PUBLIC_BUCKET_BY_TABLE[table];
-  if (publicBucket) {
-    const base = supabaseUrl.replace(/\/+$/, "");
-    return { kind: "direct", url: `${base}/storage/v1/object/public/${publicBucket}/${encodePath(address)}` };
-  }
-  return null;
+function storageSource(table: string | undefined, path: string, supabaseUrl: string): PlateSource | null {
+  const key = table ?? "";
+  const privateBucket = PRIVATE_BUCKET_BY_TABLE[key];
+  if (privateBucket) return { kind: "signed", bucket: privateBucket, path: path.replace(/^\/+/, "") };
+  const publicBucket = PUBLIC_BUCKET_BY_TABLE[key];
+  if (!publicBucket) return null;
+  const base = supabaseUrl.replace(/\/+$/, "");
+  return { kind: "direct", url: `${base}/storage/v1/object/public/${publicBucket}/${encodePath(path)}` };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -88,6 +88,45 @@ function optionalString(value: unknown): value is string | null | undefined {
   return value === null || value === undefined || typeof value === "string";
 }
 
+const GROUNDS = new Set<unknown>([null, undefined, "white", "scene", "drawing"]);
+
+type IngestCheck = (body: Record<string, unknown>, projectId: string) => string | null;
+
+// In order; the first failing check names the answer's fault.
+const INGEST_CHECKS: IngestCheck[] = [
+  (body) => (typeof body.sha256 === "string" && /^[0-9a-f]{64}$/.test(body.sha256) ? null : "ingest answer has no sha256"),
+  (body) => (positiveInt(body.width) && positiveInt(body.height) ? null : "ingest answer has no width and height"),
+  (body, projectId) =>
+    typeof body.originalKey === "string" && body.originalKey.startsWith(`plates/${projectId}/${body.sha256}/`)
+      ? null
+      : "ingest answer's original is outside plates/<project>/<sha256>/",
+  (body) => (GROUNDS.has(body.ground) ? null : "ingest answer has an unknown ground"),
+  (body) =>
+    [body.format, body.dominantHex, body.lqip].every(optionalString)
+      ? null
+      : "ingest answer has a non-text format, dominantHex or lqip",
+  (body) => (String(body.lqip ?? "").length > 800 ? "ingest answer's lqip is over 800 characters" : null),
+  (body) => (body.crops === undefined || isPlainObject(body.crops) ? null : "ingest answer's crops is not an object"),
+];
+
+function orNull<T>(value: T | undefined): T | null {
+  return value ?? null;
+}
+
+function toAsset(body: Record<string, unknown>): IngestAsset {
+  return {
+    sha256: body.sha256 as string,
+    width: body.width as number,
+    height: body.height as number,
+    format: orNull(body.format as string | null | undefined),
+    ground: orNull(body.ground as IngestAsset["ground"] | undefined),
+    dominantHex: orNull(body.dominantHex as string | null | undefined),
+    lqip: orNull(body.lqip as string | null | undefined),
+    originalKey: body.originalKey as string,
+    crops: (body.crops as Record<string, unknown> | undefined) ?? {},
+  };
+}
+
 /**
  * Checks the media worker's answer before it is recorded. The original must
  * sit under plates/<projectId>/<sha256>/, the key record_client_plate_asset
@@ -98,42 +137,11 @@ export function validateIngestResponse(
   projectId: string,
 ): { ok: true; asset: IngestAsset } | { ok: false; error: string } {
   if (!isPlainObject(body)) return { ok: false, error: "ingest answer is not an object" };
-  const { sha256, width, height, format, ground, dominantHex, lqip, originalKey, crops } = body;
-  if (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256)) {
-    return { ok: false, error: "ingest answer has no sha256" };
+  for (const check of INGEST_CHECKS) {
+    const error = check(body, projectId);
+    if (error) return { ok: false, error };
   }
-  if (!positiveInt(width) || !positiveInt(height)) {
-    return { ok: false, error: "ingest answer has no width and height" };
-  }
-  if (typeof originalKey !== "string" || !originalKey.startsWith(`plates/${projectId}/${sha256}/`)) {
-    return { ok: false, error: "ingest answer's original is outside plates/<project>/<sha256>/" };
-  }
-  if (!(ground === null || ground === undefined || ground === "white" || ground === "scene" || ground === "drawing")) {
-    return { ok: false, error: "ingest answer has an unknown ground" };
-  }
-  if (!optionalString(format) || !optionalString(dominantHex) || !optionalString(lqip)) {
-    return { ok: false, error: "ingest answer has a non-text format, dominantHex or lqip" };
-  }
-  if (typeof lqip === "string" && lqip.length > 800) {
-    return { ok: false, error: "ingest answer's lqip is over 800 characters" };
-  }
-  if (!(crops === undefined || isPlainObject(crops))) {
-    return { ok: false, error: "ingest answer's crops is not an object" };
-  }
-  return {
-    ok: true,
-    asset: {
-      sha256,
-      width,
-      height,
-      format: format ?? null,
-      ground: ground ?? null,
-      dominantHex: dominantHex ?? null,
-      lqip: lqip ?? null,
-      originalKey,
-      crops: crops ?? {},
-    },
-  };
+  return { ok: true, asset: toAsset(body) };
 }
 
 /** The p_asset for record_client_plate_asset: the answer plus the request's source. */
@@ -146,19 +154,25 @@ export function recordPayload(asset: IngestAsset, request: PlateRequest): Record
  * Query strings are dropped, so a signed URL's token never reaches the queue.
  */
 export function shortenError(error: unknown, max = MAX_ERROR_LENGTH): string {
-  let text: string;
-  if (error instanceof Error) text = error.message;
-  else if (typeof error === "string") text = error;
-  else {
-    try {
-      text = JSON.stringify(error) ?? String(error);
-    } catch {
-      text = String(error);
-    }
-  }
-  text = text.replace(/(https?:\/\/[^\s?#"']*)[?#][^\s"']*/gi, "$1").replace(/\s+/g, " ").trim();
-  if (!text) text = "copy failed";
+  const text = errorText(error)
+    .replace(/(https?:\/\/[^\s?#"']*)[?#][^\s"']*/gi, "$1")
+    .replace(/\s+/g, " ")
+    .trim() || "copy failed";
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return jsonText(error);
+}
+
+function jsonText(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
 }
 
 /** The body's job_run_id when it is a positive integer, else null. */
