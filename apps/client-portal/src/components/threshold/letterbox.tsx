@@ -17,6 +17,7 @@ import {
 import type { InvoiceModel } from '@/lib/threshold/derive';
 import {
   invoiceProjection,
+  retireSettledHolds,
   type InvoiceFiguresWithheld,
   type InvoiceProjection,
   type InvoiceRow,
@@ -236,6 +237,10 @@ export function Letterbox({
       }),
     [handed, invoices, today, holds],
   );
+  // Proven settlement retires the hold here too; it feeds the row's act and notes.
+  useEffect(() => {
+    setHolds((held) => retireSettledHolds(held, projection));
+  }, [projection]);
   const rows = useMemo(() => [...projection.outstanding, ...projection.history], [projection]);
 
   // The return from the till. A return that names an order belongs to the road,

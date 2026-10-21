@@ -238,10 +238,11 @@ function paymentFacts(invoice: Invoice, hold: InvoiceServerHold | undefined) {
 }
 
 /**
- * The hold this row still answers to. Its owner never clears a hold, so a
- * `payment_processing` hold stands against every inconclusive read and yields
- * only to proof the invoice settled: a complete read with nothing left owing
- * whose status says paid, or whose payments show nothing pending.
+ * The hold this row still answers to. A `payment_processing` hold stands
+ * against every inconclusive read and yields only to proof the invoice
+ * settled: a complete read with nothing left owing whose status says paid, or
+ * whose payments show nothing pending. Its owner then retires it
+ * (`retireSettledHolds`), so a later reopen is judged on its own read.
  */
 function standingHold(
   invoice: Invoice,
@@ -424,6 +425,26 @@ export function invoiceProjection(
     nothingToPay: trust.countable && payable.length === 0,
     allClear: trust.countable && outstanding.length === 0,
   };
+}
+
+/**
+ * The owner's holds without those this projection's read proved settled — the
+ * same `holds` object when it proved none, so a state setter can return it
+ * unchanged. Reconciliation holds and holds against an inconclusive read stay.
+ */
+export function retireSettledHolds(
+  holds: Record<string, InvoiceServerHold>,
+  projection: InvoiceProjection,
+): Record<string, InvoiceServerHold> {
+  const complete = projection.read === 'complete';
+  const settled = [...projection.outstanding, ...projection.history].filter(({ invoice, balanceCents }) => {
+    const hold = holds[invoice.id];
+    return hold !== undefined && standingHold(invoice, balanceCents, hold, complete) === undefined;
+  });
+  if (settled.length === 0) return holds;
+  const kept = { ...holds };
+  for (const row of settled) delete kept[row.invoice.id];
+  return kept;
 }
 
 /**
