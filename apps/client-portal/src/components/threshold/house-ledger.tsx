@@ -61,6 +61,11 @@ function figure(cents: number | null | undefined): cents is number {
   return typeof cents === 'number' && Number.isFinite(cents) && cents > 0;
 }
 
+/** The owed and paid figures are in the invoices' own currency, never assumed USD. */
+function owedMoney(ledger: HouseLedgerModel, cents: number): string {
+  return formatCurrency(cents, ledger.owedCurrency ?? undefined);
+}
+
 /**
  * One open invoice is "the open invoice"; several are counted in words.
  *
@@ -104,7 +109,7 @@ function reconcileClauses(ledger: HouseLedgerModel): ReconcileClause[] | null {
     clauses.push({ figure: formatCurrency(ledger.agreedCents), words: 'agreed' });
   }
   if (typeof ledger.paidCents === 'number' && Number.isFinite(ledger.paidCents)) {
-    clauses.push({ figure: formatCurrency(ledger.paidCents), words: 'paid' });
+    clauses.push({ figure: owedMoney(ledger, ledger.paidCents), words: 'paid' });
   }
   const owed = owedWords(
     ledger.owedInvoiceCount,
@@ -112,7 +117,7 @@ function reconcileClauses(ledger: HouseLedgerModel): ReconcileClause[] | null {
     ledger.owedInvoiceNumber,
   );
   clauses.push({
-    figure: formatCurrency(ledger.owedCents),
+    figure: owedMoney(ledger, ledger.owedCents),
     words: `${owed.charAt(0).toLowerCase()}${owed.slice(1)}`,
   });
   return clauses;
@@ -156,7 +161,7 @@ export function HouseLedger({ ledger, today }: HouseLedgerProps) {
     >
       {owed !== null && (
         <p data-testid="house-ledger-owed" className="t-d2 text-[var(--text-primary)]">
-          {formatCurrency(owed)}
+          {owedMoney(ledger, owed)}
         </p>
       )}
 
