@@ -40,6 +40,7 @@
     "PROJECTS_SERVICE_URL": "https://patina-projects-worker.kody-be3.workers.dev",
     "NEXT_PUBLIC_PROJECTS_API_URL": "https://patina-projects-worker.kody-be3.workers.dev/v1"
   },
+  "r2_buckets": [{ "binding": "PLATES", "bucket_name": "patina-plates" }],
   "services": [
     { "binding": "SVC_PROJECTS", "service": "patina-projects-worker" },
     { "binding": "SVC_ORDERS", "service": "patina-orders-worker" },
@@ -87,6 +88,7 @@
         "PROJECTS_SERVICE_URL": "https://patina-projects-worker-staging.kody-be3.workers.dev",
         "NEXT_PUBLIC_PROJECTS_API_URL": "https://patina-projects-worker-staging.kody-be3.workers.dev/v1"
       },
+      "r2_buckets": [{ "binding": "PLATES", "bucket_name": "patina-plates-staging" }],
       "services": [
         { "binding": "SVC_PROJECTS", "service": "patina-projects-worker-staging" },
         { "binding": "SVC_ORDERS", "service": "patina-orders-worker-staging" },

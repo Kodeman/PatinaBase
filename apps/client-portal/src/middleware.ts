@@ -205,7 +205,7 @@ export async function middleware(req: NextRequest) {
     isPaperworkPage ||
     isPiecePage ||
     isUnsubscribeOutcomePage;
-  const isApiRoute = req.nextUrl.pathname.startsWith('/api');
+  const isDataRoute = /^\/(?:api|plates\/)/.test(req.nextUrl.pathname);
   // The wrong-portal interstitial is the redirect target for wrong-role users;
   // it must be exempt from the gate or a wrong-role user would loop. /unauthorized
   // is kept exempt too — it now redirects to /wrong-portal (back-compat shim).
@@ -216,7 +216,9 @@ export async function middleware(req: NextRequest) {
   const baseUrl = req.nextUrl.origin;
   const requestedPath = `${req.nextUrl.pathname}${req.nextUrl.search || ''}`;
 
-  if (isApiRoute) return res;
+  // Plates refresh the session here, then authorize in the route's membership
+  // RPC. Like APIs, image requests must receive a status, never sign-in HTML.
+  if (isDataRoute) return res;
   // Helper: create a redirect that preserves Supabase auth cookies from res.
   // Use the object-set form so domain/secure/sameSite/path/httpOnly/TTL
   // attributes carry over — the (name, value) shorthand drops them, which
@@ -344,6 +346,7 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
+    '/plates/:path*',
     '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
