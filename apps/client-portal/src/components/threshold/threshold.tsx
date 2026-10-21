@@ -1130,16 +1130,11 @@ export function Threshold({
   const standsUnfiledAsks = adopted;
 
   const ledger = <><HouseLedger ledger={model.ledger} today={today} /><BudgetCheckpointReview projectId={projectId} /></>;
-  // W2-B's projection-reading props (SQ-1525). Spread until that slice lands:
-  // the compiler checks them against `LetterboxProps` from then on.
-  const letterboxReads = {
-    projection: model.invoices,
-    onHold: onInvoiceHold,
-    projectName: words(project.name),
-  };
   const letterbox = (
     <Letterbox
-      {...letterboxReads}
+      projection={model.invoices}
+      onHold={onInvoiceHold}
+      projectName={words(project.name)}
       invoice={model.letterbox}
       invoices={invoices}
       designerName={studioName}

@@ -60,15 +60,14 @@ const PAINTWORK_GATE = {
   href: '/projects/vale/trade-scopes/ts-2',
 };
 
-// `settle` is required: the toll's act is always taken in place — there is no
-// outbound branch, because the acts never leave the page.
+// The sheet's act is always taken in place — there is no outbound branch,
+// because the acts never leave the page.
 const INVOICE_4 = {
   invoiceId: 'inv-4',
   invoiceNumber: 'Invoice No. 4',
   totalCents: 1825000,
   paidCents: 912500,
   dueDate: '2026-08-15',
-  settle: { onSettle: () => {} },
 };
 
 const CREDENZA = {
@@ -172,81 +171,105 @@ describe('SpineGate', () => {
   });
 });
 
-// ── The toll — an open balance on the line ──────────────────────────────────
+// ── The payment sheet — an open balance, framed (US-45 CPUX-03) ────────────
 
 describe('SpineToll', () => {
   // A due date is a term of the invoice (PP-2), so the year is on the page in
-  // this year and in every other one — never a day the reader has to date off
-  // her own calendar.
-  it('spells the year on every due date, this year or another', () => {
-    const today = new Date(2026, 7, 5);
-
-    const { unmount } = render(<SpineToll {...INVOICE_4} today={today} />);
+  // this year and in every other one, in ordinary body ink.
+  it('states the real due status, with its year, this year or another', () => {
+    const { unmount } = render(<SpineToll {...INVOICE_4} dueState="upcoming" />);
     expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'A toll on the line · due 15 August 2026',
+      'Due 15 August 2026 · $9,125.00 paid',
     );
     unmount();
 
-    render(<SpineToll {...INVOICE_4} dueDate="2027-02-10" today={today} />);
-    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'due 10 February 2027',
-    );
+    render(<SpineToll {...INVOICE_4} dueDate="2027-02-10" />);
+    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent('Due 10 February 2027');
   });
 
-  it('runs the ledger in the accountant’s order and derives the balance', () => {
-    render(<SpineToll {...INVOICE_4} />);
+  it('says past due and due today in words, never in red', () => {
+    const { container, unmount } = render(<SpineToll {...INVOICE_4} dueState="past_due" />);
+    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent('Past due · 15 August 2026');
+    expect(container.innerHTML).not.toContain('--color-terracotta');
+    expect(container.innerHTML).not.toContain('--color-error');
+    unmount();
+
+    render(<SpineToll {...INVOICE_4} dueState="due_today" />);
+    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent('Due today · 15 August 2026');
+  });
+
+  it('frames the balance due, the invoice total and the payee on a card', () => {
+    render(<SpineToll {...INVOICE_4} payee="Birchwood Studio" />);
+    expect(screen.getByTestId('spine-toll')).toHaveClass('cp-card');
+    expect(screen.getByText('Invoice No. 4 · Balance due')).toBeInTheDocument();
+    expect(screen.getByTestId('spine-toll-balance')).toHaveTextContent('$9,125.00');
     const ledger = within(screen.getByTestId('spine-toll-ledger'));
-    expect(ledger.getByText('Total')).toBeInTheDocument();
+    expect(ledger.getByText('Invoice total')).toBeInTheDocument();
     expect(ledger.getByText('$18,250.00')).toBeInTheDocument();
-    expect(ledger.getByText('Paid')).toBeInTheDocument();
-    // paid and balance are the same figure on a half-settled invoice; both
-    // must be present, which getAllByText proves without over-asserting order
-    expect(ledger.getAllByText('$9,125.00')).toHaveLength(2);
-    expect(ledger.getByText('Balance')).toBeInTheDocument();
+    expect(ledger.getByText('Payable to')).toBeInTheDocument();
+    expect(ledger.getByText('Birchwood Studio')).toBeInTheDocument();
   });
 
-  it('names the invoice and the day it comes due', () => {
-    render(<SpineToll {...INVOICE_4} />);
-    expect(screen.getByText('Invoice No. 4')).toBeInTheDocument();
-    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'A toll on the line · due 15 August 2026',
-    );
-  });
-
-  it('drops the due clause when the invoice carries no due date', () => {
-    render(<SpineToll {...INVOICE_4} dueDate={null} />);
-    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent('A toll on the line');
-    expect(screen.getByTestId('spine-toll-due')).not.toHaveTextContent('due');
+  it('says there is no due date rather than inventing one', () => {
+    render(<SpineToll {...INVOICE_4} dueDate={null} paidCents={0} />);
+    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(/^No due date$/);
   });
 
   it('falls back to a plain word when the invoice was issued without a number', () => {
     render(<SpineToll {...INVOICE_4} invoiceNumber={null} />);
-    expect(screen.getByText('Invoice')).toBeInTheDocument();
+    expect(screen.getByText('Invoice · Balance due')).toBeInTheDocument();
   });
 
-  it('floors an overpaid invoice at zero rather than showing a negative toll', () => {
+  it('floors an overpaid invoice at zero rather than showing a negative balance', () => {
     render(<SpineToll {...INVOICE_4} paidCents={2000000} />);
-    expect(
-      within(screen.getByTestId('spine-toll-ledger')).getByText('$0.00'),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('spine-toll-balance')).toHaveTextContent('$0.00');
   });
 
-  it('settles in place — the act never leaves the page — and reports the follow', () => {
+  it('takes the forest act in place, with the amount it carries, and reports the follow', () => {
     const onFollow = jest.fn();
     const onSettle = jest.fn();
-    render(<SpineToll {...INVOICE_4} onFollow={onFollow} settle={{ onSettle }} />);
-    const act = screen.getByRole('button', { name: /settle the balance/i });
-    expect(screen.queryByRole('link', { name: /settle the balance/i })).toBeNull();
+    render(
+      <SpineToll
+        {...INVOICE_4}
+        onFollow={onFollow}
+        settle={{ label: 'Continue to secure payment · $9,130.00', onSettle }}
+      />,
+    );
+    const act = screen.getByRole('button', { name: 'Continue to secure payment · $9,130.00' });
+    expect(screen.queryByRole('link', { name: /continue to secure payment/i })).toBeNull();
+    expect(act).toHaveClass('da-terminal');
     expect(act).toHaveAttribute('data-action-region', 'toll');
     fireEvent.click(act);
     expect(onFollow).toHaveBeenCalledTimes(1);
     expect(onSettle).toHaveBeenCalledTimes(1);
+    expect(document.body).not.toHaveTextContent(/a toll on the line|settle the balance/i);
   });
 
-  it('never inks money red — past due reads in the same ink as anything else', () => {
-    const { container } = render(<SpineToll {...INVOICE_4} dueDate="2020-01-01" />);
-    expect(container.innerHTML).not.toContain('--color-terracotta');
-    expect(container.innerHTML).not.toContain('--color-error');
+  it('keeps an unavailable act focusable, says why, and does not take it', () => {
+    const onSettle = jest.fn();
+    render(
+      <SpineToll
+        {...INVOICE_4}
+        settle={{
+          label: 'Continue to secure payment',
+          onSettle,
+          unavailableReason: 'Card payment is unavailable until the card fee loads.',
+        }}
+      />,
+    );
+    const act = screen.getByRole('button', { name: /continue to secure payment/i });
+    expect(act).toHaveAttribute('aria-disabled', 'true');
+    expect(act).not.toBeDisabled();
+    fireEvent.click(act);
+    expect(onSettle).not.toHaveBeenCalled();
+    expect(screen.getByTestId('toll_settle-unavailable-reason')).toHaveTextContent(
+      'Card payment is unavailable until the card fee loads.',
+    );
+  });
+
+  it('draws no act where nothing may be paid here', () => {
+    render(<SpineToll {...INVOICE_4} settle={null} />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
 

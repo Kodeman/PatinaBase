@@ -79,7 +79,7 @@ const SHEET_RULES = `
   [data-pay-sheet] { max-width: none; border: 0; padding: 0; gap: 20px; }
   [data-pay-grid] { display: block; }
   [data-pay-money], [data-pay-record] {
-    border-left: 0; padding-left: 0; padding-right: 0; display: block;
+    border: 0; box-shadow: none; background: none; padding: 0; display: block;
   }
   [data-pay-money] > * + *, [data-pay-record] > * + * { margin-top: 22px; }
   [data-pay-print="hide"] { display: none !important; }
@@ -261,6 +261,44 @@ function readLiveState(value: unknown): PayLinkLiveState | null {
 export interface InvoiceSheetProps {
   token: string;
   payload: InvoiceLinkPayload;
+}
+
+/** What the act does and does not do, above it (US-45 CPUX-03). */
+function PayConsequence({
+  check,
+  designerFirst,
+  balance,
+}: {
+  check: boolean;
+  designerFirst: string;
+  balance: string;
+}) {
+  return (
+    <p data-testid="pay-consequence" className="cp-note text-[15px] leading-[1.55]">
+      {check
+        ? `Telling ${designerFirst} a check is coming doesn’t pay the invoice. The balance stays ${balance} until the check arrives.`
+        : "The next screen shows the amount and asks you to confirm. Nothing is charged until you confirm there. Opening this page or choosing a method doesn’t pay anything."}
+    </p>
+  );
+}
+
+/** After the acknowledgement: a check is expected, and nothing is paid yet. */
+function CheckExpectedRecord({
+  designerFirst,
+  balance,
+}: {
+  designerFirst: string;
+  balance: string;
+}) {
+  return (
+    <div role="status" data-testid="pay-check-expected" className="cp-record">
+      <p className="text-[16px] font-medium leading-[1.5]">Check expected</p>
+      <p className="mt-1 text-[15px] leading-[1.5]">
+        {designerFirst} knows a check is coming. The balance stays {balance} until
+        the check arrives and is recorded. Nothing has been paid yet.
+      </p>
+    </div>
+  );
 }
 
 export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
@@ -611,13 +649,13 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
           {/* ── The money column ── */}
           <div
             data-pay-money
-            className="flex min-w-0 flex-col gap-[26px] min-[920px]:col-start-2 min-[920px]:row-span-2 min-[920px]:row-start-1 min-[920px]:self-stretch min-[920px]:border-l min-[920px]:border-[var(--border-default)] min-[920px]:pl-9"
+            className="cp-card flex min-w-0 flex-col gap-[26px] px-5 py-6 min-[920px]:col-start-2 min-[920px]:row-span-2 min-[920px]:row-start-1 min-[920px]:self-start min-[920px]:px-7"
           >
             {returnNoticeText && (
               <div
                 data-pay-print="hide"
                 data-testid="pay-return-notice"
-                className="flex items-start gap-3 border border-[var(--border-subtle)] bg-[var(--bg-warm)] px-3.5 py-3 text-[14px] leading-[1.5] text-[var(--text-body)]"
+                className="flex items-start gap-3 cp-note text-[15px] leading-[1.55]"
               >
                 <p className="min-w-0">{returnNoticeText}</p>
                 {showReturnNotice && confirmState === null && (
@@ -625,7 +663,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                     type="button"
                     aria-label="Dismiss this message"
                     onClick={() => setNoticeDismissed(true)}
-                    className="-my-3 -mr-3.5 h-11 w-11 flex-none font-mono text-[15px] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--color-clay-ink)]"
+                    className="-my-3 -mr-3.5 h-11 w-11 flex-none font-mono text-[15px] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--focus-ring)]"
                   >
                     ×
                   </button>
@@ -637,14 +675,14 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
             <div className="flex flex-col gap-[9px]">
               <div className="flex items-baseline justify-between gap-4">
                 <span className="type-meta">Total</span>
-                <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                <span className="font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                   {formatCurrency(invoice.total_cents, currency)}
                 </span>
               </div>
               {amountPaidCents > 0 && (
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="type-meta">Received</span>
-                  <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                  <span className="font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                     {formatCurrency(amountPaidCents, currency)}
                   </span>
                 </div>
@@ -658,22 +696,35 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                 </span>
               </div>
               {invoice.due_date && !paid && (
-                <p className="font-mono text-[12px] text-[var(--text-muted)]">
-                  due {formatLongDate(invoice.due_date)}
+                <p
+                  data-testid="pay-due-date"
+                  className="text-[16px] text-[var(--text-primary)]"
+                >
+                  Due {formatLongDate(invoice.due_date)}
                 </p>
               )}
               {invoice.issue_date && (
-                <p className="font-mono text-[12px] text-[var(--color-quiet-ink)]">
-                  issued {formatLongDate(invoice.issue_date)}
+                <p className="text-[15px] text-[var(--text-body)]">
+                  Issued {formatLongDate(invoice.issue_date)}
                 </p>
               )}
             </div>
+
+            <p
+              data-testid="pay-payee"
+              className="flex items-baseline justify-between gap-4 text-[15px] text-[var(--text-body)]"
+            >
+              <span>Payable to</span>
+              <span className="text-[16px] text-[var(--text-primary)]">
+                {studioName}
+              </span>
+            </p>
 
             {!payable && !paid && !processing && (
               <p
                 data-pay-print="hide"
                 data-testid="pay-reconciling-notice"
-                className="border border-[var(--border-subtle)] bg-[var(--bg-warm)] px-3.5 py-3 text-[14px] leading-[1.5] text-[var(--text-body)]"
+                className="cp-note text-[15px] leading-[1.55]"
               >
                 A payment on this invoice is being sorted out by {studioName}.
                 Nothing to do here for now — they&rsquo;ll be in touch.
@@ -684,7 +735,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
               <p
                 data-pay-print="hide"
                 data-testid="pay-processing-notice"
-                className="border border-[var(--border-subtle)] bg-[var(--bg-warm)] px-3.5 py-3 text-[14px] leading-[1.5] text-[var(--text-body)]"
+                className="cp-note text-[15px] leading-[1.55]"
               >
                 Your bank transfer is on its way — it usually settles in 3–5
                 business days.
@@ -715,28 +766,28 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
               aria-label="What this comes to"
             >
               <div className="flex items-baseline justify-between gap-4">
-                <span className="text-[13.5px] text-[var(--text-body)]">
+                <span className="text-[15px] text-[var(--text-body)]">
                   Subtotal
                 </span>
-                <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                <span className="font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                   {formatCurrency(invoice.subtotal_cents, currency)}
                 </span>
               </div>
               {showTaxLadder && (
                 <>
                   <div className="flex items-baseline justify-between gap-4">
-                    <span className="text-[13.5px] text-[var(--text-body)]">
+                    <span className="text-[15px] text-[var(--text-body)]">
                       Tax
                     </span>
-                    <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                    <span className="font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                       {formatCurrency(invoice.tax_cents, currency)}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-4">
-                    <span className="text-[13.5px] text-[var(--text-body)]">
+                    <span className="text-[15px] text-[var(--text-body)]">
                       Total
                     </span>
-                    <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                    <span className="font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                       {formatCurrency(invoice.total_cents, currency)}
                     </span>
                   </div>
@@ -744,19 +795,19 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
               )}
               {amountPaidCents > 0 && (
                 <div className="flex items-baseline justify-between gap-4">
-                  <span className="text-[13.5px] text-[var(--text-body)]">
+                  <span className="text-[15px] text-[var(--text-body)]">
                     Received
                   </span>
-                  <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                  <span className="font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                     −{formatCurrency(amountPaidCents, currency)}
                   </span>
                 </div>
               )}
               <div className="flex items-baseline justify-between gap-4">
-                <span className="text-[13.5px] text-[var(--text-body)]">
+                <span className="text-[15px] text-[var(--text-body)]">
                   Balance
                 </span>
-                <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                <span className="font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                   {formatCurrency(balanceCents, currency)}
                 </span>
               </div>
@@ -766,12 +817,12 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                   data-testid="pay-fee-row"
                   className="flex items-baseline justify-between gap-4"
                 >
-                  <span className="text-[13.5px] text-[var(--text-body)]">
+                  <span className="text-[15px] text-[var(--text-body)]">
                     {method === "card"
                       ? "Card processing fee"
                       : "Bank transfer fee"}
                   </span>
-                  <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                  <span className="font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                     {formatCurrency(surchargeCents, currency)}
                   </span>
                 </div>
@@ -782,7 +833,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                   data-testid="pay-total-row"
                   className="mt-1 flex items-baseline justify-between gap-4 border-t border-[var(--border-default)] pt-3"
                 >
-                  <span className="text-[13.5px] text-[var(--text-primary)]">
+                  <span className="text-[15px] text-[var(--text-primary)]">
                     Total to pay
                   </span>
                   <span className="font-heading text-[29px] tracking-[-0.005em] tabular-nums text-[var(--text-primary)]">
@@ -793,46 +844,58 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
             </section>
 
             {showChooser && (
-              <div data-pay-print="hide" aria-busy={submitting || undefined}>
+              <div
+                data-pay-print="hide"
+                aria-busy={submitting || undefined}
+                className="flex flex-col gap-3"
+              >
                 {method === "check" && checkNotified ? (
-                  <p className="flex min-h-[50px] items-center text-[14px] text-[var(--text-muted)]">
-                    {designerFirst} has been notified.
-                  </p>
+                  <CheckExpectedRecord
+                    designerFirst={designerFirst}
+                    balance={formatCurrency(balanceCents, currency)}
+                  />
                 ) : (
-                  // The terminal tier (R139), not a fourth grammar: the same
-                  // filled act the wall and the door carry, so the product
-                  // stops shipping three ways to say "this one is heavy".
-                  //
-                  // No native `disabled` (sheet §A5): the unavailable rule and
-                  // the loading state would otherwise share one face, and a
-                  // payment in flight would read as a payment refused. Working
-                  // stays filled and says what it is doing; `handleAct` already
-                  // refuses a second press while one is open.
-                  <button
-                    type="button"
-                    onClick={() => void handleAct()}
-                    aria-disabled={submitting || undefined}
-                    data-testid="pay-act"
-                    className={`da-act da-terminal flex w-full shrink-0 items-center justify-center gap-2 font-medium${
-                      submitting ? " is-loading" : ""
-                    }`}
-                  >
-                    <span className="da-label">
-                      {submitting
-                        ? method === "check"
-                          ? `Letting ${designerFirst} know`
-                          : "Opening payment"
-                        : method === "check"
-                          ? `Let ${designerFirst} know a check is coming`
-                          : `Pay ${formatCurrency(totalToPayCents, currency)}`}
-                    </span>
-                    <span aria-hidden="true" data-action-hit className="da-hit" />
-                  </button>
+                  <>
+                    <PayConsequence
+                      check={method === "check"}
+                      designerFirst={designerFirst}
+                      balance={formatCurrency(balanceCents, currency)}
+                    />
+                    {/* The terminal tier (R139), not a fourth grammar: the same
+                        filled act the wall and the door carry, so the product
+                        stops shipping three ways to say "this one is heavy".
+
+                        No native `disabled` (sheet §A5): the unavailable rule and
+                        the loading state would otherwise share one face, and a
+                        payment in flight would read as a payment refused. Working
+                        stays filled and says what it is doing; `handleAct` already
+                        refuses a second press while one is open. */}
+                    <button
+                      type="button"
+                      onClick={() => void handleAct()}
+                      aria-disabled={submitting || undefined}
+                      data-testid="pay-act"
+                      className={`da-act da-terminal flex w-full shrink-0 items-center justify-center gap-2 font-medium${
+                        submitting ? " is-loading" : ""
+                      }`}
+                    >
+                      <span className="da-label">
+                        {submitting
+                          ? method === "check"
+                            ? `Letting ${designerFirst} know`
+                            : "Opening payment"
+                          : method === "check"
+                            ? "I’ll mail a check"
+                            : `Continue to secure payment · ${formatCurrency(totalToPayCents, currency)}`}
+                      </span>
+                      <span aria-hidden="true" data-action-hit className="da-hit" />
+                    </button>
+                  </>
                 )}
                 {refusal && (
                   <p
                     role="alert"
-                    className="mt-2 text-[14px] leading-[1.5] text-[var(--text-body)]"
+                    className="text-[15px] leading-[1.5] text-[var(--text-primary)]"
                   >
                     {refusal}
                   </p>
@@ -896,7 +959,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                       <span className="text-right font-mono text-[12px] text-[var(--color-quiet-ink)]">
                         {line.quantity ?? ""}
                       </span>
-                      <span className="text-right font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                      <span className="text-right font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                         {formatCurrency(line.amount_cents, currency)}
                       </span>
                     </div>
@@ -933,7 +996,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                     className="flex items-baseline justify-between gap-4 border-b border-[var(--border-subtle)] py-3"
                   >
                     <div className="min-w-0">
-                      <p className="text-[14.5px] text-[var(--text-primary)]">
+                      <p className="text-[15px] text-[var(--text-primary)]">
                         {paymentLabel(payment)}
                         {payment.surcharge_cents > 0 &&
                           ` · + ${formatCurrency(payment.surcharge_cents, currency)} processing fee (${formatCurrency(
@@ -941,11 +1004,11 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                             currency,
                           )} charged)`}
                       </p>
-                      <p className="mt-0.5 font-mono text-[11.5px] text-[var(--color-quiet-ink)]">
+                      <p className="mt-0.5 text-[15px] text-[var(--text-body)]">
                         {paymentStanding(payment, studioName)}
                       </p>
                     </div>
-                    <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                    <span className="font-mono text-[15px] tabular-nums text-[var(--text-primary)]">
                       {formatCurrency(payment.amount_cents, currency)}
                     </span>
                   </div>
@@ -957,7 +1020,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
               type="button"
               data-pay-print="hide"
               onClick={() => window.print()}
-              className="min-h-[44px] self-start py-3 text-[14px] text-[var(--color-clay-ink)] underline underline-offset-[3px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--color-clay-ink)]"
+              className="min-h-[44px] self-start py-3 text-[15px] text-[var(--color-forest)] underline underline-offset-[3px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--focus-ring)]"
             >
               Print / save PDF
             </button>

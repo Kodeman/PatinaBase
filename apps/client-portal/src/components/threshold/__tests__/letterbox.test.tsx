@@ -3,51 +3,36 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Invoice } from '@patina/supabase';
 
-import type { InvoiceModel } from '@/lib/threshold/derive';
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
+import { invoiceProjection, type InvoiceReadState } from '@/lib/threshold/invoice-rollup';
 
 // ── Boundaries ──────────────────────────────────────────────────────────────
-// Opening the letterbox now unfolds the settlement, which owns the pay path's
-// three hooks. Mock the module they come from; the ceremony itself is covered
-// in settlement.test.tsx.
+// Opening a payable row lays in the payment sheet, which owns the pay path's
+// three hooks. Mock the module they come from; the sheet itself is covered in
+// settlement.test.tsx.
 
-jest.mock('@patina/supabase', () => ({
-  __esModule: true,
-  InvoiceCheckoutError: class InvoiceCheckoutError extends Error {},
-  useInvoicePaymentOptions: jest.fn(),
-  useStartCheckout: jest.fn(),
-  useNotifyCheckIntent: jest.fn(),
-  useStudioIdentity: jest.fn(),
-  useInvoiceLink: jest.fn(),
-}));
+jest.mock('@patina/supabase', () => {
+  class InvoiceCheckoutError extends Error {
+    code: string;
+    constructor(code: string, detail: string) {
+      super(detail);
+      this.code = code;
+    }
+  }
+  return {
+    __esModule: true,
+    InvoiceCheckoutError,
+    useInvoicePaymentOptions: jest.fn(),
+    useStartCheckout: jest.fn(),
+    useNotifyCheckIntent: jest.fn(),
+    useStudioIdentity: jest.fn(),
+  };
+});
 
-// `prefetch` is a Next `Link` prop, not a DOM attribute, so it leaves no trace
-// on the rendered anchor. It is surfaced as `data-prefetch` here so the
-// guarantee below can be asserted at all — the pay-link e2e CANNOT assert it,
-// because `next dev` disables prefetching outright and the suite would pass
-// just as green with the prop deleted.
-//
-// J30(b): scoped to the one link that cares. Omitting `data-prefetch`
-// entirely when `prefetch` is undefined keeps every OTHER `next/link` usage
-// in the tree free of a stray `data-prefetch="undefined"` attribute nobody
-// asserts on.
 jest.mock('next/link', () => ({
   __esModule: true,
-  default: ({
-    children,
-    href,
-    prefetch,
-    ...rest
-  }: {
-    children: ReactNode;
-    href: string;
-    prefetch?: boolean;
-  } & Record<string, unknown>) => (
-    <a
-      href={href}
-      {...(prefetch !== undefined ? { 'data-prefetch': String(prefetch) } : {})}
-      {...rest}
-    >
+  default: ({ children, href, ...rest }: { children: ReactNode; href: string } & Record<string, unknown>) => (
+    <a href={href} {...rest}>
       {children}
     </a>
   ),
@@ -66,7 +51,7 @@ jest.mock('@/lib/analytics/events', () => ({
 }));
 
 import {
-  useInvoiceLink,
+  InvoiceCheckoutError,
   useInvoicePaymentOptions,
   useNotifyCheckIntent,
   useStartCheckout,
@@ -76,29 +61,13 @@ import { clientEvents } from '@/lib/analytics/events';
 
 import { Letterbox } from '../letterbox';
 
-/** The 64-hex shape ensure_invoice_link (00574) emits. */
-const LINK_TOKEN = 'a'.repeat(64);
-
 /** 5 August 2026 — the deck's "today". */
 const TODAY = new Date(2026, 7, 5);
 
-/** Two studios, one designer — Kody's own shape. */
 const STUDIO_NAMES: Record<string, string> = {
-  'studio-1': 'Alder & Fox',
+  'studio-1': 'Birchwood Studio',
   'studio-b': 'Bramwell Fox',
 };
-
-function invoice(overrides: Partial<InvoiceModel> = {}): InvoiceModel {
-  return {
-    id: 'b0000000-0000-0000-0000-0000000000i4',
-    number: 'Invoice No. 4',
-    totalCents: 1_825_000,
-    paidCents: 912_500,
-    balanceCents: 912_500,
-    dueDate: '2026-08-15',
-    ...overrides,
-  };
-}
 
 function invoiceRow(overrides: Partial<Invoice> = {}): Invoice {
   return {
@@ -108,21 +77,22 @@ function invoiceRow(overrides: Partial<Invoice> = {}): Invoice {
     designer_id: 'designer-1',
     client_id: 'client-1',
     invoice_number: 'Invoice No. 3',
-    status: 'paid',
+    title: null,
+    status: 'sent',
     issue_date: '2026-06-01',
-    due_date: '2026-06-15',
+    due_date: '2026-08-20',
     payment_terms_days: 14,
     currency: 'USD',
-    subtotal_cents: 912_500,
+    subtotal_cents: 30_000,
     tax_rate: 0,
     tax_cents: 0,
-    total_cents: 912_500,
-    amount_paid_cents: 912_500,
+    total_cents: 30_000,
+    amount_paid_cents: 0,
     memo: null,
     internal_notes: null,
     stripe_checkout_session_id: null,
     sent_at: '2026-06-01T10:00:00Z',
-    paid_at: '2026-06-12T10:00:00Z',
+    paid_at: null,
     voided_at: null,
     void_reason: null,
     reminder_count: 0,
@@ -130,10 +100,57 @@ function invoiceRow(overrides: Partial<Invoice> = {}): Invoice {
     ar_flagged_at: null,
     ar_last_chased_at: null,
     created_at: '2026-06-01T10:00:00Z',
-    updated_at: '2026-06-12T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z',
+    payments: [],
     ...overrides,
   } as Invoice;
 }
+
+/* The §10 mixed-invoice fixture: six outstanding, a zero-balance sent row,
+   and two paid ones. Only the outstanding six may be counted to pay. */
+const MIXED: Invoice[] = [
+  invoiceRow({ id: 'inv-f', invoice_number: 'INV-2026-019', due_date: '2026-10-01', total_cents: 50_000 }),
+  invoiceRow({ id: 'inv-d', invoice_number: 'INV-2026-021', due_date: null, total_cents: 12_500 }),
+  invoiceRow({
+    id: 'inv-c',
+    invoice_number: 'INV-2026-017',
+    status: 'partially_paid',
+    due_date: '2026-09-02',
+    total_cents: 80_000,
+    amount_paid_cents: 50_000,
+  }),
+  invoiceRow({ id: 'inv-a', invoice_number: 'INV-2026-014', due_date: '2026-07-25', total_cents: 60_000 }),
+  invoiceRow({
+    id: 'inv-e',
+    project_id: null,
+    invoice_number: 'INV-2026-022',
+    title: 'Design fee, September',
+    due_date: '2026-08-20',
+    total_cents: 25_000,
+  }),
+  invoiceRow({ id: 'inv-b', invoice_number: 'INV-2026-016', due_date: '2026-08-05', total_cents: 20_000 }),
+  invoiceRow({
+    id: 'inv-z',
+    invoice_number: 'INV-2026-023',
+    total_cents: 0,
+    amount_paid_cents: 0,
+    sent_at: '2026-07-12T10:00:00Z',
+  }),
+  invoiceRow({
+    id: 'inv-p1',
+    invoice_number: 'INV-2026-008',
+    status: 'paid',
+    amount_paid_cents: 30_000,
+    paid_at: '2026-06-12T10:00:00Z',
+  }),
+  invoiceRow({
+    id: 'inv-p2',
+    invoice_number: 'INV-2026-011',
+    status: 'paid',
+    amount_paid_cents: 30_000,
+    paid_at: '2026-07-22T10:00:00Z',
+  }),
+];
 
 const originalLocation = window.location;
 
@@ -149,7 +166,21 @@ function standAt(search: string) {
   });
 }
 
-describe('Letterbox — one letter, half out of the slot', () => {
+let checkout: jest.Mock;
+let notify: jest.Mock;
+
+const row = (id: string) => {
+  const element = document.querySelector<HTMLElement>(`[data-testid="invoice-row"][data-invoice-id="${id}"]`);
+  if (!element) throw new Error(`no row ${id}`);
+  return element;
+};
+const viewInvoice = (id: string) => within(row(id)).getByRole('button', { name: 'View invoice' });
+const rowIds = (testId: string) =>
+  within(screen.getByTestId(testId))
+    .getAllByTestId('invoice-row')
+    .map((element) => element.dataset.invoiceId);
+
+describe('Letterbox — every invoice in plain view (US-45 CPUX-02, CPUX-03)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetCheckoutReturn();
@@ -157,581 +188,420 @@ describe('Letterbox — one letter, half out of the slot', () => {
     jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
     (useInvoicePaymentOptions as jest.Mock).mockReturnValue({
       isPending: false,
-      data: { card_surcharge_bps: 300, check_remit_to: null },
+      isFetching: false,
+      isError: false,
+      data: { card_surcharge_bps: 300, check_remit_to: null, card_surcharge_resolved: true },
+      refetch: jest.fn(),
     });
-    (useStartCheckout as jest.Mock).mockReturnValue({
-      mutateAsync: jest.fn(),
+    checkout = jest.fn();
+    (useStartCheckout as jest.Mock).mockReturnValue({ mutateAsync: checkout, isPending: false });
+    notify = jest.fn().mockResolvedValue({ ok: true });
+    (useNotifyCheckIntent as jest.Mock).mockReturnValue({ mutateAsync: notify, isPending: false });
+    (useStudioIdentity as jest.Mock).mockImplementation(({ studioId }: { studioId?: string | null }) => ({
       isPending: false,
-    });
-    (useNotifyCheckIntent as jest.Mock).mockReturnValue({ mutateAsync: jest.fn() });
-    (useInvoiceLink as jest.Mock).mockReturnValue({ data: { token: LINK_TOKEN, status: 'active' } });
-    // The brand resolver, keyed the way 00571 keys it: the studio the row
-    // names itself wins, and each studio answers with its own name.
-    (useStudioIdentity as jest.Mock).mockImplementation(
-      ({ studioId }: { studioId?: string | null }) => ({
-        isPending: false,
-        data: { name: STUDIO_NAMES[studioId ?? ''] ?? null },
-      }),
-    );
+      data: { name: STUDIO_NAMES[studioId ?? ''] ?? null },
+    }));
   });
 
   afterEach(() => {
     Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
   });
 
-  /* ── The letter the address named ────────────────────────────────────────
-     `/invoices/<id>` still goes out in the studio's mail and folds to
-     `?invoice=<id>`. The slot holds one letter, chosen by due date, so
-     without this the client who followed a link about one invoice reads
-     another and is never told which. ─────────────────────────────────────── */
+  it('A01 · lists all six outstanding invoices, soonest due first, with nothing expanded', () => {
+    render(<Letterbox invoices={MIXED} today={TODAY} projectName="Elm Street House" designerName="Maren Holt" />);
 
-  it('stands the letter the address named in the slot, not the soonest-due one', () => {
-    standAt('?invoice=inv-9');
+    expect(screen.getByRole('heading', { level: 2, name: 'Invoices' })).toBeInTheDocument();
+    expect(screen.getByTestId('letterbox-eyebrow')).toHaveTextContent('Elm Street House and studio');
+    const toPay = screen.getByTestId('invoices-to-pay');
+    expect(within(toPay).getByRole('heading', { level: 3, name: 'Invoices to pay' })).toBeInTheDocument();
+    expect(toPay).toHaveTextContent('Six invoices, soonest due first.');
+    expect(rowIds('invoices-to-pay')).toEqual(['inv-a', 'inv-b', 'inv-e', 'inv-c', 'inv-f', 'inv-d']);
+    // No row is open, and history is folded.
+    for (const toggle of screen.getAllByRole('button', { name: 'View invoice' })) {
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    }
+    expect(screen.getByRole('button', { name: 'Payment history' })).toHaveAttribute('aria-expanded', 'false');
+    expect(document.body).not.toHaveTextContent(/a toll on the line|settle the balance|earlier invoices/i);
+  });
 
+  it('A02 · a zero-balance sent invoice stands in history, never in the count to pay', async () => {
+    render(<Letterbox invoices={MIXED} today={TODAY} />);
+
+    expect(rowIds('invoices-to-pay')).not.toContain('inv-z');
+    await userEvent.click(screen.getByRole('button', { name: 'Payment history' }));
+    // Newest first: a paid date, else the sent date.
+    expect(rowIds('payment-history')).toEqual(['inv-p2', 'inv-z', 'inv-p1']);
+    expect(within(row('inv-z')).getByTestId('invoice-row-status')).toHaveTextContent(
+      'No balance due · sent 12 July 2026',
+    );
+    expect(within(row('inv-p2')).getByTestId('invoice-row-status')).toHaveTextContent('Paid 22 July 2026');
+    expect(screen.getByTestId('payment-history')).toHaveTextContent('Three invoices, newest first.');
+  });
+
+  it('writes each row’s real due status and origin, at reading size', () => {
+    render(<Letterbox invoices={MIXED} today={TODAY} projectName="Elm Street House" />);
+
+    expect(within(row('inv-a')).getByTestId('invoice-row-status')).toHaveTextContent('Past due · 25 July 2026');
+    expect(within(row('inv-b')).getByTestId('invoice-row-status')).toHaveTextContent('Due today · 5 August 2026');
+    expect(within(row('inv-c')).getByTestId('invoice-row-status')).toHaveTextContent(
+      'Due 2 September 2026 · $500.00 paid',
+    );
+    expect(row('inv-c')).toHaveTextContent('of $800.00');
+    expect(within(row('inv-c')).getByTestId('invoice-row-amount')).toHaveTextContent('$300.00');
+    expect(within(row('inv-d')).getByTestId('invoice-row-status')).toHaveTextContent('No due date');
+    // A studio invoice names itself by its title, and its origin is its studio.
+    expect(within(row('inv-e')).getByTestId('invoice-row-name')).toHaveTextContent('Design fee, September');
+    expect(within(row('inv-e')).getByTestId('invoice-row-reference')).toHaveTextContent(
+      'INV-2026-022 · Birchwood Studio',
+    );
+    expect(within(row('inv-a')).getByTestId('invoice-row-reference')).toHaveTextContent('Elm Street House');
+  });
+
+  it('totals what is outstanding, once per invoice, across the house and the studio', () => {
+    render(<Letterbox invoices={MIXED} today={TODAY} projectName="Elm Street House" />);
+
+    const total = screen.getByTestId('letterbox-total');
+    expect(total).toHaveTextContent('Total outstanding');
+    expect(within(total).getByTestId('letterbox-total-amount')).toHaveTextContent('$1,975.00');
+    expect(total).toHaveTextContent(
+      '$1,975.00 across Elm Street House and your studio invoices. It counts only the invoices shown here.',
+    );
+  });
+
+  it('A04 · totals each currency on its own and never converts', () => {
     render(
       <Letterbox
-        invoice={invoice({ id: 'inv-4', number: 'Invoice No. 4' })}
         invoices={[
-          invoiceRow({ id: 'inv-9', invoice_number: 'Invoice No. 9', status: 'sent' }),
+          invoiceRow({ id: 'inv-u', total_cents: 60_000, due_date: '2026-07-25' }),
+          invoiceRow({ id: 'inv-k', currency: 'CAD', total_cents: 12_000, due_date: null }),
         ]}
+        today={TODAY}
+        projectName="Elm Street House"
+      />,
+    );
+
+    expect(within(row('inv-u')).getByTestId('invoice-row-amount')).toHaveTextContent('USD $600.00');
+    expect(within(row('inv-k')).getByTestId('invoice-row-amount')).toHaveTextContent('CAD $120.00');
+    const amounts = within(screen.getByTestId('letterbox-total')).getAllByTestId('letterbox-total-amount');
+    expect(amounts.map((element) => element.textContent)).toEqual(['CAD $120.00', 'USD $600.00']);
+    expect(screen.getByTestId('letterbox-total')).toHaveTextContent(
+      'Across Elm Street House. Each currency is totalled on its own.',
+    );
+  });
+
+  it('A05 · keeps in-flight and review invoices visible in their own groups, and pending without an intent payable', () => {
+    render(
+      <Letterbox
+        invoices={[
+          invoiceRow({
+            id: 'inv-pi',
+            invoice_number: 'INV-2026-030',
+            payments: [
+              {
+                status: 'pending',
+                stripe_payment_intent_id: 'pi_1',
+                created_at: '2026-08-03T15:00:00Z',
+              },
+            ] as Invoice['payments'],
+          }),
+          invoiceRow({
+            id: 'inv-cs',
+            invoice_number: 'INV-2026-031',
+            payments: [{ status: 'pending', stripe_payment_intent_id: null, created_at: '2026-08-03T15:00:00Z' }] as Invoice['payments'],
+          }),
+          invoiceRow({
+            id: 'inv-rr',
+            invoice_number: 'INV-2026-032',
+            payments: [{ status: 'requires_refund', stripe_payment_intent_id: 'pi_2', created_at: '2026-08-01T15:00:00Z' }] as Invoice['payments'],
+          }),
+        ]}
+        today={TODAY}
+        designerName="Maren Holt"
+      />,
+    );
+
+    expect(rowIds('invoices-to-pay')).toEqual(['inv-cs']);
+    expect(rowIds('invoices-in-progress')).toEqual(['inv-pi']);
+    expect(within(row('inv-pi')).getByTestId('invoice-row-note')).toHaveTextContent(
+      'Payment started 3 August 2026. Confirmation is pending. You don’t need to pay again.',
+    );
+    expect(rowIds('invoices-under-review')).toEqual(['inv-rr']);
+    expect(within(row('inv-rr')).getByTestId('invoice-row-note')).toHaveTextContent(
+      'This payment needs a closer look. Birchwood Studio will follow up. You don’t need to do anything now.',
+    );
+    expect(screen.getByTestId('letterbox-total')).toHaveTextContent(
+      'Each invoice is counted once, including payments in progress and under review.',
+    );
+  });
+
+  it('withholds the total while an invoice’s paid status contradicts its balance', async () => {
+    render(
+      <Letterbox
+        invoices={[invoiceRow({ id: 'inv-x', invoice_number: 'INV-2026-040', status: 'paid', amount_paid_cents: 5_000 })]}
         today={TODAY}
       />,
     );
 
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 9');
-    expect(screen.getByTestId('letterbox-body')).not.toHaveTextContent('Invoice No. 4');
+    expect(within(row('inv-x')).getByTestId('invoice-row-note')).toHaveTextContent(
+      'We can’t confirm this invoice’s payment status.',
+    );
+    expect(screen.getByTestId('letterbox-total')).toHaveTextContent(
+      'The total is hidden until every invoice’s payment status is confirmed.',
+    );
+    await userEvent.click(viewInvoice('inv-x'));
+    expect(screen.getByTestId('invoice-standing')).toHaveTextContent(
+      'Its record says paid, but $250.00 still shows as due. Until the two agree, it isn’t shown as paid and can’t be paid here.',
+    );
+    expect(screen.queryByRole('button', { name: /continue to secure payment/i })).not.toBeInTheDocument();
   });
 
-  it('says nothing new when the address names a letter this house is not holding', () => {
+  it.each<[InvoiceReadState, string]>([
+    ['loading', 'Loading your invoices.'],
+    ['failed', 'We couldn’t load your invoices.'],
+    ['partial', 'Some invoices didn’t load, so this list may be incomplete. The total is hidden until everything loads.'],
+    ['stale', 'We couldn’t refresh your invoices. These may be out of date.'],
+  ])('A06 · says what the %s read can and cannot stand behind', async (read, sentence) => {
+    const onRefetch = jest.fn();
+    const rows = read === 'loading' || read === 'failed' ? [] : [MIXED[0]];
+    render(
+      <Letterbox
+        projection={invoiceProjection(rows, { today: TODAY, read })}
+        onRefetch={onRefetch}
+      />,
+    );
+
+    expect(screen.getByTestId('letterbox-read-notice')).toHaveTextContent(sentence);
+    expect(screen.queryByText('No invoices to pay.')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('letterbox-total-amount')).not.toBeInTheDocument();
+    if (read === 'loading') {
+      expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+      return;
+    }
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('A06 · says there is nothing to pay only on a complete read, and keeps the history', () => {
+    render(<Letterbox invoices={[MIXED[7]]} today={TODAY} />);
+
+    expect(screen.getByTestId('invoices-none')).toHaveTextContent('No invoices to pay.');
+    expect(screen.getByRole('button', { name: 'Payment history' })).toBeInTheDocument();
+    expect(screen.queryByTestId('letterbox-total')).not.toBeInTheDocument();
+  });
+
+  it('opens one row in place, moves focus into it, and changes nothing on the server', async () => {
+    render(<Letterbox invoices={MIXED} today={TODAY} />);
+
+    await userEvent.click(viewInvoice('inv-c'));
+
+    expect(viewInvoice('inv-c')).toHaveAttribute('aria-expanded', 'true');
+    const region = screen.getByRole('region', { name: 'Payment details for INV-2026-017' });
+    expect(within(region).getByRole('heading', { level: 4 })).toHaveFocus();
+    expect(within(region).getByTestId('spine-toll-balance')).toHaveTextContent('$300.00');
+    expect(within(region).getByRole('button', { name: 'Continue to secure payment · $302.40' })).toBeInTheDocument();
+    expect(within(region).getByRole('link', { name: 'Print invoice' })).toHaveAttribute(
+      'href',
+      '/invoices/inv-c/print',
+    );
+    expect(checkout).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+
+    // Opening another closes the first, without submitting anything.
+    await userEvent.click(viewInvoice('inv-a'));
+    expect(viewInvoice('inv-c')).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getAllByTestId('spine-toll')).toHaveLength(1);
+    expect(checkout).not.toHaveBeenCalled();
+  });
+
+  it('returns focus to the row’s own control when its details close', async () => {
+    render(<Letterbox invoices={MIXED} today={TODAY} />);
+
+    await userEvent.click(viewInvoice('inv-b'));
+    await userEvent.click(screen.getByRole('button', { name: 'Close payment details' }));
+
+    expect(viewInvoice('inv-b')).toHaveAttribute('aria-expanded', 'false');
+    expect(viewInvoice('inv-b')).toHaveFocus();
+  });
+
+  it('A07 · opens the invoice the address named, even one in history', () => {
+    standAt('?invoice=inv-p1');
+    render(<Letterbox invoices={MIXED} today={TODAY} />);
+
+    expect(screen.getByRole('button', { name: 'Payment history' })).toHaveAttribute('aria-expanded', 'true');
+    expect(viewInvoice('inv-p1')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('region', { name: 'Invoice details for INV-2026-008' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close invoice details' })).toBeInTheDocument();
+  });
+
+  it('A07 · names nothing for an address this house is not holding, or one under a return', () => {
     standAt('?invoice=inv-nowhere');
+    const { unmount } = render(<Letterbox invoices={MIXED} today={TODAY} />);
+    for (const toggle of screen.getAllByRole('button', { name: 'View invoice' })) {
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    }
+    unmount();
 
+    resetCheckoutReturn();
+    standAt('?invoice=inv-a&checkout=cancel');
+    render(<Letterbox invoices={MIXED} today={TODAY} />);
+    expect(viewInvoice('inv-a')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('A08 · keeps a returned processing hold across closing and reopening, and hands it up', async () => {
+    const onHold = jest.fn();
+    checkout.mockRejectedValue(new InvoiceCheckoutError('payment_processing', 'clearing'));
+    render(<Letterbox invoices={MIXED} today={TODAY} onHold={onHold} />);
+
+    await userEvent.click(viewInvoice('inv-c'));
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: /continue to secure payment/i }));
+    });
+
+    expect(onHold).toHaveBeenCalledWith('inv-c', 'payment_processing');
+    expect(rowIds('invoices-in-progress')).toEqual(['inv-c']);
+    expect(within(row('inv-c')).getByTestId('invoice-row-note')).toHaveTextContent(
+      'Your payment is still processing. You don’t need to pay again.',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close payment details' }));
+    await userEvent.click(viewInvoice('inv-c'));
+    expect(screen.getByTestId('invoice-standing')).toHaveTextContent(
+      'Your payment provider is still processing this payment. The balance updates only when the payment is confirmed. You don’t need to pay again.',
+    );
+    expect(screen.queryByRole('button', { name: /continue to secure payment/i })).not.toBeInTheDocument();
+    expect(checkout).toHaveBeenCalledTimes(1);
+  });
+
+  it('A08 · keeps a reconciliation hold under review after switching away and back', async () => {
+    checkout.mockRejectedValue(new InvoiceCheckoutError('payment_reconciliation_required', 'review'));
+    render(<Letterbox invoices={MIXED} today={TODAY} />);
+
+    await userEvent.click(viewInvoice('inv-f'));
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: /continue to secure payment/i }));
+    });
+    expect(rowIds('invoices-under-review')).toEqual(['inv-f']);
+
+    await userEvent.click(viewInvoice('inv-a'));
+    await userEvent.click(viewInvoice('inv-f'));
+    expect(screen.getByTestId('invoice-standing')).toHaveTextContent(
+      'It’s on hold until it’s checked, so it can’t be paid again here.',
+    );
+    expect(screen.queryByRole('button', { name: /continue to secure payment/i })).not.toBeInTheDocument();
+  });
+
+  it('A09 · says check expected after the acknowledgement, with the balance still due', async () => {
+    render(<Letterbox invoices={MIXED} today={TODAY} />);
+
+    await userEvent.click(viewInvoice('inv-c'));
+    await userEvent.click(screen.getByRole('radio', { name: /mail a check/i }));
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: 'I’ll mail a check' }));
+    });
+
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(within(row('inv-c')).getByTestId('invoice-row-note')).toHaveTextContent(
+      'Check expected. The balance stays $300.00 until the check arrives and is recorded.',
+    );
+    expect(rowIds('invoices-to-pay')).toContain('inv-c');
+    expect(within(row('inv-c')).getByTestId('invoice-row-amount')).toHaveTextContent('$300.00');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close payment details' }));
+    await userEvent.click(viewInvoice('inv-c'));
+    await userEvent.click(screen.getByRole('radio', { name: /mail a check/i }));
+    expect(screen.getByTestId('threshold-check-expected')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'I’ll mail a check' })).not.toBeInTheDocument();
+  });
+
+  it('makes each row’s check out to that invoice’s own studio', async () => {
     render(
       <Letterbox
-        invoice={invoice({ id: 'inv-4', number: 'Invoice No. 4' })}
-        invoices={[invoiceRow({ id: 'inv-9', invoice_number: 'Invoice No. 9' })]}
+        invoices={[invoiceRow({ id: 'inv-b2', invoice_number: 'Invoice No. 9', studio_id: 'studio-b' })]}
         today={TODAY}
+        designerName="Maren Holt"
       />,
     );
 
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 4');
+    await userEvent.click(viewInvoice('inv-b2'));
+    await userEvent.click(screen.getByRole('radio', { name: /mail a check/i }));
+    expect(screen.getByTestId('threshold-check-panel')).toHaveTextContent('Mail your check to Bramwell Fox');
+    expect(screen.getByTestId('spine-toll-payee')).toHaveTextContent('Payable toBramwell Fox');
   });
 
-  it('leaves the till the return: `?invoice=` under `?checkout=` names a receipt, not a letter', () => {
-    standAt('?invoice=inv-9&checkout=cancel');
-
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-4', number: 'Invoice No. 4' })}
-        invoices={[invoiceRow({ id: 'inv-9', invoice_number: 'Invoice No. 9' })]}
-        today={TODAY}
-      />,
-    );
-
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 4');
-  });
-
-  /* ── A letter for no house ───────────────────────────────────────────────
-     A studio invoice stands in the letterbox of the adopted house, which is
-     not the house the work is in — the envelope has to say so on its own
-     line, and name itself by the regarding line that stands where a house
-     name would. ────────────────────────────────────────────────────────── */
-
-  it('says a studio letter is not for a house, and names it by its regarding line', () => {
-    render(
-      <Letterbox
-        invoice={invoice({
-          id: 'inv-31',
-          number: 'Invoice No. 31',
-          totalCents: 45_000,
-          paidCents: 0,
-          balanceCents: 45_000,
-          dueDate: '2026-09-20',
-        })}
-        invoices={[
-          invoiceRow({
-            id: 'inv-31',
-            invoice_number: 'Invoice No. 31',
-            status: 'sent',
-            project_id: null,
-            title: 'Design consultation · 12 September 2026',
-          }),
-        ]}
-        today={TODAY}
-      />,
-    );
-
-    expect(screen.getByTestId('letterbox-from-studio')).toHaveTextContent(
-      'From the studio · not for a house',
-    );
-    expect(screen.getByTestId('letterbox-regarding')).toHaveTextContent(
-      'Design consultation · 12 September 2026',
-    );
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 31');
-  });
-
-  /* ── Whose name is on the check ──────────────────────────────────────────
-     A studio letter stands in the ADOPTED house's letterbox, and the adopted
-     house may belong to a different studio than the one that drew the letter.
-     The payee has to come off the letter. ──────────────────────────────── */
-
-  it("makes the check out to the letter's own studio, not the house's", async () => {
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-31', number: 'Invoice No. 31' })}
-        invoices={[
-          invoiceRow({
-            id: 'inv-31',
-            status: 'sent',
-            project_id: null,
-            studio_id: 'studio-b',
-            title: 'Design consultation',
-          }),
-        ]}
-        // The adopted house's studio — what the house page hands down.
-        designerName="Alder & Fox"
-        today={TODAY}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: /open invoice details/i }));
-    await userEvent.click(screen.getByRole('radio', { name: /check/i }));
-
-    expect(
-      screen.getByRole('button', { name: 'Let Bramwell Fox know a check is coming' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Alder & Fox/ }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("resolves a folded letter's payee from that letter, not from the slot", async () => {
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-31', number: 'Invoice No. 31' })}
-        invoices={[
-          invoiceRow({
-            id: 'inv-31',
-            status: 'sent',
-            project_id: null,
-            studio_id: 'studio-b',
-          }),
-          invoiceRow({
-            id: 'inv-5',
-            invoice_number: 'Invoice No. 5',
-            status: 'sent',
-            studio_id: 'studio-1',
-            amount_paid_cents: 0,
-            paid_at: null,
-          }),
-        ]}
-        today={TODAY}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Settle this balance' }));
-    await userEvent.click(screen.getByRole('radio', { name: /check/i }));
-
-    expect(
-      screen.getByRole('button', { name: 'Let Alder & Fox know a check is coming' }),
-    ).toBeInTheDocument();
-  });
-
-  it('says nothing of the studio for a letter this house holds', () => {
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-3', number: 'Invoice No. 3' })}
-        invoices={[invoiceRow({ id: 'inv-3', status: 'sent' })]}
-        today={TODAY}
-      />,
-    );
-
-    expect(screen.queryByTestId('letterbox-from-studio')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('letterbox-regarding')).not.toBeInTheDocument();
-  });
-
-  it('states the studio line for a letter with no regarding line to print', () => {
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-31', number: 'Invoice No. 31' })}
-        invoices={[
-          invoiceRow({ id: 'inv-31', status: 'sent', project_id: null, title: null }),
-        ]}
-        today={TODAY}
-      />,
-    );
-
-    expect(screen.getByTestId('letterbox-from-studio')).toBeInTheDocument();
-    expect(screen.queryByTestId('letterbox-regarding')).not.toBeInTheDocument();
-  });
-
-  it('carries the anchor, the unit, and never opts into dimming', () => {
-    render(<Letterbox invoice={invoice()} />);
-
-    const root = screen.getByTestId('letterbox');
-    expect(root).toHaveAttribute('id', 'letterbox');
-    expect(root).toHaveAttribute('data-threshold-unit', 'letterbox');
-    expect(root).not.toHaveAttribute('data-dimmable');
-    expect(root).toHaveAttribute('data-never-dim');
-  });
-
-  it('draws the letterbox with the letter standing out of it', () => {
-    render(<Letterbox invoice={invoice()} />);
-
-    expect(
-      screen.getByRole('img', {
-        name: 'A letterbox with an invoice standing half out of the slot',
-      }),
-    ).toBeInTheDocument();
-  });
-
-  it('states the letter in words and figures before it is opened', () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    const body = screen.getByTestId('letterbox-body');
-    expect(body).toHaveTextContent('Invoice No. 4');
-    expect(body).toHaveTextContent('$18,250.00');
-    expect(body).toHaveTextContent('$9,125.00');
-    expect(body).toHaveTextContent('due 15 August');
-  });
-
-  it('spells the year out once the letter falls in another one', async () => {
-    render(<Letterbox invoice={invoice({ dueDate: '2027-01-15' })} today={TODAY} />);
-
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('due 15 January 2027');
-
-    await userEvent.click(screen.getByRole('button', { name: /open invoice details/i }));
-    expect(within(screen.getByTestId('spine-toll')).getByTestId('spine-toll-due')).toHaveTextContent(
-      'due 15 January 2027',
-    );
-  });
-
-  it('names an unnumbered letter, and omits a due date it does not have', () => {
-    render(<Letterbox invoice={invoice({ number: null, dueDate: null })} today={TODAY} />);
-
-    const body = screen.getByTestId('letterbox-body');
-    expect(body).toHaveTextContent('Invoice · $18,250.00 total');
-    expect(body).not.toHaveTextContent('due');
-  });
-
-  it('unfolds to the settlement when the letterbox is opened, and folds back', async () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(screen.queryByTestId('settlement')).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /open invoice details/i }));
-
-    expect(screen.getByTestId('settlement')).toBeInTheDocument();
-    const toll = screen.getByTestId('spine-toll');
-    expect(toll).toHaveAttribute('data-invoice-id', 'b0000000-0000-0000-0000-0000000000i4');
-    expect(screen.getByTestId('threshold-payment-methods')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /close invoice details/i }),
-    ).toHaveAttribute('aria-expanded', 'true');
-
-    await userEvent.click(screen.getByRole('button', { name: /close invoice details/i }));
-
-    expect(screen.queryByTestId('settlement')).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /open invoice details/i }),
-    ).toHaveAttribute('aria-expanded', 'false');
-  });
-
-  it('stands empty, and says so, when nothing has come', () => {
-    render(<Letterbox invoice={null} />);
-
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('No current invoice.');
-    expect(
-      screen.queryByRole('button', { name: /open invoice details/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('img', { name: 'An empty letterbox' }),
-    ).toBeInTheDocument();
-  });
-
-  it('keeps the earlier invoices behind the one letter, even when the slot is empty', () => {
-    render(<Letterbox invoice={null} invoices={[invoiceRow()]} today={TODAY} />);
-
-    expect(screen.getByTestId('earlier-invoices')).toBeInTheDocument();
-  });
-
-  it('does not keep the letter it is already holding', () => {
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-3' })}
-        invoices={[invoiceRow({ id: 'inv-3' })]}
-        today={TODAY}
-      />,
-    );
-
-    expect(screen.queryByTestId('earlier-invoices')).not.toBeInTheDocument();
-  });
+  /* ── The return from the till ─────────────────────────────────────────── */
 
   it('reads a settled return once the invoice’s own row says it is paid', () => {
     standAt('?invoice=inv-4&checkout=success&session_id=cs_1');
-
     render(
       <Letterbox
-        invoice={null}
-        invoices={[invoiceRow({ id: 'inv-4', status: 'paid' })]}
-        today={new Date(2026, 8, 4)}
+        invoices={[invoiceRow({ id: 'inv-4', status: 'paid', amount_paid_cents: 30_000 })]}
+        today={TODAY}
       />,
     );
 
-    // The retired invoice detail page's own confirmed sentence, and the letter
-    // it is about — the receipt used to stand unlabelled over a different one.
     expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent(
       'Invoice No. 3 · Payment confirmed — thank you. Your invoice has been updated.',
     );
-    expect(clientEvents.paymentCompleted).toHaveBeenCalledTimes(1);
     expect(clientEvents.paymentCompleted).toHaveBeenCalledWith({ invoiceId: 'inv-4' });
   });
 
-  it('will not say a letter is paid while it is still open, and counts nothing', () => {
+  it('will not say an invoice is paid while it is still open, and pauses its act', async () => {
     standAt('?invoice=inv-4&checkout=success&session_id=cs_1');
+    render(<Letterbox invoices={[invoiceRow({ id: 'inv-4' })]} today={TODAY} />);
 
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-4' })}
-        invoices={[
-          invoiceRow({
-            id: 'inv-4',
-            status: 'sent',
-            amount_paid_cents: 912_500,
-            total_cents: 1_825_000,
-            paid_at: null,
-          }),
-        ]}
-        today={new Date(2026, 8, 4)}
-      />,
+    expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent(
+      'Confirming payment… This usually takes a few seconds.',
     );
-
-    const receipt = screen.getByTestId('letterbox-receipt');
-    expect(receipt).toHaveTextContent('Confirming payment… This usually takes a few seconds.');
-    expect(receipt).not.toHaveTextContent('Payment confirmed');
     expect(clientEvents.paymentCompleted).not.toHaveBeenCalled();
+    await userEvent.click(viewInvoice('inv-4'));
+    expect(screen.getByRole('button', { name: /continue to secure payment/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('says plainly that nothing is confirmed once the wait runs out', () => {
     jest.useFakeTimers();
     try {
       standAt('?invoice=inv-4&checkout=success');
-
-      render(
-        <Letterbox
-          invoice={invoice({ id: 'inv-4' })}
-          invoices={[
-            invoiceRow({
-              id: 'inv-4',
-              status: 'sent',
-              amount_paid_cents: 0,
-              total_cents: 1_825_000,
-              paid_at: null,
-            }),
-          ]}
-          today={new Date(2026, 8, 4)}
-        />,
-      );
-
+      render(<Letterbox invoices={[invoiceRow({ id: 'inv-4' })]} today={TODAY} />);
       act(() => {
         jest.advanceTimersByTime(31_000);
       });
-
       expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent(
         'Checkout returned, but Patina has not confirmed a payment yet. Do not submit another payment until the status is known.',
       );
-      expect(clientEvents.paymentCompleted).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('says nothing about a letter this house is not holding', () => {
-    standAt('?invoice=inv-elsewhere&checkout=success');
-
-    render(<Letterbox invoice={invoice()} invoices={[invoiceRow()]} today={TODAY} />);
-
-    expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
-    expect(clientEvents.paymentCompleted).not.toHaveBeenCalled();
-  });
-
-  it('says nothing changed when she came back from a cancelled till', () => {
+  it('says nothing changed after a cancelled till, and nothing about invoices it is not holding', () => {
     standAt('?invoice=inv-4&checkout=cancelled');
-
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-4' })}
-        invoices={[invoiceRow({ id: 'inv-4', status: 'sent' })]}
-        today={TODAY}
-      />,
-    );
-
+    const { unmount } = render(<Letterbox invoices={[invoiceRow({ id: 'inv-4' })]} today={TODAY} />);
     expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent('Nothing changed.');
     expect(clientEvents.paymentCancelled).toHaveBeenCalledWith({ invoiceId: 'inv-4' });
-  });
+    unmount();
 
-  it('keeps the letter in the slot printable too', () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(screen.getByRole('link', { name: /print/i })).toHaveAttribute(
-      'href',
-      '/invoices/b0000000-0000-0000-0000-0000000000i4/print',
-    );
+    resetCheckoutReturn();
+    standAt('?invoice=inv-elsewhere&checkout=success');
+    render(<Letterbox invoices={[invoiceRow({ id: 'inv-4' })]} today={TODAY} />);
+    expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
   });
 
   it('leaves an order’s return to the road', () => {
     standAt('?order=ord-1&checkout=success');
-
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
+    render(<Letterbox invoices={[invoiceRow({ id: 'inv-4' })]} today={TODAY} />);
     expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
   });
 
-  it('says nothing about a till it was never sent to', () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
+  it('carries the anchor and the unit, and never opts into dimming', () => {
+    render(<Letterbox invoices={[]} today={TODAY} />);
 
-    expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
-  });
-
-  /* ── The terminal act (00574 · K1, rewritten by W4 r2 MAJOR-3) ───────────
-     00636 froze `invoice_links.token` at NULL, so the act's old href resolved
-     for NO invoice and both it and its consequence sentence vanished from the
-     household's own house page. This surface is a stable read and may not mint
-     (`ensure_invoice_link` revokes the address she already holds), so the act
-     opens the LETTER, where the settle-in-place till stands. The emailed
-     `/pay/<token>` sheet is untouched.
-     ─────────────────────────────────────────────────────────────────────── */
-
-  it('offers the terminal act with no live pay token anywhere in the system', async () => {
-    (useInvoiceLink as jest.Mock).mockReturnValue({ data: null });
-    const user = userEvent.setup();
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    const pay = screen.getByRole('button', { name: 'Pay $9,125.00' });
-    // Never a link: there is no address this surface can honestly carry.
-    expect(screen.queryByRole('link', { name: /^Pay / })).not.toBeInTheDocument();
-    expect(pay).toHaveAttribute('aria-controls', 'letterbox-letter');
-
-    await act(async () => {
-      await user.click(pay);
-    });
-    // Pressing it opens the letter, where Settlement is.
-    expect(screen.getByRole('button', { name: 'Close invoice details' })).toBeInTheDocument();
-  });
-
-  /* PP-2 · R139 — money moves here, so the act carries the figure it is for
-     and says what pressing it does before it is pressed. */
-  it('carries the amount in the label, under a sentence that says what it does', () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    const pay = screen.getByRole('button', { name: 'Pay $9,125.00' });
-    const consequence = screen.getByTestId('letterbox-consequence');
-    expect(consequence).toHaveTextContent(
-      'This opens payment. Nothing is charged until you choose how to pay.',
-    );
-    expect(consequence.compareDocumentPosition(pay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it('says nothing about payment where there is no balance to pay', () => {
-    render(
-      <Letterbox
-        invoice={invoice({ paidCents: 1_825_000, balanceCents: 0 })}
-        today={TODAY}
-      />,
-    );
-
-    expect(screen.queryByTestId('letterbox-consequence')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Pay / })).not.toBeInTheDocument();
-  });
-
-  // W4 r3 MAJOR-3 — the act KEEPS its place. It used to unmount itself on
-  // press (`payHere` carried `&& !open`), so the terminal money act destroyed
-  // the focus of the person who pressed it and announced nothing. The
-  // consequence sentence still goes: once the till is open it has become the
-  // thing it described.
-  it('keeps the act once the letter is open, and drops only its consequence', async () => {
-    const user = userEvent.setup();
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    await act(async () => {
-      await user.click(screen.getByRole('button', { name: 'Open invoice details' }));
-    });
-    const pay = screen.getByRole('button', { name: /^Pay / });
-    expect(pay).toBeInTheDocument();
-    expect(pay).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.queryByTestId('letterbox-consequence')).not.toBeInTheDocument();
-  });
-
-  it('never destroys the focus of the person who pressed the money act, and says what it did', async () => {
-    const user = userEvent.setup();
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    const pay = screen.getByRole('button', { name: /^Pay / });
-    expect(pay).toHaveAttribute('aria-expanded', 'false');
-    expect(pay).toHaveAttribute('aria-controls', 'letterbox-letter');
-
-    await act(async () => {
-      await user.click(pay);
-    });
-
-    // The act is still mounted, and focus is inside the till it opened —
-    // never on document.body.
-    expect(screen.getByRole('button', { name: /^Pay / })).toBe(pay);
-    expect(document.activeElement).not.toBe(document.body);
-    const till = screen.getByRole('group', { name: 'Pay this invoice' });
-    expect(document.activeElement).toBe(till);
-    expect(screen.getByRole('status')).toHaveTextContent(
-      /Payment for .* is open\. Nothing is charged until you choose how to pay\./,
-    );
-  });
-
-  it('glosses the drawing plainly, and leaves an empty slot unglossed', () => {
-    const { unmount } = render(<Letterbox invoice={invoice()} today={TODAY} />);
-    expect(screen.getByTestId('letterbox-gloss')).toHaveTextContent('Invoice');
-    unmount();
-
-    render(<Letterbox invoice={null} />);
-    expect(screen.queryByTestId('letterbox-gloss')).not.toBeInTheDocument();
-  });
-
-  it('sets every figure on the line in the money step', () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(
-      [...screen.getByTestId('letterbox-body').querySelectorAll('.t-money')].map(
-        (node) => node.textContent,
-      ),
-    ).toEqual(['$18,250.00', '$9,125.00', '$9,125.00']);
-  });
-
-  it('keeps the balance structurally exempt from any dimming pass', () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(screen.getByTestId('letterbox')).toHaveAttribute('data-never-dim');
-  });
-
-  /* F6's reason is gone with the href: nothing here warms the pay page,
-     because nothing here links to it. The guest sheet is reached from the
-     client's own email. */
-  it('never links to the pay page at all, so nothing can prefetch it', () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    for (const link of screen.getAllByRole('link')) {
-      expect(link.getAttribute('href') ?? '').not.toMatch(/^\/pay\//);
-    }
-  });
-
-  it('keeps the letterbox, the print sheet and the settle-in-place beside it', async () => {
-    const user = userEvent.setup();
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(screen.getByRole('button', { name: 'Pay $9,125.00' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
-
-    const toggle = screen.getByRole('button', { name: 'Open invoice details' });
-    await act(async () => {
-      await user.click(toggle);
-    });
-    expect(screen.getByRole('button', { name: 'Close invoice details' })).toBeInTheDocument();
+    const letterbox = screen.getByTestId('letterbox');
+    expect(letterbox).toHaveAttribute('id', 'letterbox');
+    expect(letterbox).toHaveAttribute('data-threshold-unit', 'letterbox');
+    expect(letterbox).toHaveAttribute('data-never-dim');
+    expect(letterbox).not.toHaveAttribute('data-dimmable');
   });
 });
