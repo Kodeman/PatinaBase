@@ -42,7 +42,8 @@ import {
 } from '@patina/supabase';
 import { clientEvents } from '@/lib/analytics/events';
 
-import { Settlement, type SettlementProps } from '../settlement';
+import type { LetterPayee } from '../letter-payee';
+import { Settlement, useCheckoutAttempt, type SettlementProps } from '../settlement';
 
 const optionsMock = useInvoicePaymentOptions as jest.Mock;
 const checkoutMock = useStartCheckout as jest.Mock;
@@ -103,10 +104,17 @@ function standAtTheTill({
   });
 }
 
-function renderSettlement(props: Partial<SettlementProps> = {}) {
-  return render(
-    <Settlement row={payableRow()} designerName="Nora" payeeName="Quist Interiors" {...props} />,
-  );
+const QUIST: LetterPayee = { state: 'known', name: 'Quist Interiors' };
+
+type SheetProps = Omit<SettlementProps, 'attempt'>;
+
+/** The sheet with its claim owned one level up, as the invoice row owns it. */
+function Sheet(props: SheetProps) {
+  return <Settlement attempt={useCheckoutAttempt()} {...props} />;
+}
+
+function renderSettlement(props: Partial<SheetProps> = {}) {
+  return render(<Sheet row={payableRow()} designerName="Nora" payee={QUIST} {...props} />);
 }
 
 const continueAct = (name: RegExp | string = /continue to secure payment/i) =>
@@ -143,13 +151,7 @@ describe('Settlement — the payment sheet, in place', () => {
   });
 
   it('states a past-due balance as a fact, in the same ink', () => {
-    render(
-      <Settlement
-        row={payableRow({}, new Date(2026, 8, 4))}
-        designerName="Nora"
-        payeeName="Quist Interiors"
-      />,
-    );
+    renderSettlement({ row: payableRow({}, new Date(2026, 8, 4)) });
     expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
       'Past due · 15 August 2026 · $9,125.00 paid',
     );

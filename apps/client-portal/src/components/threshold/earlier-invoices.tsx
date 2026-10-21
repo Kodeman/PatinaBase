@@ -7,9 +7,15 @@ import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { legalDate } from '@/lib/threshold/dates';
 import type { InvoiceRow, InvoiceServerHold } from '@/lib/threshold/invoice-rollup';
 
-import { useLetterPayee } from './letter-payee';
+import { useLetterPayee, type LetterPayee } from './letter-payee';
 import { sentenceStart } from './payment-method-chooser';
-import { holdSentence, Settlement } from './settlement';
+import {
+  holdSentence,
+  PayeeUnknown,
+  Settlement,
+  useCheckoutAttempt,
+  type CheckoutAttempt,
+} from './settlement';
 
 /* ── EVERY INVOICE, ON ITS OWN LINE (US-45 CPUX-02 layout) ──────────────────
    Each outstanding invoice is a row in plain view: its name, number and
@@ -19,7 +25,8 @@ import { holdSentence, Settlement } from './settlement';
    the standing facts for one in progress or under review — and opening it
    changes nothing on the server. One row is open at a time; the letterbox
    owns which, and keeps every returned hold and check acknowledgement by
-   invoice id, so closing or switching forgets none of them.
+   invoice id, so closing or switching forgets none of them. Each row owns
+   its own Checkout claim, so a claim still out survives its details closing.
 
    Payment history is the only fold, and it is ordinary content once open. */
 
@@ -35,7 +42,10 @@ export interface InvoiceListState {
   onCheckExpected: (invoiceId: string) => void;
   /** The invoice a return from the till is still unconfirmed for. */
   checkoutHeldId: string | null;
-  /** The designer, as a sentence names them mid-way ("your designer" when unknown). */
+  /**
+   * The page's designer. Never used to name a row's payee or helper: an
+   * adopted studio invoice may belong to another studio (US-45 review R5).
+   */
   designerName: string;
   /** The house this list stands in, for a project invoice's origin. */
   projectName: string | null;
@@ -143,18 +153,21 @@ function historyLines(row: InvoiceRow): RowLines {
   };
 }
 
-function outstandingLines(row: InvoiceRow, state: InvoiceListState, payee: string): RowLines {
+function outstandingLines(row: InvoiceRow, state: InvoiceListState, who: string): RowLines {
   const { invoice } = row;
   return {
     amountCents: row.balanceCents,
     ofTotal: invoice.amount_paid_cents > 0 ? `of ${rowMoney(row, invoice.total_cents, state)}` : '',
     status: dueLine(invoice.due_date, row.dueState, invoice.amount_paid_cents, row.currency),
-    note: standingNote(row, state, payee),
+    note: standingNote(row, state, who),
   };
 }
 
-/** Its number (when a title names it) and where it comes from: the studio, or the house. */
-function rowReference(row: InvoiceRow, payee: string, projectName: string | null): string {
+/**
+ * Its number (when a title names it) and where it comes from: the studio, or
+ * the house. A studio row whose payee isn't known yet names no origin.
+ */
+function rowReference(row: InvoiceRow, payee: string | null, projectName: string | null): string {
   const { invoice } = row;
   const origin = row.studio ? payee : (trimmed(invoice.project?.name) ?? projectName);
   const number = trimmed(invoice.title) ? trimmed(invoice.invoice_number) : null;
@@ -180,13 +193,25 @@ interface RowProps {
   state: InvoiceListState;
 }
 
+interface DetailsProps extends RowProps {
+  payee: LetterPayee;
+  attempt: CheckoutAttempt;
+}
+
+/** Who a row's sentences send her to: its own studio, or no one by name. */
+function helperOf(payee: LetterPayee): string {
+  return payee.name ?? 'your designer';
+}
+
 /** One invoice: always drawn in full, with its details opening in place. */
 export function InvoiceRowItem({ row, state }: RowProps) {
   const { invoice } = row;
-  const payee = useLetterPayee(invoice, state.designerName);
+  const payee = useLetterPayee(invoice);
+  const attempt = useCheckoutAttempt();
   const ids = invoiceDomIds(invoice.id);
   const open = state.openId === invoice.id;
-  const lines = row.group === 'history' ? historyLines(row) : outstandingLines(row, state, payee);
+  const lines =
+    row.group === 'history' ? historyLines(row) : outstandingLines(row, state, helperOf(payee));
 
   return (
     <li
@@ -209,7 +234,7 @@ export function InvoiceRowItem({ row, state }: RowProps) {
           {rowMoney(row, lines.amountCents, state)}
         </p>
         <p data-testid="invoice-row-reference" className="text-[15px] leading-[1.5] text-[var(--text-body)]">
-          {rowReference(row, payee, state.projectName)}
+          {rowReference(row, payee.name, state.projectName)}
         </p>
         <p className="text-right font-mono text-[15px] leading-[1.5] tabular-nums text-[var(--text-body)]">
           {lines.ofTotal}
@@ -252,7 +277,7 @@ export function InvoiceRowItem({ row, state }: RowProps) {
         hidden={!open}
         data-testid="invoice-details"
       >
-        {open && <InvoiceDetails row={row} state={state} payee={payee} />}
+        {open && <InvoiceDetails row={row} state={state} payee={payee} attempt={attempt} />}
       </div>
     </li>
   );
@@ -266,7 +291,7 @@ const DETAILS_COPY = {
   },
 } as const;
 
-function InvoiceDetails({ row, state, payee }: RowProps & { payee: string }) {
+function InvoiceDetails({ row, state, payee, attempt }: DetailsProps) {
   const { invoice } = row;
   const ids = invoiceDomIds(invoice.id);
   const label = trimmed(invoice.invoice_number) ?? trimmed(invoice.title) ?? 'this invoice';
@@ -283,7 +308,7 @@ function InvoiceDetails({ row, state, payee }: RowProps & { payee: string }) {
       </h4>
 
       {row.group === 'payable' ? (
-        <PayableDetails row={row} state={state} payee={payee} />
+        <PayableDetails row={row} state={state} payee={payee} attempt={attempt} />
       ) : (
         <StandingCard row={row} state={state} payee={payee} />
       )}
@@ -317,13 +342,14 @@ function InvoiceDetails({ row, state, payee }: RowProps & { payee: string }) {
 }
 
 /** The payment sheet, for an invoice that can be paid here. */
-function PayableDetails({ row, state, payee }: RowProps & { payee: string }) {
+function PayableDetails({ row, state, payee, attempt }: DetailsProps) {
   const id = row.invoice.id;
   return (
     <Settlement
       row={row}
-      designerName={payee}
-      payeeName={payee}
+      attempt={attempt}
+      designerName={helperOf(payee)}
+      payee={payee}
       hold={state.checkoutHeldId === id}
       serverHold={state.holds[id] ?? null}
       onHold={(hold) => state.onHold(id, hold)}
@@ -338,14 +364,19 @@ const FIGURE_TERM = 'text-[15px] text-[var(--text-body)]';
 const FIGURE_VALUE = 'm-0 font-mono tabular-nums text-[var(--text-primary)]';
 
 /** The standing facts of an invoice in progress, under review, or settled. */
-function StandingCard({ row, state, payee }: RowProps & { payee: string }) {
+function StandingCard({ row, state, payee }: RowProps & { payee: LetterPayee }) {
   const { invoice } = row;
   const inHistory = row.group === 'history';
   return (
     <div className="cp-card flex flex-col gap-3 px-4 py-4 sm:px-6">
+      <PayeeUnknown payee={payee} />
       <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[16px] leading-[1.5]">
-        <dt className={FIGURE_TERM}>Payable to</dt>
-        <dd className="m-0 text-[var(--text-primary)]">{payee}</dd>
+        {payee.name && (
+          <>
+            <dt className={FIGURE_TERM}>Payable to</dt>
+            <dd className="m-0 text-[var(--text-primary)]">{payee.name}</dd>
+          </>
+        )}
         {inHistory ? (
           <>
             <dt className={FIGURE_TERM}>Invoice total</dt>
@@ -362,7 +393,7 @@ function StandingCard({ row, state, payee }: RowProps & { payee: string }) {
       </dl>
       {!inHistory && (
         <p role="status" data-testid="invoice-standing" className="cp-note text-[16px] leading-[1.55]">
-          {standingDetail(row, state, payee)}
+          {standingDetail(row, state, helperOf(payee))}
         </p>
       )}
     </div>

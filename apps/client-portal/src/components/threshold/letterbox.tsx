@@ -85,21 +85,35 @@ function countSentence(count: number | null | undefined, order: string): string 
   return `${capitalised(countInWords(count))} invoices, ${order}.`;
 }
 
-const READ_SENTENCE: Record<'failed' | 'partial' | 'stale', string> = {
+type ReadNoticeKind = 'failed' | 'partial' | 'stale' | 'unverified';
+
+const READ_SENTENCE: Record<ReadNoticeKind, string> = {
   failed: 'We couldn’t load your invoices.',
   partial:
     'Some invoices didn’t load, so this list may be incomplete. The total is hidden until everything loads.',
   stale: 'We couldn’t refresh your invoices. These may be out of date.',
+  unverified:
+    'We couldn’t load the payment status of every invoice. An invoice whose status didn’t load can’t be paid here yet.',
 };
+
+/** A read that fell short says so; a complete one can still be missing a row's payments. */
+function noticeOf(
+  read: Exclude<InvoiceProjection['read'], 'loading'>,
+  withheld: InvoiceProjection['withheld'],
+): ReadNoticeKind | null {
+  if (read !== 'complete') return read;
+  return withheld === 'unverified' ? withheld : null;
+}
 
 function ReadNotice({
   read,
+  withheld,
   onRetry,
 }: {
   read: InvoiceProjection['read'];
+  withheld: InvoiceProjection['withheld'];
   onRetry?: () => void | Promise<unknown>;
 }) {
-  if (read === 'complete') return null;
   if (read === 'loading') {
     return (
       <p role="status" data-testid="letterbox-read-notice" data-read={read} className="t-body">
@@ -107,12 +121,14 @@ function ReadNotice({
       </p>
     );
   }
-  const sentence = READ_SENTENCE[read];
+  const notice = noticeOf(read, withheld);
+  if (!notice) return null;
+  const sentence = READ_SENTENCE[notice];
   return (
     <div
       role="status"
       data-testid="letterbox-read-notice"
-      data-read={read}
+      data-read={notice}
       className="cp-note flex flex-col items-start gap-2"
     >
       <p className="text-[16px] leading-[1.55]">{sentence}</p>
@@ -417,7 +433,7 @@ export function Letterbox({
         </p>
       )}
 
-      <ReadNotice read={projection.read} onRetry={onRefetch} />
+      <ReadNotice read={projection.read} withheld={projection.withheld} onRetry={onRefetch} />
 
       {projection.payable.length > 0 ? (
         <InvoiceGroupList

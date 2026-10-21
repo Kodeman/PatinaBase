@@ -381,6 +381,37 @@ describe('Letterbox — every invoice in plain view (US-45 CPUX-02, CPUX-03)', (
     expect(onRefetch).toHaveBeenCalledTimes(1);
   });
 
+  it('R3 · keeps a row read without its payments in view, withholds its act with the reason, and offers Retry', async () => {
+    const onRefetch = jest.fn();
+    render(
+      <Letterbox
+        invoices={[invoiceRow({ id: 'inv-u', invoice_number: 'INV-2026-050', payments: undefined })]}
+        today={TODAY}
+        onRefetch={onRefetch}
+      />,
+    );
+
+    expect(rowIds('invoices-to-pay')).toEqual(['inv-u']);
+    expect(within(row('inv-u')).getByTestId('invoice-row-amount')).toHaveTextContent('$300.00');
+
+    await userEvent.click(viewInvoice('inv-u'));
+    const settle = screen.getByRole('button', { name: /continue to secure payment/i });
+    expect(settle).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('toll_settle-unavailable-reason')).toHaveTextContent(
+      'Paying is paused until this invoice’s payment status loads.',
+    );
+    await act(async () => {
+      await userEvent.click(settle);
+    });
+    expect(checkout).not.toHaveBeenCalled();
+
+    expect(screen.getByTestId('letterbox-read-notice')).toHaveTextContent(
+      'We couldn’t load the payment status of every invoice. An invoice whose status didn’t load can’t be paid here yet.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRefetch).toHaveBeenCalledTimes(1);
+  });
+
   it('A06 · says there is nothing to pay only on a complete read, and keeps the history', () => {
     render(<Letterbox invoices={[MIXED[7]]} today={TODAY} />);
 

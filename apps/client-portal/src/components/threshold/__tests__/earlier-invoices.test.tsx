@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { useState, type ReactNode } from 'react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Invoice } from '@patina/supabase';
 
-import { invoiceProjection } from '@/lib/threshold/invoice-rollup';
+import { invoiceProjection, type InvoiceRow } from '@/lib/threshold/invoice-rollup';
 
 // ── Boundaries ──────────────────────────────────────────────────────────────
 // A row lays in the payment sheet when it opens; the sheet's hooks are the
@@ -42,6 +42,7 @@ import {
   useStartCheckout,
   useStudioIdentity,
 } from '@patina/supabase';
+import { clientEvents } from '@/lib/analytics/events';
 
 import {
   InvoiceGroupList,
@@ -93,6 +94,23 @@ function listState(overrides: Partial<InvoiceListState> = {}): InvoiceListState 
 function project(invoices: Invoice[], serverHolds = {}) {
   return invoiceProjection(invoices, { today: TODAY, read: 'complete', serverHolds });
 }
+
+/** The list with the letterbox's one-open-row rule, so closing really unmounts the details. */
+function OpenableList({ rows, initialOpenId }: { rows: readonly InvoiceRow[]; initialOpenId: string }) {
+  const [openId, setOpenId] = useState<string | null>(initialOpenId);
+  const state = listState({
+    openId,
+    onToggle: (row) => setOpenId((was) => (was === row.invoice.id ? null : row.invoice.id)),
+    onClose: () => setOpenId(null),
+  });
+  return <InvoiceGroupList testId="to-pay" heading="Invoices to pay" rows={rows} state={state} />;
+}
+
+const rowElement = (id: string) => {
+  const element = document.querySelector<HTMLElement>(`[data-testid="invoice-row"][data-invoice-id="${id}"]`);
+  if (!element) throw new Error(`no row ${id}`);
+  return element;
+};
 
 describe('Invoice rows and the payment history fold', () => {
   beforeEach(() => {
@@ -228,5 +246,103 @@ describe('Invoice rows and the payment history fold', () => {
     expect(screen.getByTestId('invoice-standing')).toHaveTextContent(
       'Until its payment status is confirmed, it can’t be paid here. Birchwood Studio can help.',
     );
+  });
+
+  it.each([
+    ['still loading', { isPending: true, isError: false, data: undefined }, 'Payee details are loading.'],
+    ['failed', { isPending: false, isError: true, data: undefined }, 'We couldn’t load who this invoice is payable to.'],
+  ])(
+    'R5 · names no other studio as payee while a studio invoice’s own identity is %s',
+    (_label, identity, sentence) => {
+      (useStudioIdentity as jest.Mock).mockReturnValue(identity);
+      const { payable } = project([
+        invoice({ project_id: null, studio_id: 'studio-b', designer_id: 'designer-b' }),
+      ]);
+      render(
+        <InvoiceGroupList
+          testId="to-pay"
+          heading="Invoices to pay"
+          rows={payable}
+          state={listState({ openId: 'inv-1', designerName: 'Ash House Studio' })}
+        />,
+      );
+
+      const row = rowElement('inv-1');
+      expect(row).not.toHaveTextContent('Ash House Studio');
+      expect(within(row).getByTestId('payee-unknown')).toHaveTextContent(sentence);
+      expect(within(row).queryByTestId('spine-toll-payee')).not.toBeInTheDocument();
+      // The till names its own merchant, so the online act is not withheld.
+      expect(within(row).getByRole('button', { name: /continue to secure payment/i })).not.toHaveAttribute(
+        'aria-disabled',
+      );
+
+      fireEvent.click(within(row).getByRole('radio', { name: /mail a check/i }));
+      expect(row).not.toHaveTextContent('Ash House Studio');
+      expect(within(row).queryByTestId('threshold-check-panel')).not.toBeInTheDocument();
+      expect(within(row).queryByRole('button', { name: 'I’ll mail a check' })).not.toBeInTheDocument();
+      expect(within(row).getByTestId('threshold-check-unavailable')).toHaveTextContent(
+        'We can’t give mailing details for a check until we know who this invoice is payable to.',
+      );
+    },
+  );
+
+  describe('R7 · a Checkout claim outlives the details it was started from', () => {
+    const originalLocation = window.location;
+    let finish: (value: unknown) => void;
+    let mutateAsync: jest.Mock;
+
+    beforeEach(() => {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: { href: 'https://client.test/projects/p1' },
+      });
+      mutateAsync = jest.fn().mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+      (useStartCheckout as jest.Mock).mockReturnValue({ mutateAsync, isPending: false });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+    });
+
+    const continueAct = () => screen.getByRole('button', { name: /continue to secure payment/i });
+    const late = { url: 'https://checkout.stripe.test/late', amount_cents: 40_000, surcharge_cents: 500 };
+
+    it('starts one checkout across closing and reopening, and a late answer redirects nowhere', async () => {
+      render(<OpenableList rows={project([invoice()]).payable} initialOpenId="inv-1" />);
+
+      fireEvent.click(continueAct());
+      fireEvent.click(screen.getByRole('button', { name: 'Close payment details' }));
+      fireEvent.click(screen.getByRole('button', { name: 'View invoice' }));
+      fireEvent.click(continueAct());
+      expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        finish(late);
+      });
+      expect(window.location.href).toBe('https://client.test/projects/p1');
+      expect(clientEvents.paymentStarted).not.toHaveBeenCalled();
+
+      // Once the late answer is in, the open sheet can claim its own session.
+      mutateAsync.mockResolvedValueOnce({ ...late, url: 'https://checkout.stripe.test/fresh' });
+      await act(async () => {
+        fireEvent.click(continueAct());
+      });
+      expect(mutateAsync).toHaveBeenCalledTimes(2);
+      expect(window.location.href).toBe('https://checkout.stripe.test/fresh');
+    });
+
+    it('sends no late answer to the till after another row was opened', async () => {
+      const rows = project([invoice(), invoice({ id: 'inv-2', invoice_number: 'INV-2026-002' })]).payable;
+      render(<OpenableList rows={rows} initialOpenId="inv-1" />);
+
+      fireEvent.click(continueAct());
+      fireEvent.click(within(rowElement('inv-2')).getByRole('button', { name: 'View invoice' }));
+      await act(async () => {
+        finish(late);
+      });
+
+      expect(window.location.href).toBe('https://client.test/projects/p1');
+      expect(clientEvents.paymentStarted).not.toHaveBeenCalled();
+    });
   });
 });
