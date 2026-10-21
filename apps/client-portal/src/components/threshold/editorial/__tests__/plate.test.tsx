@@ -35,24 +35,41 @@ const fallback = {
   category: "furniture",
 };
 
-function stubImageState(complete: boolean, naturalWidth: number) {
+/** The picture's state as the browser reports it when React first mounts. */
+function stubImageState(state: {
+  complete: boolean;
+  naturalWidth: number;
+  currentSrc: string;
+}) {
   const proto = HTMLImageElement.prototype;
-  const restore = [
-    ["complete", Object.getOwnPropertyDescriptor(proto, "complete")],
-    ["naturalWidth", Object.getOwnPropertyDescriptor(proto, "naturalWidth")],
-  ] as const;
-  Object.defineProperty(proto, "complete", {
-    configurable: true,
-    get: () => complete,
-  });
-  Object.defineProperty(proto, "naturalWidth", {
-    configurable: true,
-    get: () => naturalWidth,
-  });
+  const keys = ["complete", "naturalWidth", "currentSrc"] as const;
+  const saved = keys.map(
+    (key) => [key, Object.getOwnPropertyDescriptor(proto, key)] as const,
+  );
+  for (const key of keys) {
+    Object.defineProperty(proto, key, {
+      configurable: true,
+      get: () => state[key],
+    });
+  }
   return () =>
-    restore.forEach(
-      ([key, desc]) => desc && Object.defineProperty(proto, key, desc),
+    saved.forEach(([key, desc]) =>
+      desc
+        ? Object.defineProperty(proto, key, desc)
+        : delete (proto as unknown as Record<string, unknown>)[key],
     );
+}
+
+function renderHero() {
+  return render(
+    <HeroPlate
+      scopeId={SCOPE}
+      asset={hero}
+      eyebrow="01 · House"
+      headline="The house is on its way"
+      fallback={fallback}
+    />,
+  );
 }
 
 describe("Plate pre-hydration failure", () => {
@@ -60,16 +77,12 @@ describe("Plate pre-hydration failure", () => {
   afterEach(() => restore());
 
   it("renders the silhouette and says so when the eager picture already failed before mount", () => {
-    restore = stubImageState(true, 0);
-    const { container } = render(
-      <HeroPlate
-        scopeId={SCOPE}
-        asset={hero}
-        eyebrow="01 · House"
-        headline="The house is on its way"
-        fallback={fallback}
-      />,
-    );
+    restore = stubImageState({
+      complete: true,
+      naturalWidth: 0,
+      currentSrc: "https://portal.test/plates/project-1/a/cover_phone-640.avif",
+    });
+    const { container } = renderHero();
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getByTestId("piece-silhouette")).toHaveAttribute(
       "data-silhouette",
@@ -82,16 +95,23 @@ describe("Plate pre-hydration failure", () => {
   });
 
   it("keeps a picture that already loaded before mount", () => {
-    restore = stubImageState(true, 2048);
-    const { container } = render(
-      <HeroPlate
-        scopeId={SCOPE}
-        asset={hero}
-        eyebrow="01 · House"
-        headline="The house is on its way"
-        fallback={fallback}
-      />,
-    );
+    restore = stubImageState({
+      complete: true,
+      naturalWidth: 2048,
+      currentSrc: "https://portal.test/plates/project-1/a/wide-2048.avif",
+    });
+    const { container } = renderHero();
+    expect(container.querySelector("img")).not.toBeNull();
+    expect(screen.queryByText("Picture did not load.")).toBeNull();
+  });
+
+  it("keeps a lazy picture whose load has not started, though it reads complete", () => {
+    restore = stubImageState({
+      complete: true,
+      naturalWidth: 0,
+      currentSrc: "",
+    });
+    const { container } = renderHero();
     expect(container.querySelector("img")).not.toBeNull();
     expect(screen.queryByText("Picture did not load.")).toBeNull();
   });

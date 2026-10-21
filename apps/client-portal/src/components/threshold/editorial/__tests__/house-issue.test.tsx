@@ -380,7 +380,7 @@ describe("the issue", () => {
 
   it("opens a room with at most three revealed children: head, plate, pieces; silhouettes for pieces with no photograph", () => {
     const issue = houseIssue(editorial([SCENE, WHITE]));
-    const chapters = editionChapters(issue, ["room-living"]);
+    const chapters = editionChapters(issue, ["room-living"])!;
     const { container } = render(
       <RoomOpening issue={issue} chapters={chapters} roomId="living" />,
     );
@@ -397,9 +397,11 @@ describe("the issue", () => {
     expect(pieces[1].querySelector("img, source")).toBeNull();
   });
 
-  it("opens nothing with the edition off", () => {
+  it("opens nothing for a room the issue does not hold", () => {
+    const issue = houseIssue(editorial([SCENE, WHITE]));
+    const chapters = editionChapters(issue, ["room-living"])!;
     const { container } = render(
-      <RoomOpening issue={null} chapters={null} roomId="living" />,
+      <RoomOpening issue={issue} chapters={chapters} roomId="study" />,
     );
     expect(container).toBeEmptyDOMElement();
   });

@@ -1,6 +1,12 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, type ReactNode } from "react";
+import {
+  Fragment,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from "react";
 
 import {
   GOODS_JOURNEY_STAGES,
@@ -254,6 +260,12 @@ const DUE_WORDS: Record<
     `${money(row.balanceCents, row.currency)} is due on ${dayMonth(row.dueDate)}.`,
 };
 
+/** What the first payable invoice says: when it is due, or that it is ready. */
+function payableWords(first: InvoiceRow): string {
+  if (first.dueState && first.dueDate) return DUE_WORDS[first.dueState](first);
+  return `${money(first.balanceCents, first.currency)} is ready to pay.`;
+}
+
 /** Row 1, the letterbox: the first invoice she can pay, by its due date. */
 export function letterboxRow(
   invoices: InvoiceProjection | null,
@@ -262,13 +274,7 @@ export function letterboxRow(
   if (invoices.read === "failed")
     return { sentence: "Your invoices could not be read just now." };
   const first = invoices.payable[0];
-  if (first) {
-    const words =
-      first.dueState && first.dueDate
-        ? DUE_WORDS[first.dueState](first)
-        : `${money(first.balanceCents, first.currency)} is ready to pay.`;
-    return { sentence: words, amountAct: true };
-  }
+  if (first) return { sentence: payableWords(first), amountAct: true };
   if (invoices.processing.length > 0)
     return { sentence: "Your payment is on its way to the studio." };
   return { sentence: null };
@@ -281,6 +287,25 @@ export interface ApprovalsRowInput {
   readFailed: boolean;
 }
 
+const GATE_WORDS: Record<"door" | "wall", string> = {
+  door: "A document is waiting for your signature.",
+  wall: "Finished work is waiting for your review.",
+};
+
+function oneAskWords(ask: { artifactTitle?: string | null }): string {
+  const title = ask.artifactTitle?.trim();
+  return title
+    ? `Waiting for your approval: ${title}.`
+    : "One approval is waiting for you.";
+}
+
+function askWords(asks: ApprovalsRowInput["asks"]): string | null {
+  if (asks.length === 1) return oneAskWords(asks[0]);
+  if (asks.length > 1)
+    return `${capitalise(countInWords(asks.length))} approvals are waiting for you.`;
+  return null;
+}
+
 /** Row 2, approvals: what waits on her name, in words. */
 export function approvalsRow({
   asks,
@@ -289,23 +314,22 @@ export function approvalsRow({
 }: ApprovalsRowInput): StandingRowsProps["approvals"] {
   if (readFailed)
     return { sentence: "The approvals could not be read just now." };
-  if (gate === "door")
-    return { sentence: "A document is waiting for your signature." };
-  if (gate === "wall")
-    return { sentence: "Finished work is waiting for your review." };
-  if (asks.length === 1) {
-    const title = asks[0].artifactTitle?.trim();
-    return {
-      sentence: title
-        ? `Waiting for your approval: ${title}.`
-        : "One approval is waiting for you.",
-    };
-  }
-  if (asks.length > 1)
-    return {
-      sentence: `${capitalise(countInWords(asks.length))} approvals are waiting for you.`,
-    };
-  return { sentence: null };
+  if (gate) return { sentence: GATE_WORDS[gate] };
+  return { sentence: askWords(asks) };
+}
+
+type OutstandingTotals = NonNullable<InvoiceProjection["outstandingTotals"]>;
+
+/** What is open, counted in words, with one currency's total. */
+function openWords(totals: OutstandingTotals): string | null {
+  const count = totals.reduce((n, t) => n + t.invoiceCount, 0);
+  if (count === 0) return null;
+  const noun =
+    count === 1
+      ? "One invoice is open"
+      : `${capitalise(countInWords(count))} invoices are open`;
+  if (totals.length !== 1) return `${noun}.`;
+  return `${noun}, ${money(totals[0].cents, totals[0].currency)} in all.`;
 }
 
 /** Row 3, the ledger: what is open, in one currency's words. */
@@ -313,45 +337,37 @@ export function ledgerRow(
   invoices: InvoiceProjection | null,
 ): StandingRowsProps["ledger"] {
   if (!invoices) return { sentence: null };
-  if (invoices.withheld || !invoices.outstandingTotals) {
+  const totals = invoices.withheld ? null : invoices.outstandingTotals;
+  if (!totals)
     return {
       sentence: invoices.allClear ? null : "Your invoices are being checked.",
     };
-  }
-  const totals = invoices.outstandingTotals;
-  const count = totals.reduce((n, t) => n + t.invoiceCount, 0);
-  if (count === 0) return { sentence: null };
-  const noun =
-    count === 1
-      ? "One invoice is open"
-      : `${capitalise(countInWords(count))} invoices are open`;
-  const only = totals.length === 1 ? totals[0] : null;
-  return {
-    sentence: only
-      ? `${noun}, ${money(only.cents, only.currency)} in all.`
-      : `${noun}.`,
-  };
+  return { sentence: openWords(totals) };
 }
 
 // ── the arrival: hero or drawn cover, then the standing rows ─────────────────
 
 /**
- * Full bleed out of the page's measure. The width is read from the root's
- * client width (never 100vw, which counts a classic scrollbar and overflows).
- * At the phone the 16px gutter is put back so `.ed-hero`'s own −16px lands on
- * the edge. A failed hero is drawn at the hero's geometry, not a square.
+ * Full bleed out of the page's measure. Once hydrated the width is read from
+ * the root's client width (100vw counts a classic scrollbar and overflows);
+ * the server paint uses 100vw, exact at the phone, so the hero never jumps.
+ * The width is set in a layout effect so the paper tab's own measure (a
+ * child's effect) already sees the bled width. At the phone the 16px gutter is
+ * put back so `.ed-hero`'s own −16px lands on the edge. A failed hero is drawn
+ * at the hero's geometry, not a square (`:first-child` is the frame; an
+ * underscore in a Tailwind arbitrary variant would read as a space).
  */
 const BLEED = [
-  "[margin-inline:calc(50%-var(--hi-page-w,100%)/2)]",
+  "[margin-inline:calc(50%-var(--hi-page-w,100vw)/2)]",
   "max-[600px]:px-4",
-  "[&_.ed-silhouette.ed-hero>.ed-plate__frame]:aspect-auto",
-  "[&_.ed-silhouette.ed-hero>.ed-plate__frame]:h-[340px]",
-  "min-[601px]:[&_.ed-silhouette.ed-hero>.ed-plate__frame]:h-[min(72svh,648px)]",
+  "[&_.ed-silhouette.ed-hero>:first-child]:aspect-[39/34]",
+  "min-[601px]:[&_.ed-silhouette.ed-hero>:first-child]:aspect-auto",
+  "min-[601px]:[&_.ed-silhouette.ed-hero>:first-child]:h-[min(72svh,648px)]",
 ].join(" ");
 
 function Bleed({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const measure = () =>
@@ -534,19 +550,19 @@ export interface HouseIssueHeadProps {
  * the page's own top padding so the band starts at the page's top edge.
  */
 const HEAD = [
-  "-mt-10 pt-4",
-  "min-[601px]:grid min-[601px]:grid-cols-[minmax(240px,1fr)_minmax(0,auto)] min-[601px]:gap-x-12",
+  "-mt-10 pt-2 min-[601px]:pt-4",
+  "min-[601px]:grid min-[601px]:grid-cols-[auto_minmax(0,1fr)] min-[601px]:gap-x-8",
 ].join(" ");
 const AT_DESK = {
   letterhead:
-    "pb-2 min-[601px]:col-start-1 min-[601px]:row-start-1 min-[601px]:row-span-2 min-[601px]:pb-0",
+    "pb-1 min-[601px]:col-start-1 min-[601px]:row-start-1 min-[601px]:row-span-2 min-[601px]:pb-0",
   purpose:
     "m-0 max-w-[56ch] text-[16px] leading-[22px] text-[var(--text-primary)] min-[601px]:col-start-2 min-[601px]:row-start-1 min-[601px]:self-end",
   links:
     "min-[601px]:col-start-2 min-[601px]:row-start-2 min-[601px]:[&>nav]:!mt-0",
   rule: "hidden min-[601px]:col-span-2 min-[601px]:row-start-3 min-[601px]:mt-2 min-[601px]:block min-[601px]:h-px min-[601px]:bg-[var(--border-default)]",
   cover: "min-[601px]:col-span-2 min-[601px]:row-start-4 min-[601px]:mt-2",
-  rows: "min-[601px]:col-span-2 min-[601px]:row-start-5",
+  rows: "[&>ul]:mt-0 min-[601px]:col-span-2 min-[601px]:row-start-5",
 } as const;
 
 function EditionHead(props: HouseIssueHeadProps & { issue: HouseIssue }) {
@@ -703,11 +719,6 @@ function Pieces({
 }
 
 /**
- * A room's opening, standing just above its RoomBand: the chapter head, the
- * room plate (or the one held plate), and the room's pieces. Three children,
- * so the reveal moves all of it.
- */
-/**
  * A RoomBand with its opening above it under the edition; the band itself,
  * untouched, with the edition off. The plates stand above the band, never
  * inside it: the band is a dimmable unit and a plate never dims.
@@ -718,7 +729,7 @@ export function withRoomOpening(
   roomId: string,
   band: ReactNode,
 ): ReactNode {
-  if (!issue) return band;
+  if (!issue || !chapters) return band;
   return (
     <Fragment key={roomId}>
       <RoomOpening issue={issue} chapters={chapters} roomId={roomId} />
@@ -727,19 +738,36 @@ export function withRoomOpening(
   );
 }
 
+function roomParts(
+  issue: HouseIssue,
+  chapters: ReadonlyMap<string, Chapter>,
+  roomId: string,
+) {
+  const room = issue.editorial.rooms.find((r) => r.id === roomId);
+  if (!room) return null;
+  const chapter = chapters.get(room.anchor);
+  const choice = issue.rooms.get(roomId);
+  if (!chapter || !choice) return null;
+  return { room, chapter, choice };
+}
+
+/**
+ * A room's opening, standing just above its RoomBand: the chapter head, the
+ * room plate (or the one held plate), and the room's pieces. Three children,
+ * so the reveal moves all of it.
+ */
 export function RoomOpening({
   issue,
   chapters,
   roomId,
 }: {
-  issue: HouseIssue | null;
-  chapters: ReadonlyMap<string, Chapter> | null;
+  issue: HouseIssue;
+  chapters: ReadonlyMap<string, Chapter>;
   roomId: string;
 }) {
-  const choice = issue?.rooms.get(roomId);
-  const room = issue?.editorial.rooms.find((r) => r.id === roomId);
-  const chapter = room ? chapters?.get(room.anchor) : undefined;
-  if (!issue || !choice || !room || !chapter) return null;
+  const parts = roomParts(issue, chapters, roomId);
+  if (!parts) return null;
+  const { room, chapter, choice } = parts;
   const swatches = issue.swatchRoomId === roomId ? issue.editorial.palette : [];
   return (
     <Reveal className="mt-12">

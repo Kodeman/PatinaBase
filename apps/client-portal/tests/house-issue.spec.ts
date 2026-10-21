@@ -104,7 +104,8 @@ test.describe('The House Issue', { tag: '@edition' }, () => {
     console.log(`[measured-1440] ${info.annotations.at(-1)!.description}`);
     expect(Math.abs(hero.width - 1440)).toBeLessThanOrEqual(1);
     expect(hero.height).toBeLessThanOrEqual(648);
-    for (const row of rows) expect(row.bottom).toBeLessThanOrEqual(880);
+    // R-v2-2: the standing rows' TOP is within 880 page-relative (fails above 900).
+    for (const row of rows) expect(row.top).toBeLessThanOrEqual(880);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
   });
 
@@ -131,6 +132,8 @@ test.describe('The House Issue', { tag: '@edition' }, () => {
     await expect(sofa.locator('img, source')).toHaveCount(0);
     // The sideboard's plate exists but cannot be served here: it falls back too.
     const sideboard = pieces.filter({ hasText: ELM.sideboard });
+    // A piece plate is lazy: it asks for its picture as it nears the screen.
+    await sideboard.scrollIntoViewIfNeeded();
     await expect(sideboard.locator('.plate-note')).toHaveText('Picture did not load.', { timeout: 30000 });
     // Every plate request named a plate the house holds; none was for the sofa.
     expect(plates.length).toBeGreaterThan(0);

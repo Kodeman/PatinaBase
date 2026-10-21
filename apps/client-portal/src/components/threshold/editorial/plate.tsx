@@ -100,9 +100,10 @@ function PlatePictureEl({
   const priority = Boolean(props.priority);
   const imgRef = useRef<HTMLImageElement>(null);
   // An eager (preloaded) picture can fail before hydration attaches onError; catch that on mount.
+  // `currentSrc` is empty for a lazy picture whose load has not started, which can also read complete.
   useEffect(() => {
     const img = imgRef.current;
-    if (img && img.complete && img.naturalWidth === 0) onError();
+    if (img && img.complete && img.naturalWidth === 0 && img.currentSrc) onError();
   }, [onError]);
   return (
     <picture>
