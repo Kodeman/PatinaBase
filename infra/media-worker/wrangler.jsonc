@@ -34,10 +34,12 @@
   },
 
   // R2 bindings — the Worker owns all object I/O (account-native view). The
-  // container is pure compute and needs no credentials.
+  // container is pure compute and needs no credentials. PLATES is the private
+  // client-plate bucket written by POST /plates/ingest (never public).
   "r2_buckets": [
     { "binding": "RAW", "bucket_name": "patina-raw" },
-    { "binding": "PROCESSED", "bucket_name": "patina-processed" }
+    { "binding": "PROCESSED", "bucket_name": "patina-processed" },
+    { "binding": "PLATES", "bucket_name": "patina-plates" }
   ],
 
   "observability": { "enabled": true },
@@ -68,7 +70,8 @@
       },
       "r2_buckets": [
         { "binding": "RAW", "bucket_name": "patina-raw-staging" },
-        { "binding": "PROCESSED", "bucket_name": "patina-processed-staging" }
+        { "binding": "PROCESSED", "bucket_name": "patina-processed-staging" },
+        { "binding": "PLATES", "bucket_name": "patina-plates-staging" }
       ]
     }
   }

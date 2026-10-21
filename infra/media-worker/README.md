@@ -30,6 +30,38 @@ renditions (base64) + metadata. This sidesteps the R2-jurisdiction gotcha below.
 - Other types ack without processing (3D/snapshot/virus are stubs in the source
   service; `media-bulk` is DB-heavy and stays in NestJS until phase 1).
 
+## Client plate lane (`POST /plates/ingest`, US-49)
+The `client-plate-copy` edge function posts
+`{projectId, requestId, sourceKind, sourceUrl, focal?, subjectBox?}` (focal and
+subject box normalised 0–1) with `Authorization: Bearer <PLATE_INGEST_SECRET>`.
+The Worker fetches the source once (10 s, `image/*` only, ≤ 20 MB), hashes it,
+and runs container op `plate_ingest` (`container/plates.mjs` holds the crop
+geometry, `server.mjs` the Sharp I/O): EXIF-orient, ground (`white` | `drawing` |
+`scene`), dominant colour, a ≤ 800-char WebP LQIP, and every PLAN crop the source
+meets (`wide`, `cover_phone`, `tall`, `wide32`, `pair`, `piece`; sheets and boards
+also get an uncropped `sheet` / `board` plate) as AVIF q50 + WebP q72. Objects land
+in the **private** `PLATES` bucket:
+
+```
+plates/{projectId}/{sha256}/original.{format}
+plates/{projectId}/{sha256}/{crop}-{width}.{avif|webp}
+plates/{projectId}/{sha256}/crops.json   # written last; the response record + focal/subjectBox
+```
+
+The response is `{sha256, width, height, format, ground, dominantHex, lqip,
+originalKey, crops}` with `crops = {<crop>: {rect: [x, y, w, h] in source px,
+widths}}`; errors are `{error}` with a 4xx/5xx status. Re-ingesting the same bytes
+with the same focal/subject box returns the stored `crops.json` without
+reprocessing. Nothing in the bucket is public; the client portal serves plates
+through its own `PLATES` read binding after a membership check.
+
+- **Bucket**: `patina-plates` (prod) / `patina-plates-staging` are created by the
+  US-49 Phase 1 deploy ticket (`wrangler r2 bucket create patina-plates`) before
+  this Worker is deployed with the binding.
+- **Secret**: `PLATE_INGEST_SECRET` is a Worker secret
+  (`wrangler secret put PLATE_INGEST_SECRET`), never a `vars` entry; the same value
+  is set on the `client-plate-copy` edge function. With it unset, every ingest is 401.
+
 ## Deploy
 ```bash
 npm install

@@ -11,6 +11,16 @@
 import { createServer } from 'node:http';
 import sharp from 'sharp';
 import { encode as blurhashEncode } from 'blurhash';
+import {
+  LQIP_WIDTH,
+  borderLuminance,
+  classifyGround,
+  fitLqip,
+  outputJobs,
+  planCrops,
+  runnerFor,
+  toHex,
+} from './plates.mjs';
 
 const PORT = Number(process.env.PORT || 8080);
 
@@ -164,6 +174,62 @@ async function runJob(job, imageBuffer) {
   return { success: true, jobId: job.jobId, assetId, results };
 }
 
+// Client plate lane (POST /plates/ingest on the Worker): EXIF-orient and decode
+// once, classify the ground, then encode every planned crop × width × format.
+// Geometry lives in plates.mjs; outputs travel as base64 like renditions. A
+// Sharp error throws to the /process handler, which answers 500 {error}.
+async function encodePlate(data, raw, out) {
+  const [left, top, width, height] = out.rect;
+  const bytes = await sharp(data, raw)
+    .extract({ left, top, width, height })
+    .resize({ width: out.width, withoutEnlargement: true })
+    .toFormat(out.format, { quality: out.quality })
+    .toBuffer();
+  return { key: out.key, contentType: out.contentType, dataB64: bytes.toString('base64') };
+}
+
+// Sequential, so one crop pipeline holds memory at a time.
+function encodePlates(data, raw, crops) {
+  return outputJobs(crops).reduce(
+    async (done, out) => [...(await done), await encodePlate(data, raw, out)],
+    Promise.resolve([]),
+  );
+}
+
+async function runPlateIngest(job, imageBuffer) {
+  const { format } = await sharp(imageBuffer).metadata();
+  const { data, info } = await sharp(imageBuffer)
+    .rotate()
+    .flatten({ background: '#ffffff' })
+    .toColourspace('srgb')
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const raw = { raw: { width: info.width, height: info.height, channels: info.channels } };
+  const ground = classifyGround(borderLuminance(data, info.width, info.height, info.channels));
+  const { dominant } = await sharp(data, raw).stats();
+  const crops = planCrops({
+    width: info.width,
+    height: info.height,
+    ground,
+    sourceKind: job.sourceKind,
+    focal: job.focal,
+    subjectBox: job.subjectBox,
+  });
+  return {
+    success: true,
+    width: info.width,
+    height: info.height,
+    format,
+    ground,
+    dominantHex: toHex(dominant),
+    lqip: await fitLqip((quality) => sharp(data, raw).resize({ width: LQIP_WIDTH }).webp({ quality }).toBuffer()),
+    crops,
+    outputs: await encodePlates(data, raw, crops),
+  };
+}
+
+const RUNNERS = { plateIngest: runPlateIngest, mediaJob: runJob };
+
 const server = createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -177,7 +243,8 @@ const server = createServer((req, res) => {
     req.on('end', async () => {
       try {
         const job = JSON.parse(Buffer.from(String(jobHeader || ''), 'base64').toString('utf8'));
-        const result = await runJob(job, Buffer.concat(chunks));
+        const body = Buffer.concat(chunks);
+        const result = await runnerFor(job, RUNNERS)(job, body);
         res.writeHead(result.success ? 200 : 422, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
       } catch (err) {

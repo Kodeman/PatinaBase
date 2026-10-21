@@ -1,4 +1,5 @@
 import { Container, getContainer } from '@cloudflare/containers';
+import { routePlates } from './plates';
 
 // Job message shape — mirrors the media service's JobPayload + BullMQ job.data.
 // The NestJS producer (Milestone 2) sends this to the media-jobs queue instead
@@ -30,6 +31,9 @@ interface Env {
   // Required signed NestJS ledger callback (POST {jobId,state,result}).
   COMPLETE_CALLBACK_URL: string;
   COMPLETE_CALLBACK_SECRET: string;
+  PLATES: R2Bucket; // patina-plates (private client plates)
+  // Bearer secret on POST /plates/ingest, shared with the client-plate-copy edge function.
+  PLATE_INGEST_SECRET: string;
 }
 
 // Job types the container can run today. 3D / snapshot / virus scan are stubs in
@@ -165,7 +169,12 @@ export default {
       await env.MEDIA_JOBS.send(job);
       return Response.json({ queued: true, jobId: job.jobId }, { status: 202 });
     }
-    return new Response('not found', { status: 404 });
+    // POST /plates/ingest, else 404.
+    return routePlates(request, env, {
+      fetchSource: (sourceUrl, init) => fetch(sourceUrl, init),
+      // One named lane instance stays warm (sleepAfter) across the per-minute copy runs.
+      processPlate: (req) => getContainer(env.MEDIA_PROCESSOR, 'plates').fetch(req),
+    });
   },
 
   // Queue consumer. media-jobs → container; unported types + errors handled per message.
