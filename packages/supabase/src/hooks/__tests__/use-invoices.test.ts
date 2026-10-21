@@ -677,6 +677,48 @@ describe('useClientInvoices', () => {
       { id: 'studio-invoice-a', project_id: null, title: 'Consultation' },
     ]);
   });
+
+  // CPUX-02 read parity: a studio invoice must carry the same payment evidence
+  // as a project invoice, or a payment in flight reads as none.
+  it('reads payments with the same shape as the project list, under its own unchanged keys', async () => {
+    const order = vi.fn().mockResolvedValue({ data: [], error: null });
+    const eq = vi.fn(() => ({ order }));
+    const select = vi.fn((_selection: string) => ({ order, eq }));
+    supabaseClient.from.mockReturnValue({ select });
+
+    const client = useClientInvoices() as unknown as { queryKey: unknown[]; queryFn: () => Promise<unknown> };
+    const project = useProjectInvoices('project-a') as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown>;
+    };
+    await client.queryFn();
+    await project.queryFn();
+
+    const [clientSelection] = select.mock.calls[0];
+    const [projectSelection] = select.mock.calls[1];
+    expect(clientSelection).toContain('payments:invoice_payments(*)');
+    expect(clientSelection).toBe(projectSelection);
+    expect(eq).toHaveBeenCalledTimes(1);
+    expect(eq).toHaveBeenCalledWith('project_id', 'project-a');
+    expect(client.queryKey).toEqual(['invoices', 'client']);
+    expect(project.queryKey).toEqual(['invoices', 'project', 'project-a']);
+    expect((useInvoice('invoice-a') as unknown as { queryKey: unknown[] }).queryKey).toEqual([
+      'invoices',
+      'invoice-a',
+    ]);
+    expect(
+      (useInvoicePaymentOptions('invoice-a') as unknown as { queryKey: unknown[] }).queryKey,
+    ).toEqual(['invoice-payment-options', 'invoice-a']);
+  });
+
+  it('throws a failed household read instead of returning an empty list', async () => {
+    const failure = { message: 'permission denied', code: '42501' };
+    const order = vi.fn().mockResolvedValue({ data: null, error: failure });
+    supabaseClient.from.mockReturnValue({ select: vi.fn(() => ({ order })) });
+
+    const config = useClientInvoices() as unknown as { queryFn: () => Promise<unknown> };
+    await expect(config.queryFn()).rejects.toBe(failure);
+  });
 });
 
 describe('useInvoice line selections', () => {

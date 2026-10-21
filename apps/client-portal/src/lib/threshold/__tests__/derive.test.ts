@@ -64,6 +64,8 @@ function invoice(overrides: Partial<Invoice> & { id: string }): Invoice {
     due_date: null,
     total_cents: 0,
     amount_paid_cents: 0,
+    currency: 'USD',
+    payments: [],
     updated_at: '2026-08-01T00:00:00.000Z',
     ...overrides,
   } as Invoice;
@@ -425,7 +427,13 @@ describe('deriveThreshold — the ledger and the letterbox', () => {
         invoices: [
           invoice({ id: 'inv-draft', status: 'draft', due_date: '2026-07-01', total_cents: 100 }),
           invoice({ id: 'inv-void', status: 'void', due_date: '2026-07-02', total_cents: 100 }),
-          invoice({ id: 'inv-paid', status: 'paid', due_date: '2026-07-03', total_cents: 100 }),
+          invoice({
+            id: 'inv-paid',
+            status: 'paid',
+            due_date: '2026-07-03',
+            total_cents: 100,
+            amount_paid_cents: 100,
+          }),
           soonest,
         ],
       }),
@@ -641,7 +649,9 @@ describe('deriveThreshold — what moved since the client last read', () => {
       input({
         previousReadAt: PREVIOUS,
         notes: [note({ id: 'n-1', sentAt: AFTER })],
-        invoices: [invoice({ id: 'inv-4', due_date: '2026-08-15', updated_at: AFTER })],
+        invoices: [
+          invoice({ id: 'inv-4', due_date: '2026-08-15', total_cents: 100, updated_at: AFTER }),
+        ],
         proposals: {
           signatureGates: [proposal({ id: 'p-1', sentAt: null, updatedAt: AFTER })],
           instrumentReceipts: [],
@@ -1105,6 +1115,77 @@ describe('deriveThreshold — what is owed across every open invoice', () => {
 
     expect(model.ledger.owedDueDate).toBeNull();
     expect(model.ledger.owedDatedCount).toBe(0);
+  });
+});
+
+describe('deriveThreshold — the ledger and letterbox read the one invoice projection (CPUX-02)', () => {
+  const payable = invoice({ id: 'inv-pay', due_date: '2026-09-01', total_cents: 50_000 });
+  const flying = invoice({
+    id: 'inv-flying',
+    due_date: '2026-08-10',
+    total_cents: 20_000,
+    payments: [
+      {
+        id: 'pay-1',
+        invoice_id: 'inv-flying',
+        status: 'pending',
+        stripe_payment_intent_id: 'pi_test_1',
+      } as NonNullable<Invoice['payments']>[number],
+    ],
+  });
+  const zero = invoice({ id: 'inv-zero', due_date: '2026-08-01', total_cents: 0 });
+
+  it('exposes the projection on the model', () => {
+    const model = deriveThreshold(input({ invoices: [payable, flying, zero] }));
+    expect(model.invoices.payable.map((row) => row.invoice.id)).toEqual(['inv-pay']);
+    expect(model.invoices.processing.map((row) => row.invoice.id)).toEqual(['inv-flying']);
+    expect(model.invoices.history.map((row) => row.invoice.id)).toEqual(['inv-zero']);
+    expect(model.invoices.read).toBe('complete');
+  });
+
+  it('never stands a payment in progress or a zero balance in the slot, but owes the one in progress', () => {
+    const model = deriveThreshold(input({ invoices: [zero, flying, payable] }));
+    expect(model.letterbox?.id).toBe('inv-pay');
+    expect(model.ledger.owedCents).toBe(70_000);
+    expect(model.ledger.owedCurrency).toBe('USD');
+    expect(model.ledger.owedInvoiceCount).toBe(2);
+    expect(model.ledger.owedDueDate).toBe('2026-08-10');
+  });
+
+  it('leaves the slot empty when nothing is payable, without claiming nothing is owed', () => {
+    const model = deriveThreshold(input({ invoices: [flying] }));
+    expect(model.letterbox).toBeNull();
+    expect(model.ledger.owedCents).toBe(20_000);
+  });
+
+  it('prints no single owed figure across two currencies', () => {
+    const euro = invoice({ id: 'inv-eur', currency: 'EUR', due_date: '2026-08-20', total_cents: 30_000 });
+    const model = deriveThreshold(input({ invoices: [payable, euro] }));
+    expect(model.ledger.owedCents).toBeNull();
+    expect(model.ledger.owedCurrency).toBeNull();
+    expect(model.ledger.paidCents).toBeNull();
+    expect(model.invoices.outstandingTotals).toEqual([
+      { currency: 'EUR', cents: 30_000, invoiceCount: 1 },
+      { currency: 'USD', cents: 50_000, invoiceCount: 1 },
+    ]);
+  });
+
+  it('withholds the owed figure when the invoice reads are incomplete', () => {
+    const model = deriveThreshold(input({ invoices: [payable], invoiceRead: 'partial' }));
+    expect(model.letterbox?.id).toBe('inv-pay');
+    expect(model.ledger.owedCents).toBeNull();
+    expect(model.invoices.withheld).toBe('incomplete');
+  });
+
+  it('moves an invoice the checkout boundary held out of the slot', () => {
+    const model = deriveThreshold(
+      input({
+        invoices: [payable],
+        invoiceHolds: { 'inv-pay': 'payment_reconciliation_required' },
+      }),
+    );
+    expect(model.letterbox).toBeNull();
+    expect(model.invoices.review.map((row) => row.invoice.id)).toEqual(['inv-pay']);
   });
 });
 

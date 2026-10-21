@@ -458,6 +458,11 @@ function invalidateInvoiceLinkFact(queryClient: QueryClient, invoiceId?: string 
 // metadata is scrubbed at the database boundary by 00822.
 const INVOICE_LINE_COLUMNS = 'id, invoice_id, kind, milestone_id, ffe_item_id, billing_stage, billing_stage_pct, description, quantity, unit_amount_cents, amount_cents, metadata, sort_order, created_at';
 
+// One read shape for the project and household lists, so a studio invoice
+// carries the same payment evidence as a project invoice. A row read without
+// its payments cannot say whether a payment is in flight (CPUX-02).
+const INVOICE_LIST_SELECT = `*, line_items:invoice_line_items(${INVOICE_LINE_COLUMNS}), payments:invoice_payments(*)`;
+
 /**
  * Fetches invoices for the authenticated designer (RLS-scoped). Joins project
  * and client names for the list page. Optional status/project filters.
@@ -540,7 +545,7 @@ export function useProjectInvoices(projectId: string | null | undefined) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('invoices')
-        .select(`*, line_items:invoice_line_items(${INVOICE_LINE_COLUMNS}), payments:invoice_payments(*)`)
+        .select(INVOICE_LIST_SELECT)
         .eq('project_id', projectId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -555,6 +560,8 @@ export function useProjectInvoices(projectId: string | null | undefined) {
  * alike. Unscoped on purpose: RLS decides (00178's project-keyed client
  * policies plus 00571's household policies), so a studio invoice — which has
  * no project to filter on — arrives here and nowhere else. Drafts never do.
+ * Payments ride the same read: invoice_payments carries a client policy
+ * beside each of those two (00178 project-keyed, 00571 household).
  */
 export function useClientInvoices() {
   return useQuery({
@@ -563,7 +570,7 @@ export function useClientInvoices() {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('invoices')
-        .select(`*, line_items:invoice_line_items(${INVOICE_LINE_COLUMNS})`)
+        .select(INVOICE_LIST_SELECT)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as Invoice[];

@@ -37,6 +37,15 @@ export function parseSourceDate(value: string | null | undefined): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+/**
+ * The local calendar day a date falls on, as a whole-day count: equal for any
+ * two moments on the same wall-clock day, one apart across a midnight. An
+ * invoice due today is not past due until today has ended.
+ */
+export function calendarDayOrdinal(date: Date): number {
+  return Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000);
+}
+
 const LEGAL_DATE = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'long',
