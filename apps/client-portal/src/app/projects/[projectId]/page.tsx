@@ -2,8 +2,9 @@ import { notFound } from 'next/navigation';
 
 import { HeroPreloadLinks } from '@/components/threshold/editorial/house-issue';
 import { Threshold } from '@/components/threshold/threshold';
-import { fetchClientEditorial, heroPreloads } from '@/lib/data/client-editorial';
+import { fetchEnabledClientEditorial, heroPreloads } from '@/lib/data/client-editorial';
 import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
+import { clientEditionEnabled } from '@/lib/server-feature-flag';
 import { toOtherHouses } from '@/lib/threshold/other-houses';
 
 interface ProjectPageProps {
@@ -12,11 +13,12 @@ interface ProjectPageProps {
 
 export default async function ProjectPage({ params }: ProjectPageProps) {
   const { projectId } = await params;
+  const editionEnabled = await clientEditionEnabled();
   const [projects, projectView, editorial] = await Promise.all([
     fetchClientProjects(),
     fetchClientProjectView(projectId),
     // The House Issue's plates; null never blocks the house.
-    fetchClientEditorial(projectId),
+    fetchEnabledClientEditorial(projectId, editionEnabled),
   ]);
 
   const headerProject = projects.find((project) => project.id === projectId);
@@ -40,6 +42,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           milestones={milestones}
           otherHouses={toOtherHouses(projects, project.id)}
           editorial={editorial}
+          editionEnabled={editionEnabled}
         />
       </main>
     </div>

@@ -379,6 +379,8 @@ export interface ThresholdProps {
    * only while `client-edition-page` is on; null or flag off, today's house.
    */
   editorial?: ClientProjectEditorial | null;
+  /** Server rollout authority: false also disables the browser editorial read. */
+  editionEnabled?: boolean;
 }
 
 export function Threshold({
@@ -389,6 +391,7 @@ export function Threshold({
   viewSource = 'named',
   namedProposalId = null,
   editorial = null,
+  editionEnabled,
 }: ThresholdProps) {
   // ── every hook, before any branch ──────────────────────────────────────────
   const hydrated = useHydrated();
@@ -432,7 +435,7 @@ export function Threshold({
   useProjectNotesRealtime(projectId);
   // The House Issue: null with `client-edition-page` off or loading, and then
   // every edition helper below hands back today's page.
-  const issue = useEditionIssue(projectId, editorial);
+  const issue = useEditionIssue(projectId, editorial, editionEnabled);
 
   // ── the studio's own letters ───────────────────────────────────────────────
   // An invoice drawn against no house at all (ruling S1) belongs to the

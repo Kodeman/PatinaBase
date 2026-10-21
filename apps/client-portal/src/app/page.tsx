@@ -2,12 +2,13 @@ import { Threshold } from '@/components/threshold/threshold';
 import { LetterboxDoor } from '@/components/threshold/letterbox-door';
 import { HeroPreloadLinks } from '@/components/threshold/editorial/house-issue';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
-import { fetchClientEditorial, heroPreloads } from '@/lib/data/client-editorial';
+import { fetchEnabledClientEditorial, heroPreloads } from '@/lib/data/client-editorial';
 import {
   resolveActiveHouse,
   resolveHouseForInstrument,
 } from '@/lib/data/active-project';
 import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
+import { clientEditionEnabled } from '@/lib/server-feature-flag';
 import { toOtherHouses } from '@/lib/threshold/other-houses';
 
 /**
@@ -53,14 +54,15 @@ export default async function HomePage(props: {
     ? [activeProjectId, ...projectIds.filter((id) => id !== activeProjectId)]
     : projectIds;
 
+  const editionEnabled = await clientEditionEnabled();
   let projectView: Awaited<ReturnType<typeof fetchClientProjectView>> = null;
-  let editorial: Awaited<ReturnType<typeof fetchClientEditorial>> = null;
+  let editorial: Awaited<ReturnType<typeof fetchEnabledClientEditorial>> = null;
   for (const candidateId of candidates) {
     // The House Issue's plates read beside the house itself, so the hero's
     // preload is in this HTML. Null never blocks the house (it is today's page).
     [projectView, editorial] = await Promise.all([
       fetchClientProjectView(candidateId),
-      fetchClientEditorial(candidateId),
+      fetchEnabledClientEditorial(candidateId, editionEnabled),
     ]);
     if (projectView) break;
   }
@@ -113,6 +115,7 @@ export default async function HomePage(props: {
           viewSource="front-door"
           namedProposalId={namedProposalId}
           editorial={editorial}
+          editionEnabled={editionEnabled}
         />
       </main>
     </div>

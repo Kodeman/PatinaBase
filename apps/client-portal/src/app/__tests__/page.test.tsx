@@ -13,6 +13,8 @@ import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects
    open — and, when there is none it can open, to say so without a 404.
    ────────────────────────────────────────────────────────────────────────── */
 
+jest.mock('@/lib/server-feature-flag', () => ({ clientEditionEnabled: jest.fn().mockResolvedValue(false) }));
+
 jest.mock('@/lib/data/projects', () => ({
   fetchClientProjects: jest.fn(),
   fetchClientProjectView: jest.fn(),
