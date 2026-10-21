@@ -229,14 +229,14 @@ describe("Mat — the people, the papers, and the way out", () => {
     expect(screen.queryByTestId('mat-people')).not.toBeInTheDocument();
     expect(screen.queryByText('The people, where they work')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mat-papers')).not.toBeInTheDocument();
-    expect(screen.queryByText('The papers')).not.toBeInTheDocument();
+    expect(screen.queryByText('Documents')).not.toBeInTheDocument();
   });
 
   it('keeps the papers column, headed, when only the "papers, in full" act stands', () => {
     render(<Mat {...mat({ papers: [], onOpenPapers: jest.fn() })} />);
 
     const papers = screen.getByTestId('mat-papers');
-    expect(within(papers).getByText('The papers')).toBeInTheDocument();
+    expect(within(papers).getByText('Documents')).toBeInTheDocument();
     expect(
       within(papers).getByRole('button', { name: /the papers, in full/i }),
     ).toBeInTheDocument();

@@ -57,6 +57,7 @@ import {
   type ThresholdReceipt,
   type ThresholdRoom,
 } from '@/lib/threshold/derive';
+import { houseInvoices, type InvoiceServerHold } from '@/lib/threshold/invoice-rollup';
 import { planKeyGeometry } from '@/lib/threshold/plan-key';
 import { toClosedOrders, toRoadOrders } from '@/lib/threshold/road-orders';
 import {
@@ -78,7 +79,12 @@ import { Doorstep, hasChangedBlock } from './doorstep';
 import { GroundFloor } from './ground-floor';
 import { HouseLedger } from './house-ledger';
 import { BudgetCheckpointReview } from './budget-checkpoint-review';
-import { LandmarkLedger } from './landmark-ledger';
+import {
+  ARRIVAL_PURPOSE,
+  ArrivalLine,
+  LandmarkLedger,
+  invoiceArrivalLines,
+} from './landmark-ledger';
 import { Letterbox } from './letterbox';
 import { Mat, type MatPaper, type MatPerson } from './mat';
 import type { OtherHouse } from './other-houses';
@@ -332,18 +338,44 @@ export function Threshold({
     [projectId, otherHouseKey],
   );
   const clientInvoicesQuery = useClientInvoices();
-  const studioInvoices = useMemo(
+  // CPUX-02's one reading of this house's invoices, and how complete it is: a
+  // failed or partial read must reach the projection as such, never as an
+  // empty list read in full.
+  const house = useMemo(
     () =>
-      adopted
-        ? (clientInvoicesQuery.data ?? []).filter(
-            (row) => row.project_id === null && row.status !== 'draft',
-          )
-        : [],
-    [adopted, clientInvoicesQuery.data],
+      houseInvoices({
+        projectId,
+        adopted,
+        project: {
+          data: invoicesQuery.data,
+          isPending: invoicesQuery.isPending,
+          isError: invoicesQuery.isError,
+        },
+        client: {
+          data: clientInvoicesQuery.data,
+          isPending: clientInvoicesQuery.isPending,
+          isError: clientInvoicesQuery.isError,
+        },
+      }),
+    [
+      projectId,
+      adopted,
+      invoicesQuery.data,
+      invoicesQuery.isPending,
+      invoicesQuery.isError,
+      clientInvoicesQuery.data,
+      clientInvoicesQuery.isPending,
+      clientInvoicesQuery.isError,
+    ],
   );
-  const invoices = useMemo(
-    () => [...(invoicesQuery.data ?? []), ...studioInvoices],
-    [invoicesQuery.data, studioInvoices],
+  const invoices = house.invoices;
+  // Holds the checkout boundary returned this visit. Only an authoritative
+  // resolution releases one, so a refetch never clears an entry.
+  const [invoiceHolds, setInvoiceHolds] = useState<Record<string, InvoiceServerHold>>({});
+  const onInvoiceHold = useCallback(
+    (invoiceId: string, hold: InvoiceServerHold) =>
+      setInvoiceHolds((held) => (held[invoiceId] === hold ? held : { ...held, [invoiceId]: hold })),
+    [],
   );
   const clientInvoicesRefetch = clientInvoicesQuery.refetch;
   const projectInvoicesRefetch = invoicesQuery.refetch;
@@ -363,6 +395,9 @@ export function Threshold({
     ...(proposalsQuery.data ?? [])
       .filter((proposal) => commercialSummaryFromProposal(proposal).projectId === projectId)
       .map((proposal) => proposal.id),
+    // The raw project rows too: a voided invoice leaves the list, not the
+    // notices filed about it.
+    ...(invoicesQuery.data ?? []).map((invoice) => invoice.id),
     ...invoices.map((invoice) => invoice.id),
     ...projectApprovals.map((approval) => approval.decisionId),
   ]
@@ -704,6 +739,8 @@ export function Threshold({
     selections: selectionsQuery.data,
     proposals: { signatureGates, instrumentReceipts },
     invoices,
+    invoiceRead: house.read,
+    invoiceHolds,
     approvals,
     notes: (notesQuery.data ?? []).map(toThresholdNote),
     previousReadAt,
@@ -1093,8 +1130,16 @@ export function Threshold({
   const standsUnfiledAsks = adopted;
 
   const ledger = <><HouseLedger ledger={model.ledger} today={today} /><BudgetCheckpointReview projectId={projectId} /></>;
+  // W2-B's projection-reading props (SQ-1525). Spread until that slice lands:
+  // the compiler checks them against `LetterboxProps` from then on.
+  const letterboxReads = {
+    projection: model.invoices,
+    onHold: onInvoiceHold,
+    projectName: words(project.name),
+  };
   const letterbox = (
     <Letterbox
+      {...letterboxReads}
       invoice={model.letterbox}
       invoices={invoices}
       designerName={studioName}
@@ -1261,7 +1306,9 @@ export function Threshold({
       readingMark={readingMarkLine(parseSourceDate(previousReadAt))}
     >
       {ledger}
-      {model.groundFloor ? null : letterbox}
+      {/* The ground floor sets the letterbox itself; a house whose rooms did
+          not read still shows its invoices. */}
+      {model.groundFloor && !roomsUnread ? null : letterbox}
     </Doorstep>
   );
 
@@ -1282,7 +1329,7 @@ export function Threshold({
     />
   );
 
-  const asks = (
+  const askList = (
     <>
       {doorstepGates}
       {/* A failed read, in the ink every other failed read on this surface
@@ -1327,6 +1374,45 @@ export function Threshold({
     </>
   );
 
+  /* CPUX-01.4 — "Approvals" always has somewhere to land. With an ask drawn
+     the ledger goes to that ask; with none it lands here. The empty sentence
+     shows only while the ask list rendered nothing (`peer-empty`), so a review
+     or scope-change ask the page does not count here, or a failed read's
+     notice, always replaces it. It never stands while a door or wall waits in
+     a room band, because then `whatNeedsYou` names it. */
+  const asksKnown =
+    doorstepGates.some(Boolean) ||
+    doorstepAsks.length > 0 ||
+    projectApprovalsError ||
+    papersUnread;
+  const approvalsHeaded = asksKnown || whatNeedsYou === null;
+  const asks = (
+    <section
+      id="approvals"
+      aria-labelledby={approvalsHeaded ? 'approvals-title' : undefined}
+      data-testid="approvals"
+      className={approvalsHeaded ? 'mt-8 border-t border-[var(--border-subtle)] pt-2.5' : undefined}
+    >
+      {approvalsHeaded && (
+        <h2
+          id="approvals-title"
+          className="font-heading text-[1.35rem] font-medium tracking-[-0.012em] text-[var(--text-primary)]"
+        >
+          Approvals
+        </h2>
+      )}
+      <div className="peer">{askList}</div>
+      {whatNeedsYou === null && (
+        <p
+          data-testid="approvals-empty"
+          className="t-body mt-3 hidden max-w-[56ch] text-[var(--text-body)] peer-empty:block"
+        >
+          Nothing is waiting for your approval.
+        </p>
+      )}
+    </section>
+  );
+
   // ── the page ───────────────────────────────────────────────────────────────
   const doorplate = (
     <Doorplate
@@ -1346,6 +1432,16 @@ export function Threshold({
    * five links to nowhere.
    */
   const houseHasSpoken = hydrated && !loading && !model.pending;
+  // The standing note, else the back matter that keeps the past ones.
+  const updatesAnchor = model.note ? 'note' : model.previously.length > 0 || hasRecord ? 'previously' : null;
+  // `help` (#contact) stands once the presentation read has answered.
+  const presentedDesigner = words(presentationQuery.data?.designerName);
+  const contactLandmark = help
+    ? {
+        anchor: 'contact',
+        label: presentedDesigner ? `Contact ${presentedDesigner}` : 'Contact your designer',
+      }
+    : null;
 
   let body: ReactNode;
 
@@ -1405,14 +1501,12 @@ export function Threshold({
       // The money and the ask, in the order the page prints them. Without
       // these two the caret could land on every part of the house except the
       // two the page is actually about.
-      ...(model.groundFloor
-        ? []
-        : [{ id: "letterbox", label: "Invoices and payments", short: "invoices and payments" }]),
+      { id: "letterbox", label: "Invoices and payments", short: "invoices and payments" },
       ...(firstGateAnchor
         ? [
             {
               id: firstGateAnchor,
-              label: "What needs you",
+              label: "Approvals",
               // `firstGateAnchor` is only ever "wall" or "door" — the two
               // gates whose paper the page has already proven is present.
               short: firstGateAnchor === "wall" ? "finished work to review" : "document to sign",
@@ -1528,8 +1622,12 @@ export function Threshold({
       {/* Under the doorplate and OUTSIDE the since-yesterday dimming: an index
           that faded with the page would be an index of nothing. Every landmark
           is answered from what the branches below actually drew. */}
+      <ArrivalLine>{ARRIVAL_PURPOSE}</ArrivalLine>
       <LandmarkLedger
-        whereWeAre={houseHasSpoken}
+        invoices={houseHasSpoken}
+        approvals={houseHasSpoken ? (whatNeedsYou ?? 'approvals') : null}
+        progress={houseHasSpoken}
+        updates={houseHasSpoken ? updatesAnchor : null}
         whatChanged={
           houseHasSpoken &&
           hasChangedBlock({
@@ -1538,10 +1636,15 @@ export function Threshold({
             readingMark: readingMarkLine(parseSourceDate(previousReadAt)),
           })
         }
-        whatYouOwe={houseHasSpoken && !(model.groundFloor && roomsUnread)}
-        whatNeedsYou={houseHasSpoken ? whatNeedsYou : null}
-        thePapers={houseHasSpoken}
+        documents={houseHasSpoken}
+        contact={houseHasSpoken ? contactLandmark : null}
       />
+      {houseHasSpoken &&
+        invoiceArrivalLines(model.invoices).map((line) => (
+          <ArrivalLine key={line} testId="arrival-invoices">
+            {line}
+          </ArrivalLine>
+        ))}
       <SinceYesterday active={sinceActive} changed={model.changed}>
         {body}
       </SinceYesterday>
