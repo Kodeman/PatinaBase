@@ -221,6 +221,11 @@ for (const outcome of ['approved', 'changes_requested', 'needs_discussion'] as c
     await expect(terminal).toBeEnabled();
     const before = await checked(house.client.rpc('get_project_decision_review', { p_decision_id: id }));
     expect(before.outcome).toBeNull();
+    // A freshly revealed terminal can sit below the fold: focusing it scrolls
+    // the page, and that scroll lands a frame later — after the key is down —
+    // cancelling the hold as a page scrolled under the thumb. Bring it into
+    // view first so the hold is the only thing being tested.
+    await terminal.scrollIntoViewIfNeeded();
     await terminal.focus();
     await page.keyboard.down('Enter');
     await expect(terminal).toHaveAttribute('data-hold-state', 'holding');
