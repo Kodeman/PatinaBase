@@ -1,0 +1,2587 @@
+{
+ "site": "stanzza",
+ "live": "https://stanzza.design/",
+ "capturedAt": "2026-10-21T14:27:44.282Z",
+ "attempts": [
+  {
+   "viewport": "desktop",
+   "attempt": 1,
+   "channel": "headless-shell",
+   "reducedMotion": "reduce",
+   "status": 200,
+   "preloaderStuck": false,
+   "shots": 6
+  },
+  {
+   "viewport": "mobile",
+   "attempt": 1,
+   "channel": "headless-shell",
+   "reducedMotion": "reduce",
+   "status": 200,
+   "preloaderStuck": false,
+   "shots": 3
+  }
+ ],
+ "viewports": {
+  "desktop": {
+   "viewport": "desktop",
+   "reducedMotion": "reduce",
+   "shots": [
+    {
+     "file": "_renders/stanzza-desktop-0.jpg",
+     "bytes": 109696,
+     "width": 1440,
+     "height": 900
+    },
+    {
+     "file": "_renders/stanzza-desktop-1.jpg",
+     "bytes": 52324,
+     "width": 1440,
+     "height": 900
+    },
+    {
+     "file": "_renders/stanzza-desktop-2.jpg",
+     "bytes": 34967,
+     "width": 1440,
+     "height": 900
+    },
+    {
+     "file": "_renders/stanzza-desktop-3.jpg",
+     "bytes": 65610,
+     "width": 1440,
+     "height": 900
+    },
+    {
+     "file": "_renders/stanzza-desktop-5.jpg",
+     "bytes": 74604,
+     "width": 1440,
+     "height": 900
+    },
+    {
+     "file": "_renders/stanzza-desktop-full.jpg",
+     "bytes": 381509,
+     "width": 1224,
+     "height": 21816
+    }
+   ],
+   "screens": [
+    {
+     "offset": 0,
+     "requestedY": 0,
+     "scrollY": 0,
+     "imageShare": 98,
+     "firstWords": [
+      {
+       "text": "menu",
+       "x": 40,
+       "y": 37,
+       "w": 37,
+       "size": 12,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.92px",
+       "tt": "uppercase",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "Request a call",
+       "x": 1260,
+       "y": 39,
+       "w": 108,
+       "size": 12,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.92px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Composed residential interiors",
+       "x": 452,
+       "y": 598,
+       "w": 522,
+       "size": 72,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Interiors designed as one complete whole.",
+       "x": 525,
+       "y": 748,
+       "w": 375,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Composed residential interiors",
+       "x": 452,
+       "y": 598,
+       "w": 522,
+       "size": 72,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Interiors designed as one complete whole.",
+       "x": 525,
+       "y": 748,
+       "w": 375,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "menu",
+       "x": 40,
+       "y": 37,
+       "w": 37,
+       "size": 12,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.92px",
+       "tt": "uppercase",
+       "color": "rgb(244, 243, 235)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header",
+       "position": "fixed",
+       "top": 0,
+       "h": 92,
+       "w": 1425,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 10
+      },
+      {
+       "tag": "div",
+       "cls": "header_overlay-mobile",
+       "position": "absolute",
+       "top": 0,
+       "h": 92,
+       "w": 1425,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 0
+      }
+     ],
+     "textCount": 4,
+     "actualY": 0
+    },
+    {
+     "offset": 1,
+     "requestedY": 900,
+     "scrollY": 1200,
+     "imageShare": 18,
+     "firstWords": [
+      {
+       "text": "COMPOSED",
+       "x": 677,
+       "y": 90,
+       "w": 71,
+       "size": 12,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.92px",
+       "tt": "uppercase",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "In a well-composed interior, nothing is accidental. Proporti",
+       "x": 1063,
+       "y": 317,
+       "w": 338,
+       "size": 18,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.18px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "We begin with how the home should work, refine how it should",
+       "x": 24,
+       "y": 748,
+       "w": 338,
+       "size": 18,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.18px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "In a well-composed interior, nothing is accidental. Proporti",
+       "x": 1063,
+       "y": 317,
+       "w": 338,
+       "size": 18,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.18px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "We begin with how the home should work, refine how it should",
+       "x": 24,
+       "y": 748,
+       "w": 338,
+       "size": 18,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.18px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "COMPOSED",
+       "x": 677,
+       "y": 90,
+       "w": 71,
+       "size": 12,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.92px",
+       "tt": "uppercase",
+       "color": "rgb(244, 243, 235)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header is-hide header--dark",
+       "position": "fixed",
+       "top": -101,
+       "h": 92,
+       "w": 1425,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 10
+      },
+      {
+       "tag": "div",
+       "cls": "header_overlay-mobile",
+       "position": "absolute",
+       "top": -101,
+       "h": 92,
+       "w": 1425,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 0
+      }
+     ],
+     "textCount": 3,
+     "actualY": 910
+    },
+    {
+     "offset": 2,
+     "requestedY": 1800,
+     "scrollY": 2000,
+     "imageShare": 6,
+     "firstWords": [
+      {
+       "text": "COMPOSED",
+       "x": 677,
+       "y": 90,
+       "w": 71,
+       "size": 12,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.92px",
+       "tt": "uppercase",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "In a well-composed interior, nothing is accidental. Proporti",
+       "x": 1063,
+       "y": 216,
+       "w": 338,
+       "size": 18,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.18px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "We begin with how the home should work, refine how it should",
+       "x": 24,
+       "y": 324,
+       "w": 338,
+       "size": 18,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.18px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "In a well-composed interior, nothing is accidental. Proporti",
+       "x": 1063,
+       "y": 216,
+       "w": 338,
+       "size": 18,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.18px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "We begin with how the home should work, refine how it should",
+       "x": 24,
+       "y": 324,
+       "w": 338,
+       "size": 18,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.18px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "COMPOSED",
+       "x": 677,
+       "y": 90,
+       "w": 71,
+       "size": 12,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.92px",
+       "tt": "uppercase",
+       "color": "rgb(244, 243, 235)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header is-hide header--dark",
+       "position": "fixed",
+       "top": -101,
+       "h": 92,
+       "w": 1425,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 10
+      },
+      {
+       "tag": "div",
+       "cls": "header_overlay-mobile",
+       "position": "absolute",
+       "top": -101,
+       "h": 92,
+       "w": 1425,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 0
+      }
+     ],
+     "textCount": 3,
+     "actualY": 1732
+    },
+    {
+     "offset": 3,
+     "requestedY": 2700,
+     "scrollY": 3000,
+     "imageShare": 43,
+     "firstWords": [
+      {
+       "text": "Project executed",
+       "x": 1234,
+       "y": 379,
+       "w": 128,
+       "size": 12,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.92px",
+       "tt": "uppercase",
+       "color": "color(srgb 1 1 1 / 0.8)"
+      },
+      {
+       "text": "In",
+       "x": 1273,
+       "y": 396,
+       "w": 17,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "62",
+       "x": 1293,
+       "y": 396,
+       "w": 23,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "days",
+       "x": 1320,
+       "y": 396,
+       "w": 42,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Pau Claris Apartment",
+       "x": 63,
+       "y": 438,
+       "w": 272,
+       "size": 56,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "Area",
+       "x": 1328,
+       "y": 460,
+       "w": 34,
+       "size": 12,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.92px",
+       "tt": "uppercase",
+       "color": "color(srgb 1 1 1 / 0.8)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Pau Claris Apartment",
+       "x": 63,
+       "y": 438,
+       "w": 272,
+       "size": 56,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "In",
+       "x": 1273,
+       "y": 396,
+       "w": 17,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "62",
+       "x": 1293,
+       "y": 396,
+       "w": 23,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header is-hide",
+       "position": "fixed",
+       "top": -101,
+       "h": 92,
+       "w": 1425,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 10
+      },
+      {
+       "tag": "div",
+       "cls": "header_overlay-mobile",
+       "position": "absolute",
+       "top": -101,
+       "h": 92,
+       "w": 1425,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 0
+      }
+     ],
+     "textCount": 12,
+     "actualY": 2726
+    },
+    {
+     "offset": 5,
+     "requestedY": 4500,
+     "scrollY": 4600,
+     "imageShare": 98,
+     "firstWords": [
+      {
+       "text": "05",
+       "x": 68,
+       "y": 416,
+       "w": 14,
+       "size": 16,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Pau Claris Apartment",
+       "x": 23,
+       "y": 557,
+       "w": 272,
+       "size": 56,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "Project executed",
+       "x": 1274,
+       "y": 557,
+       "w": 128,
+       "size": 12,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.92px",
+       "tt": "uppercase",
+       "color": "color(srgb 1 1 1 / 0.8)"
+      },
+      {
+       "text": "In",
+       "x": 1313,
+       "y": 573,
+       "w": 17,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "62",
+       "x": 1334,
+       "y": 573,
+       "w": 23,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "days",
+       "x": 1360,
+       "y": 573,
+       "w": 42,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Pau Claris Apartment",
+       "x": 23,
+       "y": 557,
+       "w": 272,
+       "size": 56,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "In",
+       "x": 1313,
+       "y": 573,
+       "w": 17,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "62",
+       "x": 1334,
+       "y": 573,
+       "w": 23,
+       "size": 23.9999,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.239999px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header is-hide",
+       "position": "fixed",
+       "top": -101,
+       "h": 92,
+       "w": 1425,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 10
+      },
+      {
+       "tag": "div",
+       "cls": "header_overlay-mobile",
+       "position": "absolute",
+       "top": -101,
+       "h": 92,
+       "w": 1425,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 0
+      }
+     ],
+     "textCount": 15,
+     "actualY": 4417
+    }
+   ],
+   "status": 200,
+   "earlyCover": {
+    "covers": [
+     {
+      "tag": "div",
+      "cls": "preloader",
+      "z": "1000",
+      "bg": "rgb(255, 251, 245)"
+     }
+    ],
+    "textChars": 5176,
+    "title": "Stanzza"
+   },
+   "lateCover": {
+    "covers": [],
+    "textChars": 5192,
+    "title": "Stanzza"
+   },
+   "cookieDismissed": "accept",
+   "loadPassBottom": 7118,
+   "page": {
+    "vw": 1440,
+    "vh": 900,
+    "docHeight": 25666,
+    "ground": {
+     "body": "#f4f3eb",
+     "html": "transparent"
+    },
+    "inkByChars": [
+     [
+      "#1e1e1e",
+      1788
+     ],
+     [
+      "#8c8c8c",
+      1185
+     ],
+     [
+      "#ffffff",
+      489
+     ],
+     [
+      "#f4f3eb",
+      252
+     ],
+     [
+      "#010101",
+      170
+     ],
+     [
+      "#0.f4f4f93bc0a070.f3f3f0fe047d40.ebebf22c01e688",
+      139
+     ]
+    ],
+    "type": [
+     {
+      "size": 120,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "-0.18px",
+      "transform": "none",
+      "lineHeight": "105.6px",
+      "chars": 9,
+      "n": 4,
+      "sample": "10"
+     },
+     {
+      "size": 72,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "63.36px",
+      "chars": 30,
+      "n": 1,
+      "sample": "Composed residential interiors"
+     },
+     {
+      "size": 56,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "49.28px",
+      "chars": 122,
+      "n": 7,
+      "sample": "Pau Claris Apartment"
+     },
+     {
+      "size": 56,
+      "family": "Katherine Plus",
+      "weight": "400",
+      "letterSpacing": "-0.56px",
+      "transform": "none",
+      "lineHeight": "49.28px",
+      "chars": 124,
+      "n": 2,
+      "sample": "\"Good design feels inevitable. Nothing extra, noth"
+     },
+     {
+      "size": 56,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "-0.18px",
+      "transform": "none",
+      "lineHeight": "49.28px",
+      "chars": 15,
+      "n": 1,
+      "sample": "Project inquiry"
+     },
+     {
+      "size": 40,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "40px",
+      "chars": 87,
+      "n": 4,
+      "sample": "One responsible lead"
+     },
+     {
+      "size": 32,
+      "family": "Helioscond",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "42.24px",
+      "chars": 6,
+      "n": 1,
+      "sample": "Kirill"
+     },
+     {
+      "size": 32,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "35.84px",
+      "chars": 870,
+      "n": 14,
+      "sample": "Do you only create the design project, or do you m"
+     },
+     {
+      "size": 23.9999,
+      "family": "Helioscond",
+      "weight": "400",
+      "letterSpacing": "-0.239999px",
+      "transform": "none",
+      "lineHeight": "31.6799px",
+      "chars": 473,
+      "n": 38,
+      "sample": "Interiors designed as one complete whole."
+     },
+     {
+      "size": 18,
+      "family": "Helioscond",
+      "weight": "400",
+      "letterSpacing": "-0.18px",
+      "transform": "none",
+      "lineHeight": "23.76px",
+      "chars": 1606,
+      "n": 31,
+      "sample": "In a well-composed interior, nothing is accidental"
+     },
+     {
+      "size": 16,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "14.08px",
+      "chars": 10,
+      "n": 5,
+      "sample": "05"
+     },
+     {
+      "size": 12,
+      "family": "Helioscond",
+      "weight": "400",
+      "letterSpacing": "1.92px",
+      "transform": "uppercase",
+      "lineHeight": "14.16px",
+      "chars": 828,
+      "n": 72,
+      "sample": "menu"
+     }
+    ],
+    "lineLengths": [
+     {
+      "size": 18,
+      "widthPx": 338,
+      "charsPerLine": 44,
+      "sample": "We begin with how the home should work, "
+     },
+     {
+      "size": 18,
+      "widthPx": 400,
+      "charsPerLine": 44,
+      "sample": "We begin with how the home should work, "
+     }
+    ],
+    "maxWidths": [
+     [
+      "300.001px",
+      3
+     ],
+     [
+      "450px",
+      2
+     ],
+     [
+      "432px",
+      2
+     ],
+     [
+      "540px",
+      1
+     ],
+     [
+      "522px",
+      1
+     ],
+     [
+      "363.001px",
+      1
+     ],
+     [
+      "400px",
+      1
+     ]
+    ],
+    "textLeftEdges": [
+     [
+      139,
+      870
+     ],
+     [
+      24,
+      533
+     ],
+     [
+      784,
+      457
+     ],
+     [
+      716,
+      322
+     ],
+     [
+      1081,
+      169
+     ],
+     [
+      1063,
+      134
+     ]
+    ],
+    "imageCount": 38,
+    "imageRowsFirst5Screens": 6,
+    "ratios": [
+     1.58,
+     0.85,
+     0.71,
+     0.55,
+     0.83,
+     1.59,
+     1,
+     0.93,
+     0.86,
+     1.53,
+     0.99,
+     1.25,
+     4
+    ],
+    "fullBleedCount": 3,
+    "imagesInLinks": 8,
+    "sequence": [
+     {
+      "kind": "image",
+      "top": 0,
+      "h": 900,
+      "n": 2,
+      "ratios": [
+       1.58,
+       0.85
+      ],
+      "widths": [
+       1425,
+       620
+      ],
+      "fullBleed": true,
+      "links": 0
+     },
+     {
+      "kind": "text",
+      "words": 1,
+      "from": 900,
+      "to": 1213
+     },
+     {
+      "kind": "image",
+      "top": 1213,
+      "h": 415,
+      "n": 1,
+      "ratios": [
+       0.71
+      ],
+      "widths": [
+       297
+      ],
+      "fullBleed": false,
+      "links": 1
+     },
+     {
+      "kind": "image",
+      "top": 1440,
+      "h": 188,
+      "n": 2,
+      "ratios": [
+       0.71,
+       0.55
+      ],
+      "widths": [
+       134,
+       197
+      ],
+      "fullBleed": false,
+      "links": 2
+     },
+     {
+      "kind": "image",
+      "top": 1710,
+      "h": 231,
+      "n": 1,
+      "ratios": [
+       0.83
+      ],
+      "widths": [
+       193
+      ],
+      "fullBleed": false,
+      "links": 1
+     },
+     {
+      "kind": "text",
+      "words": 31,
+      "from": 1941,
+      "to": 2016
+     },
+     {
+      "kind": "image",
+      "top": 2016,
+      "h": 376,
+      "n": 1,
+      "ratios": [
+       0.71
+      ],
+      "widths": [
+       269
+      ],
+      "fullBleed": false,
+      "links": 1
+     },
+     {
+      "kind": "image",
+      "top": 2919,
+      "h": 580,
+      "n": 15,
+      "ratios": [
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59,
+       1.59
+      ],
+      "widths": [
+       921,
+       921,
+       921,
+       921,
+       921,
+       921,
+       921,
+       921,
+       921,
+       921,
+       921,
+       921,
+       921,
+       921,
+       921
+      ],
+      "fullBleed": false,
+      "links": 0
+     },
+     {
+      "kind": "text",
+      "words": 50,
+      "from": 3499,
+      "to": 4500
+     }
+    ],
+    "overImage": [
+     {
+      "text": "menu",
+      "size": 12,
+      "color": "#f4f3eb",
+      "tint": "color(srgb 0.898039 0.894118 0.862745 / 0.24)"
+     },
+     {
+      "text": "Request a call",
+      "size": 12,
+      "color": "#ffffff",
+      "tint": "color(srgb 0.956863 0.952941 0.921569 / 0.01)"
+     },
+     {
+      "text": "Request a call",
+      "size": 12,
+      "color": "#ffffff",
+      "tint": "color(srgb 0.956863 0.952941 0.921569 / 0.01)"
+     },
+     {
+      "text": "Composed residential interiors",
+      "size": 72,
+      "color": "#ffffff",
+      "tint": "linear-gradient(rgba(15, 15, 15, 0) 60%, rgba(15, 15, 15, 0.4))"
+     },
+     {
+      "text": "Interiors designed as one complete whole",
+      "size": 23.9999,
+      "color": "#ffffff",
+      "tint": "linear-gradient(rgba(15, 15, 15, 0) 60%, rgba(15, 15, 15, 0.4))"
+     },
+     {
+      "text": "Project inquiry",
+      "size": 56,
+      "color": "#ffffff",
+      "tint": "linear-gradient(rgba(15, 15, 15, 0) 60%, rgba(15, 15, 15, 0.4))"
+     },
+     {
+      "text": "Every interior starts with a conversatio",
+      "size": 18,
+      "color": "#ffffff",
+      "tint": "linear-gradient(rgba(15, 15, 15, 0) 60%, rgba(15, 15, 15, 0.4))"
+     },
+     {
+      "text": "By submitting this form, you agree to ou",
+      "size": 12,
+      "color": "#1e1e1e",
+      "tint": "linear-gradient(rgba(15, 15, 15, 0) 60%, rgba(15, 15, 15, 0.4))"
+     }
+    ],
+    "motion": {
+     "runningAnimations": [
+      {
+       "name": "marquee",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline"
+      },
+      {
+       "name": "marquee",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline"
+      },
+      {
+       "name": "marquee",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline"
+      }
+     ],
+     "libs": {
+      "gsap": true,
+      "gsapVersion": "3.15.0",
+      "scrollTrigger": true,
+      "triggers": 25,
+      "pinned": 0,
+      "scrubbed": 25,
+      "lenis": true,
+      "locomotive": false,
+      "swiper": true,
+      "three": false,
+      "barba": false,
+      "webflow": true
+     },
+     "speedAttrs": 0,
+     "htmlClass": "w-mod-js w-mod-ix lenis lenis-smooth w-mod-ix3 preloader-skip lenis-scrolling"
+    },
+    "sticky": [
+     "div.content_composition-heading",
+     "div.content_composition-text",
+     "div.content_composition-text is-second",
+     "div.swiper-tools",
+     "div.content is-apart"
+    ],
+    "smallestTargets": "33 of 64 links/buttons under 44px tall",
+    "scripts": [
+     "lenis.min.js",
+     "MeetingsEmbedCode.js",
+     "jquery-3.5.1.min.dc5e7f18c8.js",
+     "webflow.schunk.36b8fb49256177c8.js",
+     "webflow.schunk.e1e468d4b5dfafa4.js",
+     "webflow.8edbfe09.106f5899ca3e378f.js",
+     "gsap.min.js",
+     "SplitText.min.js",
+     "Flip.min.js",
+     "ScrollTrigger.min.js",
+     "swiper-bundle.min.js"
+    ],
+    "stylesheets": [
+     "https://cdn.prod.website-files.com/69e1cc2c4bb2c432ebac4f2b/css/stanza-dev.webflow.shared.f7ce34a96.min.css",
+     "https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
+    ],
+    "css": {
+     "cssBytes": 198789,
+     "transitionDurations": [
+      [
+       ".3s",
+       9
+      ],
+      [
+       "0.35s",
+       5
+      ],
+      [
+       ".35s",
+       5
+      ],
+      [
+       ".2s",
+       5
+      ],
+      [
+       ".28s",
+       3
+      ],
+      [
+       ".65s",
+       2
+      ],
+      [
+       ".46s",
+       2
+      ],
+      [
+       "0.5s",
+       1
+      ]
+     ],
+     "easings": [
+      [
+       "ease-out",
+       30
+      ],
+      [
+       "linear",
+       20
+      ],
+      [
+       "cubic-bezier(.32,.72,0,1)",
+       1
+      ],
+      [
+       "cubic-bezier(.075,.82,.165,1)",
+       1
+      ]
+     ],
+     "animationDurations": [
+      [
+       "20s",
+       2
+      ],
+      [
+       ".8s",
+       1
+      ],
+      [
+       "1s",
+       1
+      ]
+     ],
+     "keyframes": [
+      [
+       "marquee",
+       1
+      ],
+      [
+       "marqueesec",
+       1
+      ],
+      [
+       "spin",
+       1
+      ],
+      [
+       "swiper-preloader-spin",
+       1
+      ]
+     ],
+     "hoverRules": 42,
+     "hoverTransforms": 0,
+     "hoverOpacity": 7,
+     "breakpoints": [
+      [
+       "767px",
+       8
+      ],
+      [
+       "479px",
+       6
+      ],
+      [
+       "991px",
+       6
+      ],
+      [
+       "768px",
+       5
+      ],
+      [
+       "992px",
+       1
+      ],
+      [
+       "1920px",
+       1
+      ],
+      [
+       "1440px",
+       1
+      ],
+      [
+       "375px",
+       1
+      ]
+     ],
+     "clampSizes": [],
+     "maxWidths": [
+      [
+       "767px",
+       8
+      ],
+      [
+       "479px",
+       6
+      ],
+      [
+       "991px",
+       6
+      ],
+      [
+       "6.66667rem",
+       2
+      ],
+      [
+       "25rem",
+       2
+      ],
+      [
+       "31.9444rem",
+       2
+      ],
+      [
+       "1920px",
+       1
+      ],
+      [
+       "1440px",
+       1
+      ]
+     ],
+     "reducedMotionQueries": 0,
+     "scrollBehavior": [
+      [
+       "auto",
+       1
+      ],
+      [
+       "contain",
+       1
+      ]
+     ],
+     "fontFaces": [
+      [
+       "var(--font-family--text)",
+       15
+      ],
+      [
+       "var(--font-family--heading)",
+       8
+      ],
+      [
+       "Arial",
+       2
+      ],
+      [
+       "Helioscond",
+       2
+      ],
+      [
+       "var(--font-family--design)",
+       2
+      ],
+      [
+       "swiper-icons",
+       2
+      ],
+      [
+       "sans-serif",
+       1
+      ],
+      [
+       "monospace",
+       1
+      ]
+     ]
+    }
+   }
+  },
+  "mobile": {
+   "viewport": "mobile",
+   "reducedMotion": "reduce",
+   "shots": [
+    {
+     "file": "_renders/stanzza-mobile-0.jpg",
+     "bytes": 68688,
+     "width": 780,
+     "height": 1688
+    },
+    {
+     "file": "_renders/stanzza-mobile-1.jpg",
+     "bytes": 76480,
+     "width": 780,
+     "height": 1688
+    },
+    {
+     "file": "_renders/stanzza-mobile-2.jpg",
+     "bytes": 68223,
+     "width": 780,
+     "height": 1688
+    }
+   ],
+   "screens": [
+    {
+     "offset": 0,
+     "requestedY": 0,
+     "scrollY": 0,
+     "imageShare": 97,
+     "firstWords": [
+      {
+       "text": "menu",
+       "x": 32,
+       "y": 35,
+       "w": 27,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "Architecture",
+       "x": 86,
+       "y": 341,
+       "w": 72,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Design",
+       "x": 190,
+       "y": 341,
+       "w": 35,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Delivery",
+       "x": 258,
+       "y": 341,
+       "w": 46,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Composed residential interiors",
+       "x": 24,
+       "y": 379,
+       "w": 343,
+       "size": 48,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Interiors designed as one complete whole.",
+       "x": 70,
+       "y": 487,
+       "w": 250,
+       "size": 16,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.16px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Composed residential interiors",
+       "x": 24,
+       "y": 379,
+       "w": 343,
+       "size": 48,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Interiors designed as one complete whole.",
+       "x": 70,
+       "y": 487,
+       "w": 250,
+       "size": 16,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.16px",
+       "tt": "none",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "menu",
+       "x": 32,
+       "y": 35,
+       "w": 27,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(244, 243, 235)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header",
+       "position": "fixed",
+       "top": 0,
+       "h": 80,
+       "w": 390,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 10
+      },
+      {
+       "tag": "div",
+       "cls": "header_overlay-mobile",
+       "position": "absolute",
+       "top": 0,
+       "h": 80,
+       "w": 390,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 0
+      }
+     ],
+     "textCount": 7,
+     "actualY": 0
+    },
+    {
+     "offset": 1,
+     "requestedY": 844,
+     "scrollY": 900,
+     "imageShare": 37,
+     "firstWords": [
+      {
+       "text": "COMPOSED",
+       "x": 28,
+       "y": 36,
+       "w": 53,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(30, 30, 30)"
+      },
+      {
+       "text": "In a well-composed interior, nothing is accidental. Proporti",
+       "x": 16,
+       "y": 135,
+       "w": 358,
+       "size": 16,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.16px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "We begin with how the home should work, refine how it should",
+       "x": 16,
+       "y": 210,
+       "w": 358,
+       "size": 16,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.16px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "Pau Claris Apartment",
+       "x": 40,
+       "y": 342,
+       "w": 224,
+       "size": 40,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "Proportion",
+       "x": 40,
+       "y": 616,
+       "w": 62,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Natural light",
+       "x": 124,
+       "y": 616,
+       "w": 76,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Pau Claris Apartment",
+       "x": 40,
+       "y": 342,
+       "w": 224,
+       "size": 40,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "In a well-composed interior, nothing is accidental. Proporti",
+       "x": 16,
+       "y": 135,
+       "w": 358,
+       "size": 16,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.16px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "We begin with how the home should work, refine how it should",
+       "x": 16,
+       "y": 210,
+       "w": 358,
+       "size": 16,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.16px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header is-hide header--dark",
+       "position": "fixed",
+       "top": -88,
+       "h": 80,
+       "w": 390,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 10
+      },
+      {
+       "tag": "div",
+       "cls": "header_overlay-mobile",
+       "position": "absolute",
+       "top": -88,
+       "h": 80,
+       "w": 390,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 0
+      }
+     ],
+     "textCount": 6,
+     "actualY": 750
+    },
+    {
+     "offset": 2,
+     "requestedY": 1688,
+     "scrollY": 1800,
+     "imageShare": 35,
+     "firstWords": [
+      {
+       "text": "COMPOSED",
+       "x": 28,
+       "y": 36,
+       "w": 53,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(30, 30, 30)"
+      },
+      {
+       "text": "In a well-composed interior, nothing is accidental. Proporti",
+       "x": 16,
+       "y": 135,
+       "w": 358,
+       "size": 16,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.16px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "We begin with how the home should work, refine how it should",
+       "x": 16,
+       "y": 210,
+       "w": 358,
+       "size": 16,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.16px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "Cafe Chok",
+       "x": 70,
+       "y": 342,
+       "w": 139,
+       "size": 40,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "tertert",
+       "x": 70,
+       "y": 616,
+       "w": 42,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "erterter",
+       "x": 134,
+       "y": 616,
+       "w": 49,
+       "size": 9,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "1.44px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Cafe Chok",
+       "x": 70,
+       "y": 342,
+       "w": 139,
+       "size": 40,
+       "family": "Instrument Serif",
+       "weight": "400",
+       "ls": "normal",
+       "tt": "none",
+       "color": "rgb(244, 243, 235)"
+      },
+      {
+       "text": "In a well-composed interior, nothing is accidental. Proporti",
+       "x": 16,
+       "y": 135,
+       "w": 358,
+       "size": 16,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.16px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      },
+      {
+       "text": "We begin with how the home should work, refine how it should",
+       "x": 16,
+       "y": 210,
+       "w": 358,
+       "size": 16,
+       "family": "Helioscond",
+       "weight": "400",
+       "ls": "-0.16px",
+       "tt": "none",
+       "color": "rgb(140, 140, 140)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header is-hide header--dark",
+       "position": "fixed",
+       "top": -88,
+       "h": 80,
+       "w": 390,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 10
+      },
+      {
+       "tag": "div",
+       "cls": "header_overlay-mobile",
+       "position": "absolute",
+       "top": -88,
+       "h": 80,
+       "w": 390,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 0
+      }
+     ],
+     "textCount": 6,
+     "actualY": 1650
+    }
+   ],
+   "status": 200,
+   "earlyCover": {
+    "covers": [
+     {
+      "tag": "div",
+      "cls": "preloader",
+      "z": "1000",
+      "bg": "rgb(255, 251, 245)"
+     }
+    ],
+    "textChars": 5166,
+    "title": "Stanzza"
+   },
+   "lateCover": {
+    "covers": [],
+    "textChars": 5141,
+    "title": "Stanzza"
+   },
+   "cookieDismissed": "accept",
+   "loadPassBottom": 6667,
+   "page": {
+    "vw": 390,
+    "vh": 844,
+    "docHeight": 23655,
+    "ground": {
+     "body": "#f4f3eb",
+     "html": "transparent"
+    },
+    "inkByChars": [
+     [
+      "#1e1e1e",
+      1672
+     ],
+     [
+      "#8c8c8c",
+      1185
+     ],
+     [
+      "#ffffff",
+      594
+     ],
+     [
+      "#f4f3eb",
+      380
+     ],
+     [
+      "#010101",
+      170
+     ],
+     [
+      "#c4c2b7",
+      75
+     ]
+    ],
+    "type": [
+     {
+      "size": 106.667,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "-0.16px",
+      "transform": "none",
+      "lineHeight": "93.8667px",
+      "chars": 9,
+      "n": 4,
+      "sample": "10"
+     },
+     {
+      "size": 48,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "42.24px",
+      "chars": 30,
+      "n": 1,
+      "sample": "Composed residential interiors"
+     },
+     {
+      "size": 40,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "35.2px",
+      "chars": 166,
+      "n": 10,
+      "sample": "Pau Claris Apartment"
+     },
+     {
+      "size": 40,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "41.6px",
+      "chars": 124,
+      "n": 2,
+      "sample": "\"Good design feels inevitable. Nothing extra, noth"
+     },
+     {
+      "size": 40,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "-0.16px",
+      "transform": "none",
+      "lineHeight": "35.2px",
+      "chars": 15,
+      "n": 1,
+      "sample": "Project inquiry"
+     },
+     {
+      "size": 32,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "32px",
+      "chars": 87,
+      "n": 4,
+      "sample": "One responsible lead"
+     },
+     {
+      "size": 26,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "29.12px",
+      "chars": 870,
+      "n": 14,
+      "sample": "Do you only create the design project, or do you m"
+     },
+     {
+      "size": 24,
+      "family": "Helioscond",
+      "weight": "400",
+      "letterSpacing": "-0.24px",
+      "transform": "none",
+      "lineHeight": "29.76px",
+      "chars": 432,
+      "n": 37,
+      "sample": "In"
+     },
+     {
+      "size": 24,
+      "family": "Helioscond",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "29.76px",
+      "chars": 6,
+      "n": 1,
+      "sample": "Kirill"
+     },
+     {
+      "size": 24,
+      "family": "Instrument Serif",
+      "weight": "400",
+      "letterSpacing": "-0.16px",
+      "transform": "none",
+      "lineHeight": "26.88px",
+      "chars": 126,
+      "n": 1,
+      "sample": "Kirill works like an architect inside the interior"
+     },
+     {
+      "size": 16,
+      "family": "Helioscond",
+      "weight": "400",
+      "letterSpacing": "-0.16px",
+      "transform": "none",
+      "lineHeight": "19.84px",
+      "chars": 1521,
+      "n": 31,
+      "sample": "Interiors designed as one complete whole."
+     },
+     {
+      "size": 9,
+      "family": "Helioscond",
+      "weight": "400",
+      "letterSpacing": "1.44px",
+      "transform": "uppercase",
+      "lineHeight": "10.62px",
+      "chars": 785,
+      "n": 67,
+      "sample": "menu"
+     }
+    ],
+    "lineLengths": [
+     {
+      "size": 16,
+      "widthPx": 358,
+      "charsPerLine": 58,
+      "sample": "We begin with how the home should work, "
+     },
+     {
+      "size": 16,
+      "widthPx": 358,
+      "charsPerLine": 58,
+      "sample": "We begin with how the home should work, "
+     }
+    ],
+    "maxWidths": [
+     [
+      "400px",
+      2
+     ],
+     [
+      "480px",
+      1
+     ],
+     [
+      "464px",
+      1
+     ],
+     [
+      "343px",
+      1
+     ]
+    ],
+    "textLeftEdges": [
+     [
+      16,
+      2451
+     ],
+     [
+      37,
+      204
+     ],
+     [
+      33,
+      124
+     ],
+     [
+      56,
+      119
+     ],
+     [
+      28,
+      82
+     ],
+     [
+      77,
+      77
+     ]
+    ],
+    "imageCount": 26,
+    "imageRowsFirst5Screens": 3,
+    "ratios": [
+     0.48,
+     1,
+     0.73,
+     0.86,
+     0.93,
+     0.88,
+     1.51,
+     0.43
+    ],
+    "fullBleedCount": 2,
+    "imagesInLinks": 8,
+    "sequence": [
+     {
+      "kind": "image",
+      "top": -8,
+      "h": 860,
+      "n": 2,
+      "ratios": [
+       0.48,
+       1
+      ],
+      "widths": [
+       410,
+       326
+      ],
+      "fullBleed": true,
+      "links": 0
+     },
+     {
+      "kind": "text",
+      "words": 52,
+      "from": 852,
+      "to": 1194
+     },
+     {
+      "kind": "image",
+      "top": 1194,
+      "h": 401,
+      "n": 5,
+      "ratios": [
+       0.73,
+       0.73,
+       0.73,
+       0.73,
+       0.73
+      ],
+      "widths": [
+       293,
+       293,
+       293,
+       293,
+       293
+      ],
+      "fullBleed": false,
+      "links": 5
+     },
+     {
+      "kind": "text",
+      "words": 23,
+      "from": 1595,
+      "to": 3503
+     },
+     {
+      "kind": "image",
+      "top": 3503,
+      "h": 422,
+      "n": 5,
+      "ratios": [
+       0.86,
+       0.86,
+       0.86,
+       0.86,
+       0.86
+      ],
+      "widths": [
+       363,
+       363,
+       363,
+       363,
+       363
+      ],
+      "fullBleed": false,
+      "links": 0
+     },
+     {
+      "kind": "text",
+      "words": 58,
+      "from": 3925,
+      "to": 4220
+     }
+    ],
+    "overImage": [
+     {
+      "text": "menu",
+      "size": 9,
+      "color": "#f4f3eb",
+      "tint": "color(srgb 0.898039 0.894118 0.862745 / 0.24)"
+     },
+     {
+      "text": "Architecture",
+      "size": 9,
+      "color": "#ffffff",
+      "tint": "linear-gradient(rgba(15, 15, 15, 0) 60%, rgba(15, 15, 15, 0.4))"
+     },
+     {
+      "text": "Design",
+      "size": 9,
+      "color": "#ffffff",
+      "tint": "linear-gradient(rgba(15, 15, 15, 0) 60%, rgba(15, 15, 15, 0.4))"
+     },
+     {
+      "text": "Delivery",
+      "size": 9,
+      "color": "#ffffff",
+      "tint": "linear-gradient(rgba(15, 15, 15, 0) 60%, rgba(15, 15, 15, 0.4))"
+     },
+     {
+      "text": "Composed residential interiors",
+      "size": 48,
+      "color": "#ffffff",
+      "tint": "linear-gradient(rgba(15, 15, 15, 0) 60%, rgba(15, 15, 15, 0.4))"
+     },
+     {
+      "text": "Interiors designed as one complete whole",
+      "size": 16,
+      "color": "#ffffff",
+      "tint": "linear-gradient(rgba(15, 15, 15, 0) 60%, rgba(15, 15, 15, 0.4))"
+     },
+     {
+      "text": "Request a call",
+      "size": 9,
+      "color": "#ffffff",
+      "tint": "rgb(30, 30, 30)"
+     },
+     {
+      "text": "Request a call",
+      "size": 9,
+      "color": "#ffffff",
+      "tint": "rgb(30, 30, 30)"
+     }
+    ],
+    "motion": {
+     "runningAnimations": [
+      {
+       "name": "marquee",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline"
+      },
+      {
+       "name": "marquee",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline"
+      },
+      {
+       "name": "marquee",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline"
+      },
+      {
+       "name": "marqueesec",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline second"
+      },
+      {
+       "name": "marqueesec",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline second"
+      },
+      {
+       "name": "marqueesec",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline second"
+      },
+      {
+       "name": "marquee",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline"
+      },
+      {
+       "name": "marquee",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline"
+      },
+      {
+       "name": "marquee",
+       "duration": 20000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee-linline"
+      }
+     ],
+     "libs": {
+      "gsap": true,
+      "gsapVersion": "3.15.0",
+      "scrollTrigger": true,
+      "triggers": 27,
+      "pinned": 0,
+      "scrubbed": 27,
+      "lenis": true,
+      "locomotive": false,
+      "swiper": true,
+      "three": false,
+      "barba": false,
+      "webflow": true
+     },
+     "speedAttrs": 0,
+     "htmlClass": "w-mod-js w-mod-touch w-mod-ix lenis lenis-smooth w-mod-ix3 preloader-skip lenis-scrolling"
+    },
+    "sticky": [
+     "div.content_composition",
+     "div.swiper-tools",
+     "div.content is-apart",
+     "div.content is-apart",
+     "div.content is-apart"
+    ],
+    "smallestTargets": "39 of 47 links/buttons under 44px tall",
+    "scripts": [
+     "lenis.min.js",
+     "MeetingsEmbedCode.js",
+     "jquery-3.5.1.min.dc5e7f18c8.js",
+     "webflow.schunk.36b8fb49256177c8.js",
+     "webflow.schunk.e1e468d4b5dfafa4.js",
+     "webflow.8edbfe09.106f5899ca3e378f.js",
+     "gsap.min.js",
+     "SplitText.min.js",
+     "Flip.min.js",
+     "ScrollTrigger.min.js",
+     "swiper-bundle.min.js"
+    ],
+    "stylesheets": [
+     "https://cdn.prod.website-files.com/69e1cc2c4bb2c432ebac4f2b/css/stanza-dev.webflow.shared.f7ce34a96.min.css",
+     "https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
+    ],
+    "css": {
+     "cssBytes": 199203,
+     "transitionDurations": [
+      [
+       ".3s",
+       9
+      ],
+      [
+       "0.35s",
+       5
+      ],
+      [
+       ".35s",
+       5
+      ],
+      [
+       ".2s",
+       5
+      ],
+      [
+       ".28s",
+       3
+      ],
+      [
+       ".65s",
+       2
+      ],
+      [
+       ".46s",
+       2
+      ],
+      [
+       "0.5s",
+       1
+      ]
+     ],
+     "easings": [
+      [
+       "ease-out",
+       30
+      ],
+      [
+       "linear",
+       20
+      ],
+      [
+       "cubic-bezier(.32,.72,0,1)",
+       1
+      ],
+      [
+       "cubic-bezier(.075,.82,.165,1)",
+       1
+      ]
+     ],
+     "animationDurations": [
+      [
+       "20s",
+       2
+      ],
+      [
+       ".8s",
+       1
+      ],
+      [
+       "1s",
+       1
+      ]
+     ],
+     "keyframes": [
+      [
+       "marquee",
+       1
+      ],
+      [
+       "marqueesec",
+       1
+      ],
+      [
+       "spin",
+       1
+      ],
+      [
+       "swiper-preloader-spin",
+       1
+      ]
+     ],
+     "hoverRules": 42,
+     "hoverTransforms": 0,
+     "hoverOpacity": 7,
+     "breakpoints": [
+      [
+       "767px",
+       8
+      ],
+      [
+       "479px",
+       6
+      ],
+      [
+       "991px",
+       6
+      ],
+      [
+       "768px",
+       5
+      ],
+      [
+       "992px",
+       1
+      ],
+      [
+       "1920px",
+       1
+      ],
+      [
+       "1440px",
+       1
+      ],
+      [
+       "375px",
+       1
+      ]
+     ],
+     "clampSizes": [],
+     "maxWidths": [
+      [
+       "767px",
+       8
+      ],
+      [
+       "479px",
+       6
+      ],
+      [
+       "991px",
+       6
+      ],
+      [
+       "6.66667rem",
+       2
+      ],
+      [
+       "25rem",
+       2
+      ],
+      [
+       "31.9444rem",
+       2
+      ],
+      [
+       "1920px",
+       1
+      ],
+      [
+       "1440px",
+       1
+      ]
+     ],
+     "reducedMotionQueries": 0,
+     "scrollBehavior": [
+      [
+       "auto",
+       1
+      ],
+      [
+       "contain",
+       1
+      ]
+     ],
+     "fontFaces": [
+      [
+       "var(--font-family--text)",
+       15
+      ],
+      [
+       "var(--font-family--heading)",
+       8
+      ],
+      [
+       "Arial",
+       2
+      ],
+      [
+       "Helioscond",
+       2
+      ],
+      [
+       "var(--font-family--design)",
+       2
+      ],
+      [
+       "swiper-icons",
+       2
+      ],
+      [
+       "sans-serif",
+       1
+      ],
+      [
+       "monospace",
+       1
+      ]
+     ]
+    }
+   }
+  }
+ },
+ "gallery": {
+  "awwwards": "https://www.awwwards.com/sites/stanzza-design",
+  "files": [
+   {
+    "url": "https://assets.awwwards.com/awards/submissions/2026/09/6a993a7df0249631843461.jpg",
+    "file": "_renders/stanzza-awwwards-gallery-1.jpg",
+    "bytes": 68414,
+    "width": 1600,
+    "height": 1200
+   }
+  ],
+  "awwwardsStatus": 403
+ }
+}

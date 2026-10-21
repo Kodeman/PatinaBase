@@ -1,0 +1,2111 @@
+{
+ "site": "era-residence",
+ "live": "https://www.era-residence.com/",
+ "capturedAt": "2026-10-21T14:31:12.741Z",
+ "attempts": [
+  {
+   "viewport": "desktop",
+   "attempt": 1,
+   "channel": "headless-shell",
+   "reducedMotion": "reduce",
+   "status": 200,
+   "preloaderStuck": false,
+   "shots": 6
+  },
+  {
+   "viewport": "mobile",
+   "attempt": 1,
+   "channel": "headless-shell",
+   "reducedMotion": "reduce",
+   "status": 200,
+   "preloaderStuck": false,
+   "shots": 3
+  }
+ ],
+ "viewports": {
+  "desktop": {
+   "viewport": "desktop",
+   "reducedMotion": "reduce",
+   "shots": [
+    {
+     "file": "_renders/era-residence-desktop-0.jpg",
+     "bytes": 123569,
+     "width": 1440,
+     "height": 900
+    },
+    {
+     "file": "_renders/era-residence-desktop-1.jpg",
+     "bytes": 144504,
+     "width": 1440,
+     "height": 900
+    },
+    {
+     "file": "_renders/era-residence-desktop-2.jpg",
+     "bytes": 128576,
+     "width": 1440,
+     "height": 900
+    },
+    {
+     "file": "_renders/era-residence-desktop-3.jpg",
+     "bytes": 125666,
+     "width": 1440,
+     "height": 900
+    },
+    {
+     "file": "_renders/era-residence-desktop-5.jpg",
+     "bytes": 69039,
+     "width": 1440,
+     "height": 900
+    },
+    {
+     "file": "_renders/era-residence-desktop-full.jpg",
+     "bytes": 319032,
+     "width": 638,
+     "height": 10901
+    }
+   ],
+   "screens": [
+    {
+     "offset": 0,
+     "requestedY": 0,
+     "scrollY": 0,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "Book a call",
+       "x": 1312,
+       "y": 116,
+       "w": 85,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Contact",
+       "x": 1338,
+       "y": 131,
+       "w": 59,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "00",
+       "x": 83,
+       "y": 313,
+       "w": 43,
+       "size": 9.9,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.4752px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "by day",
+       "x": 624,
+       "y": 472,
+       "w": 46,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "by night",
+       "x": 756,
+       "y": 472,
+       "w": 61,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Scroll",
+       "x": 99,
+       "y": 743,
+       "w": 11,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "00",
+       "x": 83,
+       "y": 313,
+       "w": 43,
+       "size": 9.9,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.4752px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Book a call",
+       "x": 1312,
+       "y": 116,
+       "w": 85,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Contact",
+       "x": 1338,
+       "y": 131,
+       "w": 59,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "navs": [],
+     "textCount": 6,
+     "actualY": 0
+    },
+    {
+     "offset": 1,
+     "requestedY": 900,
+     "scrollY": 1200,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "Book a call",
+       "x": 1312,
+       "y": 116,
+       "w": 85,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Contact",
+       "x": 1338,
+       "y": 131,
+       "w": 59,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "05",
+       "x": 83,
+       "y": 326,
+       "w": 43,
+       "size": 9.9,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.4752px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Scroll",
+       "x": 99,
+       "y": 743,
+       "w": 11,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "05",
+       "x": 83,
+       "y": 326,
+       "w": 43,
+       "size": 9.9,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.4752px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Book a call",
+       "x": 1312,
+       "y": 116,
+       "w": 85,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Contact",
+       "x": 1338,
+       "y": 131,
+       "w": 59,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "navs": [],
+     "textCount": 4,
+     "actualY": 905
+    },
+    {
+     "offset": 2,
+     "requestedY": 1800,
+     "scrollY": 2000,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "Book a call",
+       "x": 1312,
+       "y": 116,
+       "w": 85,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Contact",
+       "x": 1338,
+       "y": 131,
+       "w": 59,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "08",
+       "x": 83,
+       "y": 335,
+       "w": 43,
+       "size": 9.9,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.4752px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Scroll",
+       "x": 99,
+       "y": 743,
+       "w": 11,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "08",
+       "x": 83,
+       "y": 335,
+       "w": 43,
+       "size": 9.9,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.4752px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Book a call",
+       "x": 1312,
+       "y": 116,
+       "w": 85,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Contact",
+       "x": 1338,
+       "y": 131,
+       "w": 59,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "navs": [],
+     "textCount": 4,
+     "actualY": 1722
+    },
+    {
+     "offset": 3,
+     "requestedY": 2700,
+     "scrollY": 3000,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "Book a call",
+       "x": 1312,
+       "y": 116,
+       "w": 85,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Contact",
+       "x": 1338,
+       "y": 131,
+       "w": 59,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "13",
+       "x": 83,
+       "y": 346,
+       "w": 43,
+       "size": 9.9,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.4752px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Three reasons to choose Era",
+       "x": 446,
+       "y": 661,
+       "w": 549,
+       "size": 56.7,
+       "family": "ambroise-francois-std",
+       "weight": "400",
+       "ls": "-0.9072px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "Scroll",
+       "x": 99,
+       "y": 743,
+       "w": 11,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Three reasons to choose Era",
+       "x": 446,
+       "y": 661,
+       "w": 549,
+       "size": 56.7,
+       "family": "ambroise-francois-std",
+       "weight": "400",
+       "ls": "-0.9072px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "13",
+       "x": 83,
+       "y": 346,
+       "w": 43,
+       "size": 9.9,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.4752px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Book a call",
+       "x": 1312,
+       "y": 116,
+       "w": 85,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "navs": [],
+     "textCount": 5,
+     "actualY": 2734
+    },
+    {
+     "offset": 5,
+     "requestedY": 4500,
+     "scrollY": 4800,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "Book a call",
+       "x": 1312,
+       "y": 116,
+       "w": 85,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "Contact",
+       "x": 1338,
+       "y": 131,
+       "w": 59,
+       "size": 8.1,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.592px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "Nestled",
+       "x": 456,
+       "y": 256,
+       "w": 44,
+       "size": 11.7,
+       "family": "Maison Neue Extended",
+       "weight": "400",
+       "ls": "-0.2808px",
+       "tt": "none",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "between",
+       "x": 503,
+       "y": 256,
+       "w": 51,
+       "size": 11.7,
+       "family": "Maison Neue Extended",
+       "weight": "400",
+       "ls": "-0.2808px",
+       "tt": "none",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "pristine",
+       "x": 556,
+       "y": 256,
+       "w": 42,
+       "size": 11.7,
+       "family": "Maison Neue Extended",
+       "weight": "400",
+       "ls": "-0.2808px",
+       "tt": "none",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "beaches,",
+       "x": 601,
+       "y": 256,
+       "w": 53,
+       "size": 11.7,
+       "family": "Maison Neue Extended",
+       "weight": "400",
+       "ls": "-0.2808px",
+       "tt": "none",
+       "color": "rgb(23, 35, 59)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Nestled",
+       "x": 456,
+       "y": 256,
+       "w": 44,
+       "size": 11.7,
+       "family": "Maison Neue Extended",
+       "weight": "400",
+       "ls": "-0.2808px",
+       "tt": "none",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "between",
+       "x": 503,
+       "y": 256,
+       "w": 51,
+       "size": 11.7,
+       "family": "Maison Neue Extended",
+       "weight": "400",
+       "ls": "-0.2808px",
+       "tt": "none",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "pristine",
+       "x": 556,
+       "y": 256,
+       "w": 42,
+       "size": 11.7,
+       "family": "Maison Neue Extended",
+       "weight": "400",
+       "ls": "-0.2808px",
+       "tt": "none",
+       "color": "rgb(23, 35, 59)"
+      }
+     ],
+     "navs": [],
+     "textCount": 35,
+     "actualY": 4543
+    }
+   ],
+   "status": 200,
+   "earlyCover": {
+    "covers": [],
+    "textChars": 4008,
+    "title": "ERA Residence — Contemporary Mediterranean Residences in Estepona"
+   },
+   "lateCover": {
+    "covers": [],
+    "textChars": 4008,
+    "title": "ERA Residence — Contemporary Mediterranean Residences in Estepona"
+   },
+   "cookieDismissed": "Accept",
+   "loadPassBottom": 7200,
+   "page": {
+    "vw": 1440,
+    "vh": 900,
+    "docHeight": 24605,
+    "ground": {
+     "body": "transparent",
+     "html": "#f3f3ec"
+    },
+    "inkByChars": [
+     [
+      "#17233b",
+      1883
+     ],
+     [
+      "#ffffff",
+      717
+     ],
+     [
+      "#f3f3ec",
+      86
+     ]
+    ],
+    "type": [
+     {
+      "size": 56.7,
+      "family": "ambroise-francois-std",
+      "weight": "400",
+      "letterSpacing": "-0.9072px",
+      "transform": "uppercase",
+      "lineHeight": "49.896px",
+      "chars": 260,
+      "n": 39,
+      "sample": "Three reasons to choose Era"
+     },
+     {
+      "size": 36,
+      "family": "ambroise-francois-std",
+      "weight": "400",
+      "letterSpacing": "-0.288px",
+      "transform": "uppercase",
+      "lineHeight": "36px",
+      "chars": 499,
+      "n": 73,
+      "sample": "Instead"
+     },
+     {
+      "size": 11.7,
+      "family": "Maison Neue Extended",
+      "weight": "400",
+      "letterSpacing": "-0.2808px",
+      "transform": "none",
+      "lineHeight": "16.146px",
+      "chars": 1273,
+      "n": 119,
+      "sample": "Nestled"
+     },
+     {
+      "size": 9.9,
+      "family": "Maison Neue Extended",
+      "weight": "700",
+      "letterSpacing": "0.4752px",
+      "transform": "uppercase",
+      "lineHeight": "14.355px",
+      "chars": 485,
+      "n": 92,
+      "sample": "Era"
+     },
+     {
+      "size": 9.9,
+      "family": "Maison Neue Extended",
+      "weight": "400",
+      "letterSpacing": "0.4752px",
+      "transform": "uppercase",
+      "lineHeight": "14.355px",
+      "chars": 93,
+      "n": 14,
+      "sample": "Era"
+     },
+     {
+      "size": 8.1,
+      "family": "Maison Neue Extended",
+      "weight": "700",
+      "letterSpacing": "2.592px",
+      "transform": "uppercase",
+      "lineHeight": "10.773px",
+      "chars": 76,
+      "n": 10,
+      "sample": "Book a call"
+     }
+    ],
+    "lineLengths": [
+     {
+      "size": 11.7,
+      "widthPx": 533,
+      "charsPerLine": 74,
+      "sample": "The project holds all required permits a"
+     },
+     {
+      "size": 11.7,
+      "widthPx": 533,
+      "charsPerLine": 74,
+      "sample": "Currently under construction. The first "
+     }
+    ],
+    "maxWidths": [],
+    "textLeftEdges": [
+     [
+      454,
+      452
+     ],
+     [
+      1001,
+      111
+     ],
+     [
+      315,
+      106
+     ],
+     [
+      727,
+      59
+     ],
+     [
+      418,
+      48
+     ],
+     [
+      317,
+      45
+     ]
+    ],
+    "imageCount": 35,
+    "imageRowsFirst5Screens": 1,
+    "ratios": [
+     1.11,
+     1.63,
+     2,
+     1.33,
+     0.65,
+     1,
+     5.15,
+     1.14,
+     1.79,
+     1.92,
+     1.61,
+     0.75,
+     1.6,
+     0.91
+    ],
+    "fullBleedCount": 6,
+    "imagesInLinks": 0,
+    "sequence": [
+     {
+      "kind": "image",
+      "top": 0,
+      "h": 975,
+      "n": 2,
+      "ratios": [
+       1.11,
+       1.63
+      ],
+      "widths": [
+       1083,
+       1397
+      ],
+      "fullBleed": true,
+      "links": 0
+     },
+     {
+      "kind": "text",
+      "words": 16,
+      "from": 975,
+      "to": 4500
+     }
+    ],
+    "overImage": [
+     {
+      "text": "Costa",
+      "size": 22.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "C",
+      "size": 22.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "o",
+      "size": 22.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "s",
+      "size": 22.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "t",
+      "size": 22.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "a",
+      "size": 22.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "Era",
+      "size": 86.4,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "E",
+      "size": 86.4,
+      "color": "#f3f3ec",
+      "tint": "none"
+     }
+    ],
+    "motion": {
+     "runningAnimations": [
+      {
+       "name": "visibility",
+       "duration": 400,
+       "easing": "cubic-bezier(0.25, 1, 0.5, 1)",
+       "iterations": 1,
+       "target": "a.nav-item w-inline-block is-act"
+      },
+      {
+       "name": "opacity",
+       "duration": 400,
+       "easing": "cubic-bezier(0.25, 1, 0.5, 1)",
+       "iterations": 1,
+       "target": "a.nav-item w-inline-block is-act"
+      },
+      {
+       "name": "visibility",
+       "duration": 800,
+       "easing": "cubic-bezier(0.25, 1, 0.5, 1)",
+       "iterations": 1,
+       "target": "div.nav-item_label_text"
+      },
+      {
+       "name": "visibility",
+       "duration": 800,
+       "easing": "cubic-bezier(0.25, 1, 0.5, 1)",
+       "iterations": 1,
+       "target": "div.nav-item_label_text is-2"
+      },
+      {
+       "name": "visibility",
+       "duration": 800,
+       "easing": "cubic-bezier(0.76, 0, 0.24, 1)",
+       "iterations": 1,
+       "target": "div.hero-s_tabs_divider is-day"
+      },
+      {
+       "name": "visibility",
+       "duration": 400,
+       "easing": "cubic-bezier(0.25, 1, 0.5, 1)",
+       "iterations": 1,
+       "target": "a.nav-item w-inline-block"
+      },
+      {
+       "name": "visibility",
+       "duration": 800,
+       "easing": "cubic-bezier(0.25, 1, 0.5, 1)",
+       "iterations": 1,
+       "target": "div.nav-item_label_text"
+      },
+      {
+       "name": "visibility",
+       "duration": 800,
+       "easing": "cubic-bezier(0.25, 1, 0.5, 1)",
+       "iterations": 1,
+       "target": "div.nav-item_label_text is-2"
+      },
+      {
+       "name": "opacity",
+       "duration": 400,
+       "easing": "cubic-bezier(0.25, 1, 0.5, 1)",
+       "iterations": 1,
+       "target": "div.amen-tab is-active"
+      },
+      {
+       "name": "marquee",
+       "duration": 32000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee_track"
+      },
+      {
+       "name": "marquee",
+       "duration": 32000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee_track"
+      },
+      {
+       "name": "marquee",
+       "duration": 32000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee_track"
+      }
+     ],
+     "libs": {
+      "gsap": true,
+      "gsapVersion": "3.15.0",
+      "scrollTrigger": true,
+      "triggers": 194,
+      "pinned": 0,
+      "scrubbed": 28,
+      "lenis": true,
+      "locomotive": false,
+      "swiper": false,
+      "three": false,
+      "barba": true,
+      "webflow": true
+     },
+     "speedAttrs": 0,
+     "htmlClass": "w-mod-js wf-ambroisefrancoisstd-n4-active wf-sloopscriptthree-n4-active wf-active lenis lenis-stopped"
+    },
+    "sticky": [
+     "div.hero-w",
+     "div.loc-scroll-area_screen",
+     "div.scroll-area_screen",
+     "div.arch-intro-s b-desk",
+     "div.arch-w theme_on-color"
+    ],
+    "smallestTargets": "15 of 26 links/buttons under 44px tall",
+    "scripts": [
+     "gtm.js",
+     "pig8glj.js",
+     "jquery-3.5.1.min.dc5e7f18c8.js",
+     "webflow.a0aa6ca1.b7683852b8a60d8e.js",
+     "core",
+     "gsap.min.js",
+     "ScrollTrigger.min.js",
+     "SplitText.min.js",
+     "CustomEase.min.js",
+     "lenis.min.js",
+     "lottie.min.js",
+     "20164.js"
+    ],
+    "stylesheets": [
+     "https://cdn.prod.website-files.com/6a068da7ad91b057365bf967/css/era-residence.webflow.shared.c9555a234.min.css",
+     "https://unpkg.com/lenis@1.3.21/dist/lenis.css"
+    ],
+    "css": {
+     "cssBytes": 144868,
+     "transitionDurations": [
+      [
+       ".1s",
+       1
+      ],
+      [
+       ".3s",
+       1
+      ],
+      [
+       "1ms",
+       1
+      ]
+     ],
+     "easings": [
+      [
+       "ease-out",
+       20
+      ],
+      [
+       "linear",
+       11
+      ],
+      [
+       "ease-in-out",
+       5
+      ],
+      [
+       "ease-in",
+       2
+      ],
+      [
+       "cubic-bezier(0.76, 0, 0.24, 1)",
+       1
+      ],
+      [
+       "cubic-bezier(0.25, 1, 0.5, 1)",
+       1
+      ],
+      [
+       "cubic-bezier(0.5, 0, 0.75, 0)",
+       1
+      ],
+      [
+       "cubic-bezier(0.25, 0.1, 0.25, 1)",
+       1
+      ]
+     ],
+     "animationDurations": [
+      [
+       "32s",
+       1
+      ],
+      [
+       ".8s",
+       1
+      ]
+     ],
+     "keyframes": [
+      [
+       "marquee",
+       1
+      ],
+      [
+       "spin",
+       1
+      ]
+     ],
+     "hoverRules": 24,
+     "hoverTransforms": 2,
+     "hoverOpacity": 5,
+     "breakpoints": [
+      [
+       "992px",
+       9
+      ],
+      [
+       "991px",
+       6
+      ],
+      [
+       "767px",
+       3
+      ],
+      [
+       "479px",
+       3
+      ],
+      [
+       "768px",
+       1
+      ]
+     ],
+     "clampSizes": [
+      [
+       "1vw",
+       2
+      ]
+     ],
+     "maxWidths": [
+      [
+       "991px",
+       6
+      ],
+      [
+       "767px",
+       3
+      ],
+      [
+       "479px",
+       3
+      ],
+      [
+       "940px",
+       1
+      ],
+      [
+       "728px",
+       1
+      ],
+      [
+       "100vw",
+       1
+      ],
+      [
+       "96vw",
+       1
+      ],
+      [
+       "82.3vw",
+       1
+      ]
+     ],
+     "reducedMotionQueries": 0,
+     "scrollBehavior": [
+      [
+       "none",
+       1
+      ],
+      [
+       "contain",
+       1
+      ]
+     ],
+     "fontFaces": [
+      [
+       "var(--_fonts---font-display)",
+       13
+      ],
+      [
+       "var(--_fonts---font-body)",
+       6
+      ],
+      [
+       "sloop-script-three",
+       3
+      ],
+      [
+       "ambroise-francois-std",
+       2
+      ],
+      [
+       "Maison Neue Extended",
+       2
+      ],
+      [
+       "var(--_fonts---font-accent)",
+       2
+      ],
+      [
+       "sans-serif",
+       1
+      ],
+      [
+       "monospace",
+       1
+      ]
+     ]
+    }
+   }
+  },
+  "mobile": {
+   "viewport": "mobile",
+   "reducedMotion": "reduce",
+   "shots": [
+    {
+     "file": "_renders/era-residence-mobile-0.jpg",
+     "bytes": 88351,
+     "width": 780,
+     "height": 1688
+    },
+    {
+     "file": "_renders/era-residence-mobile-1.jpg",
+     "bytes": 86317,
+     "width": 780,
+     "height": 1688
+    },
+    {
+     "file": "_renders/era-residence-mobile-2.jpg",
+     "bytes": 40800,
+     "width": 780,
+     "height": 1688
+    }
+   ],
+   "screens": [
+    {
+     "offset": 0,
+     "requestedY": 0,
+     "scrollY": 0,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "Menu",
+       "x": 304,
+       "y": 28,
+       "w": 38,
+       "size": 8.4375,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.7px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      },
+      {
+       "text": "Era",
+       "x": 149,
+       "y": 784,
+       "w": 23,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(243, 243, 236)"
+      },
+      {
+       "text": "Residence",
+       "x": 176,
+       "y": 784,
+       "w": 65,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(243, 243, 236)"
+      },
+      {
+       "text": "place",
+       "x": 136,
+       "y": 799,
+       "w": 38,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(243, 243, 236)"
+      },
+      {
+       "text": "to",
+       "x": 177,
+       "y": 799,
+       "w": 16,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(243, 243, 236)"
+      },
+      {
+       "text": "return",
+       "x": 196,
+       "y": 799,
+       "w": 47,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(243, 243, 236)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Era",
+       "x": 149,
+       "y": 784,
+       "w": 23,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(243, 243, 236)"
+      },
+      {
+       "text": "Residence",
+       "x": 176,
+       "y": 784,
+       "w": 65,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(243, 243, 236)"
+      },
+      {
+       "text": "place",
+       "x": 136,
+       "y": 799,
+       "w": 38,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(243, 243, 236)"
+      }
+     ],
+     "navs": [],
+     "textCount": 7,
+     "actualY": 0
+    },
+    {
+     "offset": 1,
+     "requestedY": 844,
+     "scrollY": 844,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "Menu",
+       "x": 304,
+       "y": 28,
+       "w": 38,
+       "size": 8.4375,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.7px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Menu",
+       "x": 304,
+       "y": 28,
+       "w": 38,
+       "size": 8.4375,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.7px",
+       "tt": "uppercase",
+       "color": "rgb(255, 255, 255)"
+      }
+     ],
+     "navs": [],
+     "textCount": 1,
+     "actualY": 844
+    },
+    {
+     "offset": 2,
+     "requestedY": 1688,
+     "scrollY": 1744,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "Three reasons to choose Era",
+       "x": 18,
+       "y": -46,
+       "w": 355,
+       "size": 37.5,
+       "family": "ambroise-francois-std",
+       "weight": "400",
+       "ls": "-0.6px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "Menu",
+       "x": 304,
+       "y": 28,
+       "w": 38,
+       "size": 8.4375,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "2.7px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "Costa",
+       "x": 111,
+       "y": 102,
+       "w": 39,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "del",
+       "x": 240,
+       "y": 102,
+       "w": 22,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "Sol",
+       "x": 265,
+       "y": 102,
+       "w": 23,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "place",
+       "x": 117,
+       "y": 357,
+       "w": 38,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Three reasons to choose Era",
+       "x": 18,
+       "y": -46,
+       "w": 355,
+       "size": 37.5,
+       "family": "ambroise-francois-std",
+       "weight": "400",
+       "ls": "-0.6px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "Costa",
+       "x": 111,
+       "y": 102,
+       "w": 39,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      },
+      {
+       "text": "del",
+       "x": 240,
+       "y": 102,
+       "w": 22,
+       "size": 10.3125,
+       "family": "Maison Neue Extended",
+       "weight": "700",
+       "ls": "0.495px",
+       "tt": "uppercase",
+       "color": "rgb(23, 35, 59)"
+      }
+     ],
+     "navs": [],
+     "textCount": 13,
+     "actualY": 1597
+    }
+   ],
+   "status": 200,
+   "earlyCover": {
+    "covers": [],
+    "textChars": 3644,
+    "title": "ERA Residence — Contemporary Mediterranean Residences in Estepona"
+   },
+   "lateCover": {
+    "covers": [],
+    "textChars": 3644,
+    "title": "ERA Residence — Contemporary Mediterranean Residences in Estepona"
+   },
+   "cookieDismissed": "Accept",
+   "loadPassBottom": 6752,
+   "page": {
+    "vw": 390,
+    "vh": 844,
+    "docHeight": 15381,
+    "ground": {
+     "body": "transparent",
+     "html": "#f3f3ec"
+    },
+    "inkByChars": [
+     [
+      "#17233b",
+      2436
+     ],
+     [
+      "#ffffff",
+      659
+     ],
+     [
+      "#f3f3ec",
+      275
+     ]
+    ],
+    "type": [
+     {
+      "size": 90,
+      "family": "ambroise-francois-std",
+      "weight": "400",
+      "letterSpacing": "-2.16px",
+      "transform": "uppercase",
+      "lineHeight": "81.9px",
+      "chars": 51,
+      "n": 9,
+      "sample": "New"
+     },
+     {
+      "size": 90,
+      "family": "sloop-script-three",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "90px",
+      "chars": 7,
+      "n": 1,
+      "sample": "Live in"
+     },
+     {
+      "size": 68.4375,
+      "family": "ambroise-francois-std",
+      "weight": "400",
+      "letterSpacing": "-1.6425px",
+      "transform": "uppercase",
+      "lineHeight": "59.5406px",
+      "chars": 58,
+      "n": 3,
+      "sample": "Real-Life Location"
+     },
+     {
+      "size": 67.5,
+      "family": "sloop-script-three",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "67.5px",
+      "chars": 5,
+      "n": 1,
+      "sample": "yours"
+     },
+     {
+      "size": 52.5,
+      "family": "ambroise-francois-std",
+      "weight": "400",
+      "letterSpacing": "-1.26px",
+      "transform": "uppercase",
+      "lineHeight": "48.3px",
+      "chars": 75,
+      "n": 6,
+      "sample": "The coast you wanted"
+     },
+     {
+      "size": 37.5,
+      "family": "ambroise-francois-std",
+      "weight": "400",
+      "letterSpacing": "-0.6px",
+      "transform": "uppercase",
+      "lineHeight": "37.5px",
+      "chars": 298,
+      "n": 3,
+      "sample": "Three reasons to choose Era"
+     },
+     {
+      "size": 26.25,
+      "family": "ambroise-francois-std",
+      "weight": "400",
+      "letterSpacing": "-0.21px",
+      "transform": "uppercase",
+      "lineHeight": "26.25px",
+      "chars": 440,
+      "n": 10,
+      "sample": "Between Marbella and Estepona"
+     },
+     {
+      "size": 17.8125,
+      "family": "ambroise-francois-std",
+      "weight": "400",
+      "letterSpacing": "14.25px",
+      "transform": "uppercase",
+      "lineHeight": "22.4438px",
+      "chars": 26,
+      "n": 2,
+      "sample": "Spain"
+     },
+     {
+      "size": 12.1875,
+      "family": "Maison Neue Extended",
+      "weight": "400",
+      "letterSpacing": "-0.2925px",
+      "transform": "none",
+      "lineHeight": "16.8188px",
+      "chars": 1373,
+      "n": 9,
+      "sample": "Nestled between pristine beaches, world-class golf"
+     },
+     {
+      "size": 10.3125,
+      "family": "Maison Neue Extended",
+      "weight": "700",
+      "letterSpacing": "0.495px",
+      "transform": "uppercase",
+      "lineHeight": "14.9531px",
+      "chars": 943,
+      "n": 44,
+      "sample": "Era"
+     },
+     {
+      "size": 10.3125,
+      "family": "Maison Neue Extended",
+      "weight": "400",
+      "letterSpacing": "0.495px",
+      "transform": "uppercase",
+      "lineHeight": "14.9531px",
+      "chars": 86,
+      "n": 7,
+      "sample": "Bedrooms"
+     },
+     {
+      "size": 8.4375,
+      "family": "Maison Neue Extended",
+      "weight": "700",
+      "letterSpacing": "2.7px",
+      "transform": "uppercase",
+      "lineHeight": "11.2219px",
+      "chars": 8,
+      "n": 2,
+      "sample": "Menu"
+     }
+    ],
+    "lineLengths": [
+     {
+      "size": 12.1875,
+      "widthPx": 345,
+      "charsPerLine": 49,
+      "sample": "Nestled between pristine beaches, world-"
+     },
+     {
+      "size": 12.1875,
+      "widthPx": 345,
+      "charsPerLine": 43,
+      "sample": "Inspired by the atmosphere of Marbella’s"
+     },
+     {
+      "size": 12.1875,
+      "widthPx": 255,
+      "charsPerLine": 38,
+      "sample": "Surrounded by beaches, golf courses, wel"
+     },
+     {
+      "size": 12.1875,
+      "widthPx": 255,
+      "charsPerLine": 39,
+      "sample": "Underfloor heating throughout the proper"
+     },
+     {
+      "size": 12.1875,
+      "widthPx": 345,
+      "charsPerLine": 56,
+      "sample": "The project holds all required permits a"
+     },
+     {
+      "size": 12.1875,
+      "widthPx": 345,
+      "charsPerLine": 44,
+      "sample": "Currently under construction. The first "
+     },
+     {
+      "size": 10.3125,
+      "widthPx": 345,
+      "charsPerLine": 43,
+      "sample": "A short conversation is enough to unders"
+     }
+    ],
+    "maxWidths": [],
+    "textLeftEdges": [
+     [
+      23,
+      1869
+     ],
+     [
+      113,
+      717
+     ],
+     [
+      98,
+      270
+     ],
+     [
+      143,
+      100
+     ],
+     [
+      188,
+      50
+     ],
+     [
+      103,
+      50
+     ]
+    ],
+    "imageCount": 32,
+    "imageRowsFirst5Screens": 4,
+    "ratios": [
+     0.46,
+     0.44,
+     2,
+     1,
+     0.75,
+     5.15,
+     1.14,
+     1.79,
+     1.92,
+     1.61,
+     0.33,
+     1.33,
+     0.38,
+     0.27
+    ],
+    "fullBleedCount": 20,
+    "imagesInLinks": 0,
+    "sequence": [
+     {
+      "kind": "image",
+      "top": 0,
+      "h": 971,
+      "n": 2,
+      "ratios": [
+       0.46,
+       0.44
+      ],
+      "widths": [
+       449,
+       360
+      ],
+      "fullBleed": true,
+      "links": 0
+     },
+     {
+      "kind": "text",
+      "words": 20,
+      "from": 971,
+      "to": 2525
+     },
+     {
+      "kind": "image",
+      "top": 2525,
+      "h": 173,
+      "n": 1,
+      "ratios": [
+       2
+      ],
+      "widths": [
+       345
+      ],
+      "fullBleed": false,
+      "links": 0
+     },
+     {
+      "kind": "text",
+      "words": 36,
+      "from": 2698,
+      "to": 3033
+     },
+     {
+      "kind": "image",
+      "top": 3033,
+      "h": 390,
+      "n": 1,
+      "ratios": [
+       1
+      ],
+      "widths": [
+       390
+      ],
+      "fullBleed": true,
+      "links": 0
+     },
+     {
+      "kind": "image",
+      "top": 3341,
+      "h": 375,
+      "n": 1,
+      "ratios": [
+       1
+      ],
+      "widths": [
+       375
+      ],
+      "fullBleed": true,
+      "links": 0
+     },
+     {
+      "kind": "text",
+      "words": 23,
+      "from": 3716,
+      "to": 4220
+     }
+    ],
+    "overImage": [
+     {
+      "text": "Era",
+      "size": 52.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "E",
+      "size": 52.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "r",
+      "size": 52.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "a",
+      "size": 52.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "Residence",
+      "size": 52.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "R",
+      "size": 52.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "e",
+      "size": 52.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     },
+     {
+      "text": "s",
+      "size": 52.5,
+      "color": "#f3f3ec",
+      "tint": "none"
+     }
+    ],
+    "motion": {
+     "runningAnimations": [
+      {
+       "name": "marquee",
+       "duration": 32000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee_track"
+      },
+      {
+       "name": "marquee",
+       "duration": 32000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee_track"
+      },
+      {
+       "name": "marquee",
+       "duration": 32000,
+       "easing": "linear",
+       "iterations": null,
+       "target": "div.marquee_track"
+      }
+     ],
+     "libs": {
+      "gsap": true,
+      "gsapVersion": "3.15.0",
+      "scrollTrigger": true,
+      "triggers": 14,
+      "pinned": 0,
+      "scrubbed": 14,
+      "lenis": true,
+      "locomotive": false,
+      "swiper": false,
+      "three": false,
+      "barba": true,
+      "webflow": true
+     },
+     "speedAttrs": 0,
+     "htmlClass": "w-mod-js w-mod-touch wf-ambroisefrancoisstd-n4-active wf-sloopscriptthree-n4-active wf-active lenis lenis-stopped"
+    },
+    "sticky": [
+     "div.hero-w",
+     "div.scroll-area_screen",
+     "div.arch-intro-s b-desk"
+    ],
+    "smallestTargets": "9 of 15 links/buttons under 44px tall",
+    "scripts": [
+     "gtm.js",
+     "pig8glj.js",
+     "jquery-3.5.1.min.dc5e7f18c8.js",
+     "webflow.a0aa6ca1.b7683852b8a60d8e.js",
+     "core",
+     "gsap.min.js",
+     "ScrollTrigger.min.js",
+     "SplitText.min.js",
+     "CustomEase.min.js",
+     "lenis.min.js",
+     "lottie.min.js",
+     "20164.js"
+    ],
+    "stylesheets": [
+     "https://cdn.prod.website-files.com/6a068da7ad91b057365bf967/css/era-residence.webflow.shared.c9555a234.min.css",
+     "https://unpkg.com/lenis@1.3.21/dist/lenis.css"
+    ],
+    "css": {
+     "cssBytes": 144868,
+     "transitionDurations": [
+      [
+       ".1s",
+       1
+      ],
+      [
+       ".3s",
+       1
+      ],
+      [
+       "1ms",
+       1
+      ]
+     ],
+     "easings": [
+      [
+       "ease-out",
+       20
+      ],
+      [
+       "linear",
+       11
+      ],
+      [
+       "ease-in-out",
+       5
+      ],
+      [
+       "ease-in",
+       2
+      ],
+      [
+       "cubic-bezier(0.76, 0, 0.24, 1)",
+       1
+      ],
+      [
+       "cubic-bezier(0.25, 1, 0.5, 1)",
+       1
+      ],
+      [
+       "cubic-bezier(0.5, 0, 0.75, 0)",
+       1
+      ],
+      [
+       "cubic-bezier(0.25, 0.1, 0.25, 1)",
+       1
+      ]
+     ],
+     "animationDurations": [
+      [
+       "32s",
+       1
+      ],
+      [
+       ".8s",
+       1
+      ]
+     ],
+     "keyframes": [
+      [
+       "marquee",
+       1
+      ],
+      [
+       "spin",
+       1
+      ]
+     ],
+     "hoverRules": 24,
+     "hoverTransforms": 2,
+     "hoverOpacity": 5,
+     "breakpoints": [
+      [
+       "992px",
+       9
+      ],
+      [
+       "991px",
+       6
+      ],
+      [
+       "767px",
+       3
+      ],
+      [
+       "479px",
+       3
+      ],
+      [
+       "768px",
+       1
+      ]
+     ],
+     "clampSizes": [
+      [
+       "1vw",
+       2
+      ]
+     ],
+     "maxWidths": [
+      [
+       "991px",
+       6
+      ],
+      [
+       "767px",
+       3
+      ],
+      [
+       "479px",
+       3
+      ],
+      [
+       "940px",
+       1
+      ],
+      [
+       "728px",
+       1
+      ],
+      [
+       "100vw",
+       1
+      ],
+      [
+       "96vw",
+       1
+      ],
+      [
+       "82.3vw",
+       1
+      ]
+     ],
+     "reducedMotionQueries": 0,
+     "scrollBehavior": [
+      [
+       "none",
+       1
+      ],
+      [
+       "contain",
+       1
+      ]
+     ],
+     "fontFaces": [
+      [
+       "var(--_fonts---font-display)",
+       13
+      ],
+      [
+       "var(--_fonts---font-body)",
+       6
+      ],
+      [
+       "sloop-script-three",
+       3
+      ],
+      [
+       "ambroise-francois-std",
+       2
+      ],
+      [
+       "Maison Neue Extended",
+       2
+      ],
+      [
+       "var(--_fonts---font-accent)",
+       2
+      ],
+      [
+       "sans-serif",
+       1
+      ],
+      [
+       "monospace",
+       1
+      ]
+     ]
+    }
+   }
+  }
+ },
+ "gallery": {
+  "awwwards": "https://www.awwwards.com/sites/era-residence",
+  "files": [],
+  "awwwardsStatus": 403
+ }
+}

@@ -1,0 +1,1366 @@
+{
+ "site": "fitosauna",
+ "live": "https://fitosauna.com/",
+ "capturedAt": "2026-10-21T14:30:06.399Z",
+ "attempts": [
+  {
+   "viewport": "desktop",
+   "attempt": 1,
+   "channel": "headless-shell",
+   "reducedMotion": "reduce",
+   "status": 403,
+   "blocked": "status 403, title \"403 - Forbidden\", 50 text chars",
+   "preloaderStuck": false,
+   "shots": 0
+  },
+  {
+   "viewport": "desktop",
+   "attempt": 2,
+   "channel": "chromium",
+   "reducedMotion": "no-preference",
+   "status": 403,
+   "blocked": "status 403, title \"403 - Forbidden\", 50 text chars",
+   "preloaderStuck": false,
+   "shots": 0
+  },
+  {
+   "viewport": "desktop",
+   "attempt": 3,
+   "channel": "chrome",
+   "reducedMotion": "no-preference",
+   "status": 403,
+   "blocked": "status 403, title \"403 - Forbidden\", 50 text chars",
+   "preloaderStuck": false,
+   "shots": 0
+  },
+  {
+   "viewport": "mobile",
+   "attempt": 1,
+   "channel": "headless-shell",
+   "reducedMotion": "reduce",
+   "status": 200,
+   "preloaderStuck": false,
+   "shots": 3
+  }
+ ],
+ "viewports": {
+  "desktop": {
+   "viewport": "desktop",
+   "reducedMotion": "no-preference",
+   "shots": [],
+   "screens": [],
+   "status": 403,
+   "earlyCover": {
+    "covers": [],
+    "textChars": 50,
+    "title": "403 - Forbidden"
+   },
+   "lateCover": {
+    "covers": [],
+    "textChars": 50,
+    "title": "403 - Forbidden"
+   },
+   "blocked": "status 403, title \"403 - Forbidden\", 50 text chars"
+  },
+  "mobile": {
+   "viewport": "mobile",
+   "reducedMotion": "reduce",
+   "shots": [
+    {
+     "file": "_renders/fitosauna-mobile-0.jpg",
+     "bytes": 102112,
+     "width": 780,
+     "height": 1688
+    },
+    {
+     "file": "_renders/fitosauna-mobile-1.jpg",
+     "bytes": 49395,
+     "width": 780,
+     "height": 1688
+    },
+    {
+     "file": "_renders/fitosauna-mobile-2.jpg",
+     "bytes": 51918,
+     "width": 780,
+     "height": 1688
+    }
+   ],
+   "screens": [
+    {
+     "offset": 0,
+     "requestedY": 0,
+     "scrollY": 1,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "EN",
+       "x": 263,
+       "y": 26,
+       "w": 15,
+       "size": 12,
+       "family": "Archivo Narrow",
+       "weight": "600",
+       "ls": "0.48px",
+       "tt": "uppercase",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "MENU",
+       "x": 319,
+       "y": 26,
+       "w": 42,
+       "size": 12,
+       "family": "Archivo Narrow",
+       "weight": "600",
+       "ls": "0.48px",
+       "tt": "uppercase",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "Relieve stress at home",
+       "x": 16,
+       "y": 92,
+       "w": 310,
+       "size": 48,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-1.92px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "Choose Relaxation",
+       "x": 16,
+       "y": 199,
+       "w": 182,
+       "size": 12,
+       "family": "Archivo Narrow",
+       "weight": "600",
+       "ls": "0.48px",
+       "tt": "uppercase",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "Fitosauna",
+       "x": 16,
+       "y": 667,
+       "w": 274,
+       "size": 21,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.21px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "steam sauna is designed for people who want to support their",
+       "x": 16,
+       "y": 667,
+       "w": 274,
+       "size": 21,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.21px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Relieve stress at home",
+       "x": 16,
+       "y": 92,
+       "w": 310,
+       "size": 48,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-1.92px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "Fitosauna",
+       "x": 16,
+       "y": 667,
+       "w": 274,
+       "size": 21,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.21px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "steam sauna is designed for people who want to support their",
+       "x": 16,
+       "y": 667,
+       "w": 274,
+       "size": 21,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.21px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header header-light",
+       "position": "fixed",
+       "top": 0,
+       "h": 68,
+       "w": 390,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 44
+      },
+      {
+       "tag": "div",
+       "cls": "header-nav mobile",
+       "position": "static",
+       "top": 16,
+       "h": 36,
+       "w": 196,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 22
+      },
+      {
+       "tag": "div",
+       "cls": "nav-wrapper nav-collapsed",
+       "position": "static",
+       "top": 16,
+       "h": 36,
+       "w": 196,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 22
+      },
+      {
+       "tag": "nav",
+       "cls": "",
+       "position": "static",
+       "top": 15202,
+       "h": 122,
+       "w": 358,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 5
+      }
+     ],
+     "textCount": 8,
+     "actualY": 1
+    },
+    {
+     "offset": 1,
+     "requestedY": 844,
+     "scrollY": 801,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "Fitosauna",
+       "x": 16,
+       "y": -22,
+       "w": 274,
+       "size": 21,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.21px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "steam sauna is designed for people who want to support their",
+       "x": 16,
+       "y": -22,
+       "w": 274,
+       "size": 21,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.21px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "EN",
+       "x": 263,
+       "y": 26,
+       "w": 15,
+       "size": 12,
+       "family": "Archivo Narrow",
+       "weight": "600",
+       "ls": "0.48px",
+       "tt": "uppercase",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "MENU",
+       "x": 319,
+       "y": 26,
+       "w": 42,
+       "size": 12,
+       "family": "Archivo Narrow",
+       "weight": "600",
+       "ls": "0.48px",
+       "tt": "uppercase",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "SCROLL TO EXPLORE",
+       "x": 16,
+       "y": 121,
+       "w": 114,
+       "size": 12,
+       "family": "Archivo Narrow",
+       "weight": "600",
+       "ls": "0.48px",
+       "tt": "uppercase",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "Fitosauna",
+       "x": 300,
+       "y": 121,
+       "w": 74,
+       "size": 12,
+       "family": "Archivo Narrow",
+       "weight": "600",
+       "ls": "0.48px",
+       "tt": "uppercase",
+       "color": "rgb(252, 246, 236)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Modern life leaves little",
+       "x": 39,
+       "y": 404,
+       "w": 311,
+       "size": 32,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.64px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "room for",
+       "x": 39,
+       "y": 434,
+       "w": 311,
+       "size": 32,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.64px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "recovery",
+       "x": 39,
+       "y": 434,
+       "w": 311,
+       "size": 32,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.64px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header sticky-header header-light",
+       "position": "fixed",
+       "top": 0,
+       "h": 68,
+       "w": 390,
+       "bg": "rgba(252, 246, 236, 0.16)",
+       "links": 44
+      },
+      {
+       "tag": "div",
+       "cls": "header-nav mobile",
+       "position": "static",
+       "top": 16,
+       "h": 36,
+       "w": 196,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 22
+      },
+      {
+       "tag": "div",
+       "cls": "nav-wrapper nav-collapsed",
+       "position": "static",
+       "top": 16,
+       "h": 36,
+       "w": 196,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 22
+      },
+      {
+       "tag": "nav",
+       "cls": "",
+       "position": "static",
+       "top": 14402,
+       "h": 122,
+       "w": 358,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 5
+      }
+     ],
+     "textCount": 9,
+     "actualY": 801
+    },
+    {
+     "offset": 2,
+     "requestedY": 1688,
+     "scrollY": 1601,
+     "imageShare": 100,
+     "firstWords": [
+      {
+       "text": "EN",
+       "x": 263,
+       "y": 26,
+       "w": 15,
+       "size": 12,
+       "family": "Archivo Narrow",
+       "weight": "600",
+       "ls": "0.48px",
+       "tt": "uppercase",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "MENU",
+       "x": 319,
+       "y": 26,
+       "w": 42,
+       "size": 12,
+       "family": "Archivo Narrow",
+       "weight": "600",
+       "ls": "0.48px",
+       "tt": "uppercase",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "Fitosauna is here to make",
+       "x": 20,
+       "y": 422,
+       "w": 350,
+       "size": 32,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.64px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "stress relief",
+       "x": 20,
+       "y": 453,
+       "w": 350,
+       "size": 32,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.64px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "possible",
+       "x": 20,
+       "y": 453,
+       "w": 350,
+       "size": 32,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.64px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      }
+     ],
+     "largest": [
+      {
+       "text": "Fitosauna is here to make",
+       "x": 20,
+       "y": 422,
+       "w": 350,
+       "size": 32,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.64px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "stress relief",
+       "x": 20,
+       "y": 453,
+       "w": 350,
+       "size": 32,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.64px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      },
+      {
+       "text": "possible",
+       "x": 20,
+       "y": 453,
+       "w": 350,
+       "size": 32,
+       "family": "Archivo",
+       "weight": "500",
+       "ls": "-0.64px",
+       "tt": "none",
+       "color": "rgb(252, 246, 236)"
+      }
+     ],
+     "navs": [
+      {
+       "tag": "header",
+       "cls": "header sticky-header header-light",
+       "position": "fixed",
+       "top": 0,
+       "h": 68,
+       "w": 390,
+       "bg": "rgba(252, 246, 236, 0.16)",
+       "links": 44
+      },
+      {
+       "tag": "div",
+       "cls": "header-nav mobile",
+       "position": "static",
+       "top": 16,
+       "h": 36,
+       "w": 196,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 22
+      },
+      {
+       "tag": "div",
+       "cls": "nav-wrapper nav-collapsed",
+       "position": "static",
+       "top": 16,
+       "h": 36,
+       "w": 196,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 22
+      },
+      {
+       "tag": "nav",
+       "cls": "",
+       "position": "static",
+       "top": 13602,
+       "h": 122,
+       "w": 358,
+       "bg": "rgba(0, 0, 0, 0)",
+       "links": 5
+      }
+     ],
+     "textCount": 5,
+     "actualY": 1601
+    }
+   ],
+   "status": 200,
+   "earlyCover": {
+    "covers": [],
+    "textChars": 6465,
+    "title": "Home - Fitosauna"
+   },
+   "lateCover": {
+    "covers": [],
+    "textChars": 6465,
+    "title": "Home - Fitosauna"
+   },
+   "cookieDismissed": "Accept All",
+   "loadPassBottom": 6701,
+   "page": {
+    "vw": 390,
+    "vh": 844,
+    "docHeight": 16356,
+    "ground": {
+     "body": "#fcf6ec",
+     "html": "transparent"
+    },
+    "inkByChars": [
+     [
+      "#27221a",
+      4670
+     ],
+     [
+      "#fcf6ec",
+      413
+     ],
+     [
+      "#d2942d",
+      52
+     ],
+     [
+      "#000000",
+      6
+     ]
+    ],
+    "type": [
+     {
+      "size": 70.2,
+      "family": "Archivo",
+      "weight": "500",
+      "letterSpacing": "-6.318px",
+      "transform": "none",
+      "lineHeight": "58.968px",
+      "chars": 9,
+      "n": 1,
+      "sample": "FITOSAUNA"
+     },
+     {
+      "size": 48,
+      "family": "Archivo",
+      "weight": "500",
+      "letterSpacing": "-1.92px",
+      "transform": "none",
+      "lineHeight": "40.32px",
+      "chars": 22,
+      "n": 1,
+      "sample": "Relieve stress at home"
+     },
+     {
+      "size": 32,
+      "family": "Archivo",
+      "weight": "500",
+      "letterSpacing": "-0.64px",
+      "transform": "none",
+      "lineHeight": "30.72px",
+      "chars": 236,
+      "n": 11,
+      "sample": "Modern life leaves little"
+     },
+     {
+      "size": 28,
+      "family": "Archivo",
+      "weight": "500",
+      "letterSpacing": "-1.12px",
+      "transform": "none",
+      "lineHeight": "30.8px",
+      "chars": 24,
+      "n": 2,
+      "sample": "Choose your"
+     },
+     {
+      "size": 24,
+      "family": "Archivo",
+      "weight": "500",
+      "letterSpacing": "-0.48px",
+      "transform": "none",
+      "lineHeight": "26.4px",
+      "chars": 2211,
+      "n": 31,
+      "sample": "Relaxation"
+     },
+     {
+      "size": 21,
+      "family": "Archivo",
+      "weight": "500",
+      "letterSpacing": "-0.21px",
+      "transform": "none",
+      "lineHeight": "23.1px",
+      "chars": 106,
+      "n": 2,
+      "sample": "Fitosauna"
+     },
+     {
+      "size": 16,
+      "family": "Archivo Narrow",
+      "weight": "600",
+      "letterSpacing": "0.64px",
+      "transform": "uppercase",
+      "lineHeight": "19.2px",
+      "chars": 198,
+      "n": 18,
+      "sample": "MAIN"
+     },
+     {
+      "size": 16,
+      "family": "Archivo",
+      "weight": "500",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "19.2px",
+      "chars": 151,
+      "n": 3,
+      "sample": "Made from thermo-aspen wood — built to last"
+     },
+     {
+      "size": 14,
+      "family": "Archivo",
+      "weight": "600",
+      "letterSpacing": "0.56px",
+      "transform": "uppercase",
+      "lineHeight": "16.8px",
+      "chars": 15,
+      "n": 1,
+      "sample": "Skip to content"
+     },
+     {
+      "size": 14,
+      "family": "Archivo",
+      "weight": "500",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "16.8px",
+      "chars": 482,
+      "n": 15,
+      "sample": "01"
+     },
+     {
+      "size": 12,
+      "family": "Archivo Narrow",
+      "weight": "600",
+      "letterSpacing": "0.48px",
+      "transform": "uppercase",
+      "lineHeight": "14.4px",
+      "chars": 939,
+      "n": 62,
+      "sample": "EN"
+     },
+     {
+      "size": 12,
+      "family": "Archivo Narrow",
+      "weight": "600",
+      "letterSpacing": "0.48px",
+      "transform": "uppercase",
+      "lineHeight": "normal",
+      "chars": 4,
+      "n": 2,
+      "sample": "01"
+     },
+     {
+      "size": 12,
+      "family": "Archivo Narrow",
+      "weight": "400",
+      "letterSpacing": "normal",
+      "transform": "none",
+      "lineHeight": "normal",
+      "chars": 30,
+      "n": 9,
+      "sample": "01"
+     },
+     {
+      "size": 12,
+      "family": "Archivo Narrow",
+      "weight": "600",
+      "letterSpacing": "0.48px",
+      "transform": "none",
+      "lineHeight": "14.4px",
+      "chars": 162,
+      "n": 12,
+      "sample": "VERIFIED CUSTOMER"
+     },
+     {
+      "size": 12,
+      "family": "Archivo Narrow",
+      "weight": "600",
+      "letterSpacing": "normal",
+      "transform": "uppercase",
+      "lineHeight": "normal",
+      "chars": 4,
+      "n": 1,
+      "sample": "NEXT"
+     },
+     {
+      "size": 10,
+      "family": "Archivo Narrow",
+      "weight": "600",
+      "letterSpacing": "0.4px",
+      "transform": "uppercase",
+      "lineHeight": "12px",
+      "chars": 256,
+      "n": 10,
+      "sample": "Improve health while relaxing"
+     },
+     {
+      "size": 10,
+      "family": "Archivo Narrow",
+      "weight": "600",
+      "letterSpacing": "0.4px",
+      "transform": "uppercase",
+      "lineHeight": "13px",
+      "chars": 292,
+      "n": 1,
+      "sample": "SIA FITOSAUNA is implementing an investment projec"
+     }
+    ],
+    "lineLengths": [
+     {
+      "size": 14,
+      "widthPx": 300,
+      "charsPerLine": 43,
+      "sample": "Fitosauna is suitable for regular use an"
+     },
+     {
+      "size": 10,
+      "widthPx": 358,
+      "charsPerLine": 58,
+      "sample": "SIA FITOSAUNA is implementing an investm"
+     }
+    ],
+    "maxWidths": [
+     [
+      "390px",
+      6
+     ],
+     [
+      "453px",
+      5
+     ],
+     [
+      "650px",
+      2
+     ],
+     [
+      "336px",
+      2
+     ],
+     [
+      "420px",
+      2
+     ],
+     [
+      "310px",
+      1
+     ],
+     [
+      "514px",
+      1
+     ],
+     [
+      "611px",
+      1
+     ]
+    ],
+    "textLeftEdges": [
+     [
+      16,
+      1846
+     ],
+     [
+      32,
+      179
+     ],
+     [
+      243,
+      124
+     ],
+     [
+      28,
+      68
+     ],
+     [
+      175,
+      65
+     ],
+     [
+      39,
+      52
+     ]
+    ],
+    "imageCount": 30,
+    "imageRowsFirst5Screens": 3,
+    "ratios": [
+     0.46,
+     0.33,
+     1.77,
+     1.27,
+     1.43,
+     0.83,
+     0.28,
+     1.21,
+     0.84,
+     1.33
+    ],
+    "fullBleedCount": 11,
+    "imagesInLinks": 0,
+    "sequence": [
+     {
+      "kind": "image",
+      "top": 1,
+      "h": 844,
+      "n": 2,
+      "ratios": [
+       0.46,
+       0.46
+      ],
+      "widths": [
+       390,
+       390
+      ],
+      "fullBleed": true,
+      "links": 0
+     },
+     {
+      "kind": "image",
+      "top": 844,
+      "h": 1182,
+      "n": 1,
+      "ratios": [
+       0.33
+      ],
+      "widths": [
+       390
+      ],
+      "fullBleed": true,
+      "links": 0
+     },
+     {
+      "kind": "text",
+      "words": 20,
+      "from": 2026,
+      "to": 2888
+     },
+     {
+      "kind": "image",
+      "top": 2888,
+      "h": 180,
+      "n": 7,
+      "ratios": [
+       1.77,
+       1.77,
+       1.77,
+       1.77,
+       1.77,
+       1.77,
+       1.77
+      ],
+      "widths": [
+       318,
+       318,
+       318,
+       318,
+       318,
+       318,
+       318
+      ],
+      "fullBleed": false,
+      "links": 0
+     },
+     {
+      "kind": "text",
+      "words": 68,
+      "from": 3068,
+      "to": 4220
+     }
+    ],
+    "overImage": [
+     {
+      "text": "Contact via WhatsApp",
+      "size": 12,
+      "color": "#fcf6ec",
+      "tint": "none"
+     },
+     {
+      "text": "0  Your cart",
+      "size": 12,
+      "color": "#000000",
+      "tint": "none"
+     },
+     {
+      "text": "0",
+      "size": 12,
+      "color": "#fcf6ec",
+      "tint": "none"
+     },
+     {
+      "text": "0",
+      "size": 10,
+      "color": "#27221a",
+      "tint": "none"
+     },
+     {
+      "text": "EN",
+      "size": 12,
+      "color": "#fcf6ec",
+      "tint": "none"
+     },
+     {
+      "text": "MENU",
+      "size": 12,
+      "color": "#fcf6ec",
+      "tint": "none"
+     },
+     {
+      "text": "Relieve stress at home",
+      "size": 48,
+      "color": "#fcf6ec",
+      "tint": "none"
+     },
+     {
+      "text": "Choose Relaxation",
+      "size": 12,
+      "color": "#fcf6ec",
+      "tint": "none"
+     }
+    ],
+    "motion": {
+     "runningAnimations": [],
+     "libs": {
+      "gsap": true,
+      "gsapVersion": "3.14.1",
+      "scrollTrigger": true,
+      "triggers": 19,
+      "pinned": 5,
+      "scrubbed": 7,
+      "lenis": false,
+      "locomotive": false,
+      "swiper": true,
+      "three": false,
+      "barba": false,
+      "webflow": false
+     },
+     "speedAttrs": 0,
+     "htmlClass": "fitosauna-cookie-analytics-allowed fitosauna-cookie-marketing-allowed"
+    },
+    "sticky": [],
+    "smallestTargets": "38 of 42 links/buttons under 44px tall",
+    "scripts": [
+     "clientParamBuilder.bundle.js",
+     "lkpco40ak9",
+     "282182581337431",
+     "fbevents.js",
+     "dmi0u",
+     "964oknhmjovbs.js",
+     "tp.min.js",
+     "headerScript.min.js",
+     "tp.widget.bootstrap.min.js",
+     "trustBoxScript.min.js",
+     "jquery.min.js",
+     "jquery-migrate.min.js",
+     "jquery.blockUI.min.js",
+     "add-to-cart.min.js",
+     "js.cookie.min.js",
+     "woocommerce.min.js",
+     "underscore.min.js",
+     "backbone.min.js",
+     "front-end-deps.js",
+     "front-end.js",
+     "klaviyo.js",
+     "montonio-timezone.js",
+     "swiper-bundle.min.js",
+     "fancybox.umd.js",
+     "qrcode.min.js"
+    ],
+    "stylesheets": [
+     "https://fitosauna.com/wp-content/uploads/siteground-optimizer-assets/siteground-optimizer-combined-css-c1c90cd4a1d3f6ad4cb125d95a3ea091.css",
+     "https://fitosauna.com/wp-content/themes/fitosauna-theme/style.css?ver=2.0.10",
+     "https://fitosauna.com/wp-content/themes/fitosauna-theme/assets/css/style.css?ver=2.0.10",
+     "https://fitosauna.com/wp-content/themes/fitosauna-theme/dist/css/custom.css?ver=1782689234",
+     "https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.css?ver=5.0.0"
+    ],
+    "css": {
+     "cssBytes": 727916,
+     "transitionDurations": [
+      [
+       "0.3s",
+       66
+      ],
+      [
+       "0.2s",
+       30
+      ],
+      [
+       "0.5s",
+       15
+      ],
+      [
+       "0.4s",
+       12
+      ],
+      [
+       "0.1s",
+       6
+      ],
+      [
+       "0.6s",
+       6
+      ],
+      [
+       ".5s",
+       5
+      ],
+      [
+       "1s",
+       5
+      ]
+     ],
+     "easings": [
+      [
+       "linear",
+       62
+      ],
+      [
+       "ease-in-out",
+       15
+      ],
+      [
+       "ease-out",
+       9
+      ],
+      [
+       "cubic-bezier(0.16, 1, 0.3, 1)",
+       8
+      ],
+      [
+       "cubic-bezier(0.22, 1, 0.36, 1)",
+       7
+      ],
+      [
+       "cubic-bezier(0.4, 0, 0.2, 1)",
+       2
+      ],
+      [
+       "cubic-bezier(.795,-.035,0,1)",
+       1
+      ],
+      [
+       "cubic-bezier(.65,.05,.36,.95)",
+       1
+      ]
+     ],
+     "animationDurations": [
+      [
+       "0.85s",
+       8
+      ],
+      [
+       "0.2s",
+       7
+      ],
+      [
+       "1s",
+       4
+      ],
+      [
+       "2s",
+       3
+      ],
+      [
+       "6s",
+       3
+      ],
+      [
+       ".15s",
+       3
+      ],
+      [
+       "0.175s",
+       2
+      ],
+      [
+       "0.5s",
+       2
+      ]
+     ],
+     "keyframes": [
+      [
+       "spin",
+       1
+      ],
+      [
+       "montonio-spinner",
+       1
+      ],
+      [
+       "nf-scaleout",
+       1
+      ],
+      [
+       "marquee-scroll",
+       1
+      ],
+      [
+       "marquee-move",
+       1
+      ],
+      [
+       "fitosauna-empty-dot-cycle",
+       1
+      ],
+      [
+       "blog-load-more-spin",
+       1
+      ],
+      [
+       "product-showcase-ticker",
+       1
+      ]
+     ],
+     "hoverRules": 395,
+     "hoverTransforms": 37,
+     "hoverOpacity": 41,
+     "breakpoints": [
+      [
+       "768px",
+       475
+      ],
+      [
+       "1024px",
+       98
+      ],
+      [
+       "1440px",
+       81
+      ],
+      [
+       "769px",
+       34
+      ],
+      [
+       "767px",
+       26
+      ],
+      [
+       "1366px",
+       4
+      ],
+      [
+       "500px",
+       4
+      ],
+      [
+       "600px",
+       3
+      ]
+     ],
+     "clampSizes": [
+      [
+       "1.667vw",
+       7
+      ],
+      [
+       "6.11vw",
+       5
+      ],
+      [
+       "6.641vw",
+       5
+      ],
+      [
+       "3.889vw",
+       4
+      ],
+      [
+       "4.102vw",
+       4
+      ],
+      [
+       "2.148vw",
+       4
+      ],
+      [
+       "0.833vw",
+       4
+      ],
+      [
+       "2.5vw",
+       3
+      ]
+     ],
+     "maxWidths": [
+      [
+       "768px",
+       469
+      ],
+      [
+       "1024px",
+       91
+      ],
+      [
+       "767px",
+       26
+      ],
+      [
+       "13.6875rem",
+       8
+      ],
+      [
+       "19.75rem",
+       6
+      ],
+      [
+       "87rem",
+       6
+      ],
+      [
+       "22.875rem",
+       4
+      ],
+      [
+       "21rem",
+       4
+      ]
+     ],
+     "reducedMotionQueries": 1,
+     "scrollBehavior": [
+      [
+       "contain",
+       13
+      ],
+      [
+       "auto",
+       2
+      ],
+      [
+       "none",
+       2
+      ]
+     ],
+     "fontFaces": [
+      [
+       "Archivo Narrow",
+       158
+      ],
+      [
+       "Archivo",
+       147
+      ],
+      [
+       "WooCommerce",
+       13
+      ],
+      [
+       "inherit",
+       10
+      ],
+      [
+       "Swizzy Trial",
+       2
+      ],
+      [
+       "Plus Jakarta Sans",
+       2
+      ],
+      [
+       "star",
+       1
+      ],
+      [
+       "Helvetica Neue",
+       1
+      ]
+     ]
+    }
+   }
+  }
+ },
+ "gallery": {
+  "awwwards": "https://www.awwwards.com/sites/fitosauna",
+  "files": [
+   {
+    "url": "https://assets.awwwards.com/awards/submissions/2026/10/6abf44a6bff53321409410.jpg",
+    "file": "_renders/fitosauna-awwwards-gallery-1.jpg",
+    "bytes": 128720,
+    "width": 1600,
+    "height": 1200
+   }
+  ],
+  "awwwardsStatus": 403
+ }
+}
