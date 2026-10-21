@@ -101,11 +101,24 @@ describe('commercial client hooks', () => {
   it('loads only the working budget with the canonical budget key', async () => {
     const rpc = jest.fn().mockResolvedValue({
       data: {
-        id: 'b1',
-        projectId: 'p1',
-        version: 3,
-        targetTotalCents: 50_000,
-        checkpoint: { evidenceFingerprint: 'fingerprint-1' },
+        version: {
+          id: 'b1',
+          projectId: 'p1',
+          version: 3,
+          status: 'published',
+          targetTotalCents: 50_000,
+        },
+        lines: [],
+        checkpoint: {
+          id: 'checkpoint-1',
+          projectId: 'p1',
+          versionId: 'b1',
+          checkpointCode: 'BC-001',
+          status: 'open',
+          snapshotFingerprint: 'fingerprint-1',
+          publishedAt: '2026-10-20T00:00:00Z',
+        },
+        isPurchaseAuthority: false,
       },
       error: null,
     });
@@ -127,6 +140,14 @@ describe('commercial client hooks', () => {
     expect(queryClient.getQueryData(commercialKeys.budget('p1'))).toEqual(
       result.current.data,
     );
+    expect(result.current.data).toMatchObject({
+      id: 'b1',
+      projectId: 'p1',
+      version: 3,
+      state: 'published',
+      targetTotalCents: 50_000,
+      checkpoint: { id: 'checkpoint-1', state: 'open' },
+    });
     expect(result.current.data?.checkpoint?.evidenceFingerprint).toBe(
       'fingerprint-1',
     );
