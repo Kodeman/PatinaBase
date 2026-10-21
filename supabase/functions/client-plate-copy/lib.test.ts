@@ -1,19 +1,34 @@
 // deno test --no-check -A --config supabase/functions/deno.json supabase/functions/client-plate-copy/
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  fetchAddress,
   mapPool,
   parseJobRunId,
   type PlateRequest,
   recordPayload,
   resolveSource,
   shortenError,
+  type SourceAuthority,
+  SourceNotOwned,
   summarizeRun,
   validateIngestResponse,
 } from "./lib.ts";
 
 const PROJECT = "84300000-0000-4000-8000-000000000001";
+const OTHER_PROJECT = "84300000-0000-4000-8000-000000000002";
+const ROOM = "84300000-0000-4000-8000-000000000011";
+const OWNER = "84300000-0000-4000-8000-0000000000a1";
+const SCAN = "84300000-0000-4000-8000-000000000301";
+const PROPOSAL = "84300000-0000-4000-8000-0000000000f1";
 const SHA = "a".repeat(64);
 const SUPABASE = "https://strata.example.supabase.co/";
+
+// Each private bucket's object layout (its storage policy): room-renders
+// <project>/<room>/<file>; room-scans <type>/<owner>/<scan>/<file>;
+// proposal-mood-boards <proposal>/...
+const RENDER_PATH = `${PROJECT}/${ROOM}/kitchen-v1.png`;
+const SCAN_PATH = `photos/${OWNER}/${SCAN}/still-1.jpg`;
+const BOARD_PATH = `${PROPOSAL}/boards/b1/cover.jpg`;
 
 function request(table: string, sourceKind: string, sourceUrl: string): PlateRequest {
   return {
@@ -41,6 +56,21 @@ function answer(overrides: Record<string, unknown> = {}): Record<string, unknown
   };
 }
 
+function authority(owned: boolean | Error) {
+  const calls = { owned: 0, signed: [] as string[] };
+  const value: SourceAuthority = {
+    owned() {
+      calls.owned++;
+      return owned instanceof Error ? Promise.reject(owned) : Promise.resolve(owned);
+    },
+    sign(bucket, path) {
+      calls.signed.push(`${bucket}/${path}`);
+      return Promise.resolve(`https://signed.test/${bucket}/${path}?token=t`);
+    },
+  };
+  return { value, calls };
+}
+
 Deno.test("resolveSource: a library hotlink is fetched as it is", () => {
   assertEquals(
     resolveSource(request("project_ffe_item_images", "maker", "https://img.test/chair.jpg"), SUPABASE),
@@ -59,21 +89,38 @@ Deno.test("resolveSource: an upload gets the public project-item-images URL", ()
 });
 
 Deno.test("resolveSource: concept renders, scans and board covers are signed in their private bucket", () => {
-  assertEquals(resolveSource(request("project_rooms", "concept", `${PROJECT}/kitchen.png`), SUPABASE), {
+  assertEquals(resolveSource(request("project_rooms", "concept", RENDER_PATH), SUPABASE), {
     kind: "signed",
     bucket: "room-renders",
-    path: `${PROJECT}/kitchen.png`,
+    path: RENDER_PATH,
   });
-  assertEquals(resolveSource(request("room_scan_images", "scan", "/scan-301/still-1.jpg"), SUPABASE), {
+  assertEquals(resolveSource(request("room_scan_images", "scan", `/${SCAN_PATH}`), SUPABASE), {
     kind: "signed",
     bucket: "room-scans",
-    path: "scan-301/still-1.jpg",
+    path: SCAN_PATH,
   });
-  assertEquals(resolveSource(request("project_boards", "board", "board-401/cover.jpg"), SUPABASE), {
+  assertEquals(resolveSource(request("project_boards", "board", BOARD_PATH), SUPABASE), {
     kind: "signed",
     bucket: "proposal-mood-boards",
-    path: "board-401/cover.jpg",
+    path: BOARD_PATH,
   });
+});
+
+Deno.test("resolveSource: a render outside the project's folder or a dot segment is not the project's", () => {
+  for (const path of [
+    `${OTHER_PROJECT}/${ROOM}/kitchen-v1.png`,
+    `${PROJECT}/kitchen.png`,
+    `${PROJECT}/${ROOM}/../../${OTHER_PROJECT}/${ROOM}/kitchen-v1.png`,
+  ]) {
+    assertEquals(resolveSource(request("project_rooms", "concept", path), SUPABASE), { kind: "not_owned" }, path);
+  }
+  for (const [table, path] of [
+    ["room_scan_images", `photos/${OWNER}/${SCAN}/../../../photos/x/y/still-1.jpg`],
+    ["room_scan_images", `photos/${OWNER}//still-1.jpg`],
+    ["project_boards", `${PROPOSAL}/%2E%2E/other/cover.jpg`],
+  ]) {
+    assertEquals(resolveSource(request(table, "scan", path), SUPABASE), { kind: "not_owned" }, path);
+  }
 });
 
 Deno.test("resolveSource: an outside board cover is fetched as it is", () => {
@@ -86,6 +133,70 @@ Deno.test("resolveSource: an outside board cover is fetched as it is", () => {
 Deno.test("resolveSource: an unknown table or a blank address has no source", () => {
   assertEquals(resolveSource(request("plan_prints", "sheet", "prints/a.pdf"), SUPABASE), null);
   assertEquals(resolveSource(request("project_rooms", "concept", "   "), SUPABASE), null);
+});
+
+const PRIVATE_SOURCES = [
+  { table: "project_rooms", kind: "concept", bucket: "room-renders", path: RENDER_PATH },
+  { table: "room_scan_images", kind: "scan", bucket: "room-scans", path: SCAN_PATH },
+  { table: "project_boards", kind: "board", bucket: "proposal-mood-boards", path: BOARD_PATH },
+];
+
+for (const source of PRIVATE_SOURCES) {
+  Deno.test(`fetchAddress: a ${source.bucket} object the project owns is signed`, async () => {
+    const { value, calls } = authority(true);
+    assertEquals(
+      await fetchAddress(request(source.table, source.kind, source.path), SUPABASE, value),
+      `https://signed.test/${source.bucket}/${source.path}?token=t`,
+    );
+    assertEquals(calls, { owned: 1, signed: [`${source.bucket}/${source.path}`] });
+  });
+
+  Deno.test(`fetchAddress: a ${source.bucket} object the database places elsewhere is never signed`, async () => {
+    const { value, calls } = authority(false);
+    await assertRejects(
+      () => fetchAddress(request(source.table, source.kind, source.path), SUPABASE, value),
+      SourceNotOwned,
+      "source_not_owned",
+    );
+    assertEquals(calls, { owned: 1, signed: [] });
+  });
+}
+
+Deno.test("fetchAddress: a render under another project is refused before the database is asked", async () => {
+  const { value, calls } = authority(true);
+  await assertRejects(
+    () => fetchAddress(request("project_rooms", "concept", `${OTHER_PROJECT}/${ROOM}/kitchen-v1.png`), SUPABASE, value),
+    SourceNotOwned,
+  );
+  assertEquals(calls, { owned: 0, signed: [] });
+});
+
+Deno.test("fetchAddress: a failed ownership check signs nothing", async () => {
+  const { value, calls } = authority(new Error("ownership check failed: timeout"));
+  await assertRejects(
+    () => fetchAddress(request("room_scan_images", "scan", SCAN_PATH), SUPABASE, value),
+    Error,
+    "ownership check failed",
+  );
+  assertEquals(calls.signed, []);
+});
+
+Deno.test("fetchAddress: a hotlink or outside cover needs neither the check nor a signature", async () => {
+  const { value, calls } = authority(false);
+  assertEquals(
+    await fetchAddress(request("project_ffe_item_images", "maker", "https://img.test/chair.jpg"), SUPABASE, value),
+    "https://img.test/chair.jpg",
+  );
+  assertEquals(
+    await fetchAddress(request("project_boards", "board", "https://img.test/cover.jpg"), SUPABASE, value),
+    "https://img.test/cover.jpg",
+  );
+  assertEquals(calls, { owned: 0, signed: [] });
+  await assertRejects(() => fetchAddress(request("plan_prints", "sheet", "a.pdf"), SUPABASE, value), Error, "no fetch address");
+});
+
+Deno.test("shortenError: a refused source is recorded as source_not_owned", () => {
+  assertEquals(shortenError(new SourceNotOwned()), "source_not_owned");
 });
 
 Deno.test("validateIngestResponse: a full answer is accepted with its fields", () => {

@@ -17,6 +17,9 @@
 --               from set_project_show_makers
 --   makers on   the studio owner turns show_makers on; the client then reads
 --               the maker, where it is made, and the maker as caption whose
+--   concept dedupe  the line's picture and the room's concept render share
+--               one asset: sourceKind is concept, the room and the line both
+--               name it, the caption stays the line's
 --
 -- Run (from supabase/): psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 --        -v ON_ERROR_STOP=1 -f tests/00842_client_editorial_reader.test.sql
@@ -24,7 +27,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(25);
+SELECT plan(29);
 
 -- ─── fixtures (as postgres) ────────────────────────────────────────────────
 -- O owner of the studio · C the client · Z a stranger with no seat
@@ -271,6 +274,48 @@ RESET ROLE;
 SELECT ok(
   (SELECT show_makers FROM public.projects WHERE id = '84200000-0000-4000-8000-000000000001'),
   'makers on: projects.show_makers is stored'
+);
+
+-- ─── the same bytes as the room's concept render ───────────────────────────
+-- The room's concept render copies to the chair picture's sha256, so both
+-- sources share asset 501; its caption still comes from the line.
+
+UPDATE public.project_rooms
+   SET concept_render_url = '84200000-0000-4000-8000-000000000001/84200000-0000-4000-8000-000000000011/concept-v1.png',
+       concept_render_uploaded_at = now()
+ WHERE id = '84200000-0000-4000-8000-000000000011';
+UPDATE public.client_plate_requests
+   SET status = 'done', asset_id = '84200000-0000-4000-8000-000000000501', updated_at = now()
+ WHERE source_ref = '{"table": "project_rooms", "id": "84200000-0000-4000-8000-000000000011"}';
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84200000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT 'read' AS us49_concept
+FROM (SELECT set_config('us49.editorial_concept',
+        public.get_client_project_editorial('84200000-0000-4000-8000-000000000001')::text, true)) AS stash;
+RESET ROLE;
+
+SELECT is(
+  (SELECT envelope #>> '{rooms,0,conceptAssetId}' FROM (SELECT current_setting('us49.editorial_concept')::jsonb AS envelope) AS editorial_read),
+  '84200000-0000-4000-8000-000000000501',
+  'concept dedupe: the room names the shared plate as its concept render'
+);
+SELECT is(
+  (SELECT envelope #> '{rooms,0,items,0,assetIds}' FROM (SELECT current_setting('us49.editorial_concept')::jsonb AS envelope) AS editorial_read),
+  '["84200000-0000-4000-8000-000000000501"]'::jsonb,
+  'concept dedupe: the line still names the shared plate'
+);
+SELECT is(
+  (SELECT string_agg(asset ->> 'sourceKind', ',')
+     FROM (SELECT current_setting('us49.editorial_concept')::jsonb AS envelope) AS editorial_read,
+          jsonb_array_elements(envelope -> 'assets') AS asset),
+  'concept',
+  'concept dedupe: one asset, and bytes any source produced as a concept stay concept'
+);
+SELECT is(
+  (SELECT envelope #>> '{assets,0,alt}' FROM (SELECT current_setting('us49.editorial_concept')::jsonb AS envelope) AS editorial_read),
+  'Lounge chair · Atelier Nord · concept render, not installed',
+  'concept dedupe: the alt says concept render while the caption stays the line''s'
 );
 
 SELECT * FROM finish(true);

@@ -3,7 +3,8 @@
 --
 -- Named cases:
 --   lockdown    RLS on both tables with no policy; authenticated reads neither
---               and calls none of the copy-lane functions; anon cannot call
+--               and calls none of the copy-lane functions, nor the ownership
+--               check (service_role can); anon cannot call
 --               client_can_read_plate, authenticated can
 --   cron        client-plate-copy-dispatch runs every minute
 --   enqueue     a library picture, an upload, a concept render, a scan still
@@ -18,12 +19,24 @@
 --               refused (23514); a closed request cannot be recorded again
 --   fail        a wrong token is refused; the right one re-queues with the
 --               error; the third attempt stays failed
---   re-queue    the same address queued again changes nothing; a replaced
+--   re-queue    the same address and revision queued again changes nothing;
+--               the same render path uploaded again (newer
+--               concept_render_uploaded_at) re-queues with the new revision;
+--               the same address and upload time is a no-op; a replaced
 --               concept render re-queues with attempts 0 and no asset
 --   dispatch    an expired lease goes back to the queue; a queued request
 --               opens one job_runs row (trigger cron); with nothing queued no
 --               row is opened; begin/finish close a run, and a bad status or
 --               a closed run is refused
+--   ownership   a private source whose object is not the project's per its
+--               bucket's storage policy is recorded failed (source_not_owned)
+--               and never queued: a render under another project's folder
+--               (its landed copy is dropped), a still whose key names another
+--               scan or another owner, a board cover under another project's
+--               proposal, a dot segment; pointed back at its own render, the
+--               room queues again
+--   moved       an item moved to another job queues its picture there once;
+--               the old job keeps its one request
 --   plate check the client gets the project id for a plate the project
 --               holds; a stranger and an unknown sha256 get NULL
 --
@@ -33,7 +46,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(50);
+SELECT plan(62);
 
 -- ─── lockdown ──────────────────────────────────────────────────────────────
 
@@ -60,6 +73,10 @@ SELECT ok(NOT has_function_privilege('anon', 'public.client_can_read_plate(uuid,
           'lockdown: anon cannot call client_can_read_plate');
 SELECT ok(has_function_privilege('authenticated', 'public.client_can_read_plate(uuid, text)', 'EXECUTE'),
           'lockdown: authenticated can call client_can_read_plate');
+SELECT ok(NOT has_function_privilege('authenticated', 'public.client_plate_source_owned(uuid, text, uuid, text)', 'EXECUTE'),
+          'lockdown: authenticated cannot call the ownership check');
+SELECT ok(has_function_privilege('service_role', 'public.client_plate_source_owned(uuid, text, uuid, text)', 'EXECUTE'),
+          'lockdown: service_role can call the ownership check');
 
 SELECT is(
   (SELECT schedule || ' ' || command FROM cron.job WHERE jobname = 'client-plate-copy-dispatch'),
@@ -125,14 +142,20 @@ VALUES ('84300000-0000-4000-8000-000000000201', '84300000-0000-4000-8000-0000000
 INSERT INTO public.room_scans (id, user_id, name, project_id, project_room_id)
 VALUES ('84300000-0000-4000-8000-000000000301', '84300000-0000-4000-8000-0000000000a1', 'Kitchen scan',
         '84300000-0000-4000-8000-000000000001', '84300000-0000-4000-8000-000000000011');
+-- room-scans keys are <type>/<owner>/<scan>/<file> (00584 policy).
 INSERT INTO public.room_scan_images (id, scan_id, role, image_url, captured_at)
 VALUES ('84300000-0000-4000-8000-000000000302', '84300000-0000-4000-8000-000000000301', 'still',
-        'http://127.0.0.1:54321/storage/v1/object/public/room-scans/scan-301/still-1.jpg?v=1', now());
+        'http://127.0.0.1:54321/storage/v1/object/public/room-scans/photos/84300000-0000-4000-8000-0000000000a1/84300000-0000-4000-8000-000000000301/still-1.jpg?v=1', now());
+
+-- proposal-mood-boards keys start with the proposal (00485 policy).
+INSERT INTO public.proposals (id, project_id, designer_id, title, status, document_kind, commercial_state, total_amount, subtotal)
+VALUES ('84300000-0000-4000-8000-000000000451', '84300000-0000-4000-8000-000000000001', '84300000-0000-4000-8000-0000000000a1',
+        'US49 Plate Authorization', 'accepted', 'furnishings_authorization', 'executed', 30000, 30000);
 
 INSERT INTO public.project_boards (id, project_id, name, cover_image_url, sort_order)
 VALUES
   ('84300000-0000-4000-8000-000000000401', '84300000-0000-4000-8000-000000000001', 'Kitchen board',
-   'http://127.0.0.1:54321/storage/v1/object/public/proposal-mood-boards/board-401/cover.jpg', 0),
+   'http://127.0.0.1:54321/storage/v1/object/public/proposal-mood-boards/84300000-0000-4000-8000-000000000451/boards/b401/cover.jpg', 0),
   ('84300000-0000-4000-8000-000000000402', '84300000-0000-4000-8000-000000000001', 'Pinned board',
    'https://img.test/us49-board-cover.jpg', 1);
 
@@ -156,13 +179,13 @@ SELECT is(
 SELECT is(
   (SELECT source_kind || ' ' || source_url FROM public.client_plate_requests
     WHERE source_ref = '{"table": "room_scan_images", "id": "84300000-0000-4000-8000-000000000302"}'),
-  'scan scan-301/still-1.jpg',
+  'scan photos/84300000-0000-4000-8000-0000000000a1/84300000-0000-4000-8000-000000000301/still-1.jpg',
   'enqueue: a scan still queues its room-scans key'
 );
 SELECT is(
   (SELECT source_kind || ' ' || source_url FROM public.client_plate_requests
     WHERE source_ref = '{"table": "project_boards", "id": "84300000-0000-4000-8000-000000000401"}'),
-  'board board-401/cover.jpg',
+  'board 84300000-0000-4000-8000-000000000451/boards/b401/cover.jpg',
   'enqueue: a stored board cover queues its proposal-mood-boards path'
 );
 SELECT is(
@@ -319,14 +342,16 @@ SELECT is(
 
 -- ─── re-queue ──────────────────────────────────────────────────────────────
 
+-- room-renders paths are <project>/<room>/<file> (00580 policy).
 UPDATE public.project_rooms
-   SET concept_render_url = '84300000-0000-4000-8000-000000000001/kitchen-v1.png'
+   SET concept_render_url = '84300000-0000-4000-8000-000000000001/84300000-0000-4000-8000-000000000011/kitchen-v1.png',
+       concept_render_uploaded_at = '2026-10-21 10:00:00+00'
  WHERE id = '84300000-0000-4000-8000-000000000011';
 SELECT is(
-  (SELECT source_kind || ' ' || source_url || ' ' || status FROM public.client_plate_requests
+  (SELECT source_kind || ' ' || source_url || ' ' || status || ' ' || source_revision FROM public.client_plate_requests
     WHERE source_ref = '{"table": "project_rooms", "id": "84300000-0000-4000-8000-000000000011"}'),
-  'concept 84300000-0000-4000-8000-000000000001/kitchen-v1.png queued',
-  'enqueue: a concept render queues its room-renders path'
+  'concept 84300000-0000-4000-8000-000000000001/84300000-0000-4000-8000-000000000011/kitchen-v1.png queued 2026-10-21T10:00:00.000000Z',
+  'enqueue: a concept render queues its room-renders path and upload time'
 );
 
 -- The concept render's copy landed.
@@ -337,22 +362,49 @@ UPDATE public.client_plate_requests
 
 SELECT public._enqueue_client_plate_request(
   '84300000-0000-4000-8000-000000000001', 'concept', 'project_rooms',
-  '84300000-0000-4000-8000-000000000011', '84300000-0000-4000-8000-000000000001/kitchen-v1.png');
+  '84300000-0000-4000-8000-000000000011',
+  '84300000-0000-4000-8000-000000000001/84300000-0000-4000-8000-000000000011/kitchen-v1.png',
+  public._client_plate_concept_revision('2026-10-21 10:00:00+00'));
 SELECT is(
   (SELECT status || ' ' || (asset_id IS NOT NULL)::text FROM public.client_plate_requests
     WHERE source_ref = '{"table": "project_rooms", "id": "84300000-0000-4000-8000-000000000011"}'),
   'done true',
-  're-queue: the same address queued again changes nothing'
+  're-queue: the same address and revision queued again changes nothing'
+);
+
+-- The designer uploads a new render to the same path (upsert).
+UPDATE public.project_rooms
+   SET concept_render_uploaded_at = '2026-10-21 11:00:00+00'
+ WHERE id = '84300000-0000-4000-8000-000000000011';
+SELECT is(
+  (SELECT status || ' ' || attempts || ' ' || (asset_id IS NULL)::text || ' ' || source_revision
+     FROM public.client_plate_requests
+    WHERE source_ref = '{"table": "project_rooms", "id": "84300000-0000-4000-8000-000000000011"}'),
+  'queued 0 true 2026-10-21T11:00:00.000000Z',
+  're-queue: the same render path uploaded again is queued again'
+);
+
+UPDATE public.client_plate_requests
+   SET status = 'done', asset_id = current_setting('us49.first_asset')::uuid
+ WHERE source_ref = '{"table": "project_rooms", "id": "84300000-0000-4000-8000-000000000011"}';
+UPDATE public.project_rooms
+   SET concept_render_url = concept_render_url, concept_render_uploaded_at = concept_render_uploaded_at
+ WHERE id = '84300000-0000-4000-8000-000000000011';
+SELECT is(
+  (SELECT status || ' ' || (asset_id IS NOT NULL)::text || ' ' || source_revision FROM public.client_plate_requests
+    WHERE source_ref = '{"table": "project_rooms", "id": "84300000-0000-4000-8000-000000000011"}'),
+  'done true 2026-10-21T11:00:00.000000Z',
+  're-queue: the same address and upload time is a no-op'
 );
 
 UPDATE public.project_rooms
-   SET concept_render_url = '84300000-0000-4000-8000-000000000001/kitchen-v2.png'
+   SET concept_render_url = '84300000-0000-4000-8000-000000000001/84300000-0000-4000-8000-000000000011/kitchen-v2.png'
  WHERE id = '84300000-0000-4000-8000-000000000011';
 SELECT is(
   (SELECT status || ' ' || attempts || ' ' || (asset_id IS NULL)::text || ' ' || source_url
      FROM public.client_plate_requests
     WHERE source_ref = '{"table": "project_rooms", "id": "84300000-0000-4000-8000-000000000011"}'),
-  'queued 0 true 84300000-0000-4000-8000-000000000001/kitchen-v2.png',
+  'queued 0 true 84300000-0000-4000-8000-000000000001/84300000-0000-4000-8000-000000000011/kitchen-v2.png',
   're-queue: a replaced concept render is queued again from scratch'
 );
 
@@ -427,6 +479,120 @@ SELECT throws_ok(
     current_setting('us49.manual_run')),
   'P0002', NULL,
   'dispatch: a closed run cannot be finished again'
+);
+
+-- ─── ownership ─────────────────────────────────────────────────────────────
+-- A second job of the same studio, with its own room, scan and proposal.
+
+INSERT INTO public.projects (id, name, designer_id, client_id, created_by, studio_id, status)
+VALUES ('84300000-0000-4000-8000-000000000002', 'US49 Plate Cottage',
+        '84300000-0000-4000-8000-0000000000a1', '84300000-0000-4000-8000-0000000000a2',
+        '84300000-0000-4000-8000-0000000000a1', '84300000-0000-4000-8000-0000000000f1', 'active');
+INSERT INTO public.project_rooms (id, project_id, name, sort_order)
+VALUES ('84300000-0000-4000-8000-000000000012', '84300000-0000-4000-8000-000000000002', 'Porch', 0);
+INSERT INTO public.room_scans (id, user_id, name, project_id, project_room_id)
+VALUES ('84300000-0000-4000-8000-000000000391', '84300000-0000-4000-8000-0000000000a1', 'Porch scan',
+        '84300000-0000-4000-8000-000000000002', '84300000-0000-4000-8000-000000000012');
+INSERT INTO public.proposals (id, project_id, designer_id, title, status, document_kind, commercial_state, total_amount, subtotal)
+VALUES ('84300000-0000-4000-8000-000000000452', '84300000-0000-4000-8000-000000000002', '84300000-0000-4000-8000-0000000000a1',
+        'US49 Cottage Authorization', 'accepted', 'furnishings_authorization', 'executed', 30000, 30000);
+
+-- The kitchen render's copy had landed; then the room points at the porch's render.
+UPDATE public.client_plate_requests
+   SET status = 'done', lease_token = NULL, lease_expires_at = NULL,
+       asset_id = current_setting('us49.first_asset')::uuid
+ WHERE source_ref = '{"table": "project_rooms", "id": "84300000-0000-4000-8000-000000000011"}';
+UPDATE public.project_rooms
+   SET concept_render_url = '84300000-0000-4000-8000-000000000002/84300000-0000-4000-8000-000000000012/porch.png'
+ WHERE id = '84300000-0000-4000-8000-000000000011';
+SELECT is(
+  (SELECT status || ' ' || last_error || ' ' || (asset_id IS NULL)::text FROM public.client_plate_requests
+    WHERE source_ref = '{"table": "project_rooms", "id": "84300000-0000-4000-8000-000000000011"}'),
+  'failed source_not_owned true',
+  'ownership: a render under another project''s folder is recorded failed and its copy dropped'
+);
+
+UPDATE public.project_rooms
+   SET concept_render_url = '84300000-0000-4000-8000-000000000001/84300000-0000-4000-8000-000000000011/../../84300000-0000-4000-8000-000000000002/84300000-0000-4000-8000-000000000012/porch.png'
+ WHERE id = '84300000-0000-4000-8000-000000000011';
+SELECT is(
+  (SELECT status || ' ' || last_error || ' ' || source_url FROM public.client_plate_requests
+    WHERE source_ref = '{"table": "project_rooms", "id": "84300000-0000-4000-8000-000000000011"}'),
+  'failed source_not_owned 84300000-0000-4000-8000-000000000001/84300000-0000-4000-8000-000000000011/../../84300000-0000-4000-8000-000000000002/84300000-0000-4000-8000-000000000012/porch.png',
+  'ownership: a render path with a dot segment is recorded failed'
+);
+
+UPDATE public.project_rooms
+   SET concept_render_url = '84300000-0000-4000-8000-000000000001/84300000-0000-4000-8000-000000000011/kitchen-v3.png'
+ WHERE id = '84300000-0000-4000-8000-000000000011';
+SELECT is(
+  (SELECT status || ' ' || COALESCE(last_error, 'no error') || ' ' || attempts FROM public.client_plate_requests
+    WHERE source_ref = '{"table": "project_rooms", "id": "84300000-0000-4000-8000-000000000011"}'),
+  'queued no error 0',
+  'ownership: pointed back at its own render, the room queues again'
+);
+
+INSERT INTO public.room_scan_images (id, scan_id, role, image_url, captured_at)
+VALUES
+  ('84300000-0000-4000-8000-000000000303', '84300000-0000-4000-8000-000000000301', 'still',
+   'http://127.0.0.1:54321/storage/v1/object/public/room-scans/photos/84300000-0000-4000-8000-0000000000a1/84300000-0000-4000-8000-000000000391/still-2.jpg', now()),
+  ('84300000-0000-4000-8000-000000000304', '84300000-0000-4000-8000-000000000301', 'still',
+   'http://127.0.0.1:54321/storage/v1/object/public/room-scans/photos/84300000-0000-4000-8000-0000000000a3/84300000-0000-4000-8000-000000000301/still-3.jpg', now());
+SELECT is(
+  (SELECT status || ' ' || last_error FROM public.client_plate_requests
+    WHERE source_ref = '{"table": "room_scan_images", "id": "84300000-0000-4000-8000-000000000303"}'),
+  'failed source_not_owned',
+  'ownership: a still whose key names another job''s scan is recorded failed'
+);
+SELECT is(
+  (SELECT status || ' ' || last_error FROM public.client_plate_requests
+    WHERE source_ref = '{"table": "room_scan_images", "id": "84300000-0000-4000-8000-000000000304"}'),
+  'failed source_not_owned',
+  'ownership: a still under another owner''s folder is recorded failed'
+);
+
+INSERT INTO public.project_boards (id, project_id, name, cover_image_url, sort_order)
+VALUES ('84300000-0000-4000-8000-000000000403', '84300000-0000-4000-8000-000000000001', 'Borrowed board',
+        'http://127.0.0.1:54321/storage/v1/object/public/proposal-mood-boards/84300000-0000-4000-8000-000000000452/boards/b9/cover.jpg', 2);
+SELECT is(
+  (SELECT status || ' ' || last_error FROM public.client_plate_requests
+    WHERE source_ref = '{"table": "project_boards", "id": "84300000-0000-4000-8000-000000000403"}'),
+  'failed source_not_owned',
+  'ownership: a board cover under another job''s proposal is recorded failed'
+);
+
+-- ─── moved ─────────────────────────────────────────────────────────────────
+-- A second stool line snapshots the stool's one library picture, then moves
+-- to the cottage (a NULL thread gets a new one there, 00438).
+
+SELECT set_config('app.ffe_mutation_rpc', 'on', true);
+INSERT INTO public.project_ffe_items (
+  id, project_id, name, status, item_type, product_id, quantity,
+  unit_price_cents, line_total_cents, design_disposition, assignment_scope, sort_order
+) VALUES ('84300000-0000-4000-8000-000000000102', '84300000-0000-4000-8000-000000000001', 'Second stool',
+          'specified', 'fixed', '84300000-0000-4000-8000-000000000021', 1, 30000, 30000, 'selected', 'unassigned', 1);
+UPDATE public.project_ffe_items
+   SET project_id = '84300000-0000-4000-8000-000000000002', selection_thread_id = NULL
+ WHERE id = '84300000-0000-4000-8000-000000000102';
+SELECT set_config('app.ffe_mutation_rpc', '', true);
+
+SELECT is(
+  (SELECT count(*)::int FROM public.client_plate_requests AS request
+     JOIN public.project_ffe_item_images AS picture
+       ON request.source_ref = jsonb_build_object('table', 'project_ffe_item_images', 'id', picture.id)
+    WHERE picture.item_id = '84300000-0000-4000-8000-000000000102'
+      AND request.project_id = '84300000-0000-4000-8000-000000000002' AND request.status = 'queued'),
+  1,
+  'moved: the moved line''s picture is queued once in its new job'
+);
+SELECT is(
+  (SELECT count(*)::int FROM public.client_plate_requests AS request
+     JOIN public.project_ffe_item_images AS picture
+       ON request.source_ref = jsonb_build_object('table', 'project_ffe_item_images', 'id', picture.id)
+    WHERE picture.item_id = '84300000-0000-4000-8000-000000000102'
+      AND request.project_id = '84300000-0000-4000-8000-000000000001'),
+  1,
+  'moved: the old job keeps its one request, no duplicate'
 );
 
 -- ─── plate check ───────────────────────────────────────────────────────────

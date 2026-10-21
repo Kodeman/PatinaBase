@@ -23534,13 +23534,31 @@ END $g$;
 
 -- 00843_client_plate_assets.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._enqueue_client_plate_request(uuid, text, text, uuid, text) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.client_plate_source_owned(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.client_plate_source_owned(uuid, text, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._enqueue_client_plate_request(uuid, text, text, uuid, text, text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00843_client_plate_assets.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._client_plate_scan_source(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00843_client_plate_assets.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_plate_concept_revision(timestamptz) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
