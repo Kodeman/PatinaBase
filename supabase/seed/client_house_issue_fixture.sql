@@ -15,6 +15,8 @@
 --                     The sofa has no picture: it is drawn.
 --   Lake Cottage      one room, no plate at all: the drawn cover, which is
 --                     the majority arrival (SQ-1575: 13 of 24 active projects).
+--   Garden Flat       one room, one portrait photograph (1100 × 1900): the
+--                     portrait hero (SQ-1614). Its own block, below.
 --
 -- The plate rows are what record_client_plate_asset would have written; their
 -- bytes are not in any bucket. Locally the plate route answers 503 (no PLATES
@@ -262,7 +264,153 @@ BEGIN
     (6,  7500, CURRENT_DATE + 35)
   ) AS bill(n, cents, due);
 
+  -- ── One standing note, read before her last visit: `#note` stands (SQ-1614) ─
+
+  INSERT INTO public.project_notes (id, project_id, author_id, body, state, sent_at, created_at, updated_at)
+  VALUES (
+    'b0000000-0000-0000-0000-0000000e1c31', v_elm, uid_designer,
+    'The walnut for the sideboard came in a shade darker than your sample. I have asked the workshop for a second board before anything is cut.',
+    'standing', ts - INTERVAL '10 days', ts - INTERVAL '10 days', ts - INTERVAL '10 days'
+  );
+
   INSERT INTO public.project_reading_marks (project_id, user_id, read_at)
   VALUES (v_elm, uid_june, ts - INTERVAL '3 days'), (v_lake, uid_june, ts - INTERVAL '3 days')
+  ON CONFLICT (project_id, user_id) DO NOTHING;
+END $$;
+
+-- ── Garden Flat: the portrait hero (SQ-1614) ──────────────────────────────
+-- One signed line, an oak tallboy, whose one picture is a portrait 1100 × 1900.
+-- floors.ts places it as the `portrait` hero: under `wide`'s 1600 floor and
+-- the 1248 measure, at or over the 1040 portrait floor. Its crops are what
+-- plates.mjs plans for that size: `cover_phone`, `tall` and `piece` (wide and
+-- wide32 miss their floors; pair would discard more than half). Every clock is
+-- two months old, so "/" still lands on Elm Street House. Idempotent on its
+-- own house; it needs June and her studio from the block above.
+
+DO $$
+DECLARE
+  uid_designer   UUID := 'a0000000-0000-0000-0000-000000000004';
+  uid_june       UUID := 'a0000000-0000-0000-0000-0000000e1a05';
+  v_studio       UUID := 'b0000000-0000-0000-0000-0000000e1a00';
+  v_relationship UUID := 'd0000000-0000-0000-0000-0000000e1a01';
+  v_garden       UUID := 'b0000000-0000-0000-0000-0000000e1a03';
+  v_bedroom      UUID := 'b0000000-0000-0000-0000-0000000e1b05';
+  v_proposal     UUID := 'b0000000-0000-0000-0000-0000000e1c02';
+  v_document     UUID := 'b0000000-0000-0000-0000-0000000e1c12';
+  v_thread       UUID := 'b0000000-0000-0000-0000-0000000e1c23';
+  v_tallboy      UUID := 'b0000000-0000-0000-0000-0000000e1d03';
+  v_tallboy_s    UUID := 'b0000000-0000-0000-0000-0000000e1d13';
+  v_picture      UUID := 'b0000000-0000-0000-0000-0000000e1e03';
+  v_plate        UUID := 'b0000000-0000-0000-0000-0000000e1f03';
+  v_sha          TEXT := 'e1a0000000000000000000000000000000000000000000000000000000007a11';
+  ts             TIMESTAMPTZ := NOW() - INTERVAL '60 days';
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.projects WHERE id = v_garden) THEN
+    RETURN;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = v_relationship) THEN
+    RAISE NOTICE 'client_house_issue_fixture.sql: June Brennan is not seeded yet, skipping Garden Flat';
+    RETURN;
+  END IF;
+
+  INSERT INTO public.projects (
+    id, name, client_id, designer_id, studio_id,
+    status, created_by, client_visibility_tier, current_phase,
+    budget_cents, total_amount_cents, start_date, created_at, updated_at
+  ) VALUES (
+    v_garden, 'Garden Flat', uid_june, uid_designer, v_studio,
+    'active', uid_designer, 'full', 'procurement',
+    900000, 900000, (ts - INTERVAL '30 days')::date, ts - INTERVAL '31 days', ts
+  );
+
+  INSERT INTO public.project_rooms (id, project_id, name, sort_order, created_at, updated_at)
+  VALUES (v_bedroom, v_garden, 'Bedroom', 0, ts, ts);
+
+  INSERT INTO public.proposals (
+    id, project_id, designer_id, client_id, designer_client_id, title, description,
+    status, document_kind, commercial_state, total_amount, subtotal,
+    sent_at, accepted_at, signed_at, signed_by_name, created_at, updated_at
+  ) VALUES (
+    v_proposal, v_garden, uid_designer, uid_june, v_relationship,
+    'Garden Flat — Authorization No. 1',
+    'The bedroom''s tallboy, agreed and signed.',
+    'accepted', 'furnishings_authorization', 'executed', 480000, 480000,
+    ts - INTERVAL '20 days', ts - INTERVAL '18 days',
+    ts - INTERVAL '18 days', 'June Brennan',
+    ts - INTERVAL '22 days', ts - INTERVAL '18 days'
+  );
+
+  INSERT INTO public.project_commercial_documents (
+    id, project_id, proposal_id, document_kind, wave_name,
+    is_origin, bound_at, executed_at, created_by
+  ) VALUES (
+    v_document, v_garden, v_proposal, 'furnishings_authorization', 'Authorization No. 1',
+    FALSE, ts - INTERVAL '18 days', ts - INTERVAL '18 days', uid_designer
+  );
+
+  INSERT INTO public.project_ffe_selection_threads (id, project_id, created_by, created_at, updated_at)
+  VALUES (v_thread, v_garden, uid_designer, ts - INTERVAL '18 days', ts - INTERVAL '18 days');
+
+  INSERT INTO public.project_ffe_items (
+    id, project_id, project_room_id, name, ffe_category,
+    item_type, status, quantity, unit_price_cents, line_total_cents,
+    trade_price_cents, markup_percent, sort_order, doc_code,
+    selection_thread_id, design_disposition, assignment_scope, created_at, updated_at
+  ) VALUES (
+    v_tallboy, v_garden, v_bedroom, 'Oak tallboy', 'furniture',
+    'fixed', 'production', 1, 480000, 480000,
+    320000, 50.00, 0, 'FF-201',
+    v_thread, 'selected', 'room', ts - INTERVAL '18 days', ts - INTERVAL '2 days'
+  );
+
+  INSERT INTO public.furnishing_authorization_items (
+    id, commercial_document_id, source_ffe_item_id,
+    name, room_name, project_room_id, category, item_type, quantity,
+    client_unit_price_cents, client_line_total_cents,
+    trade_unit_cost_cents, markup_percent, sort_order, created_at
+  ) VALUES (
+    v_tallboy_s, v_document, v_tallboy,
+    'Oak tallboy', 'Bedroom', v_bedroom, 'furniture', 'fixed', 1,
+    480000, 480000, 320000, 50.00, 0, ts - INTERVAL '18 days'
+  );
+
+  UPDATE public.project_ffe_items
+     SET source_commercial_document_id = v_document,
+         source_authorization_item_id  = v_tallboy_s
+   WHERE id = v_tallboy;
+
+  INSERT INTO public.project_ffe_item_images (
+    id, item_id, project_id, url, source, position, is_primary, created_by, created_at
+  ) VALUES (
+    v_picture, v_tallboy, v_garden,
+    'https://images.example.test/birchwood/oak-tallboy-room.jpg', 'library', 0, TRUE, uid_designer, ts - INTERVAL '15 days'
+  );
+
+  INSERT INTO public.client_plate_assets (
+    id, project_id, sha256, source_kind, source_ref, original_key,
+    width, height, ground, dominant_hex, lqip, crops, created_at, updated_at
+  ) VALUES (
+    v_plate, v_garden, v_sha, 'maker',
+    jsonb_build_object('table', 'project_ffe_item_images', 'id', v_picture),
+    'plates/' || v_garden || '/' || v_sha || '/original',
+    1100, 1900, 'scene', '#7A6450', NULL,
+    '{"cover_phone": {"rect": [0, 376, 1100, 959], "widths": [640, 828, 1080]},
+      "tall":        {"rect": [113, 0, 874, 1900], "widths": [640, 828]},
+      "piece":       {"rect": [0, 0, 1100, 1900],  "widths": [256, 512, 768]}}'::jsonb,
+    ts - INTERVAL '14 days', ts - INTERVAL '14 days'
+  );
+
+  UPDATE public.client_plate_requests AS request
+     SET status = 'done',
+         asset_id = v_plate,
+         attempts = 1,
+         updated_at = ts - INTERVAL '14 days'
+   WHERE request.project_id = v_garden
+     AND request.source_ref ->> 'table' = 'project_ffe_item_images'
+     AND request.source_ref ->> 'id' = v_picture::text;
+
+  INSERT INTO public.project_reading_marks (project_id, user_id, read_at)
+  VALUES (v_garden, uid_june, ts)
   ON CONFLICT (project_id, user_id) DO NOTHING;
 END $$;

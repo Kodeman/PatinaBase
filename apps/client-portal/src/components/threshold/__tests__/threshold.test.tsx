@@ -3967,4 +3967,62 @@ describe('Threshold — The House Issue flag (client-edition-page)', () => {
     ]);
     expect(container.querySelectorAll('.ed-chapter-head').length).toBeGreaterThan(0);
   });
+
+  /* Standing row 2 reads the same projection "Waiting on you" reads at #road
+     (SQ-1585 F1), never which gates are drawn. */
+  describe('standing row 2', () => {
+    const rowTwo = (container: HTMLElement) => container.querySelector('[data-standing-row="2"]');
+    /** No open paper, no finished work to review, no approval. */
+    function quietHouse() {
+      mockEditionFlag = { value: true, isLoading: false };
+      proposalsMock.mockReturnValue(settled([SIGNED_AGREEMENT]));
+      selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [CREDENZA] }));
+    }
+
+    it('does not say a document waits when the only door is the receipt of her signature', () => {
+      quietHouse();
+      proposalsMock.mockReturnValue(
+        settled([{ ...SIGNED_AGREEMENT, commercial_state: 'client_signed' } as unknown as Proposal]),
+      );
+      const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
+
+      expect(container.querySelector('#door')).not.toBeNull();
+      expect(rowTwo(container)).toHaveTextContent('Nothing waiting on you');
+    });
+
+    it('names a studio-sent scope change rather than saying nothing waits', () => {
+      quietHouse();
+      scopeChangesMock.mockReturnValue({
+        data: [
+          {
+            id: 'sc-1',
+            title: 'Add a runner to the stair hall',
+            description: 'A runner underfoot in the stair hall.',
+            status: 'sent',
+            request_origin: 'designer_amendment',
+          },
+        ],
+        isLoading: false,
+        isPending: false,
+        isError: false,
+      });
+      const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
+
+      expect(rowTwo(container)).toHaveTextContent('Waiting for you: Add a runner to the stair hall.');
+    });
+
+    it('says the read failed when any read an ask is drawn from did not answer', () => {
+      quietHouse();
+      pendingReviewMock.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isPending: false,
+        isError: true,
+        refetch: jest.fn(),
+      });
+      const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
+
+      expect(rowTwo(container)).toHaveTextContent('The approvals could not be read just now.');
+    });
+  });
 });

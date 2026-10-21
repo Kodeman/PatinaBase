@@ -1,6 +1,18 @@
 import { test, expect, type Page } from '@playwright/test';
 
-import { ANCHORS, ELM, LAKE, MEASURE, box, settled, signInAsJune } from './fixtures/house-issue';
+import {
+  ANCHORS,
+  ANCHOR_PATTERNS,
+  ELM,
+  ELM_UNDRAWN,
+  GARDEN,
+  LAKE,
+  MEASURE,
+  box,
+  servePlates,
+  settled,
+  signInAsJune,
+} from './fixtures/house-issue';
 
 /**
  * The House Issue (US-49 Phase 1), with `client-edition-page` forced on by
@@ -19,6 +31,55 @@ function platesRequests(page: Page): string[] {
     if (new URL(request.url()).pathname.startsWith('/plates/')) urls.push(request.url());
   });
   return urls;
+}
+
+/** Every contract anchor once; every entity anchor unique, and every link to one lands. */
+async function expectAnchors(page: Page): Promise<void> {
+  const named = [...ANCHORS, ...ELM.rooms.map((room) => `room-${room}`)];
+  const counts = await page.evaluate(
+    (ids) => Object.fromEntries(ids.map((id) => [id, document.querySelectorAll(`[id="${id}"]`).length])),
+    named,
+  );
+  expect(counts).toEqual(Object.fromEntries(named.map((id) => [id, ELM_UNDRAWN.includes(id) ? 0 : 1])));
+  const ids = await page
+    .locator(ANCHOR_PATTERNS.map((prefix) => `[id^="${prefix}"]`).join(', '))
+    .evaluateAll((nodes) => nodes.map((node) => node.id));
+  expect(ids.length - new Set(ids).size, `duplicate entity ids in ${ids.join(' ')}`).toBe(0);
+  const hrefs = await page
+    .locator(ANCHOR_PATTERNS.map((prefix) => `a[href^="#${prefix}"]`).join(', '))
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href') ?? ''));
+  for (const href of new Set(hrefs)) await expect(page.locator(`[id="${href.slice(1)}"]`), href).toHaveCount(1);
+}
+
+interface Rect {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+/** Viewport geometry of the first match. */
+async function rect(page: Page, selector: string): Promise<Rect> {
+  const found = await page.locator(selector).first().evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+  });
+  return found;
+}
+
+const HERO = '[data-testid="house-issue-hero"] figure.ed-hero';
+
+/** The hero's picture decoded: served, not the drawn fallback. */
+async function heroLoaded(page: Page): Promise<string> {
+  const img = page.locator(`${HERO} img.ed-plate__img`);
+  await expect(img).toBeVisible({ timeout: 30000 });
+  await expect
+    .poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0), { timeout: 30000 })
+    .toBe(true);
+  await expect(page.locator(`${HERO} .plate-note`)).toHaveCount(0);
+  return img.evaluate((el: HTMLImageElement) => el.currentSrc);
 }
 
 /** Every element wider than the viewport, by tag and class, for the report. */
@@ -78,15 +139,16 @@ test.describe('The House Issue', { tag: '@edition' }, () => {
     }
     expect(await page.locator('body').innerText()).not.toMatch(/\bAI\b/);
 
-    // The first Tab stop is the skip link, and it lands on the house.
+    // PLAN §2: no skip link; the first Tab stop is standing row 1.
+    await expect(page.getByText('Skip to the project')).toHaveCount(0);
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('Tab');
     const focused = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement | null;
-      return { testid: el?.getAttribute('data-testid'), href: el?.getAttribute('href'), text: el?.textContent?.trim() };
+      return { row: el?.getAttribute('data-standing-row'), href: el?.getAttribute('href'), text: el?.textContent?.trim() };
     });
     console.log(`[first-tab] ${JSON.stringify(focused)}`);
-    expect(focused).toEqual({ testid: 'house-issue-skip', href: '#doorstep', text: 'Skip to the project' });
+    expect(focused).toEqual({ row: '1', href: '#letterbox', text: '$600.00 was due on 25 September.' });
   });
 
   test('1440: the hero bleeds the full width at most 648 tall, rows within 880', async ({ page }, info) => {
@@ -138,7 +200,45 @@ test.describe('The House Issue', { tag: '@edition' }, () => {
     // Every plate request named a plate the house holds; none was for the sofa.
     expect(plates.length).toBeGreaterThan(0);
     for (const url of plates) expect(url).toContain(`/plates/${ELM.id}/`);
-    for (const id of ANCHORS) await expect(page.locator(`[id="${id}"]`), `#${id}`).toHaveCount(1);
+    await expectAnchors(page);
+  });
+
+  test('a retired route lands on its anchor, carrying the entity it named', async ({ page }) => {
+    await signInAsJune(page, `/projects/${ELM.id}`);
+    await settled(page);
+    const named = ELM.invoices[1];
+    const fold = await page.request.get(`/invoices/${named}`, { maxRedirects: 0 });
+    expect(fold.status()).toBe(308);
+    const location = new URL(fold.headers()['location'] ?? '', 'http://localhost');
+    expect([location.pathname, location.searchParams.get('invoice'), location.hash]).toEqual(['/', named, '#letterbox']);
+
+    await page.goto(`/invoices/${named}`);
+    await settled(page);
+    await expect.poll(() => new URL(page.url()).hash).toBe('#letterbox');
+    await expect(page.locator('[id="letterbox"]')).toHaveCount(1);
+    // The letter the address named stands in the slot, not the one due first.
+    const slot = page.locator('#letterbox [data-testid="spine-toll"]');
+    await expect(slot).toBeVisible({ timeout: 30000 });
+    await expect(slot).toHaveAttribute('data-invoice-id', named);
+  });
+
+  test('the till’s return resolves #letterbox, its query read on arrival', async ({ page }) => {
+    await signInAsJune(page, `/projects/${ELM.id}`);
+    await settled(page);
+    const address = `/projects/${ELM.id}?invoice=${ELM.invoices[0]}&checkout=success&session_id=cs_e2e_sq1614#letterbox`;
+    // Served where it was sent: no hop drops the query on the way in.
+    const served = await page.request.get(address, { maxRedirects: 0 });
+    expect(served.status()).toBe(200);
+
+    await page.goto(address);
+    await settled(page);
+    // The receipt is the letterbox reading `?invoice=` and `?checkout=` off the address.
+    await expect(page.getByTestId('letterbox-receipt')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('[id="letterbox"]')).toHaveCount(1);
+    await expect(page.locator('#letterbox')).toBeInViewport({ timeout: 30000 });
+    await expect.poll(() => new URL(page.url()).hash).toBe('#letterbox');
+    // Read once, then struck out: a refresh never replays the return.
+    await expect.poll(() => new URL(page.url()).searchParams.get('checkout')).toBeNull();
   });
 
   test('the drawn cover: a house with no plate opens on its plan, with no plate request at all', async ({ page }) => {
@@ -171,4 +271,101 @@ test.describe('The House Issue', { tag: '@edition' }, () => {
     expect(transforms.length).toBeGreaterThan(0);
     expect(transforms.filter((t) => t !== 'none')).toEqual([]);
   });
+});
+
+/*
+ * The plate route has no PLATES binding under `next dev`, so every case above
+ * meets the drawn fallback. These serve committed stand-in bytes instead and
+ * measure the hero as a reader sees it: a decoded photograph, in its layout.
+ */
+test.describe('The House Issue, its pictures served', { tag: '@edition' }, () => {
+  test.beforeEach(async ({ page }) => servePlates(page));
+
+  test('1440: a landscape hero bleeds the full width, at most 648 tall', async ({ page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInAsJune(page, `/projects/${ELM.id}`);
+    await settled(page);
+    await expect(page.locator(HERO)).toHaveClass(/\bed-hero--bleed\b/);
+    const src = await heroLoaded(page);
+    const img = await rect(page, `${HERO} img.ed-plate__img`);
+    info.annotations.push({
+      type: 'measured-1440-bleed',
+      description: `hero ${img.width.toFixed(1)}×${img.height.toFixed(1)} at x ${img.left.toFixed(1)}; ${src}`,
+    });
+    console.log(`[measured-1440-bleed] ${info.annotations.at(-1)!.description}`);
+    expect(src).toContain('/wide-');
+    expect(Math.abs(img.left)).toBeLessThanOrEqual(1);
+    expect(Math.abs(img.width - 1440)).toBeLessThanOrEqual(1);
+    expect(img.height).toBeLessThanOrEqual(648);
+    expect(await wider(page, 1440)).toEqual([]);
+  });
+
+  test('1440: a portrait hero stands inside the measure at 4:5, five-twelfths wide', async ({ page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInAsJune(page, `/projects/${GARDEN.id}`);
+    await expect(page.getByTestId('doorplate-title')).toHaveText(GARDEN.name, { timeout: 60000 });
+    await settled(page);
+    await expect(page.locator(HERO)).toHaveClass(/\bed-hero--portrait\b/);
+    const src = await heroLoaded(page);
+    const measure = await rect(page, '[data-testid="house-issue-hero"]');
+    const img = await rect(page, `${HERO} img.ed-plate__img`);
+    const tab = await rect(page, '[data-testid="house-issue-hero"] .ed-tab');
+    info.annotations.push({
+      type: 'measured-1440-portrait',
+      description: `hero ${img.width.toFixed(1)}×${img.height.toFixed(1)} at x ${img.left.toFixed(1)} in a ${measure.width.toFixed(0)} measure at x ${measure.left.toFixed(0)}; tab x ${tab.left.toFixed(0)}–${tab.right.toFixed(0)}; ${src}`,
+    });
+    console.log(`[measured-1440-portrait] ${info.annotations.at(-1)!.description}`);
+    expect(src).toContain('/tall-');
+    expect(measure.width).toBeLessThan(1440);
+    expect(img.left).toBeGreaterThanOrEqual(measure.left - 0.5);
+    expect(img.right).toBeLessThanOrEqual(measure.right + 0.5);
+    expect(Math.abs(img.width - (measure.width * 5) / 12)).toBeLessThanOrEqual(1);
+    expect(Math.abs(img.height / img.width - 5 / 4)).toBeLessThanOrEqual(0.01);
+    expect(img.height).toBeLessThanOrEqual(648);
+    // The paper tab reads beside the picture, never under it.
+    expect(tab.left).toBeGreaterThanOrEqual(img.right);
+    expect(tab.right).toBeLessThanOrEqual(measure.right + 0.5);
+  });
+
+  for (const house of [ELM, GARDEN]) {
+    test(`390×400: ${house.name}'s hero holds 72svh, its tab and rows in reach`, async ({ page }, info) => {
+      await page.setViewportSize({ width: 390, height: 400 });
+      await signInAsJune(page, `/projects/${house.id}`);
+      await expect(page.getByTestId('doorplate-title')).toHaveText(house.name, { timeout: 60000 });
+      await settled(page);
+      const src = await heroLoaded(page);
+      const img = await rect(page, `${HERO} img.ed-plate__img`);
+      const tab = page.locator('[data-testid="house-issue-hero"] .ed-tab');
+      await tab.scrollIntoViewIfNeeded();
+      await expect(tab).toBeVisible();
+      const tabBox = await rect(page, '[data-testid="house-issue-hero"] .ed-tab');
+      const rows = await Promise.all([1, 2, 3].map((n) => rect(page, `[data-standing-row="${n}"]`)));
+      const type = `measured-390x400-${house === ELM ? 'bleed' : 'portrait'}`;
+      info.annotations.push({
+        type,
+        description: `hero ${img.width.toFixed(1)}×${img.height.toFixed(1)}; tab x ${tabBox.left.toFixed(0)}–${tabBox.right.toFixed(0)}; rows ${rows.map((r) => r.height.toFixed(0)).join('/')} tall; ${src}`,
+      });
+      console.log(`[${type}] ${info.annotations.at(-1)!.description}`);
+      expect(src).toContain('/cover_phone-');
+      expect(Math.abs(img.width - 390)).toBeLessThanOrEqual(1);
+      expect(img.height).toBeLessThanOrEqual(288.5);
+      expect(tabBox.left).toBeGreaterThanOrEqual(0);
+      expect(tabBox.right).toBeLessThanOrEqual(390);
+      for (const row of rows) {
+        expect(row.height).toBeGreaterThanOrEqual(44);
+        expect(row.left).toBeGreaterThanOrEqual(0);
+        expect(row.right).toBeLessThanOrEqual(390);
+      }
+      expect(await wider(page, 390)).toEqual([]);
+      // A row is a working control on this screen, not just drawn on it.
+      const link = page.locator('a[data-standing-row]').first();
+      if ((await link.count()) > 0) {
+        const href = (await link.getAttribute('href')) ?? '';
+        await link.scrollIntoViewIfNeeded();
+        await link.click();
+        await expect.poll(() => new URL(page.url()).hash).toBe(href);
+        await expect(page.locator(`[id="${href.slice(1)}"]`)).toBeInViewport();
+      }
+    });
+  }
 });

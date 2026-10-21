@@ -279,9 +279,10 @@ describe("the issue", () => {
     );
     expect(screen.queryByTestId("doorplate-today")).toBeNull();
     expect(screen.queryByTestId("arrival-invoices")).toBeNull();
+    // PLAN §2: no skip link; standing row 1 is the first Tab stop.
+    expect(container.querySelector("a[href='#doorstep']")).toBeNull();
     const order = [
       "#doorplate",
-      '[data-testid="house-issue-skip"]',
       '[data-testid="house-issue-hero"]',
       '[data-testid="standing-rows-held"]',
       '[data-testid="landmark-ledger"]',
@@ -460,6 +461,23 @@ describe("the standing rows, in words", () => {
     expect(approvalsRow({ asks: [], gate: null, readFailed: false })).toEqual({
       sentence: null,
     });
+    // Any other ask owed her, by the name "Waiting on you" gives it.
+    expect(
+      approvalsRow({
+        asks: [],
+        gate: null,
+        waiting: { label: "Share a preference with your studio" },
+        readFailed: false,
+      }).sentence,
+    ).toBe("Waiting for you: Share a preference with your studio.");
+    expect(
+      approvalsRow({
+        asks: [{}],
+        gate: null,
+        waiting: { label: "Share a preference with your studio" },
+        readFailed: false,
+      }).sentence,
+    ).toBe("One approval is waiting for you.");
   });
 
   it("row 3 counts open invoices in words with one currency’s total, never a measure", () => {

@@ -87,6 +87,11 @@ export interface TrackingRowProps {
    * "photograph … to follow" clause is printed only where a maker is named.
    */
   maker?: string | null;
+  /**
+   * False draws no picture and no plate caption: in the House Issue the
+   * piece's picture stands as an editorial plate beside the band.
+   */
+  plate?: boolean;
 }
 
 /** R140: a plate goes to 96px above a value threshold, and 64px below it. */
@@ -123,6 +128,52 @@ export function plateCaption({
     .join(' · ');
 }
 
+/** Where the row's columns fall with its plate, and without one. */
+const ROW_GRID = {
+  framed: { plate: true, columns: 'grid-cols-[auto_minmax(0,1fr)_auto]', name: 'col-start-2', stamp: 'col-start-3' },
+  bare: { plate: false, columns: 'grid-cols-[minmax(0,1fr)_auto]', name: 'col-start-1', stamp: 'col-start-2' },
+} as const;
+
+interface RowPlateProps extends Pick<TrackingRowProps, 'name' | 'imageUrl' | 'priceCents' | 'itemType'> {
+  drawImage: boolean;
+  onBroken: () => void;
+}
+
+/** The row's picture, or the piece drawn when there is none to show. */
+function RowPlate({ name, imageUrl, priceCents, itemType, drawImage, onBroken }: RowPlateProps) {
+  const large = typeof priceCents === 'number' && priceCents >= LARGE_PLATE_MIN_CENTS;
+  // 64px everywhere the page is dense or narrow; 96px only where the room is
+  // wide enough for it AND the piece is worth the floor it would take.
+  const plateSize = large
+    ? 'h-16 w-16 min-[960px]:h-24 min-[960px]:w-24'
+    : 'h-16 w-16';
+  return (
+    <div
+      data-testid="tracking-row-plate"
+      data-plate={large ? '96' : '64'}
+      className={`${plateSize} col-start-1 row-start-1 row-span-2 shrink-0 overflow-hidden rounded-[3px] border border-[var(--hairline)] bg-[var(--paper-doc)]`}
+    >
+      {drawImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageUrl as string}
+          alt=""
+          onError={onBroken}
+          className="h-full w-full object-cover"
+          data-testid="tracking-row-thumb"
+        />
+      ) : (
+        <span
+          data-testid="tracking-row-thumb-placeholder"
+          className="block h-full w-full"
+        >
+          <PieceSilhouette category={silhouetteCategory(name, itemType)} />
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function TrackingRow({
   name,
   imageUrl,
@@ -131,6 +182,7 @@ export function TrackingRow({
   itemType,
   studioName,
   maker,
+  plate,
 }: TrackingRowProps) {
   const stopIndex = journeyStageIndexForStatus(status);
   const stage = GOODS_JOURNEY_STAGES[stopIndex];
@@ -139,44 +191,26 @@ export function TrackingRow({
   // instead of staying quiet because an earlier one 404'd.
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
   const drawImage = !!imageUrl && brokenUrl !== imageUrl;
-  const large = typeof priceCents === 'number' && priceCents >= LARGE_PLATE_MIN_CENTS;
-  // 64px everywhere the page is dense or narrow; 96px only where the room is
-  // wide enough for it AND the piece is worth the floor it would take.
-  const plate = large
-    ? 'h-16 w-16 min-[960px]:h-24 min-[960px]:w-24'
-    : 'h-16 w-16';
+  const grid = plate === false ? ROW_GRID.bare : ROW_GRID.framed;
 
   return (
     <div
       data-testid="tracking-row"
       data-journey-stop={stage}
-      className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-6 gap-y-3 border-b border-[var(--border-subtle)] py-3.5"
+      className={`grid ${grid.columns} gap-x-6 gap-y-3 border-b border-[var(--border-subtle)] py-3.5`}
     >
-      <div
-        data-testid="tracking-row-plate"
-        data-plate={large ? '96' : '64'}
-        className={`${plate} col-start-1 row-start-1 row-span-2 shrink-0 overflow-hidden rounded-[3px] border border-[var(--hairline)] bg-[var(--paper-doc)]`}
-      >
-        {drawImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl as string}
-            alt=""
-            onError={() => setBrokenUrl(imageUrl)}
-            className="h-full w-full object-cover"
-            data-testid="tracking-row-thumb"
-          />
-        ) : (
-          <span
-            data-testid="tracking-row-thumb-placeholder"
-            className="block h-full w-full"
-          >
-            <PieceSilhouette category={silhouetteCategory(name, itemType)} />
-          </span>
-        )}
-      </div>
+      {grid.plate && (
+        <RowPlate
+          name={name}
+          imageUrl={imageUrl}
+          priceCents={priceCents}
+          itemType={itemType}
+          drawImage={drawImage}
+          onBroken={() => setBrokenUrl(imageUrl)}
+        />
+      )}
 
-      <div className="col-start-2 row-start-1 min-w-0">
+      <div className={`${grid.name} row-start-1 min-w-0`}>
         <p className="type-body-small font-medium text-[var(--text-primary)]">{name}</p>
 
         {typeof priceCents === 'number' && (
@@ -188,16 +222,18 @@ export function TrackingRow({
         <MicroSpine stopIndex={stopIndex} stage={stage} ink={ink} />
       </div>
 
-      <div className="col-start-3 row-start-1">
+      <div className={`${grid.stamp} row-start-1`}>
         <StatusStamp stage={stage} ink={ink} />
       </div>
 
-      <p
-        data-testid="tracking-row-caption"
-        className="t-meta col-start-2 col-span-2 row-start-2 text-[var(--ink-subtle)]"
-      >
-        {plateCaption({ name, drawn: !drawImage, studioName, maker })}
-      </p>
+      {grid.plate && (
+        <p
+          data-testid="tracking-row-caption"
+          className="t-meta col-start-2 col-span-2 row-start-2 text-[var(--ink-subtle)]"
+        >
+          {plateCaption({ name, drawn: !drawImage, studioName, maker })}
+        </p>
+      )}
     </div>
   );
 }

@@ -17,6 +17,8 @@ import { useClientEditorial } from "@/hooks/use-client-editorial";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
 import { plateAlt } from "@/lib/editorial/caption";
 import { chapterOrder, type Chapter } from "@/lib/editorial/chapters";
+import { heroPicture } from "@/lib/editorial/crop";
+import type { HeroDesktopLayout } from "@/lib/editorial/floors";
 import {
   rankHero,
   roomPlates,
@@ -280,10 +282,19 @@ export function letterboxRow(
   return { sentence: null };
 }
 
+/**
+ * Read off the page's own "Waiting on you" projection (threshold.tsx
+ * `waitingAsk`), never off which gates are drawn: a door kept as the receipt
+ * of her signature, or an approval waiting on the studio, asks nothing.
+ */
 export interface ApprovalsRowInput {
+  /** Approvals still owed her answer. */
   asks: ReadonlyArray<{ artifactTitle?: string | null }>;
-  /** A door or wall waits in a room band. */
+  /** Finished work to review, or a document still unsigned, in a room band. */
   gate: "door" | "wall" | null;
+  /** Any other ask owed her: a review request, an edition, a scope change. */
+  waiting?: { label: string } | null;
+  /** Any read an ask is drawn from failed. */
   readFailed: boolean;
 }
 
@@ -310,12 +321,14 @@ function askWords(asks: ApprovalsRowInput["asks"]): string | null {
 export function approvalsRow({
   asks,
   gate,
+  waiting,
   readFailed,
 }: ApprovalsRowInput): StandingRowsProps["approvals"] {
   if (readFailed)
     return { sentence: "The approvals could not be read just now." };
   if (gate) return { sentence: GATE_WORDS[gate] };
-  return { sentence: askWords(asks) };
+  const other = waiting ? `Waiting for you: ${waiting.label}.` : null;
+  return { sentence: askWords(asks) ?? other };
 }
 
 type OutstandingTotals = NonNullable<InvoiceProjection["outstandingTotals"]>;
@@ -353,19 +366,25 @@ export function ledgerRow(
  * the server paint uses 100vw, exact at the phone, so the hero never jumps.
  * The width is set in a layout effect so the paper tab's own measure (a
  * child's effect) already sees the bled width. At the phone the 16px gutter is
- * put back so `.ed-hero`'s own −16px lands on the edge. A failed hero is drawn
- * at the hero's geometry, not a square (`:first-child` is the frame; an
- * underscore in a Tailwind arbitrary variant would read as a space).
+ * put back so `.ed-hero`'s own −16px lands on the edge. Every layout bleeds at
+ * the phone; at 601 and up only `bleed` leaves the measure (editorial.css sets
+ * the measure and portrait plates inside it).
  */
-const BLEED = [
-  "[margin-inline:calc(50%-var(--hi-page-w,100vw)/2)]",
-  "max-[600px]:px-4",
-  "[&_.ed-silhouette.ed-hero>:first-child]:aspect-[39/34]",
-  "min-[601px]:[&_.ed-silhouette.ed-hero>:first-child]:aspect-auto",
-  "min-[601px]:[&_.ed-silhouette.ed-hero>:first-child]:h-[min(72svh,648px)]",
-].join(" ");
+const BLEED: Readonly<Record<HeroDesktopLayout, string>> = {
+  bleed: "[margin-inline:calc(50%-var(--hi-page-w,100vw)/2)] max-[600px]:px-4",
+  measure:
+    "max-[600px]:[margin-inline:calc(50%-var(--hi-page-w,100vw)/2)] max-[600px]:px-4",
+  portrait:
+    "max-[600px]:[margin-inline:calc(50%-var(--hi-page-w,100vw)/2)] max-[600px]:px-4",
+};
 
-function Bleed({ children }: { children: ReactNode }) {
+function Bleed({
+  layout,
+  children,
+}: {
+  layout: HeroDesktopLayout;
+  children: ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -380,7 +399,7 @@ function Bleed({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("resize", measure);
   }, []);
   return (
-    <div ref={ref} data-testid="house-issue-hero" className={BLEED}>
+    <div ref={ref} data-testid="house-issue-hero" className={BLEED[layout]}>
       {children}
     </div>
   );
@@ -453,7 +472,7 @@ function HeroCover({
 }) {
   const item = issue.heroItem;
   return (
-    <Bleed>
+    <Bleed layout={heroPicture(hero).layout}>
       <HeroPlate
         scopeId={issue.editorial.project.id}
         asset={hero}
@@ -579,14 +598,6 @@ function EditionHead(props: HouseIssueHeadProps & { issue: HouseIssue }) {
         <LetterheadCompact {...props.letterhead} />
       </div>
       <p className={AT_DESK.purpose}>{ARRIVAL_PURPOSE}</p>
-      {/* The first Tab stop: past the cover and its rows to the house itself. */}
-      <a
-        href="#doorstep"
-        data-testid="house-issue-skip"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:mt-2 focus:inline-flex focus:min-h-[44px] focus:items-center focus:bg-[var(--bg-primary)] focus:px-3 focus:text-[var(--text-primary)] focus:underline"
-      >
-        Skip to the project
-      </a>
       <div aria-hidden="true" className={AT_DESK.rule} />
       <div className={AT_DESK.cover}>
         <Cover {...arrival} />

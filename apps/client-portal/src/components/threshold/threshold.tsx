@@ -204,6 +204,16 @@ function waitingGate(mark: ThresholdMark | undefined, anchorOf: (mark: Threshold
   return mark ? progressAsk(anchorOf(mark), mark.label) : null;
 }
 
+/** The gate standing row 2 names: the wall before the door, and only one still owed. */
+function owedGate(wall: ThresholdMark | undefined, door: ThresholdMark | undefined) {
+  return wall ? "wall" : door ? "door" : null;
+}
+
+/** The House Issue draws a room's pictures as plates, so its bands draw none. */
+function bandImagery(issue: ReturnType<typeof useEditionIssue>) {
+  return issue ? "editorial" : "legacy";
+}
+
 /** An approval still owed her answer: one waiting on the studio to issue it is not. */
 function waitingApproval(asks: readonly ProjectApprovalReview[]) {
   const owed = asks.find(isClientActionableProjectApproval);
@@ -1294,9 +1304,11 @@ export function Threshold({
   // drawn under. A door kept on the page as the receipt of her signature, or an
   // approval waiting on the studio, is owed nothing (R9); the review, edition
   // and scope-change asks drawn beside the approvals are owed like any other (R1).
+  const waitingWall = wallMarks.find((mark) => mark.id === firstWallId);
+  const waitingDoor = drawnDoors.find((mark) => openDoorIds.has(mark.id));
   const waitingAsk = [
-    waitingGate(wallMarks.find((mark) => mark.id === firstWallId), gateAnchor),
-    waitingGate(drawnDoors.find((mark) => openDoorIds.has(mark.id)), gateAnchor),
+    waitingGate(waitingWall, gateAnchor),
+    waitingGate(waitingDoor, gateAnchor),
     waitingApproval(doorstepAsks),
     waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks),
     waitingEdition(editionId, editionQuery.data),
@@ -1725,6 +1737,7 @@ export function Threshold({
               projectId={projectId}
               studioName={studioName}
               leadRoomName={leadRoomName}
+              imagery={bandImagery(issue)}
             >
               {/* ONE array, keyed by mark: a door that has just been signed
                   leaves `band.marks` (the band's own sentence may not go on
@@ -1807,11 +1820,13 @@ export function Threshold({
           ))
         }
         rows={{
+          // The same projection "Waiting on you" reads at #road.
           spoken: houseHasSpoken,
           invoices: model.invoices,
-          asks: doorstepAsks,
-          gate: firstGateAnchor,
-          readFailed: projectApprovalsError,
+          asks: doorstepAsks.filter(isClientActionableProjectApproval),
+          gate: owedGate(waitingWall, waitingDoor),
+          waiting: waitingAsk,
+          readFailed: unreadAsks.length > 0,
         }}
         plan={{ unread: roomsUnread, rooms, marks: model.marks }}
         studioName={studioName}
