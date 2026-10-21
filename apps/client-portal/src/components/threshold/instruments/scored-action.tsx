@@ -54,15 +54,22 @@ export type ScoredActionPresentation = 'inline' | 'mobile_dock';
    2.21:1 and is not a state anyone can read. Unavailability is a colour and a
    hairline, drawn in the Scored Ink block. */
 const BASE_CLASS =
-  'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
+  'da-act relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
+
+/* A one-word scored act stays on one line. A terminal or a choice carries a
+   sentence and an amount ("Continue to secure payment · $9,125"), so it is
+   never forced onto one line: it shrinks to its container and its label wraps,
+   at 360px and at 200% zoom, without shortening the copy (CPUX-07). */
+const ONE_LINE = 'shrink-0 whitespace-nowrap';
+const REFLOWS = 'max-w-full text-center';
 
 const VARIANT_CLASS: Record<ScoredActionVariant, string> = {
-  primary: 'da-primary font-medium tracking-[0.12em]',
-  secondary: 'da-secondary font-normal tracking-[0.1em]',
-  tertiary: 'da-tertiary font-light tracking-[0.1em]',
-  danger: 'da-danger font-medium tracking-[0.12em]',
-  terminal: 'da-terminal font-medium',
-  choice: 'da-choice font-medium',
+  primary: `da-primary font-medium tracking-[0.12em] ${ONE_LINE}`,
+  secondary: `da-secondary font-normal tracking-[0.1em] ${ONE_LINE}`,
+  tertiary: `da-tertiary font-light tracking-[0.1em] ${ONE_LINE}`,
+  danger: `da-danger font-medium tracking-[0.12em] ${ONE_LINE}`,
+  terminal: `da-terminal font-medium ${REFLOWS}`,
+  choice: `da-choice font-medium ${REFLOWS}`,
 };
 
 interface ScoredActionBaseProps {
@@ -183,7 +190,9 @@ function choicePressed(variant: ScoredActionVariant, pressed: boolean | undefine
 }
 
 /* The reason is drawn, not only announced: a reader who cannot take the act
-   sees why without first trying it. */
+   sees why without first trying it. The wrapper is always the same span, so
+   the control keeps its identity (and its focus) when the reason comes or
+   goes; with no reason it lays out as if it were not there. */
 function WithReason({
   reason,
   reasonId,
@@ -195,17 +204,18 @@ function WithReason({
   actionKey: string;
   children: ReactNode;
 }) {
-  if (!reason) return <>{children}</>;
   return (
-    <span className="inline-flex max-w-full flex-col items-start">
+    <span className={reason ? 'inline-flex max-w-full flex-col items-start' : 'contents'}>
       {children}
-      <span
-        id={reasonId}
-        data-testid={`${actionKey}-unavailable-reason`}
-        className="da-unavailable-reason"
-      >
-        {reason}
-      </span>
+      {reason && (
+        <span
+          id={reasonId}
+          data-testid={`${actionKey}-unavailable-reason`}
+          className="da-unavailable-reason"
+        >
+          {reason}
+        </span>
+      )}
     </span>
   );
 }

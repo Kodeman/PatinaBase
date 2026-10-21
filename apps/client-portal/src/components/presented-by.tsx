@@ -56,6 +56,10 @@ function telHref(phone: string): string | null {
 const LINK_CLASS =
   'underline decoration-[var(--border-default)] underline-offset-[3px] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
 
+/* Contact is a set of acts, so each way in is a 44px target (CPUX-07) that
+   still reads as a text link inside the sentence. */
+const CONTACT_LINK_CLASS = `${LINK_CLASS} inline-flex min-h-11 items-center`;
+
 /* ── CONTACT YOUR DESIGNER (CPUX-06) ─────────────────────────────────────────
    Named help near the summary, built from the same resolved fields: the lead's
    name, the phone and email the studio presented, and the reply field when this
@@ -93,7 +97,7 @@ export function ContactDesigner({ identity, writeAnchor, className }: ContactDes
         <>
           {'Call '}
           {phoneHref ? (
-            <a className={`${LINK_CLASS} whitespace-nowrap`} href={phoneHref} data-testid="contact-phone">
+            <a className={`${CONTACT_LINK_CLASS} whitespace-nowrap`} href={phoneHref} data-testid="contact-phone">
               {phone}
             </a>
           ) : (
@@ -111,7 +115,7 @@ export function ContactDesigner({ identity, writeAnchor, className }: ContactDes
       node: (
         <>
           {ways.length === 0 ? 'Email ' : 'email '}
-          <a className={LINK_CLASS} href={`mailto:${email}`} data-testid="contact-email">
+          <a className={CONTACT_LINK_CLASS} href={`mailto:${email}`} data-testid="contact-email">
             {email}
           </a>
         </>
@@ -122,7 +126,7 @@ export function ContactDesigner({ identity, writeAnchor, className }: ContactDes
     ways.push({
       key: 'write',
       node: (
-        <a className={LINK_CLASS} href={`#${writeAnchor}`} data-testid="contact-write">
+        <a className={CONTACT_LINK_CLASS} href={`#${writeAnchor}`} data-testid="contact-write">
           {ways.length === 0 ? 'Write here' : 'write here'}
         </a>
       ),

@@ -102,7 +102,7 @@ function AskLink({ ask }: { ask: ProgressAsk }) {
   return (
     <>
       Your response to{' '}
-      <a href={`#${ask.anchor}`} className="underline underline-offset-[6px]">
+      <a href={`#${ask.anchor}`} className={LINK_CLASS}>
         {ask.label}
       </a>
       .
