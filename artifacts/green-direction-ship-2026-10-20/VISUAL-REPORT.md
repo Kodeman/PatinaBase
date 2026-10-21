@@ -53,6 +53,23 @@ NOT CAPTURED (UNVERIFIED): Approved verdict chip, `.da-terminal` forest act, suc
 ## US-46 (partial, UNVERIFIED)
 Paper band, `.da-plate` "Next" and region head were not captured in the lens-band surface. Only the closest observed charcoal action ("Complete the installation / Check what's arriving", in a ruled strip at 1440 and 390) is in `designer-project-cedar-*`. It is a flat charcoal button with sentence-case body font and a distinct ruled strip. No forest terminal was on the same screen, so the plate-versus-terminal tier question stays open. Follow-up: seed a lens-band project and an order paper, then re-shoot.
 
+## Designer + US-46 (W3-V2)
+Ticket SQ-1551. Local only (127.0.0.1:54321), designer portal on :3000 run from this worktree with `one-voice` and `the-document-pilot` set through `NEXT_PUBLIC_FLAG_OVERRIDES` (no PostHog change). Captured with real Chromium viewports of 1440x900 and 390x844 (no framing gutter, but the Next dev "N" badge is a dev artifact). Fixtures are synthetic: three client verdicts on a new draft proposal (W3V synthetic draft), and one W3V invoice recorded paid on each of two synthetic houses ($9,125 recorded at 1440, $500 at 390; nothing was sent). The Aspen Loft project was only opened, nothing there was changed.
+
+| File | Verdict | Issues |
+|---|---|---|
+| designer-terminal-record-payment-1440 / 390 | pass | Forest `.da-terminal` "Record the payment · $4,250.00" measured rgb(62,81,69) fill, rgb(255,253,249) ink, 48px high, 3px radius, label 16px sentence-case body font (the mono 12px uppercase rule applies to the button's wrapper but the visible label is Inter). No overflow at 390. L: the form fields above it use browser-default select and tiny 12px mono labels. |
+| designer-paid-success-notice-1440 / 390 | pass with defect | After recording, the folio shows PAID, balance $0.00 in green, a "SUCCEEDED" payment row and the notice "PAYMENT OF $9,125.00 RECORDED". M: the notice is a quiet grey mono line at the foot of a long sheet, so it can sit below the fold on a short screen (390). L: the PAID header line itself is plain ink, only the balance figure is green. |
+| designer-approved-chip-line-1440 / 390 | pass | "APPROVED" chip is outlined with a forest dot and forest edge. Flagged shows a clay dot and Noted a muted dot on the same row group, so the green record reads as the settled state. L: at 390 the line card is stacked tall; chip sits under the card, not beside it. |
+| designer-us46-band-plate-1440 | pass | Paper band: "PROJECT · ASPEN LOFT REFRESH / NEXT — Awaiting the client: 2 decisions overdue" with the charcoal square `.da-plate` "Contact the client" (44px, 15px Inter semibold, no radius) in the same ruled strip. |
+| designer-us46-band-plate-390 | pass with defect | At 390 the band is text only ("NEXT OVERDUE 5D · DECISIONS") and the plate moves to the fixed bottom bar next to "MORE". L: the plate label wraps to two lines ("Contact the client") in the bar at 390, and "Open the pieces" does the same. |
+| designer-us46-region-head-1440 / 390 | pass | Left-stacked head for FF&E selections: name with "Collapse" (Fold) beside it, lead "No selections yet. · nothing released" under, tools row (Add items, Edit selections, Prepare purchasing authorization, More) beneath. 390 keeps the same stack with the tools row wrapping. |
+| designer-us46-region-head-financials-1440 / 390 | pass | Project financials head follows the same order: eyebrow, name + Collapse, lead line, tools row (Record the payment, Draft an invoice, Details). |
+
+Plate versus terminal tiers: the plate and a forest terminal were NOT captured on one screen. The invoice folio that holds the terminal is modal and covers the band, and the order paper and agreement composer were not reachable with the seeded data in this pass (UNVERIFIED). Judged from the two separate screens plus measured values, they read as different tiers: the plate is charcoal, square, 44px and sits in the ruled band or mobile bar as a pointer to the next move, while the terminal is forest, rounded 3px, 48px and appears only inside a sheet to commit an act. M (open): because they were not seen together, whether a designer confuses "Contact the client" with a commit act is unproven.
+
+Still not captured: agreement composer and procurement order paper terminals, and a green completed status in the designer portal beyond the earlier "CLOSED" shot.
+
 ## Findings summary
 1. M: clay/ochre leftovers on client surfaces (strata mark, `--threshold-accent`, mono chips, PREPARED FOR, APPROVED stamp).
 2. M: text inputs use the browser-default blue focus ring, not forest.
