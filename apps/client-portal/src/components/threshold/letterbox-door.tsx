@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useQueries } from '@tanstack/react-query';
 
@@ -36,6 +36,7 @@ import {
 import {
   houseInvoices,
   invoiceProjection,
+  retireSettledHolds,
   type InvoiceServerHold,
 } from '@/lib/threshold/invoice-rollup';
 
@@ -427,6 +428,11 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
       }),
     [standing, today, house.read, invoiceHolds],
   );
+  // A complete read that proved a held invoice settled retires its hold, so a
+  // refund that reopens it this visit is judged on its own read.
+  useEffect(() => {
+    setInvoiceHolds((held) => retireSettledHolds(held, projection));
+  }, [projection]);
 
   const refetch = invoicesQuery.refetch;
   // Stable: the confirmation poll holds this in an effect's dependency list.
