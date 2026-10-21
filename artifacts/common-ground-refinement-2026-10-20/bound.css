@@ -1,0 +1,118 @@
+body[data-variant="bound"] {
+  --bound-cloth: #3e5145;
+  --bound-paper: #fcfaf6;
+  --bound-linen: #e8e3db;
+  --bound-foil: #d7bc98;
+  --bound-seam: #2c3c31;
+  --bound-ink: #2c2926;
+}
+
+body[data-variant="bound"] .left-page {
+  position: relative;
+  color: var(--bound-paper);
+  background-color: var(--bound-cloth);
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 2px, rgb(252 250 246 / 2.2%) 2px 3px),
+    repeating-linear-gradient(90deg, transparent 0 3px, rgb(22 35 25 / 4%) 3px 4px);
+  border-right-color: var(--bound-seam);
+}
+
+body[data-variant="bound"] .left-page::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 5px;
+  bottom: 0;
+  width: 1px;
+  background: rgb(232 227 219 / 18%);
+  pointer-events: none;
+}
+
+body[data-variant="bound"] .project-title {
+  color: var(--bound-paper);
+}
+
+body[data-variant="bound"] .left-page :is(.project-label, .folio-meta, .material-heading) {
+  color: var(--bound-foil);
+}
+
+body[data-variant="bound"] .left-page :is(.project-address, .room-caption, .project-people p, .studio-letter p, .studio-letter cite, .swatch-row small, .material-heading > span, .project-details dt) {
+  color: var(--bound-linen);
+}
+
+body[data-variant="bound"] .left-page .project-address span {
+  color: var(--bound-foil);
+}
+
+body[data-variant="bound"] .left-page .project-mark i {
+  background-color: var(--bound-foil);
+}
+
+body[data-variant="bound"] .left-page :is(.project-details dd, .studio-letter, .project-people strong) {
+  color: var(--bound-paper);
+}
+
+body[data-variant="bound"] .left-page :is(.paper-rule, .studio-letter, .project-details, .material-notes, .project-people) {
+  border-color: rgb(232 227 219 / 25%);
+}
+
+body[data-variant="bound"] .left-page .room-photo {
+  outline: 1px solid rgb(252 250 246 / 15%);
+  outline-offset: -1px;
+}
+
+body[data-variant="bound"] .left-page :is(.room-caption a, .text-button, a) {
+  color: var(--bound-linen);
+  text-decoration-color: var(--bound-foil);
+}
+
+body[data-variant="bound"] .left-page .text-button {
+  border-bottom-color: var(--bound-foil);
+}
+
+body[data-variant="bound"] .left-page :is(.text-button, a):hover {
+  color: var(--bound-paper);
+  text-decoration-color: var(--bound-paper);
+  border-bottom-color: var(--bound-paper);
+}
+
+body[data-variant="bound"] .left-page .monogram {
+  color: var(--bound-paper);
+  background: transparent;
+  border-color: rgb(232 227 219 / 48%);
+}
+
+body[data-variant="bound"] .left-page .status-dot {
+  background: var(--bound-foil);
+}
+
+body[data-variant="bound"] .left-page :is(a, button):focus-visible {
+  outline-color: var(--bound-paper);
+}
+
+body[data-variant="bound"] .right-page {
+  background-color: var(--bound-paper);
+  color: var(--bound-ink);
+}
+
+@media (max-width: 620px) {
+  body[data-variant="bound"] .left-page {
+    border-bottom-color: var(--bound-seam);
+  }
+
+  body[data-variant="bound"] .left-page::after {
+    top: auto;
+    right: 0;
+    bottom: 5px;
+    left: 0;
+    width: auto;
+    height: 1px;
+  }
+}
+
+@media print {
+  body[data-variant="bound"] .left-page {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
