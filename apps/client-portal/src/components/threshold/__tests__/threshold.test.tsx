@@ -4020,6 +4020,32 @@ describe('Threshold — The House Issue flag (client-edition-page)', () => {
       expect(rowTwo(container)).toHaveTextContent('Waiting for you: Add a runner to the stair hall.');
     });
 
+    it.each([
+      ['percent', 'Increase the fabric allowance by 10%'],
+      ['fraction', 'Replace the 2/3-height panel'],
+    ])('uses an affirmative fallback for a sent scope-change title containing a %s', (_measure, title) => {
+      quietHouse();
+      scopeChangesMock.mockReturnValue({
+        data: [
+          {
+            id: 'sc-1',
+            title,
+            description: 'A change sent by the studio.',
+            status: 'sent',
+            request_origin: 'designer_amendment',
+          },
+        ],
+        isLoading: false,
+        isPending: false,
+        isError: false,
+      });
+      const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
+
+      expect(rowTwo(container)).toHaveTextContent(/^A request is waiting for you\.$/);
+      expect(rowTwo(container)).toHaveAttribute('href', '#approvals');
+      expect(screen.queryByText('Nothing waiting on you')).not.toBeInTheDocument();
+    });
+
     it('says the read failed when any read an ask is drawn from did not answer', () => {
       quietHouse();
       pendingReviewMock.mockReturnValue({

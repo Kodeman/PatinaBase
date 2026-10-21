@@ -54,7 +54,7 @@ import { PiecePlate } from "./piece-plate";
 import { PlanPlate } from "./plan-plate";
 import { Reveal } from "./reveal";
 import { RoomPlate } from "./room-plate";
-import { StandingRows, type StandingRowsProps } from "./standing-rows";
+import { isStandingSentence, StandingRows, type StandingRowsProps } from "./standing-rows";
 import { SwatchStrip } from "./swatch-strip";
 import "./editorial.css";
 
@@ -318,6 +318,12 @@ function askWords(asks: ApprovalsRowInput["asks"]): string | null {
   return null;
 }
 
+function approvalSentence(sentence: string | null): string | null {
+  return sentence === null || isStandingSentence(sentence)
+    ? sentence
+    : "A request is waiting for you.";
+}
+
 /** Row 2, approvals: what waits on her name, in words. */
 export function approvalsRow({
   asks,
@@ -329,7 +335,7 @@ export function approvalsRow({
     return { sentence: "The approvals could not be read just now." };
   if (gate) return { sentence: GATE_WORDS[gate] };
   const other = waiting ? `Waiting for you: ${waiting.label}.` : null;
-  return { sentence: askWords(asks) ?? other };
+  return { sentence: approvalSentence(askWords(asks) ?? other) };
 }
 
 type OutstandingTotals = NonNullable<InvoiceProjection["outstandingTotals"]>;
