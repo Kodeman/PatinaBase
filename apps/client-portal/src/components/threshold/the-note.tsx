@@ -117,7 +117,7 @@ export function TheNote({
       {line && (
         <p
           data-testid="note-dateline"
-          className="pt-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
+          className="pt-2.5 font-mono text-[15px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
         >
           {line}
         </p>

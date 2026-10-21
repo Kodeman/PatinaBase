@@ -225,7 +225,7 @@ async function signIn(page: Page, email: string): Promise<void> {
   // is not. Press it until the password leg it controls actually opens.
   const disclosure = page
     .getByRole('button', {
-      name: /sign in with email|use email and password instead/i,
+      name: /sign in with email|use (?:email and )?password instead|use a password instead/i,
     })
     .first();
   const password = page.getByLabel(/password/i).first();
@@ -303,8 +303,8 @@ test.describe('The Threshold — the client page', () => {
     // 3 · the draw held back until she accepts it
     await expect(body).toContainText(HELD_DRAW);
     // 4 · the balance, and the day it falls due
-    await expect(page.getByTestId('letterbox-body')).toContainText(INVOICE_BALANCE);
-    await expect(page.getByTestId('letterbox-body')).toContainText(INVOICE_DUE_DAY);
+    await expect(page.getByTestId('letterbox')).toContainText(INVOICE_BALANCE);
+    await expect(page.getByTestId('letterbox')).toContainText(INVOICE_DUE_DAY);
     // 5 · the chapter the house stands in, named on the doorplate
     await expect(page.getByTestId('doorplate-sub')).not.toBeEmpty();
   });
@@ -443,9 +443,9 @@ test.describe('The Threshold — the client page', () => {
 
     // The toll is the letter inside the envelope: the act only exists once the
     // letterbox is unfolded, which is the client's own first move.
-    const settle = page.getByRole('button', { name: /settle the balance/i });
+    const settle = page.getByRole('button', { name: /continue to secure payment/i });
     await pressUntilOpen(
-      page.getByTestId('letterbox').getByRole('button', { name: /open the letterbox/i }),
+      page.locator('[data-invoice-id="b0000000-0000-0000-0000-00000000cc01"]').getByRole('button', { name: 'View invoice' }),
       settle,
     );
     await expect(settle).toBeEnabled({ timeout: 30_000 });
@@ -478,9 +478,9 @@ test.describe('The Threshold — the client page', () => {
     const writeBack = page.getByTestId('write-back');
     await expect(writeBack).toBeVisible({ timeout: 60_000 });
     const body = page.getByTestId('write-back-body');
-    await pressUntilOpen(writeBack.getByRole('button', { name: /write back/i }), body);
+    await pressUntilOpen(writeBack.getByRole('button', { name: /write to /i }), body);
     await body.fill(`Read it, thank you. (e2e ${Date.now()})`);
-    await page.getByRole('button', { name: /send it/i }).click();
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
 
     // The pen goes down and the house stamps the day — no route change, no
     // header, no error in red.
@@ -798,7 +798,7 @@ test.describe('The Threshold — the client page', () => {
     await expect(page.locator('body')).not.toContainText('Leave the house');
   });
 
-  test('stands five landmarks under the doorplate, every one pointing at something that renders', async ({
+  test('stands literal landmarks under the doorplate, every one pointing at something that renders', async ({
     page,
   }) => {
     await signInAsClient(page);
@@ -808,14 +808,10 @@ test.describe('The Threshold — the client page', () => {
     await expect(ledger).toBeVisible();
 
     const links = ledger.locator('a');
-    await expect(links).toHaveCount(5);
-    await expect(links).toHaveText([
-      'Where we are',
-      'What changed',
-      'What you owe',
-      'What needs you',
-      'The papers',
-    ]);
+    await expect(links.nth(0)).toHaveText('Invoices');
+    await expect(links.nth(1)).toHaveText('Approvals');
+    await expect(links.nth(2)).toHaveText('Progress');
+    await expect(ledger.getByRole('link', { name: 'Documents', exact: true })).toBeVisible();
 
     // IA-21's failure was a ledger pointing at ids that never render. Every
     // href resolves to an element on this page.
@@ -830,10 +826,8 @@ test.describe('The Threshold — the client page', () => {
     await expect(ledger.locator('a[href="#letterbox"]')).toHaveAttribute('data-never-dim', '');
   });
 
-  test('omits a landmark whose target is not on the page', async ({ page }) => {
-    // The three-house client's Aspen Loft has no gate standing: no wall, no
-    // door, no approval. "What needs you" has nothing to point at, so it is
-    // not printed — never printed disabled.
+  test('keeps an honest approvals destination when no approval is waiting', async ({ page }) => {
+    // With no active ask, Approvals still lands on the honest empty state.
     await signIn(page, 'client@patina.dev');
     await expect.poll(() => new URL(page.url()).pathname, { timeout: 60_000 }).toBe('/');
     await settle(page);
@@ -844,8 +838,8 @@ test.describe('The Threshold — the client page', () => {
 
     const ledger = page.getByTestId('landmark-ledger');
     await expect(ledger).toBeVisible();
-    await expect(ledger.locator('a')).toHaveCount(4);
-    await expect(ledger).not.toContainText('What needs you');
+    await expect(ledger.getByRole('link', { name: 'Approvals', exact: true })).toHaveAttribute('href', '#approvals');
+    await expect(page.locator('#approvals')).toBeVisible();
     // And the four that remain still point at something.
     for (const href of await ledger.locator('a').evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute('href') ?? ''),

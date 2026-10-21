@@ -333,3 +333,11 @@ describe('the mounts', () => {
     ).not.toContainElement(screen.getByTestId('the-mute'));
   });
 });
+
+
+it('CPUX-07 keeps correspondence dates at the critical-copy floor', () => {
+  render(<Letters letters={LETTERS} notices={NOTICES} />);
+  for (const date of screen.getAllByTestId('notice-date')) {
+    expect(date).toHaveClass('text-[15px]');
+  }
+});

@@ -23,7 +23,7 @@ import { isTruncated, oneLine } from './previously';
    rather than an empty field or a disabled act. ──────────────────────────── */
 
 const HEAD_CLASS =
-  'font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';
+  'font-mono text-[15px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';
 
 const REFUSAL_CLASS = 'mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]';
 
@@ -137,7 +137,7 @@ export function WriteBack({ threadId, designerName, today = new Date() }: WriteB
       {sentOn && !open && (
         <p
           data-testid="write-back-receipt"
-          className="mt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
+          className="mt-2 font-mono text-[15px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
         >
           {`Sent ${DAY_MONTH.format(sentOn)}`}
         </p>
@@ -177,7 +177,7 @@ function Notice({ notice }: { notice: NoticeReceipt }) {
     <>
       <span
         data-testid="notice-date"
-        className="min-w-[6.6em] shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
+        className="min-w-[6.6em] shrink-0 font-mono text-[15px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
       >
         {notice.date ? DAY_MONTH.format(notice.date) : '—'}
       </span>
@@ -188,7 +188,7 @@ function Notice({ notice }: { notice: NoticeReceipt }) {
       />
       <span
         data-testid="notice-state"
-        className="shrink-0 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-mocha)]"
+        className="shrink-0 font-mono text-[15px] uppercase tracking-[0.14em] text-[var(--color-mocha)]"
       >
         Sent
       </span>
@@ -293,7 +293,7 @@ export function Letters({
               >
                 <p
                   data-testid="letter-dateline"
-                  className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
+                  className="font-mono text-[15px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
                 >
                   {[
                     letter.sentAt ? DAY_MONTH.format(letter.sentAt) : null,

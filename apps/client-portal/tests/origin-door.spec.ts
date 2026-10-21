@@ -93,7 +93,7 @@ async function signIn(page: Page, email: string): Promise<void> {
 
   const disclosure = page
     .getByRole('button', {
-      name: /sign in with email|use email and password instead/i,
+      name: /sign in with email|use (?:email and )?password instead|use a password instead/i,
     })
     .first();
   const password = page.getByLabel(/password/i).first();

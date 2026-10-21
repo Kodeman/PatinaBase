@@ -98,10 +98,10 @@ export function LetterShell({
               </span>
             ) : null}
           </div>
-          <p className="mt-1.5 font-mono text-[11px] tracking-[0.08em] text-[#8C8578]">{place}</p>
+          <p className="mt-1.5 font-mono text-[15px] tracking-[0.08em] text-[#4B463E]">{place}</p>
         </div>
         {snapshot.recipientName?.trim() ? (
-          <p className="text-right text-[13px] text-[#8C8578]">
+          <p className="text-right text-[15px] text-[#4B463E]">
             Prepared for {snapshot.recipientName.trim()}
           </p>
         ) : null}
@@ -143,7 +143,7 @@ export function LetterShell({
       <div className="mt-8">{children}</div>
 
       {snapshot.kind === 'invite' ? (
-        <p data-testid="letter-expiry" className="mt-5 text-[13px] text-[#8C8578]">
+        <p data-testid="letter-expiry" className="mt-5 text-[15px] text-[#4B463E]">
           {sender
             ? `The link works until ${longDate(snapshot.expiresAt)}; ${sender} can send another.`
             : `The link works until ${longDate(snapshot.expiresAt)}.`}

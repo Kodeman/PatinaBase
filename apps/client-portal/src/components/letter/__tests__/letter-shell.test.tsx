@@ -23,6 +23,9 @@ it('PP-1 — the studio is on top and Patina appears once, in the colophon', () 
   expect(screen.getByTestId('letter-letterhead')).toHaveTextContent('MIDDLE WEST STUDIO');
   expect(screen.getByTestId('letter-letterhead')).toHaveTextContent('Madison · 8 September 2026');
   expect(screen.getByTestId('letter-letterhead')).toHaveTextContent('Prepared for Dave Okonkwo');
+  expect(screen.getByText('Madison · 8 September 2026')).toHaveClass('text-[15px]', 'text-[#4B463E]');
+  expect(screen.getByText('Prepared for Dave Okonkwo')).toHaveClass('text-[15px]', 'text-[#4B463E]');
+  expect(screen.getByTestId('letter-expiry')).toHaveClass('text-[15px]', 'text-[#4B463E]');
   expect((container.textContent ?? '').match(/Patina/g) ?? []).toHaveLength(1);
   expect(screen.getByTestId('letter-colophon')).toHaveTextContent(
     'Prepared by Middle West Studio · Sent through Patina',
