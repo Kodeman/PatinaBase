@@ -26,6 +26,7 @@ jest.mock('@patina/supabase', () => ({
   useDecisionComments: jest.fn(),
   useCreateDecisionComment: jest.fn(),
   useDecisionRealtime: jest.fn(),
+  useMyProjectApprovalReviews: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-commercial-client', () => ({
@@ -54,6 +55,7 @@ import {
   useRespondProjectApproval,
   useSetDecisionSnooze,
   useDecisionSnooze,
+  useMyProjectApprovalReviews,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
@@ -76,6 +78,8 @@ const createCommentHook = useCreateDecisionComment as jest.Mock;
 const realtimeHook = useDecisionRealtime as jest.Mock;
 const authHook = useAuth as jest.Mock;
 const budgetHook = useProjectWorkingBudget as jest.Mock;
+const reviewsHook = useMyProjectApprovalReviews as jest.Mock;
+const reviewsRefetch = jest.fn();
 
 const respondMutate = jest.fn();
 const confirmMutate = jest.fn();
@@ -148,23 +152,23 @@ function signIfAsked() {
 
 /** Choose an outcome, sign it, hold the submit — the beats an outcome takes. */
 async function answer(name: RegExp) {
-  fireEvent.click(screen.getByRole('button', { name }));
+  fireEvent.click(screen.getByRole('button', { name, pressed: false }));
   signIfAsked();
-  await hold(screen.getByRole('button', { name: /submit response/i }));
+  await hold(screen.getByTestId('approval-terminal'));
 }
 
 /** Returning takes one more beat: the note the designer needs (R10). */
 async function returnEdition(note = 'The runner is too dark for the stair hall.') {
-  fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^request changes$/i }));
   fireEvent.change(await screen.findByTestId('approval-change-note'), {
     target: { value: note },
   });
-  await hold(screen.getByRole('button', { name: /submit response/i }));
+  await hold(screen.getByTestId('approval-terminal'));
 }
 
 /** Re-submitting after a refusal: the note and the name are already there. */
 async function submitAgain() {
-  await hold(screen.getByRole('button', { name: /submit response/i }));
+  await hold(screen.getByTestId('approval-terminal'));
 }
 
 // jsdom's Crypto has no `randomUUID`, so it is lent for the test and handed
@@ -192,6 +196,8 @@ beforeEach(() => {
     isPending: false,
   });
   realtimeHook.mockReturnValue(undefined);
+  reviewsRefetch.mockReset().mockResolvedValue({ isError: false });
+  reviewsHook.mockReturnValue({ refetch: reviewsRefetch, isFetching: false });
   budgetHook.mockReturnValue({ data: null, isLoading: false, isError: false });
   authHook.mockReturnValue({ user: { id: 'user-1', name: 'Harper Vale' } });
 
@@ -253,13 +259,14 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     );
     expect(screen.getByTestId('approval-impact')).not.toHaveTextContent('Cost Schedule');
 
-    // Three doors, one weight: same variant, verb labels, no ranking.
-    const doors = ['approve', 'return', 'hold'].map((label) =>
-      screen.getByRole('button', { name: new RegExp(`^${label}$`, 'i') }),
+    // Three answers, one weight: the same `choice` toggle, none picked, no ranking.
+    const doors = ['approve this edition', 'request changes', 'pause to discuss'].map((label) =>
+      screen.getByRole('button', { name: new RegExp(`^${label}$`, 'i'), pressed: false }),
     );
     expect(doors).toHaveLength(3);
     const variants = new Set(doors.map((door) => door.className.match(/da-\w+/g)?.join(' ')));
     expect(variants.size).toBe(1);
+    for (const door of doors) expect(door).toHaveAttribute('data-action-variant', 'choice');
   });
 
   /**
@@ -455,7 +462,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
       'You are approving edition 3, exactly as shown.',
     );
 
-    await answer(/^approve$/i);
+    await answer(/^approve this edition$/i);
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     expect(await screen.findByTestId('approval-stamp')).toHaveTextContent(/^APPROVED/);
@@ -472,7 +479,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
     expect(screen.queryByRole('link', { name: 'Keep a copy' })).not.toBeInTheDocument();
 
-    await answer(/^approve$/i);
+    await answer(/^approve this edition$/i);
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
 
     const keep = await screen.findByRole('link', { name: 'Keep a copy' });
@@ -483,19 +490,27 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
   it('names the consequence and takes a second beat before recording an outcome', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+    const approve = screen.getByRole('button', { name: /^approve this edition$/i, pressed: false });
+    fireEvent.click(approve);
 
-    // Nothing is recorded on the first click.
+    // Nothing is recorded on the first click; the pick is a pressed toggle.
     expect(respondMutate).not.toHaveBeenCalled();
+    expect(approve).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('approval-consequence')).toHaveTextContent(
-      'Approve · Accept this exact edition and its stated impacts.',
+      'Approving signs edition 3 of Library elevations, exactly as shown, and accepts its stated impacts.',
     );
-    // The other two acts are gone while one is chosen, so no second act can fire.
-    expect(screen.queryByRole('button', { name: /^return$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^hold$/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('approval-consequence')).toHaveClass('cp-note');
+    // The other two stay as unpressed toggles: picking one only switches.
+    expect(screen.getByRole('button', { name: /^request changes$/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^pause to discuss$/i }));
+    expect(respondMutate).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /choose another outcome/i }));
-    expect(screen.getByRole('button', { name: /^return$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /choose another response/i }));
+    expect(screen.queryByTestId('approval-confirm-outcome')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^request changes$/i })).toBeInTheDocument();
     expect(respondMutate).not.toHaveBeenCalled();
   });
 
@@ -503,7 +518,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     const onAnswered = jest.fn();
     render(<ApprovalAsk approval={APPROVAL} onAnswered={onAnswered} />);
 
-    await answer(/^approve$/i);
+    await answer(/^approve this edition$/i);
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     // The old page's payload exactly, with the typed legal name and its
@@ -541,7 +556,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
   it('holds the approval when the client asks a question', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    await answer(/^hold$/i);
+    await answer(/^pause to discuss$/i);
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     expect(respondMutate.mock.calls[0][0]).toMatchObject({ outcome: 'needs_discussion' });
@@ -600,7 +615,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
       'Your approval · read the edition first',
     );
-    await hold(screen.getByRole('button', { name: /review exact edition/i }));
+    await hold(screen.getByRole('button', { name: /^confirm review$/i }));
 
     await waitFor(() => expect(confirmMutate).toHaveBeenCalledTimes(1));
     expect(confirmMutate).toHaveBeenCalledWith({
@@ -613,7 +628,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(screen.queryByTestId('approval-acts')).not.toBeInTheDocument();
     // The surface speaks rather than deleting itself.
     expect(await screen.findByTestId('approval-notice')).toHaveTextContent(
-      'Review confirmed for this exact artifact. Your designer can now issue it.',
+      'Your review is confirmed. Your designer prepares the approval next. Nothing is waiting on you.',
     );
     expect(onAnswered).toHaveBeenCalledWith('dec-1');
   });
@@ -626,11 +641,11 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
       />,
     );
 
-    await hold(screen.getByRole('button', { name: /review exact edition/i }));
+    await hold(screen.getByRole('button', { name: /^confirm review$/i }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(
-      'The artifact changed or the review could not be confirmed. Refresh and review it again.',
+      "This edition changed, or the review couldn't be confirmed. Refresh the review and read it again.",
     );
     expect(alert).not.toHaveTextContent('artifact_checksum_mismatch');
     expect(screen.queryByTestId('approval-notice')).not.toBeInTheDocument();
@@ -653,9 +668,9 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     );
     // No timing: nothing on this row knows when the studio will issue it.
     expect(screen.getByTestId('approval-awaiting-studio-issue')).toHaveTextContent(
-      "You've confirmed edition 3. Your designer issues it next. Nothing is waiting on you.",
+      'Your review is confirmed. Your designer prepares the approval next. Nothing is waiting on you.',
     );
-    expect(screen.queryByRole('button', { name: /review exact edition/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^confirm review$/i })).not.toBeInTheDocument();
     expect(screen.queryByTestId('approval-acts')).not.toBeInTheDocument();
   });
 
@@ -672,16 +687,16 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     );
 
     expect(screen.getByTestId('approval-confirmation-unavailable')).toHaveTextContent(
-      'Review confirmation is temporarily unavailable. The frozen authority revision was not supplied.',
+      "We couldn't load the information needed to confirm this review. Refresh the review or contact your designer.",
     );
-    expect(screen.queryByRole('button', { name: /review exact edition/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^confirm review$/i })).not.toBeInTheDocument();
   });
 
   it('says so in the house’s words when the approval moved under the client', async () => {
     respondMutate.mockRejectedValue(new Error('approval_conflict'));
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    await answer(/^approve$/i);
+    await answer(/^approve this edition$/i);
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(
@@ -1271,6 +1286,17 @@ describe('ApprovalAsk — a budget edition', () => {
       evidenceFingerprint: 'a'.repeat(64),
     },
   };
+
+  it('carries the edition’s own total on the approve terminal (CPUX-04)', () => {
+    budgetHook.mockReturnValue({ data: BUDGET, isLoading: false, isError: false });
+    render(<ApprovalAsk approval={BUDGET_APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^approve this edition$/i, pressed: false }));
+    expect(screen.getByTestId('approval-terminal')).toHaveTextContent(
+      /^Approve this edition · \$50,000/,
+    );
+    expect(screen.getByTestId('approval-consequence')).toHaveTextContent(/ at \$50,000/);
+  });
 
   it('shows the figures of the exact edition the question is about', () => {
     budgetHook.mockReturnValue({ data: BUDGET, isLoading: false, isError: false });
@@ -1929,10 +1955,15 @@ describe('the ask in the house’s vocabulary', () => {
   it('asks for the change in the designer’s own name, and will not send an empty return', () => {
     render(<ApprovalAsk approval={APPROVAL} designerGivenName="Leah" />);
 
-    fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^request changes$/i }));
 
-    expect(screen.getByLabelText('Tell Leah what to change.')).toBeInTheDocument();
-    const submit = screen.getByRole('button', { name: /submit response/i });
+    expect(screen.getByLabelText("What you'd like changed")).toHaveAccessibleDescription(
+      "Tell your designer what you'd like changed before sending.",
+    );
+    expect(screen.getByTestId('approval-consequence')).toHaveTextContent(
+      'Sending posts your note to the discussion with Leah',
+    );
+    const submit = screen.getByTestId('approval-terminal');
     expect(submit).toHaveAttribute('aria-disabled', 'true');
 
     // Instruction, never validation: nothing on the page reports a failure,
@@ -1944,17 +1975,19 @@ describe('the ask in the house’s vocabulary', () => {
 
   it('names the designer generically when the house has no name for him', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
-    fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
-    expect(screen.getByLabelText('Tell your designer what to change.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^request changes$/i }));
+    expect(screen.getByTestId('approval-consequence')).toHaveTextContent(
+      'Sending posts your note to the discussion with your designer',
+    );
   });
 
   it('records nothing while the note is only whitespace', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
-    fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^request changes$/i }));
     fireEvent.change(screen.getByTestId('approval-change-note'), { target: { value: '   ' } });
 
-    expect(screen.getByRole('button', { name: /submit response/i })).toHaveAttribute('aria-disabled', 'true');
-    await hold(screen.getByRole('button', { name: /submit response/i }));
+    expect(screen.getByTestId('approval-terminal')).toHaveAttribute('aria-disabled', 'true');
+    await hold(screen.getByTestId('approval-terminal'));
     expect(respondMutate).not.toHaveBeenCalled();
     expect(commentMutateAsync).not.toHaveBeenCalled();
   });
@@ -1981,7 +2014,7 @@ describe('the ask in the house’s vocabulary', () => {
     await returnEdition();
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The note could not be sent, so the edition was not returned. Your note is still here; try again.',
+      "We couldn't post your note, so your change request wasn't sent. Your text is still here. Press and hold Send change request to try again.",
     );
     expect(respondMutate).not.toHaveBeenCalled();
     expect(screen.queryByTestId('approval-stamp')).not.toBeInTheDocument();
@@ -1993,8 +2026,10 @@ describe('the ask in the house’s vocabulary', () => {
 
     await returnEdition('The runner is too dark for the stair hall.');
 
+    // CPUX-04 §6: the note landed and the outcome did not — she is told the
+    // retry records it without posting the note a second time.
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'This approval changed while it was open. Refresh before responding.',
+      "Your note is in the discussion with your designer, but the change request didn't record. Trying again records it without posting your note twice.",
     );
     expect(commentMutateAsync).toHaveBeenCalledTimes(1);
 
@@ -2028,23 +2063,23 @@ describe('the ask in the house’s vocabulary', () => {
   it('asks for no note on the two outcomes that are not a return', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^approve this edition$/i }));
     expect(screen.queryByTestId('approval-change-note')).not.toBeInTheDocument();
     sign();
-    expect(screen.getByRole('button', { name: /submit response/i })).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByTestId('approval-terminal')).not.toHaveAttribute('aria-disabled');
 
-    fireEvent.click(screen.getByRole('button', { name: /choose another outcome/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^hold$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /choose another response/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^pause to discuss$/i }));
     expect(screen.queryByTestId('approval-change-note')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /submit response/i })).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByTestId('approval-terminal')).not.toHaveAttribute('aria-disabled');
   });
 
   it('holds the approval, not the gate, when the client keeps it open', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
-    fireEvent.click(screen.getByRole('button', { name: /^hold$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^pause to discuss$/i }));
 
     expect(screen.getByTestId('approval-consequence')).toHaveTextContent(
-      'Hold · Keep this open while you and your designer talk it through.',
+      "This records that you want to pause and talk it through. It doesn't approve or reject the edition.",
     );
   });
 });
@@ -2100,7 +2135,7 @@ describe('reviews counted in words', () => {
    door that would only refuse her is not drawn at all.
    ─────────────────────────────────────────────────────────────────────────── */
 describe('who this approval waits on', () => {
-  const DOORS = /^(approve|return|hold)$/i;
+  const DOORS = /^(approve this edition|request changes|pause to discuss)$/i;
 
   it('offers the three doors to the lead', () => {
     render(<ApprovalAsk approval={{ ...APPROVAL, viewerRole: 'lead' }} />);
@@ -2168,7 +2203,7 @@ describe('who this approval waits on', () => {
     );
 
     expect(
-      screen.queryByRole('button', { name: /review exact edition/i }),
+      screen.queryByRole('button', { name: /^confirm review$/i }),
     ).not.toBeInTheDocument();
     expect(screen.getByTestId('approval-review-count')).toHaveTextContent(
       'The review is still needed.',
@@ -2204,7 +2239,7 @@ describe('who this approval waits on', () => {
     );
 
     const line = screen.getByTestId('approval-awaiting-studio-issue');
-    expect(line).toHaveTextContent('Edition 3 is confirmed. Nora issues it next.');
+    expect(line).toHaveTextContent('The review is confirmed. Nora prepares the approval next.');
     expect(line).not.toHaveTextContent("You've confirmed");
     expect(line).not.toHaveTextContent('Nothing is waiting on you.');
   });
@@ -2233,7 +2268,7 @@ describe('the end of the wait', () => {
 
     const said = screen.getByTestId('approval-awaiting-studio-issue');
     expect(said).toHaveTextContent(
-      "You've confirmed edition 3. Nora issues it next. Nothing is waiting on you.",
+      'Your review is confirmed. Your designer prepares the approval next. Nothing is waiting on you.',
     );
     // No invented timing — the row carries no date the studio promised.
     expect(said.textContent).not.toMatch(/day|week|soon|shortly/i);
@@ -2243,16 +2278,16 @@ describe('the end of the wait', () => {
     render(<ApprovalAsk approval={AWAITING} />);
 
     expect(screen.getByTestId('approval-awaiting-studio-issue')).toHaveTextContent(
-      'Your designer issues it next.',
+      'Your designer prepares the approval next.',
     );
-    expect(screen.getByRole('button', { name: /ask your designer about this/i }))
+    expect(screen.getByRole('button', { name: /ask your designer a question/i }))
       .toBeInTheDocument();
   });
 
   it('puts her in the composer already on the page, and opens no route', () => {
     render(<ApprovalAsk approval={AWAITING} designerGivenName="Nora" studioName="Quist Interiors" />);
 
-    const act = screen.getByRole('button', { name: /ask nora about this/i });
+    const act = screen.getByRole('button', { name: /ask nora a question/i });
     expect(act.tagName).toBe('BUTTON');
     fireEvent.click(act);
 
@@ -2264,7 +2299,7 @@ describe('the end of the wait', () => {
     render(<ApprovalAsk approval={AWAITING} designerGivenName="Nora" studioName="Quist Interiors" />);
 
     expect(screen.getByTestId('approval-awaiting-studio-issue')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /ask nora about this/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ask nora a question/i })).not.toBeInTheDocument();
   });
 });
 
@@ -2349,11 +2384,13 @@ describe('the outcome is signed and held (P-18)', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
     expect(screen.queryByTestId('approval-signature')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^approve this edition$/i }));
 
     const rule = screen.getByTestId('approval-signature');
     expect(rule).toHaveAttribute('autocomplete', 'name');
-    expect(screen.getByLabelText('Type your full name')).toBe(rule);
+    expect(screen.getByLabelText('Your full name')).toBe(rule);
+    expect(rule).toHaveAccessibleDescription('Type your full name before approving.');
+    expect(rule).toHaveAttribute('aria-required', 'true');
     expect(screen.getByTestId('approval-signature-notice')).toHaveTextContent(
       'Your typed name acts as your electronic signature.',
     );
@@ -2362,9 +2399,9 @@ describe('the outcome is signed and held (P-18)', () => {
 
   it('leaves the submit unheld until there is a name to hold it with', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
-    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^approve this edition$/i }));
 
-    const submit = screen.getByRole('button', { name: /submit response/i });
+    const submit = screen.getByTestId('approval-terminal');
     expect(submit).toHaveAttribute('aria-disabled', 'true');
 
     sign('H');
@@ -2381,10 +2418,10 @@ describe('the outcome is signed and held (P-18)', () => {
 
   it('records nothing on a tap, and only on a hold held to its length', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
-    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^approve this edition$/i }));
     sign();
 
-    const submit = screen.getByRole('button', { name: /submit response/i });
+    const submit = screen.getByTestId('approval-terminal');
     // A tap is a pointer press and the click that trails it; neither records.
     fireEvent.pointerDown(submit, { clientX: 4, clientY: 4 });
     fireEvent.pointerUp(submit);
@@ -2412,13 +2449,13 @@ describe('the outcome is signed and held (P-18)', () => {
 
     // Returning consents to nothing, so there is no rule to sign on: the
     // choice is the act and the hold is the commitment (ux/02:308).
-    fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^request changes$/i }));
     expect(screen.queryByTestId('approval-signature')).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId('approval-change-note'), {
       target: { value: 'The runner is too dark for the stair hall.' },
     });
-    await hold(screen.getByRole('button', { name: /submit response/i }));
+    await hold(screen.getByTestId('approval-terminal'));
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     // RULED 2026-09-05: never NULL. A press and hold is a click-through, and
@@ -2434,10 +2471,10 @@ describe('the outcome is signed and held (P-18)', () => {
   it('asks no name of a hold either', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /^hold$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^pause to discuss$/i }));
     expect(screen.queryByTestId('approval-signature')).not.toBeInTheDocument();
     // Nothing to type, so the act is armed the moment it is chosen.
-    const submit = screen.getByRole('button', { name: /submit response/i });
+    const submit = screen.getByTestId('approval-terminal');
     expect(submit).not.toHaveAttribute('aria-disabled');
     await hold(submit);
 
@@ -2452,10 +2489,10 @@ describe('the outcome is signed and held (P-18)', () => {
   it('names the gesture on both held acts, and asks no signature of the review', async () => {
     render(<ApprovalAsk approval={{ ...APPROVAL, lifecycleStatus: 'draft', completedReviewCount: 0 }} />);
 
-    const confirm = screen.getByRole('button', { name: /review exact edition/i });
-    const said = confirm.getAttribute('aria-describedby');
-    expect(document.getElementById(said as string)).toHaveTextContent(
-      'Press and hold to confirm this exact edition.',
+    const confirm = screen.getByRole('button', { name: /^confirm review$/i });
+    // The consequence stands directly above it and describes it, beside the gesture.
+    expect(confirm).toHaveAccessibleDescription(
+      /^Confirming records that you've read edition 3 exactly as shown..*Press and hold to confirm this exact edition.$/,
     );
     // R1: a hold is still a click-through, so nothing is signed here.
     expect(screen.queryByTestId('approval-signature')).not.toBeInTheDocument();
@@ -2484,5 +2521,166 @@ describe('the date line', () => {
     expect(line.textContent).not.toMatch(/overdue/i);
     expect(line.className).toContain('text-[var(--text-body)]');
     expect(line.className).not.toMatch(/red|terracotta/);
+  });
+});
+
+describe('CPUX-04 — the approval ask in green', () => {
+  const DRAFT: ProjectApprovalReview = { ...APPROVAL, lifecycleStatus: 'draft', completedReviewCount: 0 };
+
+  it('asks a question from the open ask without recording any response', () => {
+    render(<ApprovalAsk approval={APPROVAL} designerGivenName="Nora" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^ask nora a question$/i }));
+
+    expect(screen.getByTestId('approval-comment-field')).toHaveFocus();
+    expect(respondMutate).not.toHaveBeenCalled();
+    expect(confirmMutate).not.toHaveBeenCalled();
+    expect(commentMutate).not.toHaveBeenCalled();
+    expect(commentMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('confirms a review without ever approving', async () => {
+    render(<ApprovalAsk approval={DRAFT} />);
+
+    const consequence = screen.getByTestId('approval-review-consequence');
+    expect(consequence).toHaveClass('cp-note');
+    expect(consequence).toHaveTextContent("It doesn't approve the edition");
+    expect(screen.queryByRole('button', { name: /^approve this edition/i })).not.toBeInTheDocument();
+
+    await hold(screen.getByRole('button', { name: /^confirm review$/i }));
+
+    await waitFor(() => expect(confirmMutate).toHaveBeenCalledTimes(1));
+    expect(respondMutate).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /^approve this edition/i })).not.toBeInTheDocument();
+  });
+
+  it('offers Refresh review after a refused confirm, and refreshing only reloads', async () => {
+    confirmMutate.mockRejectedValue(new Error('artifact_checksum_mismatch'));
+    render(<ApprovalAsk approval={DRAFT} />);
+    expect(screen.queryByRole('button', { name: /^refresh review$/i })).not.toBeInTheDocument();
+
+    await hold(screen.getByRole('button', { name: /^confirm review$/i }));
+    const refresh = await screen.findByRole('button', { name: /^refresh review$/i });
+    await act(async () => {
+      fireEvent.click(refresh);
+    });
+
+    expect(reviewsRefetch).toHaveBeenCalledTimes(1);
+    expect(await screen.findByTestId('approval-refresh-said')).toHaveTextContent('Review refreshed.');
+    expect(confirmMutate).toHaveBeenCalledTimes(1);
+    expect(respondMutate).not.toHaveBeenCalled();
+  });
+
+  it('never prints the retired review copy', () => {
+    const { container } = render(
+      <ApprovalAsk approval={{ ...DRAFT, authorityRevision: null }} />,
+    );
+    expect(screen.getByTestId('approval-confirmation-unavailable')).toHaveTextContent(
+      "We couldn't load the information needed to confirm this review.",
+    );
+    expect(container).not.toHaveTextContent(/frozen authority revision/i);
+    expect(container).not.toHaveTextContent(/gone stale/i);
+  });
+
+  it('moves focus into the step a pick opens, and back to the pick on Choose another response', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^approve this edition$/i, pressed: false }));
+    await waitFor(() => expect(screen.getByTestId('approval-signature')).toHaveFocus());
+
+    fireEvent.click(screen.getByRole('button', { name: /^request changes$/i, pressed: false }));
+    await waitFor(() => expect(screen.getByTestId('approval-change-note')).toHaveFocus());
+
+    const pause = screen.getByRole('button', { name: /^pause to discuss$/i, pressed: false });
+    fireEvent.click(pause);
+    await waitFor(() => expect(screen.getByTestId('approval-step-heading')).toHaveFocus());
+    expect(pause).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: /choose another response/i }));
+    await waitFor(() => expect(pause).toHaveFocus());
+    expect(pause).toHaveAttribute('aria-pressed', 'false');
+    expect(respondMutate).not.toHaveBeenCalled();
+  });
+
+  it('explains a missing name instead of recording, and puts her at the rule', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: /^approve this edition$/i, pressed: false }));
+
+    const terminal = screen.getByTestId('approval-terminal');
+    expect(terminal).toHaveAttribute('data-action-variant', 'terminal');
+    expect(terminal).toHaveTextContent(/^Approve this edition$/);
+    expect(terminal).toHaveAttribute('aria-disabled', 'true');
+    const reason = screen.getByTestId('approval-unavailable-reason');
+    expect(reason).toHaveClass('da-unavailable-reason');
+    expect(reason).toHaveTextContent('Unavailable until your full name is typed above.');
+    expect(terminal.getAttribute('aria-describedby')).toContain(reason.id);
+
+    fireEvent.click(terminal);
+
+    expect(respondMutate).not.toHaveBeenCalled();
+    expect(
+      screen.getByText('Type your full name before approving.', { selector: '[role="status"]' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('approval-signature')).toHaveFocus();
+  });
+
+  it('explains a missing note on Send change request, and puts her at the note', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: /^request changes$/i, pressed: false }));
+
+    const terminal = screen.getByTestId('approval-terminal');
+    expect(terminal).toHaveTextContent(/^Send change request$/);
+    expect(screen.getByTestId('approval-unavailable-reason')).toHaveTextContent(
+      'Unavailable until your note is written above.',
+    );
+    fireEvent.click(terminal);
+
+    expect(respondMutate).not.toHaveBeenCalled();
+    expect(commentMutateAsync).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Tell your designer what you'd like changed before sending.", {
+        selector: '[role="status"]',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('approval-change-note')).toHaveFocus();
+  });
+
+  it('labels the pause terminal Confirm pause and arms it without a field', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: /^pause to discuss$/i, pressed: false }));
+
+    const terminal = screen.getByTestId('approval-terminal');
+    expect(terminal).toHaveTextContent(/^Confirm pause$/);
+    expect(terminal).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByTestId('approval-unavailable-reason')).not.toBeInTheDocument();
+  });
+
+  it('records the approval as a dated, signed line in the forest record', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    await answer(/^approve this edition$/i);
+
+    const record = await screen.findByTestId('approval-record');
+    expect(record).toHaveClass('cp-record');
+    expect(screen.getByTestId('approval-record-line')).toHaveTextContent(
+      /^Approved on \d{1,2} \w+ \d{4} · Signed Harper Vale$/,
+    );
+  });
+
+  it('prints a recorded approval on the receipt as the record line', () => {
+    render(
+      <ApprovalReceipt
+        approval={{
+          ...APPROVAL,
+          outcome: 'approved',
+          lifecycleStatus: 'responded',
+          respondedAt: '2026-10-20T12:00:00Z',
+          clientSignature: 'June Brennan',
+        }}
+      />,
+    );
+    expect(screen.getByTestId('approval-receipt-record')).toHaveClass('cp-record');
+    expect(screen.getByTestId('approval-receipt-record-line')).toHaveTextContent(
+      'Approved on 20 October 2026 · Signed June Brennan',
+    );
   });
 });
