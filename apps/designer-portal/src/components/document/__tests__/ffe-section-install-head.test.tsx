@@ -38,14 +38,14 @@ jest.mock('@/components/document/buying/install-manifest', () => ({
   InstallManifest: () => null,
 }));
 
-// The reading's own act, as the Install head's leader prints it (inked).
+// The reading's own act, as the Install head's leader prints it (primary).
 jest.mock('@/components/document/overlays/ask-maker-sheet', () => ({
   InstallReadingLine: () => (
     <button
       type="button"
       data-action-key="install-reading-act"
-      data-action-variant="inked"
-      className="da-inked"
+      data-action-variant="primary"
+      className="da-primary"
     >
       Ask the maker for a date
     </button>
@@ -192,7 +192,7 @@ describe('One leader on the Install head (F15, R32)', () => {
     expect(
       section.querySelector('[data-action-key="bill-project-ffe"]'),
     ).toHaveAttribute('data-action-variant', 'secondary');
-    expect(section.querySelectorAll('.da-inked, .da-primary')).toHaveLength(1);
+    expect(section.querySelectorAll('.da-primary, .da-plate')).toHaveLength(1);
     // Spec book stays a link.
     expect(screen.getByRole('link', { name: 'Spec book →' })).toBeInTheDocument();
   });

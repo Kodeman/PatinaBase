@@ -45,13 +45,6 @@ const VARIANTS = [
     hasPool: true,
   },
   {
-    variant: 'inked',
-    retiredChrome: 'bg-[var(--color-charcoal)]',
-    size: 'text-[15px]',
-    weight: 'font-medium',
-    hasPool: true,
-  },
-  {
     variant: 'secondary',
     retiredChrome: 'border-[var(--color-aged-oak)]',
     size: 'text-[14px]',
@@ -457,16 +450,16 @@ describe('DocumentActionGroup', () => {
     spy.mockRestore();
   });
 
-  // `inked` is the region-ledger rendering of the SAME leadership claim, so it
+  // `plate` is the band's rendering of the SAME leadership claim, so it
   // counts against the one-leader budget rather than beside it.
-  it('counts an inked leader against the one-primary budget', async () => {
+  it('counts a plate leader against the one-primary budget', async () => {
     const spy = jest
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
     render(
       <DocumentActionGroup surfaceKey="test" regionKey="two-leaders">
-        <DocumentAction actionKey="inked" variant="inked">
-          Inked
+        <DocumentAction actionKey="plate" variant="plate">
+          Plate
         </DocumentAction>
         <DocumentAction actionKey="primary" variant="primary">
           Primary
@@ -479,14 +472,14 @@ describe('DocumentActionGroup', () => {
     spy.mockRestore();
   });
 
-  it('accepts a single inked leader', () => {
+  it('accepts a single plate leader', () => {
     const spy = jest
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
     render(
       <DocumentActionGroup surfaceKey="test" regionKey="one-leader">
-        <DocumentAction actionKey="inked" variant="inked">
-          Inked
+        <DocumentAction actionKey="plate" variant="plate">
+          Plate
         </DocumentAction>
         <DocumentAction actionKey="secondary">Secondary</DocumentAction>
       </DocumentActionGroup>,
