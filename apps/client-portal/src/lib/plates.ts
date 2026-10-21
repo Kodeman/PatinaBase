@@ -10,7 +10,7 @@ export const PLATE_WIDTHS = {
 } as const;
 
 export type PlateCropKey = keyof typeof PLATE_WIDTHS;
-type PlateFormat = 'avif' | 'webp';
+export type PlateFormat = 'avif' | 'webp';
 
 export const PLATE_SIZES = {
   cover_phone: '100vw',
