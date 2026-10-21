@@ -88,7 +88,7 @@ describe('WriteBack', () => {
 
     render(<WriteBack threadId="thr-1" today={TODAY} />);
 
-    const act = screen.getByRole('button', { name: /write back/i });
+    const act = screen.getByRole('button', { name: 'Write to your designer' });
     expect(act).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId('write-back-body')).not.toBeInTheDocument();
 
@@ -96,12 +96,12 @@ describe('WriteBack', () => {
     expect(screen.getByTestId('write-back-body')).toBeInTheDocument();
 
     // The act refuses an empty letter.
-    expect(screen.getByRole('button', { name: /send it/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
 
     fireEvent.change(screen.getByTestId('write-back-body'), {
       target: { value: 'Friday works for us.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /send it/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() =>
       expect(send).toHaveBeenCalledWith({ threadId: 'thr-1', body: 'Friday works for us.' }),
@@ -112,6 +112,24 @@ describe('WriteBack', () => {
     expect(screen.queryByTestId('write-back-body')).not.toBeInTheDocument();
   });
 
+  it('CPUX-06 — names the designer it writes to, and opening it sends nothing', () => {
+    const send = jest.fn().mockResolvedValue(undefined);
+    writeBackMock.mockReturnValue({ send, isPending: false });
+
+    render(<WriteBack threadId="thr-1" designerName="Maren Holt" today={TODAY} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Write to Maren Holt' }));
+
+    const field = screen.getByLabelText('Your message to Maren Holt');
+    expect(field).toHaveAccessibleDescription('Nothing is sent until you choose Send.');
+    expect(screen.getByRole('button', { name: 'Close message' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(send).not.toHaveBeenCalled();
+    // The help line's "write here" lands on this element.
+    expect(document.getElementById('write-back')).toBe(screen.getByTestId('write-back'));
+  });
+
   it('keeps the words in the field when the send is refused', async () => {
     const error = jest.spyOn(console, 'error').mockImplementation(() => {});
     writeBackMock.mockReturnValue({
@@ -120,11 +138,11 @@ describe('WriteBack', () => {
     });
 
     render(<WriteBack threadId="thr-1" today={TODAY} />);
-    fireEvent.click(screen.getByRole('button', { name: /write back/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Write to your designer' }));
     fireEvent.change(screen.getByTestId('write-back-body'), {
       target: { value: 'Friday works for us.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /send it/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(screen.getByTestId('write-back-body')).toHaveValue('Friday works for us.');

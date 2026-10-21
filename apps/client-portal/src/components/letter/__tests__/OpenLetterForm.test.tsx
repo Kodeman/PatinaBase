@@ -59,9 +59,29 @@ it('says what happened, plainly, when the link has already been used', async () 
     status: 409,
     json: async () => ({ error: 'already_accepted' }),
   });
-  render(<OpenLetterForm token="tok1" label="Open the project" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Open the project' }));
-  expect(await screen.findByText('This letter has already been opened.')).toBeInTheDocument();
+  render(
+    <OpenLetterForm
+      token="tok1"
+      label="Open your project"
+      signInHref="/auth/signin?callbackUrl=%2Fprojects%2Fp1"
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Open your project' }));
+  expect(
+    await screen.findByText('This invitation has already been used. Sign in to continue.'),
+  ).toBeInTheDocument();
+  // Sign-in keeps the invited project as its return path.
+  expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+    'href',
+    '/auth/signin?callbackUrl=%2Fprojects%2Fp1',
+  );
+});
+
+it('CPUX-05 — the open act is the forest terminal, and says no password is needed', () => {
+  render(<OpenLetterForm token="tok1" label="Open your project" />);
+  expect(screen.getByRole('button', { name: 'Open your project' })).toHaveClass('da-terminal');
+  expect(screen.getByText('Opening it signs you in. There’s no password to set.')).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
 });
 
 it('says something plain, and lets her try again, when the transport fails', async () => {

@@ -16,9 +16,11 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+
 const MESSAGES: Record<string, string> = {
-  revoked: "This letter’s gone stale.",
-  not_found: "This letter’s gone stale.",
+  revoked: 'This invitation link has expired.',
+  not_found: 'This invitation link has expired.',
 };
 
 export function CapabilityLetterForm({ token }: { token: string }) {
@@ -64,15 +66,19 @@ export function CapabilityLetterForm({ token }: { token: string }) {
 
   return (
     <div>
-      <button
-        type="button"
+      <ScoredAction
+        actionKey="invite_acknowledge"
+        surfaceKey="invitation"
+        regionKey="letter"
+        variant="terminal"
         onClick={() => void acknowledge()}
         disabled={busy}
-        className="inline-flex min-h-11 items-center rounded-[7px] border border-[#8A6A30] bg-[#B08A46] px-8 py-3.5 text-[15px] font-semibold text-[#F5F0E6] disabled:opacity-70"
       >
         Let them know I have it
-      </button>
-      {error ? <p className="mt-3 text-[13px] text-[#A24E2E]">{error}</p> : null}
+      </ScoredAction>
+      <div aria-live="polite">
+        {error ? <p className="mt-3 text-[15px] text-[#A24E2E]">{error}</p> : null}
+      </div>
     </div>
   );
 }

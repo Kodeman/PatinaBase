@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import { toPresentationIdentity } from '@patina/supabase';
-import { PresentedBy, hasPresentation } from '../presented-by';
+import { ContactDesigner, PresentedBy, hasPresentation } from '../presented-by';
 
 // US-37 #6 (contract D8). The server (00812) resolves each field (the firm's
 // public email before the lead's, the lead's phone before the firm's, R178)
@@ -124,6 +124,44 @@ describe('PresentedBy', () => {
 
     rerender(<PresentedBy identity={{ website: 'javascript:alert(1)' }} />);
     expect(screen.getByTestId('presented-by-website').tagName).toBe('SPAN');
+  });
+});
+
+describe('ContactDesigner (CPUX-06 · A18)', () => {
+  it('names the designer, offers the presented phone, and points at the existing reply', () => {
+    render(
+      <ContactDesigner
+        identity={{ designerName: 'Maren Holt', phone: '(608) 555-0148' }}
+        writeAnchor="write-back"
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Contact Maren Holt' })).toBeInTheDocument();
+    expect(screen.getByTestId('contact-designer')).toHaveTextContent(
+      'Call (608) 555-0148, or write here.',
+    );
+    expect(screen.getByTestId('contact-phone')).toHaveAttribute('href', 'tel:6085550148');
+    expect(screen.getByRole('link', { name: 'write here' })).toHaveAttribute('href', '#write-back');
+  });
+
+  it('with no thread, offers only what the studio presented', () => {
+    render(
+      <ContactDesigner identity={{ designerName: 'Maren Holt', email: 'maren@birchwood.studio' }} />,
+    );
+    expect(screen.getByTestId('contact-designer')).toHaveTextContent('Email maren@birchwood.studio.');
+    expect(screen.getByTestId('contact-email')).toHaveAttribute(
+      'href',
+      'mailto:maren@birchwood.studio',
+    );
+    expect(screen.queryByTestId('contact-write')).toBeNull();
+  });
+
+  it('with nothing presented and no thread, invents no channel and no name', () => {
+    render(<ContactDesigner identity={{}} />);
+    expect(screen.getByRole('heading', { name: 'Contact your designer' })).toBeInTheDocument();
+    expect(screen.getByTestId('contact-designer')).toHaveTextContent(
+      'Contact your designer using the phone number or email you already use.',
+    );
+    expect(screen.queryByRole('link')).toBeNull();
   });
 });
 

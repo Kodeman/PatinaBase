@@ -32,10 +32,16 @@ const REFUSAL_CLASS = 'mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15
 export interface WriteBackProps {
   /** Null when this house has no thread: nothing to write to, so nothing shows. */
   threadId: string | null;
+  /** CPUX-06 — the lead's real name, so the act says who it writes to. Null
+   *  when none is named: the act writes to "your designer", never a guess. */
+  designerName?: string | null;
   today?: Date;
 }
 
-export function WriteBack({ threadId, today = new Date() }: WriteBackProps) {
+/** The reply's own place on the page, for the help line's "write here". */
+export const WRITE_BACK_ANCHOR = 'write-back';
+
+export function WriteBack({ threadId, designerName, today = new Date() }: WriteBackProps) {
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState('');
   const [sentOn, setSentOn] = useState<Date | null>(null);
@@ -45,6 +51,8 @@ export function WriteBack({ threadId, today = new Date() }: WriteBackProps) {
   const bodyId = `${fieldId}-body`;
 
   if (!threadId) return null;
+
+  const recipient = designerName?.trim() || 'your designer';
 
   const send = async () => {
     if (!body.trim()) return;
@@ -66,7 +74,12 @@ export function WriteBack({ threadId, today = new Date() }: WriteBackProps) {
   };
 
   return (
-    <div data-testid="write-back" className="mt-4 max-w-[44ch]">
+    <div
+      id={WRITE_BACK_ANCHOR}
+      tabIndex={-1}
+      data-testid="write-back"
+      className="mt-4 max-w-[44ch]"
+    >
       <ScoredAction
         actionKey="note_write_back"
         regionKey="note"
@@ -76,22 +89,26 @@ export function WriteBack({ threadId, today = new Date() }: WriteBackProps) {
         aria-controls={fieldId}
         onClick={() => setOpen((was) => !was)}
       >
-        {open ? 'Put the pen down' : 'Write back'}
+        {open ? 'Close message' : `Write to ${recipient}`}
       </ScoredAction>
 
       <div id={fieldId}>
         {open && (
           <div className="mt-2 border-t border-dotted border-[var(--border-default)] pt-3">
             <label htmlFor={bodyId} className={`${HEAD_CLASS} block`}>
-              Your reply
+              {`Your message to ${recipient}`}
             </label>
+            <p id={`${bodyId}-hint`} className="mt-1 text-[15px] leading-normal text-[var(--text-body)]">
+              Nothing is sent until you choose Send.
+            </p>
             <textarea
               id={bodyId}
+              aria-describedby={`${bodyId}-hint`}
               data-testid="write-back-body"
               rows={4}
               value={body}
               onChange={(event) => setBody(event.target.value)}
-              className="mt-2 w-full resize-y border border-[var(--border-default)] bg-transparent p-2.5 text-[15px] leading-relaxed text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]"
+              className="mt-2 w-full resize-y border border-[var(--border-default)] bg-transparent p-2.5 text-[15px] leading-relaxed text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--focus-ring)]"
             />
             <div className="mt-2">
               <ScoredAction
@@ -104,7 +121,7 @@ export function WriteBack({ threadId, today = new Date() }: WriteBackProps) {
                 loadingLabel="Sending"
                 onClick={send}
               >
-                Send it
+                Send
               </ScoredAction>
             </div>
           </div>

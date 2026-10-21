@@ -7,19 +7,33 @@
  *
  * MINT ON POST, NEVER ON GET. Outlook SafeLinks and similar corporate scanners
  * follow links in mail; a page that minted on GET would burn her token before
- * she ever clicked, and her first click would land on "already opened".
+ * she ever clicked, and her first click would land on "already used".
  */
 
 import { useCallback, useRef, useState } from 'react';
 
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+
+const USED = 'This invitation has already been used. Sign in to continue.';
+const EXPIRED = 'This invitation link has expired.';
+
 const MESSAGES: Record<string, string> = {
-  already_accepted: 'This letter has already been opened.',
-  expired: "This letter’s gone stale.",
-  revoked: "This letter’s gone stale.",
-  not_found: "This letter’s gone stale.",
+  already_accepted: USED,
+  expired: EXPIRED,
+  revoked: EXPIRED,
+  not_found: EXPIRED,
 };
 
-export function OpenLetterForm({ token, label }: { token: string; label: string }) {
+export function OpenLetterForm({
+  token,
+  label,
+  signInHref = '/auth/signin',
+}: {
+  token: string;
+  label: string;
+  /** Sign-in that returns to the invited project (the sanitized return path). */
+  signInHref?: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // One in flight, whatever the button is asked to do.
@@ -58,15 +72,34 @@ export function OpenLetterForm({ token, label }: { token: string; label: string 
 
   return (
     <div>
-      <button
-        type="button"
+      <ScoredAction
+        actionKey="invite_open"
+        surfaceKey="invitation"
+        regionKey="letter"
+        variant="terminal"
         onClick={() => void open()}
         disabled={busy}
-        className="inline-flex min-h-11 items-center rounded-[7px] border border-[#8A6A30] bg-[#B08A46] px-8 py-3.5 text-[15px] font-semibold text-[#F5F0E6] disabled:opacity-70"
       >
         {label}
-      </button>
-      {error ? <p className="mt-3 text-[13px] text-[#A24E2E]">{error}</p> : null}
+      </ScoredAction>
+      <p className="mt-2 text-[15px] text-[#4B463E]">
+        Opening it signs you in. There&rsquo;s no password to set.
+      </p>
+      <div aria-live="polite">
+        {error ? (
+          <p data-testid="invite-open-error" className="mt-3 text-[15px] text-[#A24E2E]">
+            {error}
+          </p>
+        ) : null}
+        {error === USED ? (
+          <a
+            href={signInHref}
+            className="mt-2 inline-flex min-h-11 items-center text-[15px] font-semibold underline underline-offset-4"
+          >
+            Sign in
+          </a>
+        ) : null}
+      </div>
     </div>
   );
 }

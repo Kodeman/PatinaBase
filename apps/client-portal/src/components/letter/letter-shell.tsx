@@ -57,9 +57,13 @@ function letterheadName(s: LetterSnapshotView): string | null {
 
 export function LetterShell({
   snapshot,
+  purpose,
   children,
 }: {
   snapshot: LetterSnapshotView;
+  /** CPUX-05 — the page's purpose in one sentence, printed only where the
+   *  letter still opens; a used or lapsed letter has nothing to promise. */
+  purpose?: string | null;
   children: ReactNode;
 }) {
   const name = letterheadName(snapshot);
@@ -116,12 +120,21 @@ export function LetterShell({
         {snapshot.standingSentence}
       </p>
 
+      {purpose ? (
+        <p
+          data-testid="letter-purpose"
+          className="mt-3 max-w-[52ch] text-[1rem] leading-relaxed text-[#1F1B16]"
+        >
+          {purpose}
+        </p>
+      ) : null}
+
       {/* ABSENCE IS SILENCE. A studio that says nothing is allowed to say
           nothing — no empty frame, no substitute sentence in her voice. */}
       {note ? (
         <blockquote
           data-testid="letter-note"
-          className="mt-6 max-w-[52ch] whitespace-pre-line border-l-[3px] border-[#B08A46] bg-white py-3.5 pl-4 pr-4 font-heading text-[1rem] italic leading-relaxed text-[#4B463E]"
+          className="mt-6 max-w-[52ch] whitespace-pre-line border-l-[3px] border-[var(--color-forest)] bg-white py-3.5 pl-4 pr-4 font-heading text-[1rem] italic leading-relaxed text-[#4B463E]"
         >
           {note}
         </blockquote>

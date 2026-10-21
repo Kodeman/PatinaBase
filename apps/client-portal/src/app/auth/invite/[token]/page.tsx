@@ -3,6 +3,8 @@ import { createAdminClient } from '@patina/supabase/client';
 import { LetterShell, type LetterSnapshotView } from '@/components/letter/letter-shell';
 import { OpenLetterForm } from '@/components/letter/OpenLetterForm';
 import { StaleLetterForm } from '@/components/letter/StaleLetterForm';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { buildSignInPath } from '@/lib/auth-redirect';
 
 import { CapabilityLetterForm } from './CapabilityLetterForm';
 
@@ -18,8 +20,24 @@ const SNAPSHOT_COLUMNS = [
   'studio_logo_url', 'signature_city', 'designer_full_name',
   'designer_given_name', 'project_name', 'rendered_standing_sentence',
   'personal_message', 'sent_at', 'expires_at', 'accepted_at', 'revoked_at',
-  'superseded_by',
+  'superseded_by', 'project_id',
 ].join(', ');
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * CPUX-05 — where the invitation leads: its own project when it names one,
+ * otherwise her page. Sign-in carries the same place as its sanitized return
+ * path, so a used or retried invitation still lands on the invited project.
+ * The project page does its own authorization; this only names the address.
+ */
+function destinationOf(row: Record<string, unknown>): string {
+  const projectId = row.project_id;
+  return typeof projectId === 'string' && UUID.test(projectId) ? `/projects/${projectId}` : '/';
+}
+
+const PURPOSE_PROJECT = 'Pay invoices, review approvals, and follow your project here.';
+const PURPOSE_PAGE = 'Pay your studio invoices and review agreements here.';
 
 /**
  * ONE READ. Everything the page prints comes from the snapshot frozen at send —
@@ -117,18 +135,25 @@ export default async function InvitePage({ params }: InvitePageProps) {
   }
 
   const view = toView(row as Record<string, unknown>);
-  const label = view.projectName?.trim() ? 'Open the project' : 'Open the page';
+  const forProject = !!view.projectName?.trim();
+  const label = forProject ? 'Open your project' : 'Open your page';
+  const purpose = forProject ? PURPOSE_PROJECT : PURPOSE_PAGE;
+  const destination = destinationOf(row as Record<string, unknown>);
+  const signInHref = buildSignInPath(destination);
 
   // R13 — a notice has nothing to accept: the button is a plain link home.
   if (view.kind === 'notice') {
     return (
-      <LetterShell snapshot={view}>
-        <a
-          href={`${CLIENT_PORTAL_URL}/`}
-          className="inline-flex min-h-11 items-center rounded-[7px] border border-[#8A6A30] bg-[#B08A46] px-8 py-3.5 text-[15px] font-semibold text-[#F5F0E6]"
+      <LetterShell snapshot={view} purpose={purpose}>
+        <ScoredAction
+          actionKey="invite_open"
+          surfaceKey="invitation"
+          regionKey="letter"
+          variant="terminal"
+          href={`${CLIENT_PORTAL_URL}${destination}`}
         >
           {label}
-        </a>
+        </ScoredAction>
       </LetterShell>
     );
   }
@@ -142,13 +167,20 @@ export default async function InvitePage({ params }: InvitePageProps) {
     return (
       <LetterShell snapshot={view}>
         <div>
-          <p className="font-heading text-[1.15rem]">This letter has already been opened.</p>
-          <a
-            href="/auth/signin"
-            className="mt-4 inline-flex min-h-11 items-center text-[15px] font-semibold underline underline-offset-4"
-          >
-            Sign in
-          </a>
+          <p className="font-heading text-[1.15rem]">
+            This invitation has already been used. Sign in to continue.
+          </p>
+          <div className="mt-4">
+            <ScoredAction
+              actionKey="invite_sign_in"
+              surfaceKey="invitation"
+              regionKey="letter"
+              variant="terminal"
+              href={signInHref}
+            >
+              Sign in
+            </ScoredAction>
+          </div>
         </div>
       </LetterShell>
     );
@@ -166,11 +198,11 @@ export default async function InvitePage({ params }: InvitePageProps) {
   }
 
   return (
-    <LetterShell snapshot={view}>
+    <LetterShell snapshot={view} purpose={purpose}>
       {byCapability ? (
         <CapabilityLetterForm token={token} />
       ) : (
-        <OpenLetterForm token={token} label={label} />
+        <OpenLetterForm token={token} label={label} signInHref={signInHref} />
       )}
     </LetterShell>
   );
