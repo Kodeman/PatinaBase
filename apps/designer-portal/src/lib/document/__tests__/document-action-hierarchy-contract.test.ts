@@ -326,10 +326,16 @@ describe("Project region ledgers", () => {
     );
     expect(head.match(/'primary'/g) ?? []).toHaveLength(2);
     // US-19 499-2 / F2-12 (P-1): a head may declare it has no leader at all;
-    // when it has one, it is still entry 0 and only entry 0.
+    // when it has one, it is still entry 0 and only entry 0. US-46 B: that
+    // lead stands on its own line; every later entry prints on the tools row.
+    expect(head).toContain("const leads = leaderProp && !leaderless;");
+    expect(head).toContain("const leadEntry = leads ? printedActions[0] : undefined;");
     expect(head).toContain(
-      "entry.variant ?? (index === 0 && leads ? 'primary' : 'secondary')",
+      "const toolEntries = leadEntry ? printedActions.slice(1) : printedActions;",
     );
+    expect(head).toContain("renderEntry(leadEntry, leadEntry.variant ?? 'primary')");
+    expect(head).toContain("renderEntry(entry, entry.variant ?? 'secondary')");
+    expect(head.match(/renderEntry\(/g) ?? []).toHaveLength(2);
     // the other occurrence is the dev guard that catches a caller trying to
     // spell leadership on a later entry — not a second place it is granted.
     expect(head).toContain("return declared === 'primary' || declared === 'inked';");
