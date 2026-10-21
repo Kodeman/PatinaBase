@@ -58,6 +58,45 @@ describe('ScoredAction — the terminal tier', () => {
     );
     const act = screen.getByRole('button', { name: 'Settle the balance' });
     expect(act.className).not.toContain('opacity-50');
+  });
+
+  /* R2 (SQ-1530): a sentence-and-amount label must reflow at 360px and at 200%
+     zoom. jsdom has no layout, so this pins the classes; the pixels at
+     360/390 and 200% are SQ-1531's visual measurement. */
+  it.each(['terminal', 'choice'] as const)(
+    'never forces a %s label onto one line, and keeps it inside its container',
+    (variant) => {
+      render(
+        <ScoredAction actionKey="toll_settle" variant={variant}>
+          Continue to secure payment · $9,125.00
+        </ScoredAction>,
+      );
+      const act = screen.getByRole('button', { name: /continue to secure payment/i });
+      expect(act).not.toHaveClass('whitespace-nowrap');
+      expect(act).not.toHaveClass('shrink-0');
+      expect(act).toHaveClass('max-w-full', 'min-h-[44px]');
+    },
+  );
+
+  it.each(['terminal', 'choice'] as const)('a held %s act reflows the same way', (variant) => {
+    render(
+      <HoldAction actionKey="sign" verb="sign" variant={variant} onHold={() => undefined}>
+        Approve this edition · $7,480.00
+      </HoldAction>,
+    );
+    const act = screen.getByRole('button', { name: /approve this edition/i });
+    expect(act).not.toHaveClass('whitespace-nowrap');
+    expect(act).not.toHaveClass('shrink-0');
+    expect(act).toHaveClass('max-w-full');
+  });
+
+  it('keeps the one-word scored tiers on one line', () => {
+    render(
+      <ScoredAction actionKey="ask" variant="tertiary">
+        Ask
+      </ScoredAction>,
+    );
+    expect(screen.getByRole('button', { name: 'Ask' })).toHaveClass('whitespace-nowrap', 'shrink-0');
     // and not in the shared base either, for any variant
     expect(SOURCE).not.toContain('disabled:opacity-50');
     expect(SOURCE).not.toContain('aria-disabled:opacity-50');
@@ -247,6 +286,42 @@ describe('ScoredAction — unavailableReason', () => {
     expect(act).toHaveFocus();
     fireEvent.click(act);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  /* R11 (SQ-1530): the card fee loads while the client sits on Continue. When
+     the reason clears, the act she is on must become available under her
+     focus — not be replaced by a fresh node that drops it. */
+  it('keeps the same focused control when the reason clears, and enables it', () => {
+    const onClick = jest.fn();
+    const continueAct = (why?: string) => (
+      <ScoredAction
+        actionKey="toll_settle"
+        variant="terminal"
+        unavailableReason={why}
+        onClick={onClick}
+      >
+        Continue to secure payment · $9,125.00
+      </ScoredAction>
+    );
+    const { rerender } = render(continueAct(reason));
+    const act = screen.getByRole('button', { name: /continue to secure payment/i });
+    act.focus();
+    expect(act).toHaveFocus();
+    expect(act).toHaveAttribute('aria-disabled', 'true');
+
+    rerender(continueAct(undefined));
+    const after = screen.getByRole('button', { name: /continue to secure payment/i });
+    expect(after).toBe(act);
+    expect(after).toHaveFocus();
+    expect(after).not.toHaveAttribute('aria-disabled');
+    expect(after).not.toBeDisabled();
+    expect(screen.queryByTestId('toll_settle-unavailable-reason')).toBeNull();
+    fireEvent.click(after);
+    expect(onClick).toHaveBeenCalledTimes(1);
+
+    rerender(continueAct(reason));
+    expect(screen.getByRole('button', { name: /continue to secure payment/i })).toBe(act);
+    expect(act).toHaveFocus();
   });
 
   it('keeps a caller’s own aria-describedby alongside the reason', () => {

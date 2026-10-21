@@ -143,6 +143,26 @@ describe('ContactDesigner (CPUX-06 · A18)', () => {
     expect(screen.getByRole('link', { name: 'write here' })).toHaveAttribute('href', '#write-back');
   });
 
+  /* R6 (SQ-1530): each way in is a 44px target (CPUX-07) that still reads as
+     an underlined text link. */
+  it('gives every contact link a 44px target and keeps it a text link', () => {
+    render(
+      <ContactDesigner
+        identity={{
+          designerName: 'Maren Holt',
+          phone: '(608) 555-0148',
+          email: 'maren@birchwood.studio',
+        }}
+        writeAnchor="write-back"
+      />,
+    );
+    for (const id of ['contact-phone', 'contact-email', 'contact-write']) {
+      const link = screen.getByTestId(id);
+      expect(link.tagName).toBe('A');
+      expect(link).toHaveClass('inline-flex', 'min-h-11', 'items-center', 'underline');
+    }
+  });
+
   it('with no thread, offers only what the studio presented', () => {
     render(
       <ContactDesigner identity={{ designerName: 'Maren Holt', email: 'maren@birchwood.studio' }} />,

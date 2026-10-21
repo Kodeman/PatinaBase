@@ -1324,7 +1324,9 @@ describe('ApprovalAsk — a budget edition', () => {
     const breakdown = screen.getByTestId('approval-budget-breakdown');
     expect(breakdown.parentElement).toHaveClass('hidden', 'sm:block');
     const disclosure = screen.getByRole('button', { name: /read the breakdown/i });
-    expect(disclosure.parentElement).toHaveClass('sm:hidden');
+    // ScoredAction keeps a layout-transparent reason wrapper (R11), so the
+    // fold is the nearest sm:hidden ancestor rather than the direct parent.
+    expect(disclosure.closest('.sm\\:hidden')).not.toBeNull();
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(disclosure);

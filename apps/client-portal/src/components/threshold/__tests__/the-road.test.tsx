@@ -227,6 +227,17 @@ describe('ProjectProgress', () => {
     expect(screen.getByTestId('project-progress').textContent).not.toMatch(/%|complete/i);
   });
 
+  /* R6 (SQ-1530): the open ask is an act, so its link is a 44px target
+     (CPUX-07) that still reads as an underlined text link. */
+  it('gives the open-ask link a 44px target wherever it is named', () => {
+    render(<ProjectProgress {...progress({ nextMilestone: null })} />);
+    const links = screen.getAllByRole('link', { name: SOFA_ASK.label });
+    expect(links.length).toBeGreaterThanOrEqual(2);
+    for (const link of links) {
+      expect(link).toHaveClass('inline-flex', 'min-h-11', 'items-center', 'underline');
+    }
+  });
+
   it('says no stage is shown when the read succeeded with none', () => {
     render(<ProjectProgress {...progress({ now: null })} />);
     expect(screen.getByTestId('progress-now')).toHaveTextContent('No project stage is shown here yet.');
