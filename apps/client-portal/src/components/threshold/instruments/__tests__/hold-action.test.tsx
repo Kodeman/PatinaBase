@@ -431,3 +431,49 @@ describe('HoldAction — the act, held', () => {
     expect(dock).toHaveClass('max-[600px]:bottom-0');
   });
 });
+
+/* ── The hold on forest (US-45 A1 / A4) ──────────────────────────────────────
+   The hold keeps its length; only the ink it fills with changes. On the forest
+   terminal the fill is a record-green rule along the act's foot (7.22:1 on
+   forest, measured in green-contrast.test.ts) — a darker-forest flood would
+   be 1.33:1 and the progress would not read. */
+describe('HoldAction — the hold on forest', () => {
+  const GLOBALS = readFileSync(resolve(__dirname, '../../../../app/globals.css'), 'utf8');
+
+  it('keeps the 900ms beat', () => {
+    expect(HOLD_MS).toBe(900);
+    draw({ variant: 'terminal' });
+    expect(actWord()).toHaveAttribute('data-hold-ms', '900');
+  });
+
+  it('a held terminal act is the forest tier, and is taken the same way', () => {
+    draw({ variant: 'terminal' });
+    const target = actWord();
+    expect(target).toHaveClass('da-terminal');
+    expect(target).toHaveClass('da-hold');
+    hold(target);
+    expect(onHold).toHaveBeenCalledTimes(1);
+  });
+
+  it('fills the terminal along a record-green rule, and floods a primary forest', () => {
+    const pool = GLOBALS.slice(
+      GLOBALS.indexOf('.da-terminal .da-pool {'),
+      GLOBALS.indexOf('.da-terminal:hover'),
+    );
+    expect(pool).toContain('background-color: var(--color-green-record)');
+    expect(pool).toContain('height: 3px');
+    expect(pool).not.toContain('var(--ink-faint)');
+    expect(GLOBALS).toMatch(/\.da-primary \.da-pool \{\n  background-color: var\(--color-forest\);/);
+    // the hold still fills left to right over its own length
+    expect(GLOBALS).toContain('transition: clip-path var(--hold-ms, 900ms) linear;');
+  });
+
+  it('an unavailable held terminal wears the dashed unavailable face', () => {
+    draw({ variant: 'terminal', disabled: true, unmetReason: 'Type your name first.' });
+    const target = actWord();
+    expect(target).toHaveAttribute('aria-disabled', 'true');
+    expect(GLOBALS).toMatch(
+      /\.da-terminal\[aria-disabled='true'\],[\s\S]*?border: 1\.5px dashed var\(--color-unavailable-edge\);/,
+    );
+  });
+});

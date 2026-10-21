@@ -37,14 +37,17 @@ import { makingEvents } from '@/lib/analytics/events';
    composed by hand and each names its own region key. ────────────────────── */
 
 /* `terminal` is the only filled tier: money moves, or a paper is signed. Its
-   label carries the amount, and it appears at exactly three sites — the wall
-   gate, the door gate and /pay/<token> (R139, sheet §A5 as amended by §F-C). */
+   label carries the amount (R139, sheet §A5 as amended by §F-C); since US-45
+   A1 it fills forest. `secondary` and `choice` are the green outline; a
+   `choice` is a toggle that names one of several answers and fills forest
+   once it is `pressed` — it never takes the answer by itself. */
 export type ScoredActionVariant =
   | 'primary'
   | 'secondary'
   | 'tertiary'
   | 'danger'
-  | 'terminal';
+  | 'terminal'
+  | 'choice';
 export type ScoredActionPresentation = 'inline' | 'mobile_dock';
 
 /* No `opacity-50` on either unavailable state: quiet ink at half opacity is
@@ -59,6 +62,7 @@ const VARIANT_CLASS: Record<ScoredActionVariant, string> = {
   tertiary: 'da-tertiary font-light tracking-[0.1em]',
   danger: 'da-danger font-medium tracking-[0.12em]',
   terminal: 'da-terminal font-medium',
+  choice: 'da-choice font-medium',
 };
 
 interface ScoredActionBaseProps {
@@ -77,6 +81,18 @@ interface ScoredActionBaseProps {
   restoreFocusRef?: RefObject<HTMLElement | null>;
   children: ReactNode;
   className?: string;
+  /**
+   * `choice` only: whether this answer is the one picked. Rendered as
+   * `aria-pressed` on the button; ignored by every other variant.
+   */
+  pressed?: boolean;
+  /**
+   * Why the act cannot be taken yet, in plain words. When set the act is
+   * unavailable: it wears the dashed unavailable face, stays focusable
+   * (`aria-disabled`, not `disabled`), and this sentence is drawn under it
+   * and linked by `aria-describedby`.
+   */
+  unavailableReason?: string;
 }
 
 type ScoredActionButtonProps = ScoredActionBaseProps &
@@ -120,6 +136,80 @@ function markInkPoint(event: ReactPointerEvent<HTMLElement>) {
   target.style.setProperty('--ink-y', `${event.clientY - rect.top}px`);
 }
 
+/* An act with a stated reason is unavailable but stays reachable: it is
+   `aria-disabled` rather than `disabled`, and a link keeps its tab stop, so
+   the reason it is described by can be heard. Without a reason the act
+   behaves exactly as it always has. */
+function readAvailability({
+  unavailableReason,
+  blocked,
+  describedBy,
+  ariaDisabled,
+  reasonId,
+}: {
+  unavailableReason: string | undefined;
+  blocked: boolean;
+  describedBy: string | undefined;
+  ariaDisabled: ButtonHTMLAttributes<HTMLButtonElement>['aria-disabled'];
+  reasonId: string;
+}) {
+  const reason = unavailableReason?.trim() || undefined;
+  if (reason === undefined) {
+    return {
+      reason,
+      unavailable: blocked,
+      nativeDisabled: blocked,
+      untabbable: blocked,
+      ariaDisabled,
+      describedBy,
+      className: '',
+    };
+  }
+  return {
+    reason,
+    unavailable: true,
+    nativeDisabled: false,
+    untabbable: false,
+    ariaDisabled: true as const,
+    describedBy: [describedBy, reasonId].filter(Boolean).join(' '),
+    className: 'da-unavailable',
+  };
+}
+
+/* A choice is a toggle: it reports whether it is the picked answer. No other
+   variant carries `aria-pressed`, and a caller's own value is left alone. */
+function choicePressed(variant: ScoredActionVariant, pressed: boolean | undefined) {
+  return variant === 'choice' ? { 'aria-pressed': pressed === true } : {};
+}
+
+/* The reason is drawn, not only announced: a reader who cannot take the act
+   sees why without first trying it. */
+function WithReason({
+  reason,
+  reasonId,
+  actionKey,
+  children,
+}: {
+  reason: string | undefined;
+  reasonId: string;
+  actionKey: string;
+  children: ReactNode;
+}) {
+  if (!reason) return <>{children}</>;
+  return (
+    <span className="inline-flex max-w-full flex-col items-start">
+      {children}
+      <span
+        id={reasonId}
+        data-testid={`${actionKey}-unavailable-reason`}
+        className="da-unavailable-reason"
+      >
+        {reason}
+      </span>
+    </span>
+  );
+}
+
 export const ScoredAction = forwardRef<
   HTMLButtonElement | HTMLAnchorElement,
   ScoredActionProps
@@ -137,6 +227,8 @@ export const ScoredAction = forwardRef<
     restoreFocusRef,
     children,
     className,
+    pressed,
+    unavailableReason,
     disabled = false,
     href,
     onClick,
@@ -144,7 +236,15 @@ export const ScoredAction = forwardRef<
   },
   ref,
 ) {
-  const unavailable = disabled || loading;
+  const reasonId = `unavailable-${useId().replace(/:/g, '')}`;
+  const availability = readAvailability({
+    unavailableReason,
+    blocked: disabled || loading,
+    describedBy: rest['aria-describedby'],
+    ariaDisabled: rest['aria-disabled'],
+    reasonId,
+  });
+  const { reason, unavailable } = availability;
   const shown = useRef(new Set<string>());
   const shownKey = `${actionKey}:${presentation}`;
 
@@ -202,10 +302,22 @@ export const ScoredAction = forwardRef<
     'data-action-variant': variant,
     'data-action-region': regionKey,
     'aria-busy': loading || undefined,
+    'aria-describedby': availability.describedBy,
     onPointerDown: markInkPoint,
     onPointerMove: markInkPoint,
-    className: [BASE_CLASS, VARIANT_CLASS[variant], className ?? ''].join(' '),
+    className: [
+      BASE_CLASS,
+      VARIANT_CLASS[variant],
+      availability.className,
+      className ?? '',
+    ].join(' '),
   };
+
+  const withReason = (control: ReactNode) => (
+    <WithReason reason={reason} reasonId={reasonId} actionKey={actionKey}>
+      {control}
+    </WithReason>
+  );
 
   if (href) {
     const linkOnClick = onClick as ScoredActionLinkProps['onClick'];
@@ -222,18 +334,18 @@ export const ScoredAction = forwardRef<
       }
     };
 
-    return (
+    return withReason(
       <Link
         {...(rest as Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>)}
         {...shared}
         href={href}
         ref={ref as React.Ref<HTMLAnchorElement>}
         aria-disabled={unavailable || undefined}
-        tabIndex={unavailable ? -1 : rest.tabIndex}
+        tabIndex={availability.untabbable ? -1 : rest.tabIndex}
         onClick={handleClick}
       >
         {content}
-      </Link>
+      </Link>,
     );
   }
 
@@ -248,17 +360,19 @@ export const ScoredAction = forwardRef<
     }
   };
 
-  return (
+  return withReason(
     <button
       {...(rest as ButtonHTMLAttributes<HTMLButtonElement>)}
       {...shared}
+      {...choicePressed(variant, pressed)}
       ref={ref as React.Ref<HTMLButtonElement>}
       type={(rest as ButtonHTMLAttributes<HTMLButtonElement>).type ?? 'button'}
-      disabled={unavailable}
+      disabled={availability.nativeDisabled}
+      aria-disabled={availability.ariaDisabled}
       onClick={handleClick}
     >
       {content}
-    </button>
+    </button>,
   );
 });
 

@@ -76,23 +76,28 @@ describe('The Scored Ink block — the rest rules', () => {
     expect(GLOBALS).not.toContain('@media (hover: none)');
   });
 
-  it('gives the terminal tier the sheet’s own fill, box and label type', () => {
+  it('gives the terminal tier the forest fill, box and label type (US-45 A1)', () => {
     const terminal = GLOBALS.slice(
       GLOBALS.indexOf('.da-terminal {'),
       GLOBALS.indexOf('.da-terminal:hover'),
     );
-    expect(terminal).toContain('background-color: var(--color-charcoal)');
-    expect(terminal).toContain('color: var(--ink-paper)');
+    expect(terminal).toContain('background-color: var(--color-forest)');
+    expect(terminal).toContain('color: var(--color-card)');
     expect(terminal).toContain('padding: 13px 22px');
     expect(terminal).toContain('min-height: 48px');
-    expect(terminal).toContain('border-radius: 3px');
+    expect(terminal).toContain('border-radius: 5px');
     expect(terminal).toContain('font-size: 16px');
     expect(terminal).toContain('text-transform: none');
     expect(terminal).toContain('font-variant-numeric: tabular-nums');
+    expect(terminal).not.toContain('var(--color-charcoal)');
+    // the press darkens to forest-press, never to the old charcoal literal
+    expect(GLOBALS).not.toContain('#1F1D1A');
   });
 
-  it('focuses with an outline standing beside the proofreader’s caret', () => {
-    expect(GLOBALS).toContain('outline: 2px solid var(--color-clay-ink)');
+  it('focuses with the forest ring standing beside the proofreader’s caret', () => {
+    expect(GLOBALS).toMatch(/\.da-act:focus-visible \{\n  outline: 2px solid var\(--focus-ring\);/);
+    expect(GLOBALS).toMatch(/--focus-ring:\s*var\(--color-forest\)\s*;/);
+    expect(GLOBALS).not.toContain('outline: 2px solid var(--color-clay');
     expect(GLOBALS).toContain('outline-offset: 2px');
     // the caret is not replaced by the ring
     expect(GLOBALS).toContain(".da-act:focus-visible::before {\n  opacity: 1;\n}");
@@ -111,8 +116,8 @@ describe('The Scored Ink block — the rest rules', () => {
       GLOBALS.indexOf('/* \u2500\u2500 focus'),
     );
     expect(loading).toContain('.da-terminal.is-loading:hover');
-    expect(loading).toContain('background-color: var(--color-charcoal)');
-    expect(loading).toContain('color: var(--ink-paper)');
+    expect(loading).toContain('background-color: var(--color-forest)');
+    expect(loading).toContain('color: var(--color-card)');
     expect(loading).toContain('border: 0');
     // and it wins: the loading rules are declared after the unavailable ones
     expect(GLOBALS.indexOf('.da-terminal.is-loading,')).toBeGreaterThan(
@@ -125,6 +130,181 @@ describe('The Scored Ink block — the rest rules', () => {
   it('never dims an unavailable act', () => {
     // a declaration, not the prose that forbids one
     expect(GLOBALS).not.toMatch(/opacity:\s*(0?\.5|50%)\s*;/);
+  });
+});
+
+/* ── The green outline (US-45 A1) ────────────────────────────────────────────
+   A choice names one of several answers. It is a toggle, not the act: it
+   reports `aria-pressed`, fills forest once picked, and the answer is taken
+   by the terminal act beneath it. */
+describe('ScoredAction — the choice variant', () => {
+  it('renders aria-pressed="false" until it is picked, and "true" once it is', () => {
+    const { rerender } = render(
+      <ScoredAction actionKey="choose_approve" variant="choice">
+        Approve
+      </ScoredAction>,
+    );
+    const choice = screen.getByRole('button', { name: 'Approve' });
+    expect(choice).toHaveClass('da-act');
+    expect(choice).toHaveClass('da-choice');
+    expect(choice).toHaveAttribute('data-action-variant', 'choice');
+    expect(choice).toHaveAttribute('aria-pressed', 'false');
+
+    rerender(
+      <ScoredAction actionKey="choose_approve" variant="choice" pressed>
+        Approve
+      </ScoredAction>,
+    );
+    expect(screen.getByRole('button', { name: 'Approve', pressed: true })).toBe(choice);
+  });
+
+  it('runs its own onClick — picking is the caller’s state, not an act taken', () => {
+    const onClick = jest.fn();
+    render(
+      <ScoredAction actionKey="choose_pause" variant="choice" onClick={onClick}>
+        Pause to discuss
+      </ScoredAction>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Pause to discuss' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves aria-pressed off every other variant', () => {
+    render(
+      <ScoredAction actionKey="contact" variant="secondary" pressed>
+        Contact Maren Holt
+      </ScoredAction>,
+    );
+    expect(screen.getByRole('button', { name: 'Contact Maren Holt' })).not.toHaveAttribute(
+      'aria-pressed',
+    );
+  });
+
+  it('draws secondary and choice as a 1.5px forest outline; picked fills forest', () => {
+    const outline = GLOBALS.slice(
+      GLOBALS.indexOf('.da-secondary,\n.da-choice {'),
+      GLOBALS.indexOf('.da-secondary .da-label,'),
+    );
+    expect(outline).toContain('border: 1.5px solid var(--color-forest)');
+    expect(outline).toContain('color: var(--color-forest)');
+    expect(outline).toContain('border-radius: 5px');
+    // the deck's 2.2:1 edge is never used
+    expect(GLOBALS.toUpperCase()).not.toContain('#A7B0A6');
+
+    const picked = GLOBALS.slice(
+      GLOBALS.indexOf(".da-choice[aria-pressed='true'] {"),
+      GLOBALS.indexOf(".da-choice[aria-pressed='true'] .da-pool"),
+    );
+    expect(picked).toContain('background-color: var(--color-forest)');
+    expect(picked).toContain('color: var(--color-card)');
+  });
+
+  it('takes no clay anywhere in the action grammar', () => {
+    const grammar = GLOBALS.slice(
+      GLOBALS.indexOf('/* The Scored Ink (I107)'),
+      GLOBALS.indexOf('/* Typography: now provided by'),
+    );
+    expect(grammar).not.toMatch(/var\(--color-clay(-ink)?\)/);
+    expect(grammar).not.toContain('var(--color-mocha)');
+  });
+});
+
+describe('ScoredAction — unavailableReason', () => {
+  const reason = 'Choose an answer above first.';
+
+  it('draws the reason as visible text and describes the act with it', () => {
+    render(
+      <ScoredAction actionKey="approve" variant="terminal" unavailableReason={reason}>
+        Approve this edition · $7,480.00
+      </ScoredAction>,
+    );
+    const act = screen.getByRole('button', { name: 'Approve this edition · $7,480.00' });
+    const line = screen.getByTestId('approve-unavailable-reason');
+    expect(line).toHaveTextContent(reason);
+    expect(line).not.toHaveClass('sr-only');
+    expect(line).toHaveClass('da-unavailable-reason');
+    expect(act.getAttribute('aria-describedby')?.split(' ')).toContain(line.id);
+    expect(act).toHaveAccessibleDescription(reason);
+  });
+
+  it('is aria-disabled, stays in the tab order, and wears the unavailable face', () => {
+    const onClick = jest.fn();
+    render(
+      <ScoredAction
+        actionKey="approve"
+        variant="terminal"
+        unavailableReason={reason}
+        onClick={onClick}
+      >
+        Approve this edition · $7,480.00
+      </ScoredAction>,
+    );
+    const act = screen.getByRole('button', { name: /approve this edition/i });
+    expect(act).toHaveAttribute('aria-disabled', 'true');
+    expect(act).not.toBeDisabled();
+    expect(act).toHaveClass('da-unavailable');
+    act.focus();
+    expect(act).toHaveFocus();
+    fireEvent.click(act);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('keeps a caller’s own aria-describedby alongside the reason', () => {
+    render(
+      <div>
+        <p id="consequence">Approving signs edition 2.</p>
+        <ScoredAction
+          actionKey="approve"
+          variant="choice"
+          aria-describedby="consequence"
+          unavailableReason={reason}
+        >
+          Approve
+        </ScoredAction>
+      </div>,
+    );
+    const act = screen.getByRole('button', { name: 'Approve' });
+    expect(act.getAttribute('aria-describedby')?.split(' ')).toEqual([
+      'consequence',
+      screen.getByTestId('approve-unavailable-reason').id,
+    ]);
+  });
+
+  it('keeps a reasoned link reachable instead of removing it from the tab order', () => {
+    render(
+      <ScoredAction actionKey="pay" variant="terminal" href="/pay/x" unavailableReason={reason}>
+        Pay $300.00
+      </ScoredAction>,
+    );
+    const link = screen.getByRole('link', { name: 'Pay $300.00' });
+    expect(link).toHaveAttribute('aria-disabled', 'true');
+    expect(link).not.toHaveAttribute('tabindex', '-1');
+    expect(link).toHaveAccessibleDescription(reason);
+  });
+
+  it('renders nothing extra, and changes nothing, when no reason is given', () => {
+    render(
+      <ScoredAction actionKey="settle" variant="terminal" disabled>
+        Pay $300.00
+      </ScoredAction>,
+    );
+    const act = screen.getByRole('button', { name: 'Pay $300.00' });
+    expect(act).toBeDisabled();
+    expect(act).not.toHaveClass('da-unavailable');
+    expect(act).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByTestId('settle-unavailable-reason')).toBeNull();
+  });
+
+  it('draws the A3 unavailable face: record fill, dashed edge, unavailable ink', () => {
+    const face = GLOBALS.slice(
+      GLOBALS.indexOf('.da-terminal:disabled,\n.da-terminal[aria-disabled'),
+      GLOBALS.indexOf('.da-act.da-unavailable:not(.da-terminal)'),
+    );
+    expect(face).toContain('.da-act.da-unavailable,');
+    expect(face).toContain('background-color: var(--color-green-record)');
+    expect(face).toContain('border: 1.5px dashed var(--color-unavailable-edge)');
+    expect(face).toContain('color: var(--color-unavailable-ink)');
+    expect(GLOBALS).toMatch(/\.da-unavailable-reason \{[^}]*font-size: 15px;/);
   });
 });
 

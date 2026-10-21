@@ -223,6 +223,87 @@ describe('house-sheet type steps (§A3) and the consequence sentence (§A6)', ()
   });
 });
 
+/** The green direction (US-45 story contract "SHARED SURFACE", spec §3a
+ * A1–A3). Every W2 slice reads these names; none may invent a parallel one. */
+const GREEN_TOKENS: Record<string, string> = {
+  '--color-forest': '#3E5145',
+  '--color-forest-press': '#2F3E35',
+  '--color-card': '#FFFDF9',
+  '--color-card-rule': '#C9C7BD',
+  '--color-green-note': '#F0F3ED',
+  '--color-green-record': '#E8EEE7',
+  '--color-green-record-rule': '#B6C3B7',
+  '--color-unavailable-edge': '#6E7B71',
+  '--color-unavailable-ink': '#4A574D',
+};
+
+describe('green direction tokens (US-45 A1–A3)', () => {
+  it.each(Object.entries(GREEN_TOKENS))('declares %s at %s', (name, hex) => {
+    expect(css).toMatch(new RegExp(`${name}:\\s*${hex}\\s*;`, 'i'));
+  });
+
+  it('declares a soft card shadow', () => {
+    expect(css).toMatch(/--shadow-card:\s*0 10px 35px rgba\(44, 41, 38, 0\.035\)\s*;/);
+  });
+
+  it('points the accent and the focus ring at forest — clay is no longer the client accent (A2)', () => {
+    expect(css).toMatch(/--accent-primary:\s*var\(--color-forest\)\s*;/);
+    expect(css).toMatch(/--focus-ring:\s*var\(--color-forest\)\s*;/);
+    expect(css).not.toMatch(/--accent-primary:\s*var\(--color-clay/);
+    // the HSL primary/accent/ring triple is forest, not clay's 33 34% 62.5%
+    const root = css.slice(css.indexOf(':root {'), css.indexOf('.dark {'));
+    for (const name of ['--primary', '--accent', '--ring', '--sidebar-ring']) {
+      expect(root).toMatch(new RegExp(`\\n\\s*${name}:\\s*142 13% 28%;`));
+    }
+  });
+
+  it('colours links forest, hovering to forest-press — never mocha', () => {
+    // anchored at line start: `a {` also ends `.dark {`-shaped selectors
+    expect(css.match(/\na \{([^}]*)\}/)?.[1]).toMatch(/color:\s*var\(--accent-primary\)/);
+    expect(css.match(/\na:hover \{([^}]*)\}/)?.[1]).toMatch(
+      /color:\s*var\(--color-forest-press\)/,
+    );
+  });
+
+  it('keeps the paper and charcoal ink tokens', () => {
+    expect(css).toMatch(/--color-off-white:\s*#FAF7F2\s*;/);
+    expect(css).toMatch(/--color-charcoal:\s*#2C2926\s*;/);
+    expect(css).toMatch(/--text-primary:\s*var\(--color-charcoal\)\s*;/);
+  });
+
+  it('adds no hex literal in its own token block beyond the pinned ones', () => {
+    const block = region('green direction tokens');
+    const allowed = new Set(Object.values(GREEN_TOKENS).map((h) => h.toUpperCase()));
+    for (const hex of block.match(/#[0-9a-fA-F]{3,8}/g) ?? []) {
+      expect(allowed.has(hex.toUpperCase())).toBe(true);
+    }
+  });
+});
+
+describe('framed card primitives (A3)', () => {
+  it('.cp-card is card fill, 1px card rule, 8px radius, the card shadow', () => {
+    const body = ruleBody('.cp-card');
+    expect(body).toMatch(/background-color:\s*var\(--color-card\)/);
+    expect(body).toMatch(/border:\s*1px solid var\(--color-card-rule\)/);
+    expect(body).toMatch(/border-radius:\s*8px/);
+    expect(body).toMatch(/box-shadow:\s*var\(--shadow-card\)/);
+  });
+
+  it('.cp-note is the pale green note', () => {
+    const body = ruleBody('.cp-note');
+    expect(body).toMatch(/background-color:\s*var\(--color-green-note\)/);
+    expect(body).toMatch(/color:\s*var\(--color-charcoal\)/);
+  });
+
+  it('.cp-record is the record fill with a forest edge (the record rule is 1.55:1)', () => {
+    const body = ruleBody('.cp-record');
+    expect(body).toMatch(/background-color:\s*var\(--color-green-record\)/);
+    expect(body).toMatch(/border:\s*1px solid var\(--color-forest\)/);
+    expect(body).not.toContain('--color-green-record-rule');
+    expect(body).toMatch(/color:\s*var\(--color-charcoal\)/);
+  });
+});
+
 describe('the Scored Ink block stays Lane H4\'s', () => {
   it('is untouched — its banner comment and .da-tertiary rest rule still stand', () => {
     expect(css).toContain('The Scored Ink (I107) — DocumentAction grammar');
