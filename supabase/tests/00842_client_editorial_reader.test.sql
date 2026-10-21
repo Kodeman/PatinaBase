@@ -20,6 +20,14 @@
 --   concept dedupe  the line's picture and the room's concept render share
 --               one asset: sourceKind is concept, the room and the line both
 --               name it, the caption stays the line's
+--   concept requeue  the render uploaded again at the same key is queued
+--               again and stops naming the shared asset; the line's plate
+--               still reads concept
+--   concept replaced  the new upload copies to other bytes: the room names
+--               the new asset, which records as concept; the line's plate
+--               stays concept
+--   maker re-record  the line's picture copied again onto the shared bytes
+--               leaves concept_seen set and the plate concept
 --
 -- Run (from supabase/): psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 --        -v ON_ERROR_STOP=1 -f tests/00842_client_editorial_reader.test.sql
@@ -27,7 +35,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(29);
+SELECT plan(34);
 
 -- ─── fixtures (as postgres) ────────────────────────────────────────────────
 -- O owner of the studio · C the client · Z a stranger with no seat
@@ -278,15 +286,25 @@ SELECT ok(
 
 -- ─── the same bytes as the room's concept render ───────────────────────────
 -- The room's concept render copies to the chair picture's sha256, so both
--- sources share asset 501; its caption still comes from the line.
+-- sources share asset 501; its caption still comes from the line. Each copy
+-- below lands through record_client_plate_asset on a lease of its request.
 
 UPDATE public.project_rooms
    SET concept_render_url = '84200000-0000-4000-8000-000000000001/84200000-0000-4000-8000-000000000011/concept-v1.png',
        concept_render_uploaded_at = now()
  WHERE id = '84200000-0000-4000-8000-000000000011';
 UPDATE public.client_plate_requests
-   SET status = 'done', asset_id = '84200000-0000-4000-8000-000000000501', updated_at = now()
+   SET status = 'leased', lease_token = '84200000-0000-4000-8000-000000000601',
+       lease_expires_at = now() + interval '5 minutes'
  WHERE source_ref = '{"table": "project_rooms", "id": "84200000-0000-4000-8000-000000000011"}';
+SELECT public.record_client_plate_asset(
+  (SELECT id FROM public.client_plate_requests
+    WHERE source_ref = '{"table": "project_rooms", "id": "84200000-0000-4000-8000-000000000011"}'),
+  '84200000-0000-4000-8000-000000000601',
+  jsonb_build_object('sha256', repeat('a', 64), 'width', 1600, 'height', 1200, 'ground', 'white',
+    'dominantHex', '#efe9e0', 'lqip', 'data:image/webp;base64,AAAA',
+    'originalKey', 'plates/84200000-0000-4000-8000-000000000001/' || repeat('a', 64) || '/original.jpg',
+    'crops', '{"wide": {"rect": [0, 0, 1600, 900], "widths": [800, 1600]}}'::jsonb)) AS us49_concept_copy;
 
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"84200000-0000-4000-8000-0000000000a2","role":"authenticated"}';
@@ -316,6 +334,115 @@ SELECT is(
   (SELECT envelope #>> '{assets,0,alt}' FROM (SELECT current_setting('us49.editorial_concept')::jsonb AS envelope) AS editorial_read),
   'Lounge chair · Atelier Nord · concept render, not installed',
   'concept dedupe: the alt says concept render while the caption stays the line''s'
+);
+
+-- ─── the concept render is uploaded again ──────────────────────────────────
+-- Same key, newer upload time: the room's request is queued again and stops
+-- naming 501, which now reaches the page only through the line's picture.
+
+UPDATE public.project_rooms
+   SET concept_render_uploaded_at = now() + interval '1 hour'
+ WHERE id = '84200000-0000-4000-8000-000000000011';
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84200000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT 'read' AS us49_concept_requeued
+FROM (SELECT set_config('us49.editorial_requeued',
+        public.get_client_project_editorial('84200000-0000-4000-8000-000000000001')::text, true)) AS stash;
+RESET ROLE;
+
+SELECT is(
+  (SELECT request.status || ' ' || (request.asset_id IS NULL)::text || ' '
+          || COALESCE(current_setting('us49.editorial_requeued')::jsonb #>> '{rooms,0,conceptAssetId}', 'none')
+     FROM public.client_plate_requests AS request
+    WHERE request.source_ref = '{"table": "project_rooms", "id": "84200000-0000-4000-8000-000000000011"}'),
+  'queued true none',
+  'concept requeue: the re-uploaded render is queued again, names no plate, and the room shows none'
+);
+SELECT is(
+  (SELECT asset ->> 'sourceKind'
+     FROM (SELECT current_setting('us49.editorial_requeued')::jsonb AS envelope) AS editorial_read,
+          jsonb_array_elements(envelope -> 'assets') AS asset
+    WHERE asset ->> 'id' = '84200000-0000-4000-8000-000000000501'),
+  'concept',
+  'concept requeue: the line''s plate still reads concept while the render is copied again'
+);
+
+-- ─── the new upload copies to other bytes ──────────────────────────────────
+
+UPDATE public.client_plate_requests
+   SET status = 'leased', lease_token = '84200000-0000-4000-8000-000000000602',
+       lease_expires_at = now() + interval '5 minutes'
+ WHERE source_ref = '{"table": "project_rooms", "id": "84200000-0000-4000-8000-000000000011"}';
+SELECT 'recorded' AS us49_concept_replaced
+FROM (SELECT set_config('us49.concept_b', public.record_client_plate_asset(
+  (SELECT id FROM public.client_plate_requests
+    WHERE source_ref = '{"table": "project_rooms", "id": "84200000-0000-4000-8000-000000000011"}'),
+  '84200000-0000-4000-8000-000000000602',
+  jsonb_build_object('sha256', repeat('b', 64), 'width', 1600, 'height', 1000, 'ground', 'scene',
+    'originalKey', 'plates/84200000-0000-4000-8000-000000000001/' || repeat('b', 64) || '/original.png'))::text,
+  true)) AS stash;
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84200000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT 'read' AS us49_concept_replaced_read
+FROM (SELECT set_config('us49.editorial_replaced',
+        public.get_client_project_editorial('84200000-0000-4000-8000-000000000001')::text, true)) AS stash;
+RESET ROLE;
+
+SELECT is(
+  (SELECT (envelope #>> '{rooms,0,conceptAssetId}') || ' '
+          || (SELECT asset ->> 'sourceKind' FROM jsonb_array_elements(envelope -> 'assets') AS asset
+               WHERE asset ->> 'id' = current_setting('us49.concept_b')) || ' '
+          || (SELECT concept_seen::text FROM public.client_plate_assets
+               WHERE id = current_setting('us49.concept_b')::uuid)
+     FROM (SELECT current_setting('us49.editorial_replaced')::jsonb AS envelope) AS editorial_read),
+  current_setting('us49.concept_b') || ' concept true',
+  'concept replaced: the new bytes are the room''s concept plate and record as concept'
+);
+SELECT is(
+  (SELECT asset ->> 'sourceKind'
+     FROM (SELECT current_setting('us49.editorial_replaced')::jsonb AS envelope) AS editorial_read,
+          jsonb_array_elements(envelope -> 'assets') AS asset
+    WHERE asset ->> 'id' = '84200000-0000-4000-8000-000000000501'),
+  'concept',
+  'concept replaced: the line''s plate stays concept once the render has new bytes'
+);
+
+-- ─── the line's picture is copied again ────────────────────────────────────
+-- A maker copy of 501's bytes records onto 501 again.
+
+UPDATE public.client_plate_requests AS request
+   SET status = 'leased', lease_token = '84200000-0000-4000-8000-000000000603',
+       lease_expires_at = now() + interval '5 minutes'
+  FROM public.project_ffe_item_images AS picture
+ WHERE picture.item_id = '84200000-0000-4000-8000-000000000101'
+   AND request.source_ref = jsonb_build_object('table', 'project_ffe_item_images', 'id', picture.id);
+SELECT public.record_client_plate_asset(
+  (SELECT request.id FROM public.client_plate_requests AS request
+     JOIN public.project_ffe_item_images AS picture
+       ON request.source_ref = jsonb_build_object('table', 'project_ffe_item_images', 'id', picture.id)
+    WHERE picture.item_id = '84200000-0000-4000-8000-000000000101'),
+  '84200000-0000-4000-8000-000000000603',
+  jsonb_build_object('sha256', repeat('a', 64), 'width', 1600, 'height', 1200, 'ground', 'white',
+    'originalKey', 'plates/84200000-0000-4000-8000-000000000001/' || repeat('a', 64) || '/original.jpg',
+    'source_kind', 'maker')) AS us49_maker_copy;
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84200000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT 'read' AS us49_maker_again
+FROM (SELECT set_config('us49.editorial_maker_again',
+        public.get_client_project_editorial('84200000-0000-4000-8000-000000000001')::text, true)) AS stash;
+RESET ROLE;
+
+SELECT is(
+  (SELECT (SELECT concept_seen::text FROM public.client_plate_assets
+            WHERE id = '84200000-0000-4000-8000-000000000501') || ' ' || (asset ->> 'sourceKind')
+     FROM (SELECT current_setting('us49.editorial_maker_again')::jsonb AS envelope) AS editorial_read,
+          jsonb_array_elements(envelope -> 'assets') AS asset
+    WHERE asset ->> 'id' = '84200000-0000-4000-8000-000000000501'),
+  'true concept',
+  'maker re-record: copying the line''s picture again leaves its bytes concept'
 );
 
 SELECT * FROM finish(true);

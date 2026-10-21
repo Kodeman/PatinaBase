@@ -51,7 +51,9 @@
 -- An asset's sourceKind is the kind of the source its caption describes,
 -- except that bytes any of the project's sources produced as a concept render
 -- stay 'concept' (R142: a concept is never the hero), whichever source the
--- caption describes. The alt's kind word follows sourceKind.
+-- caption describes. The asset's concept_seen keeps that after the concept
+-- request is re-queued or moves to other bytes. The alt's kind word follows
+-- sourceKind.
 --
 -- Captions are code: what = the line's name as signed (room name for a concept
 -- render or scan, board name, sheet title); whose = the maker when
@@ -377,7 +379,8 @@ BEGIN
        AND asset.project_id = p_project_id
       CROSS JOIN LATERAL (
         SELECT CASE
-                 WHEN asset.source_kind = 'concept'
+                 WHEN asset.concept_seen
+                   OR asset.source_kind = 'concept'
                    OR EXISTS (SELECT 1 FROM plate
                               WHERE plate.id = asset.id AND plate.source_kind = 'concept')
                  THEN 'concept'
