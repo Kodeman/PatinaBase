@@ -1,10 +1,11 @@
 /** @jest-environment node */
+import { readFileSync } from 'node:fs';
 import { NextRequest } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
 import { createAdminClient, createMiddlewareClient } from '@patina/supabase/client';
 import { getCloudflareContext } from '@opennextjs/cloudflare/cloudflare-context';
 import { config, middleware } from '@/middleware';
-import { GET } from './route';
+import { GET } from '../route';
 
 jest.mock('@patina/supabase/server', () => ({ createServerClient: jest.fn() }));
 jest.mock('@patina/supabase/client', () => ({
@@ -58,9 +59,21 @@ describe('private plate GET', () => {
       { file: '../wide-1280.avif' }, { file: 'wide-1280.jpg' }, { file: 'wide-1280.avif\n' },
       { scope: 'not-a-uuid' }, { sha256: SHA.toUpperCase() }, { sha256: 'b'.repeat(63) },
     ]) {
-      expect((await call(values)).status).toBe(404);
+      const response = await call(values);
+      expect(response.status).toBe(404);
+      expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     }
     expect(createServerClient).not.toHaveBeenCalled();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('rejects leading-zero widths before any I/O', async () => {
+    for (const file of ['wide-0640.avif', 'piece-0256.webp', 'board-000.webp']) {
+      expect((await call({ file })).status).toBe(404);
+    }
+    expect(createServerClient).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(getCloudflareContext).not.toHaveBeenCalled();
     expect(mockGet).not.toHaveBeenCalled();
   });
 
@@ -69,6 +82,7 @@ describe('private plate GET', () => {
     const response = await call();
     expect(response.status).toBe(401);
     expect(await response.text()).toBe('');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(mockRpc).not.toHaveBeenCalled();
     expect(mockGet).not.toHaveBeenCalled();
   });
@@ -80,16 +94,36 @@ describe('private plate GET', () => {
     expect(getCloudflareContext).not.toHaveBeenCalled();
   });
 
-  it('fails closed on an RPC error even if it includes data', async () => {
-    mockRpc.mockResolvedValue({ data: PROJECT, error: { message: 'unavailable' } });
-    expect((await call()).status).toBe(404);
+  it('logs only RPC code and message while failing closed even if it includes data', async () => {
+    const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockRpc.mockResolvedValue({ data: PROJECT, error: { code: 'PGRST202', message: 'unavailable', details: 'private detail' } });
+    const response = await call();
+    expect(response.status).toBe(404);
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(log).toHaveBeenCalledWith('client_can_read_plate', { code: 'PGRST202', message: 'unavailable' });
+    expect(log).toHaveBeenCalledTimes(1);
     expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('returns identical empty no-store 404s for denial, RPC fault, and missing bytes', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+    const denied = await call();
+    mockRpc.mockResolvedValueOnce({ data: null, error: { code: 'XX000', message: 'fault' } });
+    const fault = await call();
+    mockGet.mockResolvedValueOnce(null);
+    const missing = await call();
+    for (const response of [denied, fault, missing]) {
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe('');
+      expect(Array.from(response.headers.entries())).toEqual([['cache-control', 'private, no-store']]);
+    }
   });
 
   it('returns 404 for a missing object using the authorized project key', async () => {
     mockGet.mockResolvedValue(null);
     expect((await call()).status).toBe(404);
-    expect(mockGet).toHaveBeenCalledWith(`plates/${PROJECT}/${SHA}/${FILE}`);
+    expect(mockGet).toHaveBeenCalledWith(`plates/${PROJECT}/${SHA}/${FILE}`, { onlyIf: expect.any(Headers) });
   });
 
   it('streams a hit with exactly private one-hour caching and Cookie variance', async () => {
@@ -102,30 +136,36 @@ describe('private plate GET', () => {
     expect(response.headers.get('Cache-Control')).toBe('private, max-age=3600');
     expect(response.headers.get('Vary')).toBe('Cookie');
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
-    expect(mockGet).toHaveBeenCalledWith(`plates/${PROJECT}/${SHA}/${FILE}`);
+    expect(mockGet).toHaveBeenCalledWith(`plates/${PROJECT}/${SHA}/${FILE}`, { onlyIf: expect.any(Headers) });
   });
 
-  it('uses object metadata and falls back by extension for both formats', async () => {
-    mockGet.mockResolvedValueOnce(object('image/custom'));
-    expect((await call()).headers.get('Content-Type')).toBe('image/custom');
+  it('derives the content type from each allowlisted extension, never stored metadata', async () => {
+    mockGet.mockResolvedValueOnce(object('text/html'));
+    expect((await call()).headers.get('Content-Type')).toBe('image/avif');
     const avif = object();
     delete avif.httpMetadata.contentType;
     mockGet.mockResolvedValueOnce(avif);
     expect((await call()).headers.get('Content-Type')).toBe('image/avif');
-    const webp = object();
-    delete webp.httpMetadata.contentType;
-    mockGet.mockResolvedValueOnce(webp);
+    mockGet.mockResolvedValueOnce(object('image/avif'));
     expect((await call({ file: 'piece-256.webp' })).headers.get('Content-Type')).toBe('image/webp');
   });
 
-  it('returns an empty 304 for exact, weak, list and wildcard validators after auth', async () => {
+  it('returns a lean empty 304 from metadata-only exact, weak, list and wildcard reads after auth', async () => {
     for (const validator of ['"plate-etag"', 'W/"plate-etag"', '"other", W/"plate-etag"', '*']) {
-      mockGet.mockResolvedValueOnce(object());
+      mockGet.mockImplementationOnce((_key, options) => Promise.resolve(options?.onlyIf
+        ? { size: 5, httpEtag: '"plate-etag"' }
+        : object()));
       const response = await call({}, { 'If-None-Match': validator });
       expect(response.status).toBe(304);
       expect(await response.text()).toBe('');
-      expect(response.headers.get('Cache-Control')).toBe('private, max-age=3600');
-      expect(response.headers.get('Vary')).toBe('Cookie');
+      expect(Array.from(response.headers.entries())).toEqual([
+        ['cache-control', 'private, max-age=3600'], ['etag', '"plate-etag"'], ['vary', 'Cookie'],
+      ]);
+      expect(response.headers.has('Content-Type')).toBe(false);
+      expect(response.headers.has('Content-Length')).toBe(false);
+      const options = mockGet.mock.calls.at(-1)?.[1];
+      expect(options?.onlyIf).toBeInstanceOf(Headers);
+      expect(options.onlyIf.get('If-None-Match')).toBe(validator);
     }
     expect(mockRpc).toHaveBeenCalledTimes(4);
   });
@@ -137,13 +177,15 @@ describe('private plate GET', () => {
     expect(mockGet).toHaveBeenCalledTimes(1);
   });
 
-  it('returns 503 no-store outside Workers or without the binding', async () => {
+  it('returns 503 private no-store outside Workers or without the binding', async () => {
     jest.mocked(getCloudflareContext).mockImplementationOnce(() => { throw new Error('not a Worker'); });
     const response = await call();
     expect(response.status).toBe(503);
-    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     jest.mocked(getCloudflareContext).mockReturnValueOnce({ env: {} } as ReturnType<typeof getCloudflareContext>);
-    expect((await call()).status).toBe(503);
+    const unbound = await call();
+    expect(unbound.status).toBe(503);
+    expect(unbound.headers.get('Cache-Control')).toBe('private, no-store');
     expect(mockGet).not.toHaveBeenCalled();
   });
 
@@ -151,7 +193,7 @@ describe('private plate GET', () => {
     for (const crop of ['sheet', 'board']) {
       mockGet.mockResolvedValueOnce(object());
       expect((await call({ file: `${crop}-1024.webp` })).status).toBe(200);
-      expect(mockGet).toHaveBeenLastCalledWith(`plates/${PROJECT}/${SHA}/${crop}-1024.webp`);
+      expect(mockGet).toHaveBeenLastCalledWith(`plates/${PROJECT}/${SHA}/${crop}-1024.webp`, { onlyIf: expect.any(Headers) });
     }
   });
 });
@@ -166,11 +208,44 @@ describe('plate middleware', () => {
     expect((await call({ file: 'piece-256.webp' })).status).toBe(401);
   });
 
-  it('keeps signed-in plates on the route membership path, with a matcher covering WebP', async () => {
-    expect(config.matcher).toContain('/plates/:path*');
+  it('keeps signed-in plates on the route membership path, with unchanged generic matcher', async () => {
+    expect(config.matcher).toEqual([
+      '/plates/:path*',
+      '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    ]);
     const response = await middleware(new NextRequest(`https://client.patina.test/plates/${SCOPE}/${SHA}/${FILE}`));
     expect(response.headers.get('Location')).toBeNull();
     expect(createAdminClient).not.toHaveBeenCalled();
     expect((await call()).status).toBe(200);
+  });
+
+  it('redirects signed-out page paths including plates lookalikes and apiary', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    for (const path of ['/plates', '/platesx', '/projects', '/apiary']) {
+      const response = await middleware(new NextRequest(`https://client.patina.test${path}`));
+      expect(response.headers.get('Location')).not.toBeNull();
+      const location = new URL(response.headers.get('Location')!);
+      expect(location.pathname).toBe('/auth/signin');
+      expect(location.searchParams.get('callbackUrl')).toBe(path);
+    }
+  });
+
+  it('preserves signed-out API pass-through for the exact root and slash boundary', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    for (const path of ['/api', '/api/', '/api/projects']) {
+      const response = await middleware(new NextRequest(`https://client.patina.test${path}`));
+      expect(response.headers.get('Location')).toBeNull();
+      expect(response.headers.get('x-middleware-next')).toBe('1');
+    }
+  });
+
+  it('keeps private plate URLs on the first PWA NetworkOnly rule', () => {
+    const source = readFileSync(`${process.cwd()}/next.config.js`, 'utf8');
+    const pattern = source.match(/urlPattern: (\/[^\n]+),\n\s+handler: 'NetworkOnly'/)?.[1];
+    expect(pattern).toBeDefined();
+    const networkOnly = new RegExp(pattern!.slice(1, -1));
+    expect(networkOnly.test(`https://client.patina.test/plates/${SCOPE}/${SHA}/${FILE}`)).toBe(true);
+    expect(networkOnly.test(`https://client.patina.test/plates/${SCOPE}/${SHA}/piece-256.webp`)).toBe(true);
+    expect(source.indexOf("handler: 'NetworkOnly'")).toBeLessThan(source.indexOf("handler: 'NetworkFirst'"));
   });
 });

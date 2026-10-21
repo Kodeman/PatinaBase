@@ -31,7 +31,7 @@ const withPWA =
           // non-OpenNext builds and preview hosts, and fails safe if the PWA
           // is ever re-enabled.
           {
-            urlPattern: /^https?:\/\/[^/]+\/(pay|plans|share|rfq|trade|evidence|field|paperwork)\//,
+            urlPattern: /^https?:\/\/[^/]+\/(pay|plans|share|rfq|trade|evidence|field|paperwork|plates)\//,
             handler: 'NetworkOnly',
           },
           {

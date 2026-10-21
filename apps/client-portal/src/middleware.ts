@@ -205,7 +205,7 @@ export async function middleware(req: NextRequest) {
     isPaperworkPage ||
     isPiecePage ||
     isUnsubscribeOutcomePage;
-  const isDataRoute = /^\/(?:api|plates\/)/.test(req.nextUrl.pathname);
+  const isDataRoute = /^\/(?:api(?:\/|$)|plates\/)/.test(req.nextUrl.pathname);
   // The wrong-portal interstitial is the redirect target for wrong-role users;
   // it must be exempt from the gate or a wrong-role user would loop. /unauthorized
   // is kept exempt too — it now redirects to /wrong-portal (back-compat shim).
