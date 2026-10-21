@@ -61,7 +61,7 @@ export function Doorplate({
       data-testid="doorplate"
       className="border-b border-[var(--border-default)] pb-3"
     >
-      <StrataMark variant="mini" />
+      <StrataMark variant="mini" tone="forest" />
 
       {(keeper.length > 0 || addressee) && (
         <p

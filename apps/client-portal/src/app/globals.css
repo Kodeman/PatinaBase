@@ -540,13 +540,15 @@ a:hover {
 
    The rule rests drawn, unconditionally — no `scaleX(0)`, no `hover: none`
    variant. A phone has no hover, and the hover-gated rule left a touch
-   surface with no interactive mark on it at all (R139, sheet §A5). */
+   surface with no interactive mark on it at all (R139, sheet §A5). The rule
+   is forest, not oak: green replaces clay on everything a client acts on
+   (US-45 A2). */
 .da-tertiary {
   color: var(--color-quiet-ink);
 }
 .da-tertiary .da-label::before {
   height: 1px;
-  background-color: var(--color-aged-oak);
+  background-color: var(--color-forest);
   transition: background-color 150ms linear, height 150ms var(--ease-editorial);
 }
 .da-tertiary .da-label::after {
@@ -635,7 +637,7 @@ a:hover {
 }
 .da-tertiary:hover .da-label::before {
   height: 1.5px;
-  background-color: var(--color-quiet-ink);
+  background-color: var(--color-forest-press);
 }
 
 /* ── press · the word drops a pixel, the ink opens from the contact point,
@@ -811,8 +813,11 @@ a:hover {
 .da-act:focus-visible::before {
   opacity: 1;
 }
+/* The terminal carries no caret: its forest ring already marks focus, and on
+   the forest face the glyph read as a stray mark at the act's left edge while
+   a hold ran (SQ-1531 finding 4). */
 .da-terminal::before {
-  color: var(--color-card);
+  content: none;
 }
 .da-act.da-unavailable::before {
   color: var(--color-unavailable-ink);
@@ -1020,6 +1025,16 @@ a:hover {
     --font-display: var(--font-playfair), 'Playfair Display', Georgia, serif;
     --font-body: var(--font-inter), 'Inter', sans-serif;
     --font-meta: var(--font-mono), 'DM Mono', monospace;
+  }
+
+  /* A text field takes the forest focus ring rather than the browser's blue
+     (US-45 A2). Base layer and `:where()` keep this at a single pseudo-class
+     of weight, so any utility on the field (`outline-none`, its own
+     `focus-visible:outline-*`) still wins. Radios and checkboxes are left
+     out: the payment chooser rings the whole row around its radio. */
+  :where(input:not([type='radio'], [type='checkbox'], [type='file']), textarea, select):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 }
 

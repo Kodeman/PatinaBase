@@ -5,7 +5,8 @@ import type { AnchorHTMLAttributes, ReactNode } from 'react';
 /* ── The inline act (house sheet §A5 / §F-D) ────────────────────────────────
    A tertiary act living inside a sentence. It inherits the sentence's family,
    size, case and colour, keeps no 44px control box of its own, and rests on a
-   1px oak rule 3px under the baseline.
+   1px forest rule 3px under the baseline (oak until US-45: green replaces
+   clay on what a client acts on).
 
    THE RULE IS UNCONDITIONAL. A word inside prose that only rules itself on
    hover is invisible to every reader holding a phone, which is the whole of
@@ -18,10 +19,10 @@ import type { AnchorHTMLAttributes, ReactNode } from 'react';
 
 export const INLINE_ACT_CLASS = [
   'inline cursor-pointer border-0 border-b border-solid bg-transparent p-0 pb-[3px]',
-  'border-b-[var(--color-aged-oak)] no-underline',
+  'border-b-[var(--color-forest)] no-underline',
   '[font:inherit] [letter-spacing:inherit] [text-transform:inherit] [color:inherit]',
   '[-webkit-box-decoration-break:clone] [box-decoration-break:clone]',
-  'hover:border-b-[1.5px] hover:border-b-[var(--color-quiet-ink)] hover:pb-[2.5px]',
+  'hover:border-b-[1.5px] hover:border-b-[var(--color-forest-press)] hover:pb-[2.5px]',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
   'focus-visible:outline-[var(--focus-ring)]',
 ].join(' ');

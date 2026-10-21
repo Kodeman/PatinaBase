@@ -43,8 +43,8 @@ describe('the twelve states', () => {
   });
 
   it.each([
-    ['approved', 'APPROVED', 'var(--color-mocha)', 'var(--color-mocha)'],
-    ['chosen', 'CHOSEN', 'var(--color-mocha)', 'var(--color-mocha)'],
+    ['approved', 'APPROVED', 'var(--color-forest)', 'var(--color-forest)'],
+    ['chosen', 'CHOSEN', 'var(--color-forest)', 'var(--color-forest)'],
     ['returned', 'RETURNED', 'var(--color-clay-ink)', 'var(--color-charcoal)'],
     ['held', 'HELD', 'var(--color-golden-hour-ink)', 'var(--color-charcoal)'],
     ['signed', 'SIGNED', 'var(--color-mocha)', 'var(--color-mocha)'],
@@ -156,7 +156,7 @@ describe('the one aging step', () => {
     const old = new Date('2020-01-01T00:00:00Z');
     const stamp = mark('approved', { since: old, now: NOW });
     expect(stamp).toHaveAttribute('data-stamp-aged', 'true');
-    expect(stamp.style.getPropertyValue('--stamp-ink')).toBe('var(--color-mocha)');
+    expect(stamp.style.getPropertyValue('--stamp-ink')).toBe('var(--color-forest)');
     expect(stamp).toHaveTextContent('APPROVED');
   });
 

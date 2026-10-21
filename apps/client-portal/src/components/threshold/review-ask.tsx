@@ -219,7 +219,7 @@ function StudioReviewCard({ request }: { request: ClientPendingReview }) {
           minLength={MIN_BODY}
           data-testid="review-body"
           placeholder="A few sentences about your experience…"
-          className="mt-1.5 w-full max-w-[52ch] resize-y border border-[var(--border-default)] bg-transparent px-3 py-2 text-[15px] leading-relaxed text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]"
+          className="mt-1.5 w-full max-w-[52ch] resize-y border border-[var(--border-default)] bg-transparent px-3 py-2 text-[15px] leading-relaxed text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--focus-ring)]"
         />
         <p className="mt-1 font-mono text-[11px] text-[var(--text-muted)]">
           {`${body.length} / ${MIN_BODY} min`}

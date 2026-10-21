@@ -15,10 +15,11 @@ describe('InlineAct — a tertiary act inside a sentence', () => {
     expect(act).toHaveAttribute('data-inline-act', '');
   });
 
-  it('rests on a 1px oak rule, unconditionally', () => {
-    expect(INLINE_ACT_CLASS).toContain('border-b-[var(--color-aged-oak)]');
+  it('rests on a 1px forest rule, unconditionally', () => {
+    expect(INLINE_ACT_CLASS).toContain('border-b-[var(--color-forest)]');
+    expect(INLINE_ACT_CLASS).not.toContain('aged-oak');
     expect(INLINE_ACT_CLASS).not.toContain('scaleX');
-    expect(INLINE_ACT_CLASS).not.toContain('hover:border-b-[var(--color-aged-oak)]');
+    expect(INLINE_ACT_CLASS).not.toContain('hover:border-b-[var(--color-forest)]');
   });
 
   it('keeps no control box and no type of its own', () => {
