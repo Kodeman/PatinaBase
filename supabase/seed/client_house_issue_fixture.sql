@@ -1,0 +1,268 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- The House Issue (US-49) — the client page's e2e fixture (US-44's household)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Local only (and staging, by config.toml's derivation rule). Two houses for
+-- one homeowner, June Brennan, kept by a studio of their own — Birchwood
+-- Studio, Evanston — so no other spec's household is touched:
+--
+--   Elm Street House  procurement · Living room / Study / Entry · six open
+--                     invoices ($600 past due since 25 September, $1,375.00
+--                     in all) · a signed authorization: the walnut sideboard
+--                     and the linen sofa. The sideboard has two pictures, each
+--                     copied to a plate (client_plate_assets) — a maker's
+--                     scene, hero-eligible, and a white-ground catalogue shot.
+--                     The sofa has no picture: it is drawn.
+--   Lake Cottage      one room, no plate at all: the drawn cover, which is
+--                     the majority arrival (SQ-1575: 13 of 24 active projects).
+--
+-- The plate rows are what record_client_plate_asset would have written; their
+-- bytes are not in any bucket. Locally the plate route answers 503 (no PLATES
+-- binding under `next dev`), so every photograph falls back to its silhouette
+-- with "Picture did not load." — tests/house-issue.spec.ts asserts exactly that.
+--
+-- Idempotent: the whole block returns early once Elm Street House exists.
+-- Sign in as june.brennan@patina.dev / password123.
+
+DO $$
+DECLARE
+  uid_designer  UUID := 'a0000000-0000-0000-0000-000000000004';  -- Leah Hartwell
+  uid_june      UUID := 'a0000000-0000-0000-0000-0000000e1a05';
+  v_studio      UUID := 'b0000000-0000-0000-0000-0000000e1a00';  -- Birchwood Studio
+  v_elm         UUID := 'b0000000-0000-0000-0000-0000000e1a01';  -- Elm Street House
+  v_lake        UUID := 'b0000000-0000-0000-0000-0000000e1a02';  -- Lake Cottage
+  v_relationship UUID := 'd0000000-0000-0000-0000-0000000e1a01';
+
+  v_living      UUID := 'b0000000-0000-0000-0000-0000000e1b01';
+  v_study       UUID := 'b0000000-0000-0000-0000-0000000e1b02';
+  v_entry       UUID := 'b0000000-0000-0000-0000-0000000e1b03';
+  v_porch       UUID := 'b0000000-0000-0000-0000-0000000e1b04';  -- Lake Cottage
+
+  v_proposal    UUID := 'b0000000-0000-0000-0000-0000000e1c01';
+  v_document    UUID := 'b0000000-0000-0000-0000-0000000e1c11';
+  v_thread      UUID := 'b0000000-0000-0000-0000-0000000e1c21';
+  v_thread_2    UUID := 'b0000000-0000-0000-0000-0000000e1c22';
+  v_sideboard   UUID := 'b0000000-0000-0000-0000-0000000e1d01';
+  v_sofa        UUID := 'b0000000-0000-0000-0000-0000000e1d02';
+  v_sideboard_s UUID := 'b0000000-0000-0000-0000-0000000e1d11';
+  v_sofa_s      UUID := 'b0000000-0000-0000-0000-0000000e1d12';
+
+  v_picture_scene UUID := 'b0000000-0000-0000-0000-0000000e1e01';
+  v_picture_white UUID := 'b0000000-0000-0000-0000-0000000e1e02';
+  v_plate_scene   UUID := 'b0000000-0000-0000-0000-0000000e1f01';
+  v_plate_white   UUID := 'b0000000-0000-0000-0000-0000000e1f02';
+
+  pw_hash       TEXT;
+  ts            TIMESTAMPTZ := NOW();
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.projects WHERE id = v_elm) THEN
+    RETURN;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = uid_designer) THEN
+    RAISE NOTICE 'client_house_issue_fixture.sql: dev accounts are not seeded yet, skipping';
+    RETURN;
+  END IF;
+
+  pw_hash := extensions.crypt('password123', extensions.gen_salt('bf'));
+
+  -- ── The studio and the homeowner ────────────────────────────────────────
+  -- No membership row: the designer stays in Local Dev Studio, so every other
+  -- spec's resolve_studio_identity answer is unchanged.
+
+  INSERT INTO public.organizations (id, type, name, slug, settings, status, address)
+  VALUES (v_studio, 'design_studio', 'Birchwood Studio', 'birchwood-studio-fixture', '{}'::jsonb, 'active',
+          '{"city": "Evanston"}'::jsonb)
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO auth.users (
+    instance_id, id, aud, role, email, encrypted_password,
+    email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+    created_at, updated_at, confirmation_token, recovery_token,
+    email_change_token_new, email_change
+  ) VALUES (
+    '00000000-0000-0000-0000-000000000000', uid_june, 'authenticated', 'authenticated',
+    'june.brennan@patina.dev', pw_hash, ts,
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"full_name":"June Brennan"}'::jsonb,
+    ts, ts, '', '', '', ''
+  ) ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO auth.identities (
+    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+  ) VALUES (
+    extensions.gen_random_uuid(), uid_june, uid_june::text,
+    jsonb_build_object('sub', uid_june::text, 'email', 'june.brennan@patina.dev'),
+    'email', ts, ts, ts
+  ) ON CONFLICT ON CONSTRAINT identities_provider_id_provider_unique DO NOTHING;
+
+  INSERT INTO public.profiles (id, email, full_name, display_name, role, created_at, updated_at)
+  VALUES (uid_june, 'june.brennan@patina.dev', 'June Brennan', 'June Brennan', 'homeowner', ts, ts)
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    display_name = EXCLUDED.display_name,
+    role = EXCLUDED.role,
+    updated_at = EXCLUDED.updated_at;
+
+  INSERT INTO public.user_roles (user_id, role_id)
+  SELECT uid_june, id FROM public.roles WHERE name = 'app_user'
+  ON CONFLICT (user_id, role_id) DO NOTHING;
+
+  INSERT INTO public.designer_clients (id, designer_id, client_id, status, created_at, updated_at)
+  VALUES (v_relationship, uid_designer, uid_june, 'active', ts, ts)
+  ON CONFLICT (id) DO NOTHING;
+
+  -- ── Two houses ──────────────────────────────────────────────────────────
+  -- Elm Street moved last, so "/" lands there; Lake Cottage opens by name.
+
+  INSERT INTO public.projects (
+    id, name, client_id, designer_id, studio_id,
+    status, created_by, client_visibility_tier, current_phase,
+    budget_cents, total_amount_cents, start_date, created_at, updated_at
+  ) VALUES
+    (v_elm, 'Elm Street House', uid_june, uid_designer, v_studio,
+     'active', uid_designer, 'full', 'procurement',
+     2400000, 2400000, (ts - INTERVAL '90 days')::date, ts - INTERVAL '92 days', ts),
+    (v_lake, 'Lake Cottage', uid_june, uid_designer, v_studio,
+     'active', uid_designer, 'full', 'design_development',
+     600000, 600000, (ts - INTERVAL '20 days')::date, ts - INTERVAL '21 days', ts - INTERVAL '2 days');
+
+  INSERT INTO public.project_rooms (id, project_id, name, sort_order, created_at, updated_at) VALUES
+    (v_living, v_elm,  'Living room', 0, ts, ts),
+    (v_study,  v_elm,  'Study',       1, ts, ts),
+    (v_entry,  v_elm,  'Entry',       2, ts, ts),
+    (v_porch,  v_lake, 'Porch',       0, ts, ts);
+
+  -- ── The signed furnishings authorization: two lines in the living room ──
+
+  INSERT INTO public.proposals (
+    id, project_id, designer_id, client_id, designer_client_id, title, description,
+    status, document_kind, commercial_state, total_amount, subtotal,
+    sent_at, accepted_at, signed_at, signed_by_name, created_at, updated_at
+  ) VALUES (
+    v_proposal, v_elm, uid_designer, uid_june, v_relationship,
+    'Elm Street — Authorization No. 1',
+    'The living room''s sideboard and sofa, agreed and signed.',
+    'accepted', 'furnishings_authorization', 'executed', 1290000, 1290000,
+    ts - INTERVAL '40 days', ts - INTERVAL '35 days',
+    ts - INTERVAL '35 days', 'June Brennan',
+    ts - INTERVAL '42 days', ts - INTERVAL '35 days'
+  );
+
+  INSERT INTO public.project_commercial_documents (
+    id, project_id, proposal_id, document_kind, wave_name,
+    is_origin, bound_at, executed_at, created_by
+  ) VALUES (
+    v_document, v_elm, v_proposal, 'furnishings_authorization', 'Authorization No. 1',
+    FALSE, ts - INTERVAL '35 days', ts - INTERVAL '35 days', uid_designer
+  );
+
+  INSERT INTO public.project_ffe_selection_threads (id, project_id, created_by, created_at, updated_at)
+  VALUES (v_thread, v_elm, uid_designer, ts - INTERVAL '35 days', ts - INTERVAL '35 days'),
+         (v_thread_2, v_elm, uid_designer, ts - INTERVAL '35 days', ts - INTERVAL '35 days');
+
+  INSERT INTO public.project_ffe_items (
+    id, project_id, project_room_id, name, ffe_category,
+    item_type, status, quantity, unit_price_cents, line_total_cents,
+    trade_price_cents, markup_percent, sort_order, doc_code,
+    selection_thread_id, design_disposition, assignment_scope, created_at, updated_at
+  ) VALUES
+    (v_sideboard, v_elm, v_living, 'Walnut sideboard', 'furniture',
+     'fixed', 'production', 1, 690000, 690000,
+     460000, 50.00, 0, 'FF-101',
+     v_thread, 'selected', 'room', ts - INTERVAL '35 days', ts - INTERVAL '4 days'),
+    (v_sofa, v_elm, v_living, 'Linen sofa', 'furniture',
+     'fixed', 'ordered', 1, 600000, 600000,
+     400000, 50.00, 1, 'FF-102',
+     v_thread_2, 'selected', 'room', ts - INTERVAL '35 days', ts - INTERVAL '4 days');
+
+  INSERT INTO public.furnishing_authorization_items (
+    id, commercial_document_id, source_ffe_item_id,
+    name, room_name, project_room_id, category, item_type, quantity,
+    client_unit_price_cents, client_line_total_cents,
+    trade_unit_cost_cents, markup_percent, sort_order, created_at
+  ) VALUES
+    (v_sideboard_s, v_document, v_sideboard,
+     'Walnut sideboard', 'Living room', v_living, 'furniture', 'fixed', 1,
+     690000, 690000, 460000, 50.00, 0, ts - INTERVAL '35 days'),
+    (v_sofa_s, v_document, v_sofa,
+     'Linen sofa', 'Living room', v_living, 'furniture', 'fixed', 1,
+     600000, 600000, 400000, 50.00, 1, ts - INTERVAL '35 days');
+
+  UPDATE public.project_ffe_items
+     SET source_commercial_document_id = v_document,
+         source_authorization_item_id  = CASE id WHEN v_sideboard THEN v_sideboard_s ELSE v_sofa_s END
+   WHERE id IN (v_sideboard, v_sofa);
+
+  -- ── The sideboard's two pictures, each copied to a plate ────────────────
+  -- The insert trigger (00843) queues one copy request per picture; the
+  -- requests are then marked done against the plates, as the copier would.
+
+  INSERT INTO public.project_ffe_item_images (
+    id, item_id, project_id, url, source, position, is_primary, created_by, created_at
+  ) VALUES
+    (v_picture_scene, v_sideboard, v_elm,
+     'https://images.example.test/birchwood/walnut-sideboard-room.jpg', 'library', 0, TRUE, uid_designer, ts - INTERVAL '30 days'),
+    (v_picture_white, v_sideboard, v_elm,
+     'https://images.example.test/birchwood/walnut-sideboard-white.jpg', 'library', 1, FALSE, uid_designer, ts - INTERVAL '30 days');
+
+  INSERT INTO public.client_plate_assets (
+    id, project_id, sha256, source_kind, source_ref, original_key,
+    width, height, ground, dominant_hex, lqip, crops, created_at, updated_at
+  ) VALUES
+    (v_plate_scene, v_elm,
+     'e1a0000000000000000000000000000000000000000000000000000000005ce1', 'maker',
+     jsonb_build_object('table', 'project_ffe_item_images', 'id', v_picture_scene),
+     'plates/' || v_elm || '/e1a0000000000000000000000000000000000000000000000000000000005ce1/original',
+     2400, 1600, 'scene', '#6B4F3A', NULL,
+     '{"wide":        {"rect": [0, 0, 2400, 1500],    "widths": [1280, 1600, 2048]},
+       "cover_phone": {"rect": [282, 0, 1835, 1600], "widths": [640, 828, 1080]},
+       "wide32":      {"rect": [0, 0, 2400, 1600],    "widths": [768, 1024, 1600]},
+       "piece":       {"rect": [400, 0, 1600, 1600],  "widths": [256, 512, 768]}}'::jsonb,
+     ts - INTERVAL '29 days', ts - INTERVAL '29 days'),
+    (v_plate_white, v_elm,
+     'e1a000000000000000000000000000000000000000000000000000000000a11e', 'maker',
+     jsonb_build_object('table', 'project_ffe_item_images', 'id', v_picture_white),
+     'plates/' || v_elm || '/e1a000000000000000000000000000000000000000000000000000000000a11e/original',
+     1200, 1200, 'white', '#F4F1EC', NULL,
+     '{"piece": {"rect": [0, 0, 1200, 1200], "widths": [256, 512, 768]}}'::jsonb,
+     ts - INTERVAL '29 days', ts - INTERVAL '29 days');
+
+  UPDATE public.client_plate_requests AS request
+     SET status = 'done',
+         asset_id = CASE request.source_ref ->> 'id'
+                      WHEN v_picture_scene::text THEN v_plate_scene
+                      ELSE v_plate_white
+                    END,
+         attempts = 1,
+         updated_at = ts - INTERVAL '29 days'
+   WHERE request.project_id = v_elm
+     AND request.source_ref ->> 'table' = 'project_ffe_item_images'
+     AND request.source_ref ->> 'id' IN (v_picture_scene::text, v_picture_white::text);
+
+  -- ── Six open invoices: $1,375.00, one of them past due ──────────────────
+
+  INSERT INTO public.invoices (
+    id, project_id, designer_id, client_id, invoice_number, status,
+    issue_date, due_date, payment_terms_days, currency,
+    subtotal_cents, tax_rate, tax_cents, total_cents, amount_paid_cents,
+    memo, sent_at
+  )
+  SELECT ('b0000000-0000-0000-0000-0000000e1a1' || n)::uuid, v_elm, uid_designer, uid_june,
+         'BW-2026-01' || n, 'sent',
+         due - 14, due, 14, 'USD',
+         cents, 0, 0, cents, 0,
+         'Elm Street — invoice ' || n || '.', ts - INTERVAL '30 days'
+  FROM (VALUES
+    (1, 60000, DATE '2026-09-25'),
+    (2, 10000, CURRENT_DATE + 7),
+    (3, 30000, CURRENT_DATE + 14),
+    (4, 25000, CURRENT_DATE + 21),
+    (5,  5000, CURRENT_DATE + 28),
+    (6,  7500, CURRENT_DATE + 35)
+  ) AS bill(n, cents, due);
+
+  INSERT INTO public.project_reading_marks (project_id, user_id, read_at)
+  VALUES (v_elm, uid_june, ts - INTERVAL '3 days'), (v_lake, uid_june, ts - INTERVAL '3 days')
+  ON CONFLICT (project_id, user_id) DO NOTHING;
+END $$;

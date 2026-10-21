@@ -830,6 +830,36 @@ test.describe('The Threshold — the client page', () => {
     await expect(ledger.locator('a[href="#letterbox"]')).toHaveAttribute('data-never-dim', '');
   });
 
+  // The House Issue on (the `edition` project's server, :3102): the cover,
+  // chapter heads and plates stand beside the sections, and every anchor the
+  // mail, the retired routes and the middleware point at still resolves, once.
+  test('keeps every anchor resolving with The House Issue on', { tag: '@edition-only' }, async ({ page }) => {
+    await signInAsClient(page);
+    await openTheHouse(page);
+    await expect(page.locator('[data-standing-row]')).toHaveCount(3, { timeout: 30000 });
+    await expect(page.locator('.ed-chapter-head').first()).toBeVisible();
+
+    const ids = ['doorstep', 'ledger', 'letterbox', 'approvals', 'key', 'road', 'note', 'previously', 'mat'];
+    for (const id of ids) {
+      await expect(page.locator(`[id="${id}"]`), `#${id}`).toHaveCount(1);
+    }
+    const roomIds = await page.locator('section[id^="room-"]').evaluateAll((nodes) => nodes.map((n) => n.id));
+    expect(roomIds.length).toBeGreaterThan(0);
+
+    const hrefs = await page
+      .locator('[data-testid="landmark-ledger"] a, [data-standing-row], a[href^="#approval-"], a[href^="#room-"]')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href') ?? ''));
+    for (const href of new Set(hrefs)) {
+      expect(href.startsWith('#'), href).toBe(true);
+      await expect(page.locator(`[id="${href.slice(1)}"]`), href).toHaveCount(1);
+    }
+
+    // The "On this page" row keeps today's order.
+    await expect(page.getByTestId('landmark-ledger').locator('a').nth(0)).toHaveText('Invoices');
+    await expect(page.getByTestId('landmark-ledger').locator('a').nth(1)).toHaveText('Approvals');
+    await expect(page.getByTestId('landmark-ledger').locator('a').nth(2)).toHaveText('Progress');
+  });
+
   test('keeps an honest approvals destination when no approval is waiting', async ({ page }) => {
     // With no active ask, Approvals still lands on the honest empty state.
     await signIn(page, 'client@patina.dev');

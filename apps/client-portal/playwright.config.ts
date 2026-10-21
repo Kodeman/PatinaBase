@@ -32,7 +32,25 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
  * The Supabase pins stay, and they are the point: apps/client-portal/.env.local
  * has pointed at Strata PROD before, and this suite reads and writes the LOCAL
  * stack.
+ *
+ * US-49 brings a second server back, for the same reason the first split
+ * existed: a flag the suite must see both ways. `client-edition-page` (The
+ * House Issue) is read through `NEXT_PUBLIC_FLAG_OVERRIDES`, which Next inlines
+ * when the dev server starts, so "on" and "off" cannot share one server. :3002
+ * stays the shipped surface with no override; :3102 carries the override and
+ * its own NEXT_DIST_DIR (next.config.js) so the two copies of the app never
+ * share one `.next`. The `edition` project runs only what must see the flag on:
+ * every test tagged `@edition` (house-issue.spec.ts and the flag-on anchor
+ * check in threshold.spec.ts); `edition-usability` runs the whole of
+ * homeowner-usability.spec.ts there too, so it holds both ways.
+ * `@edition-only` keeps a flag-on test off the shipped server.
  */
+const LOCAL_SUPABASE_ENV = {
+  NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: LOCAL_ANON_KEY,
+  SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
+};
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -48,7 +66,22 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: /house-issue\.spec\.ts$/,
+      grepInvert: /@edition-only/,
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'edition',
+      testMatch: /(house-issue|threshold)\.spec\.ts$/,
+      grep: /@edition/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3102' },
+    },
+    {
+      // The usability contract holds with the edition on too: the whole file,
+      // against the flag-on server.
+      name: 'edition-usability',
+      testMatch: /homeowner-usability\.spec\.ts$/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3102' },
     },
   ],
   webServer: [
@@ -59,10 +92,19 @@ export default defineConfig({
       url: 'http://localhost:3002',
       reuseExistingServer: true,
       timeout: 120000,
+      env: LOCAL_SUPABASE_ENV,
+    },
+    {
+      // The House Issue on. Never reused from a stray :3102 that might carry a
+      // different override; started and stopped by this run.
+      command: 'pnpm exec next dev --webpack -p 3102',
+      url: 'http://localhost:3102',
+      reuseExistingServer: false,
+      timeout: 180000,
       env: {
-        NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: LOCAL_ANON_KEY,
-        SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
+        ...LOCAL_SUPABASE_ENV,
+        NEXT_PUBLIC_FLAG_OVERRIDES: 'client-edition-page:true',
+        NEXT_DIST_DIR: '.next-edition',
       },
     },
   ],

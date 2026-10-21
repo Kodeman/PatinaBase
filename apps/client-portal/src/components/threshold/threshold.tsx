@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
 
@@ -42,8 +42,21 @@ import {
   useClientProjectReviewBundle,
   useClientSelections,
 } from '@/hooks/use-commercial-client';
+import {
+  HouseIssueArrival,
+  RoomOpening,
+  approvalsRow,
+  editionChapters,
+  ledgerRow,
+  letterboxRow,
+  useHouseIssue,
+  withChapter,
+} from '@/components/threshold/editorial/house-issue';
+import { useClientEditorial } from '@/hooks/use-client-editorial';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useHoldCeiling } from '@/hooks/use-hold-ceiling';
 import { useHydrated } from '@/hooks/use-hydrated';
+import type { ClientProjectEditorial } from '@/lib/editorial/types';
 import {
   useMarkLettersRead,
   useMarkNoticesRead,
@@ -356,6 +369,11 @@ export interface ThresholdProps {
    * whichever door happens to be first.
    */
   namedProposalId?: string | null;
+  /**
+   * The House Issue's plate read (00842), fetched by the server page. Drawn
+   * only while `client-edition-page` is on; null or flag off, today's house.
+   */
+  editorial?: ClientProjectEditorial | null;
 }
 
 export function Threshold({
@@ -365,6 +383,7 @@ export function Threshold({
   otherHouses = [],
   viewSource = 'named',
   namedProposalId = null,
+  editorial = null,
 }: ThresholdProps) {
   // ── every hook, before any branch ──────────────────────────────────────────
   const hydrated = useHydrated();
@@ -406,6 +425,12 @@ export function Threshold({
   const partiesQuery = useProjectParties(projectId);
   const ordersQuery = useDirectOrders();
   useProjectNotesRealtime(projectId);
+  // The House Issue. Fail-closed: off, or still loading, is today's house and
+  // makes no plate read.
+  const editionFlag = useFeatureFlag('client-edition-page');
+  const editionOn = editionFlag.value && !editionFlag.isLoading;
+  const editorialQuery = useClientEditorial(projectId, editorial, editionOn);
+  const issue = useHouseIssue(editionOn ? editorialQuery.data : null);
 
   // ── the studio's own letters ───────────────────────────────────────────────
   // An invoice drawn against no house at all (ruling S1) belongs to the
@@ -1561,6 +1586,11 @@ export function Threshold({
     : null;
 
   let body: ReactNode;
+  // The House Issue's chapter heads, numbered in the order each branch prints
+  // its sections. Null with the edition off: `withChapter` hands back the
+  // section itself and the page is today's tree.
+  let chapters: ReturnType<typeof editionChapters> | null = null;
+  const earlierShown = model.previously.length > 0 || hasRecord;
 
   // NEVER REVERSE. The house speaks only once every source it speaks FROM has
   // answered — the papers, the goods, the ledger, the rooms and the letter.
@@ -1597,16 +1627,19 @@ export function Threshold({
       </>
     );
   } else if (model.groundFloor && !roomsUnread) {
+    chapters = issue
+      ? editionChapters(issue, ['doorstep', model.note && 'note', 'approvals', 'road', earlierShown && 'previously', 'mat'])
+      : null;
     body = (
       <GroundFloor
-        doorstep={doorstep}
-        note={note}
-        enclosures={asks}
-        bench={road}
+        doorstep={withChapter(chapters, 'doorstep', doorstep)}
+        note={withChapter(chapters, 'note', note)}
+        enclosures={withChapter(chapters, 'approvals', asks)}
+        bench={withChapter(chapters, 'road', road)}
         toll={letterbox}
-        previously={previouslySection}
+        previously={withChapter(chapters, 'previously', previouslySection)}
         ahead={phases.future}
-        mat={mat}
+        mat={withChapter(chapters, 'mat', mat)}
       />
     );
   } else {
@@ -1649,6 +1682,18 @@ export function Threshold({
         : []),
       { id: "mat", label: "Project details and documents", short: "project details and documents" },
     ];
+    chapters = issue
+      ? editionChapters(issue, [
+          'doorstep',
+          'approvals',
+          !roomsUnread && 'key',
+          ...model.bands.map((band) => band.anchor),
+          'road',
+          model.note && 'note',
+          earlierShown && 'previously',
+          'mat',
+        ])
+      : null;
 
     body = (
       // Path B's sheet: a 170px pole rail on the LEFT, sticky, standing beside
@@ -1668,8 +1713,8 @@ export function Threshold({
         </div>
 
         <div className="min-w-0">
-          {doorstep}
-          {asks}
+          {withChapter(chapters, 'doorstep', doorstep)}
+          {withChapter(chapters, 'approvals', asks)}
           {roomsUnread ? (
             <p
               data-testid="threshold-rooms-error"
@@ -1678,14 +1723,19 @@ export function Threshold({
               Couldn&rsquo;t load your rooms. Please refresh.
             </p>
           ) : (
-            <PlanKey
-              geometry={planKeyGeometry(rooms ?? [], model.marks)}
-              marks={model.marks}
-              keySentence={keySentence(model.drawnMarkCount)}
-            />
+            withChapter(
+              chapters,
+              'key',
+              <PlanKey
+                geometry={planKeyGeometry(rooms ?? [], model.marks)}
+                marks={model.marks}
+                keySentence={keySentence(model.drawnMarkCount)}
+              />,
+            )
           )}
 
-          {model.bands.map((band) => (
+          {model.bands.map((band) => {
+            const bandNode = (
             <RoomBand
               key={band.roomId}
               band={band}
@@ -1713,7 +1763,18 @@ export function Threshold({
                 projectStatus={project.status}
               />
             </RoomBand>
-          ))}
+            );
+            // The room's plates stand above its band, never inside it: the
+            // band is a dimmable unit and a plate never dims.
+            return issue ? (
+              <Fragment key={band.roomId}>
+                <RoomOpening issue={issue} chapters={chapters} roomId={band.roomId} />
+                {bandNode}
+              </Fragment>
+            ) : (
+              bandNode
+            );
+          })}
 
           {user?.id && (
             <StrayCaptures
@@ -1724,10 +1785,10 @@ export function Threshold({
             />
           )}
 
-          {road}
-          {note}
-          {previouslySection}
-          {mat}
+          {withChapter(chapters, 'road', road)}
+          {withChapter(chapters, 'note', note)}
+          {withChapter(chapters, 'previously', previouslySection)}
+          {withChapter(chapters, 'mat', mat)}
         </div>
       </div>
     );
@@ -1740,6 +1801,27 @@ export function Threshold({
           that faded with the page would be an index of nothing. Every landmark
           is answered from what the branches below actually drew. */}
       <ArrivalLine>{ARRIVAL_PURPOSE}</ArrivalLine>
+      {/* The House Issue's cover and its three standing rows, outside the
+          dimming like the index under them. The rows wait for the house to
+          speak: an early "Nothing waiting on you" would be taken back. */}
+      {issue && (
+        <HouseIssueArrival
+          issue={issue}
+          chapters={chapters ?? new Map()}
+          rows={
+            houseHasSpoken
+              ? {
+                  letterbox: letterboxRow(model.invoices),
+                  approvals: approvalsRow({ asks: doorstepAsks, gate: firstGateAnchor, readFailed: projectApprovalsError }),
+                  ledger: ledgerRow(model.invoices),
+                }
+              : null
+          }
+          plan={roomsUnread ? null : planKeyGeometry(rooms ?? [], model.marks)}
+          studioName={studioName}
+          today={today}
+        />
+      )}
       <LandmarkLedger
         invoices={houseHasSpoken}
         approvals={houseHasSpoken ? (whatNeedsYou ?? 'approvals') : null}
@@ -1756,7 +1838,9 @@ export function Threshold({
         documents={houseHasSpoken}
         contact={houseHasSpoken ? contactLandmark : null}
       />
+      {/* The standing rows say this in the edition; twice would be noise. */}
       {houseHasSpoken &&
+        !issue &&
         invoiceArrivalLines(model.invoices).map((line) => (
           <ArrivalLine key={line} testId="arrival-invoices">
             {line}

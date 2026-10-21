@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 
+import { HeroPreloadLinks } from '@/components/threshold/editorial/house-issue';
 import { Threshold } from '@/components/threshold/threshold';
+import { fetchClientEditorial, heroPreloads } from '@/lib/data/client-editorial';
 import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
 import { toOtherHouses } from '@/lib/threshold/other-houses';
 
@@ -10,9 +12,11 @@ interface ProjectPageProps {
 
 export default async function ProjectPage({ params }: ProjectPageProps) {
   const { projectId } = await params;
-  const [projects, projectView] = await Promise.all([
+  const [projects, projectView, editorial] = await Promise.all([
     fetchClientProjects(),
     fetchClientProjectView(projectId),
+    // The House Issue's plates; null never blocks the house.
+    fetchClientEditorial(projectId),
   ]);
 
   const headerProject = projects.find((project) => project.id === projectId);
@@ -25,6 +29,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
+      <HeroPreloadLinks preloads={heroPreloads(editorial)} />
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
         {/* The page stays server-side: same fetch, same notFound(). Only the
             surface itself is a client component, because the house reads its
@@ -34,6 +39,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           project={project}
           milestones={milestones}
           otherHouses={toOtherHouses(projects, project.id)}
+          editorial={editorial}
         />
       </main>
     </div>

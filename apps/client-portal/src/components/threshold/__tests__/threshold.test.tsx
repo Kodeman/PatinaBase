@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 
 import type { InboxNotification, Invoice, ProjectApprovalReview, Proposal } from '@patina/supabase';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
+import type { ClientProjectEditorial } from '@/lib/editorial/types';
 import { adaptClientSelections, adaptProjectCommercialSummary, type ClientSelection } from '@/lib/commercial-documents';
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
 import { toNotices } from '@/lib/threshold/correspondence';
@@ -207,6 +208,21 @@ jest.mock('@/lib/analytics/events', () => ({
   proposalClientEvents: { signed: jest.fn() },
 }));
 
+// `client-edition-page` (The House Issue). A plain function, not a jest.fn,
+// so `resetMocks` leaves it alone; every test reads the fail-closed default
+// unless it sets the state itself.
+let mockEditionFlag = { value: false, isLoading: false };
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (name: string) =>
+    name === 'client-edition-page' ? mockEditionFlag : { value: false, isLoading: false },
+}));
+afterEach(() => {
+  mockEditionFlag = { value: false, isLoading: false };
+});
+// The plate read's own client (use-client-editorial): a flag-off page must
+// never construct it.
+jest.mock('@patina/supabase/client', () => ({ createBrowserClient: jest.fn() }));
+
 import {
   useClientInvoices,
   useConfirmProjectApprovalReview,
@@ -257,6 +273,7 @@ import {
   useRecordProjectReviewFeedback,
 } from '@/hooks/use-commercial-client';
 
+import { createBrowserClient as createEditorialClient } from '@patina/supabase/client';
 import { HOLD_MS } from '../instruments/scored-action';
 import { LetterboxDoor } from '../letterbox-door';
 import { Threshold } from '../threshold';
@@ -527,6 +544,7 @@ function invoiceRow(id: string): HTMLElement {
 function renderThreshold(
   milestones: MilestoneDetail[] = MILESTONES,
   otherHouses: { id: string; name: string }[] = [],
+  editorial?: ClientProjectEditorial | null,
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -538,6 +556,7 @@ function renderThreshold(
         project={PROJECT}
         milestones={milestones}
         otherHouses={otherHouses}
+        {...(editorial === undefined ? {} : { editorial })}
       />
     </QueryClientProvider>,
   );
@@ -3858,5 +3877,94 @@ describe('Threshold — Project progress and designer help (CPUX-06)', () => {
       expect(within(waiting).queryByRole('link')).toBeNull();
       expect(progressRow(container, 'progress-next')).not.toHaveTextContent('Your response to');
     });
+  });
+});
+
+describe('Threshold — The House Issue flag (client-edition-page)', () => {
+  const PLATE_CROPS = {
+    wide: { rect: [0, 0, 2400, 1500] as const, widths: [1280, 1600, 2048] },
+    cover_phone: { rect: [300, 0, 1720, 1500] as const, widths: [640, 828, 1080] },
+    wide32: { rect: [0, 0, 2400, 1600] as const, widths: [768, 1024, 1600] },
+  };
+  const EDITORIAL: ClientProjectEditorial = {
+    project: {
+      id: PROJECT_ID,
+      name: 'Harper house',
+      phase: 'procurement',
+      targetDate: null,
+      showMakers: false,
+      studio: { name: 'Fieldwork Studio', town: null },
+    } as unknown as ClientProjectEditorial['project'],
+    rooms: [LIBRARY, ENTRY].map((id, i) => ({
+      id,
+      name: ROOMS[i].name,
+      anchor: `room-${id}`,
+      conceptAssetId: null,
+      scanAssetIds: [],
+      items: [],
+    })),
+    assets: [
+      {
+        id: 'plate-1',
+        sha256: 'a'.repeat(64),
+        sourceKind: 'upload',
+        width: 2400,
+        height: 1600,
+        ground: 'scene',
+        dominantHex: '#6B4F3A',
+        lqip: null,
+        focal: null,
+        subjectBox: null,
+        crops: PLATE_CROPS,
+        caption: { what: 'The library', whose: 'Fieldwork Studio', when: '14 October 2026' },
+        alt: 'The library, shelves lit from the window',
+      },
+    ],
+    palette: [],
+    boards: [],
+    sheets: [],
+  };
+
+  // The flag off, and the flag still loading: the edition's read changes
+  // nothing — the same markup, byte for byte, as a page given no read at all.
+  it.each([
+    ['off', { value: false, isLoading: false }],
+    ['loading', { value: false, isLoading: true }],
+    ['on but still loading', { value: true, isLoading: true }],
+  ])('flag %s: the page is today’s house, unchanged, and makes no plate read', (_label, flag) => {
+    mockEditionFlag = flag;
+    // React's useId counter runs on across roots (`_r_1m_` then `_r_2c_`);
+    // every other byte must match.
+    const markup = (html: string) => html.replace(/_r_[0-9a-z]+_/g, '_r_id_');
+    const today = renderThreshold(MILESTONES, [], undefined);
+    const todayHtml = markup(today.container.innerHTML);
+    today.unmount();
+
+    const withRead = renderThreshold(MILESTONES, [], EDITORIAL);
+    expect(markup(withRead.container.innerHTML)).toBe(todayHtml);
+    expect(withRead.container.querySelector('[data-testid="house-issue-hero"], .ed-chapter-head, .ed-standing')).toBeNull();
+    expect(createEditorialClient).not.toHaveBeenCalled();
+  });
+
+  it('flag on: the hero stands between the doorplate and the house, and every anchor stays', () => {
+    mockEditionFlag = { value: true, isLoading: false };
+    const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
+    const hero = screen.getByTestId('house-issue-hero');
+    const doorplate = container.querySelector('#doorplate')!;
+    const doorstep = container.querySelector('#doorstep')!;
+    expect(doorplate.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hero.compareDocumentPosition(doorstep) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // A plate never sits inside a section the since-yesterday light dims.
+    expect(container.querySelector('[data-dimmable] .ed-plate')).toBeNull();
+    expect(container.querySelectorAll('.ed-plate').length).toBeGreaterThan(0);
+    for (const id of ['doorstep', 'ledger', 'letterbox', 'approvals', 'key', `room-${LIBRARY}`, 'road', 'note', 'previously', 'mat']) {
+      expect(container.querySelectorAll(`[id="${id}"]`)).toHaveLength(1);
+    }
+    expect([...container.querySelectorAll('[data-standing-row]')].map((a) => a.getAttribute('href'))).toEqual([
+      '#letterbox',
+      '#approvals',
+      '#ledger',
+    ]);
+    expect(container.querySelectorAll('.ed-chapter-head').length).toBeGreaterThan(0);
   });
 });

@@ -56,6 +56,13 @@ const withPWA =
 const nextConfig = {
   reactStrictMode: true,
 
+  // Two dev servers run side by side during e2e — the shipped surface on :3002
+  // and the flag-overridden House Issue on :3102 (playwright.config.ts). They are
+  // the same app in the same directory, so without a separate build directory
+  // they would share `.next` and corrupt each other's chunks. Unset everywhere
+  // else, so normal dev and every build keep `.next`.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+
   // CRITICAL: Enable standalone output for Docker deployment
   output: 'standalone',
 
