@@ -8,6 +8,7 @@ import {
   useDecisionComments,
   useDecisionRealtime,
   useDecisionSnooze,
+  useMyProjectApprovalReviews,
   useRespondProjectApproval,
   useSetDecisionSnooze,
   type DecisionComment,
@@ -60,69 +61,157 @@ const LETTER_DATE = new Intl.DateTimeFormat('en-GB', {
 
 /** The house sentences for a refused act. An RPC's own words never reach the page. */
 const CONFIRM_REFUSED =
-  'The artifact changed or the review could not be confirmed. Refresh and review it again.';
+  "This edition changed, or the review couldn't be confirmed. Refresh the review and read it again.";
 const RESPOND_REFUSED = 'This approval changed while it was open. Refresh before responding.';
 /**
- * The note IS the return: an edition sent back with nothing said about it is
- * a designer's dead end. So a note that does not land stops the outcome, and
- * says so without blaming her for it.
+ * The note IS the change request: an edition sent back with nothing said
+ * about it is a designer's dead end. So a note that does not land stops the
+ * outcome, and says so without blaming her for it.
  */
 const NOTE_REFUSED =
-  'The note could not be sent, so the edition was not returned. Your note is still here; try again.';
+  "We couldn't post your note, so your change request wasn't sent. Your text is still here. Press and hold Send change request to try again.";
+/** The note landed and the outcome did not: a retry records it, and only it. */
+function notePostedRefused(designer: string | null): string {
+  return `Your note is in the discussion with ${
+    designer ?? 'your designer'
+  }, but the change request didn't record. Trying again records it without posting your note twice.`;
+}
+
+/* CPUX-04 · the review leg, said in plain words. */
+const REVIEW_CONFIRMED =
+  'Your review is confirmed. Your designer prepares the approval next. Nothing is waiting on you.';
+/** Missing authority: the act cannot be offered, so the recovery is. */
+const REVIEW_UNCONFIRMABLE =
+  "We couldn't load the information needed to confirm this review. Refresh the review or contact your designer.";
+
+/* CPUX-04 · what a missing input asks for, before and after an attempt. */
+const NAME_HELP = 'Type your full name before approving.';
+const NOTE_HELP = "Tell your designer what you'd like changed before sending.";
 
 /**
- * Three doors, one weight. The three outcomes are peers — a house that ranks
- * them has already answered for her — so they carry ONE variant between them;
- * the old primary / secondary / tertiary ranking is retired here (P-16).
+ * Three answers, one weight. The three outcomes are peers — a house that ranks
+ * them has already answered for her — so they are three `choice` toggles of
+ * one face (P-16, US-45 A1): green outline, forest once picked. Picking one
+ * records nothing; the held terminal act under its consequence does.
  *
- * Each label is a verb and each consequence says what the verb does, so the
- * act is legible before it is taken. The telemetry keys are unchanged and
- * deliberately so: they are the same events the retired detail page emitted,
- * and renaming them would break the series, not the copy.
+ * The telemetry keys are unchanged and deliberately so: they are the same
+ * events the retired detail page emitted, and renaming them would break the
+ * series, not the copy. The domain values are unchanged too — "Request
+ * changes" is `changes_requested`, "Pause to discuss" is `needs_discussion`.
  */
-const OUTCOME_VARIANT = 'secondary' as const;
-
 const OUTCOME_ACTS: Array<{
   outcome: ProjectApprovalOutcome;
   /**
    * The act that WRITES the outcome. Choosing one records nothing, so the
    * outcome's own event belongs on the submit — a client who considers
-   * returning an edition and then approves it must not have emitted
+   * requesting changes and then approves must not have emitted
    * `decline_project_approval`.
    */
   writeKey: string;
   /** Choosing an outcome to read its consequence: a selection, not a record. */
   selectKey: string;
+  /** The choice itself. */
   label: string;
-  consequence: string;
+  /** The held act that records it (CPUX-04's final action label). */
+  terminal: string;
+  /** "Press and hold to {verb}." */
+  verb: string;
+  /** The visible reason the terminal cannot be taken yet, when it needs input. */
+  unavailable: string | null;
 }> = [
   {
     outcome: 'approved',
     writeKey: 'approve_project_approval',
     selectKey: 'consider_approve_project_approval',
-    label: 'Approve',
-    consequence: 'Accept this exact edition and its stated impacts.',
+    label: 'Approve this edition',
+    terminal: 'Approve this edition',
+    verb: 'approve this edition',
+    unavailable: 'Unavailable until your full name is typed above.',
   },
   {
     outcome: 'changes_requested',
     writeKey: 'decline_project_approval',
     selectKey: 'consider_decline_project_approval',
-    label: 'Return',
-    consequence: 'Send this edition back for revision and a new approval request.',
+    label: 'Request changes',
+    terminal: 'Send change request',
+    verb: 'send your change request',
+    unavailable: 'Unavailable until your note is written above.',
   },
   {
     outcome: 'needs_discussion',
     writeKey: 'question_project_approval',
     selectKey: 'consider_question_project_approval',
-    label: 'Hold',
-    consequence: 'Keep this open while you and your designer talk it through.',
+    label: 'Pause to discuss',
+    terminal: 'Confirm pause',
+    verb: 'confirm the pause',
+    unavailable: null,
   },
 ];
+
+/**
+ * What the chosen answer does, said directly above the act that records it
+ * (R141, CPUX-04 §2) — armed or not.
+ */
+export function outcomeConsequence(
+  outcome: ProjectApprovalOutcome,
+  {
+    edition,
+    title,
+    amount,
+    designer,
+  }: { edition: number; title: string; amount: string | null; designer: string | null },
+): string {
+  switch (outcome) {
+    case 'approved':
+      return `Approving signs edition ${edition} of ${title}${
+        amount ? ` at ${amount}` : ''
+      }, exactly as shown, and accepts its stated impacts. It doesn't charge you; any invoice arrives on its own.`;
+    case 'changes_requested':
+      return `Sending posts your note to the discussion with ${
+        designer ?? 'your designer'
+      } and records that you've asked for changes. It doesn't approve edition ${edition}.`;
+    case 'needs_discussion':
+      return "This records that you want to pause and talk it through. It doesn't approve or reject the edition.";
+  }
+}
+
+/**
+ * The recorded response, in words (A3's record): the outcome, the day it was
+ * given, and — on an approval only — the name it was signed with. A record
+ * with no date is honest; a record with the wrong date is not.
+ */
+export function recordLine(
+  outcome: ProjectApprovalOutcome,
+  at: Date | null,
+  signedBy: string | null,
+): string {
+  const on = at ? legalDate(at) : null;
+  switch (outcome) {
+    case 'approved': {
+      const head = on ? `Approved on ${on}` : 'Approved';
+      return signedBy ? `${head} · Signed ${signedBy}` : head;
+    }
+    case 'changes_requested':
+      return on ? `Change request sent ${on}` : 'Change request sent';
+    case 'needs_discussion':
+      return on ? `Pause recorded ${on}` : 'Pause recorded';
+  }
+}
+
+/** The name a recorded approval was signed with, when the row carries one. */
+function signedNameOf(approval: Pick<ProjectApprovalReview, 'clientSignature'>): string | null {
+  const name = approval.clientSignature;
+  return typeof name === 'string' && name.trim().length > 0 ? name.trim() : null;
+}
 
 const EYEBROW_CLASS =
   'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]';
 const SECTION_CLASS =
   'relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]';
+/** An open ask sits in the deck's framed card (A3); a closed record does not. */
+const ASK_CLASS = 'cp-card relative mt-8 px-5 pb-6 pt-3 text-[var(--text-primary)] sm:px-6';
+/** Instructions she reads before she acts: the house's 16 px body (CPUX-07). */
+const BODY_CLASS = 'max-w-[52ch] text-[16px] leading-[1.55] text-[var(--text-body)]';
 
 /**
  * Who a comment that is not the client's own is from. The studio answers as
@@ -762,16 +851,30 @@ export function ApprovalReceipt({
       >
         {approval.question}
       </h3>
-      <p className="mt-3">
-        <Stamp
-          data-testid="approval-receipt-stamp"
-          state={stampStateForApproval(approval)}
-          since={stampedAt}
-          dateLabel={legalDate(stampedAt)}
-        >
-          {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-        </Stamp>
-      </p>
+      <div data-testid="approval-receipt-record" className="cp-record mt-3 max-w-[52ch]">
+        <p>
+          <Stamp
+            data-testid="approval-receipt-stamp"
+            state={stampStateForApproval(approval)}
+            since={stampedAt}
+            dateLabel={legalDate(stampedAt)}
+          >
+            {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
+          </Stamp>
+        </p>
+        {approval.outcome !== null && (
+          <p
+            data-testid="approval-receipt-record-line"
+            className="mt-2 text-[15px] leading-normal"
+          >
+            {recordLine(
+              approval.outcome,
+              stampedAt,
+              approval.outcome === 'approved' ? signedNameOf(approval) : null,
+            )}
+          </p>
+        )}
+      </div>
       {forward && (
         <p className="mt-3">
           <a
@@ -1123,6 +1226,64 @@ export function ApprovalRecords({
   );
 }
 
+/**
+ * CPUX-04 §7. A read-only way back when the review cannot be confirmed: it
+ * re-reads the same caller-global approvals the house drew this ask from
+ * (`useMyProjectApprovalReviews`, the query the Threshold already holds) and
+ * submits nothing. A refreshed row that brings its authority back offers the
+ * review act again; one that brings a different edition shows that edition.
+ * Never a guessed revision, never a retry of the confirm itself.
+ */
+function RefreshReview() {
+  const reviews = useMyProjectApprovalReviews();
+  const [refreshing, setRefreshing] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+
+  async function refresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setSaid(null);
+    try {
+      const result = await reviews.refetch();
+      setSaid(
+        result.isError
+          ? "The review couldn't be refreshed just now. Try again, or contact your designer."
+          : 'Review refreshed.',
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  return (
+    <div className="mt-3" data-testid="approval-refresh-review">
+      <ScoredAction
+        actionKey="refresh_project_approval_review"
+        regionKey="doorstep"
+        surfaceKey="the_threshold"
+        variant="secondary"
+        loading={refreshing}
+        loadingLabel="Refreshing"
+        onClick={refresh}
+      >
+        Refresh review
+      </ScoredAction>
+      <p className="mt-2 max-w-[52ch] text-[15px] leading-normal text-[var(--text-body)]">
+        {"Refreshing only reloads the review. It doesn't confirm or send anything."}
+      </p>
+      {said && (
+        <p
+          role="status"
+          data-testid="approval-refresh-said"
+          className="mt-1.5 max-w-[52ch] text-[15px] leading-normal text-[var(--text-body)]"
+        >
+          {said}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export interface ApprovalAskProps {
   approval: ProjectApprovalReview;
   /**
@@ -1164,12 +1325,21 @@ export function ApprovalAsk({
   const [justAnswered, setJustAnswered] = useState<{
     outcome: ProjectApprovalOutcome;
     at: Date;
+    /** The name the approval was signed with this visit; null on the other two. */
+    signedName: string | null;
   } | null>(null);
   // The outcome the client has chosen but not yet recorded. An outcome is
   // terminal, so it takes two beats: the act names its consequence, and the
   // client submits it.
   const [chosen, setChosen] = useState<ProjectApprovalOutcome | null>(null);
+  // CPUX-04 §5. A pick moves her to what it asks of her — the name, the note,
+  // or the step's own heading — and "Choose another response" hands her back
+  // to the choice she made. Only a pick moves focus; a first paint never does.
+  const focusAfterPick = useRef(false);
+  const priorChoice = useRef<HTMLElement | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // A refused confirm keeps the act and offers the read-only refresh beside it.
+  const [confirmRefused, setConfirmRefused] = useState(false);
   // The discussion composer itself, once it is on the page. Held as state
   // rather than a ref because the act that puts her in it may only be drawn
   // when there is something to put her in.
@@ -1256,6 +1426,44 @@ export function ApprovalAsk({
   // with the wrong date is not.
   const stampedAt = parseSourceDate(approval.respondedAt) ?? justAnswered?.at ?? null;
   const chosenAct = OUTCOME_ACTS.find((act) => act.outcome === chosen) ?? null;
+  // The ids a pick, a refusal and the record line thread through.
+  const choiceId = (outcome: ProjectApprovalOutcome) =>
+    `approval-choice-${outcome}-${approval.decisionId}`;
+  const signatureId = `approval-signature-${approval.decisionId}`;
+  const noteId = `approval-change-note-${approval.decisionId}`;
+  const stepHeadingId = `approval-step-${approval.decisionId}`;
+  const consequenceId = `approval-consequence-${approval.decisionId}`;
+  const unmetId = `approval-unmet-${approval.decisionId}`;
+  const reviewConsequenceId = `approval-review-consequence-${approval.decisionId}`;
+
+  const stepTarget = (outcome: ProjectApprovalOutcome) =>
+    outcome === 'approved'
+      ? signatureId
+      : outcome === 'changes_requested'
+        ? noteId
+        : stepHeadingId;
+
+  useEffect(() => {
+    if (!focusAfterPick.current || chosen === null) return;
+    focusAfterPick.current = false;
+    document.getElementById(stepTarget(chosen))?.focus();
+    // `stepTarget` is derived from ids that only change with the decision.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosen]);
+
+  function pick(outcome: ProjectApprovalOutcome) {
+    if (outcome === chosen) {
+      document.getElementById(stepTarget(outcome))?.focus();
+      return;
+    }
+    focusAfterPick.current = true;
+    setChosen(outcome);
+  }
+
+  function chooseAnother() {
+    priorChoice.current = chosen ? document.getElementById(choiceId(chosen)) : null;
+    setChosen(null);
+  }
 
   /**
    * R11's baseline, PRODUCED rather than read off a field no migration
@@ -1284,6 +1492,16 @@ export function ApprovalAsk({
     approval.costCentsDelta !== 0 &&
     budgetIsTheEdition(editionBudget.data, approval)
       ? editionBudget.data.targetTotalCents - approval.costCentsDelta
+      : null;
+  /**
+   * The amount the approve act carries (R139, A1), and only where the surface
+   * holds one that IS this edition: a budget edition's own total, under the
+   * same fail-closed match. Every other artifact names no amount on the act —
+   * a delta is not what she signs, and nothing else on the projection is.
+   */
+  const editionAmount =
+    isBudgetEdition && budgetIsTheEdition(editionBudget.data, approval)
+      ? moneyExact(editionBudget.data.targetTotalCents, editionBudget.data.currency)
       : null;
   /** The designer, named where the copy has room for a name. */
   const designer = designerGivenName?.trim() || null;
@@ -1325,6 +1543,7 @@ export function ApprovalAsk({
     inFlight.current = true;
     setError(null);
     setNotice(null);
+    setConfirmRefused(false);
     try {
       await confirmReview.mutateAsync({
         projectId: approval.projectId,
@@ -1333,7 +1552,7 @@ export function ApprovalAsk({
         artifactChecksum: approval.artifactChecksum,
         idempotencyKey: crypto.randomUUID(),
       });
-      setNotice('Review confirmed for this exact artifact. Your designer can now issue it.');
+      setNotice(REVIEW_CONFIRMED);
       // Without this the refetch takes the ask off the doorstep mid-ceremony:
       // a confirmed draft is no longer client-actionable, and the client would
       // watch the question, the impact and the thread they were reading
@@ -1341,6 +1560,7 @@ export function ApprovalAsk({
       onAnswered?.(approval.decisionId);
     } catch (cause) {
       setError(refusalSentence(cause, CONFIRM_REFUSED));
+      setConfirmRefused(true);
     } finally {
       inFlight.current = false;
     }
@@ -1394,10 +1614,21 @@ export function ApprovalAsk({
         clientSignature: signing ? signedByName : undefined,
         clientConsentMethod: signing ? 'electronic_signature' : 'click_through',
       });
-      setJustAnswered({ outcome: chosen, at: new Date() });
+      setJustAnswered({
+        outcome: chosen,
+        at: new Date(),
+        signedName: signing ? signedByName : null,
+      });
       onAnswered?.(approval.decisionId);
     } catch (cause) {
-      setError(refusalSentence(cause, RESPOND_REFUSED));
+      setError(
+        refusalSentence(
+          cause,
+          chosen === 'changes_requested' && notePosted.current === note
+            ? notePostedRefused(designer)
+            : RESPOND_REFUSED,
+        ),
+      );
     } finally {
       inFlight.current = false;
     }
@@ -1428,6 +1659,31 @@ export function ApprovalAsk({
   const changedSince =
     answeredBefore && continuation ? whatChangedSince(predecessor, approval) : null;
 
+  /** The chosen answer still needs her input: the name, or the note. */
+  const unmet =
+    (chosen === 'approved' && !signatureIsComplete(signature)) ||
+    (chosen === 'changes_requested' && changeNote.trim().length === 0);
+
+  /**
+   * CPUX-04: asking a question is its own act, and it records nothing. It
+   * puts her in the discussion composer already on the page; only that
+   * composer's own button sends anything. Drawn only once the composer exists,
+   * so it can never be a button that does nothing.
+   */
+  const askQuestion = composer ? (
+    <div className="mt-3">
+      <ScoredAction
+        actionKey="ask_designer_about_approval"
+        regionKey="doorstep"
+        surfaceKey="the_threshold"
+        variant="secondary"
+        onClick={() => composer.focus()}
+      >
+        {`Ask ${designer ?? 'your designer'} a question`}
+      </ScoredAction>
+    </div>
+  ) : null;
+
   // `data-never-dim` is spared the Since-Yesterday dim only while something is
   // actually owed on it: a gate she has reviewed and that now waits on the
   // studio owes her nothing, and reads like the other two gates do.
@@ -1440,7 +1696,7 @@ export function ApprovalAsk({
         : { 'data-never-dim': '' })}
       data-testid="doorstep-approval"
       aria-labelledby={`approval-gate-${approval.decisionId}`}
-      className={SECTION_CLASS}
+      className={ASK_CLASS}
     >
       <p className={`pt-2.5 ${EYEBROW_CLASS}`}>
         {!viewerAnswers
@@ -1573,20 +1829,33 @@ export function ApprovalAsk({
         </section>
       )}
 
+      {/* A3's record: the stamp and the response in words, dated, signed
+          where it was signed — the answer she gave, not another offer. */}
       {recordedOutcome && (
-        <p className="mt-4">
-          <Stamp
-            data-testid="approval-stamp"
-            state={stampStateForApproval({
-              disposition: approval.disposition,
-              outcome: recordedOutcome,
-            })}
-            since={stampedAt}
-            dateLabel={legalDate(stampedAt)}
-          >
-            {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-          </Stamp>
-        </p>
+        <div data-testid="approval-record" className="cp-record mt-4 max-w-[52ch]">
+          <p>
+            <Stamp
+              data-testid="approval-stamp"
+              state={stampStateForApproval({
+                disposition: approval.disposition,
+                outcome: recordedOutcome,
+              })}
+              since={stampedAt}
+              dateLabel={legalDate(stampedAt)}
+            >
+              {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
+            </Stamp>
+          </p>
+          <p data-testid="approval-record-line" className="mt-2 text-[15px] leading-normal">
+            {recordLine(
+              recordedOutcome,
+              stampedAt,
+              recordedOutcome === 'approved'
+                ? (signedNameOf(approval) ?? justAnswered?.signedName ?? null)
+                : null,
+            )}
+          </p>
+        </div>
       )}
       {recordedOutcome && <KeepACopy decisionId={approval.decisionId} />}
 
@@ -1599,194 +1868,267 @@ export function ApprovalAsk({
             This one is answered by the person it was sent to.
           </p>
         )}
-        <p
-          data-testid="approval-review-count"
-          className="max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
-        >
-          {reviewStanding}
-        </p>
+        {/* Once the studio holds it, the line below says the review is in;
+            on a single review the count would only say it twice. */}
+        {!(awaitingStudioIssue && approval.requiredReviewCount <= 1) && (
+          <p data-testid="approval-review-count" className={BODY_CLASS}>
+            {reviewStanding}
+          </p>
+        )}
 
         {canConfirm && (
           <div className="mt-2.5">
+            <p data-testid="approval-review-explainer" className={BODY_CLASS}>
+              {"Read the edition, then confirm you've reviewed it. This isn't the approval; that comes next."}
+            </p>
+            {/* R141 / CPUX-04 §2: what the act records, directly above it. */}
+            <p
+              id={reviewConsequenceId}
+              data-testid="approval-review-consequence"
+              className={`cp-note mt-4 ${BODY_CLASS}`}
+            >
+              {`Confirming records that you've read edition ${approval.artifactVersion} exactly as shown. It doesn't approve the edition; your designer prepares the approval next.`}
+            </p>
             {/* Held, not tapped (R1). The review METHOD is unchanged —
                 `portal_clickthrough`, because a hold is still a click-through
                 — so no migration rides with this one. */}
-            <HoldAction
-              actionKey="confirm_project_approval_review"
-              regionKey="doorstep"
-              surfaceKey="the_threshold"
-              variant="primary"
-              verb="confirm this exact edition"
-              loading={confirmReview.isPending}
-              loadingLabel="Confirming"
-              onHold={confirmExactEdition}
-            >
-              Review exact edition
-            </HoldAction>
+            <div className="mt-3">
+              <HoldAction
+                actionKey="confirm_project_approval_review"
+                regionKey="doorstep"
+                surfaceKey="the_threshold"
+                variant="primary"
+                verb="confirm this exact edition"
+                loading={confirmReview.isPending}
+                loadingLabel="Confirming"
+                aria-describedby={reviewConsequenceId}
+                onHold={confirmExactEdition}
+              >
+                Confirm review
+              </HoldAction>
+            </div>
+            <p className="mt-3 max-w-[52ch] text-[15px] leading-normal text-[var(--text-body)]">
+              No approval choices appear until your designer sends the approval.
+            </p>
+            {confirmRefused && <RefreshReview />}
           </div>
         )}
 
-        {/* The gate asserts a review it then refuses to accept — say why. */}
+        {/* The gate asserts a review it then refuses to accept — say why, in
+            words she can act on, and give her the way back: a read-only
+            refresh, and the designer. The failure itself stays classified
+            (`authorityRevision === null`); it is never guessed around. */}
         {confirmationUnavailable && (
-          <p
-            role="alert"
-            data-testid="approval-confirmation-unavailable"
-            className="mt-2.5 max-w-[52ch] border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-[1.62] text-[var(--text-body)]"
-          >
-            Review confirmation is temporarily unavailable. The frozen authority revision was
-            not supplied.
-          </p>
+          <div className="mt-2.5">
+            <p
+              role="alert"
+              data-testid="approval-confirmation-unavailable"
+              className={`border-t border-[var(--border-subtle)] pt-2 ${BODY_CLASS}`}
+            >
+              {REVIEW_UNCONFIRMABLE}
+            </p>
+            <RefreshReview />
+            {askQuestion}
+          </div>
         )}
 
         {/* Not a dead end: it says what she did, who has it, and that she is
             free — and no timing, because nothing on this row knows one. The
             act beside it is drawn only once the composer it opens is on the
-            page, so it can never be a button that does nothing. */}
-        {awaitingStudioIssue && (
-          <>
-            <p
-              data-testid="approval-awaiting-studio-issue"
-              className="mt-2.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
-            >
-              {viewerAnswers
-                ? `You've confirmed edition ${approval.artifactVersion}. ${
-                    designer ?? 'Your designer'
-                  } issues it next. Nothing is waiting on you.`
-                : `Edition ${approval.artifactVersion} is confirmed. ${
-                    designer ?? 'The designer'
-                  } issues it next.`}
-            </p>
-            {composer && (
-              <div className="mt-2.5">
-                <ScoredAction
-                  actionKey="ask_designer_about_approval"
-                  regionKey="doorstep"
-                  surfaceKey="the_threshold"
-                  variant="secondary"
-                  onClick={() => composer.focus()}
-                >
-                  {`Ask ${designer ?? 'your designer'} about this`}
-                </ScoredAction>
-              </div>
-            )}
-          </>
+            page, so it can never be a button that does nothing. The notice
+            her own act raised says the same sentence, so it is said once. */}
+        {awaitingStudioIssue && notice === null && (
+          <p data-testid="approval-awaiting-studio-issue" className={`mt-2.5 ${BODY_CLASS}`}>
+            {viewerAnswers
+              ? REVIEW_CONFIRMED
+              : `The review is confirmed. ${
+                  designer ?? 'Your designer'
+                } prepares the approval next.`}
+          </p>
         )}
+        {awaitingStudioIssue && askQuestion}
       </div>
 
       {canRespond && !justAnswered && (
-        <div className="mt-4" data-testid="approval-acts">
-          <p className="max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]">
-            Choose one outcome. Add questions or notes in Discussion below; comments do not
-            submit an outcome.
-          </p>
-
-          {chosenAct === null ? (
-            <div className="mt-2 flex flex-wrap items-center gap-x-6">
+        <div
+          className="mt-6 border-t border-[var(--border-subtle)] pt-5"
+          data-testid="approval-acts"
+        >
+          <div role="group" aria-labelledby={`approval-choices-${approval.decisionId}`}>
+            <h3
+              id={`approval-choices-${approval.decisionId}`}
+              className="font-heading text-[17px] font-medium leading-6"
+            >
+              Your response
+            </h3>
+            {/* Named on the picker itself: the answer is hers to give, and no
+                one else's name is on this page to give it. */}
+            <p data-testid="approval-who-answers" className={`mt-1.5 ${BODY_CLASS}`}>
+              {"You're the one who answers this. Choosing shows what happens next; nothing is recorded until you confirm."}
+            </p>
+            <div className="mt-3 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap">
               {OUTCOME_ACTS.map((act) => (
                 <ScoredAction
                   key={act.outcome}
+                  id={choiceId(act.outcome)}
                   actionKey={act.selectKey}
                   regionKey="doorstep"
                   surfaceKey="the_threshold"
-                  variant={OUTCOME_VARIANT}
-                  onClick={() => setChosen(act.outcome)}
+                  variant="choice"
+                  pressed={chosen === act.outcome}
+                  disabled={respond.isPending || changeNoteComment.isPending}
+                  onClick={() => pick(act.outcome)}
                 >
                   {act.label}
                 </ScoredAction>
               ))}
             </div>
-          ) : (
-            <div className="mt-2" data-testid="approval-confirm-outcome">
-              <p
-                data-testid="approval-consequence"
-                className="max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+          </div>
+
+          {chosenAct !== null && (
+            <div className="mt-5" data-testid="approval-confirm-outcome">
+              <h4
+                id={stepHeadingId}
+                tabIndex={-1}
+                data-testid="approval-step-heading"
+                className="font-heading text-[17px] font-medium leading-6 focus:outline-none"
               >
-                {`${chosenAct.label} · ${chosenAct.consequence}`}
-              </p>
+                {chosenAct.outcome === 'approved'
+                  ? `Sign edition ${approval.artifactVersion}`
+                  : chosenAct.outcome === 'changes_requested'
+                    ? 'Your change request'
+                    : 'Pause and talk it through'}
+              </h4>
               {/* The change note, required here and nowhere else (R10). It asks
                   for the thing the designer needs rather than reporting that a
-                  field is empty: no error state, no red, no "required" — the
-                  submit simply is not ready until she has said something. */}
+                  field is empty: no error state, no red, no "invalid" — the
+                  act simply is not ready until she has said something, and
+                  says so in the same words. */}
               {chosenAct.outcome === 'changes_requested' && (
                 <div className="mt-3 max-w-[52ch]">
                   <label
-                    className="block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
-                    htmlFor={`approval-change-note-${approval.decisionId}`}
+                    className="block text-[15px] font-medium leading-[1.4] text-[var(--text-primary)]"
+                    htmlFor={noteId}
                   >
-                    {`Tell ${designer ?? 'your designer'} what to change.`}
+                    {"What you'd like changed"}
                   </label>
+                  <p
+                    id={`${noteId}-help`}
+                    data-testid="approval-change-note-help"
+                    className="mt-1 text-[15px] leading-normal text-[var(--text-body)]"
+                  >
+                    {NOTE_HELP}
+                  </p>
                   <textarea
-                    id={`approval-change-note-${approval.decisionId}`}
+                    id={noteId}
                     data-testid="approval-change-note"
                     value={changeNote}
+                    aria-describedby={`${noteId}-help`}
+                    aria-required="true"
                     onChange={(event) => setChangeNote(event.target.value)}
                     rows={3}
                     className="mt-1.5 w-full resize-none border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.05rem] text-[var(--text-primary)]"
                   />
-                  <p
-                    data-testid="approval-change-note-help"
-                    className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]"
-                  >
-                    It goes into the discussion below with your answer.
-                  </p>
                 </div>
               )}
               {/* The name, on a rule, dated — on the approval and on nothing
                   else. R1 asks every terminal act for a held gesture; only the
-                  act that consents to the edition is also signed. Returning it
-                  and holding it consent to nothing, so they take no signature
-                  (ux/02:308). */}
+                  act that consents to the edition is also signed. Requesting
+                  changes and pausing consent to nothing, so they take no
+                  signature (ux/02:308). */}
               {chosenAct.outcome === 'approved' && (
                 <div className="mt-3">
                   <SignatureLine
-                    id={`approval-signature-${approval.decisionId}`}
+                    id={signatureId}
                     testId="approval-signature"
+                    label="Your full name"
+                    help={NAME_HELP}
+                    required
                     value={signature}
                     onChange={setSignature}
                     disabled={respond.isPending}
                   />
                 </div>
               )}
-              <div className="mt-3 flex flex-wrap items-center gap-x-6">
+              {chosenAct.outcome === 'needs_discussion' && (
+                <p className={`mt-2 ${BODY_CLASS}`}>
+                  {`There's nothing to fill in. Your response is recorded as a pause for discussion, and ${
+                    designer ?? 'your designer'
+                  } sees it with this approval.`}
+                </p>
+              )}
+              <p
+                id={consequenceId}
+                data-testid="approval-consequence"
+                className={`cp-note mt-4 ${BODY_CLASS}`}
+              >
+                {outcomeConsequence(chosenAct.outcome, {
+                  edition: approval.artifactVersion,
+                  title: approval.artifactTitle,
+                  amount: editionAmount,
+                  designer,
+                })}
+              </p>
+              <div className="mt-3">
                 <HoldAction
                   actionKey={chosenAct.writeKey}
                   regionKey="doorstep"
                   surfaceKey="the_threshold"
-                  variant="primary"
-                  verb={chosenAct.label.toLowerCase()}
+                  variant="terminal"
+                  verb={chosenAct.verb}
                   loading={respond.isPending || changeNoteComment.isPending}
                   loadingLabel="Recording response"
-                  disabled={
-                    (chosenAct.outcome === 'approved' &&
-                      !signatureIsComplete(signature)) ||
-                    (chosenAct.outcome === 'changes_requested' &&
-                      changeNote.trim().length === 0)
+                  disabled={unmet}
+                  unmetReason={
+                    chosenAct.outcome === 'approved'
+                      ? NAME_HELP
+                      : chosenAct.outcome === 'changes_requested'
+                        ? NOTE_HELP
+                        : undefined
                   }
+                  unmetFocusId={
+                    chosenAct.outcome === 'needs_discussion'
+                      ? undefined
+                      : stepTarget(chosenAct.outcome)
+                  }
+                  aria-describedby={[consequenceId, unmet ? unmetId : null]
+                    .filter(Boolean)
+                    .join(' ')}
+                  data-testid="approval-terminal"
                   onHold={submitResponse}
                 >
-                  Submit response
+                  {chosenAct.outcome === 'approved' && editionAmount
+                    ? `${chosenAct.terminal} · ${editionAmount}`
+                    : chosenAct.terminal}
                 </HoldAction>
+                {/* A3: the unavailable act wears the dashed face and says why
+                    in words, linked to it, before she tries it. */}
+                {unmet && chosenAct.unavailable && (
+                  <p
+                    id={unmetId}
+                    data-testid="approval-unavailable-reason"
+                    className="da-unavailable-reason"
+                  >
+                    {chosenAct.unavailable}
+                  </p>
+                )}
+              </div>
+              <div className="mt-3">
                 <ScoredAction
                   actionKey="cancel_project_approval_response"
                   regionKey="doorstep"
                   surfaceKey="the_threshold"
                   variant="tertiary"
-                  disabled={respond.isPending}
-                  onClick={() => setChosen(null)}
+                  disabled={respond.isPending || changeNoteComment.isPending}
+                  restoreFocusRef={priorChoice}
+                  onClick={chooseAnother}
                 >
-                  Choose another outcome
+                  Choose another response
                 </ScoredAction>
               </div>
             </div>
           )}
-          {/* Named on the picker itself: the answer is hers to give, and no
-              one else's name is on this page to give it. */}
-          <p
-            data-testid="approval-who-answers"
-            className="mt-3 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-muted)]"
-          >
-            {"You're the one who answers this."}
-          </p>
+          {askQuestion}
         </div>
       )}
 

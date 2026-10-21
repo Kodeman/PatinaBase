@@ -1023,7 +1023,7 @@ describe('Threshold — the doorstep’s own asks', () => {
     expect(plate).not.toHaveTextContent('Issued');
     expect(gate).toHaveTextContent('Due 20 August');
     // The ask is answered where it stands — no link off the page.
-    expect(screen.getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^approve this edition$/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /respond/i })).not.toBeInTheDocument();
   });
 
@@ -1040,7 +1040,7 @@ describe('Threshold — the doorstep’s own asks', () => {
       'Your approval · read the edition first',
     );
     expect(
-      screen.getByRole('button', { name: /review exact edition/i }),
+      screen.getByRole('button', { name: /^confirm review$/i }),
     ).toBeInTheDocument();
   });
 
@@ -1069,9 +1069,9 @@ describe('Threshold — the doorstep’s own asks', () => {
     ]);
 
     expect(screen.getByTestId('approval-awaiting-studio-issue')).toHaveTextContent(
-      "You've confirmed edition 3. Nora issues it next. Nothing is waiting on you.",
+      'Your review is confirmed. Your designer prepares the approval next. Nothing is waiting on you.',
     );
-    expect(screen.getByRole('button', { name: /ask nora about this/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ask nora a question/i })).toBeInTheDocument();
     expect(screen.getByTestId('approval-discussion')).toHaveTextContent(
       'Nora · Quist Interiors',
     );

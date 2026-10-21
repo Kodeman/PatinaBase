@@ -285,7 +285,7 @@ describe('DoorGate', () => {
 
     signWith();
     expect(signAction()).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByTestId('door-hint')).toHaveTextContent('Drawing this paper.');
+    expect(screen.getByTestId('door-hint')).toHaveTextContent('Loading document');
   });
 
   it('does not offer the act when the paper could not be read', () => {
@@ -294,7 +294,7 @@ describe('DoorGate', () => {
 
     signWith();
     expect(signAction()).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByTestId('door-hint')).toHaveTextContent('could not be drawn');
+    expect(screen.getByTestId('door-hint')).toHaveTextContent("couldn't be loaded");
   });
 
   it('signs on a ruled line with the date beside it, and says so once', () => {

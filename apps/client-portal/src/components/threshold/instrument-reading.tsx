@@ -34,7 +34,7 @@ export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
         data-testid="instrument-reading-drawing"
         className="mt-3 text-[15px] leading-normal text-[var(--text-muted)]"
       >
-        Drawing this paper.
+        Loading document
       </p>
     );
   }
@@ -48,7 +48,7 @@ export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
         data-testid="instrument-reading-refused"
         className="mt-3 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]"
       >
-        This paper could not be drawn just now. Reload to try again.
+        {"This document couldn't be loaded just now. Refresh the page to try again."}
       </p>
     );
   }
@@ -62,7 +62,7 @@ export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
         data-testid="instrument-reading-absent"
         className="mt-3 text-[15px] leading-normal text-[var(--text-muted)]"
       >
-        This paper is not on file for you. Ask your studio for a copy of it.
+        {"This document isn't available. Contact your designer for help."}
       </p>
     );
   }
@@ -73,7 +73,7 @@ export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
         data-testid="instrument-reading-unprinted"
         className="mt-3 text-[15px] leading-normal text-[var(--text-muted)]"
       >
-        This is an older paper. Ask your studio for a copy of it.
+        This is an older document. Contact your designer for a copy.
       </p>
     );
   }

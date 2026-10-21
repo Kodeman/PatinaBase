@@ -835,8 +835,8 @@ export function DoorGate({
                         ? 'This paper is past its date. Ask your studio to reissue it.'
                         : !drawn
                         ? bundle.isError
-                          ? 'This paper could not be drawn just now. Reload to try again.'
-                          : 'Drawing this paper.'
+                          ? "This document couldn't be loaded just now. Refresh the page to try again."
+                          : 'Loading document'
                         : ready
                           ? 'Ready when you are.'
                           : acknowledgeable.length > 0

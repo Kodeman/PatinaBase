@@ -52,6 +52,14 @@ export interface SignatureLineProps {
   testId: string;
   /** Anything else describing the field, e.g. an act's hint sentence. */
   describedBy?: string;
+  /**
+   * CPUX-04 §3: a neutral instruction drawn under the word over the rule and
+   * linked to the field, e.g. "Type your full name before approving." Never
+   * an error voice: it is the same sentence before and after she tries.
+   */
+  help?: string;
+  /** Whether the act this line arms cannot be taken without it (`aria-required`). */
+  required?: boolean;
 }
 
 export function SignatureLine({
@@ -64,20 +72,35 @@ export function SignatureLine({
   notice = true,
   testId,
   describedBy,
+  help,
+  required = false,
 }: SignatureLineProps) {
   // The date is the day she came to the paper, fixed once: a line that
   // re-dates itself on every keystroke is not a date.
   const [drawnOn] = useState(() => on ?? new Date());
   const dated = on ?? drawnOn;
+  const helpId = `${id}-help`;
+  const described = [help ? helpId : null, describedBy].filter(Boolean).join(' ') || undefined;
 
+  // R140 / CPUX-07: the word over the rule, the date and the signature
+  // sentence are critical consent text, so none of them is 11–12 px caps.
   return (
     <div data-signature-line="" className="max-w-[52ch]">
       <label
-        className="block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
+        className="block text-[15px] font-medium leading-[1.4] text-[var(--text-primary)]"
         htmlFor={id}
       >
         {label}
       </label>
+      {help && (
+        <p
+          id={helpId}
+          data-testid={`${testId}-help`}
+          className="mt-1 text-[15px] leading-normal text-[var(--text-body)]"
+        >
+          {help}
+        </p>
+      )}
       <div className="mt-1.5 flex flex-wrap items-end gap-x-4 gap-y-1">
         <input
           id={id}
@@ -86,13 +109,14 @@ export function SignatureLine({
           autoComplete="name"
           disabled={disabled}
           data-testid={testId}
-          aria-describedby={describedBy}
+          aria-describedby={described}
+          aria-required={required || undefined}
           onChange={(event) => onChange(event.target.value)}
           className="min-w-[12rem] flex-1 border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)]"
         />
         <span
           data-testid={`${testId}-date`}
-          className="border-b border-[var(--border-default)] px-0.5 py-1 font-mono text-[12px] tracking-[0.06em] text-[var(--text-muted)]"
+          className="border-b border-[var(--border-default)] px-0.5 py-1 font-mono text-[15px] tracking-[0.02em] text-[var(--text-body)]"
         >
           {signedOnLabel(dated)}
         </span>
@@ -100,7 +124,7 @@ export function SignatureLine({
       {notice && (
         <p
           data-testid={`${testId}-notice`}
-          className="mt-1.5 max-w-[52ch] text-[12px] leading-snug text-[var(--text-muted)]"
+          className="mt-1.5 max-w-[52ch] text-[15px] leading-normal text-[var(--text-body)]"
         >
           {SIGNATURE_NOTICE}
         </p>

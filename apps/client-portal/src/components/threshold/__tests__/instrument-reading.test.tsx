@@ -76,7 +76,7 @@ describe('InstrumentReading', () => {
     render(<InstrumentReading proposalId="prop-7" />);
 
     expect(screen.getByTestId('instrument-reading-drawing')).toHaveTextContent(
-      'Drawing this paper.',
+      'Loading document',
     );
     expect(screen.queryByTestId('commercial-document-shell')).not.toBeInTheDocument();
   });
@@ -87,7 +87,7 @@ describe('InstrumentReading', () => {
     render(<InstrumentReading proposalId="prop-7" />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'This paper could not be drawn just now. Reload to try again.',
+      "This document couldn't be loaded just now. Refresh the page to try again.",
     );
   });
 
@@ -139,7 +139,7 @@ describe('InstrumentReading', () => {
     render(<InstrumentReading proposalId="prop-7" />);
 
     expect(screen.getByTestId('instrument-reading-unprinted')).toHaveTextContent(
-      'This is an older paper. Ask your studio for a copy of it.',
+      'This is an older document. Contact your designer for a copy.',
     );
     expect(screen.queryByTestId('commercial-document-shell')).not.toBeInTheDocument();
   });
@@ -153,7 +153,7 @@ describe('InstrumentReading', () => {
     // but a resolved-empty read is not an error, and a reload does not change
     // it, so it does not take error ink or promise that one would.
     expect(screen.getByTestId('instrument-reading-absent')).toHaveTextContent(
-      'This paper is not on file for you. Ask your studio for a copy of it.',
+      "This document isn't available. Contact your designer for help.",
     );
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });

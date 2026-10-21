@@ -94,6 +94,34 @@ describe('SignatureLine — the name on a rule, dated', () => {
     expect(screen.getByTestId('sign-name-date')).toHaveTextContent(first as string);
   });
 
+  it('links a neutral help sentence and marks the rule required when asked', () => {
+    render(
+      <SignatureLine
+        id="sign-here"
+        value=""
+        onChange={jest.fn()}
+        label="Your full name"
+        help="Type your full name before approving."
+        required
+        testId="sign-name"
+        describedBy="act-hint"
+      />,
+    );
+    const rule = screen.getByLabelText('Your full name');
+    expect(rule).toHaveAttribute('aria-describedby', 'sign-here-help act-hint');
+    expect(rule).toHaveAttribute('aria-required', 'true');
+    expect(screen.getByTestId('sign-name-help')).toHaveTextContent(
+      'Type your full name before approving.',
+    );
+  });
+
+  it('draws no help line and no required mark by default', () => {
+    render(<Harness />);
+    const rule = screen.getByTestId('sign-name');
+    expect(screen.queryByTestId('sign-name-help')).not.toBeInTheDocument();
+    expect(rule).not.toHaveAttribute('aria-required');
+  });
+
   it('disables the rule when the act is closed', () => {
     render(
       <SignatureLine
