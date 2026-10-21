@@ -1,0 +1,51 @@
+# Room Proof core workflow mapping
+
+Source was read in the current checkout, not inferred from the July portal skill's retired `(portal)` routes. Source-backed means a current component has a wired read/mutation; production behavior and live feature flags were not exercised. The interface arrangement is a proposed redesign. All records and actions in this artifact are fictional local simulation.
+
+Paths below that start with `components`, `hooks` or `lib` are relative to `apps/designer-portal/src/`. Line numbers are audit hints in the 21 October checkout. The exact gate for the standalone module is `node --check artifacts/room-proof-workflows-2026-10-21/core-views.js`.
+
+## Project and brief
+
+- `/desk`: `apps/designer-portal/src/app/(document)/desk/page.tsx:587,663` mounts today's work, Mine / The studio's, project roster, inquiry capture, direct project creation and search.
+- Discovery: `components/document/discovery/discovery-section.tsx:177,209,331` reads/autosaves scope/rooms, budget comfort, timeline, style/inspiration and how they live, with keep/avoid, decision-makers and site/scan deepening. `discovery/editors.tsx:93,140` defines room rows and budget fields.
+- The sample edits a bounded brief for the existing living room; it does not implement full inquiry triage, arbitrary room creation, style teaching, capture or the five-essential Discovery readiness system.
+- Project room records: `hooks/use-document-rooms.ts:34,51`; measured files: `components/room-file/room-files-section.tsx:31`, mounted at `app/(document)/doc/[id]/page.tsx:3871`. Room direction illustration and drawing sketch are explicitly separate from a verified scan. This sample has no verified measured file.
+- Drawing revisions and current holders: `components/document/shelves/plan-room-leaf.tsx:19`; real file upload/client visibility/revision chains: `components/document/folio-strip.tsx:133`. The sample records successive draft/issued drawing editions; it does not upload or distribute construction files. The source's scan-chip branch at `folio-strip.tsx:157` is dormant and is not presented as implemented behavior.
+- Margin notes and file-change notifications: `components/document/margin-rail.tsx:411,436,557`. Sample private note stays out of the shared brief download and shared approval artifact. Shared activity contains event descriptions, not private note content.
+
+## Approval gate
+
+- Active mount: `components/document/project-approval-document-mount.tsx:21`.
+- Authority and creation: `components/document/approvals/project-approval-document.tsx:339,362` require the project decision lead, an issued artifact, a live phase, title/question and due date. Authored why/scope/cost/schedule/lead-time impact are preserved.
+- Gate rules: `components/document/approvals/project-approval-model.ts:33`: publish requires an active draft leaf, a nonzero frozen reviewer count, and every required review confirmed. This sample freezes Nora and Evan as two reviewers, with Nora as decision lead.
+- Issue UI and evidence: `project-approval-document.tsx:1110,1167,1199`. The sample exposes a client-review preview for each reviewer, then an explicit local issue, then Nora's response. It does not collapse a finish preference into a formal design approval.
+- Withdrawal/supersession: `project-approval-document.tsx:423,458`; a withdrawal needs a reason; a successor requires a genuinely new issued artifact. The sample retains previous editions and requires a newer issued drawing for supersession. Completed-phase refusal is represented by keeping the request in a live phase and disabling the completed phase option; moving existing approvals across arbitrary phases is omitted.
+- Shared `designApproved` becomes true only after an approved formal response whose frozen selection still matches the current selection. A changed selection leaves the historical approval visible and the current design held. This module never grants `purchaseAuthorized`.
+- Nora's formal approval also records `clientFinish` from the frozen chair finish, as the last approved finish. There is no separate preference flow; changing the studio finish preserves that historical client evidence while requiring a new edition.
+- Frozen artifacts include selected quantities, material directions, specification names, COM yes/no and public custom briefs. Private specification notes and COM acceptance notes are excluded. Internal matching includes the COM acceptance reference so a changed material record cannot silently inherit an earlier approval; the reference itself is never rendered in client evidence.
+- This bounded flow shows supersession after a response. Source also permits an active pending request to be superseded; the mockup does not expose every lifecycle combination or simulate actual client authentication, notifications, checksums or server concurrency.
+
+## Engagement
+
+- Route `/drafting/[proposalId]`: `app/(document)/drafting/[proposalId]/page.tsx:13`; `components/document/rooms/drafting/drafting-room.tsx:155` resolves editability and fails closed, with issued/read-only agreements returning to the document. The `design_services` path mounts `service-agreement-drafting-room.tsx:21`, which loads the commercial bundle and AgreementComposer.
+- `components/document/rooms/drafting/agreement/agreement-composer.tsx:213` has agreement-library and nested design-build gates; client-account editing is owner-only. `:1021` saves dirty parts before opening Review & send; `:1713` holds the act on readiness blockers. Sample owner controls allow a linked-client and fee-visibility hold to be explored. Local Save & review also saves the draft parts before displaying the saved edition.
+- `components/document/rooms/drafting/agreement/readiness.ts:224,254,600` requires a draft agreement, linked client/email and valid required parts; an hourly fee basis requires a ceiling and client-visible fees cannot be hidden. The specimen demonstrates one hourly services agreement, a ceiling, retainer, scope and visible fee basis. The retainer-within-ceiling check is a conservative specimen validation rather than a claim about all current fee models.
+- `components/document/commercial/service-agreement-send-sheet.tsx:85,142,269` uses a personal message, 14-day offer validity and a real send mutation, and distinguishes email dispatched from awaiting dispatch confirmation. The mockup records a local issue only, freezes the client-visible scope/fees/installation target, and explicitly leaves acceptance and payment unrecorded. It sends no email and does not simulate a signature or legal acceptance.
+- Agreement-library templates, the full clause/part library, design-build legal/jurisdiction attestations, all other fee models, authorization policies and live flag evaluation are omitted. The current orphan/legacy drafting path does not create a new client send (`drafting-room.tsx:27,401`); the mockup does not revive it.
+- The client edition contains no private brief note, supplier trade cost, margin, private specification note or COM acceptance reference. Changing edition tabs only changes the reading surface; issued content remains frozen.
+
+## Schedule and installation
+
+- `app/(document)/doc/[id]/page.tsx:3664,3672,3858` mounts the shared RippleProvider, ScheduleRuleRegion and ScheduleSpine. The Rule is now unconditional for project documents; older comments describing a gate are not treated as current rollout evidence.
+- `components/document/schedule/schedule-spine.tsx:229,314,423,541` uses one resolved schedule and one pending ripple diff for phase/milestone changes; downstream ghost dates are previews, and date editing arms the Rule. Active-phase items and phase states remain part of the schedule rather than a generic task dashboard.
+- `components/document/schedule/schedule-confirm-strip.tsx:15,24,126,165` leaves committed dates untouched until commit, allows revert, records a revision reason and refuses changes that cross a held anchor both in the disabled UI and handler. The specimen uses a native date field instead of drag handles; preview → reason → explicit confirm/discard preserves this behavior. A conflict cannot commit.
+- The sample's 20-day downstream planning allowance is deliberately labeled as an assumption, not a maker lead time or delivery promise. It is a bounded demonstration of dependency effects, not the production resolver. Arbitrary phase creation/deletion, dependency editing, schedule cloning, imports, threaded phases, optimistic concurrency and revision-ledger browsing are omitted.
+- Coordination open items in `schedule-spine.tsx:322,668,1259` belong to phases and use the current active phase when unassigned. The sample can add a named open item with an owner/date and complete/reopen it; none of these task acts grants design approval or purchase authority.
+- `components/document/ffe-section.tsx:2722–2775` mounts WorkBlock and section FolioStrip specifically in install mode. `components/document/work-block.tsx:318,410` supports title, day/window, estimate and completion, including field punch photos. Sample punch tasks are therefore housed in Installation work; they can be added/completed/reopened with a day and estimate. Field uploads, trade gates, verified installation photographs and formal project closeout are omitted.
+- The room image is a concept illustration; the plan is an unmeasured sketch; the installation image is only the same direction reference. No visual is labeled as a measured scan, issued construction file or completed-site evidence.
+
+## Local continuity and limitations
+
+Project brief, agreement, approval, plans, dates and task state live under `state.core`. Shared catalog selection, quantities and finish flow through the shell contract. Shared activity entries use the agreed `id/date/type/text/view` shape; detailed historical approval artifacts are retained under core. Exports are restricted to shared brief fields.
+
+This module does not implement new application routes, databases, authentication, uploads, real signatures, real messages, payment or order release. It offers source-grounded representative work inside the proposed Room Proof architecture. Browser layout/flow/accessibility checks are handled by the integrating parent, separately from the syntax gate.
