@@ -3,7 +3,8 @@
 Uploaded to the canvas https://claude.ai/artifact/BC9SpaY29bDbuzUUs4kmxY with the Artifact tool's
 `asset: true` publish. Boards reference each photograph by its `/_blob/<id>` URL exactly as below.
 Source, author and licence for every file: `inputs/photos/MANIFEST.md`. All 18 are placeholders,
-not job imagery (R142); every caption that uses one says so.
+not job imagery (R142). Every caption that uses one carries a second line saying so, except on
+Main-A, Main-B and the desktop page, where the notice sits beside the frame.
 
 | # | File | Asset URL | Uploaded by |
 |---|---|---|---|

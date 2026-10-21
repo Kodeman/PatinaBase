@@ -36,10 +36,10 @@ a:focus-visible,button:focus-visible,textarea:focus-visible,input:focus-visible{
 .band{box-sizing:border-box;height:96px;padding:12px 96px 0;border-bottom:1px solid #E8E3DB;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:48px;align-items:start}
 </style>
 </helmet>
-<div style="width: 1440px; min-height: 4960px; box-sizing: border-box; padding: 0 0 64px; background: #F2EEE7; color: #2C2926; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55">
+<div style="width: 1440px; box-sizing: border-box; padding: 0 0 64px; background: #F2EEE7; color: #2C2926; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.55">
 
 <p class="fr" style="margin: 0; padding: 24px 0 12px">Frame 1 · 1440 × 900 window · landscape hero from a 16:10 source</p>
-<div style="width: 1440px; background: #FAF7F2">
+<div data-arrival-frame="desktop" style="width: 1440px; background: #FAF7F2">
 <header id="doorplate" class="band">
 <div style="display: flex; flex-direction: column; gap: 2px">
 <p class="m" style="margin: 0; font-size: 15px; line-height: 22px; letter-spacing: .02em; color: #5A4E43">Birchwood Studio</p>
@@ -60,23 +60,21 @@ a:focus-visible,button:focus-visible,textarea:focus-visible,input:focus-visible{
 </header>
 
 <section id="cover" aria-labelledby="cover-h" style="margin: 8px 0 0">
-<figure data-hero style="margin: 0">
-<img src="/_blob/54a9b93d307b5444e4fc060d22adaf6a" width="1440" height="648" fetchpriority="high" loading="eager" alt="A wooden hand plane on a workbench, curled pale shavings around it" style="display: block; width: 1440px; height: min(72svh, 648px); object-fit: cover; object-position: 50% 45%; background: #8C7356">
-<div aria-hidden="true" style="height: 4px; background: #6B4F3A"></div>
-<div style="padding: 24px 96px 0; display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); column-gap: 48px; align-items: start">
-<div style="display: flex; flex-direction: column; gap: 12px">
+<figure data-hero style="margin: 0; display: grid; grid-template-columns: 1104px 336px; grid-template-rows: calc(min(72svh, 648px) - 44px) 44px 4px auto auto">
+<div data-tab style="grid-column: 1; grid-row: 2 / 5; position: relative; z-index: 1; align-self: start; box-sizing: border-box; padding: 16px 32px 0 96px; background: #FAF7F2; display: flex; flex-direction: column; gap: 8px">
 <p class="eb">01 · Elm Street House · Procurement</p>
-<h2 id="cover-h" class="s" style="margin: 0; font-size: 72px; line-height: 1.0; font-weight: 400; letter-spacing: -0.01em">The living room is on its way</h2>
+<h2 id="cover-h" class="s" style="margin: 0; font-size: 64px; line-height: 64px; font-weight: 400; letter-spacing: -0.01em">The living room is on its way</h2>
 </div>
-<figcaption class="cap" style="margin: 30px 0 0">Walnut top, planed · Harmon Bench Works · 15 October 2026</figcaption>
-</div>
+<img data-plate src="/_blob/54a9b93d307b5444e4fc060d22adaf6a" width="1440" height="648" fetchpriority="high" loading="eager" alt="A wooden hand plane on a workbench, curled pale shavings around it" style="grid-column: 1 / 3; grid-row: 1 / 3; display: block; width: 1440px; height: min(72svh, 648px); object-fit: cover; object-position: 50% 45%; background: #8C7356">
+<div aria-hidden="true" style="grid-column: 1 / 3; grid-row: 3; height: 4px; background: #6B4F3A"></div>
+<figcaption class="cap" style="grid-column: 1 / 3; grid-row: 5; padding: 0 96px">Walnut top, planed · Harmon Bench Works · 15 October 2026</figcaption>
 </figure>
 </section>
 
-<ul aria-label="Where things stand" style="margin: 20px 96px 0; padding: 0 0 4px; list-style: none; display: flex; flex-wrap: wrap; column-gap: 32px; border-top: 1px solid #E8E3DB; border-bottom: 1px solid #E8E3DB">
-<li><a class="sl" href="#letterbox">$600.00 is past due since 25 September.</a></li>
-<li><a class="sl" href="#approvals">One approval waits: the living room sofa.</a></li>
-<li><a class="sl" href="#ledger">Six invoices are open, $1,375.00 together.</a></li>
+<ul aria-label="Where things stand" style="margin: 12px 96px 0; padding: 0 0 4px; list-style: none; display: flex; flex-wrap: wrap; column-gap: 32px; border-top: 1px solid #E8E3DB; border-bottom: 1px solid #E8E3DB">
+<li><a class="sl" data-standing-row="1" href="#letterbox">$600.00 is past due since 25 September.</a></li>
+<li><a class="sl" data-standing-row="2" href="#approvals">One approval waits: the living room sofa.</a></li>
+<li><a class="sl" data-standing-row="3" href="#ledger">Six invoices are open, $1,375.00 together.</a></li>
 </ul>
 
 <section id="doorstep" aria-labelledby="ledger-h" style="margin: 48px 96px 0; display: grid; grid-template-columns: 400px minmax(0, 1fr); column-gap: 48px; align-items: start">
@@ -101,7 +99,7 @@ a:focus-visible,button:focus-visible,textarea:focus-visible,input:focus-visible{
 <h3 class="g3">Invoices to pay</h3>
 <ul style="margin: 0; padding: 0; list-style: none; border-top: 1px solid #E8E3DB">
 <li class="inv"><span><span class="nm" style="display: block">Design fee, September</span><span class="meta" style="display: block">INV-2026-014 · Birchwood Studio</span><span class="st" style="display: block">Past due · 25 September 2026</span></span><span class="amt">$600.00</span><button type="button" class="vi" aria-label="View invoice INV-2026-014" style="min-height: 44px">View invoice</button></li>
-<li class="inv"><span><span class="nm" style="display: block">Fabric samples and freight</span><span class="meta" style="display: block">INV-2026-019 · Elm Street House</span><span class="st" style="display: block">Due today · 20 October 2026</span></span><span class="amt">$100.00</span><button type="button" class="vi" aria-label="View invoice INV-2026-019" style="min-height: 44px">View invoice</button></li>
+<li class="inv"><span><span class="nm" style="display: block">Fabric samples and freight</span><span class="meta" style="display: block">INV-2026-019 · Elm Street House</span><span class="st" style="display: block">Due today · 21 October 2026</span></span><span class="amt">$100.00</span><button type="button" class="vi" aria-label="View invoice INV-2026-019" style="min-height: 44px">View invoice</button></li>
 <li class="inv"><span><span class="nm" style="display: block">Sofa deposit</span><span class="meta" style="display: block">INV-2026-017 · Elm Street House</span><span class="st" style="display: block">Due 2 November 2026 · $500.00 paid</span></span><span class="amt">$300.00</span><button type="button" class="vi" aria-label="View invoice INV-2026-017" style="min-height: 44px">View invoice</button></li>
 <li class="inv"><span><span class="nm" style="display: block">Lighting deposit</span><span class="meta" style="display: block">INV-2026-022 · Elm Street House</span><span class="st" style="display: block">Due 14 November 2026</span></span><span class="amt">$250.00</span><button type="button" class="vi" aria-label="View invoice INV-2026-022" style="min-height: 44px">View invoice</button></li>
 <li class="inv"><span><span class="nm" style="display: block">INV-2026-023</span><span class="meta" style="display: block">INV-2026-023 · Birchwood Studio</span><span class="st" style="display: block">Due 30 November 2026</span></span><span class="amt">$50.00</span><button type="button" class="vi" aria-label="View invoice INV-2026-023" style="min-height: 44px">View invoice</button></li>
@@ -131,6 +129,10 @@ a:focus-visible,button:focus-visible,textarea:focus-visible,input:focus-visible{
 <p class="eb">03 · Approvals</p>
 <h2 id="approvals-h" class="ch">Waiting for your approval</h2>
 <article aria-labelledby="ask-h" style="margin: 16px 0 0; padding: 0 0 32px; background: #FFFDF9; border: 1px solid #C9C7BD; border-radius: 8px; overflow: hidden; display: grid; grid-template-columns: 784px 440px; column-gap: 22px; row-gap: 28px; align-items: start">
+<div style="grid-column: 1 / 3; padding: 28px 32px 0; display: flex; flex-direction: column; gap: 4px">
+<h3 id="ask-h" class="s" style="margin: 0; font-size: 24px; line-height: 1.3; font-weight: 500">Living room sofa, edition 2</h3>
+<p style="margin: 0; font-size: 15px; line-height: 1.5">Waiting for you since 16 October 2026</p>
+</div>
 <figure style="margin: 0">
 <img src="/_blob/be06be484a922b7284be4317ee5c71a9" width="784" height="560" alt="A low sofa in pale linen with loose seat cushions" style="display: block; width: 784px; height: 560px; object-fit: cover; background: #CFC6B8">
 <div aria-hidden="true" style="height: 4px; background: #C9BBA5"></div>
@@ -143,8 +145,6 @@ a:focus-visible,button:focus-visible,textarea:focus-visible,input:focus-visible{
 </figure>
 <div style="grid-column: 1 / 3; padding: 0 32px; display: grid; grid-template-columns: minmax(0, 1fr) 520px; column-gap: 56px; align-items: start">
 <div style="display: flex; flex-direction: column; gap: 12px">
-<h3 id="ask-h" class="s" style="margin: 0; font-size: 24px; line-height: 1.3; font-weight: 500">Living room sofa, edition 2</h3>
-<p style="margin: 0; font-size: 15px; line-height: 1.5">Waiting for you since 16 October 2026</p>
 <p class="p" style="color: #4E4339">Maren changed three things since edition 1, after your note of 3 October.</p>
 <ul style="margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 4px">
 <li>Oatmeal performance linen replaces wool bouclé.</li>
@@ -165,7 +165,7 @@ a:focus-visible,button:focus-visible,textarea:focus-visible,input:focus-visible{
 <p id="sig-help-desk" style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339">Type your full name before approving.</p>
 </div>
 <p id="approve-consequence" class="note">Approving signs edition 2 at $7,480.00 so Maren Holt can order the linen. Nothing is charged here.</p>
-<button type="button" class="act" aria-describedby="approve-consequence approve-hold" style="align-self: flex-start; min-height: 48px; background: #3E5145">Approve this edition · $7,480.00</button>
+<button type="button" class="act" data-act-state="ready" aria-describedby="approve-consequence approve-hold" style="align-self: flex-start; min-height: 48px; background: #3E5145">Approve this edition · $7,480.00</button>
 <p id="approve-hold" style="margin: 0; font-size: 15px; line-height: 1.5; color: #4E4339">Press and hold to approve this edition. With a keyboard, press and hold Enter.</p>
 </div>
 </div>
@@ -228,7 +228,7 @@ a:focus-visible,button:focus-visible,textarea:focus-visible,input:focus-visible{
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":4960}}'>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":4956}}'>
 class Component extends DCLogic {
   renderVals() {
     return {};
