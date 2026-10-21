@@ -220,8 +220,9 @@ describe('The Scheme', () => {
 
     const add = await screen.findByRole('button', { name: /add a line/i });
 
-    // Scored ink (the inked leader), a button — an act in place, not a route.
-    expect(add).toHaveAttribute('data-action-variant', 'inked');
+    // Scored ink (the scored, unfilled leader — US-46 R203 retired inked), a
+    // button — an act in place, not a route.
+    expect(add).toHaveAttribute('data-action-variant', 'primary');
     expect(add).not.toHaveAttribute('href');
     expect(add.querySelector('.da-hit')).not.toBeNull();
 

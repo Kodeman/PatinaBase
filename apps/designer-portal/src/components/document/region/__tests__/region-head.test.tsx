@@ -43,7 +43,7 @@ describe('RegionHead', () => {
       'data-action-variant',
       'primary',
     );
-    expect(document.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(0);
+    expect(document.querySelectorAll('[data-action-variant="plate"]')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Revise' })).toHaveAttribute(
       'data-action-variant',
       'secondary',
@@ -67,7 +67,7 @@ describe('RegionHead', () => {
       'secondary',
     );
     expect(
-      document.querySelectorAll('[data-action-variant="inked"], [data-action-variant="primary"]'),
+      document.querySelectorAll('[data-action-variant="primary"], [data-action-variant="plate"]'),
     ).toHaveLength(0);
   });
 
@@ -166,7 +166,7 @@ describe('RegionHead', () => {
     });
     expect(screen.getByRole('button', { name: 'Collapse ↑' })).toBeInTheDocument();
     expect(
-      document.querySelectorAll('[data-action-variant="inked"], [data-action-variant="primary"]'),
+      document.querySelectorAll('[data-action-variant="primary"], [data-action-variant="plate"]'),
     ).toHaveLength(0);
     // The fold is the head's own disclosure, not a ledger act: with nothing
     // in the ledger there is no empty, unnamed action group printed for it.

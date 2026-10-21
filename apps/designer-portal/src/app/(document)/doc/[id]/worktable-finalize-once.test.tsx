@@ -516,7 +516,7 @@ describe('the Finalize table says each thing once (W4 integration)', () => {
     const table = container.querySelector('[data-table="finalize"]')!;
     expect(table).not.toBeNull();
     const leaders = table.querySelectorAll(
-      '[data-action-variant="inked"], [data-action-variant="primary"]',
+      '[data-action-variant="primary"], [data-action-variant="plate"]',
     );
     expect(leaders).toHaveLength(1);
     // …and it is the head's derived leader, not the watch's Mark signed.
@@ -550,6 +550,6 @@ describe('the Finalize table says each thing once (W4 integration)', () => {
       'data-action-variant',
       'primary',
     );
-    expect(container.querySelector('[data-action-variant="inked"]')).toBeNull();
+    expect(container.querySelector('[data-action-region="finalize-leader"]')).toBeNull();
   });
 });

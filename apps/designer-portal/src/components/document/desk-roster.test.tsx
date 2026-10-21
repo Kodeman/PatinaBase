@@ -164,7 +164,7 @@ describe('DeskRoster — the ledger (US-28 S3)', () => {
     const { container } = render(<DeskRoster ledger={MINE} />);
     const region = screen.getByRole('group', { name: 'The rest of the jobs, actions' });
     expect(region).toHaveAttribute('data-action-region', 'every-job');
-    expect(region.querySelector('[data-action-variant="primary"], [data-action-variant="inked"]')).toBeNull();
+    expect(region.querySelector('[data-action-variant="primary"], [data-action-variant="plate"]')).toBeNull();
     expect(screen.getByTestId('desk-roster')).toHaveAttribute('data-tour-anchor', 'desk-needs-your-hand');
     expect(container.querySelector('[data-roster-group="yours"]')).toHaveAttribute('data-tour-anchor', 'desk-folio');
   });

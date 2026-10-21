@@ -182,7 +182,7 @@ export function RegionHead({
     if (process.env.NODE_ENV === 'production') return;
     const misdeclared = actions.slice(1).filter((entry) => {
       const declared = entry.variant as DocumentActionVariant | undefined;
-      return declared === 'primary' || declared === 'inked';
+      return declared === 'primary';
     });
     if (misdeclared.length > 0) {
       console.error(

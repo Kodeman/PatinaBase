@@ -243,7 +243,7 @@ describe("US-43 R5 scored-word grammar (globals.css)", () => {
     const plate = cssRule(".da-plate {");
     expect(plate).toContain("color: var(--ink-paper)");
     expect(plate).toContain("min-height: 44px");
-    expect(plate).toContain("padding: 0 20px");
+    expect(plate).toContain("padding: 6px 20px");
     expect(plate).not.toContain("background");
     // the paint: inset 6px top and bottom, so 44 − 12 = 32px visible
     const paint = cssRule(".da-plate::after {");
@@ -267,12 +267,30 @@ describe("US-43 R5 scored-word grammar (globals.css)", () => {
     expect(cssRule(".da-terminal {")).toContain("background-color: var(--color-forest)");
   });
 
+  // US-46 F2 — the paint is the target inset on ::after, so it covers the
+  // label only while the inset is no deeper than the plate's block padding: a
+  // wrapped label then grows the target and the paint together, never pale
+  // text past the paint onto the paper.
+  it("keeps the plate's paint inset within its block padding, so a wrapped label stays on the paint", () => {
+    const plate = cssRule(".da-plate {");
+    const padding = plate.match(/padding:\s*(\d+)(?:px)?\s+\d+px;/);
+    expect(padding).not.toBeNull();
+    const blockPadding = Number(padding![1]);
+    const paint = cssRule(".da-plate::after {");
+    const inset = paint.match(/inset:\s*(\d+)px\s+0;/);
+    expect(inset).not.toBeNull();
+    const paintInset = Number(inset![1]);
+    expect(paintInset).toBeLessThanOrEqual(blockPadding);
+    // …and the one-line plate is unchanged: 44px target over 32px of paint.
+    expect(44 - 2 * paintInset).toBe(32);
+  });
+
   it("sets the plate's label in Inter 15 semibold sentence case, and counts it as the region's lead", () => {
     const action = readComponent("document-action.tsx");
     expect(action).toContain(
       "plate: 'da-plate font-body text-[15px] font-semibold normal-case tracking-normal'",
     );
-    expect(action).toContain("const LEADER_VARIANTS: readonly DocumentActionVariant[] = ['primary', 'inked', 'plate'];");
+    expect(action).toContain("const LEADER_VARIANTS: readonly DocumentActionVariant[] = ['primary', 'plate'];");
   });
 
   it("prints the band's two Next acts as the plate, and the dock's copy of that Next too", () => {
@@ -292,7 +310,6 @@ describe("US-43 R5 scored-word grammar (globals.css)", () => {
     expect(cssRule(".da-label::after {", block)).toMatch(/forced-color-adjust:\s*none/);
     expect(cssRule(".da-label::after {", block)).toContain("background-color: CanvasText");
     expect(cssRule(".da-terminal {", block)).toContain("border: 1px solid ButtonText");
-    expect(block).toMatch(/\.da-inked,\s*\.da-terminal\s*\{/);
     expect(cssRule(".da-plate::after {", block)).toContain("border: 1px solid ButtonText");
     expect(cssRule(".da-plate:focus-visible::after,", block)).toContain("outline: 2px solid Highlight");
     expect(block).toMatch(/\.da-act:focus-visible[^{]*\{\s*outline: 2px solid Highlight/);
@@ -338,8 +355,8 @@ describe("Project region ledgers", () => {
     expect(head.match(/renderEntry\(/g) ?? []).toHaveLength(2);
     // the other occurrence is the dev guard that catches a caller trying to
     // spell leadership on a later entry — not a second place it is granted.
-    expect(head).toContain("return declared === 'primary' || declared === 'inked';");
-    expect(head.match(/'inked'/g) ?? []).toHaveLength(1);
+    expect(head).toContain("return declared === 'primary';");
+    expect(head).not.toContain("'inked'");
     // US-25 Q8's band context is gone: the band no longer demotes the lead.
     expect(head).not.toContain("BandLeadsContext");
   });

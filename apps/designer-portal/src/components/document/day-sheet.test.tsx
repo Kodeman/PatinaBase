@@ -210,7 +210,7 @@ describe('DaySheet — the cards', () => {
 
   it('carries no filled act, badge or mark, and no colour of its own (Q1)', () => {
     const { container } = renderSheet(Array.from({ length: 6 }, (_, i) => entry(i + 1, { urgent: true })));
-    expect(container.querySelector('[data-action-variant="primary"], [data-action-variant="inked"]')).toBeNull();
+    expect(container.querySelector('[data-action-variant="primary"], [data-action-variant="plate"]')).toBeNull();
     expect(container.querySelector('[data-roster-mark], [data-mark-tone], [data-badge]')).toBeNull();
     // The one status region is the polite voice an act speaks in, hidden.
     expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);

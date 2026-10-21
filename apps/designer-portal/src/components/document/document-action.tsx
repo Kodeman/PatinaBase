@@ -43,7 +43,6 @@ function cueHeldFixerAfterMouseActivation() {
 
 export type DocumentActionVariant =
   | 'primary'
-  | 'inked'
   | 'secondary'
   | 'tertiary'
   | 'danger'
@@ -79,7 +78,6 @@ const WRAP_BASE_CLASS = `${BASE_CLASS.replace('shrink-0', 'min-w-0')} whitespace
    own grammar byte for byte: its label is already Inter 16px in globals.css. */
 const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
   primary: 'da-primary font-body text-[15px] font-medium normal-case tracking-normal',
-  inked: 'da-inked font-body text-[15px] font-medium normal-case tracking-normal',
   secondary: 'da-secondary font-body text-[14px] font-normal normal-case tracking-normal',
   tertiary: 'da-tertiary font-body text-[14px] font-normal normal-case tracking-normal',
   danger: 'da-danger font-body text-[15px] font-medium normal-case tracking-normal',
@@ -395,11 +393,12 @@ interface DocumentActionGroupProps {
   'aria-label'?: string;
 }
 
-/* Leadership is a role, not a look: `primary`, `inked` and `plate` are three
+/* Leadership is a role, not a look: `primary` and `plate` are two
    renderings of the same "one leader per region" claim, so the ≤1 guard counts
-   them together (an inked ledger head beside a primary is still two leaders,
-   and the band's Next plate is that region's lead, as its `primary` was). */
-const LEADER_VARIANTS: readonly DocumentActionVariant[] = ['primary', 'inked', 'plate'];
+   them together (the band's Next plate is that region's lead, as its
+   `primary` was). US-46 R203 retired `inked`: the plate is the only
+   non-terminal fill. */
+const LEADER_VARIANTS: readonly DocumentActionVariant[] = ['primary', 'plate'];
 const LEADER_SELECTOR = LEADER_VARIANTS.map(
   (variant) => `[data-action-variant="${variant}"]`,
 ).join(', ');

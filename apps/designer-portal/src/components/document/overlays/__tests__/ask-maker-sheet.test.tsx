@@ -428,7 +428,6 @@ describe('InstallReadingLine', () => {
       renderWithQuery(<InstallReadingLine projectId={PROJECT} items={CEDAR_LANE} />);
       const act = await screen.findByRole('button', { name: 'Ask the maker for a date' });
       expect(act).toHaveClass('da-primary');
-      expect(act).not.toHaveClass('da-inked');
     } finally {
       mockOneVoice = false;
     }

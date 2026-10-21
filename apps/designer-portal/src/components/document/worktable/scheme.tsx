@@ -46,7 +46,7 @@ export function Scheme({ proposalId, roomFilter = null }: SchemeProps) {
               >
                 <DocumentAction
                   actionKey="scheme-add-line"
-                  variant="inked"
+                  variant="primary"
                   onClick={openAddItem}
                 >
                   Add a line

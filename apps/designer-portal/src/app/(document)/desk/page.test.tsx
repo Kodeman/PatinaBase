@@ -413,7 +413,7 @@ describe('Desk — one header line (US-28 S0 F1)', () => {
   it('sets both creates as secondary acts: no filled act on the Desk', () => {
     const { container } = render(<DeskPage />);
     const head = container.querySelector<HTMLElement>('[data-action-region="desk-head"]')!;
-    expect(head.querySelector('[data-action-variant="primary"], [data-action-variant="inked"]')).toBeNull();
+    expect(head.querySelector('[data-action-variant="primary"], [data-action-variant="plate"]')).toBeNull();
     for (const key of ['capture-lead', 'open-project']) {
       expect(head.querySelector(`[data-action-key="${key}"]`)).toHaveAttribute(
         'data-action-variant',

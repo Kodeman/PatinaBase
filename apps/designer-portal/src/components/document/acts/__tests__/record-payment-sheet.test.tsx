@@ -180,11 +180,11 @@ describe('Record a payment to a maker', () => {
     expect(dialogs[0]).toHaveTextContent('It sends nothing to Calloway & Brandt Upholstery.');
     const record = screen.getByRole('button', { name: 'Record $3,400.00' });
     // SQ-858 (money-p3) — the commit is the filled terminal act, and the only
-    // filled act in the sheet: no other terminal, primary or inked act.
+    // filled act in the sheet: no other terminal, primary or plate act.
     expect(record).toHaveAttribute('data-action-variant', 'terminal');
     expect(record).toHaveClass('da-terminal');
     expect(document.querySelectorAll('[data-action-variant="terminal"]')).toHaveLength(1);
-    expect(document.querySelectorAll('[data-action-variant="primary"], [data-action-variant="inked"]')).toHaveLength(0);
+    expect(document.querySelectorAll('[data-action-variant="primary"], [data-action-variant="plate"]')).toHaveLength(0);
   });
 
   it('opens the amount field as the held-payment spotlight window, live and focused (R186)', async () => {

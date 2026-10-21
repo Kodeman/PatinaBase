@@ -314,7 +314,7 @@ export function AskMakerSheet({
                     actionKey="open-held-maker-draft"
                     surfaceKey="open-document"
                     regionKey="ask-maker-sheet"
-                    variant="inked"
+                    variant="primary"
                     onClick={() => setOpened(standing)}
                   >
                     Open the held draft
@@ -562,7 +562,7 @@ function InstallReadingLive({
               actionKey={held ? 'open-held-maker-draft' : 'install-reading-act'}
               surfaceKey="project"
               regionKey="install-reading"
-              variant={oneVoice ? 'primary' : 'inked'}
+              variant="primary"
               disabled={heldReason !== null}
               held={heldReason !== null}
               aria-describedby={heldReason ? reasonId : undefined}
