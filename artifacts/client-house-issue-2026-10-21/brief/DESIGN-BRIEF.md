@@ -81,7 +81,7 @@ Fixture strings the boards reuse:
 | ink | `#2C2926` | body, money, dates, names |
 | oak ink | `#4E4339` | captions, secondary prose, purpose sentence |
 | subtle | `#5A4E43` | eyebrows, meta |
-| forest | `#3E5145` | final act fill only (carries an amount) |
+| forest | `#3E5145` | fill on final acts carrying an amount and on selected approval choices (A1); ink for links, focus and selected states (A2). Send change request and Confirm pause are covered by A1 |
 | forest press | `#2F3E35` | final act pressed |
 | card | `#FFFDF9` with 1px `#C9C7BD`, 8px radius | framed cards (R202) |
 | note | `#F0F3ED` | consequence note above an act |
@@ -117,7 +117,10 @@ canvas boards stay light.
 All plates: `figure` + `img alt` + `figcaption`; 1px hairline `#E8E3DB`; caption DM Mono 12px
 `#4E4339`, stored as three fields; caption ink never on the photograph.
 
-1. **Hero plate.** One per page. 16:10 (4:3 at ≤600px). Fills the measure, never the viewport.
+1. **Hero plate.** One per page. 16:10 at every width (358×224 at 390; 1248×780 at 1440). At
+   1440 it is never taller than 72vh: on shorter windows the plate keeps 1248 wide and its height
+   becomes 72vh, the photograph cropped by `object-fit: cover` around the stored focal point (a
+   900px-tall window gives 1248×648). Fills the measure, never the viewport.
    Focal point stored as `object-position`. Eligible: installed photo, scan above the quality
    threshold, studio board cover, maker photo of the lead piece. Never a concept render.
 2. **Room plate.** 3:2 at the top of each room band. A concept render is allowed with the
@@ -130,20 +133,21 @@ All plates: `figure` + `img alt` + `figcaption`; 1px hairline `#E8E3DB`; caption
 5. **Swatch strip.** 40×40 swatches from `project_palettes` with brand + name. The one place
    palette is colour, because it is a record of real paint.
 6. **Silhouette plate.** The existing drawn footprint. Also the load-failure fallback: the
-   figcaption stays and gains "· picture did not load".
+   figcaption stays and gains a second line, "Picture did not load."
 
-Caption grammar: `what · whose · when`, sentence case, three segments, no adjectives of praise.
-Code fills the segments from record fields; nothing invents one. A plate with an unfillable
-segment is not shown; the silhouette is.
+Caption grammar: `what · whose · when`, sentence case, exactly three stored segments, no
+adjectives of praise. Any qualification is a separate second line or the on-image chip, never a
+fourth segment. Code fills the segments from record fields; nothing invents one. A plate with an
+unfillable segment is not shown; the silhouette is.
 
-| Kind | Example caption |
-|---|---|
-| Installed | Reading chair, installed in the living room · photographed by Birchwood Studio · 3 September 2026 |
-| Workshop | Walnut sideboard, in the workshop · photographed by Harmon Bench Works · 15 October 2026 |
-| Maker catalogue | The same model, from Harmon Bench Works' catalogue · not her piece · hers is in production. |
-| Board or scan | Living room, scan drawing · by Birchwood Studio · 2 June 2026 |
-| Concept | Concept render of the living room · by Birchwood Studio · 12 May 2026 · not installed |
-| Silhouette | Walnut sideboard · drawing · photograph to follow |
+| Kind | Example caption (three segments) | Second line or chip |
+|---|---|---|
+| Installed | Reading chair, installed in the living room · photographed by Birchwood Studio · 3 September 2026 | none |
+| Workshop | Walnut sideboard, in the workshop · photographed by Harmon Bench Works · 15 October 2026 | none |
+| Maker catalogue | Walnut sideboard, the same model · from Harmon Bench Works' catalogue · photographed 2025 | line: Not her piece; hers is in production. |
+| Board or scan | Living room, scan drawing · by Birchwood Studio · 2 June 2026 | none |
+| Concept | Concept render of the living room · by Birchwood Studio · 12 May 2026 | chip: Concept · not installed |
+| Silhouette | Floor lamp · drawn by Birchwood Studio from the specification · 12 May 2026 | line: Photograph to follow. |
 
 Never "your sideboard" under a catalogue photo; say "this model" or "the same model".
 
@@ -161,33 +165,42 @@ Paper grain, if drawn, is CSS `feTurbulence` at 3% on the page, never on images.
 
 ## 5. Arrival composition and chapter table
 
-### 5.1 Arrival (390px, first 740px)
+### 5.1 Arrival (390px, measured; the first screen ends at 740px)
 
 | y | Element |
 |---|---|
 | 0–96 | Letterhead: Birchwood Studio · Elm Street House · Prepared for June Brennan (not fixed) |
-| 96–132 | Purpose sentence 16px: "Pay invoices, review approvals, and follow your project here." |
-| 132–196 | Link row, two lines, 44px targets (F3 order) |
-| 196–244 | Standing line 16px: "Six invoices are open; $600.00 is past due. One edition awaits your approval." (each clause links to its anchor) |
-| 244–520 | **Hero plate** 16:10, card-wide (358×224), eyebrow `01 · ELM STREET HOUSE · PROCUREMENT`, display headline *The living room is on its way*, caption below |
-| 520–740 | `#doorstep` begins: first invoice card, consequence note, forest Pay act |
+| 96–140 | Purpose sentence 16px, wraps to two lines: "Pay invoices, review approvals, and follow your project here." |
+| 140–228 | Link row, two rows, 44px targets each (F3 order) |
+| 228–276 | Standing line 16px: "Six invoices are open; $600.00 is past due. One edition awaits your approval." (each clause links to its anchor); the first-screen money act |
+| 288–646 | **Cover**: eyebrow `01 · ELM STREET HOUSE · PROCUREMENT`, hero plate 16:10 card-wide (358×224), two-line display headline *The living room is on its way*, caption |
+| 658– | `#doorstep` from 658: first invoice card (the 740 first-screen line falls inside it), consequence note, forest Pay act at about 905 |
 
-At 1440 the hero fills the 1248 measure (never the viewport, ≤72vh); the display headline
-overlaps the plate's bottom edge by one line. The hero never sits above the standing line.
+At 390 the forest Pay act therefore sits on the second screen; the standing line (money facts
+linking to Pay and Approve, at 228–276) is the first-screen money act.
+
+At 1440 the hero fills the 1248 measure at 16:10 (1248×780; never the viewport, ≤72vh); the
+display headline overlaps the plate's bottom edge by one line. The standing line — which states
+the money facts and links to Pay and Approve — always precedes the first image. The hero may sit
+above the Pay card itself. Founders rule whether that is acceptable (Q1); the designers recommend
+yes, because the money facts and their links arrive first.
 
 ### 5.2 Chapters (anchors preserved; bare numerals)
+
+Eyebrows carry the spec's literal heads (A7, F1); the editorial Playfair headline sits beneath.
+Chapter order never moves.
 
 | # | Anchor | Eyebrow | Headline (studio voice) | Plate |
 |---|---|---|---|---|
 | 01 | new, above `#doorstep` | 01 · ELM STREET HOUSE · PROCUREMENT | *The living room is on its way* | Hero plate: walnut sideboard · photographed at Harmon Bench Works, Dayton · 9 October 2026 |
-| 02 | `#doorstep` `#ledger` `#letterbox` | 02 · WHAT IS OWING | *Six invoices, $1,375.00 together* | none; the ledger is the image |
-| 03 | `#approvals` | 03 · WAITING ON YOU | *The sofa, second edition* | Pair plate: maker photo 7:5 + swatch strip (oatmeal performance linen · maker's sample · 14 October 2026); consequence note; forest 48px act $7,480.00 |
+| 02 | `#doorstep` `#ledger` `#letterbox` | 02 · INVOICES | *Six invoices, $1,375.00 together* | none; the ledger is the image |
+| 03 | `#approvals` | 03 · APPROVALS | *The sofa, second edition* | Pair plate: maker photo 7:5 + swatch strip (oatmeal performance linen · maker's sample · 14 October 2026); consequence note; forest 48px act $7,480.00 |
 | 04 | `#key` | 04 · THE HOUSE | *Three rooms, read from the front door* | existing SVG plan; room names link to bands |
 | 05+ | RoomBand ids | 05 · LIVING ROOM | *Walnut, linen, and a lot of light* (material words from that room's items only) | Room plate 3:2, then piece plates 1:1 in a 2/4-col run, silhouettes where no photo |
-| 08 | `#road` | 08 · WHERE THINGS STAND | *In production, then on the truck, then here* | Now / Next / Target in words; piece plate 96px beside the sideboard row |
-| 09 | `#note` | 09 · FROM MAREN | *A note from the studio, 16 October* | letter, Playfair italic lead, reply |
+| 08 | `#road` | 08 · PROGRESS | *In production, then on the truck, then here* | Now / Next / Target in words; piece plate 96px beside the sideboard row |
+| 09 | `#note` | 09 · UPDATES | *A note from the studio, 16 October* | letter, Playfair italic lead, reply |
 | 10 | `#previously` `#changed` | 10 · EARLIER | *What has already been settled* | text ledger; "Edition 4 · approved by Maren · 21 October" lines |
-| 11 | `#mat` | 11 · PEOPLE AND PAPERS | *Who to call, and the documents* | portrait only if the studio uploaded one; then colophon |
+| 11 | `#mat` | 11 · DOCUMENTS AND CONTACT | *Who to call, and the documents* | portrait only if the studio uploaded one; then colophon |
 
 Rhythm rule: plate → fact → pair → drawing → plate-and-run → words. Never two pictures in a row.
 
@@ -206,7 +219,7 @@ The canvas shows the recommended option. It does not settle any of these.
 | C1 | Shadows: A3/F4 allow, VISION §6/V9/V20 forbid | None; hairline + stock-on-paper step is the only depth; amend A3/F4. Show one labelled shadow alternative only where a board compares. |
 | C2 | Full-measure photography vs house sheet §A10's 120px cap | Adopt the proposed ruling text below. |
 | C3 | Delta-only auto-approve vs V22 | Allowed only when no prose call ran (plates changed, words unchanged), per project opt-in; otherwise V22 holds. |
-| Q1 | Imagery above the first money/approval act | No, at every viewport. |
+| Q1 | Imagery above the first money/approval act | The fact being ruled on: at 390 the standing line sits at 228–276 on the first screen, the cover at 288–646, and the forest Pay act at about 905, on the second screen. The standing line — which states the money facts and links to Pay and Approve — always precedes the first image. The hero may sit above the Pay card itself. Founders rule whether that is acceptable; the designers recommend yes, because the money facts and their links arrive first. |
 | Q2 | Maker names/provenance on the homeowner page | One provenance line (maker · town · in production since · photographed when) behind a per-project `show_makers` switch; no brand stories. |
 | Q3 | Scroll-triggered reveals vs on-mount only | On-mount only; no scroll reveals, parallax, pinned sections, carousels, preloader. |
 
@@ -229,13 +242,13 @@ frame width is the viewport the board shows and the height follows the content.
 | # | Board | Frame | Shows |
 |---|---|---|---|
 | 1 | Issue-Cover-1440 | 1440 wide | letterhead, link row, standing line, hero plate, display headline overlap |
-| 2 | Issue-Cover-390 | 390 wide, first 740 marked | the arrival table above, 44px targets marked, first act inside 740px |
+| 2 | Issue-Cover-390 | 390 wide, first 740 marked | the arrival table above, 44px targets marked, the 740 line inside the doorstep card, Pay act on the second screen |
 | 3 | Plate-Grammar | 1600×1000 | six plate types with caption rules, hairline, inset, palette rule |
 | 4 | Clipping-Study | 1200×800 | one white-ground retailer photo in four treatments (raw / inset+hairline / multiply rejected / silhouette) |
 | 5 | Approval-Pair | 1440 and 390 frames side by side | chapter 03: pair plate, consequence note, forest act $7,480.00 |
 | 6 | Living-Room-Band-1440 | 1440 wide | room plate with concept chip, piece-plate run, one lifted TrackingRow |
 | 7 | Phase-Strip | 2400×700 | the cover at Design / Procurement / Installation / Closed in a row |
-| 8 | Press-Band-Designer | 1440 wide (designer portal) | the edition draft in the designer's Document: preview in the client mirror, Approve / Hold / Edit, delta-only diff line |
+| 8 | Press-Band-Designer | 1440 wide (designer portal) | the edition draft in the designer's Document: preview in the client mirror, Approve / Hold / Edit (Edit tray: hero picker, inline headline/standing fields, caption whose/when fields; chapter order never moves), delta-only diff line |
 | 9 | Type-and-Rhythm | 1200×1600 | display, chapter head, eyebrow, caption, body at size; 200% zoom column |
 | 10 | Motion-Storyboard | 1600×600 | settle / reveal / hold frames at 0/120/360/400ms; reduced-motion row |
 | 11 | Empty-Issue-390 | 390 wide | zero-image job: palette strip + silhouettes |
