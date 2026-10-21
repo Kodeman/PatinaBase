@@ -30,7 +30,7 @@ import { householdDisplayName } from '@/lib/document/act-names';
 import { familyLabel } from '@/lib/document/family-label';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
 import { DocumentAction } from '../document-action';
-import { publishDockYieldedEdge, usePhoneWidth } from '../lens-band';
+import { publishDockYieldedEdge } from '../lens-band';
 import { openPost } from '../overlays/post-sheet';
 import { useMobileShell } from './mobile-shell';
 import { TesterSlot } from '@/components/tester/tester-slot';
@@ -119,10 +119,6 @@ export function MobileBar() {
   // dock is the band's Next's one printing; from 600 the band prints it, so
   // the centre leaves it out by CSS display and Next is in the tree once.
   const bandsNext = primaryAction?.regionKey === 'lens-band';
-  // US-43 R6 — below 600 the dock is a charcoal ground and owns Next. The
-  // ground is painted by CSS at that width; the `data-ground` hook that turns
-  // its acts to the on-dark grammar follows the same query.
-  const phone = usePhoneWidth();
   const { inHandToday, running, paused, elapsedSeconds, offer, offerOwnsEdge } =
     useDocumentTime();
   // Review F5 — when the offer takes the edge this bar is not printed, so the
@@ -340,7 +336,9 @@ export function MobileBar() {
         actionKey: primaryAction.actionKey,
         surfaceKey: primaryAction.surfaceKey,
         regionKey: primaryAction.regionKey,
-        variant: 'primary' as const,
+        // US-46 R203 — the band's Next prints as the band's own charcoal
+        // plate, full width in the centre; any other centre act stays scored.
+        variant: bandsNext ? ('plate' as const) : ('primary' as const),
         presentation: 'mobile_dock' as const,
         disabled: primaryAction.disabled,
         loading: primaryAction.loading,
@@ -364,8 +362,7 @@ export function MobileBar() {
       data-testid="mobile-bar"
       data-mobile-edge-owner="document-bar"
       data-reading-index={readingIndex ?? ''}
-      data-ground={phone ? 'dark' : undefined}
-      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[72px] items-center gap-2 border-t border-[var(--hairline-strong)] bg-[var(--paper-doc)] px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 max-[599px]:border-[var(--ink)] max-[599px]:bg-[var(--ink)] min-[1180px]:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[72px] items-center gap-2 border-t border-[var(--hairline-strong)] bg-[var(--paper-doc)] px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 min-[1180px]:hidden"
     >
       {/* SQ-856 — the TESTER mark's place, empty for everyone else. */}
       <TesterSlot kind="bar" />
@@ -382,16 +379,16 @@ export function MobileBar() {
           aria-label={
             stopLabel ? `Open project contents, at ${stopLabel}` : 'Open project contents'
           }
-          className="flex min-h-11 min-w-0 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)] max-[599px]:focus-visible:outline-[var(--focus-on-dark)]"
+          className="flex min-h-11 min-w-0 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
         >
           {STRATA}
           <span className="min-w-0">
-            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)] max-[599px]:text-[var(--on-dark-muted)]">
+            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)]">
               Project file sections
             </span>
             {household && (
               <span
-                className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)] max-[599px]:text-[var(--on-dark-ink)]"
+                className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)]"
               >
                 {household}
               </span>
@@ -402,15 +399,14 @@ export function MobileBar() {
                 thumb and churns the door's subtree on every crossing. The
                 72px reserve above is already sized for three lines.
 
-                SQ-856 (chrome-p6): from 600 the bar is the dock's
-                --paper-doc stock, so its accent text is `--color-clay-ink`
-                (AA on paper); below 600 the dock is charcoal again (US-43
-                R6) and the accent is `--on-dark-clay`. */}
+                SQ-856 (chrome-p6): the bar is the dock's --paper-doc stock
+                at every width (US-46 R203), so its accent text is
+                `--color-clay-ink` (AA on paper). */}
             <span
               aria-hidden={stopLabel ? undefined : true}
               // Below 600 the stop holds to one line: at 320 a wrap broke the
               // last word into an orphan line. The door's name keeps it whole.
-              className={`block break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] max-[599px]:truncate max-[599px]:text-[var(--on-dark-clay)] ${
+              className={`block break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] max-[599px]:truncate ${
                 stopLabel ? '' : 'invisible'
               }`}
             >
@@ -422,11 +418,11 @@ export function MobileBar() {
         <div className="flex min-w-0 flex-[1_1_0] items-center gap-2 px-1.5">
           {STRATA}
           <span className="min-w-0">
-            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)] max-[599px]:text-[var(--on-dark-muted)]">
+            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)]">
               Studio section
             </span>
             {/* F8 — the dock wraps, never truncates ("Studio overview"). */}
-            <span className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)] max-[599px]:text-[var(--on-dark-ink)]">
+            <span className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)]">
               {context}
             </span>
           </span>
@@ -467,7 +463,7 @@ export function MobileBar() {
         aria-expanded={moreOpen}
         aria-controls="mobile-studio-menu"
         onClick={() => setMoreOpen((open) => !open)}
-        className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-[2px] px-1.5 text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)] max-[599px]:text-[var(--on-dark-ink)] max-[599px]:hover:bg-transparent max-[599px]:hover:underline max-[599px]:focus-visible:outline-[var(--focus-on-dark)]"
+        className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-[2px] px-1.5 text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
       >
         <Ellipsis className="h-5 w-5" strokeWidth={1.5} aria-hidden />
         <span className="font-mono text-[12px] uppercase tracking-[0.08em]">

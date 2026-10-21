@@ -152,7 +152,7 @@ describe('LensBand · the box and the sentinel (C-5)', () => {
     expect(band()).not.toHaveAttribute('data-lens-state');
   });
 
-  it('is the sticky, opaque box with a 56px floor: a charcoal ground from 600, paper with its rule below', () => {
+  it('is the sticky, opaque box with a 56px floor: paper with its rule at every width (US-46 R203)', () => {
     render(<LensBand model={model()} docId="doc-1" />);
     expect(band().tagName).toBe('SECTION');
     expect(band()).toHaveAccessibleName('Project overview');
@@ -164,23 +164,21 @@ describe('LensBand · the box and the sentinel (C-5)', () => {
     expect(band().className).toContain('sticky');
     expect(band().className).toContain('top-0');
     expect(band().className).toContain('z-[4]');
-    // US-43 R1-A — the dark ground hook, and the ground by width.
-    expect(band()).toHaveAttribute('data-ground', 'dark');
-    expect(band()).toHaveClass(
-      'bg-[var(--doc-paper)]',
-      'min-[600px]:bg-[var(--ink)]',
-      'min-[600px]:text-[var(--on-dark-ink)]',
-    );
-    // The ground's edge replaces the charcoal rule from 600; the paper band
-    // keeps `--rule-mid` below it.
+    // US-46 R203 (supersedes R201's charcoal ground) — no dark-ground hook,
+    // no width swap: the band is paper and keeps `--rule-mid` at every width.
+    expect(band()).not.toHaveAttribute('data-ground');
+    expect(band()).toHaveClass('bg-[var(--doc-paper)]', '[border-bottom:var(--rule-mid)]');
+    expect(band().className).not.toMatch(/min-\[600px\]:(bg|text|-mx|px)-/);
     expect(band()).not.toHaveClass('doc-rule-mid');
-    expect(band()).toHaveClass('max-[599px]:[border-bottom:var(--rule-mid)]');
   });
 
-  it('prints its words in the on-dark register from 600 (US-43 R1-A)', () => {
+  it('prints its words in the paper inks at every width (US-46 R203)', () => {
     render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
-    expect(line('1')).toHaveClass('min-[600px]:text-[var(--on-dark-muted)]');
-    expect(line('2').className).toMatch(/min-\[600px\]:text-\[var\(--on-dark-(ink|terracotta)\)\]/);
+    expect(line('1')).toHaveClass('text-[var(--text-muted)]');
+    expect(line('2').className).toMatch(/text-\[var\(--(text-primary|color-terracotta-ink)\)\]/);
+    for (const which of ['1', '2'] as const) {
+      expect(line(which).className).not.toContain('on-dark');
+    }
   });
 
   it('wraps both lines and truncates nothing — the act keeps its 44px box (US-28 S7, U-Q19)', () => {
@@ -960,7 +958,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(sentence()).toHaveTextContent(CHEN_PROSE);
     expect(line('2')).toHaveClass('text-[15px]');
     const act = screen.getByRole('button', { name: 'Record the payment' });
-    expect(act).toHaveAttribute('data-action-variant', 'primary');
+    expect(act).toHaveAttribute('data-action-variant', 'plate');
     expect(door()).toHaveTextContent('All open · 2');
     expect(door()).toHaveClass('ml-auto');
     // The door follows the act on the same line.
@@ -1102,7 +1100,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(act).toHaveTextContent('Record the payment');
     // Beside the reason: the act follows the sentence on the same line.
     expect(sentence!.compareDocumentPosition(act!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(act).toHaveAttribute('data-action-variant', 'primary');
+    expect(act).toHaveAttribute('data-action-variant', 'plate');
   });
 
   it('FR6 F6-6 — the act rung below it still prints the act', () => {
@@ -1242,15 +1240,15 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         expect(sentence()).not.toHaveClass('max-[599px]:basis-full');
         expect(sentence().className).not.toMatch(/overflow-hidden|text-ellipsis|whitespace-nowrap/);
         const act = screen.getByRole('button', { name: 'Record the payment' });
-        expect(act).toHaveAttribute('data-action-variant', 'primary');
+        expect(act).toHaveAttribute('data-action-variant', 'plate');
         // display:none below 600 (out of the accessibility tree there); the
         // 44px box keeps its inset into the line wherever it prints.
         expect(act).toHaveClass('max-[599px]:hidden', 'my-[-12px]');
         expect(act.className).not.toContain('max-[599px]:my-0');
-        // The NEXT eyebrow takes the on-dark clay on the charcoal band.
-        expect(document.querySelector('[data-lens-next-lead]')).toHaveClass(
-          'min-[600px]:text-[var(--on-dark-clay)]',
-        );
+        // The NEXT eyebrow keeps the paper's muted ink at every width.
+        const lead = document.querySelector('[data-lens-next-lead]');
+        expect(lead).toHaveClass('text-[var(--text-muted)]');
+        expect(lead!.className).not.toContain('on-dark');
       });
 
       it('US-28 S7 — a rung on trial is held to one row only so the measure can see it overflow', () => {
@@ -1433,55 +1431,35 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
   });
 });
 
-// ── Review F1 / F5 (SQ-1514) — the paper band below 600 ──────────────────────
+// ── Review F1 / F5 (SQ-1514); US-46 R203 — the band is paper at every width ──
 
-describe('LensBand · below 600 the band is paper (US-43 R6, review F1/F5)', () => {
-  const original = window.matchMedia;
-  const phoneWidth = (matches: boolean) => {
-    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
-      matches: query === '(max-width: 599px)' ? matches : false,
-      media: query,
-      onchange: null,
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      dispatchEvent: jest.fn(),
-    })) as unknown as typeof window.matchMedia;
-  };
+describe('LensBand · paper at every width, its Next a charcoal plate (US-46 R203, review F1/F5)', () => {
   afterEach(() => {
-    window.matchMedia = original;
     act(() => publishDockYieldedEdge(false));
   });
 
-  it('one-voice off below 600: the act is not under a dark ground, and prints there', () => {
-    phoneWidth(true);
+  it('one-voice off: the act is the plate on the paper band, and the band prints it at every width', () => {
     render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
     const next = screen.getByRole('button', { name: 'Send a reminder' });
     expect(band()).not.toHaveAttribute('data-ground');
-    expect(next.closest('[data-ground="dark"]')).toBeNull();
+    expect(next.closest('[data-ground]')).toBeNull();
+    expect(next).toHaveAttribute('data-action-variant', 'plate');
+    expect(next).toHaveClass('da-plate');
     // The dock never takes this act, so the band is its one printing.
     expect(next).not.toHaveClass('max-[599px]:hidden');
   });
 
-  it('one-voice off from 600: the same act stands on the charcoal ground', () => {
-    phoneWidth(false);
-    render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
-    const next = screen.getByRole('button', { name: 'Send a reminder' });
-    expect(next.closest('[data-ground="dark"]')).toBe(band());
-  });
-
   it('one voice below 600: Next leaves the band for the dock, until the dock yields the edge', () => {
     mockOneVoice = true;
-    phoneWidth(true);
     render(<LensBand model={chen()} docId="doc-1" />);
     const next = screen.getByRole('button', { name: 'Record the payment' });
+    expect(next).toHaveAttribute('data-action-variant', 'plate');
     expect(next).toHaveClass('max-[599px]:hidden');
     // The log offer takes the edge: there is no dock, so the band prints its
     // Next, on paper.
     act(() => publishDockYieldedEdge(true));
     expect(next).not.toHaveClass('max-[599px]:hidden');
-    expect(next.closest('[data-ground="dark"]')).toBeNull();
+    expect(next.closest('[data-ground]')).toBeNull();
     act(() => publishDockYieldedEdge(false));
     expect(next).toHaveClass('max-[599px]:hidden');
   });

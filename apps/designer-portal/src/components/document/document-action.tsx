@@ -47,7 +47,8 @@ export type DocumentActionVariant =
   | 'secondary'
   | 'tertiary'
   | 'danger'
-  | 'terminal';
+  | 'terminal'
+  | 'plate';
 export type DocumentActionPresentation = 'inline' | 'mobile_dock';
 
 interface ActionRegion {
@@ -84,6 +85,10 @@ const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
   danger: 'da-danger font-body text-[15px] font-medium normal-case tracking-normal',
   terminal:
     'da-terminal whitespace-nowrap font-mono text-[12px] uppercase font-medium tracking-[0]',
+  // US-46 R203 — the band's one Next act, a filled charcoal plate: Inter 15
+  // semibold, sentence case, no scores. It never commits; the fill and its
+  // states live in globals.css beside `.da-terminal`.
+  plate: 'da-plate font-body text-[15px] font-semibold normal-case tracking-normal',
 };
 
 interface DocumentActionBaseProps {
@@ -390,10 +395,11 @@ interface DocumentActionGroupProps {
   'aria-label'?: string;
 }
 
-/* Leadership is a role, not a look: `primary` and `inked` are two renderings of
-   the same "one leader per region" claim, so the ≤1 guard counts them together
-   (an inked ledger head beside a primary is still two leaders). */
-const LEADER_VARIANTS: readonly DocumentActionVariant[] = ['primary', 'inked'];
+/* Leadership is a role, not a look: `primary`, `inked` and `plate` are three
+   renderings of the same "one leader per region" claim, so the ≤1 guard counts
+   them together (an inked ledger head beside a primary is still two leaders,
+   and the band's Next plate is that region's lead, as its `primary` was). */
+const LEADER_VARIANTS: readonly DocumentActionVariant[] = ['primary', 'inked', 'plate'];
 const LEADER_SELECTOR = LEADER_VARIANTS.map(
   (variant) => `[data-action-variant="${variant}"]`,
 ).join(', ');

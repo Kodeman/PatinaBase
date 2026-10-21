@@ -53,9 +53,10 @@ function restRulesTouching(pattern: RegExp): Rule[] {
   );
 }
 
-/** The Scored Ink grammar: the control, its parts, and the six tiers. */
+/** The Scored Ink grammar: the control, its parts, and the seven tiers
+ *  (US-46 R203 adds the band's charcoal Next plate). */
 const ACTION_SELECTOR =
-  /\.da-(act|hit|pool|label|leading|trailing|primary|secondary|tertiary|danger|inked|terminal)\b/;
+  /\.da-(act|hit|pool|label|leading|trailing|primary|secondary|tertiary|danger|inked|terminal|plate)\b/;
 
 describe("PP-3 · the rest rule is unconditional", () => {
   it("reads globals.css and finds the Scored Ink block", () => {
@@ -207,6 +208,28 @@ describe("PP-3 · the rest rule is unconditional", () => {
     const taken = ALL_RULES.filter(
       (rule) =>
         /\.da-terminal\b/.test(rule.selector) &&
+        /(^|[;{\s])transform\s*:/.test(rule.body),
+    ).map((rule) => rule.selector);
+    expect(taken).toEqual([]);
+  });
+
+  it("keeps a held or disabled Next plate legible as the plate (US-46 R203)", () => {
+    // Faint ink on a charcoal fill would vanish, so the plate retreats to rail
+    // stock with its edge drawn back in, exactly as the terminal does.
+    const unavailable = ALL_RULES.find((rule) =>
+      /^\.da-plate:disabled, ?\.da-plate\[aria-disabled='true'\]$/.test(
+        rule.selector,
+      ),
+    );
+    expect(unavailable).toBeDefined();
+    expect(unavailable!.body).toMatch(
+      /background-color:\s*var\(--doc-rail-stock\)/,
+    );
+    expect(unavailable!.body).toMatch(/border:\s*1px solid var\(--/);
+    // and it takes the shared press: nothing in the plate tier undoes it.
+    const taken = ALL_RULES.filter(
+      (rule) =>
+        /\.da-plate\b/.test(rule.selector) &&
         /(^|[;{\s])transform\s*:/.test(rule.body),
     ).map((rule) => rule.selector);
     expect(taken).toEqual([]);

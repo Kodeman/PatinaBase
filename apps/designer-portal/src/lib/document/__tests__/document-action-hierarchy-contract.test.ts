@@ -199,8 +199,8 @@ function ledgerLiterals(source: string): string[] {
 /**
  * US-43 R5 — the scored word's grammar in globals.css. jsdom applies no
  * stylesheet, so the CSS half of the grammar is pinned at the source: the
- * on-dark inks, the [data-ground="dark"] restatement of every scored tier,
- * and the §A11 forced-colors block.
+ * scored tiers, US-46 R203's charcoal Next plate (which retired US-43's
+ * dark ground and its on-dark inks), and the §A11 forced-colors block.
  */
 const globalsCss = readFileSync(join(SRC, "app", "globals.css"), "utf8");
 const scoredInkBlock = globalsCss.slice(
@@ -215,12 +215,11 @@ function cssRule(selectorFragment: string, source = scoredInkBlock): string {
 }
 
 describe("US-43 R5 scored-word grammar (globals.css)", () => {
-  it("declares the on-dark inks in :root", () => {
-    expect(globalsCss).toMatch(/--on-dark-ink:\s*var\(--ink-paper\);/);
-    expect(globalsCss).toMatch(/--on-dark-muted:\s*var\(--color-pearl\);/);
-    expect(globalsCss).toMatch(/--on-dark-clay:\s*#D8B98A;/);
-    expect(globalsCss).toMatch(/--on-dark-terracotta:\s*#E2A895;/);
-    expect(globalsCss).toMatch(/--focus-on-dark:\s*var\(--on-dark-ink\);/);
+  it("retires the dark ground: no on-dark inks and no [data-ground] rule (US-46 R203)", () => {
+    expect(globalsCss).not.toMatch(/--on-dark-[a-z]+\s*:/);
+    expect(globalsCss).not.toMatch(/--focus-on-dark\s*:/);
+    expect(globalsCss).not.toContain("[data-ground");
+    expect(globalsCss).toMatch(/--focus-ring:\s*var\(--color-clay-ink\);/);
   });
 
   it("sets no caps, mono face or tracking on any scored tier but the terminal label", () => {
@@ -239,25 +238,44 @@ describe("US-43 R5 scored-word grammar (globals.css)", () => {
     expect(scoredInkBlock).toMatch(/\n\.da-label::after \{\s*bottom:\s*-\d/);
   });
 
-  it("restates every non-filled tier for a dark ground", () => {
-    expect(cssRule("[data-ground='dark'] :is(.da-primary, .da-secondary, .da-tertiary) {")).toContain(
-      "color: var(--on-dark-ink)",
-    );
-    expect(cssRule("[data-ground='dark'] .da-danger {")).toContain("color: var(--on-dark-terracotta)");
-    expect(cssRule("[data-ground='dark'] .da-primary .da-label::before {")).toContain("var(--on-dark-ink)");
-    expect(cssRule("[data-ground='dark'] .da-primary .da-label::after {")).toContain("var(--on-dark-clay)");
-    expect(cssRule("[data-ground='dark'] :is(.da-secondary, .da-tertiary) .da-label::before {")).toContain(
-      "var(--on-dark-muted)",
-    );
-    expect(cssRule("[data-ground='dark'] .da-act::before {")).toContain("var(--on-dark-muted)");
-    expect(cssRule("[data-ground='dark'] :is(.da-secondary, .da-tertiary):hover {")).toContain(
-      "var(--on-dark-ink)",
-    );
-    const focus = cssRule("[data-ground='dark'] .da-act:focus-visible {");
-    expect(focus).toContain("outline: 2px solid var(--focus-on-dark)");
+  it("fills the Next plate charcoal, unscored, 44px, 2px radius — never forest (US-46 R203)", () => {
+    const plate = cssRule(".da-plate {");
+    expect(plate).toContain("background-color: var(--ink)");
+    expect(plate).toContain("color: var(--ink-paper)");
+    expect(plate).toContain("min-height: 44px");
+    expect(plate).toContain("padding: 0 20px");
+    expect(plate).toContain("border-radius: 2px");
+    expect(plate).not.toContain("forest");
+    // no clay score: both of the label's scores are switched off
+    expect(scoredInkBlock).toMatch(/\.da-plate \.da-label::before,\s*\.da-plate \.da-label::after\s*\{\s*content:\s*none;/);
+    // hover and press deepen value to the deck's #1F1D1A
+    expect(cssRule(".da-plate:hover,")).toContain("background-color: #1F1D1A");
+    // focus: the shared paper ring, 2px out
+    const focus = cssRule(".da-plate:focus-visible {");
+    expect(focus).toContain("outline: 2px solid var(--focus-ring)");
     expect(focus).toContain("outline-offset: 2px");
-    // inked and terminal never stand on a dark ground
-    expect(scoredInkBlock).not.toMatch(/\[data-ground='dark'\][^{]*\.da-(inked|terminal)/);
+    // held or disabled: rail stock with its edge drawn back in, as the terminal
+    expect(cssRule(".da-plate:disabled,")).toContain("background-color: var(--doc-rail-stock)");
+    // the forest terminal is untouched by the plate
+    expect(cssRule(".da-terminal {")).toContain("background-color: var(--color-forest)");
+  });
+
+  it("sets the plate's label in Inter 15 semibold sentence case, and counts it as the region's lead", () => {
+    const action = readComponent("document-action.tsx");
+    expect(action).toContain(
+      "plate: 'da-plate font-body text-[15px] font-semibold normal-case tracking-normal'",
+    );
+    expect(action).toContain("const LEADER_VARIANTS: readonly DocumentActionVariant[] = ['primary', 'inked', 'plate'];");
+  });
+
+  it("prints the band's two Next acts as the plate, and the dock's copy of that Next too", () => {
+    const band = readComponent("lens-band.tsx");
+    expect(band.match(/variant="plate"/g) ?? []).toHaveLength(2);
+    expect(band).not.toContain('variant="primary"');
+    expect(band).not.toContain("data-ground");
+    const dock = readComponent("mobile/mobile-bar.tsx");
+    expect(dock).toContain("variant: bandsNext ? ('plate' as const) : ('primary' as const)");
+    expect(dock).not.toContain("data-ground");
   });
 
   it("carries the §A11 forced-colors rules without un-forcing the text", () => {
@@ -268,6 +286,7 @@ describe("US-43 R5 scored-word grammar (globals.css)", () => {
     expect(cssRule(".da-label::after {", block)).toContain("background-color: CanvasText");
     expect(cssRule(".da-terminal {", block)).toContain("border: 1px solid ButtonText");
     expect(block).toMatch(/\.da-inked,\s*\.da-terminal\s*\{/);
+    expect(cssRule(".da-plate {", block)).toContain("border: 1px solid ButtonText");
     expect(block).toMatch(/\.da-act:focus-visible[^{]*\{\s*outline: 2px solid Highlight/);
     // only the scores opt out — never the act or its word
     expect(block.match(/forced-color-adjust:\s*none/g) ?? []).toHaveLength(1);
