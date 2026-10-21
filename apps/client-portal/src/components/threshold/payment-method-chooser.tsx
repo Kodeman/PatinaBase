@@ -87,8 +87,11 @@ export interface PaymentMethodChooserProps {
   disabled?: boolean;
   /** The designer the check acknowledgement goes to. */
   designerName: string;
-  /** Who the check is written to: the studio on this invoice's own row. */
-  payeeName: string;
+  /**
+   * Who the check is written to: the studio on this invoice's own row. Null
+   * while that isn't known, and then no mailing instructions are given.
+   */
+  payeeName: string | null;
   invoiceNumber: string | null;
   /** Studio's check_remit_to; falls back to CHECK_REMIT_FALLBACK when unset. */
   checkRemitTo: string | null;
@@ -200,18 +203,23 @@ export function PaymentMethodChooser({
 
       <CardFeeNotice id={cardFeeReasonId} state={cardFeeState} onRetry={onRetryCardFee} />
 
-      {method === 'check' && (
-        <CheckPanel
-          payeeName={payeeName}
-          designerName={designerName}
-          remitTo={remitAddress(checkRemitTo)}
-          memo={checkMemo(invoiceNumber)}
-          balance={balance}
-          checkExpected={checkExpected}
-          disabled={disabled}
-          intent={intent}
-        />
-      )}
+      {method === 'check' &&
+        (payeeName ? (
+          <CheckPanel
+            payeeName={payeeName}
+            designerName={designerName}
+            remitTo={remitAddress(checkRemitTo)}
+            memo={checkMemo(invoiceNumber)}
+            balance={balance}
+            checkExpected={checkExpected}
+            disabled={disabled}
+            intent={intent}
+          />
+        ) : (
+          <p data-testid="threshold-check-unavailable" className="cp-note text-[15px] leading-[1.5]">
+            We can’t give mailing details for a check until we know who this invoice is payable to.
+          </p>
+        ))}
     </div>
   );
 }

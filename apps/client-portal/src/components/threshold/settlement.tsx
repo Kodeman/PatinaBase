@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   InvoiceCheckoutError,
@@ -15,6 +15,7 @@ import { clientEvents } from '@/lib/analytics/events';
 import type { InvoiceRow, InvoiceServerHold } from '@/lib/threshold/invoice-rollup';
 import { refusalSentence } from '@/lib/threshold/refusal';
 
+import type { LetterPayee } from './letter-payee';
 import {
   METHOD_PHRASE,
   methodQuote,
@@ -36,7 +37,8 @@ import {
    that only tells the designer a check is coming, and one Checkout session
    per press. The two holds the boundary can answer are standing facts, not
    failures, and they are handed up by invoice id so closing the sheet cannot
-   forget them. ─────────────────────────────────────────────────────────── */
+   forget them. The claim itself belongs to the invoice's row, which outlives
+   the sheet, so a sheet opened again still sees a claim in flight. ─────── */
 
 const CONSEQUENCE =
   'The next screen shows the amount and asks you to confirm. Nothing is charged until you confirm there. Opening these details or choosing a method doesn’t pay anything.';
@@ -51,13 +53,42 @@ export function holdSentence(hold: InvoiceServerHold, designerName: string): str
   return `We couldn’t confirm what happened with this invoice’s last payment. It’s on hold until it’s checked, so it can’t be paid again here. ${sentenceStart(designerName)} can help. ${HELP}`;
 }
 
+/** What an invoice says in place of its payee while it has none: never a guessed name. */
+export function PayeeUnknown({ payee }: { payee: LetterPayee }) {
+  if (payee.state === 'known') return null;
+  return (
+    <p data-testid="payee-unknown" className="text-[16px] leading-[1.55] text-[var(--text-primary)]">
+      {payee.state === 'loading'
+        ? 'Payee details are loading.'
+        : 'We couldn’t load who this invoice is payable to.'}
+    </p>
+  );
+}
+
+/**
+ * The Checkout claim for one invoice. Its owner is the invoice's row, not the
+ * sheet: closing the details or opening another row unmounts the sheet while
+ * a claim may still be out, and a fresh guard there would let a second one
+ * start (US-45 review R7).
+ */
+export function useCheckoutAttempt() {
+  const startCheckout = useStartCheckout();
+  // State lands after the render; the ref closes a second press in the same tick.
+  const starting = useRef(false);
+  return { startCheckout, starting };
+}
+
+export type CheckoutAttempt = ReturnType<typeof useCheckoutAttempt>;
+
 export interface SettlementProps {
   /** The payable invoice, as the projection reads it. */
   row: InvoiceRow;
+  /** The invoice's Checkout claim, from the owner that outlives this sheet. */
+  attempt: CheckoutAttempt;
   /** The designer the check acknowledgement and any hold refer to. */
   designerName: string;
   /** The studio the money is payable to, from this invoice's own row. */
-  payeeName: string;
+  payee: LetterPayee;
   /**
    * Hold the act. The letterbox raises this while a return from the till is
    * still unconfirmed, so a second attempt cannot start in that window.
@@ -95,8 +126,9 @@ function cardFeeStateOf(options: ReturnType<typeof useInvoicePaymentOptions>): C
 
 export function Settlement({
   row,
+  attempt,
   designerName,
-  payeeName,
+  payee,
   hold = false,
   serverHold = null,
   onHold,
@@ -105,23 +137,34 @@ export function Settlement({
   onRefetch,
 }: SettlementProps) {
   const { invoice, balanceCents, currency } = row;
+  const { startCheckout, starting } = attempt;
   const [method, setMethod] = useState<InvoicePaymentUIMethod>('us_bank_account');
   const [payError, setPayError] = useState<string | null>(null);
   // Kept here as well as handed up, so the sheet never offers a second charge
   // while the owner's projection catches up.
   const [localHold, setLocalHold] = useState<InvoiceServerHold | null>(null);
   const [localCheckExpected, setLocalCheckExpected] = useState(false);
-  // State lands after the render; the ref closes a second press in the same tick.
-  const starting = useRef(false);
+  // Only the sheet a claim was started from may follow it to the till, and
+  // only while that sheet is still open: a sheet opened again is a new one.
+  const open = useRef(true);
+  useEffect(() => {
+    open.current = true;
+    return () => {
+      open.current = false;
+    };
+  }, []);
 
   const paymentOptions = useInvoicePaymentOptions(invoice.id);
-  const startCheckout = useStartCheckout();
   const notifyCheckIntent = useNotifyCheckIntent();
+  // A row read without its payments cannot prove nothing is already clearing.
+  const unverified = !row.paymentsRead;
 
   const cardFeeState = cardFeeStateOf(paymentOptions);
   const cardSurchargeBps =
     cardFeeState === 'resolved' ? (paymentOptions.data?.card_surcharge_bps ?? null) : null;
   const quote = methodQuote(method, balanceCents, cardSurchargeBps);
+  const total = quote ? formatCurrency(quote.totalCents, currency) : null;
+  const actReason = unavailableReason(hold, unverified, total);
   const activeHold = serverHold ?? localHold;
   const expected = checkExpected || localCheckExpected;
 
@@ -142,10 +185,10 @@ export function Settlement({
 
   const handleSettle = async () => {
     // One press, at most one Checkout session: a second press while the first
-    // is being claimed, with the check panel open, or without a confirmed
-    // total, does nothing.
-    if (starting.current || startCheckout.isPending || method === 'check' || !quote) return;
-    if (hold || activeHold) return;
+    // is being claimed, with the check panel open, or while the act has a
+    // reason it can't be taken (no confirmed total among them), does nothing.
+    if (starting.current || startCheckout.isPending || method === 'check') return;
+    if (actReason || activeHold) return;
     starting.current = true;
     setPayError(null);
     try {
@@ -153,6 +196,12 @@ export function Settlement({
         invoiceId: invoice.id,
         paymentMethod: method,
       });
+      if (!open.current) {
+        // Closed, or another row opened, while the claim was out: she is no
+        // longer looking at this sheet, so nothing leaves for the till.
+        starting.current = false;
+        return;
+      }
       clientEvents.paymentStarted({
         invoiceId: invoice.id,
         amountCents: receipt.amount_cents,
@@ -189,9 +238,10 @@ export function Settlement({
           dueDate={invoice.due_date}
           dueState={row.dueState}
           currency={currency}
-          payee={payeeName}
+          payee={payee.name}
           settle={null}
         >
+          <PayeeUnknown payee={payee} />
           <p
             role="status"
             data-testid="settlement-hold"
@@ -206,7 +256,6 @@ export function Settlement({
   }
 
   const online = method !== 'check';
-  const total = quote ? formatCurrency(quote.totalCents, currency) : null;
 
   return (
     <div data-testid="settlement">
@@ -218,7 +267,7 @@ export function Settlement({
         dueDate={invoice.due_date}
         dueState={row.dueState}
         currency={currency}
-        payee={payeeName}
+        payee={payee.name}
         settle={
           online
             ? {
@@ -227,11 +276,12 @@ export function Settlement({
                   : 'Continue to secure payment',
                 onSettle: () => void handleSettle(),
                 pending: startCheckout.isPending,
-                unavailableReason: unavailableReason(hold, total),
+                unavailableReason: actReason,
               }
             : null
         }
       >
+        <PayeeUnknown payee={payee} />
         <PaymentMethodChooser
           method={method}
           onMethodChange={handleMethodChange}
@@ -242,7 +292,7 @@ export function Settlement({
           onRetryCardFee={() => void paymentOptions.refetch()}
           disabled={startCheckout.isPending || notifyCheckIntent.isPending}
           designerName={designerName}
-          payeeName={payeeName}
+          payeeName={payee.name}
           invoiceNumber={invoice.invoice_number}
           checkRemitTo={paymentOptions.data?.check_remit_to ?? null}
           checkExpected={expected}
@@ -280,9 +330,16 @@ export function Settlement({
   );
 }
 
-function unavailableReason(hold: boolean, total: string | null): string | undefined {
+function unavailableReason(
+  hold: boolean,
+  unverified: boolean,
+  total: string | null,
+): string | undefined {
   if (hold) {
     return 'Paying is paused until Patina confirms what happened at checkout. Do not submit another payment until the status is known.';
+  }
+  if (unverified) {
+    return 'Paying is paused until this invoice’s payment status loads.';
   }
   if (!total) return 'Card payment is unavailable until the card fee loads.';
   return undefined;
