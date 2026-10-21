@@ -229,13 +229,17 @@ function waitingEdition(editionId: string | null, edition: ClientProjectReviewBu
     : null;
 }
 
+type ScopeChangeAskRow = { id: string; title: string | null; status: string; request_origin: string | null };
+
 /** `PendingScopeChangeAsk`'s first card: a change the studio sent, not one she asked for. */
-function waitingScopeChange(
-  rows: readonly { id: string; title: string | null; status: string; request_origin: string | null }[] | undefined,
-) {
-  const change = (rows ?? []).find(
+function openScopeChange(rows: readonly ScopeChangeAskRow[] | undefined) {
+  return (rows ?? []).find(
     (row) => row.request_origin !== 'client_request' && (row.status === 'sent' || row.status === 'viewed'),
   );
+}
+
+function waitingScopeChange(rows: readonly ScopeChangeAskRow[] | undefined) {
+  const change = openScopeChange(rows);
   return change ? progressAsk(`scope-change-${change.id}`, change.title) : null;
 }
 
@@ -921,11 +925,19 @@ export function Threshold({
   const papersUnread = proposalsQuery.isError;
 
   // ── the doorstep's sentence ────────────────────────────────────────────────
+  // The asks under Approvals are owed her answer as much as a door is owed her
+  // signature, so the sentence names them (US-45 FX-I) by the same rules
+  // "Waiting on you" reads them by.
   const standing =
     hydrated && !loading && !papersUnread
       ? thresholdStanding({
           doors: model.marks.filter((mark) => mark.kind === "door").length,
           walls: model.marks.filter((mark) => mark.kind === "wall").length,
+          approvals: doorstepAsks.filter(isClientActionableProjectApproval).length,
+          otherAsks:
+            !!waitingReviewRequest(pendingReviewQuery.data, projectId, adopted) ||
+            !!waitingEdition(editionId, editionQuery.data) ||
+            !!openScopeChange(scopeChangesQuery.data),
           balanceCents: model.ledger.owedCents ?? 0,
           nothingOwed:
             model.marks.length === 0 && model.doorstepAsks.length === 0,

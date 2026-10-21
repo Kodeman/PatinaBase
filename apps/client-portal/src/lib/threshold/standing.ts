@@ -50,6 +50,10 @@ export interface ThresholdStandingInput {
   doors: number;
   /** Finished trade work waiting to be accepted. */
   walls: number;
+  /** Project approvals still owed her answer, each counted once. */
+  approvals?: number;
+  /** A review, edition or scope-change ask under Approvals is owed her answer. */
+  otherAsks?: boolean;
   /** The open balance, in cents. */
   balanceCents: number;
   /** True when no mark waits on her hand. */
@@ -74,6 +78,17 @@ function wallsClause(walls: number): string | null {
 }
 
 /**
+ * The asks under Approvals. Approvals are counted; the other asks are unlike
+ * them (CPUX-01.7 forbids summing unlike kinds), so they are named once, and
+ * only when no approval already sends her to the same section.
+ */
+function asksClause(approvals: number, otherAsks: boolean): string | null {
+  if (approvals === 1) return 'one approval needs your answer';
+  if (approvals > 1) return `${countInWords(approvals)} approvals need your answer`;
+  return otherAsks ? 'a request waits for your answer' : null;
+}
+
+/**
  * The doorstep's sentence: what is closed, or — when nothing is — what stands
  * open behind an unlocked door.
  */
@@ -81,7 +96,11 @@ export function thresholdStanding(m: ThresholdStandingInput): string {
   const doors = tally(m.doors);
   const walls = tally(m.walls);
 
-  const clauses = [doorsClause(doors), wallsClause(walls)].filter(
+  const clauses = [
+    doorsClause(doors),
+    wallsClause(walls),
+    asksClause(tally(m.approvals), m.otherAsks === true),
+  ].filter(
     (clause): clause is string => clause !== null,
   );
 
