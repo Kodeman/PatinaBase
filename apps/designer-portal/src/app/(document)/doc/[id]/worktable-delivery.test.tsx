@@ -8,9 +8,9 @@
  * The mock surface is worktable.test.tsx's, with two stubs instrumented: the
  * FF&E section reports its release offer and records whether it was told to
  * demote, and the money region records the posture it was handed. The stubbed
- * head mirrors the real section's rule — release inked unless another head has
+ * head mirrors the real section's rule — release leads unless another head has
  * taken it — which ffe-release-lift.test.tsx pins on the real component; the
- * page's claim here is that it tells the section to demote and inks the leader
+ * page's claim here is that it tells the section to demote and prints the leader
  * exactly once itself.
  *
  * Flag OFF is paper-order.test.tsx's subject and is untouched by this wave.
@@ -151,7 +151,7 @@ jest.mock('@/components/document/ffe-section', () => ({
     return (
       <div data-index-region="ffe">
         {!props.releaseLeaderElsewhere && (
-          <button type="button" data-action-variant="inked">
+          <button type="button" data-action-variant="primary">
             Release for authorization
           </button>
         )}
@@ -418,16 +418,18 @@ describe('the Delivery table, tooled', () => {
       expect(container.querySelectorAll('[data-lens-band]')).toHaveLength(1);
     });
 
-    it('inks exactly one release leader on the page — never two', () => {
+    it('prints exactly one release leader on the page — never two', () => {
       mockReleaseOffered = true;
       const { container } = render(<DocumentPage params={params} />);
 
       expect(mockFfeProps.current.releaseLeaderElsewhere).toBe(true);
-      const inkedReleases = Array.from(
-        container.querySelectorAll('[data-action-variant="inked"]'),
+      // US-46 R203 — the lift is the scored, unfilled lead; the band's plate
+      // is the paper's only non-terminal fill.
+      const releases = Array.from(
+        container.querySelectorAll('[data-action-variant="primary"]'),
       ).filter((el) => el.textContent?.includes('Prepare purchasing authorization'));
-      expect(inkedReleases).toHaveLength(1);
-      expect(inkedReleases[0].closest('[data-release-lift]')).not.toBeNull();
+      expect(releases).toHaveLength(1);
+      expect(releases[0].closest('[data-release-lift]')).not.toBeNull();
     });
 
     it('prints no leader when the schedule has no release to offer', () => {
@@ -438,7 +440,9 @@ describe('the Delivery table, tooled', () => {
       // section-level release would be a second home for it, not a fallback.
       expect(mockFfeProps.current.releaseLeaderElsewhere).toBe(true);
       expect(
-        container.querySelectorAll('[data-action-variant="inked"]'),
+        Array.from(container.querySelectorAll('[data-action-variant="primary"]')).filter(
+          (el) => /authorization/.test(el.textContent ?? ''),
+        ),
       ).toHaveLength(0);
     });
 

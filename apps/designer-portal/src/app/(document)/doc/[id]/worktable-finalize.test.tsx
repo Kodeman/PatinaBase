@@ -6,7 +6,7 @@
  * four tools; this spec proves the Finalize table is the sent-proposal spread
  * with three things added and one taken away: the verdict roll-up promoted from
  * a 9px whisper to the headline sentence (and the whisper stood down), the one
- * inked leader at the spread head, the Offer facets folding open under it, and
+ * scored leader at the spread head, the Offer facets folding open under it, and
  * the client's copy on a shelf. Flag off, none of it exists and the whisper is
  * back where it was.
  */
@@ -546,10 +546,10 @@ describe('the Finalize table (W4a)', () => {
     expect(
       container.querySelector('a[href^="/drafting/proposal-live-1?flagged"]'),
     ).toBeNull();
-    // The next honest verb, and it is still the table's only inked act.
+    // The next honest verb, and it is still the table's only leader.
     expect(screen.getByRole('button', { name: /Preview as Avery Stone/ })).toHaveAttribute(
       'data-action-variant',
-      'inked',
+      'primary',
     );
     // The headline still states the flag as a fact — it is the VERB that had
     // nowhere to go, not the news.
@@ -609,7 +609,7 @@ describe('the Finalize table (W4a)', () => {
     renderPage();
     expect(screen.getByRole('button', { name: /Nudge Avery Stone/ })).toHaveAttribute(
       'data-action-variant',
-      'inked',
+      'primary',
     );
     expect(mockInstruments).toHaveBeenCalledWith(true);
   });
@@ -618,14 +618,16 @@ describe('the Finalize table (W4a)', () => {
     renderPage();
     expect(screen.getByRole('button', { name: /Preview as Avery Stone/ })).toHaveAttribute(
       'data-action-variant',
-      'inked',
+      'primary',
     );
   });
 
-  it('carries exactly one inked leader', () => {
+  it('carries exactly one leader, scored and unfilled (US-46 R203)', () => {
     mockFeedback = approvals(2);
     const { container } = renderPage();
-    expect(container.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
+    const head = container.querySelector('[data-finalize-head]')!;
+    expect(head.querySelectorAll('[data-action-variant="primary"], [data-action-variant="plate"]')).toHaveLength(1);
+    expect(head.querySelector('[data-action-variant="primary"]')).not.toBeNull();
   });
 
   it('folds the Offer open under the spread, read-only — the Drafting Room’s own rule', () => {
@@ -713,7 +715,7 @@ describe('the Finalize table (W4a)', () => {
     // the ladder prints no door to the copy.
     expect(container.querySelector('[data-lens-band]')).not.toBeNull();
     expect(container.querySelector('[data-ladder-door="clientcopy"]')).toBeNull();
-    expect(container.querySelector('[data-action-variant="inked"]')).toBeNull();
+    expect(container.querySelector('[data-action-region="finalize-leader"]')).toBeNull();
     // The whisper is back where it has always been.
     const whisper = screen.getByText('2 of 2 approved');
     expect(whisper.className).toContain('font-mono');

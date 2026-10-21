@@ -56,7 +56,7 @@ function restRulesTouching(pattern: RegExp): Rule[] {
 /** The Scored Ink grammar: the control, its parts, and the seven tiers
  *  (US-46 R203 adds the band's charcoal Next plate). */
 const ACTION_SELECTOR =
-  /\.da-(act|hit|pool|label|leading|trailing|primary|secondary|tertiary|danger|inked|terminal|plate)\b/;
+  /\.da-(act|hit|pool|label|leading|trailing|primary|secondary|tertiary|danger|terminal|plate)\b/;
 
 describe("PP-3 · the rest rule is unconditional", () => {
   it("reads globals.css and finds the Scored Ink block", () => {

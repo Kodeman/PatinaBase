@@ -990,31 +990,6 @@ html[data-loading-register] [data-register-off] {
   background-color: var(--color-terracotta);
 }
 
-/* ── INKED · the primary already flooded. A region ledger's leader is not a
-   word waiting to be inked — it is the word the ink has already taken, so the
-   pool opens to 150% at rest and never moves again. The stacking argument from
-   the top of this block still holds: the charcoal score melts into the charcoal
-   pool and the clay score rides on top of the ink, which is why the leader is
-   still legibly SCORED and not a plate. Hover/press shift value only. ─────── */
-.da-inked {
-  color: var(--color-off-white);
-}
-.da-inked .da-pool {
-  background-color: var(--color-charcoal);
-  clip-path: circle(150% at 50% 50%);
-  transition: background-color 150ms var(--ease-editorial);
-}
-.da-inked .da-label::before {
-  background-color: var(--color-charcoal);
-}
-.da-inked .da-label::after {
-  background-color: var(--color-clay);
-}
-.da-inked .da-leading,
-.da-inked .da-trailing {
-  color: var(--color-off-white);
-}
-
 /* ── TERMINAL · the one filled tier (R139, house sheet §A5 as amended by §F-C).
    Money moves or a paper is signed, and nothing else in either portal takes a
    fill — so the fill itself is the meaning, and the two portals share one
@@ -1062,10 +1037,13 @@ html[data-loading-register] [data-register-off] {
    sentence case (document-action.tsx). Hover and press deepen value only.
    The control keeps its honest 44px target, but the paint is 32px: it is
    inset 6px top and bottom on ::after, the way .da-pool keeps a scored word's
-   ink close to the word, so the plate sits inside the 56px band (R127). ── */
+   ink close to the word, so the plate sits inside the 56px band (R127). The
+   6px block padding matches that inset, so the paint always contains the
+   label: one line is 44 tall over 32 of paint, and a label that wraps grows
+   the target and the paint together (3 lines at 390: 57 over 45). ──────── */
 .da-plate {
   min-height: 44px;
-  padding: 0 20px;
+  padding: 6px 20px;
   color: var(--ink-paper);
 }
 .da-plate::after {
@@ -1122,23 +1100,6 @@ html[data-loading-register] [data-register-off] {
 .da-danger:hover {
   color: var(--color-error);
 }
-/* the inked leader is already flooded: the shared bead/flood clip-paths below
-   would re-open a pool that never closed, so hold the geometry and answer with
-   value alone — the ink lightens toward mocha, the clay score thickens. */
-.da-inked:hover .da-pool,
-.da-inked:active .da-pool {
-  clip-path: circle(150% at 50% 50%);
-}
-.da-inked:hover .da-pool {
-  background-color: var(--color-mocha);
-}
-.da-inked:hover .da-label::after {
-  height: 2px;
-}
-.da-inked:hover .da-trailing {
-  transform: translateX(2px);
-}
-
 /* ── press · the word drops a pixel, the ink opens from the contact point,
    and the label turns over a beat later as the flood overtakes it ────────── */
 .da-act:active {
@@ -1168,10 +1129,6 @@ html[data-loading-register] [data-register-off] {
 .da-danger:active .da-leading,
 .da-danger:active .da-trailing {
   color: var(--color-off-white);
-}
-/* held: the ink deepens back to charcoal from its hover mocha — value only. */
-.da-inked:active .da-pool {
-  background-color: var(--color-charcoal);
 }
 .da-secondary:active {
   color: var(--color-charcoal);
@@ -1274,19 +1231,10 @@ html[data-loading-register] [data-register-off] {
   background-color: var(--color-clay);
 }
 
-/* ── the inked leader focuses on its OWN ink ───────────────────────────────
-   The leader is already flooded charcoal, so the caret (quiet-ink) and the
-   melted charcoal score both sit charcoal-on-charcoal — the focus mark was
-   invisible on exactly the word a keyboard reaches first. Both invert to
-   off-white on the pool (≈13.6:1); the clay score already rides the ink at
-   ≈6.2:1 and keeps its colour, so the mark stays the proofreader's, not a
-   ring. Value only — no shadow (D4). ────────────────────────────────────── */
-.da-inked:focus-visible::before,
+/* ── the terminal's caret sits on its own fill, so it inverts to off-white
+   (≈13.6:1). Value only — no shadow (D4). ───────────────────────────────── */
 .da-terminal:focus-visible::before {
   color: var(--color-off-white);
-}
-.da-inked:focus-visible .da-label::before {
-  background-color: var(--color-off-white);
 }
 /* the plate's ring is drawn on the PAINT, not on the 44px target, so it stays
    inside the band: the shared paper ring, hugging the 32px plate, reads on
@@ -1309,7 +1257,7 @@ html[data-loading-register] [data-register-off] {
    High Contrast repaints every background to Canvas, and a score IS a
    background on an empty pseudo-element — so the scores alone opt out and
    draw in CanvasText. The text never opts out: the system keeps the word.
-   The filled tiers (inked, terminal, plate) lose their fill to Canvas, so a 1px ButtonText edge
+   The filled tiers (terminal, plate) lose their fill to Canvas, so a 1px ButtonText edge
    puts their silhouette back. `!important` because the per-variant and
    score colours above outrank a bare .da-label selector. */
 @media (forced-colors: active) {
@@ -1318,7 +1266,6 @@ html[data-loading-register] [data-register-off] {
     forced-color-adjust: none;
     background-color: CanvasText !important;
   }
-  .da-inked,
   .da-terminal {
     border: 1px solid ButtonText;
   }
@@ -1362,17 +1309,6 @@ html[data-loading-register] [data-register-off] {
   .da-act:active .da-pool {
     clip-path: circle(140% at var(--ink-x, 50%) var(--ink-y, 50%));
     transition: none;
-  }
-  /* the inked leader never had motion to still — it only has to keep its
-     flood, which the two stilled rules above would otherwise close. */
-  .da-inked .da-pool,
-  .da-inked:hover .da-pool,
-  .da-inked:active .da-pool {
-    clip-path: circle(150% at 50% 50%);
-    transition: none;
-  }
-  .da-inked:hover .da-trailing {
-    transform: none;
   }
   /* :active re-declares the transition longhands at (0,2,0), which outranks the
      blanket `.da-act { transition: none }` above — so the press clock has to be

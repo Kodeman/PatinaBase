@@ -11,7 +11,7 @@
  *      IS the state of the document. The whisper stands down here — the same
  *      fact printed twice at two weights is two documents.
  *
- *   2. The one inked leader, derived (finalize-leader.ts) from lifecycle ×
+ *   2. The one scored leader, derived (finalize-leader.ts) from lifecycle ×
  *      verdicts × the send wall's own nudge decision. Every verb here already
  *      exists below on the paper; the head promotes one of them and the
  *      instruments stand that one down, so the act is offered once.
@@ -130,7 +130,7 @@ export function FinalizeHead({
           {leader.kind === 'nudge' && !oneVoice && (
             <DocumentAction
               actionKey="nudge-client"
-              variant="inked"
+              variant="primary"
               loading={nudge.isPending}
               loadingLabel="Nudging…"
               onClick={onNudge}
@@ -141,7 +141,7 @@ export function FinalizeHead({
           {leader.kind === 'preview' && (
             <DocumentAction
               actionKey="preview-proposal-as-client"
-              variant="inked"
+              variant="primary"
               onClick={() => setPreviewOpen(true)}
             >
               {leader.label}
@@ -150,7 +150,7 @@ export function FinalizeHead({
           {leader.kind === 'resend' && (
             <DocumentAction
               actionKey="resend-proposal"
-              variant="inked"
+              variant="primary"
               onClick={() => setResendOpen(true)}
             >
               {leader.label}

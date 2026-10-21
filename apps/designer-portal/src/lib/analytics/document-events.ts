@@ -351,7 +351,6 @@ export const documentEvents = {
     action_key: string;
     variant:
       | "primary"
-      | "inked"
       | "secondary"
       | "tertiary"
       | "danger"
@@ -366,7 +365,6 @@ export const documentEvents = {
     action_key: string;
     variant:
       | "primary"
-      | "inked"
       | "secondary"
       | "tertiary"
       | "danger"

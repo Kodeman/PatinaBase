@@ -33,7 +33,7 @@ export function ReleaseLift() {
       >
         <DocumentAction
           actionKey="release-for-authorization"
-          variant="inked"
+          variant="primary"
           onClick={() => {
             window.dispatchEvent(
               new CustomEvent<StartReleaseEventDetail>(START_RELEASE_EVENT, {
