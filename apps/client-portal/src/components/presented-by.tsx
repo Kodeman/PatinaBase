@@ -54,7 +54,107 @@ function telHref(phone: string): string | null {
 }
 
 const LINK_CLASS =
-  'underline decoration-[var(--border-default)] underline-offset-[3px] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--threshold-accent,#8A5F19)]';
+  'underline decoration-[var(--border-default)] underline-offset-[3px] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
+
+/* ── CONTACT YOUR DESIGNER (CPUX-06) ─────────────────────────────────────────
+   Named help near the summary, built from the same resolved fields: the lead's
+   name, the phone and email the studio presented, and the reply field when this
+   house has a thread to write to. Nothing is inferred — no address guessed, no
+   response time promised — and with nothing presented it says where help is
+   without inventing a channel. Opening it sends nothing. ─────────────────── */
+
+export interface ContactDesignerProps {
+  identity?: PresentationIdentity | null;
+  /** The in-page id of the existing reply field, when a thread exists. */
+  writeAnchor?: string | null;
+  className?: string;
+}
+
+function joinedWithOr(parts: { key: string; node: ReactNode }[]): ReactNode {
+  return parts.map((part, index) => (
+    <Fragment key={part.key}>
+      {index === 0 ? '' : index === parts.length - 1 ? ', or ' : ', '}
+      {part.node}
+    </Fragment>
+  ));
+}
+
+export function ContactDesigner({ identity, writeAnchor, className }: ContactDesignerProps) {
+  const designerName = identity?.designerName?.trim() || null;
+  const email = identity?.email?.trim() || null;
+  const phone = identity?.phone?.trim() || null;
+  const phoneHref = phone ? telHref(phone) : null;
+
+  const ways: { key: string; node: ReactNode }[] = [];
+  if (phone) {
+    ways.push({
+      key: 'phone',
+      node: (
+        <>
+          {'Call '}
+          {phoneHref ? (
+            <a className={`${LINK_CLASS} whitespace-nowrap`} href={phoneHref} data-testid="contact-phone">
+              {phone}
+            </a>
+          ) : (
+            <span className="whitespace-nowrap" data-testid="contact-phone">
+              {phone}
+            </span>
+          )}
+        </>
+      ),
+    });
+  }
+  if (email) {
+    ways.push({
+      key: 'email',
+      node: (
+        <>
+          {ways.length === 0 ? 'Email ' : 'email '}
+          <a className={LINK_CLASS} href={`mailto:${email}`} data-testid="contact-email">
+            {email}
+          </a>
+        </>
+      ),
+    });
+  }
+  if (writeAnchor) {
+    ways.push({
+      key: 'write',
+      node: (
+        <a className={LINK_CLASS} href={`#${writeAnchor}`} data-testid="contact-write">
+          {ways.length === 0 ? 'Write here' : 'write here'}
+        </a>
+      ),
+    });
+  }
+
+  return (
+    <section
+      id="contact"
+      aria-labelledby="contact-title"
+      data-testid="contact-designer"
+      className={className}
+    >
+      <h3
+        id="contact-title"
+        className="font-heading text-[1.25rem] font-medium leading-snug text-[var(--text-primary)]"
+      >
+        {designerName ? `Contact ${designerName}` : 'Contact your designer'}
+      </h3>
+      <p className="mt-1 text-[15px] leading-relaxed text-[var(--text-body)]">
+        {ways.length > 0 ? (
+          <>
+            {joinedWithOr(ways)}
+            {'.'}
+          </>
+        ) : (
+          'Contact your designer using the phone number or email you already use.'
+        )}
+      </p>
+    </section>
+  );
+}
 
 export function PresentedBy({ identity, className }: PresentedByProps) {
   if (!hasPresentation(identity)) return null;

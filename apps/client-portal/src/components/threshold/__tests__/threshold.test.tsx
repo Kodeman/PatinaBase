@@ -3401,3 +3401,56 @@ describe('Threshold — the landmark ledger and the story pole’s sections', ()
     }
   });
 });
+
+describe('Threshold — Project progress and designer help (CPUX-06)', () => {
+  it('stands the summary at #road from the sources the house holds, with no percentage', () => {
+    const { container } = renderThreshold();
+    const road = container.querySelector<HTMLElement>('#road')!;
+
+    expect(within(road).getByRole('heading', { name: 'Project progress' })).toBeInTheDocument();
+    expect(road).toHaveAccessibleName('Project progress');
+    expect(within(road).getByTestId('progress-now')).not.toHaveTextContent(
+      'No project stage is shown here yet.',
+    );
+    // No milestone is held, so the project's own projected completion is the
+    // target — labelled a target, never a promise.
+    expect(within(road).getByTestId('progress-target')).toHaveTextContent(
+      'Target completion15 October 2099A target, not a confirmed date.',
+    );
+    // The standing note's own send date, not the fetch time.
+    expect(within(road).getByTestId('progress-update')).toHaveTextContent('Sent 4 August 2026');
+    // The phase mapper's progress figure (60 in this fixture) is never a headline.
+    expect(road.textContent).not.toMatch(/%|60\b/);
+  });
+
+  it('a failed note read keeps the phase summary and offers a Retry that re-reads', () => {
+    const refetch = jest.fn();
+    notesMock.mockReturnValue({ data: undefined, isPending: false, isLoading: false, isError: true, refetch });
+    const { container } = renderThreshold();
+    const road = container.querySelector<HTMLElement>('#road')!;
+
+    expect(within(road).getByTestId('progress-now')).not.toHaveTextContent('No project stage');
+    expect(within(road).getByTestId('progress-update-error')).toHaveTextContent(
+      'We couldn’t load the current designer update.',
+    );
+    expect(within(road).queryByText('No current designer update is shown here.')).toBeNull();
+    fireEvent.click(within(road).getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('names the presented designer and points at the existing reply field', () => {
+    mockPresentation.mockReturnValue({
+      data: { designerName: 'Maren Holt', phone: '(608) 555-0148' },
+      isPending: false,
+    });
+    correspondenceMock.mockReturnValue({ ...correspondenceMock(), threadId: 'thr-1' });
+    const { container } = renderThreshold();
+    const help = screen.getByTestId('contact-designer');
+
+    expect(within(help).getByRole('heading', { name: 'Contact Maren Holt' })).toBeInTheDocument();
+    expect(within(help).getByTestId('contact-phone')).toHaveAttribute('href', 'tel:6085550148');
+    expect(within(help).getByTestId('contact-write')).toHaveAttribute('href', '#write-back');
+    expect(container.querySelector('#write-back')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Write to Maren Holt' })).toBeInTheDocument();
+  });
+});

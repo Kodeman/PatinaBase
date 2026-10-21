@@ -26,7 +26,7 @@ import type { ProjectApprovalReview, ProjectNote } from "@patina/supabase";
 import { getFieldTradeLabel } from "@patina/types";
 
 import { Colophon } from '@/components/threshold/instruments/colophon';
-import { PresentedBy, hasPresentation } from '@/components/presented-by';
+import { ContactDesigner, PresentedBy, hasPresentation } from '@/components/presented-by';
 import { openChapterOf } from '@/components/threshold/instruments/making-spine';
 import { monthAndYear } from '@/components/threshold/instruments/standing-sentence';
 import { clientEvents } from '@/lib/analytics/events';
@@ -70,7 +70,7 @@ import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 import { ApprovalAsk, ApprovalRecords, useDoorstepApprovals } from './approval-ask';
 import { KIND_LABEL } from './consent-copy';
 import { PapersUnread } from './letterbox-door';
-import { Letters, MuteLetters, WriteBack } from './correspondence';
+import { Letters, MuteLetters, WRITE_BACK_ANCHOR, WriteBack } from './correspondence';
 import { DetailsSheet } from './details-sheet';
 import { DoorGate, type DoorProposal } from './door-gate';
 import { Doorplate } from './doorplate';
@@ -102,7 +102,7 @@ import {
 import { SinceYesterday } from './since-yesterday';
 import { StoryPole } from './story-pole';
 import { TheNote, type NoteEnclosure } from './the-note';
-import { TheRoad } from './the-road';
+import { TheRoad, type ProjectProgressProps } from './the-road';
 import { WallGate } from './wall-gate';
 
 /* ── THE THRESHOLD ──────────────────────────────────────────────────────────
@@ -1113,24 +1113,85 @@ export function Threshold({
   const ordersSettled = !ordersQuery.isPending && !ordersUnread;
   const roadOrders = ordersSettled ? toRoadOrders(ordersQuery.data, projectId, standsUnfiledAsks) : [];
   const closedOrders = ordersSettled ? toClosedOrders(ordersQuery.data, projectId, standsUnfiledAsks) : [];
-  const road =
+  const ordersShown =
     ordersUnread ||
     (ordersSettled &&
-      (model.road.length > 0 || roadOrders.length > 0 || closedOrders.length > 0)) ? (
-      <TheRoad
-        pieces={model.road}
-        orders={roadOrders}
-        closedOrders={closedOrders}
-        ordersUnread={ordersUnread}
-        onOrdersRefetch={ordersQuery.refetch}
-        today={today}
-      />
-    ) : null;
+      (model.road.length > 0 || roadOrders.length > 0 || closedOrders.length > 0));
+  // CPUX-06 — the Project progress summary stands at #road on every house,
+  // read line by line off sources this page already holds.
+  const firstAskLabel =
+    firstGateAnchor === 'door'
+      ? doorMarks.find((mark) => mark.id === firstDoorId)?.label
+      : firstGateAnchor === 'wall'
+        ? wallMarks.find((mark) => mark.id === firstWallId)?.label
+        : doorstepAsks[0]?.artifactTitle;
+  const asksUnread = projectApprovalsError || papersUnread;
+  const progress: ProjectProgressProps = {
+    now: openChapter.label ?? null,
+    nextMilestone: project.nextMilestone ?? null,
+    projectedCompletionDate: project.projectedCompletionDate ?? null,
+    waiting: asksUnread
+      ? {
+          status: 'error',
+          onRetry: () => {
+            void approvalsQuery.refetch();
+            void proposalsQuery.refetch();
+          },
+        }
+      : projectApprovalsLoading || proposalsQuery.isPending
+        ? { status: 'loading' }
+        : {
+            status: 'ready',
+            value:
+              whatNeedsYou && words(firstAskLabel)
+                ? { anchor: whatNeedsYou, label: words(firstAskLabel)! }
+                : null,
+          },
+    update: notesQuery.isError
+      ? { status: 'error', onRetry: () => void notesQuery.refetch() }
+      : holds(hasProject, notesQuery.isPending)
+        ? { status: 'loading' }
+        : { status: 'ready', value: model.note ? { sentAt: model.note.sentAt } : null },
+    pastUpdatesAnchor:
+      model.previously.length > 0 ||
+      correspondence.letters.length > 0 ||
+      correspondence.notices.length > 0
+        ? 'previously'
+        : null,
+  };
+  // Help names only what the studio presented; held until that read answers
+  // so the fallback line is never printed and then rewritten.
+  const help = presentationQuery.isPending ? null : (
+    <ContactDesigner
+      identity={presentationQuery.data}
+      writeAnchor={correspondence.threadId ? WRITE_BACK_ANCHOR : null}
+      className="mb-6"
+    />
+  );
+  const road = (
+    <TheRoad
+      progress={progress}
+      help={help}
+      showOrders={ordersShown}
+      pieces={model.road}
+      orders={roadOrders}
+      closedOrders={closedOrders}
+      ordersUnread={ordersUnread}
+      onOrdersRefetch={ordersQuery.refetch}
+      today={today}
+    />
+  );
   // The reply belongs under the note. With no standing note there is no note
   // to answer under and the central act of /messages would be unreachable, so
   // it heads the record instead.
   const replyHeadsTheRecord = model.note === null && correspondence.threadId !== null;
-  const writeBack = <WriteBack threadId={correspondence.threadId} today={today} />;
+  const writeBack = (
+    <WriteBack
+      threadId={correspondence.threadId}
+      designerName={words(presentationQuery.data?.designerName) ?? leadDesignerName}
+      today={today}
+    />
+  );
   const hasRecord = correspondence.letters.length > 0 || correspondence.notices.length > 0;
   const note = (
     <TheNote

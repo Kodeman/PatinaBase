@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { GOODS_JOURNEY_STAGES } from '@/components/commercial/journey-stepper';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { countInWords } from '@/components/threshold/instruments/standing-sentence';
+import { legalDate } from '@/lib/threshold/dates';
 import type { RoadPieceModel } from '@/lib/threshold/derive';
 import type { ClosedOrderModel, RoadOrderModel } from '@/lib/threshold/road-orders';
 
@@ -49,7 +52,217 @@ function pieceX(pieces: RoadPieceModel[], piece: RoadPieceModel): number {
   return centre - ((sharing.length - 1) * stride) / 2 + place * stride - PIECE_W / 2;
 }
 
+/* ── PROJECT PROGRESS (CPUX-06) ───────────────────────────────────────────────
+   A short summary above the road, every line read off a source the page
+   already holds: the open chapter, the project's own next milestone and its
+   target, the standing note, and the first ask the page draws. Nothing is
+   computed into a fact the source does not hold — no percentage (the phase
+   mapper's 50% fallback is not a measurement of a home), no date inferred
+   from phase order, no fetch time passed off as an update time.
+
+   Each source keeps loading, failed and empty apart: a read that has not
+   answered says nothing, a read that failed says so with a Retry, and only a
+   read that succeeded empty may say there is nothing. ───────────────────── */
+
+/** One source's read, kept apart from the others so one failure erases nothing. */
+export type ProgressRead<T> =
+  | { status: 'loading' }
+  | { status: 'error'; onRetry: () => void }
+  | { status: 'ready'; value: T };
+
+export interface ProgressAsk {
+  /** The in-page id of the ask, e.g. `door` or `approval-<id>`. */
+  anchor: string;
+  /** The ask's own name as the page prints it. */
+  label: string;
+}
+
+export interface ProjectProgressProps {
+  /** The open chapter's human-readable name, or null when no stage is held. */
+  now: string | null;
+  /** `project.nextMilestone`, when the project holds one. */
+  nextMilestone?: { title: string; targetDate?: string | null } | null;
+  /** `project.projectedCompletionDate`, a target and never a promise. */
+  projectedCompletionDate?: string | null;
+  /** The first open ask, or null when every ask read succeeded and none is open. */
+  waiting: ProgressRead<ProgressAsk | null>;
+  /** The current standing note's own send date, or null when none stands. */
+  update: ProgressRead<{ sentAt: string | null } | null>;
+  /** Where past updates are kept on this page, when there are any. */
+  pastUpdatesAnchor?: string | null;
+}
+
+const ROW_CLASS = 'grid gap-1 border-t border-[var(--border-subtle)] py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-4';
+const TERM_CLASS = 'text-[15px] font-medium leading-6 text-[var(--text-body)]';
+const VALUE_CLASS = 'text-[16px] leading-6 text-[var(--text-primary)]';
+const QUIET_CLASS = 'mt-0.5 text-[15px] leading-6 text-[var(--text-body)]';
+const LINK_CLASS = 'inline-flex min-h-11 items-center underline underline-offset-[6px]';
+
+function AskLink({ ask }: { ask: ProgressAsk }) {
+  return (
+    <>
+      Your response to{' '}
+      <a href={`#${ask.anchor}`} className="underline underline-offset-[6px]">
+        {ask.label}
+      </a>
+      .
+    </>
+  );
+}
+
+function ReadFailed({
+  testId,
+  message,
+  onRetry,
+}: {
+  testId: string;
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div data-testid={testId} role="status">
+      <p className={VALUE_CLASS}>{message}</p>
+      <ScoredAction
+        actionKey={`${testId}_retry`}
+        regionKey="road"
+        surfaceKey="the_threshold"
+        variant="tertiary"
+        onClick={onRetry}
+      >
+        Retry
+      </ScoredAction>
+    </div>
+  );
+}
+
+/** The target the source holds, labelled as a target; null when none is held. */
+function targetOf(
+  nextMilestone: ProjectProgressProps['nextMilestone'],
+  projectedCompletionDate: string | null | undefined,
+): { term: string; date: string | null } | null {
+  const milestoneDate = legalDate(nextMilestone?.targetDate ?? null);
+  if (milestoneDate) return { term: 'Target date', date: milestoneDate };
+  const completion = legalDate(projectedCompletionDate ?? null);
+  if (completion) return { term: 'Target completion', date: completion };
+  // A milestone held without a date: say the date is not confirmed rather
+  // than leave its reader to guess one.
+  return nextMilestone ? { term: 'Target date', date: null } : null;
+}
+
+export function ProjectProgress({
+  now,
+  nextMilestone,
+  projectedCompletionDate,
+  waiting,
+  update,
+  pastUpdatesAnchor,
+}: ProjectProgressProps) {
+  const milestone = nextMilestone?.title?.trim() || null;
+  const openAsk = waiting.status === 'ready' ? waiting.value : null;
+  const target = targetOf(nextMilestone, projectedCompletionDate);
+  const pastUpdates = pastUpdatesAnchor ? (
+    <a href={`#${pastUpdatesAnchor}`} className={`${LINK_CLASS} text-[15px] text-[var(--text-body)]`}>
+      Past updates
+    </a>
+  ) : null;
+
+  return (
+    <div data-testid="project-progress" className="pb-6">
+      <h2
+        id="road-progress-title"
+        className="pt-2.5 font-heading text-[1.35rem] font-medium tracking-[-0.012em]"
+      >
+        Project progress
+      </h2>
+      <dl className="mt-3 border-b border-[var(--border-subtle)]">
+        <div className={ROW_CLASS} data-testid="progress-now">
+          <dt className={TERM_CLASS}>Now</dt>
+          <dd className={VALUE_CLASS}>{now ?? 'No project stage is shown here yet.'}</dd>
+        </div>
+
+        <div className={ROW_CLASS} data-testid="progress-next">
+          <dt className={TERM_CLASS}>Next</dt>
+          <dd className={VALUE_CLASS}>
+            {milestone ??
+              (openAsk ? <AskLink ask={openAsk} /> : 'Your designer will share the next step here.')}
+          </dd>
+        </div>
+
+        {target ? (
+          <div className={ROW_CLASS} data-testid="progress-target">
+            <dt className={TERM_CLASS}>{target.term}</dt>
+            <dd className={VALUE_CLASS}>
+              {target.date ?? 'Date not confirmed'}
+              {target.date ? <p className={QUIET_CLASS}>A target, not a confirmed date.</p> : null}
+            </dd>
+          </div>
+        ) : null}
+
+        <div className={ROW_CLASS} data-testid="progress-update">
+          <dt className={TERM_CLASS}>Current designer update</dt>
+          <dd className={VALUE_CLASS}>
+            {update.status === 'loading' ? (
+              <span className="text-[var(--text-body)]">Loading the current update</span>
+            ) : update.status === 'error' ? (
+              <ReadFailed
+                testId="progress-update-error"
+                message="We couldn’t load the current designer update."
+                onRetry={update.onRetry}
+              />
+            ) : update.value ? (
+              <>
+                {legalDate(update.value.sentAt) ? `Sent ${legalDate(update.value.sentAt)}` : null}
+                <div>
+                  <a href="#note" className={`${LINK_CLASS} text-[15px] text-[var(--text-body)]`}>
+                    Read the update
+                  </a>
+                </div>
+              </>
+            ) : (
+              <>
+                No current designer update is shown here.
+                {pastUpdates ? <div>{pastUpdates}</div> : null}
+              </>
+            )}
+          </dd>
+        </div>
+
+        {/* Said only once every ask read has answered: a read still out has no
+            standing to say nothing is waiting. */}
+        {waiting.status === 'loading' ? null : (
+          <div className={ROW_CLASS} data-testid="progress-waiting">
+            <dt className={TERM_CLASS}>Waiting on you</dt>
+            <dd className={VALUE_CLASS}>
+              {waiting.status === 'error' ? (
+                <ReadFailed
+                  testId="progress-waiting-error"
+                  message="We couldn’t check what is waiting on you."
+                  onRetry={waiting.onRetry}
+                />
+              ) : openAsk ? (
+                <AskLink ask={openAsk} />
+              ) : (
+                'Nothing is waiting on you right now.'
+              )}
+            </dd>
+          </div>
+        )}
+      </dl>
+    </div>
+  );
+}
+
 export interface TheRoadProps {
+  /** CPUX-06 — the Project progress summary, drawn above the orders. */
+  progress?: ProjectProgressProps;
+  /** Named designer help, kept beside the summary. */
+  help?: ReactNode;
+  /**
+   * Whether the orders part draws. The road's section stands whenever the
+   * summary does (it is the page's Progress destination); its orders draw only
+   * once the direct-orders read has something to say.
+   */
+  showOrders?: boolean;
   pieces: RoadPieceModel[];
   /** Pieces she bought herself — the same road, and the act that pays for them. */
   orders?: RoadOrderModel[];
@@ -67,6 +280,9 @@ export interface TheRoadProps {
 }
 
 export function TheRoad({
+  progress,
+  help,
+  showOrders = true,
   pieces,
   orders = [],
   closedOrders = [],
@@ -82,9 +298,13 @@ export function TheRoad({
       id="road"
       data-threshold-unit="road"
       data-dimmable=""
-      aria-labelledby="road-title"
+      aria-labelledby={progress ? 'road-progress-title' : 'road-title'}
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
+      {progress ? <ProjectProgress {...progress} /> : null}
+      {help}
+      {showOrders && (
+      <>
       <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-[var(--border-default)] pb-2.5 pt-2.5">
         <h2
           id="road-title"
@@ -225,6 +445,8 @@ export function TheRoad({
           onRefetch={onOrdersRefetch}
           today={today}
         />
+      )}
+      </>
       )}
     </section>
   );

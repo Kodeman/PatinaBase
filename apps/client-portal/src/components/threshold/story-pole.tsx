@@ -37,8 +37,8 @@ import {
    and a measure that fades in one reading of the house is no measure.
    ────────────────────────────────────────────────────────────────────────── */
 
-/** The mock's brass. Lane 4 declares --threshold-accent once on the page root. */
-const ACCENT = 'var(--threshold-accent, #8A5F19)';
+/** The held chapter's mark: forest, the client page's one accent (US-45 A2). */
+const ACCENT = 'var(--color-forest)';
 
 
 /**
