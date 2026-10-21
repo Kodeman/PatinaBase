@@ -39,6 +39,27 @@
   --color-terracotta-ink: #9C5340;
   --color-golden-hour-ink: #79651E;
 
+  /* ── Green direction (US-45 · spec §3a A1–A3, CPUX-07) ───────────────────
+     Forest is the client page's single action colour: the filled terminal
+     act, the choice outline, links, italic party names, selected states and
+     the focus ring. Clay no longer colours anything a client acts on (A2);
+     its hex stays above only as a phase and material pigment.
+     Every text pair and control edge here is measured from these values by
+     src/app/__tests__/green-contrast.test.ts. */
+  /* — green direction tokens:start — */
+  --color-forest: #3E5145;
+  --color-forest-press: #2F3E35;
+  --color-card: #FFFDF9;
+  --color-card-rule: #C9C7BD;
+  --shadow-card: 0 10px 35px rgba(44, 41, 38, 0.035);
+  --color-green-note: #F0F3ED;
+  --color-green-record: #E8EEE7;
+  --color-green-record-rule: #B6C3B7;
+  --color-unavailable-edge: #6E7B71;
+  --color-unavailable-ink: #4A574D;
+  --focus-ring: var(--color-forest);
+  /* — green direction tokens:end — */
+
   /* Semantic aliases */
   --bg-primary: var(--color-off-white);
   --bg-surface: #FFFFFF;
@@ -47,7 +68,7 @@
   --text-muted: var(--color-oak-ink);
   --border-default: var(--color-pearl);
   --border-subtle: rgba(229, 226, 221, 0.6);
-  --accent-primary: var(--color-clay);
+  --accent-primary: var(--color-forest);
 
   /* ── Scored Ink prerequisites (ported with the I107 grammar below) ────────
      The designer portal's DocumentAction CSS reads these by name; they are
@@ -108,29 +129,30 @@
   --card-foreground: 26 7% 15.3%;
   --popover: 0 0% 100%;
   --popover-foreground: 26 7% 15.3%;
-  --primary: 33 34% 62.5%;
+  /* primary / accent / ring are --color-forest (#3E5145) in HSL (A2). */
+  --primary: 142 13% 28%;
   --primary-foreground: 40 33% 97%;
   --secondary: 30 14% 88%;
   --secondary-foreground: 26 7% 20%;
   --muted: 30 14% 88%;
   --muted-foreground: 28 14% 42%;
-  --accent: 33 34% 62.5%;
+  --accent: 142 13% 28%;
   --accent-foreground: 40 33% 97%;
   --destructive: 8 40% 52%;
   --destructive-foreground: 40 33% 97%;
   --border: 30 14% 88%;
   --input: 30 14% 88%;
-  --ring: 33 34% 62.5%;
+  --ring: 142 13% 28%;
   --radius: 0.75rem;
 
   --sidebar: 30 14% 88%;
   --sidebar-foreground: 26 7% 15.3%;
-  --sidebar-primary: 33 34% 62.5%;
+  --sidebar-primary: 142 13% 28%;
   --sidebar-primary-foreground: 40 33% 97%;
-  --sidebar-accent: 33 34% 62.5%;
+  --sidebar-accent: 142 13% 28%;
   --sidebar-accent-foreground: 40 33% 97%;
   --sidebar-border: 30 14% 88%;
-  --sidebar-ring: 33 34% 62.5%;
+  --sidebar-ring: 142 13% 28%;
 
   color-scheme: light;
 }
@@ -207,13 +229,40 @@ a {
 }
 
 a:hover {
-  color: var(--color-mocha);
+  color: var(--color-forest-press);
 }
 
 .focus-ring {
   @apply outline-none ring-2 ring-offset-2;
   --tw-ring-offset-color: var(--bg-primary);
-  --tw-ring-color: var(--accent-primary);
+  --tw-ring-color: var(--focus-ring);
+}
+
+/* ── Framed cards (A3) — the deck's card, the green note, the record ───────
+   .cp-card holds an approval ask or the payment sheet; .cp-note carries a
+   consequence or next-step sentence; .cp-record is a response already
+   recorded. The card rule is a decorative boundary, never a control's edge.
+   The record's edge is forest (7.22:1 against its fill): --color-green-record-
+   rule measures 1.55:1 there, so it stays declared but draws nothing, matching
+   the designer portal's record edge. */
+.cp-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-card-rule);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+}
+.cp-note {
+  background-color: var(--color-green-note);
+  border-radius: 4px;
+  padding: 14px 18px;
+  color: var(--color-charcoal);
+}
+.cp-record {
+  background-color: var(--color-green-record);
+  border: 1px solid var(--color-forest);
+  border-radius: 6px;
+  padding: 14px 18px;
+  color: var(--color-charcoal);
 }
 
 .timeline-gradient {
@@ -330,8 +379,8 @@ a:hover {
    until a finger asks for it, then flooding from the exact point of contact.
 
    The stacking is the whole argument: the pool sits at z 0, the label and its
-   scores at z 1, so a charcoal flood swallows the charcoal score and leaves
-   the clay one riding on top of the ink. Depth here is value, never distance. */
+   scores at z 1, so the scoring rides on top of its own ink. Depth here is
+   value, never distance. Since US-45 every action ink here is forest (A1/A2). */
 
 /* ── the control ─────────────────────────────────────────────────────────── */
 .da-act {
@@ -411,39 +460,79 @@ a:hover {
     transform 150ms var(--ease-editorial);
 }
 
-/* ── PRIMARY · two scores, charcoal over clay; the ink is charcoal ─────────
-   under a flood the charcoal score melts into the pool and the clay score
-   stays legible on top of it: the scoring survives its own ink. */
+/* ── PRIMARY · two scores, charcoal over forest; the ink is forest ─────────
+   Green is the client page's one action colour (US-45 A1/A2): the second
+   score, the glyphs and the flood a press or a hold opens are all forest,
+   and the word turns over to paper on it (7.96:1). */
 .da-primary {
   color: var(--color-charcoal);
 }
 .da-primary .da-pool {
-  background-color: var(--color-charcoal);
+  background-color: var(--color-forest);
 }
 .da-primary .da-label::before {
   background-color: var(--color-charcoal);
 }
 .da-primary .da-label::after {
-  background-color: var(--color-clay);
+  background-color: var(--color-forest);
 }
 .da-primary .da-leading,
 .da-primary .da-trailing {
-  color: var(--color-clay);
+  color: var(--color-forest);
 }
 
-/* ── SECONDARY · one score, held back; the ink only warms the paper ──────── */
-.da-secondary {
-  color: var(--color-mocha);
+/* ── SECONDARY and CHOICE · the green outline (US-45 A1) ─────────────────────
+   A 1.5px forest edge (7.96:1 on paper — the review deck's grey-green
+   secondary edge was 2.2:1 and is not used), forest word, sentence case. A choice is the same outline
+   that fills forest once it is picked (`aria-pressed="true"`), with card ink
+   on it (8.38:1). The press floods the face with the pale green note. */
+.da-secondary,
+.da-choice {
+  padding: 10px 16px;
+  border: 1.5px solid var(--color-forest);
+  border-radius: 5px;
+  background-color: transparent;
+  color: var(--color-forest);
 }
-.da-secondary .da-pool {
-  background-color: var(--bg-warm);
+.da-secondary .da-label,
+.da-choice .da-label {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0;
+  text-transform: none;
 }
-.da-secondary .da-label::before {
-  height: 1px;
-  background-color: rgba(44, 41, 38, 0.28);
+.da-choice .da-label {
+  font-size: 16px;
 }
-.da-secondary .da-label::after {
+.da-secondary .da-label::before,
+.da-secondary .da-label::after,
+.da-choice .da-label::before,
+.da-choice .da-label::after {
   content: none;
+}
+.da-secondary .da-pool,
+.da-choice .da-pool {
+  inset: 0;
+  border-radius: 4px;
+  background-color: var(--color-green-note);
+}
+.da-secondary .da-leading,
+.da-secondary .da-trailing,
+.da-choice .da-leading,
+.da-choice .da-trailing {
+  color: inherit;
+}
+.da-choice[aria-pressed='true'] {
+  background-color: var(--color-forest);
+  color: var(--color-card);
+}
+.da-choice[aria-pressed='true'] .da-pool {
+  background-color: var(--color-forest-press);
+}
+.da-choice[aria-pressed='true']::before {
+  color: var(--color-card);
 }
 
 /* ── TERTIARY · a scored word with a RESTING rule ─────────────────────────
@@ -477,18 +566,15 @@ a:hover {
 }
 
 /* ── TERMINAL · the one filled act, where money moves or a paper is signed ──
-   Sheet §A5 as amended by §F-C. The only fill this grammar has: charcoal
-   ground, paper ink, the amount inside the label. Not a fourth decoration —
-   a fourth CONSEQUENCE, and the reason the other three may stay bare words.
-
-   --ink-paper, --ink-faint, --rail and --hairline-strong are the house
-   sheet's names; their declarations live in H2's :root block. */
+   Sheet §A5 as amended by §F-C, recoloured by US-45 A1: forest ground, card
+   ink (8.38:1), the amount inside the label. Not a fourth decoration — a
+   fourth CONSEQUENCE, and the reason the lighter tiers stay lighter. */
 .da-terminal {
   padding: 13px 22px;
   min-height: 48px;
-  border-radius: 3px;
-  background-color: var(--color-charcoal);
-  color: var(--ink-paper);
+  border-radius: 5px;
+  background-color: var(--color-forest);
+  color: var(--color-card);
 }
 /* the shared 12px mono caps are overridden on the label itself, so the
    figure reads as money and not as a running head */
@@ -505,14 +591,18 @@ a:hover {
 .da-terminal .da-label::after {
   content: none;
 }
-/* the hold inks the whole face, not a rule under a word */
+/* the ink is a 3px record-green rule along the act's foot: a press opens it
+   from the contact point and a hold fills it left to right, 7.22:1 against
+   the forest face so the progress reads (a forest-press flood would be
+   1.33:1 and say nothing) */
 .da-terminal .da-pool {
-  inset: 0;
-  border-radius: 3px;
-  background-color: var(--ink-faint);
+  inset: auto 0 0 0;
+  height: 3px;
+  border-radius: 0 0 5px 5px;
+  background-color: var(--color-green-record);
 }
 .da-terminal:hover {
-  background-color: #1F1D1A;
+  background-color: var(--color-forest-press);
 }
 .da-terminal:active {
   transform: translateY(1px);
@@ -531,11 +621,14 @@ a:hover {
 .da-primary:hover .da-trailing {
   transform: translateX(2px);
 }
-.da-secondary:hover {
-  color: var(--color-charcoal);
+.da-secondary:hover,
+.da-choice:hover {
+  border-color: var(--color-forest-press);
+  color: var(--color-forest-press);
 }
-.da-secondary:hover .da-label::before {
-  background-color: var(--color-aged-oak);
+.da-choice[aria-pressed='true']:hover {
+  background-color: var(--color-forest-press);
+  color: var(--color-card);
 }
 .da-tertiary:hover {
   color: var(--color-charcoal);
@@ -575,12 +668,12 @@ a:hover {
 .da-danger:active .da-trailing {
   color: var(--color-off-white);
 }
-.da-secondary:active {
-  color: var(--color-charcoal);
+.da-secondary:active,
+.da-choice:active {
+  color: var(--color-forest-press);
 }
-.da-secondary:active .da-leading,
-.da-secondary:active .da-trailing {
-  color: var(--color-charcoal);
+.da-choice[aria-pressed='true']:active {
+  color: var(--color-card);
 }
 /* the tertiary has no ink to give: its press is a deepening of value alone,
    taken on the in-clock so held reads as held */
@@ -607,8 +700,6 @@ a:hover {
 }
 .da-primary:disabled,
 .da-primary[aria-disabled='true'],
-.da-secondary:disabled,
-.da-secondary[aria-disabled='true'],
 .da-tertiary:disabled,
 .da-tertiary[aria-disabled='true'],
 .da-danger:disabled,
@@ -619,8 +710,6 @@ a:hover {
 .da-primary[aria-disabled='true'] .da-label::before,
 .da-primary:disabled .da-label::after,
 .da-primary[aria-disabled='true'] .da-label::after,
-.da-secondary:disabled .da-label::before,
-.da-secondary[aria-disabled='true'] .da-label::before,
 .da-tertiary:disabled .da-label::before,
 .da-tertiary[aria-disabled='true'] .da-label::before,
 .da-danger:disabled .da-label::before,
@@ -629,12 +718,51 @@ a:hover {
 .da-danger[aria-disabled='true'] .da-label::after {
   background-color: var(--hairline-strong);
 }
+/* The A3 unavailable face — record fill, a 1.5px DASHED edge (4.15:1 on
+   paper), unavailable ink (6.45:1 on the fill). Every filled or outlined act
+   wears it when it cannot be taken, and so does any act given an
+   `unavailableReason` (.da-unavailable), whose reason line is drawn beside
+   it. The shape keeps its role; the dash is what says "not yet". */
 .da-terminal:disabled,
 .da-terminal[aria-disabled='true'],
-.da-terminal[aria-disabled='true']:hover {
-  background-color: var(--rail);
-  color: var(--ink-faint);
-  border: 1px solid var(--hairline-strong);
+.da-terminal[aria-disabled='true']:hover,
+.da-secondary:disabled,
+.da-secondary[aria-disabled='true'],
+.da-secondary[aria-disabled='true']:hover,
+.da-choice:disabled,
+.da-choice[aria-disabled='true'],
+.da-choice[aria-disabled='true']:hover,
+.da-act.da-unavailable,
+.da-act.da-unavailable:hover,
+.da-act.da-unavailable:active {
+  background-color: var(--color-green-record);
+  color: var(--color-unavailable-ink);
+  border: 1.5px dashed var(--color-unavailable-edge);
+  border-radius: 5px;
+  transform: none;
+}
+.da-act.da-unavailable:not(.da-terminal) {
+  padding: 10px 16px;
+}
+.da-act.da-unavailable .da-label::before,
+.da-act.da-unavailable .da-label::after {
+  content: none;
+}
+.da-act.da-unavailable .da-pool {
+  display: none;
+}
+.da-act.da-unavailable .da-leading,
+.da-act.da-unavailable .da-trailing {
+  color: inherit;
+}
+/* the reason an act cannot be taken yet, in words, drawn under it */
+.da-unavailable-reason {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-unavailable-ink);
 }
 
 /* ── LOADING · ink, not a spinner (sheet §A5) ─────────────────────────────
@@ -645,20 +773,21 @@ a:hover {
    working, and the :hover pair matches its specificity. */
 .da-terminal.is-loading,
 .da-terminal.is-loading:hover {
-  background-color: var(--color-charcoal);
-  color: var(--ink-paper);
+  background-color: var(--color-forest);
+  color: var(--color-card);
   border: 0;
 }
 .da-terminal.is-loading .da-label {
   opacity: 1;
 }
 
-/* ── focus · the proofreader's caret in the margin, and the scores turn clay,
-   now with an outline standing alongside them. The caret alone was a 14px
-   glyph in the gutter and nothing else; `outline` does not affect layout, so
-   the ring costs no neighbour a reflow (sheet §A5, R139). ─────────────────── */
+/* ── focus · the proofreader's caret in the margin, and the scores turn forest,
+   with the forest ring standing alongside them (US-45 A2; 7.96:1 on paper).
+   The caret alone was a 14px glyph in the gutter and nothing else; `outline`
+   does not affect layout, so the ring costs no neighbour a reflow (sheet §A5,
+   R139). ─────────────────────────────────────────────────────────────────── */
 .da-act:focus-visible {
-  outline: 2px solid var(--color-clay-ink);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 .da-act::before {
@@ -683,11 +812,14 @@ a:hover {
   opacity: 1;
 }
 .da-terminal::before {
-  color: var(--ink-paper);
+  color: var(--color-card);
+}
+.da-act.da-unavailable::before {
+  color: var(--color-unavailable-ink);
 }
 .da-act:focus-visible .da-label::before,
 .da-act:focus-visible .da-label::after {
-  background-color: var(--color-clay);
+  background-color: var(--color-forest);
 }
 
 /* ── stilled · the same room by the other door. No bead, no draw, no snap;
@@ -815,7 +947,7 @@ a:hover {
    to draw a hairline score under a hover or hold one steady when selected, and an
    icon-only glyph still needs to darken without ever growing a box. Typography stays
    whatever the call site already sets — this kit carries only the score and the
-   glyph state, nothing else. Ad-hoc controls take the standard 2px clay
+   glyph state, nothing else. Ad-hoc controls take the standard 2px forest
    focus-visible outline; the proofreader caret above stays DocumentAction-only. */
 
 /* ── da-score-hover · a hairline that draws in under a hover or a keyboard focus ──
@@ -842,13 +974,14 @@ a:hover {
   transform: scaleX(1);
 }
 
-/* ── da-score-on · the same rule held down, in charcoal — for a picker or toggle
-   that's already selected. Same specificity as the hover state above, declared
-   after it, so a selected control reads scored even with the pointer elsewhere;
+/* ── da-score-on · the same rule held down, in forest — for a picker or toggle
+   that's already selected (selected states are forest, US-45 A2). Same
+   specificity as the hover state above, declared after it, so a selected
+   control reads scored even with the pointer elsewhere;
    combine as className="da-score-hover da-score-on". ───────────────────────── */
 .da-score-on::after {
   transform: scaleX(1);
-  background-color: var(--color-charcoal);
+  background-color: var(--color-forest);
 }
 
 /* ── da-glyph-btn · an icon-only control (×, +) with no word to score — just a
@@ -866,7 +999,7 @@ a:hover {
   color: var(--color-charcoal);
 }
 .da-glyph-btn:focus-visible {
-  outline: 2px solid var(--color-clay);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 

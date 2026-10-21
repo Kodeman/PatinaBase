@@ -29,7 +29,7 @@ describe('InlineAct — a tertiary act inside a sentence', () => {
   });
 
   it('carries the house focus ring', () => {
-    expect(INLINE_ACT_CLASS).toContain('focus-visible:outline-[var(--color-clay-ink)]');
+    expect(INLINE_ACT_CLASS).toContain('focus-visible:outline-[var(--focus-ring)]');
     expect(INLINE_ACT_CLASS).toContain('focus-visible:outline-offset-2');
   });
 

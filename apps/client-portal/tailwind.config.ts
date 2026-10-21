@@ -46,6 +46,18 @@ const config: Config = {
           sage: '#A8B5A0',
           'dusty-blue': '#8B9CAD',
           terracotta: '#D4A090',
+          /* Green direction (US-45 A1–A3). Read through the globals.css
+             tokens so the contrast test there measures what renders. The
+             record rule is deliberately absent: at 1.55:1 it is not an edge
+             (a record's edge is forest). */
+          forest: 'var(--color-forest)',
+          'forest-press': 'var(--color-forest-press)',
+          card: 'var(--color-card)',
+          'card-rule': 'var(--color-card-rule)',
+          'green-note': 'var(--color-green-note)',
+          'green-record': 'var(--color-green-record)',
+          'unavailable-edge': 'var(--color-unavailable-edge)',
+          'unavailable-ink': 'var(--color-unavailable-ink)',
         },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

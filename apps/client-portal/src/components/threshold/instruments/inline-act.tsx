@@ -23,7 +23,7 @@ export const INLINE_ACT_CLASS = [
   '[-webkit-box-decoration-break:clone] [box-decoration-break:clone]',
   'hover:border-b-[1.5px] hover:border-b-[var(--color-quiet-ink)] hover:pb-[2.5px]',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
-  'focus-visible:outline-[var(--color-clay-ink)]',
+  'focus-visible:outline-[var(--focus-ring)]',
 ].join(' ');
 
 export interface InlineActProps
