@@ -131,8 +131,12 @@
   grid-row: 1 / 3;
 }
 
-.ed-hero .ed-plate__img {
+/* 390 × 340 at the phone, never taller than 72svh. A failed hero is drawn at
+   the hero's geometry, not a square. */
+.ed-hero .ed-plate__img,
+.ed-silhouette.ed-hero > .ed-plate__frame {
   aspect-ratio: 39 / 34;
+  max-height: 72svh;
 }
 
 .ed-hero > .ed-plate__rule {
@@ -185,7 +189,8 @@
     margin: 0;
     grid-template-columns: minmax(0, 1fr) minmax(0, 336px);
   }
-  .ed-hero .ed-plate__img {
+  .ed-hero .ed-plate__img,
+  .ed-silhouette.ed-hero > .ed-plate__frame {
     aspect-ratio: auto;
     height: min(72svh, 648px);
   }
@@ -199,6 +204,44 @@
   .ed-tab__title {
     font-size: 64px;
     line-height: 64px;
+  }
+
+  /* The portrait hero (floors.ts): 4:5 inside the measure, the paper tab
+     under it, never wider than 520px (its 1040px floor at 2x) or taller than
+     the bleed hero. */
+  .ed-hero--portrait {
+    grid-template-columns: min(100%, 520px, calc(min(72svh, 648px) * 0.8)) minmax(0, 1fr);
+  }
+  .ed-hero--portrait > .ed-plate__frame,
+  .ed-hero--portrait > .ed-plate__rule {
+    grid-column: 1;
+  }
+  .ed-hero--portrait .ed-plate__img,
+  .ed-silhouette.ed-hero--portrait > .ed-plate__frame {
+    aspect-ratio: 4 / 5;
+    height: auto;
+  }
+  .ed-hero--portrait > .ed-tab {
+    grid-column: 1 / 3;
+    grid-row: 4;
+    padding-left: 0;
+  }
+  .ed-hero--portrait > .ed-caption {
+    padding: 0;
+  }
+}
+
+/* At 1024 the portrait takes five of the measure's twelve columns, the tab
+   standing beside it at its foot. */
+@media (min-width: 1024px) {
+  .ed-hero--portrait {
+    column-gap: 32px;
+    grid-template-columns: min(calc(100% * 5 / 12), 520px, calc(min(72svh, 648px) * 0.8)) minmax(0, 1fr);
+  }
+  .ed-hero--portrait > .ed-tab {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: end;
   }
 }
 

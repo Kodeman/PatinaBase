@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { SIZES } from '@/lib/editorial/crop';
 import type { EditorialAsset, EditorialItem } from '@/lib/editorial/types';
 
 import { BoardPlate } from '../board-plate';
@@ -243,6 +244,97 @@ describe('preloadLink', () => {
 
   it('gives nothing when the hero has no rendition', () => {
     expect(preloadLink(SCOPE, asset({ crops: {} }))).toEqual([]);
+  });
+});
+
+/* SQ-1585 F2: the hero carries floors.ts' desktop layout. Each source below
+   holds the crops the media worker (plates.mjs) emits for its size. */
+describe("the hero's desktop layout", () => {
+  const PHONE = '(max-width: 600px)';
+  const MEASURE = {
+    width: 1400,
+    height: 1000,
+    crops: {
+      cover_phone: { rect: [127, 0, 1147, 1000], widths: [640, 828, 1080] },
+      wide32: { rect: [0, 0, 1400, 933], widths: [768, 1024] },
+      pair: { rect: [0, 0, 1400, 1000], widths: [768, 1024] },
+      piece: { rect: [0, 0, 1400, 1000], widths: [256, 512, 768] },
+    },
+  } satisfies Partial<EditorialAsset>;
+  const PORTRAIT = {
+    width: 1100,
+    height: 1900,
+    crops: {
+      cover_phone: { rect: [0, 376, 1100, 959], widths: [640, 828, 1080] },
+      tall: { rect: [113, 0, 874, 1900], widths: [640, 828] },
+      piece: { rect: [0, 0, 1100, 1900], widths: [256, 512, 768] },
+    },
+  } satisfies Partial<EditorialAsset>;
+
+  function drawn(a: EditorialAsset) {
+    const { container } = render(
+      <HeroPlate scopeId={SCOPE} asset={a} eyebrow="01 · House" headline="The house" fallback={fallback} />,
+    );
+    const sources = Array.from(container.querySelectorAll('source'));
+    return {
+      figure: container.querySelector('figure')!,
+      img: container.querySelector('img')!,
+      phone: sources.filter((s) => s.getAttribute('media') === PHONE),
+      desk: sources.filter((s) => s.getAttribute('media') !== PHONE),
+    };
+  }
+
+  it.each([
+    ['bleed', {}, 'wide', SIZES.bleed, [1440, 648]],
+    ['measure', MEASURE, 'wide32', SIZES.measure, [1248, 648]],
+    ['portrait', PORTRAIT, 'tall', SIZES.portrait, [520, 650]],
+  ] as const)('%s: draws its crop at its size, the phone on cover_phone, and preloads the same', (layout, over, crop, sizes, box) => {
+    const a = asset(over);
+    const { figure, img, phone, desk } = drawn(a);
+
+    expect(figure).toHaveClass('ed-hero', `ed-hero--${layout}`);
+    expect(desk.map((s) => s.getAttribute('sizes'))).toEqual([sizes, sizes]);
+    expect(desk[0].getAttribute('srcset')).toContain(`/${crop}-`);
+    expect(phone[0].getAttribute('srcset')).toContain('/cover_phone-');
+    expect([img.getAttribute('width'), img.getAttribute('height')]).toEqual(box.map(String));
+
+    const links = preloadLink(SCOPE, a);
+    expect(links.map((l) => [l.media, l.imageSizes])).toEqual([
+      [PHONE, SIZES.bleed],
+      ['(min-width: 601px)', sizes],
+    ]);
+    expect(links[0].imageSrcSet).toBe(phone[0].getAttribute('srcset'));
+    expect(links[1].imageSrcSet).toBe(desk[0].getAttribute('srcset'));
+  });
+
+  it('asks for `wide` first on a measure source that has one', () => {
+    const { desk } = drawn(asset({ ...MEASURE, crops: { ...MEASURE.crops, wide: ALL_CROPS.wide } }));
+    expect(desk[0].getAttribute('srcset')).toContain('/wide-');
+  });
+
+  it('draws a portrait with no `tall` on cover_phone at every width, and fails to a portrait silhouette', () => {
+    // 1100 × 1400 is under `tall`'s 1696 floor: the worker emits no `tall`.
+    const a = asset({
+      width: 1100,
+      height: 1400,
+      crops: {
+        cover_phone: { rect: [0, 151, 1100, 959], widths: [640, 828, 1080] },
+        piece: { rect: [0, 0, 1100, 1400], widths: [256, 512, 768] },
+      },
+    });
+    const { figure, img, phone, desk } = drawn(a);
+
+    expect(figure).toHaveClass('ed-hero--portrait');
+    expect(phone).toHaveLength(0);
+    expect(desk.map((s) => [s.getAttribute('media'), s.getAttribute('sizes')])).toEqual([
+      [null, SIZES.portrait],
+      [null, SIZES.portrait],
+    ]);
+    expect(desk[0].getAttribute('srcset')).toContain('/cover_phone-');
+    expect(preloadLink(SCOPE, a).map((l) => [l.media, l.imageSizes])).toEqual([[undefined, SIZES.portrait]]);
+
+    fireEvent.error(img);
+    expect(document.querySelector('figure.ed-silhouette')).toHaveClass('ed-hero', 'ed-hero--portrait');
   });
 });
 

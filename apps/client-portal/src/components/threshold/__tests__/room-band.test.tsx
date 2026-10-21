@@ -584,4 +584,58 @@ describe('RoomBand', () => {
 
     expect(screen.getByTestId('a-gate')).toBeInTheDocument();
   });
+
+  /* The House Issue draws the room's pictures as plates beside the band
+     (SQ-1585 F3); the band inside it draws none of its own. */
+  describe('imagery', () => {
+    function picturedBand() {
+      const piece = selection({
+        imageUrl: 'https://img.test/b.jpg',
+        primaryImageUrl: 'https://img.test/b.jpg',
+        imageUrls: ['https://img.test/a.jpg', 'https://img.test/b.jpg'],
+      });
+      return band({ conceptRender: CONCEPT, pieces: [piece] });
+    }
+    const openRecord = () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Brass library sconces — open its record' }));
+
+    it('editorial: no picture inside the band, and every control, record, gate and id stays', async () => {
+      signsWith('https://strata.test/signed/study.jpg');
+      const { container } = render(
+        <RoomBand band={picturedBand()} projectId="proj-1" studioName="Quist Interiors" imagery="editorial">
+          <p data-testid="a-gate">a gate</p>
+        </RoomBand>,
+      );
+      openRecord();
+
+      expect(await screen.findByTestId('room-band-record')).toHaveTextContent('Brass library sconces');
+      expect(container.querySelectorAll('img')).toHaveLength(0);
+      expect(screen.queryByTestId('room-band-concept')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('tracking-row-plate')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('tracking-row-caption')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('room-band-record-pictures')).not.toBeInTheDocument();
+      expect(createSignedUrl).not.toHaveBeenCalled();
+
+      const section = container.querySelector('section#room-room-library');
+      expect(section).toHaveAttribute('data-dimmable');
+      expect(screen.getByTestId('tracking-row')).toHaveTextContent('Brass library sconces');
+      expect(screen.getByTestId('tracking-row-stamp')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Brass library sconces — close its record' }),
+      ).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByTestId('room-band-drawing')).toBeInTheDocument();
+      expect(screen.getByTestId('a-gate')).toBeInTheDocument();
+    });
+
+    it('legacy, the default: the concept figure, row thumbnail, caption and record gallery all stand', async () => {
+      signsWith('https://strata.test/signed/study.jpg');
+      render(<RoomBand band={picturedBand()} projectId="proj-1" studioName="Quist Interiors" />);
+      openRecord();
+
+      expect(await screen.findByTestId('room-band-concept-image')).toBeInTheDocument();
+      expect(screen.getByTestId('tracking-row-thumb')).toHaveAttribute('src', 'https://img.test/b.jpg');
+      expect(screen.getByTestId('tracking-row-caption')).toBeInTheDocument();
+      expect(screen.getByTestId('room-band-record-pictures')).toBeInTheDocument();
+    });
+  });
 });

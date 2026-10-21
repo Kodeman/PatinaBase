@@ -485,11 +485,21 @@ export function ThresholdJourney({ stopIndex }: { stopIndex: number }) {
   );
 }
 
-function PieceRecord({ piece }: { piece: ClientSelection }) {
+/** A lifted record's pictures: none where the House Issue draws them as plates. */
+function recordPictures(piece: ClientSelection, gallery: boolean) {
+  return gallery ? (piece.imageUrls ?? []) : [];
+}
+
+/** The band's concept figure: none where the House Issue draws it as a plate. */
+function bandConcept(band: RoomBandProps['band'], pictures: boolean) {
+  return pictures ? band.conceptRender : null;
+}
+
+function PieceRecord({ piece, gallery }: { piece: ClientSelection; gallery: boolean }) {
   const detail = stampDetail(piece);
   // 00807: every picture the studio keeps on the line, in its order. The row
   // above already shows the primary, so one picture needs no gallery.
-  const pictures = piece.imageUrls ?? [];
+  const pictures = recordPictures(piece, gallery);
   return (
     <div
       data-testid="room-band-record"
@@ -544,6 +554,13 @@ export interface RoomBandProps {
   leadRoomName?: string | null;
   /** Room-scoped gates — the door and the wall — stand inside the room. */
   children?: ReactNode;
+  /**
+   * `editorial`: the House Issue draws the room's pictures as plates beside
+   * the band, so the band draws none of its own: no concept figure, no row
+   * thumbnails or plate captions, no record gallery. Every control, record,
+   * gate and id stays.
+   */
+  imagery?: 'legacy' | 'editorial';
 }
 
 export function RoomBand({
@@ -552,7 +569,10 @@ export function RoomBand({
   studioName,
   leadRoomName,
   children,
+  imagery,
 }: RoomBandProps) {
+  const pictures = imagery !== 'editorial';
+  const concept = bandConcept(band, pictures);
   const [liftedId, setLiftedId] = useState<string | null>(null);
   const ledger = lintelLedger(band);
   const settled = floorLine(band.pieces);
@@ -589,9 +609,9 @@ export function RoomBand({
       </div>
 
       <div className="pt-1.5">
-        {band.conceptRender && (
+        {concept && (
           <ConceptRenderPlate
-            render={band.conceptRender}
+            render={concept}
             roomName={band.name}
             studioName={studioName}
           />
@@ -647,6 +667,7 @@ export function RoomBand({
                       status={piece.logisticsStatus}
                       itemType={piece.itemType}
                       studioName={studioName}
+                      plate={pictures}
                     />
                     {detail && (
                       <span
@@ -665,7 +686,7 @@ export function RoomBand({
                       className="absolute inset-0 h-full w-full"
                     />
                   </div>
-                  <div id={`record-${piece.id}`}>{lifted && <PieceRecord piece={piece} />}</div>
+                  <div id={`record-${piece.id}`}>{lifted && <PieceRecord piece={piece} gallery={pictures} />}</div>
                 </li>
               );
             })}

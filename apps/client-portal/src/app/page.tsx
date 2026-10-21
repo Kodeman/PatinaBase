@@ -1,6 +1,8 @@
 import { Threshold } from '@/components/threshold/threshold';
 import { LetterboxDoor } from '@/components/threshold/letterbox-door';
+import { HeroPreloadLinks } from '@/components/threshold/editorial/house-issue';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
+import { fetchClientEditorial, heroPreloads } from '@/lib/data/client-editorial';
 import {
   resolveActiveHouse,
   resolveHouseForInstrument,
@@ -52,8 +54,14 @@ export default async function HomePage(props: {
     : projectIds;
 
   let projectView: Awaited<ReturnType<typeof fetchClientProjectView>> = null;
+  let editorial: Awaited<ReturnType<typeof fetchClientEditorial>> = null;
   for (const candidateId of candidates) {
-    projectView = await fetchClientProjectView(candidateId);
+    // The House Issue's plates read beside the house itself, so the hero's
+    // preload is in this HTML. Null never blocks the house (it is today's page).
+    [projectView, editorial] = await Promise.all([
+      fetchClientProjectView(candidateId),
+      fetchClientEditorial(candidateId),
+    ]);
     if (projectView) break;
   }
 
@@ -95,6 +103,7 @@ export default async function HomePage(props: {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
+      <HeroPreloadLinks preloads={heroPreloads(editorial)} />
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
         <Threshold
           projectId={project.id}
@@ -103,6 +112,7 @@ export default async function HomePage(props: {
           otherHouses={toOtherHouses(projects, project.id)}
           viewSource="front-door"
           namedProposalId={namedProposalId}
+          editorial={editorial}
         />
       </main>
     </div>
