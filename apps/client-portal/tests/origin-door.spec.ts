@@ -316,16 +316,25 @@ test.describe('R30 — the household door with no house', () => {
     // The one navigation landmark allowed is CPUX-01's labelled "On this
     // page" ledger, and it only jumps within this page: it is not a site nav.
     await expect(page.locator('[data-testid^="header-"]')).toHaveCount(0);
+    const navigation = page.getByRole('navigation');
     await expect(
-      page
-        .getByRole('navigation')
-        .and(page.locator(':not([data-testid="landmark-ledger"])')),
+      navigation.and(page.locator(':not([data-testid="landmark-ledger"])')),
     ).toHaveCount(0);
-    const ledger = page.getByRole('navigation', { name: 'On this page' });
-    for (const href of await ledger.locator('a').evaluateAll((links) =>
-      links.map((link) => link.getAttribute('href') ?? ''),
-    )) {
-      expect(href).toMatch(/^#/);
+    // The exemption is earned, not labelled: the named ledger is there, and
+    // every nav the test id exempts is named "On this page" and links only to
+    // fragments of this page — a mislabelled nav that leaves the page fails.
+    await expect(page.getByRole('navigation', { name: 'On this page', exact: true })).toHaveCount(1);
+    const exempt = await navigation.and(page.locator('[data-testid="landmark-ledger"]')).all();
+    expect(exempt.length).toBeGreaterThan(0);
+    for (const nav of exempt) {
+      await expect(nav).toHaveAccessibleName('On this page');
+      const hrefs = await nav
+        .locator('a')
+        .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+      expect(hrefs.length).toBeGreaterThan(0);
+      for (const href of hrefs) {
+        expect(href).toMatch(/^#[^\s#/?]+$/);
+      }
     }
   });
 

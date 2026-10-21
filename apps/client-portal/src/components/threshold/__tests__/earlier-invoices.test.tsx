@@ -209,7 +209,7 @@ describe('Invoice rows and the payment history fold', () => {
 
   it('says what a reconciliation hold means on the row and in its details, with no way to pay', () => {
     const holds = { 'inv-1': 'payment_reconciliation_required' as const };
-    const { review } = project([invoice()], holds);
+    const { review } = project([invoice()], { 'inv-1': { hold: holds['inv-1'], heldAt: 1 } });
     render(
       <InvoiceGroupList
         testId="review"

@@ -37,6 +37,8 @@ export interface InvoiceReadSource {
   data: readonly Invoice[] | undefined;
   isPending: boolean;
   isError: boolean;
+  /** TanStack's `dataUpdatedAt`: when the rows in `data` arrived (`Date.now()` ms). */
+  dataUpdatedAt?: number;
 }
 
 /**
@@ -76,6 +78,8 @@ export interface HouseInvoices {
   invoices: Invoice[];
   /** Completeness of exactly the reads this house needs. */
   read: InvoiceReadState;
+  /** When the oldest of those reads' rows arrived; null while any has none. */
+  readAt: number | null;
 }
 
 /**
@@ -95,7 +99,18 @@ export function houseInvoices({
   return {
     invoices: uniqueVisible(reads.flatMap(({ source, belongs }) => (source.data ?? []).filter(belongs))),
     read: invoiceReadState(reads.map(({ source }) => source)),
+    readAt: oldestReadAt(reads.map(({ source }) => source)),
   };
+}
+
+/** A row is only as fresh as the oldest read it could have come from. */
+function oldestReadAt(sources: readonly InvoiceReadSource[]): number | null {
+  let oldest: number | null = null;
+  for (const source of sources) {
+    if (source.data === undefined || !source.dataUpdatedAt) return null;
+    oldest = oldest === null ? source.dataUpdatedAt : Math.min(oldest, source.dataUpdatedAt);
+  }
+  return oldest;
 }
 
 /** A read this house needs, and which of its rows are this house's. */
@@ -121,6 +136,25 @@ export type InvoiceGroup = 'review' | 'processing' | 'payable' | 'history';
 
 /** Holds the checkout boundary returned for an invoice, by its stable code. */
 export type InvoiceServerHold = 'payment_processing' | 'payment_reconciliation_required';
+
+/** A hold as its owner recorded it: the code, and when it arrived (`Date.now()` ms). */
+export interface RecordedHold {
+  hold: InvoiceServerHold;
+  heldAt: number;
+}
+
+/** The holds an owner keeps this visit, by invoice id. */
+export type InvoiceHolds = Readonly<Record<string, RecordedHold>>;
+
+/** `holds` with `hold` recorded for `invoiceId` at `heldAt`; the newest word restamps it. */
+export function withHold(
+  holds: InvoiceHolds,
+  invoiceId: string,
+  hold: InvoiceServerHold,
+  heldAt: number,
+): InvoiceHolds {
+  return { ...holds, [invoiceId]: { hold, heldAt } };
+}
 
 /** Why an invoice is held for review. The last two are contradictory evidence. */
 export type InvoiceReviewReason =
@@ -174,6 +208,8 @@ export type InvoiceFiguresWithheld = 'loading' | 'incomplete' | 'unverified' | '
 
 export interface InvoiceProjection {
   read: InvoiceReadState;
+  /** When the rows arrived (`HouseInvoices.readAt`); null when unknown. */
+  readAt: number | null;
   /** Each group sorted: outstanding by due date, history by most recent first. */
   review: InvoiceRow[];
   processing: InvoiceRow[];
@@ -197,8 +233,10 @@ export interface InvoiceProjectionOptions {
   /** The calendar day due dates are read against. */
   today: Date;
   read: InvoiceReadState;
-  /** Holds the checkout boundary returned this session, by invoice id. A complete read that proves the invoice settled outranks a `payment_processing` hold. */
-  serverHolds?: Readonly<Record<string, InvoiceServerHold>>;
+  /** `HouseInvoices.readAt`. Without it no read is newer than a hold, so none can prove one settled. */
+  readAt?: number | null;
+  /** Holds the checkout boundary returned this session, by invoice id. A complete read that arrived after the hold and proves the invoice settled outranks a `payment_processing` hold. */
+  serverHolds?: InvoiceHolds;
 }
 
 const KNOWN_STATUSES = new Set<string>(['sent', 'partially_paid', 'paid']);
@@ -240,20 +278,23 @@ function paymentFacts(invoice: Invoice, hold: InvoiceServerHold | undefined) {
 /**
  * The hold this row still answers to. A `payment_processing` hold stands
  * against every inconclusive read and yields only to proof the invoice
- * settled: a complete read with nothing left owing whose status says paid, or
- * whose payments show nothing pending. Its owner then retires it
- * (`retireSettledHolds`), so a later reopen is judged on its own read.
+ * settled: a complete read, arrived after the hold, with nothing left owing
+ * whose status says paid, or whose payments show nothing pending. A cached
+ * read from before the hold proves nothing about it, even while a refetch is
+ * in flight. Its owner then retires it (`retireSettledHolds`), so a later
+ * reopen is judged on its own read.
  */
 function standingHold(
   invoice: Invoice,
   balanceCents: number,
-  hold: InvoiceServerHold | undefined,
-  complete: boolean,
+  recorded: RecordedHold | undefined,
+  conclusive: (heldAt: number) => boolean,
 ): InvoiceServerHold | undefined {
-  if (hold !== 'payment_processing' || !complete || balanceCents > 0) return hold;
+  if (!recorded || recorded.hold !== 'payment_processing') return recorded?.hold;
+  if (!conclusive(recorded.heldAt) || balanceCents > 0) return recorded.hold;
   const nothingPending =
     Array.isArray(invoice.payments) && !invoice.payments.some((payment) => payment.status === 'pending');
-  return invoice.status === 'paid' || nothingPending ? undefined : hold;
+  return invoice.status === 'paid' || nothingPending ? undefined : recorded.hold;
 }
 
 /** Evidence the status and the balance cannot both be true of. */
@@ -294,11 +335,11 @@ function settledOf(invoice: Invoice): 'paid' | 'no_balance_due' {
 function toRow(
   invoice: Invoice,
   today: Date,
-  serverHold: InvoiceServerHold | undefined,
-  complete: boolean,
+  serverHold: RecordedHold | undefined,
+  conclusive: (heldAt: number) => boolean,
 ): InvoiceRow {
   const balanceCents = invoiceBalanceCents(invoice);
-  const hold = standingHold(invoice, balanceCents, serverHold, complete);
+  const hold = standingHold(invoice, balanceCents, serverHold, conclusive);
   const facts = paymentFacts(invoice, hold);
   const contradiction = contradictionOf(invoice, balanceCents);
   const reviewReasons = reviewReasonsOf(facts.requiresRefund, hold, contradiction);
@@ -391,10 +432,11 @@ function totalsByCurrency(rows: readonly InvoiceRow[]): InvoiceCurrencyTotal[] {
  */
 export function invoiceProjection(
   invoices: readonly Invoice[],
-  { today, read, serverHolds }: InvoiceProjectionOptions,
+  { today, read, readAt = null, serverHolds }: InvoiceProjectionOptions,
 ): InvoiceProjection {
+  const conclusive = conclusiveAgainst(read, readAt);
   const rows = uniqueVisible(invoices).map((invoice) =>
-    toRow(invoice, today, serverHolds?.[invoice.id], read === 'complete'),
+    toRow(invoice, today, serverHolds?.[invoice.id], conclusive),
   );
   const inGroup = (group: InvoiceGroup) => rows.filter((row) => row.group === group);
   const review = inGroup('review').sort(outstandingOrder);
@@ -414,6 +456,7 @@ export function invoiceProjection(
 
   return {
     read,
+    readAt,
     review,
     processing,
     payable,
@@ -427,19 +470,22 @@ export function invoiceProjection(
   };
 }
 
+/** Whether a read can speak to a hold recorded at `heldAt`: complete, and arrived after it. */
+function conclusiveAgainst(read: InvoiceReadState, readAt: number | null) {
+  return (heldAt: number) => read === 'complete' && readAt !== null && readAt > heldAt;
+}
+
 /**
  * The owner's holds without those this projection's read proved settled — the
  * same `holds` object when it proved none, so a state setter can return it
- * unchanged. Reconciliation holds and holds against an inconclusive read stay.
+ * unchanged. Reconciliation holds, holds against an inconclusive read, and
+ * holds recorded after the read's rows arrived stay.
  */
-export function retireSettledHolds(
-  holds: Record<string, InvoiceServerHold>,
-  projection: InvoiceProjection,
-): Record<string, InvoiceServerHold> {
-  const complete = projection.read === 'complete';
+export function retireSettledHolds(holds: InvoiceHolds, projection: InvoiceProjection): InvoiceHolds {
+  const conclusive = conclusiveAgainst(projection.read, projection.readAt);
   const settled = [...projection.outstanding, ...projection.history].filter(({ invoice, balanceCents }) => {
-    const hold = holds[invoice.id];
-    return hold !== undefined && standingHold(invoice, balanceCents, hold, complete) === undefined;
+    const recorded = holds[invoice.id];
+    return recorded !== undefined && standingHold(invoice, balanceCents, recorded, conclusive) === undefined;
   });
   if (settled.length === 0) return holds;
   const kept = { ...holds };

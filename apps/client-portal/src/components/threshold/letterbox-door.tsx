@@ -37,6 +37,8 @@ import {
   houseInvoices,
   invoiceProjection,
   retireSettledHolds,
+  withHold,
+  type InvoiceHolds,
   type InvoiceServerHold,
 } from '@/lib/threshold/invoice-rollup';
 
@@ -263,16 +265,18 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
           data: invoicesQuery.data,
           isPending: invoicesQuery.isPending,
           isError: invoicesQuery.isError,
+          dataUpdatedAt: invoicesQuery.dataUpdatedAt,
         },
       }),
-    [invoicesQuery.data, invoicesQuery.isPending, invoicesQuery.isError],
+    [invoicesQuery.data, invoicesQuery.isPending, invoicesQuery.isError, invoicesQuery.dataUpdatedAt],
   );
   const standing = house.invoices;
   // Holds the checkout boundary returned this visit; a refetch never clears one.
-  const [invoiceHolds, setInvoiceHolds] = useState<Record<string, InvoiceServerHold>>({});
+  // Each is stamped as it arrives: only a read newer than the hold can retire it.
+  const [invoiceHolds, setInvoiceHolds] = useState<InvoiceHolds>({});
   const onInvoiceHold = useCallback(
     (invoiceId: string, hold: InvoiceServerHold) =>
-      setInvoiceHolds((held) => (held[invoiceId] === hold ? held : { ...held, [invoiceId]: hold })),
+      setInvoiceHolds((held) => withHold(held, invoiceId, hold, Date.now())),
     [],
   );
 
@@ -424,9 +428,10 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
       invoiceProjection(standing, {
         today: today ?? EPOCH,
         read: house.read,
+        readAt: house.readAt,
         serverHolds: invoiceHolds,
       }),
-    [standing, today, house.read, invoiceHolds],
+    [standing, today, house.read, house.readAt, invoiceHolds],
   );
   // A complete read that proved a held invoice settled retires its hold, so a
   // refund that reopens it this visit is judged on its own read. Adjusted in
