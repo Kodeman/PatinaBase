@@ -112,13 +112,17 @@ function plateSpecs(ground, sourceKind) {
 }
 
 /**
- * Every plate crop whose hard floor the (EXIF-oriented) source meets.
+ * Every plate crop whose hard floor the (EXIF-oriented) source meets, except the
+ * `skip` keys these bytes already have from another source kind.
  * focal [x, y] and subjectBox [x, y, w, h] are normalised 0–1; rects are source px.
  * @returns {Record<string, {rect: [number, number, number, number], widths: number[]}>}
  */
-export function planCrops({ width, height, ground, sourceKind, focal = null, subjectBox = null }) {
+export function planCrops({ width, height, ground, sourceKind, focal = null, subjectBox = null, skip = [] }) {
   const source = { width, height, focal, subjectBox };
-  const planned = plateSpecs(ground, sourceKind).map(([key, spec]) => [key, cropFor(spec, source)]);
+  const specs = plateSpecs(ground, sourceKind).filter(
+    ([key]) => !skip.includes(key),
+  );
+  const planned = specs.map(([key, spec]) => [key, cropFor(spec, source)]);
   return Object.fromEntries(planned.filter(([, crop]) => crop));
 }
 
@@ -190,6 +194,33 @@ export function classifyGround(samples) {
 /** The /process runner for a job header: op plate_ingest, else the media ops. */
 export function runnerFor(job, { plateIngest, mediaJob }) {
   return job.op === 'plate_ingest' ? plateIngest : mediaJob;
+}
+
+/**
+ * Aborts when the client goes away before the response is finished.
+ * @param {import('node:http').ServerResponse} res
+ */
+export function disconnectSignal(res) {
+  const controller = new AbortController();
+  // Not req 'close' or req.destroyed: node:http closes the request as soon as
+  // its body has been read, while the client is still waiting.
+  res.on('close', () => {
+    if (!res.writableFinished) controller.abort(new Error('client disconnected'));
+  });
+  return controller.signal;
+}
+
+/**
+ * `encode` each job in turn, so one crop pipeline holds memory at a time, and
+ * stop before the next one once `signal` aborts.
+ */
+export async function encodeInOrder(jobs, encode, signal) {
+  const outputs = [];
+  for (const job of jobs) {
+    signal.throwIfAborted();
+    outputs.push(await encode(job));
+  }
+  return outputs;
 }
 
 export function toHex({ r, g, b }) {

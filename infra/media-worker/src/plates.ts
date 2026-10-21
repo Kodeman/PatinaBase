@@ -8,6 +8,7 @@
 export interface PlatesEnv {
   PLATES: R2Bucket;
   PLATE_INGEST_SECRET: string;
+  SUPABASE_STORAGE_ORIGIN: string;
 }
 
 export interface PlateIngestDeps {
@@ -18,6 +19,19 @@ export interface PlateIngestDeps {
 export const SOURCE_KINDS = ['upload', 'installed', 'scan', 'board', 'sheet', 'maker', 'concept'];
 export const SOURCE_TIMEOUT_MS = 10_000;
 export const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
+export const MAX_REDIRECTS = 3;
+// The edge abandons the ingest call at 30 s.
+export const PROCESSOR_TIMEOUT_MS = 25_000;
+
+// The kinds the edge sends as an outside hotlink; every other kind is a Supabase
+// storage address. 00843 enqueues every non-upload item picture (the library
+// rows) as 'maker'.
+const HOTLINK_KINDS = new Set(['maker']);
+// A hotlink never targets these names or anything under them.
+const REFUSED_DOMAINS = ['localhost', 'local', 'internal', 'workers.dev', 'patina.cloud'];
+// URL parsing normalises every numeric IPv4 form (2130706433, 0x7f.1) to dotted quads.
+const IPV4 = /^\d+\.\d+\.\d+\.\d+$/;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OUTPUT_NAME = /^(wide|cover_phone|tall|wide32|pair|piece|sheet|board)-\d{3,4}\.(avif|webp)$/;
@@ -52,11 +66,24 @@ interface PlateRecord {
   crops: Record<string, { rect: Rect; widths: number[] }>;
 }
 
-// crops.json = the response record plus the inputs that shaped the crops.
+// crops.json = the response record, the inputs that shaped the crops, and the
+// source kinds whose crops it already holds.
 interface StoredPlate extends PlateRecord {
   focal: [number, number] | null;
   subjectBox: Rect | null;
+  sourceKinds?: string[];
 }
+
+interface ProcessorJob {
+  op: 'plate_ingest';
+  sourceKind: string;
+  focal: [number, number] | null;
+  subjectBox: Rect | null;
+  // Crop keys these bytes already have; the container does not plan them again.
+  skip: string[];
+}
+
+type OriginPolicy = (target: URL) => string | null;
 
 interface ProcessorOutput {
   key: string;
@@ -105,14 +132,12 @@ const isUnitTuple = (value: unknown, length: number): value is number[] =>
 
 const boxFits = ([x, y, w, h]: number[]): boolean => w > 0 && h > 0 && x + w <= 1 + EDGE && y + h <= 1 + EDGE;
 
-function urlError(value: unknown): string | null {
-  let protocol = '';
+function urlError(value: string): string | null {
   try {
-    protocol = new URL(value as string).protocol;
+    return new URL(value).protocol === 'https:' ? null : 'sourceUrl must be an https URL';
   } catch {
     return 'sourceUrl must be an absolute URL';
   }
-  return protocol === 'https:' || protocol === 'http:' ? null : 'sourceUrl must be an http(s) URL';
 }
 
 const FIELD_CHECKS: [keyof IngestBody, (value: unknown) => string | null][] = [
@@ -151,6 +176,41 @@ async function readBody(request: Request): Promise<IngestBody | string> {
   }
 }
 
+// ---- source origin policy --------------------------------------------------
+
+function storageOrigin(configured: string | undefined): string | null {
+  try {
+    const url = new URL(configured ?? '');
+    return url.protocol === 'https:' ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function hotlinkRefusal(hostname: string): string | null {
+  const host = hostname.replace(/\.+$/, '');
+  if (host.startsWith('[') || IPV4.test(host)) return 'a hotlink may not be an IP address';
+  const underRefused = REFUSED_DOMAINS.some(
+    (d) => host === d || host.endsWith(`.${d}`),
+  );
+  return !host.includes('.') || underRefused ? `a hotlink may not point at ${host}` : null;
+}
+
+function privateRefusal(target: URL, sourceKind: string, storage: string | null): string | null {
+  if (!storage) return `${sourceKind} sources are refused until SUPABASE_STORAGE_ORIGIN is set`;
+  return target.origin === storage ? null : `a ${sourceKind} source must come from the Supabase storage origin`;
+}
+
+/** The rule every fetch target (the sourceUrl and each redirect Location) must pass. */
+function originPolicy(sourceKind: string, configuredStorage: string | undefined): OriginPolicy {
+  const storage = storageOrigin(configuredStorage);
+  return (target) => {
+    if (target.protocol !== 'https:') return 'source must be an https URL';
+    if (target.username || target.password) return 'source URL may not carry credentials';
+    return HOTLINK_KINDS.has(sourceKind) ? hotlinkRefusal(target.hostname) : privateRefusal(target, sourceKind, storage);
+  };
+}
+
 // ---- source fetch (10 s, image/*, <= 20 MB) --------------------------------
 
 function lostSource(controller: AbortController): IngestError {
@@ -159,11 +219,47 @@ function lostSource(controller: AbortController): IngestError {
     : new IngestError(502, 'source fetch failed');
 }
 
-async function openSource(url: string, deps: PlateIngestDeps, controller: AbortController): Promise<Response> {
+async function discardBody(res: Response): Promise<void> {
   try {
-    return await deps.fetchSource(url, { headers: { Accept: 'image/*' }, signal: controller.signal });
+    await res.body?.cancel();
+  } catch {
+    // An errored body is already done with.
+  }
+}
+
+async function fetchOnce(url: string, deps: PlateIngestDeps, controller: AbortController): Promise<Response> {
+  try {
+    return await deps.fetchSource(url, { headers: { Accept: 'image/*' }, redirect: 'manual', signal: controller.signal });
   } catch {
     throw lostSource(controller);
+  }
+}
+
+function redirectTarget(location: string | null, from: URL): URL {
+  if (!location) throw new IngestError(502, 'source redirect has no Location');
+  try {
+    return new URL(location, from);
+  } catch {
+    throw new IngestError(502, 'source redirect Location is not a URL');
+  }
+}
+
+// Redirects are followed here, not by fetch, so the policy sees every hop first.
+async function openSource(
+  sourceUrl: string,
+  policy: OriginPolicy,
+  deps: PlateIngestDeps,
+  controller: AbortController,
+): Promise<Response> {
+  let target = new URL(sourceUrl);
+  for (let hop = 0; ; hop++) {
+    const refusal = policy(target);
+    if (refusal) throw new IngestError(403, refusal);
+    const res = await fetchOnce(target.href, deps, controller);
+    if (!REDIRECT_STATUSES.has(res.status)) return res;
+    await discardBody(res);
+    if (hop === MAX_REDIRECTS) throw new IngestError(502, `source redirected more than ${MAX_REDIRECTS} times`);
+    target = redirectTarget(res.headers.get('location'), target);
   }
 }
 
@@ -217,15 +313,15 @@ async function readCapped(body: ReadableStream<Uint8Array>, controller: AbortCon
   return concat(chunks, total);
 }
 
-async function readSource(sourceUrl: string, deps: PlateIngestDeps): Promise<Source> {
+async function readSource(sourceUrl: string, policy: OriginPolicy, deps: PlateIngestDeps): Promise<Source> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SOURCE_TIMEOUT_MS);
   try {
-    const res = await openSource(sourceUrl, deps, controller);
+    const res = await openSource(sourceUrl, policy, deps, controller);
     const contentType = mediaType(res);
     const refusal = sourceRefusal(res, contentType);
     if (refusal) {
-      await res.body?.cancel().catch(() => {});
+      await discardBody(res);
       throw refusal;
     }
     return { bytes: await readCapped(res.body as ReadableStream<Uint8Array>, controller), contentType };
@@ -260,10 +356,10 @@ function sameInputs(stored: StoredPlate, body: IngestBody): boolean {
   );
 }
 
-async function storedPlate(env: PlatesEnv, prefix: string, body: IngestBody): Promise<PlateRecord | null> {
+async function storedPlate(env: PlatesEnv, prefix: string, body: IngestBody): Promise<StoredPlate | null> {
   const existing = await env.PLATES.get(`${prefix}/crops.json`);
   const stored = existing && (await existing.json<StoredPlate>().catch(() => null));
-  return stored && sameInputs(stored, body) ? toRecord(stored) : null;
+  return stored && sameInputs(stored, body) ? stored : null;
 }
 
 const isPlateOutput = (o: ProcessorOutput): boolean =>
@@ -274,24 +370,72 @@ function checkedOutputs(outputs: unknown): ProcessorOutput[] {
   throw new IngestError(502, 'processor returned an unexpected output');
 }
 
-async function runProcessor(deps: PlateIngestDeps, body: IngestBody, bytes: Uint8Array): Promise<ProcessorResult> {
-  const job = { op: 'plate_ingest', sourceKind: body.sourceKind, focal: body.focal, subjectBox: body.subjectBox };
-  const res = await deps.processPlate(
-    new Request('http://media-processor/process', {
-      method: 'POST',
-      headers: { 'x-media-job': btoa(JSON.stringify(job)) },
-      body: bytes,
-    }),
+// Settles with `work`, or rejects as soon as `signal` aborts, whether or not
+// `work` itself honours the signal.
+function beforeDeadline<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  const deadline = new Promise<never>(
+    (_, reject) => signal.addEventListener('abort', reject, { once: true }),
   );
-  const result = await res.json<ProcessorResult & { success?: boolean; error?: string }>().catch(() => null);
+  return Promise.race([work, deadline]);
+}
+
+async function callProcessor(
+  deps: PlateIngestDeps,
+  job: ProcessorJob,
+  bytes: Uint8Array,
+  signal: AbortSignal,
+): Promise<ProcessorResult> {
+  const request = new Request('http://media-processor/process', {
+    method: 'POST',
+    headers: { 'x-media-job': btoa(JSON.stringify(job)) },
+    body: bytes,
+    signal,
+  });
+  const res = await beforeDeadline(deps.processPlate(request), signal);
+  const result = await beforeDeadline(
+    res.json<ProcessorResult & { success?: boolean; error?: string }>().catch(() => null),
+    signal,
+  );
   if (!res.ok || !result?.success) {
     throw new IngestError(502, `processor failed: ${result?.error ?? `HTTP ${res.status}`}`);
   }
   return { ...result, outputs: checkedOutputs(result.outputs) };
 }
 
+async function runProcessor(
+  deps: PlateIngestDeps,
+  body: IngestBody,
+  bytes: Uint8Array,
+  skip: string[],
+): Promise<ProcessorResult> {
+  const job: ProcessorJob = { op: 'plate_ingest', sourceKind: body.sourceKind, focal: body.focal, subjectBox: body.subjectBox, skip };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROCESSOR_TIMEOUT_MS);
+  try {
+    return await callProcessor(deps, job, bytes, controller.signal);
+  } catch (err) {
+    throw controller.signal.aborted ? new IngestError(504, `processor did not finish within ${PROCESSOR_TIMEOUT_MS / 1000} s`) : err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const extension = (format: unknown): string =>
   typeof format === 'string' && /^[a-z0-9]{2,5}$/.test(format) ? format : 'bin';
+
+async function putOutputs(env: PlatesEnv, prefix: string, outputs: ProcessorOutput[]): Promise<void> {
+  for (const o of outputs) {
+    await env.PLATES.put(`${prefix}/${o.key}`, b64ToBytes(o.dataB64), { httpMetadata: { contentType: o.contentType } });
+  }
+}
+
+// Written after every object it names: its presence means they all landed.
+async function putManifest(env: PlatesEnv, prefix: string, stored: StoredPlate): Promise<PlateRecord> {
+  await env.PLATES.put(`${prefix}/crops.json`, JSON.stringify(stored), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+  return toRecord(stored);
+}
 
 async function storePlate(
   env: PlatesEnv,
@@ -301,27 +445,38 @@ async function storePlate(
   sha256: string,
   result: ProcessorResult,
 ): Promise<PlateRecord> {
-  for (const o of result.outputs) {
-    await env.PLATES.put(`${prefix}/${o.key}`, b64ToBytes(o.dataB64), { httpMetadata: { contentType: o.contentType } });
-  }
+  await putOutputs(env, prefix, result.outputs);
   const originalKey = `${prefix}/original.${extension(result.format)}`;
   await env.PLATES.put(originalKey, source.bytes, { httpMetadata: { contentType: source.contentType } });
   const record = toRecord({ ...result, sha256, originalKey });
-  const stored: StoredPlate = { ...record, focal: body.focal, subjectBox: body.subjectBox };
-  // Written last: its presence means every output above landed.
-  await env.PLATES.put(`${prefix}/crops.json`, JSON.stringify(stored), {
-    httpMetadata: { contentType: 'application/json' },
+  return putManifest(env, prefix, { ...record, focal: body.focal, subjectBox: body.subjectBox, sourceKinds: [body.sourceKind] });
+}
+
+// Same bytes and inputs, a source kind the manifest has not planned for: the
+// processor encoded only the crops that kind adds, and the manifest keeps the union.
+async function addCrops(
+  env: PlatesEnv,
+  prefix: string,
+  body: IngestBody,
+  stored: StoredPlate,
+  result: ProcessorResult,
+): Promise<PlateRecord> {
+  await putOutputs(env, prefix, result.outputs);
+  return putManifest(env, prefix, {
+    ...stored,
+    crops: { ...stored.crops, ...result.crops },
+    sourceKinds: [...(stored.sourceKinds ?? []), body.sourceKind],
   });
-  return record;
 }
 
 async function ingest(env: PlatesEnv, deps: PlateIngestDeps, body: IngestBody): Promise<PlateRecord> {
-  const source = await readSource(body.sourceUrl, deps);
+  const source = await readSource(body.sourceUrl, originPolicy(body.sourceKind, env.SUPABASE_STORAGE_ORIGIN), deps);
   const sha256 = await sha256Hex(source.bytes);
   const prefix = `plates/${body.projectId}/${sha256}`;
-  // Re-ingest of the same bytes with the same focal/subject box returns the stored crops.
   const stored = await storedPlate(env, prefix, body);
-  return stored ?? storePlate(env, prefix, body, source, sha256, await runProcessor(deps, body, source.bytes));
+  if (!stored) return storePlate(env, prefix, body, source, sha256, await runProcessor(deps, body, source.bytes, []));
+  if (stored.sourceKinds?.includes(body.sourceKind)) return toRecord(stored);
+  return addCrops(env, prefix, body, stored, await runProcessor(deps, body, source.bytes, Object.keys(stored.crops)));
 }
 
 function errorResponse(err: unknown): Response {

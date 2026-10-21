@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import test from 'node:test';
 
 import {
@@ -6,6 +7,8 @@ import {
   MAX_DISCARD,
   borderLuminance,
   classifyGround,
+  disconnectSignal,
+  encodeInOrder,
   fitLqip,
   outputJobs,
   planCrops,
@@ -159,6 +162,61 @@ test('sheet and board sources also get an uncropped plate keyed by source kind',
   // Below the board floor (1600 wide) there is no board plate; uploads never get one.
   assert.equal(planCrops({ width: 800, height: 600, ground: 'scene', sourceKind: 'board' }).board, undefined);
   assert.equal(planCrops({ width: 2480, height: 3508, ground: 'scene', sourceKind: 'upload' }).sheet, undefined);
+});
+
+test('skip leaves out the crops these bytes already have, so a new kind plans only its own', () => {
+  const shared = ['wide', 'cover_phone', 'wide32', 'pair', 'piece'];
+  const board = planCrops({ width: 2400, height: 1800, ground: 'scene', sourceKind: 'board', skip: shared });
+  assert.deepEqual(Object.keys(board), ['board']);
+  assert.deepEqual(planCrops({ width: 2400, height: 1800, ground: 'scene', sourceKind: 'maker', skip: shared }), {});
+});
+
+test('encoding stops before the next crop once the request is aborted', async () => {
+  const controller = new AbortController();
+  const encoded = [];
+  const encode = async (job) => {
+    encoded.push(job);
+    if (job === 'b') controller.abort(new Error('client disconnected'));
+    return job.toUpperCase();
+  };
+  await assert.rejects(encodeInOrder(['a', 'b', 'c', 'd'], encode, controller.signal), /client disconnected/);
+  assert.deepEqual(encoded, ['a', 'b']);
+  assert.deepEqual(await encodeInOrder(['a', 'b'], async (j) => j.toUpperCase(), new AbortController().signal), ['A', 'B']);
+});
+
+test('a client that hangs up after sending its body aborts the job signal; a finished response does not', async () => {
+  const signals = [];
+  let received;
+  const stalledArrived = new Promise((resolve) => (received = resolve));
+  const server = createServer((req, res) => {
+    const signal = disconnectSignal(res);
+    signals.push(signal);
+    req.resume();
+    req.on('end', () => (req.url === '/finish' ? res.end('ok') : received(signal)));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    await (await fetch(`${base}/finish`, { method: 'POST', body: 'x' })).text();
+    const hangUp = new AbortController();
+    const stalled = fetch(`${base}/stall`, { method: 'POST', body: 'x', signal: hangUp.signal }).catch(() => 'hung up');
+    const signal = await stalledArrived;
+    // Long enough for node:http to close the fully read request while the client still waits.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(signal.aborted, false);
+    const aborted = new Promise((resolve) => signal.addEventListener('abort', () => resolve('aborted')));
+    hangUp.abort();
+    let timer;
+    const outcome = await Promise.race([aborted, new Promise((resolve) => (timer = setTimeout(resolve, 2000, 'still running')))]);
+    clearTimeout(timer);
+    assert.equal(outcome, 'aborted');
+    assert.equal(await stalled, 'hung up');
+    assert.match(String(signal.reason?.message), /client disconnected/);
+    assert.equal(signals[0].aborted, false);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
 });
 
 test('outputs are AVIF q50 and WebP q72 per crop width', () => {

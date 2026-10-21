@@ -15,6 +15,8 @@ import {
   LQIP_WIDTH,
   borderLuminance,
   classifyGround,
+  disconnectSignal,
+  encodeInOrder,
   fitLqip,
   outputJobs,
   planCrops,
@@ -188,15 +190,13 @@ async function encodePlate(data, raw, out) {
   return { key: out.key, contentType: out.contentType, dataB64: bytes.toString('base64') };
 }
 
-// Sequential, so one crop pipeline holds memory at a time.
-function encodePlates(data, raw, crops) {
-  return outputJobs(crops).reduce(
-    async (done, out) => [...(await done), await encodePlate(data, raw, out)],
-    Promise.resolve([]),
-  );
+function encodePlates(data, raw, crops, signal) {
+  return encodeInOrder(outputJobs(crops), (out) => encodePlate(data, raw, out), signal);
 }
 
-async function runPlateIngest(job, imageBuffer) {
+// `signal` aborts when the Worker gives up on this request (its 25 s deadline);
+// encoding stops before the next crop.
+async function runPlateIngest(job, imageBuffer, signal) {
   const { format } = await sharp(imageBuffer).metadata();
   const { data, info } = await sharp(imageBuffer)
     .rotate()
@@ -214,6 +214,7 @@ async function runPlateIngest(job, imageBuffer) {
     sourceKind: job.sourceKind,
     focal: job.focal,
     subjectBox: job.subjectBox,
+    skip: job.skip,
   });
   return {
     success: true,
@@ -224,7 +225,7 @@ async function runPlateIngest(job, imageBuffer) {
     dominantHex: toHex(dominant),
     lqip: await fitLqip((quality) => sharp(data, raw).resize({ width: LQIP_WIDTH }).webp({ quality }).toBuffer()),
     crops,
-    outputs: await encodePlates(data, raw, crops),
+    outputs: await encodePlates(data, raw, crops, signal),
   };
 }
 
@@ -238,13 +239,14 @@ const server = createServer((req, res) => {
   }
   if (req.method === 'POST' && req.url === '/process') {
     const jobHeader = req.headers['x-media-job'];
+    const signal = disconnectSignal(res);
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
     req.on('end', async () => {
       try {
         const job = JSON.parse(Buffer.from(String(jobHeader || ''), 'base64').toString('utf8'));
         const body = Buffer.concat(chunks);
-        const result = await runnerFor(job, RUNNERS)(job, body);
+        const result = await runnerFor(job, RUNNERS)(job, body, signal);
         res.writeHead(result.success ? 200 : 422, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
       } catch (err) {

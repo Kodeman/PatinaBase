@@ -34,6 +34,8 @@ interface Env {
   PLATES: R2Bucket; // patina-plates (private client plates)
   // Bearer secret on POST /plates/ingest, shared with the client-plate-copy edge function.
   PLATE_INGEST_SECRET: string;
+  // Origin every private (non-hotlink) plate source must come from; empty refuses them all.
+  SUPABASE_STORAGE_ORIGIN: string;
 }
 
 // Job types the container can run today. 3D / snapshot / virus scan are stubs in

@@ -42,6 +42,12 @@
     { "binding": "PLATES", "bucket_name": "patina-plates" }
   ],
 
+  // Not a secret. The origin (https://<project-ref>.supabase.co) every private
+  // plate source must come from: the URLs client-plate-copy signs or builds from
+  // its SUPABASE_URL. Empty refuses every non-hotlink source with a 403. A deploy
+  // replaces dashboard vars with these values, so set it here, not in the dashboard.
+  "vars": { "SUPABASE_STORAGE_ORIGIN": "" },
+
   "observability": { "enabled": true },
   "env": {
     "staging": {
@@ -72,7 +78,8 @@
         { "binding": "RAW", "bucket_name": "patina-raw-staging" },
         { "binding": "PROCESSED", "bucket_name": "patina-processed-staging" },
         { "binding": "PLATES", "bucket_name": "patina-plates-staging" }
-      ]
+      ],
+      "vars": { "SUPABASE_STORAGE_ORIGIN": "" }
     }
   }
 }

@@ -4,7 +4,8 @@ import test, { mock } from 'node:test';
 
 // src/plates.ts is erasable-only TypeScript with no runtime imports: Node strips
 // the types and loads it in place, so coverage maps to the real source lines.
-const { handlePlateIngest, routePlates, MAX_SOURCE_BYTES } = await import('../src/plates.ts');
+const { handlePlateIngest, routePlates, MAX_SOURCE_BYTES, PROCESSOR_TIMEOUT_MS } = await import('../src/plates.ts');
+const { outputJobs, planCrops } = await import('../container/plates.mjs');
 
 // Workers' crypto.subtle.timingSafeEqual (Node lacks it): same contract, recorded.
 const compares = [];
@@ -17,6 +18,7 @@ Object.defineProperty(crypto.subtle, 'timingSafeEqual', {
 });
 
 const SECRET = 'plate-ingest-test-secret-0123456789';
+const STORAGE = 'https://abcdefghijklmnop.supabase.co';
 const PROJECT = '6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b';
 const REQUEST = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
 const IMAGE = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8]);
@@ -55,20 +57,18 @@ function processorResult(overrides = {}) {
 }
 
 function harness({ source, processor, secret = SECRET } = {}) {
-  const env = { PLATES: bucket(), PLATE_INGEST_SECRET: secret };
+  const env = { PLATES: bucket(), PLATE_INGEST_SECRET: secret, SUPABASE_STORAGE_ORIGIN: STORAGE };
   const fetches = [];
   const jobs = [];
   const deps = {
     fetchSource: async (url, init) => {
       fetches.push({ url, init });
-      return source ? source(init) : new Response(IMAGE, { headers: { 'content-type': 'image/jpeg' } });
+      return source ? source(init, url) : new Response(IMAGE, { headers: { 'content-type': 'image/jpeg' } });
     },
     processPlate: async (request) => {
-      jobs.push({
-        job: JSON.parse(atob(request.headers.get('x-media-job'))),
-        bytes: new Uint8Array(await request.arrayBuffer()),
-      });
-      return processor ? processor() : Response.json(processorResult());
+      const job = JSON.parse(atob(request.headers.get('x-media-job')));
+      jobs.push({ job, bytes: new Uint8Array(await request.arrayBuffer()) });
+      return processor ? processor(request, job) : Response.json(processorResult());
     },
   };
   const ingest = (body, authorization = `Bearer ${secret}`) =>
@@ -84,7 +84,13 @@ function harness({ source, processor, secret = SECRET } = {}) {
   return { env, fetches, jobs, ingest };
 }
 
-const valid = { projectId: PROJECT, requestId: REQUEST, sourceKind: 'upload', sourceUrl: 'https://cdn.example.com/a.jpg' };
+const valid = {
+  projectId: PROJECT,
+  requestId: REQUEST,
+  sourceKind: 'upload',
+  sourceUrl: `${STORAGE}/storage/v1/object/public/project-item-images/a.jpg`,
+};
+const hotlink = { ...valid, sourceKind: 'maker', sourceUrl: 'https://cdn.example.com/a.jpg' };
 
 async function expectError(res, status) {
   assert.equal(res.status, status);
@@ -252,6 +258,7 @@ test('ingest writes every output, the original and crops.json, and returns the p
     sourceKind: 'sheet',
     focal: [0.4, 0.5],
     subjectBox: [0.1, 0.1, 0.5, 0.6],
+    skip: [],
   });
   assert.deepEqual(h.jobs[0].bytes, IMAGE);
   const objects = h.env.PLATES.objects;
@@ -335,4 +342,208 @@ test('a processor failure or unexpected output name writes nothing', async () =>
   });
   await expectError(await sneaky.ingest(valid), 502);
   assert.equal(sneaky.env.PLATES.objects.size, 0);
+});
+
+// ---- source origin policy (F3) ---------------------------------------------
+
+const redirect = (location, status = 302) => new Response(null, { status, headers: location ? { location } : {} });
+const image = () => new Response(IMAGE, { headers: { 'content-type': 'image/jpeg' } });
+
+test('a plain http source is refused before anything is fetched', async () => {
+  const h = harness();
+  for (const sourceUrl of [`http://abcdefghijklmnop.supabase.co/a.jpg`, 'http://cdn.example.com/a.jpg']) {
+    assert.match(await expectError(await h.ingest({ ...hotlink, sourceUrl }), 400), /https/);
+  }
+  assert.equal(h.fetches.length, 0);
+});
+
+test('a hotlink may be any public https host, never an IP, local name, worker or Patina host', async () => {
+  const h = harness();
+  const refused = [
+    'https://203.0.113.7/a.jpg',
+    'https://2130706433/a.jpg', // 127.0.0.1 written as one number
+    'https://0x7f.1/a.jpg',
+    'https://[::1]/a.jpg',
+    'https://[fd00::5]/a.jpg',
+    'https://localhost/a.jpg',
+    'https://localhost./a.jpg',
+    'https://intranet/a.jpg',
+    'https://printer.local/a.jpg',
+    'https://metadata.google.internal/a.jpg',
+    'https://patina-media-worker.kody.workers.dev/a.jpg',
+    'https://patina.cloud/a.jpg',
+    'https://client.patina.cloud/a.jpg',
+    'https://user:secret@cdn.example.com/a.jpg',
+  ];
+  for (const sourceUrl of refused) {
+    const error = await expectError(await h.ingest({ ...hotlink, sourceUrl }), 403);
+    assert.match(error, /hotlink|credentials/, sourceUrl);
+  }
+  assert.equal(h.fetches.length, 0);
+  // An outside retailer host (and one that merely contains a refused word) is fine.
+  for (const sourceUrl of ['https://images.hermanmiller.com/a.jpg', 'https://local-maker.example/a.jpg']) {
+    assert.equal((await h.ingest({ ...hotlink, sourceUrl })).status, 200, sourceUrl);
+  }
+});
+
+test('a private source must come from the Supabase storage origin', async () => {
+  const h = harness();
+  for (const sourceKind of ['upload', 'concept', 'scan', 'board', 'sheet', 'installed']) {
+    for (const sourceUrl of [
+      'https://cdn.example.com/a.jpg',
+      'https://abcdefghijklmnop.supabase.co.evil.example/a.jpg',
+      'https://abcdefghijklmnop.supabase.co:8443/a.jpg',
+      'https://other-project.supabase.co/a.jpg',
+    ]) {
+      assert.match(await expectError(await h.ingest({ ...valid, sourceKind, sourceUrl }), 403), /storage origin/);
+    }
+  }
+  assert.equal(h.fetches.length, 0);
+  const signed = `${STORAGE}/storage/v1/object/sign/room-renders/r/1.png?token=t`;
+  assert.equal((await h.ingest({ ...valid, sourceKind: 'concept', sourceUrl: signed })).status, 200);
+  assert.equal(h.fetches[0].url, signed);
+});
+
+test('with SUPABASE_STORAGE_ORIGIN unset every private source is refused, hotlinks still pass', async () => {
+  for (const storage of ['', undefined, 'not a url', 'http://abcdefghijklmnop.supabase.co']) {
+    const h = harness();
+    h.env.SUPABASE_STORAGE_ORIGIN = storage;
+    assert.match(await expectError(await h.ingest(valid), 403), /SUPABASE_STORAGE_ORIGIN/);
+    assert.equal(h.fetches.length, 0);
+    assert.equal((await h.ingest(hotlink)).status, 200);
+  }
+});
+
+test('every fetch is manual-redirect with no credentials, and a 2-hop public redirect is followed', async () => {
+  const h = harness({
+    source: (_, url) =>
+      ({
+        'https://shop.example.com/a.jpg': () => redirect('https://cdn.example.net/b.jpg', 301),
+        'https://cdn.example.net/b.jpg': () => redirect('/img/c.jpg', 307),
+        'https://cdn.example.net/img/c.jpg': image,
+      })[url](),
+  });
+  const res = await h.ingest({ ...hotlink, sourceUrl: 'https://shop.example.com/a.jpg' });
+  assert.equal(res.status, 200);
+  assert.deepEqual(
+    h.fetches.map((f) => f.url),
+    ['https://shop.example.com/a.jpg', 'https://cdn.example.net/b.jpg', 'https://cdn.example.net/img/c.jpg'],
+  );
+  for (const { init } of h.fetches) {
+    assert.equal(init.redirect, 'manual');
+    assert.deepEqual(init.headers, { Accept: 'image/*' });
+    assert.equal(init.credentials, undefined);
+  }
+  assert.equal(h.jobs.length, 1);
+});
+
+test('a redirect to a refused host or off the storage origin fails before it is fetched', async () => {
+  const cases = [
+    [hotlink, 'https://10.0.0.5/a.jpg', /IP address/],
+    [hotlink, 'https://metadata.internal/a.jpg', /internal/],
+    [hotlink, 'http://cdn.example.net/a.jpg', /https/],
+    [hotlink, 'https://user:pw@cdn.example.net/a.jpg', /credentials/],
+    [valid, 'https://cdn.example.com/a.jpg', /storage origin/],
+  ];
+  for (const [body, location, message] of cases) {
+    let cancelled = false;
+    const h = harness({
+      source: (_, url) =>
+        url === body.sourceUrl
+          ? new Response(new ReadableStream({ cancel: () => void (cancelled = true) }), {
+              status: 302,
+              headers: { location },
+            })
+          : assert.fail(`fetched ${url}`),
+    });
+    assert.match(await expectError(await h.ingest(body), 403), message, location);
+    assert.equal(h.fetches.length, 1);
+    assert.equal(cancelled, true);
+    assert.equal(h.jobs.length, 0);
+  }
+});
+
+test('more than three redirects, or a redirect with no Location, is a 502', async () => {
+  let n = 0;
+  const looping = harness({ source: () => redirect(`https://cdn.example.com/${++n}.jpg`) });
+  assert.match(await expectError(await looping.ingest(hotlink), 502), /more than 3/);
+  assert.equal(looping.fetches.length, 4);
+  const blank = harness({ source: () => redirect(null) });
+  assert.match(await expectError(await blank.ingest(hotlink), 502), /no Location/);
+  const garbled = harness({ source: () => redirect('https://bad host/a.jpg') });
+  assert.match(await expectError(await garbled.ingest(hotlink), 502), /Location is not a URL/);
+});
+
+// ---- idempotency keyed on the crops a source kind needs (F2) ---------------
+
+test('the same bytes as maker then board: board adds only its crop, the manifest keeps the union', async () => {
+  // The container's own planner stands in for Sharp: a 2400x1800 scene.
+  const h = harness({
+    processor: (_, job) => {
+      const crops = planCrops({ width: 2400, height: 1800, ground: 'scene', ...job });
+      const outputs = outputJobs(crops).map((o) => ({ key: o.key, contentType: o.contentType, dataB64: btoa(o.key) }));
+      return Response.json(processorResult({ width: 2400, height: 1800, crops, outputs }));
+    },
+  });
+  const maker = await (await h.ingest(hotlink)).json();
+  const shared = ['wide', 'cover_phone', 'wide32', 'pair', 'piece'];
+  assert.deepEqual(Object.keys(maker.crops), shared);
+
+  const board = await (await h.ingest({ ...hotlink, requestId: '2a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', sourceKind: 'board', sourceUrl: valid.sourceUrl })).json();
+  assert.equal(h.jobs.length, 2);
+  assert.deepEqual(h.jobs[1].job.skip, shared);
+  assert.deepEqual(Object.keys(board.crops), [...shared, 'board']);
+  assert.deepEqual(board.crops.board, { rect: [0, 0, 2400, 1800], widths: [768, 1024, 1600, 2048] });
+  for (const key of shared) assert.deepEqual(board.crops[key], maker.crops[key], key);
+  assert.equal(board.originalKey, maker.originalKey);
+  const prefix = maker.originalKey.replace(/\/original\.jpeg$/, '');
+  assert.ok(h.env.PLATES.objects.has(`${prefix}/board-2048.avif`));
+  const manifest = JSON.parse(new TextDecoder().decode(h.env.PLATES.objects.get(`${prefix}/crops.json`).body));
+  assert.deepEqual(manifest.sourceKinds, ['maker', 'board']);
+  assert.deepEqual(Object.keys(manifest.crops), [...shared, 'board']);
+
+  // A third ingest as maker (and a repeat as board) is a no-op returning the union.
+  assert.deepEqual(await (await h.ingest(hotlink)).json(), board);
+  assert.deepEqual(await (await h.ingest({ ...hotlink, sourceKind: 'board', sourceUrl: valid.sourceUrl })).json(), board);
+  assert.equal(h.jobs.length, 2);
+});
+
+// ---- processor deadline (F6) ------------------------------------------------
+
+test('a processor that stalls is abandoned at 25 s with a 504 and sees the abort', async () => {
+  const stalls = {
+    'no answer': () => new Promise(() => {}),
+    'answer with a body that never ends': () => new Response(new ReadableStream(), { status: 200 }),
+  };
+  for (const [name, stall] of Object.entries(stalls)) {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      let called;
+      const calling = new Promise((resolve) => (called = resolve));
+      let cancelled = false;
+      const h = harness({
+        processor: (request) => {
+          request.signal.addEventListener('abort', () => (cancelled = true));
+          called();
+          return stall();
+        },
+      });
+      const pending = h.ingest(valid);
+      let settled = false;
+      pending.then(() => (settled = true));
+      await calling;
+      mock.timers.tick(PROCESSOR_TIMEOUT_MS - 1);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(settled, false, name);
+      assert.equal(cancelled, false, name);
+      mock.timers.tick(1);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(settled, true, `${name}: no answer at the deadline`);
+      assert.match(await expectError(await pending, 504), /processor did not finish within 25 s/, name);
+      assert.equal(cancelled, true, name);
+      assert.equal(h.env.PLATES.objects.size, 0, name);
+    } finally {
+      mock.timers.reset();
+    }
+  }
 });
