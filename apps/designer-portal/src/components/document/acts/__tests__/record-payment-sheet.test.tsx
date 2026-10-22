@@ -189,6 +189,7 @@ describe('Record a payment to a maker', () => {
 
   it('opens the amount field as the held-payment spotlight window, live and focused (R186)', async () => {
     openSheet(PAYMENT_NEED);
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
     const amount = screen.getByLabelText('Amount');
     fireEvent.change(amount, { target: { value: '' } });
     const button = screen.getByRole('button', { name: 'Record the payment' });
