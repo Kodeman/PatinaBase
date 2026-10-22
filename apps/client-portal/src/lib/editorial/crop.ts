@@ -1,7 +1,7 @@
 /* Crop geometry the page needs: object-position from a crop rectangle and the
    `<picture>` sources built from an asset's stored crops. */
 
-import { plateSrcSet, plateUrl, type PlateFormat } from '@/lib/plates';
+import { plateRevision, plateSrcSet, plateUrl, type PlateFormat } from '@/lib/plates';
 
 import { heroDesktopLayout, type HeroDesktopLayout } from './floors';
 import type { EditorialAsset, PlateCropKey, Rect } from './types';
@@ -55,13 +55,14 @@ function sourcesFor(scopeId: string, asset: EditorialAsset, cropKey: PlateCropKe
   const crop = asset.crops[cropKey];
   if (!crop || crop.widths.length === 0) return null;
   const widths = [...crop.widths].sort((a, b) => a - b);
+  const revision = plateRevision(asset.focal, asset.subjectBox);
   const sources: PictureSource[] = PLATE_FORMATS.map((format) => ({
     type: `image/${format}` as const,
-    srcSet: plateSrcSet(scopeId, asset.sha256, cropKey, widths, format),
+    srcSet: plateSrcSet(scopeId, asset.sha256, cropKey, widths, format, revision),
     sizes,
     ...(media ? { media } : {}),
   }));
-  return { sources, src: plateUrl(scopeId, asset.sha256, cropKey, widths[widths.length - 1], 'webp') };
+  return { sources, src: plateUrl(scopeId, asset.sha256, cropKey, widths[widths.length - 1], 'webp', revision) };
 }
 
 export interface PhoneCrop {
@@ -144,7 +145,7 @@ export function heroPreloadSources(scopeId: string, asset: EditorialAsset): Hero
   return sources.flatMap(({ cropKey, sizes, media }) => {
     const widths = asset.crops[cropKey]?.widths ?? [];
     if (widths.length === 0) return [];
-    const imageSrcSet = plateSrcSet(scopeId, asset.sha256, cropKey, [...widths].sort((a, b) => a - b), 'avif');
+    const imageSrcSet = plateSrcSet(scopeId, asset.sha256, cropKey, [...widths].sort((a, b) => a - b), 'avif', plateRevision(asset.focal, asset.subjectBox));
     return [{ imageSrcSet, imageSizes: sizes, ...(media ? { media } : {}) }];
   });
 }

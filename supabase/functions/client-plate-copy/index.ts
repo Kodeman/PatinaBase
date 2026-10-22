@@ -5,6 +5,7 @@
 // service role only (verify_jwt = true, then resolveCaller).
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller } from "../_shared/caller.ts";
+import { ingestPlate } from "./ingest.ts";
 import {
   copyRun,
   type CopySteps,
@@ -84,18 +85,7 @@ function copySteps(admin: Admin, runId: number, worker: WorkerEnv): CopySteps {
       return ((data ?? []) as PlateRequest[])[0] ?? null;
     },
     authority: sourceAuthority(admin),
-    ingest: (request, sourceUrl, signal) =>
-      fetch(`${worker.workerUrl}/plates/ingest`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${worker.secret}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: request.project_id,
-          requestId: request.id,
-          sourceKind: request.source_kind,
-          sourceUrl,
-        }),
-        signal,
-      }),
+    ingest: (request, sourceUrl, signal) => ingestPlate(admin, worker, request, sourceUrl, signal),
     async record(request, asset, signal) {
       const { error } = await admin.rpc("record_client_plate_asset", {
         p_request_id: request.id,

@@ -8,6 +8,7 @@ export interface PlateRequest {
   source_kind: string;
   source_ref: { table?: string; id?: string } | null;
   source_url: string;
+  asset_id?: string | null;
   lease_token: string;
 }
 
