@@ -56,10 +56,8 @@ function joined(chunks: readonly Uint8Array[], size: number): Uint8Array {
   return bytes;
 }
 
-/** The body, or null once it passes `max` bytes (the rest is not read). */
-async function readCapped(response: Response, max: number): Promise<Uint8Array | null> {
-  if (!response.body || Number(response.headers.get("content-length") ?? 0) > max) return null;
-  const reader = response.body.getReader();
+/** The stream's bytes, or null once they pass `max` (the rest is not read). */
+async function readUpTo(reader: ReadableStreamDefaultReader<Uint8Array>, max: number): Promise<Uint8Array | null> {
   const chunks: Uint8Array[] = [];
   let size = 0;
   for (let next = await reader.read(); !next.done; next = await reader.read()) {
@@ -73,10 +71,23 @@ async function readCapped(response: Response, max: number): Promise<Uint8Array |
   return joined(chunks, size);
 }
 
+/** The body, or null when it declares or reaches more than `max` bytes. */
+async function readCapped(response: Response, max: number): Promise<Uint8Array | null> {
+  const declared = Number(response.headers.get("content-length") ?? 0);
+  if (!response.body || declared > max) return null;
+  return await readUpTo(response.body.getReader(), max);
+}
+
+function servedWebp(response: Response): boolean {
+  return response.status === 200 && response.headers.get("content-type") === "image/webp";
+}
+
 async function bytesOf(response: Response): Promise<Uint8Array | null> {
-  const webp = response.status === 200 && response.headers.get("content-type") === "image/webp";
-  const bytes = webp ? await readCapped(response, RENDITION_MAX_BYTES) : null;
-  if (!webp) await response.body?.cancel();
+  if (!servedWebp(response)) {
+    await response.body?.cancel();
+    return null;
+  }
+  const bytes = await readCapped(response, RENDITION_MAX_BYTES);
   return bytes && isWebp(bytes) ? bytes : null;
 }
 
