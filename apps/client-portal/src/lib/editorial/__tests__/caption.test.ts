@@ -99,6 +99,11 @@ describe('caption', () => {
     expect(catalogueCaption(what, null, null, 'Harmon seating', false)?.what).toBe('This piece, the same model');
   });
 
+  it('uses the signed item name instead of the uncategorized slug', () => {
+    expect(catalogueCaption('Oak table', null, null, 'uncategorized')?.what).toBe('Oak table, the same model');
+    expect(catalogueCaption(null, null, null, 'uncategorized')?.what).toBe('This piece, the same model');
+  });
+
   it('presents a slug category readably and preserves it with makers ON', () => {
     expect(catalogueCaption(null, null, null, 'living_room-seating')?.what).toBe('Living room seating, the same model');
     expect(catalogueCaption(null, null, null, 'Harmon seating', true)?.what).toBe('Harmon seating, the same model');
@@ -112,11 +117,11 @@ describe('caption', () => {
     expect(catalogueCaption('Oak / walnut — bench', null, null)?.what).toBe('Oak / walnut — bench, the same model');
   });
 
-  it('splits the silhouette caption into the three fields', () => {
+  it('keeps the silhouette note out of the when field', () => {
     expect(silhouetteCaption('Floor lamp')).toEqual({
       what: 'Floor lamp',
       whose: 'drawn from the specification',
-      when: 'photograph to follow',
+      when: null,
     });
   });
 });

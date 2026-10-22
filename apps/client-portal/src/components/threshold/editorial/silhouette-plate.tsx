@@ -41,7 +41,7 @@ export function SilhouettePlate({ name, silhouetteKind, category, note, classNam
         </div>
       </div>
       {children}
-      <PlateCaption caption={silhouetteCaption(name)} note={note} />
+      <PlateCaption caption={silhouetteCaption(name)} note={note ?? 'Photograph to follow.'} />
     </figure>
   );
 }

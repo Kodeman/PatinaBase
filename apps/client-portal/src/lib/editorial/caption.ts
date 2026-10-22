@@ -87,6 +87,6 @@ export function silhouetteCaption(itemName: string): CaptionTriplet {
   return {
     what: field(itemName) ?? 'This piece',
     whose: 'drawn from the specification',
-    when: 'photograph to follow',
+    when: null,
   };
 }

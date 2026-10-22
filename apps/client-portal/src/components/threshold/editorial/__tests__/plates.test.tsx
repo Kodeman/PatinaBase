@@ -101,10 +101,10 @@ describe('editorial plates', () => {
     const captions = container.querySelectorAll('figcaption');
     expect(captions.length).toBeGreaterThanOrEqual(11);
     captions.forEach((caption) => {
-      expect(caption.querySelectorAll('[data-caption-field]')).toHaveLength(3);
+      expect(caption.querySelectorAll('[data-caption-field]').length).toBeGreaterThanOrEqual(2);
       const note = caption.querySelector('.plate-note')?.textContent ?? '';
       const triplet = (caption.textContent ?? '').slice(0, (caption.textContent ?? '').length - note.length);
-      expect(triplet.split(' · ')).toHaveLength(3);
+      expect([2, 3]).toContain(triplet.split(' · ').length);
     });
   });
 
@@ -150,13 +150,23 @@ describe('editorial plates', () => {
     expect(container.querySelector('img')).toHaveStyle({ objectPosition: '50% 41.7%' });
   });
 
+  it('places the missing-photograph note outside the silhouette caption fields', () => {
+    const { container } = render(<SilhouettePlate name="Floor lamp" />);
+    expect(Array.from(container.querySelectorAll('[data-caption-field]')).map((field) => field.textContent)).toEqual([
+      'Floor lamp',
+      'drawn from the specification',
+    ]);
+    expect(container.querySelector('.plate-note')).toHaveTextContent('Photograph to follow.');
+    expect(container.querySelector('figcaption')).not.toHaveTextContent('photograph to follow');
+  });
+
   it('swaps a picture that fails to load for the silhouette and says so', () => {
     const { container } = render(<RoomPlate scopeId={SCOPE} asset={asset({ sourceKind: 'scan' })} fallback={fallback} />);
     fireEvent.error(container.querySelector('img')!);
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getByTestId('piece-silhouette')).toHaveAttribute('data-silhouette', 'case');
     expect(container.querySelector('.plate-note')).toHaveTextContent('Picture did not load.');
-    expect(container.querySelectorAll('[data-caption-field]')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-caption-field]')).toHaveLength(2);
   });
 
   it('keeps the hero headline when the hero picture fails', () => {
@@ -198,8 +208,8 @@ describe('editorial plates', () => {
     expect(Array.from(container.querySelectorAll('[data-caption-field]')).map((s) => s.textContent)).toEqual([
       'Floor lamp',
       'drawn from the specification',
-      'photograph to follow',
     ]);
+    expect(container.querySelector('.plate-note')).toHaveTextContent('Photograph to follow.');
   });
 
   it('captions what · whose when the when is withheld, with no dangling separator and no silhouette', () => {
@@ -223,7 +233,7 @@ describe('editorial plates', () => {
   it('draws the silhouette when the asset holds no rendition of the crop', () => {
     const { container } = render(<RoomPlate scopeId={SCOPE} asset={asset({ crops: {} })} fallback={fallback} />);
     expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('.plate-note')).toBeNull();
+    expect(container.querySelector('.plate-note')).toHaveTextContent('Photograph to follow.');
   });
 
   it('refuses a caption carrying banned wording by drawing instead', () => {
