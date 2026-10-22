@@ -6,7 +6,13 @@
  */
 import { render, screen, within } from '@testing-library/react';
 import { ClientMirror } from '../client-mirror';
-import { CURRENT_ROW, PENDING_ROW, composition, listEnvelope } from '../__fixtures__/client-editions';
+import {
+  CURRENT_ROW,
+  PENDING_ROW,
+  composition,
+  imageRow,
+  listEnvelope,
+} from '../__fixtures__/client-editions';
 
 const { normalizeClientEditions } = jest.requireActual<typeof import('@patina/supabase')>('@patina/supabase');
 
@@ -32,6 +38,8 @@ jest.mock('@patina/supabase', () => ({
   useClientEditionSourceUrls: () => ({
     data: { 'a-hero': 'https://example.com/hero.jpg', 'a-old': 'https://example.com/old.jpg' },
   }),
+  // resolve_studio_identity for the job: the studio the homeowner reader names.
+  useStudioIdentity: () => ({ data: { name: 'Birchwood Studio' } }),
 }));
 
 jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => ({ value: false }) }));
@@ -40,8 +48,8 @@ const PENDING_WORDS = composition('a-hero', {
   chapters: [{ key: 'room-living', headline: 'The finished room', standing: 'Everything is in.' }],
 });
 
-const read = (rows: Record<string, unknown>[]) => {
-  mockEditions = normalizeClientEditions(listEnvelope(rows) as never);
+const read = (rows: Record<string, unknown>[], showMakers = false) => {
+  mockEditions = normalizeClientEditions(listEnvelope(rows, showMakers) as never);
 };
 
 const renderMirror = () =>
@@ -103,5 +111,78 @@ describe('the client mirror shows the House Issue (R3)', () => {
     read([{ ...PENDING_ROW, composition: PENDING_WORDS }, { ...CURRENT_ROW, frozenAt: '2026-10-22T12:00:00+00:00' }]);
     renderMirror();
     expect(mirrorEdition()).toHaveAttribute('data-mirror-edition', '4');
+  });
+});
+
+describe('the mirror credits captions as the homeowner reader does (N2, story seq 48)', () => {
+  afterEach(() => {
+    mockEditions = undefined;
+  });
+
+  /** The approved edition opening on `hero`, with the studio's caption override when given. */
+  const approvedOn = (hero: Record<string, unknown>, whose?: string) => ({
+    ...CURRENT_ROW,
+    composition: composition('a-old'),
+    overrides: whose ? { captions: { 'a-old': { whose } } } : {},
+    images: [hero],
+  });
+  const makerHero = imageRow('a-old', {
+    plateRole: 'hero',
+    rank: 0,
+    chapterKey: 'cover',
+    sourceKind: 'maker',
+    captionWhose: 'Herman Miller',
+  });
+  const scanHero = imageRow('a-old', {
+    plateRole: 'hero',
+    rank: 0,
+    chapterKey: 'cover',
+    sourceKind: 'scan',
+    captionWhose: 'Birchwood Studio',
+  });
+  const caption = () => mirrorEdition()?.querySelector('figcaption')?.textContent ?? '';
+
+  it('a maker picture names the studio while makers are off, the maker while they show', () => {
+    read([approvedOn(makerHero)], false);
+    const { unmount } = renderMirror();
+    expect(caption()).toContain('Birchwood Studio');
+    expect(caption()).not.toContain('Herman Miller');
+    unmount();
+
+    read([approvedOn(makerHero)], true);
+    renderMirror();
+    expect(caption()).toContain('Herman Miller');
+  });
+
+  it('the waiting edition is credited the same way', () => {
+    read([{ ...PENDING_ROW, composition: composition('a-old'), images: [makerHero] }, CURRENT_ROW], false);
+    renderMirror();
+    const section = screen.getByRole('region', { name: 'What June will see if approved' });
+    expect(section.querySelector('figcaption')?.textContent).toContain('Birchwood Studio');
+    expect(section.querySelector('figcaption')?.textContent).not.toContain('Herman Miller');
+  });
+
+  it('an override cannot bring a maker credit back while makers are off; it wins while they show', () => {
+    read([approvedOn(makerHero, 'Atelier Nord')], false);
+    const { unmount } = renderMirror();
+    expect(caption()).toContain('Birchwood Studio');
+    expect(caption()).not.toContain('Atelier Nord');
+    unmount();
+
+    read([approvedOn(makerHero, 'Atelier Nord')], true);
+    renderMirror();
+    expect(caption()).toContain('Atelier Nord');
+    expect(caption()).not.toContain('Herman Miller');
+  });
+
+  it('a non-maker picture keeps its override whether makers show or not', () => {
+    read([approvedOn(scanHero, 'Atelier Nord')], false);
+    const { unmount } = renderMirror();
+    expect(caption()).toContain('Atelier Nord');
+    unmount();
+
+    read([approvedOn(scanHero, 'Atelier Nord')], true);
+    renderMirror();
+    expect(caption()).toContain('Atelier Nord');
   });
 });

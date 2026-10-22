@@ -17,7 +17,7 @@ import type {
   ClientEditionOverrides,
 } from '@patina/supabase';
 import { getOptimizedImageUrl } from '@/lib/media-utils';
-import { COVER_ASPECT, objectPositionOf, plateCropWindow } from '@/lib/document/plate-crop';
+import { coverCropShown, objectPositionOf, plateCropWindow } from '@/lib/document/plate-crop';
 
 /** The hero asset an edition opens on, the studio's choice first. */
 export function editionHeroId(
@@ -55,17 +55,46 @@ export function editionChapters(
   });
 }
 
-/** One image's caption triplet, edits laid over it. */
+/** The project's maker switch and studio name, as the homeowner reader reads them. */
+export interface CaptionPolicy {
+  showMakers: boolean;
+  studioName: string | null;
+}
+
+/** The item-picture kinds, the ones a caption may credit to a maker (story seq 48). */
+const MAKER_KINDS: ReadonlySet<string> = new Set(['maker', 'upload']);
+
+/**
+ * The caption "whose" the homeowner reader shows (00846, story seq 48): with
+ * makers off a maker picture names the studio and no override brings the maker
+ * back; otherwise an explicit override wins, then the composed credit while
+ * makers show, the studio while they do not.
+ */
+export function readerWhose(
+  image: Pick<ClientEditionImage, 'sourceKind' | 'captionWhose'>,
+  override: string | null | undefined,
+  { showMakers, studioName }: CaptionPolicy,
+): string {
+  if (!showMakers && MAKER_KINDS.has(image.sourceKind ?? '')) return studioName ?? '';
+  return override ?? (showMakers ? image.captionWhose : studioName) ?? '';
+}
+
+/**
+ * One image's caption triplet, edits laid over it; with a `policy`, "whose"
+ * as the homeowner reader projects it.
+ */
 export function imageCaption(
   edition: ClientEdition,
   image: ClientEditionImage,
   overrides?: ClientEditionOverrides | null,
+  policy?: CaptionPolicy,
 ): { what: string; whose: string; when: string } {
   const own = edition.overrides?.captions?.[image.assetId];
   const edit = overrides?.captions?.[image.assetId];
+  const whose = edit?.whose ?? own?.whose;
   return {
     what: image.captionWhat ?? '',
-    whose: edit?.whose ?? own?.whose ?? image.captionWhose ?? '',
+    whose: policy ? readerWhose(image, whose, policy) : (whose ?? image.captionWhose ?? ''),
     when: edit?.when ?? own?.when ?? image.captionWhen ?? '',
   };
 }
@@ -120,16 +149,17 @@ const EYEBROW =
   'font-mono text-[12px] font-medium uppercase leading-normal tracking-[0.12em] text-[var(--text-muted)]';
 
 /**
- * Where the desktop cover's crop sits in the hero's source picture, as the
- * worker cuts it (subject box and focal point); the 3:2 thirds when the
- * source's size is unknown.
+ * Where the crop the client page's desktop draws sits in the hero's source
+ * picture, as the worker cuts it (subject box and focal point); the 3:2
+ * thirds when the source's size is unknown, the centre when it cuts none.
  */
 export function heroObjectPosition(hero: ClientEditionImage): string {
   const width = hero.width && hero.width > 0 ? hero.width : 1500;
   const height = hero.height && hero.height > 0 ? hero.height : 1000;
-  return objectPositionOf(
-    plateCropWindow({ width, height, focal: hero.focal, subjectBox: hero.subjectBox }, COVER_ASPECT.wide),
-  );
+  const source = { width, height, focal: hero.focal, subjectBox: hero.subjectBox };
+  const shown = coverCropShown(source, 'desktop');
+  const window = shown ? plateCropWindow(source, shown) : null;
+  return window ? objectPositionOf(window) : '50% 50%';
 }
 
 export function PressBandPreview({
@@ -138,6 +168,7 @@ export function PressBandPreview({
   overrides,
   sourceUrls,
   delta = true,
+  captionPolicy,
 }: {
   edition: ClientEdition;
   /** The approved edition the client sees now; null before the first. */
@@ -147,6 +178,8 @@ export function PressBandPreview({
   sourceUrls: Record<string, string>;
   /** The what-moved line; the client mirror shows the edition alone. */
   delta?: boolean;
+  /** The client mirror's caption projection (readerWhose); the band shows raw words. */
+  captionPolicy?: CaptionPolicy;
 }) {
   const heroId = editionHeroId(edition, overrides);
   const hero = edition.images.find((image) => image.assetId === heroId) ?? null;
@@ -182,7 +215,7 @@ export function PressBandPreview({
         )}
         {hero && (
           <figcaption className="text-[15px] leading-snug">
-            {Object.values(imageCaption(edition, hero, overrides)).filter(Boolean).join(' · ')}
+            {Object.values(imageCaption(edition, hero, overrides, captionPolicy)).filter(Boolean).join(' · ')}
           </figcaption>
         )}
       </figure>

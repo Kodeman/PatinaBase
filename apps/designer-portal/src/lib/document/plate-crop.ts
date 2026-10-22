@@ -3,15 +3,17 @@
  * the Press band show the crop the client page is actually served.
  *
  * `plateCropRect` is the centring/containment math of the media worker's
- * `fittedCrop` (infra/media-worker/container/plates.mjs:53–103), ported
- * without the floors: centre the crop on the focal point (the thirds bias
- * when there is none), keep it inside the source and around the subject box.
- * Containment wins over centring; no crop exists when the subject is longer
- * than the crop. No subject box constrains nothing.
+ * `fittedCrop` (infra/media-worker/container/plates.mjs): centre the crop on
+ * the focal point (the thirds bias when there is none), keep it inside the
+ * source and around the subject box. Containment wins over centring; no crop
+ * exists when the subject is longer than the crop. No subject box constrains
+ * nothing. `plateCrop` adds the worker's floors, so it is null exactly when
+ * planCrops cuts no such crop.
  *
  * `heroEligible` is the client page's cover choice (apps/client-portal
  * src/lib/editorial/rank.ts heroEligible + floors.ts meetsHero), so the band
- * can say whether the page opens on a photograph before any edition exists.
+ * can say whether the page opens on a photograph before any edition exists;
+ * `coverCropShown` is the crop the page then draws (crop.ts heroPicture).
  */
 
 export type PlatePoint = [number, number];
@@ -30,8 +32,20 @@ export interface PlateSource {
 /** plates.mjs DEFAULT_CENTRE: the crop centre when no focal point is given. */
 export const DEFAULT_CENTRE: PlatePoint = [0.5, 0.45];
 
-/** The two delivered cover crops (plates.mjs PLATE_CROPS aspects). */
-export const COVER_ASPECT = { wide: 1.6, cover_phone: 39 / 34 } as const;
+/** The crops a cover can be drawn from (plates.mjs PLATE_CROPS): aspect and hard floor. */
+export const PLATE_CROPS = {
+  wide: { aspect: 1.6, minWidth: 1600, minHeight: 1000 },
+  cover_phone: { aspect: 39 / 34, minWidth: 780, minHeight: 680 },
+  tall: { aspect: 0.46, minWidth: 780, minHeight: 1696 },
+  wide32: { aspect: 3 / 2, minWidth: 1248, minHeight: 832 },
+} as const;
+export type PlateCropKey = keyof typeof PLATE_CROPS;
+
+/** plates.mjs MAX_DISCARD (and floors.ts): a crop may drop at most half the source. */
+const MAX_DISCARD = 0.5;
+
+/** The two delivered cover crops' aspects. */
+export const COVER_ASPECT = { wide: PLATE_CROPS.wide.aspect, cover_phone: PLATE_CROPS.cover_phone.aspect } as const;
 
 /** Largest rect of `aspect` that fits inside width × height (plates.mjs maxRectSize). */
 export function maxRectSize(width: number, height: number, aspect: number): [number, number] {
@@ -78,6 +92,21 @@ export function plateCropRect(source: PlateSource, aspect: number): PlateRect | 
   return [left, top, cw, ch];
 }
 
+/**
+ * The rect the worker cuts for `key`, or null when planCrops cuts none: the
+ * source is under the crop's floor, the crop would drop more than half of it,
+ * or the subject box cannot be held.
+ */
+export function plateCrop(source: PlateSource, key: PlateCropKey): PlateRect | null {
+  const spec = PLATE_CROPS[key];
+  const { width, height } = source;
+  if (!(width > 0 && height > 0)) return null;
+  const [cw, ch] = maxRectSize(width, height, spec.aspect);
+  const floored =
+    cw >= spec.minWidth && ch >= spec.minHeight && 1 - (cw * ch) / (width * height) <= MAX_DISCARD;
+  return floored ? plateCropRect(source, spec.aspect) : null;
+}
+
 /** The visible part of the source as fractions: left/top and its width/height. */
 export interface PlateWindow {
   left: number;
@@ -86,14 +115,10 @@ export interface PlateWindow {
   vy: number;
 }
 
-/**
- * The window a crop of `aspect` shows. Where the worker cuts no crop (the
- * subject cannot be held) the preview centres on the point unconstrained.
- */
-export function plateCropWindow(source: PlateSource, aspect: number): PlateWindow {
-  const rect =
-    plateCropRect(source, aspect) ?? plateCropRect({ ...source, subjectBox: null }, aspect);
-  if (!rect) return { left: 0, top: 0, vx: 1, vy: 1 };
+/** The window the worker's `key` crop shows; null when it cuts no such crop. */
+export function plateCropWindow(source: PlateSource, key: PlateCropKey): PlateWindow | null {
+  const rect = plateCrop(source, key);
+  if (!rect) return null;
   const [left, top, cw, ch] = rect;
   return {
     left: left / source.width,
@@ -112,7 +137,6 @@ export function objectPositionOf({ left, top, vx, vy }: PlateWindow): string {
 
 // ── The client page's cover choice (client-portal floors.ts / rank.ts) ──────
 
-const MAX_DISCARD = 0.5;
 const HERO_DESKTOP = { aspect: 1.6, floor: { w: 1600, h: 1000 } };
 const HERO_PHONE = { aspect: 39 / 34, floor: { w: 780, h: 680 } };
 const HERO_MEASURE_MIN_WIDTH = 1248;
@@ -138,13 +162,42 @@ function meetsCropped(
   return keepsEnough && holds && box.w >= spec.floor.w && box.h >= spec.floor.h;
 }
 
+type HeroLayout = 'bleed' | 'measure' | 'portrait';
+
+/** The cover's desktop layout (client-portal floors.ts heroDesktopLayout). */
+function heroLayout(
+  width: number,
+  height: number,
+  subjectBox: readonly number[] | null | undefined,
+): HeroLayout | null {
+  if (meetsCropped(HERO_DESKTOP, width, height, subjectBox)) return 'bleed';
+  const measure = { ...HERO_DESKTOP, floor: { w: HERO_MEASURE_MIN_WIDTH, h: 0 } };
+  if (meetsCropped(measure, width, height, subjectBox)) return 'measure';
+  if (height > width && width >= HERO_PORTRAIT_MIN_WIDTH) return 'portrait';
+  return null;
+}
+
 function meetsHero(width: number, height: number, subjectBox: readonly number[] | null | undefined) {
-  if (!meetsCropped(HERO_PHONE, width, height, subjectBox)) return false;
-  return (
-    meetsCropped(HERO_DESKTOP, width, height, subjectBox) ||
-    meetsCropped({ ...HERO_DESKTOP, floor: { w: HERO_MEASURE_MIN_WIDTH, h: 0 } }, width, height, subjectBox) ||
-    (height > width && width >= HERO_PORTRAIT_MIN_WIDTH)
-  );
+  return meetsCropped(HERO_PHONE, width, height, subjectBox) && heroLayout(width, height, subjectBox) !== null;
+}
+
+/** Each layout's own crop first, then the crops the worker does cut (crop.ts HERO_CROPS). */
+const HERO_CROPS: Readonly<Record<HeroLayout, readonly PlateCropKey[]>> = {
+  bleed: ['wide', 'cover_phone'],
+  measure: ['wide', 'wide32', 'cover_phone'],
+  portrait: ['tall', 'cover_phone'],
+};
+
+/**
+ * The crop the client page draws a cover from (crop.ts heroPicture): on a
+ * desktop its layout's first crop the worker cut; on a phone `cover_phone`,
+ * else that desktop crop. Null when the worker cut none of them.
+ */
+export function coverCropShown(source: PlateSource, screen: 'desktop' | 'phone'): PlateCropKey | null {
+  const layout = heroLayout(source.width, source.height, source.subjectBox) ?? 'bleed';
+  const desktop = HERO_CROPS[layout].find((key) => plateCrop(source, key) !== null) ?? null;
+  if (screen === 'desktop') return desktop;
+  return plateCrop(source, 'cover_phone') ? 'cover_phone' : desktop;
 }
 
 const PHOTOGRAPH_KINDS = new Set(['installed', 'scan', 'board', 'upload', 'maker']);

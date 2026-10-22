@@ -20,6 +20,7 @@ import {
   createBrowserClient,
   useClientEditionSourceUrls,
   useClientEditions,
+  useStudioIdentity,
 } from '@patina/supabase';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -92,10 +93,13 @@ export function useClientMirrorData(projectId: string) {
  * edition waiting on Approve, named as what the client will see if approved,
  * else the approved edition the client sees now; nothing before the first.
  * Read through the Press band's own edition read, so Approve and Undo change
- * it as they change the band.
+ * it as they change the band. Captions are credited as the homeowner reader
+ * credits them: the job's maker switch, and the job's studio by name
+ * (resolve_studio_identity, the studio the reader names).
  */
 function MirrorEdition({ projectId, name }: { projectId: string; name: string }) {
   const { data } = useClientEditions(projectId);
+  const { data: studio } = useStudioIdentity({ projectId });
   const editions = data?.editions ?? [];
   const pending = editionsFrozen(editions) ? null : pendingEdition(editions);
   const edition = pending ?? currentEdition(editions);
@@ -107,7 +111,13 @@ function MirrorEdition({ projectId, name }: { projectId: string; name: string })
       <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
         {label}
       </p>
-      <PressBandPreview edition={edition} current={null} sourceUrls={sourceUrls ?? {}} delta={false} />
+      <PressBandPreview
+        edition={edition}
+        current={null}
+        sourceUrls={sourceUrls ?? {}}
+        delta={false}
+        captionPolicy={{ showMakers: data?.showMakers === true, studioName: studio?.name ?? null }}
+      />
     </section>
   );
 }

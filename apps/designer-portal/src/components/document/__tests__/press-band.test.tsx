@@ -17,7 +17,7 @@ import {
   imageRow,
   listEnvelope,
 } from '../__fixtures__/client-editions';
-import { COVER_ASPECT, objectPositionOf, plateCropWindow } from '@/lib/document/plate-crop';
+import { objectPositionOf, plateCropWindow } from '@/lib/document/plate-crop';
 
 const { normalizeClientEditions } = jest.requireActual<typeof import('@patina/supabase')>('@patina/supabase');
 
@@ -424,8 +424,31 @@ describe('PressBand — focal point', () => {
     expect(frameImage('wide').style.objectPosition).toBe(wide);
     const source = { width: 2000, height: 2000, focal: [0.5, 0.6], subjectBox: [0.1, 0.1, 0.8, 0.5] };
     expect(frameImage('cover_phone').style.objectPosition).toBe(
-      objectPositionOf(plateCropWindow(source, COVER_ASPECT.cover_phone)),
+      objectPositionOf(plateCropWindow(source, 'cover_phone')!),
     );
+  });
+
+  it('a frame the worker cuts no crop for is shown unavailable, with what those screens draw (N1)', () => {
+    // planCrops on 2000×1250, box [0,0,1,1], focal [1,.2] → wide and piece only.
+    const whole = imageRow('a-hero', {
+      plateRole: 'hero',
+      chapterKey: 'cover',
+      width: 2000,
+      height: 1250,
+      subjectBox: [0, 0, 1, 1],
+      focal: [1, 0.2],
+    });
+    renderBand([{ ...PENDING_ROW, images: [whole] }]);
+    const tray = openHeroFocal();
+    const phone = tray.querySelector('[data-focal-frame="cover_phone"]') as HTMLElement;
+    expect(phone).toHaveAttribute('data-focal-unavailable');
+    expect(phone.querySelector('img')).toBeNull();
+    expect(within(tray).getByText('Phones show the wide cover for this photograph.')).toBeInTheDocument();
+    expect(within(tray).queryByText('The phone cover.')).toBeNull();
+    // The desktop frame is cut, and still shows the picture.
+    const wide = tray.querySelector('[data-focal-frame="wide"]') as HTMLElement;
+    expect(wide).not.toHaveAttribute('data-focal-unavailable');
+    expect(wide.querySelector('img')).not.toBeNull();
   });
 
   it('designer photography stays within 120px tall (R10)', () => {
@@ -461,7 +484,7 @@ describe('PressBand — the delta line', () => {
 
   it('positions an unboxed cover on the worker’s thirds crop', () => {
     expect(heroObjectPosition(CURRENT.images[0])).toBe(
-      objectPositionOf(plateCropWindow({ width: 2000, height: 1250 }, COVER_ASPECT.wide)),
+      objectPositionOf(plateCropWindow({ width: 2000, height: 1250 }, 'wide')!),
     );
   });
 });

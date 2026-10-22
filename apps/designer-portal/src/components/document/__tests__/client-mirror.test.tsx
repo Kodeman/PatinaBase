@@ -25,6 +25,7 @@ jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({}),
   useClientEditions: () => ({ data: undefined }),
   useClientEditionSourceUrls: () => ({ data: undefined }),
+  useStudioIdentity: () => ({ data: undefined }),
 }));
 
 const answeredDecision = {

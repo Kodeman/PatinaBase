@@ -5,8 +5,10 @@
  */
 import {
   COVER_ASPECT,
+  coverCropShown,
   heroEligible,
   objectPositionOf,
+  plateCrop,
   plateCropRect,
   plateCropWindow,
 } from '../plate-crop';
@@ -45,19 +47,52 @@ describe('plateCropWindow / objectPositionOf', () => {
   it('turns the cut into the frame’s object-position', () => {
     const window = plateCropWindow(
       { width: 2000, height: 2000, focal: [0.5, 0.6], subjectBox: [0.1, 0.1, 0.8, 0.5] },
-      COVER_ASPECT.wide,
+      'wide',
     );
     expect(window).toEqual({ left: 0, top: 0.1, vx: 1, vy: 0.625 });
     // 0.1 of the 0.375 that can move: 26.67% down.
-    expect(objectPositionOf(window)).toMatch(/^50% 26\.666/);
+    expect(objectPositionOf(window!)).toMatch(/^50% 26\.666/);
+  });
+});
+
+/*
+ * N1 — a crop the worker does not cut is unavailable, never an invented
+ * window. Oracle values are native planCrops output (plates.mjs, scene ground,
+ * upload), pinned here rather than imported.
+ */
+describe('plateCrop / plateCropWindow — unavailable where planCrops cuts nothing (N1)', () => {
+  it('2000×1250, focal [1, .2], box [0,0,1,1]: the worker cuts only wide and piece', () => {
+    // planCrops → {wide: [0, 0, 2000, 1250], piece: [0, 0, 2000, 1250]}
+    const source = { width: 2000, height: 1250, focal: [1, 0.2], subjectBox: [0, 0, 1, 1] };
+    expect(plateCrop(source, 'wide')).toEqual([0, 0, 2000, 1250]);
+    expect(plateCrop(source, 'cover_phone')).toBeNull();
+    expect(plateCrop(source, 'wide32')).toBeNull();
+    expect(plateCrop(source, 'tall')).toBeNull();
+    expect(plateCropWindow(source, 'cover_phone')).toBeNull();
+    // The client page's phones fall back to the desktop crop: the wide cover.
+    expect(coverCropShown(source, 'phone')).toBe('wide');
+    expect(coverCropShown(source, 'desktop')).toBe('wide');
   });
 
-  it('where the worker cuts nothing, the preview centres on the point unconstrained', () => {
-    const window = plateCropWindow(
-      { width: 2000, height: 1250, focal: [1, 0.2], subjectBox: [0, 0, 1, 1] },
-      COVER_ASPECT.cover_phone,
-    );
-    expect(window.left).toBeCloseTo(566 / 2000);
+  it('1400×900, no box: under the wide floor, so no wide crop; desktops draw the 3:2', () => {
+    // planCrops → {cover_phone: [184, 0, 1032, 900], wide32: [25, 0, 1350, 900], pair, piece}
+    const source = { width: 1400, height: 900, focal: null, subjectBox: null };
+    expect(plateCrop(source, 'wide')).toBeNull();
+    expect(plateCropWindow(source, 'wide')).toBeNull();
+    expect(plateCrop(source, 'cover_phone')).toEqual([184, 0, 1032, 900]);
+    expect(plateCrop(source, 'wide32')).toEqual([25, 0, 1350, 900]);
+    expect(coverCropShown(source, 'desktop')).toBe('wide32');
+    expect(coverCropShown(source, 'phone')).toBe('cover_phone');
+  });
+
+  it('900×600: under every cover floor, no cover at all', () => {
+    // planCrops → {pair, piece} only
+    const source = { width: 900, height: 600 };
+    for (const key of ['wide', 'cover_phone', 'wide32', 'tall'] as const) {
+      expect(plateCrop(source, key)).toBeNull();
+    }
+    expect(coverCropShown(source, 'desktop')).toBeNull();
+    expect(coverCropShown(source, 'phone')).toBeNull();
   });
 });
 
