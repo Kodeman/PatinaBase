@@ -4,7 +4,8 @@ import test, { mock } from 'node:test';
 
 // src/plates.ts is erasable-only TypeScript with no runtime imports: Node strips
 // the types and loads it in place, so coverage maps to the real source lines.
-const { handlePlateIngest, routePlates, MAX_SOURCE_BYTES, PROCESSOR_TIMEOUT_MS } = await import('../src/plates.ts');
+const { handlePlateIngest, routePlates, MAX_SOURCE_BYTES, PROCESSOR_TIMEOUT_MS, PROCESSOR_MARGIN_MS, processorBudgetMs } =
+  await import('../src/plates.ts');
 const { outputJobs, planCrops } = await import('../container/plates.mjs');
 
 // Workers' crypto.subtle.timingSafeEqual (Node lacks it): same contract, recorded.
@@ -234,7 +235,14 @@ test('a source that does not answer within 10 s is aborted with a 504', async ()
 
 test('ingest writes every output, the original and crops.json, and returns the plate record', async () => {
   const h = harness();
-  const res = await h.ingest({ ...valid, sourceKind: 'sheet', focal: [0.4, 0.5], subjectBox: [0.1, 0.1, 0.5, 0.6] });
+  // A still clock: the job leaves the moment the Worker's 25 s starts.
+  mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+  let res;
+  try {
+    res = await h.ingest({ ...valid, sourceKind: 'sheet', focal: [0.4, 0.5], subjectBox: [0.1, 0.1, 0.5, 0.6] });
+  } finally {
+    mock.timers.reset();
+  }
   assert.equal(res.status, 200);
   const record = await res.json();
   const sha = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', IMAGE)), (b) =>
@@ -259,6 +267,7 @@ test('ingest writes every output, the original and crops.json, and returns the p
     focal: [0.4, 0.5],
     subjectBox: [0.1, 0.1, 0.5, 0.6],
     skip: [],
+    budgetMs: PROCESSOR_TIMEOUT_MS - PROCESSOR_MARGIN_MS,
   });
   assert.deepEqual(h.jobs[0].bytes, IMAGE);
   const objects = h.env.PLATES.objects;
@@ -545,6 +554,28 @@ test('a processor that stalls is abandoned at 25 s with a 504 and sees the abort
     } finally {
       mock.timers.reset();
     }
+  }
+});
+
+test('the container gets what is left of the 25 s less a 1 s margin, never less than 1 ms', () => {
+  const deadlineAt = 1_000_000 + PROCESSOR_TIMEOUT_MS;
+  assert.equal(processorBudgetMs(deadlineAt, 1_000_000), 24_000);
+  assert.equal(processorBudgetMs(deadlineAt, deadlineAt - 10_000), 9_000);
+  assert.equal(processorBudgetMs(deadlineAt, deadlineAt - 1_000), 1);
+  assert.equal(processorBudgetMs(deadlineAt, deadlineAt + 5), 1);
+});
+
+test('a busy container is a 503 busy and a job it killed at its deadline is a 504; nothing is written', async () => {
+  const answers = [
+    [Response.json({ error: 'busy' }, { status: 503 }), 503, /^busy$/],
+    [Response.json({ success: false, error: 'job deadline of 24000 ms passed' }, { status: 504 }), 504, /processor did not finish within 25 s/],
+    [Response.json({ success: false, error: 'client disconnected' }, { status: 504 }), 504, /processor did not finish within 25 s/],
+    [Response.json({ error: 'overloaded' }, { status: 503 }), 502, /processor failed: overloaded/],
+  ];
+  for (const [answer, status, message] of answers) {
+    const h = harness({ processor: () => answer });
+    assert.match(await expectError(await h.ingest(valid), status), message);
+    assert.equal(h.env.PLATES.objects.size, 0);
   }
 });
 

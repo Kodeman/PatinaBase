@@ -35,14 +35,15 @@ it('renders the seven privacy sections, their disclosures and no prohibited word
     'Descriptions and dimensions as signed',
     'Materials and finishes',
     'Room names',
-    'The project phase and dates',
+    'The project phase and target date',
     'Palette names',
+    "The page's current headlines and sentences, including your studio's edits",
     'Maker name and where each piece is made, when your studio turns that on',
     'Photographs of the specified pieces',
     'Renderings your studio makes of your rooms',
     'Photographs taken in your home — room scans and photographs after installation',
   ]);
-  const imageUse = within(composition).getByText('They are never used to make a picture of your home that does not exist.');
+  const imageUse = within(composition).getByText('Patina never uses these photographs to make a picture of your home that does not exist.');
   expect(imageUse.tagName).toBe('P');
   expect(imageUse.previousElementSibling).toBe(within(composition).getByRole('list'));
   const keptOut = screen.getByRole('region', { name: 'What stays out' });
@@ -65,4 +66,43 @@ it('renders the seven privacy sections, their disclosures and no prohibited word
   expect(container.querySelector('time')).toHaveTextContent('21 October 2026');
   expect(container.textContent?.match(/Anthropic/g)).toHaveLength(1);
   expect(container.textContent).not.toMatch(/\bAI\b|generated|artificial intelligence|Claude|Sonnet|Opus|Haiku|GPT|allowlist|V2-5|perception/i);
+});
+
+it('discloses the current page wording and studio edits immediately after palette names', () => {
+  render(<PrivacyPage />);
+
+  const composition = screen.getByRole('region', { name: 'What goes to the composing service' });
+  const wording = within(composition).getByText("The page's current headlines and sentences, including your studio's edits", { exact: true });
+  expect(wording.tagName).toBe('LI');
+  expect(wording.previousElementSibling).toBe(within(composition).getByText('Palette names', { exact: true }));
+});
+
+it('attributes the photograph use promise to Patina', () => {
+  render(<PrivacyPage />);
+
+  expect(screen.getByText('Patina never uses these photographs to make a picture of your home that does not exist.', { exact: true })).toBeInTheDocument();
+});
+
+it('discloses the project target date rather than unspecified dates', () => {
+  render(<PrivacyPage />);
+
+  const composition = screen.getByRole('region', { name: 'What goes to the composing service' });
+  expect(within(composition).getByText('The project phase and target date', { exact: true })).toBeInTheDocument();
+  expect(within(composition).queryByText('The project phase and dates', { exact: true })).not.toBeInTheDocument();
+});
+
+it('gives the removal mailto link the house focus-visible outline while retaining its underline', () => {
+  render(<PrivacyPage />);
+
+  const link = screen.getByRole('link', { name: 'hello@patina.cloud' });
+  expect(link).toHaveAttribute('href', 'mailto:hello@patina.cloud');
+  expect(link).toHaveClass(
+    'underline',
+    'underline-offset-4',
+    'focus-visible:outline',
+    'focus-visible:outline-2',
+    'focus-visible:outline-offset-[3px]',
+    'focus-visible:outline-[var(--focus-ring)]',
+  );
+  expect(link).not.toHaveClass('focus-ring');
 });

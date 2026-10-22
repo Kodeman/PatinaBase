@@ -1,3 +1,4 @@
+/// <reference lib="deno.ns" />
 // client-plate-copy (US-49): copies queued pictures into the private plate
 // bucket through the media worker. Invoked by pg_cron through
 // dispatch_client_plate_copy() → invoke_edge_function with {job_run_id};
@@ -5,43 +6,53 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller } from "../_shared/caller.ts";
 import {
-  fetchAddress,
-  type IngestAsset,
-  INGEST_TIMEOUT_MS,
-  mapPool,
+  copyRun,
+  type CopySteps,
+  finishRun,
   parseJobRunId,
   type PlateRequest,
   recordPayload,
-  shortenError,
+  RUN_HARD_END_MS,
+  RunDeadline,
   SIGNED_URL_TTL_SECONDS,
   type SourceAuthority,
-  summarizeRun,
-  validateIngestResponse,
+  systemClock,
 } from "./lib.ts";
 
 const CLAIM_LIMIT = 10;
-// Three copies in flight keeps ten 30 s ingests inside the function's wall clock.
-const CONCURRENCY = 3;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 type Admin = SupabaseClient;
-interface CopyEnv {
-  supabaseUrl: string;
+interface WorkerEnv {
   workerUrl: string;
   secret: string;
 }
 
+// Every request this client makes is cut off at the run's hard end, signing
+// included (createSignedUrl takes no signal of its own).
+function adminClient(supabaseUrl: string, hardEnd: AbortSignal): Admin {
+  return createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { persistSession: false },
+    global: {
+      fetch: (input, init) =>
+        fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, hardEnd]) : hardEnd }),
+    },
+  });
+}
+
 function sourceAuthority(admin: Admin): SourceAuthority {
   return {
-    async owned(request) {
-      const { data, error } = await admin.rpc("client_plate_source_owned", {
+    async owned(request, signal) {
+      let call = admin.rpc("client_plate_source_owned", {
         p_project_id: request.project_id,
         p_table: request.source_ref?.table ?? null,
         p_id: request.source_ref?.id ?? null,
         p_source_url: request.source_url,
       });
+      if (signal) call = call.abortSignal(signal);
+      const { data, error } = await call;
       if (error) throw new Error(`ownership check failed: ${error.message}`);
       return data === true;
     },
@@ -53,61 +64,56 @@ function sourceAuthority(admin: Admin): SourceAuthority {
   };
 }
 
-async function ingest(admin: Admin, request: PlateRequest, env: CopyEnv): Promise<IngestAsset> {
-  const sourceUrl = await fetchAddress(request, env.supabaseUrl, sourceAuthority(admin));
-  const response = await fetch(`${env.workerUrl}/plates/ingest`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${env.secret}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      projectId: request.project_id,
-      requestId: request.id,
-      sourceKind: request.source_kind,
-      sourceUrl,
-    }),
-    signal: AbortSignal.timeout(INGEST_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    throw new Error(`ingest ${response.status}: ${(await response.text().catch(() => "")).slice(0, 300)}`);
-  }
-  const checked = validateIngestResponse(await response.json().catch(() => null), request.project_id);
-  if (!checked.ok) throw new Error(checked.error);
-  return checked.asset;
+function finishStep(admin: Admin, runId: number): CopySteps["finish"] {
+  return async (summary, signal) => {
+    const { error } = await admin.rpc("finish_client_plate_copy_run", {
+      p_run_id: runId,
+      p_status: summary.status,
+      p_detail: summary.detail,
+      p_error: summary.error,
+    }).abortSignal(signal);
+    if (error) throw new Error(`${runId}: ${error.message}`);
+  };
 }
 
-async function failRequest(admin: Admin, request: PlateRequest, cause: unknown): Promise<void> {
-  const { error } = await admin.rpc("fail_client_plate_request", {
-    p_request_id: request.id,
-    p_lease_token: request.lease_token,
-    p_error: shortenError(cause),
-  });
-  // A lease that ran out is re-queued by the dispatcher instead.
-  if (error) console.error(`client-plate-copy: fail ${request.id}: ${shortenError(error.message)}`);
-}
-
-async function copyOne(admin: Admin, request: PlateRequest, env: CopyEnv): Promise<boolean> {
-  try {
-    const asset = await ingest(admin, request, env);
-    const { error } = await admin.rpc("record_client_plate_asset", {
-      p_request_id: request.id,
-      p_lease_token: request.lease_token,
-      p_asset: recordPayload(asset, request),
-    });
-    if (error) throw new Error(`record failed: ${error.message}`);
-    return true;
-  } catch (cause) {
-    await failRequest(admin, request, cause);
-    return false;
-  }
-}
-
-async function finishRun(admin: Admin, runId: number, status: string, detail: unknown, error: string | null) {
-  const { error: finishError } = await admin.rpc("finish_client_plate_copy_run", {
-    p_run_id: runId,
-    p_status: status,
-    p_detail: detail,
-    p_error: error,
-  });
-  if (finishError) console.error(`client-plate-copy: finish ${runId}: ${shortenError(finishError.message)}`);
+function copySteps(admin: Admin, runId: number, worker: WorkerEnv): CopySteps {
+  return {
+    async claim(signal) {
+      const { data, error } = await admin.rpc("claim_client_plate_requests", { p_limit: 1 }).abortSignal(signal);
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as PlateRequest[])[0] ?? null;
+    },
+    authority: sourceAuthority(admin),
+    ingest: (request, sourceUrl, signal) =>
+      fetch(`${worker.workerUrl}/plates/ingest`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${worker.secret}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: request.project_id,
+          requestId: request.id,
+          sourceKind: request.source_kind,
+          sourceUrl,
+        }),
+        signal,
+      }),
+    async record(request, asset, signal) {
+      const { error } = await admin.rpc("record_client_plate_asset", {
+        p_request_id: request.id,
+        p_lease_token: request.lease_token,
+        p_asset: recordPayload(asset, request),
+      }).abortSignal(signal);
+      if (error) throw new Error(`record failed: ${error.message}`);
+    },
+    async fail(request, cause, signal) {
+      const { error } = await admin.rpc("fail_client_plate_request", {
+        p_request_id: request.id,
+        p_lease_token: request.lease_token,
+        p_error: cause,
+      }).abortSignal(signal);
+      if (error) throw new Error(error.message);
+    },
+    finish: finishStep(admin, runId),
+  };
 }
 
 // The cron dispatcher's run, or a manual run opened here.
@@ -118,44 +124,41 @@ async function openRun(admin: Admin, body: unknown): Promise<number | null> {
   return !error && typeof data === "number" ? data : null;
 }
 
-function workerEnv(): { workerUrl: string; secret: string } | null {
+function workerEnv(): WorkerEnv | null {
   const workerUrl = (Deno.env.get("MEDIA_WORKER_URL") ?? "").replace(/\/+$/, "");
   const secret = Deno.env.get("PLATE_INGEST_SECRET") ?? "";
   return workerUrl && secret ? { workerUrl, secret } : null;
 }
 
-async function copyBatch(admin: Admin, runId: number, supabaseUrl: string): Promise<Response> {
+async function copyBatch(admin: Admin, run: RunDeadline, runId: number, supabaseUrl: string): Promise<Response> {
   const worker = workerEnv();
   if (!worker) {
     // Nothing is claimed, so no attempt is spent while the lane is unconfigured.
-    await finishRun(admin, runId, "failed", { claimed: 0 }, "MEDIA_WORKER_URL or PLATE_INGEST_SECRET is not set");
+    await finishRun({ finish: finishStep(admin, runId) }, run, {
+      status: "failed",
+      detail: { claimed: 0, recorded: 0, failed: 0 },
+      error: "MEDIA_WORKER_URL or PLATE_INGEST_SECRET is not set",
+    });
     return json({ error: "not_configured", job_run_id: runId }, 500);
   }
-  const { data: claimed, error: claimError } = await admin.rpc("claim_client_plate_requests", {
-    p_limit: CLAIM_LIMIT,
-  });
-  if (claimError) {
-    await finishRun(admin, runId, "failed", { claimed: 0 }, shortenError(claimError.message));
-    return json({ error: "claim_failed", job_run_id: runId }, 500);
-  }
-  const requests = (claimed ?? []) as PlateRequest[];
-  const outcomes = await mapPool(requests, CONCURRENCY, (request) =>
-    copyOne(admin, request, { supabaseUrl, ...worker }));
-  const recorded = outcomes.filter(Boolean).length;
-  const run = summarizeRun({ claimed: requests.length, recorded, failed: requests.length - recorded });
-  await finishRun(admin, runId, run.status, run.detail, run.error);
-  return json({ job_run_id: runId, ...run.detail });
+  const { summary, claimError } = await copyRun(copySteps(admin, runId, worker), run, supabaseUrl, CLAIM_LIMIT);
+  if (claimError !== null) return json({ error: "claim_failed", job_run_id: runId }, 500);
+  return json({ job_run_id: runId, ...summary.detail });
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-    auth: { persistSession: false },
-  });
-  const caller = await resolveCaller(req, admin);
-  if (!caller.service) return json({ error: "forbidden" }, 403);
-  const runId = await openRun(admin, await req.json().catch(() => null));
-  if (runId === null) return json({ error: "run_not_started" }, 500);
-  return await copyBatch(admin, runId, supabaseUrl);
+  // The run's deadline counts from here.
+  const run = new RunDeadline(systemClock);
+  try {
+    if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const admin = adminClient(supabaseUrl, run.by(RUN_HARD_END_MS));
+    const caller = await resolveCaller(req, admin);
+    if (!caller.service) return json({ error: "forbidden" }, 403);
+    const runId = await openRun(admin, await req.json().catch(() => null));
+    if (runId === null) return json({ error: "run_not_started" }, 500);
+    return await copyBatch(admin, run, runId, supabaseUrl);
+  } finally {
+    run.close();
+  }
 });

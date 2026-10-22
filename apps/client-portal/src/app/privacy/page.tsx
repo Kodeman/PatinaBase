@@ -33,14 +33,15 @@ export default function PrivacyPage() {
             <li>Descriptions and dimensions as signed</li>
             <li>Materials and finishes</li>
             <li>Room names</li>
-            <li>The project phase and dates</li>
+            <li>The project phase and target date</li>
             <li>Palette names</li>
+            <li>The page's current headlines and sentences, including your studio's edits</li>
             <li>Maker name and where each piece is made, when your studio turns that on</li>
             <li>Photographs of the specified pieces</li>
             <li>Renderings your studio makes of your rooms</li>
             <li>Photographs taken in your home — room scans and photographs after installation</li>
           </ul>
-          <p>They are never used to make a picture of your home that does not exist.</p>
+          <p>Patina never uses these photographs to make a picture of your home that does not exist.</p>
         </section>
 
         <section aria-labelledby="kept-out" className="space-y-3">
@@ -64,7 +65,7 @@ export default function PrivacyPage() {
 
         <section aria-labelledby="removal" className="space-y-3">
           <h2 id="removal" className="t-d3">Ask for removal</h2>
-          <p>To ask for removal, write to your studio using the contact on your project page’s letterhead, or write to <a className="underline underline-offset-4" href="mailto:hello@patina.cloud">hello@patina.cloud</a>.</p>
+          <p>To ask for removal, write to your studio using the contact on your project page’s letterhead, or write to <a className="underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--focus-ring)]" href="mailto:hello@patina.cloud">hello@patina.cloud</a>.</p>
         </section>
 
         <section aria-labelledby="effective" className="space-y-3">

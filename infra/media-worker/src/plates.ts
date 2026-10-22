@@ -20,8 +20,12 @@ export const SOURCE_KINDS = ['upload', 'installed', 'scan', 'board', 'sheet', 'm
 export const SOURCE_TIMEOUT_MS = 10_000;
 export const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 export const MAX_REDIRECTS = 3;
-// The edge abandons the ingest call at 30 s.
+// The edge abandons the ingest call at 30 s. The container holds the same
+// deadline as the job's budgetMs (container/plates.mjs PLATE_BUDGET_MS).
 export const PROCESSOR_TIMEOUT_MS = 25_000;
+// The container's clock starts when the job reaches it, after this one: it gets
+// what is left of PROCESSOR_TIMEOUT_MS less this margin, so it gives up first.
+export const PROCESSOR_MARGIN_MS = 1_000;
 
 // Only maker pictures and board covers may be outside hotlinks. Their storage
 // URLs still use the private-origin pin, independently of their rendition role.
@@ -81,6 +85,9 @@ interface ProcessorJob {
   // Crop keys these bytes already have; the container does not plan them again.
   skip: string[];
 }
+
+// The container kills the job at this deadline even if this Worker's abort never reaches it.
+type BudgetedJob = ProcessorJob & { budgetMs: number };
 
 type OriginPolicy = (target: URL) => string | null;
 
@@ -380,15 +387,34 @@ function beforeDeadline<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   return Promise.race([work, deadline]);
 }
 
+/** The container's budget for a job sent at `now`: what is left before `deadlineAt`, less the margin; at least 1 ms. */
+export function processorBudgetMs(deadlineAt: number, now: number): number {
+  return Math.max(1, deadlineAt - now - PROCESSOR_MARGIN_MS);
+}
+
+const processorLate = (): IngestError =>
+  new IngestError(504, `processor did not finish within ${PROCESSOR_TIMEOUT_MS / 1000} s`);
+
+// The container answers 503 busy while it runs another plate job, and 504 when
+// it killed this one at its deadline or on our hang-up.
+function processorRefusal(res: Response, result: { success?: boolean; error?: string } | null): IngestError | null {
+  if (res.status === 503 && result?.error === 'busy') return new IngestError(503, 'busy');
+  if (res.status === 504) return processorLate();
+  if (!res.ok || !result?.success) return new IngestError(502, `processor failed: ${result?.error ?? `HTTP ${res.status}`}`);
+  return null;
+}
+
 async function callProcessor(
   deps: PlateIngestDeps,
   job: ProcessorJob,
   bytes: Uint8Array,
   signal: AbortSignal,
+  deadlineAt: number,
 ): Promise<ProcessorResult> {
+  const budgeted: BudgetedJob = { ...job, budgetMs: processorBudgetMs(deadlineAt, Date.now()) };
   const request = new Request('http://media-processor/process', {
     method: 'POST',
-    headers: { 'x-media-job': btoa(JSON.stringify(job)) },
+    headers: { 'x-media-job': btoa(JSON.stringify(budgeted)) },
     body: bytes,
     signal,
   });
@@ -397,10 +423,9 @@ async function callProcessor(
     res.json<ProcessorResult & { success?: boolean; error?: string }>().catch(() => null),
     signal,
   );
-  if (!res.ok || !result?.success) {
-    throw new IngestError(502, `processor failed: ${result?.error ?? `HTTP ${res.status}`}`);
-  }
-  return { ...result, outputs: checkedOutputs(result.outputs) };
+  const refusal = processorRefusal(res, result);
+  if (refusal) throw refusal;
+  return { ...(result as ProcessorResult), outputs: checkedOutputs(result?.outputs) };
 }
 
 async function runProcessor(
@@ -409,13 +434,21 @@ async function runProcessor(
   bytes: Uint8Array,
   skip: string[],
 ): Promise<ProcessorResult> {
-  const job: ProcessorJob = { op: 'plate_ingest', sourceKind: body.sourceKind, focal: body.focal, subjectBox: body.subjectBox, skip };
+  const job: ProcessorJob = {
+    op: 'plate_ingest',
+    sourceKind: body.sourceKind,
+    focal: body.focal,
+    subjectBox: body.subjectBox,
+    skip,
+  };
+  const deadlineAt = Date.now() + PROCESSOR_TIMEOUT_MS;
   const controller = new AbortController();
+  // Aborting the container fetch is the hang-up that makes the container kill the job.
   const timer = setTimeout(() => controller.abort(), PROCESSOR_TIMEOUT_MS);
   try {
-    return await callProcessor(deps, job, bytes, controller.signal);
+    return await callProcessor(deps, job, bytes, controller.signal, deadlineAt);
   } catch (err) {
-    throw controller.signal.aborted ? new IngestError(504, `processor did not finish within ${PROCESSOR_TIMEOUT_MS / 1000} s`) : err;
+    throw controller.signal.aborted ? processorLate() : err;
   } finally {
     clearTimeout(timer);
   }
