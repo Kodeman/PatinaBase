@@ -10,7 +10,7 @@
 // regeneration) → finish_client_edition. Every path settles the request with
 // its spend, or reports it unsettled with the sweep that recovers it.
 
-import type { CallClaudeOptions, CallClaudeResult, ModelResponse } from "../_shared/claude.ts";
+import { type CallClaudeOptions, type CallClaudeResult, LEDGER_SETTLE_MS, type ModelResponse } from "../_shared/claude.ts";
 import type { ClaudeRole } from "../_shared/claude-models.ts";
 import { shortenError } from "../client-plate-copy/lib.ts";
 import { lintText } from "./lint.ts";
@@ -65,8 +65,12 @@ export const EDITION_MIN_MS = 90_000;
 export const LEASE_MARGIN_MS = 30_000;
 /** One database read or write, at most. */
 export const DB_CALL_MS = 8_000;
-/** Kept after a model call's own timeout for settling its ledger row. */
-export const LEDGER_MS = 6_000;
+/**
+ * Kept after a model call's own timeout for settling its ledger row: callClaude
+ * settles within LEDGER_SETTLE_MS and then returns, so a paid answer and its
+ * cost arrive inside this window even when the ledger never answers.
+ */
+export const LEDGER_MS = LEDGER_SETTLE_MS + 1_000;
 /** One finish (or close) attempt, or one read reconciling it, at most. */
 export const SETTLE_CALL_MS = 3_000;
 
@@ -128,10 +132,19 @@ export interface ProvenanceRow {
   source_kind: string;
 }
 
-/** One page of request rows in id order; the first page also carries their exact count. */
-export interface ProvenancePage {
-  rows: ProvenanceRow[];
+/** One page of rows in id order; the first page also carries their exact count. */
+export interface Page<T> {
+  rows: T[];
   total: number | null;
+}
+
+export type ProvenancePage = Page<ProvenanceRow>;
+
+/** One project_ffe_items line, removed or not: its vendor record and the vendor name the line gives. */
+export interface MakerLine {
+  id: string;
+  vendor_id: string | null;
+  vendor_name: string | null;
 }
 
 /** Every call takes a signal that aborts once its window has passed. */
@@ -147,6 +160,10 @@ export interface Db {
     limit: number,
     signal: AbortSignal,
   ): Promise<DbResult<ProvenancePage>>;
+  /** At most `limit` of the project's item lines, removed ones included, ordered by id after `after` (null: from the first). */
+  makerLines(projectId: string, after: string | null, limit: number, signal: AbortSignal): Promise<DbResult<Page<MakerLine>>>;
+  /** The names on these vendor records. */
+  vendorNames(vendorIds: string[], signal: AbortSignal): Promise<DbResult<string[]>>;
   /** An edition's status as it stands now. */
   editionStatus(editionId: string, signal: AbortSignal): Promise<DbResult<string>>;
 }
@@ -438,6 +455,8 @@ interface Ctx {
   sources: Map<string, string[]>;
   /** The project's own names, which model attribution never matches. */
   names: string[];
+  /** While the studio hides makers, the job's maker names (makerNames); none while it shows them. */
+  makers: string[];
   seen: Map<string, Seen>;
   pictures: Map<string, string | null>;
 }
@@ -829,12 +848,15 @@ const MAKER_ATTRIBUTED = new Set(["maker", "upload"]);
  * This run's perceived alt, else the one an earlier perception stored, else
  * the caption's. While the studio hides makers, a maker or upload picture
  * takes the caption's alt, built from the masked caption, since a perceived
- * one may have been written while makers were shown.
+ * one may have been written while makers were shown; so does any picture
+ * whose alt names one of the job's makers. The facts were read with every
+ * caption alt naming one rebuilt (withoutMakerAlts), so the caption's names none.
  */
 function altOf(ctx: Ctx, asset: FactsAsset): string | null {
   const caption = asset.alt ?? null;
   if (makerHidden(ctx, asset)) return caption;
-  return ctx.seen.get(asset.id)?.alt ?? storedAlt(ctx, asset) ?? caption;
+  const alt = ctx.seen.get(asset.id)?.alt ?? storedAlt(ctx, asset) ?? caption;
+  return namesMaker(alt, ctx.makers) ? caption : alt;
 }
 
 /** A maker or upload picture while the studio hides makers. */
@@ -880,51 +902,143 @@ export interface EditionDraft {
   facts?: EditorialFacts;
 }
 
+// ── Makers off ─────────────────────────────────────────────────────────────
+
+/** _client_plate_alt's kind wording (00845). */
+const KIND_WORDS: Record<string, string> = {
+  maker: "product photograph",
+  upload: "studio photograph",
+  installed: "installed photograph",
+  scan: "room scan",
+  board: "studio board",
+  sheet: "drawing",
+  concept: "concept render, not installed",
+};
+
+/** _client_plate_alt: what · whose · the kind's wording, a missing part left out. */
+function plateAlt(what: string | null, whose: string | null, kind: string): string {
+  return [what, whose, KIND_WORDS[kind] ?? null].filter((part) => part !== null).join(" · ");
+}
+
+/** The names the 00846 reader masks: trimmed, lower-cased, at least three characters, each once. */
+function makerSet(names: readonly (string | null | undefined)[]): string[] {
+  const set = new Set<string>();
+  for (const name of names) {
+    const trimmed = name?.trim().toLowerCase() ?? "";
+    if ([...trimmed].length >= 3) set.add(trimmed);
+  }
+  return [...set];
+}
+
+/** Whether `text` holds one of `makers`, matched as the reader does: case-insensitive substrings. */
+function namesMaker(text: string | null | undefined, makers: readonly string[]): boolean {
+  const lower = text?.toLowerCase() ?? "";
+  return makers.some((maker) => lower.includes(maker));
+}
+
+const LEFTOVER_SEPARATORS = /^[\s·,;:&/\-–—]+|[\s·,;:&/\-–—]+$/g;
+
+/** `text` with every maker name taken out and its leftover separators trimmed; null once nothing (or a maker) is left. */
+function withoutMakers(text: string | null | undefined, makers: readonly string[]): string | null {
+  if (!text) return null;
+  let left = text;
+  for (const maker of [...makers].sort((a, b) => b.length - a.length)) {
+    left = left.replace(new RegExp(maker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu"), " ");
+  }
+  left = left.replace(/\s+/g, " ").replace(LEFTOVER_SEPARATORS, "");
+  return left && !namesMaker(left, makers) ? left : null;
+}
+
+/**
+ * Makers off is a consent switch over every kind of picture (story seq 53).
+ * A caption alt naming one of the job's makers is rebuilt as _client_plate_alt
+ * builds it, from the caption with those names taken out of its what; a stored
+ * perceived alt naming one is dropped. The studio's name and the kind words are
+ * trusted, so a rebuilt alt is final and never checked again (seq 59). Any
+ * other alt is kept byte for byte.
+ */
+function withoutMakerAlts(facts: EditorialFacts, makers: readonly string[]): EditorialFacts {
+  if (!makers.length) return facts;
+  const assets = facts.assets.map((asset) => {
+    const alt = namesMaker(asset.alt, makers)
+      ? plateAlt(withoutMakers(asset.caption?.what, makers), asset.caption?.whose ?? null, asset.sourceKind)
+      : asset.alt;
+    const perceivedAlt = namesMaker(asset.perceivedAlt, makers) ? null : asset.perceivedAlt;
+    return alt === asset.alt && perceivedAlt === asset.perceivedAlt ? asset : { ...asset, alt, perceivedAlt };
+  });
+  return { ...facts, assets };
+}
+
+const VENDOR_IDS_PER_READ = 100;
+
+/**
+ * While the studio hides makers, every name the 00846 reader masks: each
+ * vendor record and vendor name on the project's item lines, removed ones
+ * included, and each makerName the facts carry. An error, no answer in time
+ * or a short read throws, so nothing is composed without the whole set.
+ */
+async function makerNames(facts: EditorialFacts, deps: ComposeDeps): Promise<string[]> {
+  if (facts.project.showMakers === true || !facts.assets.length) return [];
+  const until = deps.deadline - FINISH_RESERVE_MS;
+  const lines = await readAll(deps, until, "makers", (after, signal) => deps.db.makerLines(facts.project.id, after, PAGE_ROWS, signal));
+  const vendorIds = [...new Set(lines.flatMap((line) => (line.vendor_id ? [line.vendor_id] : [])))];
+  const vendors: string[] = [];
+  for (let i = 0; i < vendorIds.length; i += VENDOR_IDS_PER_READ) {
+    const ids = vendorIds.slice(i, i + VENDOR_IDS_PER_READ);
+    const { data, error } = await dbCall(deps, windowTo(deps, until, DB_CALL_MS), (signal) => deps.db.vendorNames(ids, signal));
+    if (error || !data) throw new Error(`makers: ${error?.message ?? "no answer"}`);
+    vendors.push(...data);
+  }
+  const named = facts.rooms.flatMap((room) => room.items.map((item) => item.makerName));
+  return makerSet([...vendors, ...lines.map((line) => line.vendor_name), ...named]);
+}
+
 function kindsByAsset(rows: readonly ProvenanceRow[]): Map<string, string[]> {
   const sources = new Map<string, string[]>();
   for (const row of rows) sources.set(row.asset_id, [...(sources.get(row.asset_id) ?? []), row.source_kind]);
   return sources;
 }
 
-const PROVENANCE_PAGE = 1_000;
-const PROVENANCE_PAGES = 50;
+const PAGE_ROWS = 1_000;
+const MAX_PAGES = 50;
 
 /**
- * Every request row naming the facts' assets, read page by page in id order
- * until a short page and held to the first page's exact count. An error, no
- * answer in time or fewer rows than counted throws: the edition then fails
- * before any picture is sent.
+ * Every row a paged read returns, page by page in id order until a short page,
+ * held to the first page's exact count. An error, no answer in time or fewer
+ * rows than counted throws, naming `what`.
  */
-async function readProvenance(facts: EditorialFacts, deps: ComposeDeps, until: number): Promise<ProvenanceRow[]> {
-  const ids = facts.assets.map((asset) => asset.id);
-  if (!ids.length) return [];
-  const read = (after: string | null) => provenancePage(deps, until, (signal) => deps.db.provenancePage(facts.project.id, ids, after, PROVENANCE_PAGE, signal));
+async function readAll<T extends { id: string }>(
+  deps: ComposeDeps,
+  until: number,
+  what: string,
+  query: (after: string | null, signal: AbortSignal) => Promise<DbResult<Page<T>>>,
+): Promise<T[]> {
+  const read = async (after: string | null) => {
+    const { data, error } = await dbCall(deps, windowTo(deps, until, DB_CALL_MS), (signal) => query(after, signal));
+    if (error || !data) throw new Error(`${what}: ${error?.message ?? "no answer"}`);
+    return data;
+  };
   const first = await read(null);
   const rows = [...first.rows];
   let last = first.rows.length;
-  for (let page = 1; page < PROVENANCE_PAGES && last >= PROVENANCE_PAGE; page += 1) {
+  for (let page = 1; page < MAX_PAGES && last >= PAGE_ROWS; page += 1) {
     const next = await read(rows[rows.length - 1].id);
     rows.push(...next.rows);
     last = next.rows.length;
   }
-  return counted(rows, first.total);
-}
-
-/** One bounded page; an error or no answer in time throws. */
-async function provenancePage(
-  deps: ComposeDeps,
-  until: number,
-  query: (signal: AbortSignal) => Promise<DbResult<ProvenancePage>>,
-): Promise<ProvenancePage> {
-  const { data, error } = await dbCall(deps, windowTo(deps, until, DB_CALL_MS), query);
-  if (error || !data) throw new Error(`provenance: ${error?.message ?? "no answer"}`);
-  return data;
-}
-
-/** The rows, once they are as many as the first page counted; fewer, or no count, throws. */
-function counted(rows: ProvenanceRow[], total: number | null): ProvenanceRow[] {
-  if (total === null || rows.length < total) throw new Error(`provenance: read ${rows.length} of ${total ?? "an uncounted set of"} rows`);
+  const total = first.total;
+  if (total === null || rows.length < total) throw new Error(`${what}: read ${rows.length} of ${total ?? "an uncounted set of"} rows`);
   return rows;
+}
+
+/**
+ * Every request row naming the facts' assets. A failed or short read throws:
+ * the edition then fails before any picture is sent.
+ */
+function readProvenance(facts: EditorialFacts, deps: ComposeDeps, until: number): Promise<ProvenanceRow[]> {
+  const ids = facts.assets.map((asset) => asset.id);
+  if (!ids.length) return Promise.resolve([]);
+  return readAll(deps, until, "provenance", (after, signal) => deps.db.provenancePage(facts.project.id, ids, after, PAGE_ROWS, signal));
 }
 
 /** Every signed item name, and maker names when the studio shows makers. */
@@ -933,7 +1047,7 @@ function allowedNames(facts: EditorialFacts): string[] {
   return facts.rooms.flatMap((room) => room.items.flatMap((item) => [item.nameAsSigned, ...(makers && item.makerName ? [item.makerName] : [])]));
 }
 
-async function context(facts: EditorialFacts, deps: ComposeDeps, deadline: number, spend: { usd: number }): Promise<Ctx> {
+async function context(facts: EditorialFacts, makers: string[], deps: ComposeDeps, deadline: number, spend: { usd: number }): Promise<Ctx> {
   const rows = await readProvenance(facts, deps, deadline - FINISH_RESERVE_MS);
   return {
     facts,
@@ -943,6 +1057,7 @@ async function context(facts: EditorialFacts, deps: ComposeDeps, deadline: numbe
     model: null,
     sources: kindsByAsset(rows),
     names: allowedNames(facts),
+    makers,
     seen: new Map(),
     pictures: new Map(),
   };
@@ -972,13 +1087,14 @@ function settleWords(fresh: Composition, current: CurrentEdition | null): { comp
 /** One edition's draft. */
 export async function composeEdition(
   facts: EditorialFacts,
+  makers: string[],
   current: CurrentEdition | null,
   hash: string,
   deps: ComposeDeps,
   deadline: number,
   spend: { usd: number },
 ): Promise<EditionDraft> {
-  const ctx = await context(facts, deps, deadline, spend);
+  const ctx = await context(facts, makers, deps, deadline, spend);
   await perceive(ctx);
   const hero = await pickHero(ctx);
   const plan = chapterPlan(facts);
@@ -1158,6 +1274,7 @@ function foundAs(found: Settled, draft: EditionDraft, refused: string): Settled 
 
 async function draftOrFailure(
   facts: EditorialFacts,
+  makers: string[],
   current: CurrentEdition | null,
   hash: string,
   deps: ComposeDeps,
@@ -1165,7 +1282,7 @@ async function draftOrFailure(
   spend: { usd: number },
 ): Promise<EditionDraft> {
   try {
-    return await composeEdition(facts, current, hash, deps, deadline, spend);
+    return await composeEdition(facts, makers, current, hash, deps, deadline, spend);
   } catch (cause) {
     return failedDraft(hash, cause);
   }
@@ -1178,14 +1295,17 @@ function editionDeadline(deps: ComposeDeps, request: EditionRequest): number {
 }
 
 async function settleRequest(request: EditionRequest, deps: ComposeDeps, spend: { usd: number }, edition: { id: string | null }): Promise<Settled> {
-  const facts = await readFacts(deps, request.project_id);
+  const read = await readFacts(deps, request.project_id);
+  // Before the unchanged check, so an edition frozen from these facts reads the same next run.
+  const makers = await makerNames(read, deps);
+  const facts = withoutMakerAlts(read, makers);
   const current = await readCurrent(deps, request.project_id);
   const hash = await sourceHash(facts);
   if (await unchanged(current, hash, facts)) return await closeRequest(deps, request, "unchanged");
   edition.id = await beginEdition(deps, request);
   if (edition.id === null) return await closeRequest(deps, request, "daily_limit");
   const until = editionDeadline(deps, request);
-  const draft = await draftOrFailure(facts, current, hash, deps, until, spend);
+  const draft = await draftOrFailure(facts, makers, current, hash, deps, until, spend);
   return await finishEdition({ deps, editionId: edition.id, request, facts, hash, usd: spend.usd, until }, draft);
 }
 

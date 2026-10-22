@@ -1,4 +1,5 @@
 import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { FakeTime } from "https://deno.land/std@0.224.0/testing/time.ts";
 import { callClaude, type CallClaudeOptions, type CallClaudeResult, type LlmLedgerPort } from "../_shared/claude.ts";
 import {
   composeRequest,
@@ -12,6 +13,7 @@ import {
   privacyPageLive,
   runBatch,
   runStatus,
+  sleepFor,
   sourceHash,
 } from "./lib.ts";
 import type { EditorialFacts, FactsRoom } from "./prompts.ts";
@@ -168,6 +170,8 @@ interface DbOptions {
   requests?: EditionRequest[];
   /** Rows the first provenance page counts beyond those any page returns. */
   uncounted?: number;
+  /** The project's item lines and vendor records (id → name): the makers-off name set. */
+  makers?: { lines: { id: string; vendor_id: string | null; vendor_name: string | null }[]; vendors: Record<string, string> };
   /** Calls (an rpc name, or "provenance") that answer only after `ms` on `clock`, unless their window aborts them. */
   slow?: { clock: Clock; ms: number; fns: string[] };
 }
@@ -222,6 +226,15 @@ function fakeDb(options: DbOptions = {}) {
     approvedEdition: () => Promise.resolve({ data: options.current ?? null, error: null }),
     provenancePage: (_project: string, ids: string[], after: string | null, limit: number, signal?: AbortSignal) =>
       answer("provenance", () => page(ids, after, limit), signal),
+    makerLines: (_project: string, after: string | null, limit: number, signal?: AbortSignal) => {
+      calls.push({ fn: "makerLines", args: { after } });
+      return answer("makers", () => {
+        const all = [...(options.makers?.lines ?? [])].sort((a, b) => (a.id < b.id ? -1 : 1));
+        const lines = all.filter((line) => after === null || line.id > after).slice(0, Math.min(limit, MAX_ROWS));
+        return { data: { rows: lines, total: after === null ? all.length : null }, error: null };
+      }, signal);
+    },
+    vendorNames: (ids: string[]) => Promise.resolve({ data: ids.flatMap((id) => options.makers?.vendors[id] ?? []), error: null }),
     editionStatus: () => Promise.resolve({ data: editionStatus, error: null }),
     // e5bdbaf4's port, kept so each negative control fails there by assertion:
     // one select, cut at max_rows as the server cuts it.
@@ -808,22 +821,148 @@ Deno.test("N1: provenance that reads fewer rows than it counted fails the editio
   assertEquals(outcome.result, "failed");
 });
 
-Deno.test("N2: an alt perceived while makers were shown never reaches a page that hides them", async () => {
+/** Makers off: the facts carry no makerName, so the names come from the job's lines and vendor records. */
+const JOB_MAKERS = {
+  lines: [
+    { id: "l1", vendor_id: "v1", vendor_name: null },
+    { id: "l2", vendor_id: null, vendor_name: " Bramble & Co " },
+  ],
+  vendors: { v1: "Kettle Joinery" } as Record<string, string>,
+};
+
+/** Facts read while the studio hides makers, with alts perceived while it showed them. */
+function makersHidden(): EditorialFacts {
   const fixture = facts();
   fixture.project.showMakers = false;
-  // Perceived while makers were shown; the facts' own alt is built from the masked caption.
-  Object.assign(fixture.assets[0], {
+  for (const room of fixture.rooms) for (const item of room.items) item.makerName = null;
+  const set = (id: string, fields: Record<string, unknown>) => Object.assign(fixture.assets.find((a) => a.id === id)!, fields);
+  // The facts' own alt is built from the masked caption.
+  set("a-sofa", { perceivedPromptVersion: "e1", perceivedAlt: "A Kettle Joinery walnut sofa under the bay window.", alt: "Walnut sofa · Larch Studio · studio photograph" });
+  set("a-scan", { perceivedPromptVersion: "e1", perceivedAlt: "The kettle joinery sofa in the bay of the living room.", alt: "Living room · Larch Studio · room scan" });
+  // A caption whose what names a maker: its alt is rebuilt with the name taken out.
+  set("a-concept", {
     perceivedPromptVersion: "e1",
-    perceivedAlt: "A Kettle Joinery walnut sofa under the bay window.",
-    alt: "Walnut sofa · Larch Studio · studio photograph",
+    perceivedAlt: "A Bramble & Co armchair by the window.",
+    caption: { what: "Bramble & Co armchair", whose: "Larch Studio", when: null },
+    alt: "Bramble & Co armchair · Larch Studio · concept render, not installed",
   });
-  const { db, called } = fakeDb({ facts: fixture });
+  return fixture;
+}
+
+const namesJobMaker = (value: unknown) => /kettle joinery|bramble & co/i.test(JSON.stringify(value));
+const imageAlts = (args: Record<string, unknown>) => (args.p_images as { asset_id: string; alt: string }[]).map((r) => [r.asset_id, r.alt]);
+const factAlts = (args: Record<string, unknown>) =>
+  new Map((args.p_facts as EditorialFacts).assets.map((a) => [a.id, [a.alt ?? null, a.perceivedAlt ?? null]]));
+
+Deno.test("N2: with makers hidden, no alt naming a maker of the job reaches the page or its facts, whatever the kind", async () => {
+  // Upload: the sofa opens the page; every kind's alt is checked in p_facts.
+  {
+    const { db, called } = fakeDb({ facts: makersHidden(), makers: JOB_MAKERS });
+    const { claude } = claudeOf(respond());
+    await composeRequest(REQUEST, deps(db, claude));
+    const args = finishArgs(called);
+    assertEquals(imageAlts(args), [["a-sofa", "Walnut sofa · Larch Studio · studio photograph"]]);
+    const alts = factAlts(args);
+    assertEquals(alts.get("a-sofa"), ["Walnut sofa · Larch Studio · studio photograph", null]);
+    assertEquals(alts.get("a-scan"), ["Living room · Larch Studio · room scan", null]);
+    assertEquals(alts.get("a-concept"), ["armchair · Larch Studio · concept render, not installed", null]);
+    assert(!namesJobMaker([args.p_images, args.p_composition, [...alts.values()]]), "the hidden maker is named");
+  }
+  // Scan: its stored perceived alt named the maker; the scan opens the page.
+  {
+    const { db, called } = fakeDb({ facts: makersHidden(), makers: JOB_MAKERS });
+    const { claude } = claudeOf((opts) => {
+      const ids = shown(opts);
+      if (opts.role === "draft" && ids.length) return ok({ hero: { index: ids.indexOf("a-scan"), why: "Calm." }, held: [] });
+      return respond()(opts);
+    });
+    await composeRequest(REQUEST, deps(db, claude, { privacyLive: true }));
+    const args = finishArgs(called);
+    assertEquals(imageAlts(args), [["a-scan", "Living room · Larch Studio · room scan"]]);
+    assert(!namesJobMaker([args.p_images, [...factAlts(args).values()]]), "the hidden maker is named");
+  }
+  // Installed: perceived this run, with an alt naming the maker.
+  {
+    const fixture = makersHidden();
+    fixture.assets.push(asset("a-installed", "installed", 3000, 2000, {
+      caption: { what: "Walnut sofa", whose: "Larch Studio", when: null },
+      alt: "Walnut sofa · Larch Studio · installed photograph",
+    }) as never);
+    const { db, called } = fakeDb({ facts: fixture, makers: JOB_MAKERS, rows: [...ROWS, row("a-installed", "installed")] });
+    const { claude } = claudeOf(respond({
+      perceive: (ids) => ({
+        images: ids.map((id, index) => ({
+          index,
+          subject_box: [0.1, 0.1, 0.6, 0.6],
+          focal: [0.4, 0.4],
+          flags: [],
+          alt: id === "a-installed" ? "The Kettle Joinery sofa, installed in the bay." : `A walnut piece, view ${index}`,
+        })),
+      }),
+    }));
+    await composeRequest(REQUEST, deps(db, claude, { privacyLive: true }));
+    const args = finishArgs(called);
+    assert(called("record_plate_perception").some((call) => call.args?.p_asset_id === "a-installed"), "the installed picture was perceived");
+    assertEquals(imageAlts(args), [["a-installed", "Walnut sofa · Larch Studio · installed photograph"]]);
+    assert(!namesJobMaker([args.p_images, [...factAlts(args).values()]]), "the hidden maker is named");
+  }
+});
+
+Deno.test("N2: with makers shown, alts naming the maker are kept and no maker names are read", async () => {
+  const fixture = facts();
+  Object.assign(fixture.assets[0], { perceivedPromptVersion: "e1", perceivedAlt: "A Kettle Joinery walnut sofa under the bay window." });
+  const { db, called } = fakeDb({ facts: fixture, makers: JOB_MAKERS });
   const { claude } = claudeOf(respond());
   await composeRequest(REQUEST, deps(db, claude));
-  const args = finishArgs(called);
-  const images = args.p_images as { asset_id: string; alt: string }[];
-  assertEquals(images.map((r) => [r.asset_id, r.alt]), [["a-sofa", "Walnut sofa · Larch Studio · studio photograph"]]);
-  assert(!JSON.stringify([args.p_images, args.p_composition]).includes("Kettle"), "the hidden maker is named");
+  assertEquals(imageAlts(finishArgs(called)), [["a-sofa", "A Kettle Joinery walnut sofa under the bay window."]]);
+  assertEquals(called("makerLines").length, 0);
+});
+
+Deno.test("N2: a maker-name read that fails leaves the request for the sweep, and nothing is composed", async () => {
+  const clock = fakeClock();
+  const { db, called } = fakeDb({ facts: makersHidden(), makers: JOB_MAKERS, slow: { clock, ms: 200_000, fns: ["makers"] } });
+  const { claude, calls } = claudeOf(respond());
+  const outcome = await composeRequest(REQUEST, deps(db, claude, { now: clock.now, sleep: clock.sleep }));
+  assertEquals([outcome.result, outcome.reason, outcome.editionId], ["unsettled", "makers: no answer in time", null]);
+  assertEquals([calls.length, called("begin_client_edition").length], [0, 0]);
+});
+
+Deno.test("R2: a ledger that never settles keeps every paid answer and its cost, and the edition lands in budget", async () => {
+  const time = new FakeTime(0);
+  try {
+    const paid: number[] = [];
+    const ledger: LlmLedgerPort = {
+      reserve: () => Promise.resolve({ granted: true, reason: null, usageId: 7 }),
+      // Never answers and never looks at its signal.
+      settle: () => new Promise<void>(() => {}),
+    };
+    const clientOptions = { apiKey: "test-key", log: () => {}, capture: async () => {} };
+    const model = respond();
+    const claude = async (opts: CallClaudeOptions) => {
+      const reply = model(opts);
+      if (!reply.ok) throw new Error("unscripted");
+      const result = await callClaude({ ...opts, ledger, caller: () => Promise.resolve(reply.response), clientOptions });
+      if (result.ok) paid.push(result.usd);
+      return result;
+    };
+    const { db, called } = fakeDb();
+    let settledAt: number | null = null;
+    const pending = composeRequest(REQUEST, deps(db, claude, { now: () => Date.now(), sleep: sleepFor, deadline: 120_000 }))
+      .then((outcome) => {
+        settledAt = Date.now();
+        return outcome;
+      });
+    while (settledAt === null && Date.now() < 130_000) await time.tickAsync(1_000);
+    assert(settledAt !== null && settledAt <= 120_000, `the edition settled at ${settledAt}`);
+    const outcome = await pending;
+    const args = finishArgs(called);
+    assertEquals([outcome.result, args.p_status, composition(args).voice], ["composed", "awaiting_review", "model"]);
+    assert(paid.length >= 3 && paid.every((usd) => usd > 0), `paid answers: ${paid}`);
+    const total = Number(paid.reduce((sum, usd) => sum + usd, 0).toFixed(6));
+    assertEquals([args.p_cost_usd, outcome.usd], [total, total]);
+  } finally {
+    time.restore();
+  }
 });
 
 Deno.test("N3: a provenance read that never answers is abandoned in its window; the run ends in budget with the edition failed", async () => {

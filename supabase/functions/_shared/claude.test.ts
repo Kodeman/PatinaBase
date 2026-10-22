@@ -3,6 +3,7 @@ import {
   assertEquals,
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { FakeTime } from "https://deno.land/std@0.224.0/testing/time.ts";
 import {
   APIConnectionTimeoutError,
   APIError,
@@ -16,6 +17,7 @@ import {
   callClaude,
   type ClaudeCaller,
   createLlmLedger,
+  LEDGER_SETTLE_MS,
   type LlmLedgerPort,
   type ModelResponse,
 } from "./claude.ts";
@@ -290,6 +292,33 @@ Deno.test("callClaude bounds settling by its ledger signal: a paid answer return
   assertEquals(logs.filter((entry) => entry.event === "claude_ledger_settle_failed").length, 1, "the unsettled row was not logged");
 });
 
+Deno.test("callClaude settles inside its own window: a settle that never answers still returns the paid answer and its cost", async () => {
+  const time = new FakeTime(0);
+  try {
+    const ledger: LlmLedgerPort = {
+      reserve: async () => ({ granted: true, reason: null, usageId: 44 }),
+      // Never answers and never looks at its signal.
+      settle: () => new Promise<void>(() => {}),
+    };
+    const { logs, clientOptions } = recorder();
+    let result: Awaited<ReturnType<typeof callClaude>> | undefined;
+    void callClaude(options({ ledger, caller: async () => paidResponse, clientOptions })).then((r) => (result = r));
+    await time.tickAsync(LEDGER_SETTLE_MS - 1);
+    assertEquals(result, undefined, "the call returned before its settle window passed");
+    await time.tickAsync(1);
+    await time.runMicrotasks();
+    assert(result, "callClaude was still waiting on a settle that never answers");
+    assert(result.ok);
+    assertEquals(result.usd, 0.003);
+    assertEquals(result.response.content, paidResponse.content);
+    const unsettled = logs.filter((entry) => entry.event === "claude_ledger_settle_failed");
+    assertEquals(unsettled.length, 1, "the unsettled row was not logged");
+    assertEquals([unsettled[0].fields?.usage_id, unsettled[0].fields?.usd], [44, 0.003]);
+  } finally {
+    time.restore();
+  }
+});
+
 Deno.test("createLlmLedger hands its signal to llm_reserve and llm_settle", async () => {
   const signals: Record<string, AbortSignal> = {};
   // A query builder: awaited as is, or through abortSignal.
@@ -349,10 +378,12 @@ function fakeAdmin(
     auth: {
       getUser: async () => ({ data: { user: { id: "user-1" } }, error: null }),
     },
-    rpc: async (name: string, args: Record<string, unknown>) => {
+    // Thenable like a PostgREST builder, which also takes an abort signal.
+    rpc: (name: string, args: Record<string, unknown>) => {
       calls.push({ name, args });
       const reply = handlers[name]?.(args) ?? {};
-      return { data: reply.data ?? null, error: reply.error ?? null };
+      const result = Promise.resolve({ data: reply.data ?? null, error: reply.error ?? null });
+      return Object.assign(result, { abortSignal: () => result });
     },
   };
   return { admin: admin as never, calls };

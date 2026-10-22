@@ -106,6 +106,9 @@ function fakeDb(source: EditorialFacts): Db {
       const rows = named(ids).map(({ asset_id, source_kind }, i) => ({ id: `p-${String(i).padStart(4, "0")}`, asset_id, source_kind }));
       return Promise.resolve({ data: { rows: after === null ? rows : [], total: rows.length }, error: null });
     },
+    // No item lines: the makers-off names are the facts' own.
+    makerLines: () => Promise.resolve({ data: { rows: [], total: 0 }, error: null }),
+    vendorNames: () => Promise.resolve({ data: [], error: null }),
     editionStatus: () => Promise.resolve({ data: "drafting", error: null }),
     // e5bdbaf4's port, kept so this file loads against it for the negative controls.
     provenance: (_project: string, ids: string[]) =>

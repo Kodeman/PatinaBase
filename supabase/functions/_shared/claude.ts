@@ -65,6 +65,13 @@ export interface ClaudeClientOptions {
   capture?: typeof captureServerEvent;
 }
 
+/**
+ * Settling a call's ledger row, both attempts together, takes at most this
+ * long: a row still unsettled then is logged and left to the stale-reservation
+ * sweep, and the call returns what it knows, a paid answer and its cost included.
+ */
+export const LEDGER_SETTLE_MS = 5_000;
+
 export function createClaudeCaller(
   apiKey: string,
   timeoutMs: number,
@@ -341,8 +348,6 @@ export async function callClaude(
   return { ok: true, response, usd, model };
 }
 
-/** Settles with one retry of the same fields; a lasting failure is logged and
- * left to the stale-reservation sweep, which counts the reserved estimate. */
 /**
  * Settles a failed call with whatever usage its error reported (an error the
  * API billed is never recorded as free) and returns the typed failure, with
@@ -381,6 +386,11 @@ async function settleFailure(
   return knownUsage ? { ...failure, usd } : failure;
 }
 
+/**
+ * Settles with one retry of the same fields, both inside LEDGER_SETTLE_MS (and
+ * `signal`, when given); a lasting failure or no answer in time is logged and
+ * left to the stale-reservation sweep, which counts the reserved estimate.
+ */
 async function settleUsage(
   ledger: LlmLedgerPort,
   usageId: number,
@@ -389,22 +399,32 @@ async function settleUsage(
   feature: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      await untilAborted(signal, (bound) => ledger.settle(usageId, fields, bound));
-      return;
-    } catch (error) {
-      if (attempt === 2) {
-        log("claude_ledger_settle_failed", {
-          feature,
-          usage_id: usageId,
-          status: fields.status,
-          usd: fields.usd,
-          attempts: attempt,
-          error: errorMessage(error),
-        });
+  const window = new AbortController();
+  const timer = setTimeout(
+    () => window.abort(new Error("ledger settle window passed")),
+    LEDGER_SETTLE_MS,
+  );
+  const bounded = signal ? AbortSignal.any([signal, window.signal]) : window.signal;
+  try {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await untilAborted(bounded, (bound) => ledger.settle(usageId, fields, bound));
+        return;
+      } catch (error) {
+        if (attempt === 2) {
+          log("claude_ledger_settle_failed", {
+            feature,
+            usage_id: usageId,
+            status: fields.status,
+            usd: fields.usd,
+            attempts: attempt,
+            error: errorMessage(error),
+          });
+        }
       }
     }
+  } finally {
+    clearTimeout(timer);
   }
 }
 
