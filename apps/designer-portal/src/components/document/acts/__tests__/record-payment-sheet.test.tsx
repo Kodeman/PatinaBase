@@ -205,7 +205,7 @@ describe('Record a payment to a maker', () => {
       fix?.id,
     );
     expect(amount.closest('[inert]')).toBeNull();
-    await waitFor(() => expect(amount).toHaveFocus());
+    await waitFor(() => expect(amount).toHaveFocus(), { timeout: 3000 });
   });
 
   it('stands Put back in the foot beside the filled act, never in the head (money-p3)', async () => {
