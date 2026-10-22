@@ -20,8 +20,8 @@ import {
 } from './fixtures/house-issue';
 
 /**
- * The House Issue (US-49 Phase 1), with `client-edition-page` forced on by
- * NEXT_PUBLIC_FLAG_OVERRIDES on the `edition` project's server (:3102).
+ * The House Issue (US-49), rendered from editorial data with no flag override
+ * on the `edition` project's server (:3102).
  *
  * Locally the plate route has no PLATES binding (`next dev` is not a Worker)
  * and answers 503, so every photograph falls back to its drawn silhouette

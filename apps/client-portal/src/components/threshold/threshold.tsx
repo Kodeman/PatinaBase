@@ -376,12 +376,10 @@ export interface ThresholdProps {
    */
   namedProposalId?: string | null;
   /**
-   * The House Issue's plate read (00842), fetched by the server page. Drawn
-   * only while `client-edition-page` is on; null or flag off, today's house.
+   * The House Issue's read (00842/00846), fetched by the server page.
+   * Null data keeps today's house.
    */
   editorial?: ClientProjectEditorial | null;
-  /** Server rollout authority: false also disables the browser editorial read. */
-  editionEnabled: boolean;
 }
 
 export function Threshold({
@@ -392,7 +390,6 @@ export function Threshold({
   viewSource = 'named',
   namedProposalId = null,
   editorial = null,
-  editionEnabled,
 }: ThresholdProps) {
   // ── every hook, before any branch ──────────────────────────────────────────
   const hydrated = useHydrated();
@@ -434,9 +431,8 @@ export function Threshold({
   const partiesQuery = useProjectParties(projectId);
   const ordersQuery = useDirectOrders();
   useProjectNotesRealtime(projectId);
-  // The House Issue: null with `client-edition-page` off or loading, and then
-  // every edition helper below hands back today's page.
-  const issue = useEditionIssue(projectId, editorial, editionEnabled);
+  // Without editorial data, every edition helper hands back today's page.
+  const issue = useEditionIssue(projectId, editorial);
   // The approved edition the issue prints, if any: its notice opens the note
   // (or, with no standing note, is the whole letter) and its line heads Earlier.
   const edition = issue?.editorial.edition ?? null;

@@ -208,19 +208,11 @@ jest.mock('@/lib/analytics/events', () => ({
   proposalClientEvents: { signed: jest.fn() },
 }));
 
-// `client-edition-page` (The House Issue). A plain function, not a jest.fn,
-// so `resetMocks` leaves it alone; every test reads the fail-closed default
-// unless it sets the state itself.
-let mockEditionFlag = { value: false, isLoading: false };
+// Other flags stay off; the House Issue must not consult analytics.
 jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: (name: string) =>
-    name === 'client-edition-page' ? mockEditionFlag : { value: false, isLoading: false },
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));
-afterEach(() => {
-  mockEditionFlag = { value: false, isLoading: false };
-});
-// The plate read's own client (use-client-editorial): a flag-off page must
-// never construct it.
+// Fresh server data renders without constructing another browser client.
 jest.mock('@patina/supabase/client', () => ({ createBrowserClient: jest.fn() }));
 
 import {
@@ -545,7 +537,6 @@ function renderThreshold(
   milestones: MilestoneDetail[] = MILESTONES,
   otherHouses: { id: string; name: string }[] = [],
   editorial?: ClientProjectEditorial | null,
-  editionEnabled = true,
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -558,7 +549,6 @@ function renderThreshold(
         milestones={milestones}
         otherHouses={otherHouses}
         {...(editorial === undefined ? {} : { editorial })}
-        editionEnabled={editionEnabled}
       />
     </QueryClientProvider>,
   );
@@ -3882,7 +3872,7 @@ describe('Threshold — Project progress and designer help (CPUX-06)', () => {
   });
 });
 
-describe('Threshold — The House Issue flag (client-edition-page)', () => {
+describe('Threshold — The House Issue data', () => {
   const PLATE_CROPS = {
     wide: { rect: [0, 0, 2400, 1500] as const, widths: [1280, 1600, 2048] },
     cover_phone: { rect: [300, 0, 1720, 1500] as const, widths: [640, 828, 1080] },
@@ -3927,24 +3917,14 @@ describe('Threshold — The House Issue flag (client-edition-page)', () => {
     sheets: [],
   };
 
-  // The flag off, and the flag still loading: the edition's read changes
-  // nothing — the same markup, byte for byte, as a page given no read at all.
-  it.each([
-    ['off', { value: false, isLoading: false }],
-    ['loading', { value: false, isLoading: true }],
-    ['on but still loading', { value: true, isLoading: true }],
-  ])('flag %s: the page is today’s house, unchanged, and makes no plate read', (_label, flag) => {
-    mockEditionFlag = flag;
-    // React's useId counter runs on across roots (`_r_1m_` then `_r_2c_`);
-    // every other byte must match.
+  it('null editorial keeps today’s house unchanged', () => {
     const markup = (html: string) => html.replace(/_r_[0-9a-z]+_/g, '_r_id_');
     const today = renderThreshold(MILESTONES, [], undefined);
     const todayHtml = markup(today.container.innerHTML);
     today.unmount();
-
-    const withRead = renderThreshold(MILESTONES, [], EDITORIAL);
-    expect(markup(withRead.container.innerHTML)).toBe(todayHtml);
-    expect(withRead.container.querySelector('[data-testid="house-issue-hero"], .ed-chapter-head, .ed-standing')).toBeNull();
+    const withoutRead = renderThreshold(MILESTONES, [], null);
+    expect(markup(withoutRead.container.innerHTML)).toBe(todayHtml);
+    expect(withoutRead.container.querySelector('[data-testid="house-issue-hero"], .ed-chapter-head, .ed-standing')).toBeNull();
     expect(createEditorialClient).not.toHaveBeenCalled();
   });
 
@@ -3971,7 +3951,6 @@ describe('Threshold — The House Issue flag (client-edition-page)', () => {
   }
 
   it('ground floor renders the approved house held plate once after approvals and before the road', () => {
-    mockEditionFlag = { value: true, isLoading: false };
     roomsMock.mockReturnValue(settled([]));
     const { container } = renderThreshold(MILESTONES, [], groundFloorEdition(true));
     const groundFloor = screen.getByTestId('ground-floor');
@@ -3989,7 +3968,6 @@ describe('Threshold — The House Issue flag (client-edition-page)', () => {
   });
 
   it('ground floor without an approved held plate stays byte-identical even with an unapproved held row', () => {
-    mockEditionFlag = { value: true, isLoading: false };
     roomsMock.mockReturnValue(settled([]));
     const noHeld = groundFloorEdition(false);
     const markup = (html: string) => html.replace(/_r_[0-9a-z]+_/g, '_r_id_');
@@ -4003,15 +3981,7 @@ describe('Threshold — The House Issue flag (client-edition-page)', () => {
     expect(withUnapproved.container.querySelector('#key')).toBeNull();
   });
 
-  it('server off cannot be overridden by a resolved client flag or cached editorial', () => {
-    mockEditionFlag = { value: true, isLoading: false };
-    const { container } = renderThreshold(MILESTONES, [], EDITORIAL, false);
-    expect(container.querySelector('[data-testid="house-issue-hero"], .ed-chapter-head, .ed-standing')).toBeNull();
-    expect(createEditorialClient).not.toHaveBeenCalled();
-  });
-
-  it('flag on: the hero stands between the doorplate and the house, and every anchor stays', () => {
-    mockEditionFlag = { value: true, isLoading: false };
+  it('editorial data alone: the hero stands between the doorplate and the house, and every anchor stays', () => {
     const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
     const hero = screen.getByTestId('house-issue-hero');
     const doorplate = container.querySelector('#doorplate')!;
@@ -4038,7 +4008,6 @@ describe('Threshold — The House Issue flag (client-edition-page)', () => {
     const rowTwo = (container: HTMLElement) => container.querySelector('[data-standing-row="2"]');
     /** No open paper, no finished work to review, no approval. */
     function quietHouse() {
-      mockEditionFlag = { value: true, isLoading: false };
       proposalsMock.mockReturnValue(settled([SIGNED_AGREEMENT]));
       selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [CREDENZA] }));
     }

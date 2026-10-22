@@ -18,7 +18,6 @@ import {
   plateScope,
   useClientEditorial,
 } from "@/hooks/use-client-editorial";
-import { useFeatureFlag } from "@/hooks/use-feature-flag";
 import { plateAlt } from "@/lib/editorial/caption";
 import { chapterOrder, type Chapter } from "@/lib/editorial/chapters";
 import { heroPicture, shortFramePosition } from "@/lib/editorial/crop";
@@ -59,7 +58,7 @@ import { SwatchStrip } from "./swatch-strip";
 import "./editorial.css";
 
 /* The House Issue (US-49 Phase 1): the image-led composition the Threshold
-   draws when `client-edition-page` is on and the plate read answered. Every
+   draws when the plate read answered. Every
    plate stands BESIDE a section, never inside one: SinceYesterday dims only
    `[data-dimmable]`, and a plate must never dim with its section. */
 
@@ -197,18 +196,14 @@ export function useHouseIssue(
 }
 
 /**
- * The flag, the plate read and the issue in one. Fail-closed: the flag off, or
- * still loading, is today's house and makes no plate read.
+ * The plate read and the issue in one. Null data keeps today's house.
  */
 export function useEditionIssue(
   projectId: string,
   editorial: ClientProjectEditorial | null,
-  serverEnabled = false,
 ): HouseIssue | null {
-  const flag = useFeatureFlag("client-edition-page");
-  const on = serverEnabled && flag.value && !flag.isLoading;
-  const query = useClientEditorial(projectId, editorial, on);
-  return useHouseIssue(on ? query.data : null);
+  const query = useClientEditorial(projectId, editorial);
+  return useHouseIssue(query.data);
 }
 
 /** A chapter as the page prints it: the edition may give it a standing sentence. */

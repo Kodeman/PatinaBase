@@ -281,28 +281,15 @@ async function expectNoHeader(page: Page): Promise<void> {
 test.describe.configure({ timeout: 180_000 });
 
 test.describe('The Threshold — the client page', () => {
-  test('flag off makes no editorial RPC or plate request on either page', async ({ page }, info) => {
-    test.skip(info.project.name !== 'chromium', 'the shipped flag-off server');
-    const editorialRequests: string[] = [];
-    const plates: string[] = [];
-    page.on('request', (request) => {
-      if (request.url().includes('get_client_project_editorial')) editorialRequests.push(request.url());
-      if (new URL(request.url()).pathname.startsWith('/plates/')) plates.push(request.url());
-    });
-    // Elm holds eligible plate assets, so an accidental server preload is observable.
+  test('editorial renders on both pages with analytics blocked', async ({ page }) => {
+    await page.route(/posthog\.com/, (route) => route.abort());
     await signInAsJune(page, `/projects/${ELM.id}`);
     for (const address of ['/', `/projects/${ELM.id}`]) {
       await page.goto(address);
       await settle(page);
-      await expect(page.locator('[data-testid="house-issue-hero"], .ed-standing')).toHaveCount(0);
-      await expect(page.locator('link[rel="preload"][as="image"][imagesrcset*="/plates/"]')).toHaveCount(0);
-      // Exercise lazy images and focus-triggered React Query refresh as well.
-      await page.locator('#mat').scrollIntoViewIfNeeded();
-      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      await expect(page.locator('.ed-standing')).toBeVisible();
       await expect(page.getByTestId('doorplate')).toBeAttached();
     }
-    expect(editorialRequests).toEqual([]);
-    expect(plates).toEqual([]);
   });
   test('opens chrome-less, with the house named on the doorplate', async ({ page }) => {
     await signInAsClient(page);
@@ -857,7 +844,7 @@ test.describe('The Threshold — the client page', () => {
   // The House Issue on (the `edition` project's server, :3102): the cover,
   // chapter heads and plates stand beside the sections, and every anchor the
   // mail, the retired routes and the middleware point at still resolves, once.
-  test('keeps every anchor resolving with The House Issue on', { tag: '@edition-only' }, async ({ page }) => {
+  test('keeps every anchor resolving with The House Issue', { tag: '@edition-only' }, async ({ page }) => {
     await signInAsClient(page);
     await openTheHouse(page);
     await expect(page.locator('[data-standing-row]')).toHaveCount(3, { timeout: 30000 });

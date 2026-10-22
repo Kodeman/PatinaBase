@@ -17,36 +17,9 @@ const LOCAL_ANON_KEY =
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 /**
- * ONE server, ONE project.
- *
- * Until wave 2 this file ran two dev servers: :3002 for the shipped surface
- * and :3102 carrying `NEXT_PUBLIC_FLAG_OVERRIDES=threshold:true` for
- * `threshold.spec.ts`, plus a `NEXT_DIST_DIR=.next-threshold` so the two
- * copies of the same app did not share and corrupt one `.next`. The flag was
- * the only thing that ever differed between them, and the flag is gone — no
- * code reads `threshold` or `single-pane` any more, and every client meets the
- * chrome-less house. Two servers that render the same surface are two chances
- * to boot the wrong one, so the split (and the dist-dir special-casing it
- * needed) comes out here.
- *
- * The Supabase pins stay, and they are the point: apps/client-portal/.env.local
- * has pointed at Strata PROD before, and this suite reads and writes the LOCAL
- * stack.
- *
- * US-49 brings a second server back, for the same reason the first split
- * existed: a flag the suite must see both ways. `client-edition-page` (The
- * House Issue) is read through `NEXT_PUBLIC_FLAG_OVERRIDES`, which Next inlines
- * when the dev server starts, so "on" and "off" cannot share one server. :3002
- * stays the shipped surface with no override; :3102 carries the override and
- * its own NEXT_DIST_DIR (next.config.js) so the two copies of the app never
- * share one build directory. That directory sits INSIDE `.next` because the
- * webpack watcher ignores `.next/**` but not a sibling like `.next-edition`:
- * outside it, each server watched the other's writes and forced browser full
- * reloads mid-test. The `edition` project runs only what must see the flag on:
- * every test tagged `@edition` (house-issue.spec.ts and the flag-on anchor
- * check in threshold.spec.ts); `edition-usability` runs the whole of
- * homeowner-usability.spec.ts there too, so it holds both ways.
- * `@edition-only` keeps a flag-on test off the shipped server.
+ * Both test servers render the same ungated House Issue. Keep the existing
+ * edition projects as focused fixture groups, with separate build directories.
+ * The local Supabase pins prevent .env.local from pointing tests at Strata.
  */
 const LOCAL_SUPABASE_ENV = {
   NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
@@ -80,8 +53,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3102' },
     },
     {
-      // The usability contract holds with the edition on too: the whole file,
-      // against the flag-on server.
+      // The complete usability contract on the edition fixture server.
       name: 'edition-usability',
       testMatch: /homeowner-usability\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3102' },
@@ -98,15 +70,13 @@ export default defineConfig({
       env: LOCAL_SUPABASE_ENV,
     },
     {
-      // The House Issue on. Never reused from a stray :3102 that might carry a
-      // different override; started and stopped by this run.
+      // Dedicated edition fixture server, started and stopped by this run.
       command: 'pnpm exec next dev --webpack -p 3102',
       url: 'http://localhost:3102',
       reuseExistingServer: false,
       timeout: 180000,
       env: {
         ...LOCAL_SUPABASE_ENV,
-        NEXT_PUBLIC_FLAG_OVERRIDES: 'client-edition-page:true',
         NEXT_DIST_DIR: '.next/edition',
       },
     },

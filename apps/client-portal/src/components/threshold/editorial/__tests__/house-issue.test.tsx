@@ -546,18 +546,18 @@ describe("the standing rows, in words", () => {
   });
 });
 
-// Exercise the real query so a default-open gate would construct its browser client.
-jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => ({ value: true, isLoading: false }) }));
+// Exercise the real query with analytics off: initial data is enough to render.
+jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => ({ value: false, isLoading: true }) }));
 jest.mock('@patina/supabase/client', () => ({ createBrowserClient: jest.fn() }));
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase/client';
 
-it.each([undefined, false])('server gate %p is closed despite a resolved true client flag', (serverEnabled) => {
+it('renders editorial immediately while analytics is unavailable', () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const { result } = renderHook(() => useEditionIssue(PROJECT, editorial([asset('cover')]), serverEnabled), {
+  const { result } = renderHook(() => useEditionIssue(PROJECT, editorial([asset('cover')])), {
     wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
   });
-  expect(result.current).toBeNull();
+  expect(result.current?.hero?.id).toBe('cover');
   expect(createBrowserClient).not.toHaveBeenCalled();
 });
 
