@@ -502,12 +502,28 @@ async function putOutputs(env: PlatesEnv, prefix: string, outputs: ProcessorOutp
   }
 }
 
-// Written after every object it names: its presence means they all landed.
+function mergeManifest(stored: StoredPlate, incoming: StoredPlate): StoredPlate {
+  return {
+    ...stored,
+    crops: { ...incoming.crops, ...stored.crops },
+    sourceKinds: [...new Set([...(stored.sourceKinds ?? []), ...(incoming.sourceKinds ?? [])])],
+  };
+}
+
+// Written after every object it names. An ETag precondition makes the union
+// atomic even when two source kinds both rendered from an absent manifest.
 async function putManifest(env: PlatesEnv, prefix: string, stored: StoredPlate): Promise<PlateRecord> {
-  await env.PLATES.put(`${prefix}/crops.json`, JSON.stringify(stored), {
-    httpMetadata: { contentType: 'application/json' },
-  });
-  return toRecord(stored);
+  const key = `${prefix}/crops.json`;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const current = await env.PLATES.get(key);
+    const merged = current ? mergeManifest(await current.json<StoredPlate>(), stored) : stored;
+    const written = await env.PLATES.put(key, JSON.stringify(merged), {
+      httpMetadata: { contentType: 'application/json' },
+      onlyIf: current ? { etagMatches: current.etag } : { etagDoesNotMatch: '*' },
+    });
+    if (written) return toRecord(merged);
+  }
+  throw new IngestError(503, 'manifest publication contention');
 }
 
 // The same bytes under every framing, so written once: an existing original stays.

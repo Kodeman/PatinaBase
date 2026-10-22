@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { timingSafeEqual as nodeTimingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual as nodeTimingSafeEqual } from 'node:crypto';
 import test, { mock } from 'node:test';
 
 // src/plates.ts is erasable-only TypeScript with no runtime imports: Node strips
@@ -35,20 +35,31 @@ function bucket() {
   const objects = new Map();
   // Every put's key, in the order the puts landed.
   const log = [];
+  const conflicts = [];
   return {
     objects,
     log,
+    conflicts,
     async get(key) {
       const o = objects.get(key);
-      return o ? { json: async () => JSON.parse(new TextDecoder().decode(o.body)) } : null;
+      return o ? { etag: o.etag, json: async () => JSON.parse(new TextDecoder().decode(o.body)) } : null;
     },
     async head(key) {
       return objects.has(key) ? { key } : null;
     },
     async put(key, value, options) {
       const body = typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value);
-      objects.set(key, { body, contentType: options?.httpMetadata?.contentType });
+      const current = objects.get(key);
+      const condition = options?.onlyIf;
+      if ((condition?.etagMatches !== undefined && condition.etagMatches !== current?.etag) ||
+          (condition?.etagDoesNotMatch === '*' && current)) {
+        conflicts.push(key);
+        return null;
+      }
+      const etag = createHash('sha256').update(body).digest('hex');
+      objects.set(key, { body, etag, contentType: options?.httpMetadata?.contentType });
       log.push(key);
+      return { etag };
     },
   };
 }
@@ -760,14 +771,27 @@ function gatedHarness() {
       notify();
     });
   // Releases one waiting job of `framing` that has not been released yet.
-  const release = (framing) => {
+  const release = (framing, sourceKind) => {
     const same = ({ job, released }) =>
-      !released && JSON.stringify([job.focal, job.subjectBox]) === JSON.stringify([framing.focal, framing.subjectBox]);
+      !released && (!sourceKind || job.sourceKind === sourceKind) && JSON.stringify([job.focal, job.subjectBox]) === JSON.stringify([framing.focal, framing.subjectBox]);
     const next = waiting.find(same);
     next.released = true;
     next.release();
   };
-  return { ...h, arrived, release };
+  // Force both publication reads to precede either conditional manifest write.
+  const holdPublications = () => {
+    const put = h.env.PLATES.put;
+    const gate = Promise.withResolvers();
+    let writes = 0;
+    h.env.PLATES.put = async (key, ...args) => {
+      if (key.endsWith('/crops.json') && ++writes <= 2) {
+        if (writes === 2) gate.resolve();
+        await gate.promise;
+      }
+      return put(key, ...args);
+    };
+  };
+  return { ...h, arrived, release, holdPublications };
 }
 
 test('concurrent: framings A and B of one sha, both past their manifest read, each publish to their own f/<rev>/ and never change the other', async () => {
@@ -836,6 +860,83 @@ test('concurrent: two ingests of one framing race to the same f/<rev>/ and leave
   assert.deepEqual([manifest.focal, manifest.subjectBox], [FRAMING_A.focal, FRAMING_A.subjectBox]);
   assert.deepEqual(manifest.crops, first.crops);
   assert.deepEqual([...snapshot(h.env.PLATES.objects, BASE).keys()], [`${BASE}/original.jpeg`]);
+});
+
+test('concurrent: maker and board publish one framing without losing either source kind or crop', { timeout: 5000 }, async () => {
+  const rev = await revOf(FRAMING_A);
+  for (const schedule of [['maker', 'board'], ['board', 'maker'], ['together']]) {
+    const h = gatedHarness();
+    const pending = Object.fromEntries(['maker', 'board'].map((sourceKind, n) =>
+      [sourceKind, h.ingest({ ...valid, ...FRAMING_A, sourceKind, requestId: request(n + 1) })]));
+    await h.arrived(2);
+    assert.equal(h.env.PLATES.objects.size, 0, 'both initial manifest reads saw an empty bucket');
+    const records = {};
+    const publish = async (kind) => {
+      h.release(FRAMING_A, kind);
+      const res = await pending[kind];
+      assert.equal(res.status, 200, await res.clone().text());
+      records[kind] = await res.json();
+    };
+    if (schedule[0] === 'together') {
+      // Hold both first conditional writes after their publication reads. A
+      // reread-and-unconditional-put implementation still loses this race.
+      h.holdPublications();
+      await Promise.all(['maker', 'board'].map(publish));
+      assert.equal(h.env.PLATES.conflicts.length, 1, 'the losing conditional create retries');
+    } else {
+      for (const kind of schedule) await publish(kind);
+    }
+    const manifest = await (await h.env.PLATES.get(`${BASE}/f/${rev}/crops.json`)).json();
+    assert.deepEqual(manifest.sourceKinds.slice().sort(), ['board', 'maker'], String(schedule));
+    assert.ok(manifest.crops.board, 'manifest retains the board crop');
+    assert.ok(manifest.crops.piece, 'manifest retains the maker crop');
+    const expected = {
+      ...planCrops({ ...SCENE, ...FRAMING_A, sourceKind: 'maker' }),
+      ...planCrops({ ...SCENE, ...FRAMING_A, sourceKind: 'board' }),
+    };
+    assert.deepEqual(manifest.crops, Object.fromEntries(Object.entries(expected).map(([key, crop]) => [key, { ...crop, rev }])),
+      'manifest contains exactly the crop union for this framing');
+    for (const kind of ['maker', 'board']) {
+      const late = await (await h.ingest({ ...valid, ...FRAMING_A, sourceKind: kind })).json();
+      assert.deepEqual(late.crops, manifest.crops, 'cached response includes the published union');
+      assert.ok(readerKeys(late).every((key) => h.env.PLATES.objects.has(key)), 'every returned crop has bytes');
+    }
+    assert.equal(h.jobs.length, 2, 'both source kinds remain cached without reprocessing');
+    const last = schedule[0] === 'together' ? Object.values(records).find((r) => r.crops.board && r.crops.piece) : records[schedule[1]];
+    assert.deepEqual(last.crops, manifest.crops, 'the merging publisher returns the union');
+  }
+});
+
+test('concurrent: additions to an existing manifest retry an ETag conflict and preserve both kinds', { timeout: 5000 }, async () => {
+  const h = gatedHarness();
+  const seed = h.ingest({ ...valid, ...FRAMING_A });
+  await h.arrived(1);
+  h.release(FRAMING_A);
+  assert.equal((await seed).status, 200);
+  const pending = ['maker', 'board'].map((sourceKind) => h.ingest({ ...valid, ...FRAMING_A, sourceKind }));
+  await h.arrived(3);
+  h.holdPublications();
+  for (const kind of ['maker', 'board']) h.release(FRAMING_A, kind);
+  const responses = await Promise.all(pending);
+  for (const res of responses) assert.equal(res.status, 200, await res.clone().text());
+  const rev = await revOf(FRAMING_A);
+  const manifest = await (await h.env.PLATES.get(`${BASE}/f/${rev}/crops.json`)).json();
+  assert.deepEqual(manifest.sourceKinds.slice().sort(), ['board', 'maker', 'upload']);
+  assert.ok(manifest.crops.board && manifest.crops.piece, 'existing manifest retains both crop families');
+  assert.equal(h.env.PLATES.conflicts.length, 1, 'conditional update retries its stale ETag');
+});
+
+test('manifest publication stops after bounded conditional-write contention', async () => {
+  const h = harness();
+  const put = h.env.PLATES.put;
+  let attempts = 0;
+  h.env.PLATES.put = async (key, ...args) => {
+    if (!key.endsWith('/crops.json')) return put(key, ...args);
+    attempts++;
+    return null;
+  };
+  assert.match(await expectError(await h.ingest(valid), 503), /manifest publication contention/);
+  assert.equal(attempts, 5, 'contention has a finite retry budget');
 });
 
 // ---- processor deadline (F6) ------------------------------------------------

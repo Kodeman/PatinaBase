@@ -66,14 +66,19 @@ function harness() {
     PLATES: {
       async get(key) {
         const body = objects.get(key);
-        return body ? { json: async () => JSON.parse(new TextDecoder().decode(body)) } : null;
+        return body ? { etag: createHash('sha256').update(body).digest('hex'), json: async () => JSON.parse(new TextDecoder().decode(body)) } : null;
       },
       async head(key) {
         return objects.has(key) ? { key } : null;
       },
-      async put(key, value) {
+      async put(key, value, options) {
+        const held = objects.get(key);
+        const etag = held && createHash('sha256').update(held).digest('hex');
+        if (options?.onlyIf?.etagMatches !== undefined && options.onlyIf.etagMatches !== etag) return null;
+        if (options?.onlyIf?.etagDoesNotMatch === '*' && held) return null;
         objects.set(key, typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value));
         puts.push(key);
+        return { etag: createHash('sha256').update(objects.get(key)).digest('hex') };
       },
     },
   };
