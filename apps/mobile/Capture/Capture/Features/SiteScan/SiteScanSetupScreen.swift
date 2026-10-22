@@ -33,16 +33,17 @@ final class SiteScanSetupModel {
     private let session: any SessionProviding
     private let sessionContext = CaptureSessionContextStore.shared
 
+    private let selection: SiteScanProjectSelection
+
     var allProjects: [FieldProject] = []
-    var selectedProjectID: String?
-    var rooms: [FieldVisitRoomOption] = []
-    var selectedScanRoomID: String? {
-        rooms.first { $0.id == selectedRoomID }?.scanRoomID
+    var selectedProjectID: String? { selection.selectedProjectID }
+    var rooms: [FieldVisitRoomOption] { selection.rooms }
+    var selectedScanRoomID: String? { selection.selectedScanRoomID }
+    var selectedFilingRoomID: String? { selection.selectedFilingRoomID }
+    var selectedRoomID: String? {
+        get { selection.selectedRoomID }
+        set { selection.selectedRoomID = newValue }
     }
-    var selectedFilingRoomID: String? {
-        rooms.first { $0.id == selectedRoomID }?.projectRoomID
-    }
-    var selectedRoomID: String?
     var name: String
     var loadError: String?
     /// The open visit, refreshed on every `load()`. F1's Flow-4 collapse reads
@@ -55,6 +56,7 @@ final class SiteScanSetupModel {
         self.projects = projects
         self.siteScan = siteScan
         self.session = session
+        self.selection = SiteScanProjectSelection(projects: projects)
         self.name = Self.defaultName()
     }
 
@@ -117,15 +119,7 @@ final class SiteScanSetupModel {
 
     /// Load the picked project's rooms; clear the room pick (it belonged to the old project).
     func selectProject(_ id: String?) async {
-        selectedProjectID = id
-        selectedRoomID = nil
-        rooms = []
-        guard let id else { return }
-        // Room pick is optional — on failure we just make a new room at upload.
-        guard let detail = try? await projects.projectDetail(id: id) else { return }
-        rooms = FieldVisitRoomMerge.merge(
-            specRooms: detail.specRooms.map { CaptureCachedRoom(id: $0.id, name: $0.name) },
-            rooms: detail.rooms.map { CaptureCachedRoom(id: $0.id, name: $0.name) })
+        await selection.selectProject(id)
     }
 
     nonisolated static func defaultName() -> String {
