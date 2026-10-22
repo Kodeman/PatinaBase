@@ -91,6 +91,7 @@ interface DbOptions {
   facts?: EditorialFacts;
   current?: CurrentEdition | null;
   beginError?: DbError;
+  finishError?: DbError;
   requests?: EditionRequest[];
 }
 
@@ -102,6 +103,7 @@ function fakeDb(options: DbOptions = {}) {
     get_project_editorial_facts: () => ({ data: structuredClone(options.facts ?? facts()), error: null }),
     begin_client_edition: () => (options.beginError ? { data: null, error: options.beginError } : { data: "edition-1", error: null }),
     client_plate_source_owned: () => ({ data: true, error: null }),
+    finish_client_edition: () => ({ data: null, error: options.finishError ?? null }),
   };
   const db: Db = {
     rpc(fn, args) {
@@ -341,6 +343,13 @@ Deno.test("a denied call stops composition: the edition finishes failed with the
   assertEquals(outcome.result, "failed");
   const args = finishArgs(called);
   assertEquals([args.p_status, args.p_error, args.p_cost_usd], ["failed", "claude budget", 0.02]);
+});
+
+Deno.test("a refused finish counts the request as failed, keeping the spend", async () => {
+  const { db } = fakeDb({ finishError: { message: "lease lost" } });
+  const { claude } = fakeClaude({ perceive: [perceiveAll], draft: [ok({ hero: { index: 0, why: "Sofa." } }), ok(WORDS)], judge: [judgeOk] });
+  const outcome = await composeRequest(REQUEST, deps(db, claude));
+  assertEquals([outcome.result, outcome.reason, outcome.usd], ["failed", "finish failed", 0.031]);
 });
 
 Deno.test("runBatch claims five, composes in turn, and sums the cost", async () => {
