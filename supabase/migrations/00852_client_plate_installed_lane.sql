@@ -102,6 +102,29 @@ WHERE capture.capture_kind = 'context'
   AND NOT public._client_edition_closed(project.id)
   AND public.client_plate_source_owned(project.id, 'field_captures', capture.id, source.path);
 
+-- A newly settled installed photograph needs an edition; re-crops do not.
+CREATE OR REPLACE FUNCTION public.client_edition_enqueue_installed_plate()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+BEGIN
+  PERFORM 1 FROM public.projects WHERE id = NEW.project_id FOR SHARE;
+  IF NOT public._client_edition_closed(NEW.project_id) THEN
+    PERFORM public._enqueue_client_edition_request(NEW.project_id, 'installed');
+  END IF;
+  RETURN NULL;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.client_edition_enqueue_installed_plate() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_client_edition_installed_plate ON public.client_plate_assets;
+CREATE TRIGGER trg_client_edition_installed_plate
+AFTER INSERT ON public.client_plate_assets
+FOR EACH ROW WHEN (NEW.source_kind = 'installed')
+EXECUTE FUNCTION public.client_edition_enqueue_installed_plate();
+
 CREATE OR REPLACE FUNCTION public._build_project_editorial(p_project_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql

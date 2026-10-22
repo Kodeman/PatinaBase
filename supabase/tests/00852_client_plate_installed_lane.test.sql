@@ -1,7 +1,7 @@
 -- D1: only explicitly filed context photos cross the private Field boundary.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(25);
+SELECT plan(31);
 
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,instance_id,aud,role)
 VALUES
@@ -76,8 +76,28 @@ SELECT is((SELECT count(*) FROM installed_requests),3::bigint,'enqueue: a stored
 
 INSERT INTO public.client_plate_assets(id,project_id,sha256,source_kind,source_ref,original_key,width,height)
 VALUES
- ('85200000-0000-4000-8000-000000000201','85200000-0000-4000-8000-000000000001',repeat('a',64),'installed','{"table":"field_captures","id":"85200000-0000-4000-8000-000000000101"}','plates/test/a.jpg',2400,1600),
- ('85200000-0000-4000-8000-000000000202','85200000-0000-4000-8000-000000000001',repeat('b',64),'scan','{}','plates/test/b.jpg',2400,1600);
+ ('85200000-0000-4000-8000-000000000201','85200000-0000-4000-8000-000000000001',repeat('a',64),'installed','{"table":"field_captures","id":"85200000-0000-4000-8000-000000000101"}','plates/test/a.jpg',2400,1600);
+SELECT is((SELECT count(*) FROM public.client_edition_requests
+ WHERE project_id='85200000-0000-4000-8000-000000000001' AND reason='installed' AND status='queued'),
+ 1::bigint,'edition: the first installed settlement enqueues');
+SELECT ok((SELECT debounce_key=project_id::text||':installed' AND available_at=now()+interval '30 minutes'
+ FROM public.client_edition_requests WHERE project_id='85200000-0000-4000-8000-000000000001' AND reason='installed' AND status='queued'),
+ 'edition: installed uses the existing debounce key and thirty-minute delay');
+INSERT INTO public.client_plate_assets(id,project_id,sha256,source_kind,source_ref,original_key,width,height)
+VALUES ('85200000-0000-4000-8000-000000000203','85200000-0000-4000-8000-000000000001',repeat('c',64),'installed','{}','plates/test/c.jpg',2400,1600);
+SELECT is((SELECT count(*) FROM public.client_edition_requests
+ WHERE project_id='85200000-0000-4000-8000-000000000001' AND reason='installed' AND status='queued'),
+ 1::bigint,'edition: a second installed settlement debounces without duplicating');
+DELETE FROM public.client_edition_requests WHERE project_id='85200000-0000-4000-8000-000000000001' AND reason='installed';
+UPDATE public.client_plate_assets SET width=2401 WHERE id='85200000-0000-4000-8000-000000000201';
+SELECT ok(NOT EXISTS(SELECT 1 FROM public.client_edition_requests
+ WHERE project_id='85200000-0000-4000-8000-000000000001' AND reason='installed'),
+ 'edition: re-crop updates do not enqueue');
+INSERT INTO public.client_plate_assets(id,project_id,sha256,source_kind,source_ref,original_key,width,height)
+VALUES ('85200000-0000-4000-8000-000000000202','85200000-0000-4000-8000-000000000001',repeat('b',64),'scan','{}','plates/test/b.jpg',2400,1600);
+SELECT ok(NOT EXISTS(SELECT 1 FROM public.client_edition_requests
+ WHERE project_id='85200000-0000-4000-8000-000000000001' AND reason='installed'),
+ 'edition: non-installed settlements do not enqueue');
 UPDATE public.client_plate_requests SET status='done',asset_id='85200000-0000-4000-8000-000000000201'
 WHERE source_ref='{"table":"field_captures","id":"85200000-0000-4000-8000-000000000101"}' AND project_id='85200000-0000-4000-8000-000000000001';
 INSERT INTO public.room_scans(id,user_id,project_id,project_room_id,name,status)
@@ -113,6 +133,11 @@ SELECT ok(NOT EXISTS(SELECT 1 FROM envelope,jsonb_array_elements(body->'assets')
 UPDATE public.organization_members SET status='active'
 WHERE user_id='85200000-0000-4000-8000-0000000000a1' AND organization_id='85200000-0000-4000-8000-0000000000f1';
 UPDATE public.projects SET status='completed' WHERE id='85200000-0000-4000-8000-000000000001';
+INSERT INTO public.client_plate_assets(id,project_id,sha256,source_kind,source_ref,original_key,width,height)
+VALUES ('85200000-0000-4000-8000-000000000204','85200000-0000-4000-8000-000000000001',repeat('d',64),'installed','{}','plates/test/d.jpg',2400,1600);
+SELECT ok(NOT EXISTS(SELECT 1 FROM public.client_edition_requests
+ WHERE project_id='85200000-0000-4000-8000-000000000001' AND reason='installed'),
+ 'edition: closed jobs do not enqueue installed settlements');
 UPDATE public.field_captures SET primary_photo_path='85200000-0000-4000-8000-0000000000a1/85200000-0000-4000-8000-000000000105/new.jpg'
 WHERE id='85200000-0000-4000-8000-000000000105';
 SELECT ok(NOT EXISTS(SELECT 1 FROM installed_requests WHERE source_url LIKE '%new.jpg'),'freeze: a closed job gets no new installed copy');
