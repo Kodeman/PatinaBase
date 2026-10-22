@@ -7,6 +7,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { resolveCaller } from "../_shared/caller.ts";
 import { ingestPlate } from "./ingest.ts";
 import {
+  bounded,
   copyRun,
   type CopySteps,
   finishRun,
@@ -43,7 +44,7 @@ function adminClient(supabaseUrl: string, hardEnd: AbortSignal): Admin {
   });
 }
 
-function sourceAuthority(admin: Admin): SourceAuthority {
+function sourceAuthority(admin: Admin, supabaseUrl: string): SourceAuthority {
   return {
     async owned(request, signal) {
       let call = admin.rpc("client_plate_source_owned", {
@@ -57,8 +58,11 @@ function sourceAuthority(admin: Admin): SourceAuthority {
       if (error) throw new Error(`ownership check failed: ${error.message}`);
       return data === true;
     },
-    async sign(bucket, path) {
-      const { data, error } = await admin.storage.from(bucket).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+    async sign(bucket, path, signal) {
+      // Storage exposes no per-call signal, so bind this signer client's fetch
+      // to the address step, not just the run's later hard end.
+      const signer = signal ? adminClient(supabaseUrl, signal) : admin;
+      const { data, error } = await signer.storage.from(bucket).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
       if (error) throw new Error(`signing ${bucket} failed: ${error.message}`);
       return data.signedUrl;
     },
@@ -77,14 +81,14 @@ function finishStep(admin: Admin, runId: number): CopySteps["finish"] {
   };
 }
 
-function copySteps(admin: Admin, runId: number, worker: WorkerEnv): CopySteps {
+function copySteps(admin: Admin, runId: number, worker: WorkerEnv, supabaseUrl: string): CopySteps {
   return {
     async claim(signal) {
       const { data, error } = await admin.rpc("claim_client_plate_requests", { p_limit: 1 }).abortSignal(signal);
       if (error) throw new Error(error.message);
       return ((data ?? []) as PlateRequest[])[0] ?? null;
     },
-    authority: sourceAuthority(admin),
+    authority: sourceAuthority(admin, supabaseUrl),
     ingest: (request, sourceUrl, signal) => ingestPlate(admin, worker, request, sourceUrl, signal),
     async record(request, asset, signal) {
       const { error } = await admin.rpc("record_client_plate_asset", {
@@ -131,7 +135,7 @@ async function copyBatch(admin: Admin, run: RunDeadline, runId: number, supabase
     });
     return json({ error: "not_configured", job_run_id: runId }, 500);
   }
-  const { summary, claimError } = await copyRun(copySteps(admin, runId, worker), run, supabaseUrl, CLAIM_LIMIT);
+  const { summary, claimError } = await copyRun(copySteps(admin, runId, worker, supabaseUrl), run, supabaseUrl, CLAIM_LIMIT);
   if (claimError !== null) return json({ error: "claim_failed", job_run_id: runId }, 500);
   return json({ job_run_id: runId, ...summary.detail });
 }
@@ -142,10 +146,18 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const admin = adminClient(supabaseUrl, run.by(RUN_HARD_END_MS));
+    const hardEnd = run.by(RUN_HARD_END_MS);
+    const admin = adminClient(supabaseUrl, hardEnd);
     const caller = await resolveCaller(req, admin);
     if (!caller.service) return json({ error: "forbidden" }, 403);
-    const runId = await openRun(admin, await req.json().catch(() => null));
+    let body: unknown;
+    try {
+      body = await bounded(hardEnd, (signal) =>
+        new Response(req.body?.pipeThrough(new TransformStream(), { signal })).json().catch(() => null));
+    } catch {
+      return json({ error: "request_body_timeout" }, 408);
+    }
+    const runId = await openRun(admin, body);
     if (runId === null) return json({ error: "run_not_started" }, 500);
     return await copyBatch(admin, run, runId, supabaseUrl);
   } finally {

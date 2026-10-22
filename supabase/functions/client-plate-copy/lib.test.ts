@@ -456,8 +456,9 @@ Deno.test("copyRun: a claim answered at 61 s is cut off at 45 s; the run ends be
   await clock.runUntil(70_000);
   assertEquals(log.aborts.claim, 45_000);
   assertEquals(ended.at, 45_000);
-  // The row the late claim leased never reached the run: no ingest, even after it
-  // lands at 61 s. Its lease runs out and dispatch_client_plate_copy re-queues it.
+  // SQ-1655 R1 ruling: a claim first seen after the hard end cannot be
+  // settled. No late ingest/fail; the 10-minute lease expiry recovers it.
+  // This attempt counts: the third expiry leaves it failed, not re-queued.
   assertEquals(log.ingests, []);
   assertEquals(log.fails, []);
   assertEquals(ended.summary, { status: "failed", detail: counts(0, 0, 0), error: RUN_BUDGET_EXCEEDED });
