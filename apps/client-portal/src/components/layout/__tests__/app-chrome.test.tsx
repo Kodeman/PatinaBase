@@ -37,6 +37,7 @@ describe('AppChrome', () => {
     // The one-click unsubscribe outcome page: the recipient clicking it out of
     // an email more often than not has no session at all.
     '/preferences/unsubscribe',
+    '/privacy',
     '/wrong-portal',
     '/unauthorized',
   ])('marks the login-less guest path %s public', (pathname) => {

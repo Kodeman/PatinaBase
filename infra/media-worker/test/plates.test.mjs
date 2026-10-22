@@ -5,11 +5,13 @@ import test from 'node:test';
 import {
   LQIP_MAX_CHARS,
   MAX_DISCARD,
+  PLATE_BUDGET_MS,
   borderLuminance,
   classifyGround,
   disconnectSignal,
   encodeInOrder,
   fitLqip,
+  jobBudgetMs,
   outputJobs,
   planCrops,
   runnerFor,
@@ -171,17 +173,17 @@ test('skip leaves out the crops these bytes already have, so a new kind plans on
   assert.deepEqual(planCrops({ width: 2400, height: 1800, ground: 'scene', sourceKind: 'maker', skip: shared }), {});
 });
 
-test('encoding stops before the next crop once the request is aborted', async () => {
-  const controller = new AbortController();
-  const encoded = [];
+test('crops are encoded one at a time, in order', async () => {
+  let inFlight = 0;
+  let most = 0;
   const encode = async (job) => {
-    encoded.push(job);
-    if (job === 'b') controller.abort(new Error('client disconnected'));
+    most = Math.max(most, ++inFlight);
+    await new Promise((resolve) => setImmediate(resolve));
+    inFlight--;
     return job.toUpperCase();
   };
-  await assert.rejects(encodeInOrder(['a', 'b', 'c', 'd'], encode, controller.signal), /client disconnected/);
-  assert.deepEqual(encoded, ['a', 'b']);
-  assert.deepEqual(await encodeInOrder(['a', 'b'], async (j) => j.toUpperCase(), new AbortController().signal), ['A', 'B']);
+  assert.deepEqual(await encodeInOrder(['a', 'b', 'c'], encode), ['A', 'B', 'C']);
+  assert.equal(most, 1);
 });
 
 test('a client that hangs up after sending its body aborts the job signal; a finished response does not', async () => {
@@ -219,17 +221,25 @@ test('a client that hangs up after sending its body aborts the job signal; a fin
   }
 });
 
-test('outputs are AVIF q50 and WebP q72 per crop width', () => {
+test('outputs are AVIF q50 at effort 2 and WebP q72 per crop width', () => {
   const jobs = outputJobs({ piece: { rect: [0, 0, 600, 400], widths: [256, 512] } });
   assert.deepEqual(
-    jobs.map((j) => [j.key, j.format, j.quality, j.contentType, j.width]),
+    jobs.map((j) => [j.key, j.format, j.quality, j.effort, j.contentType, j.width]),
     [
-      ['piece-256.avif', 'avif', 50, 'image/avif', 256],
-      ['piece-256.webp', 'webp', 72, 'image/webp', 256],
-      ['piece-512.avif', 'avif', 50, 'image/avif', 512],
-      ['piece-512.webp', 'webp', 72, 'image/webp', 512],
+      ['piece-256.avif', 'avif', 50, 2, 'image/avif', 256],
+      ['piece-256.webp', 'webp', 72, undefined, 'image/webp', 256],
+      ['piece-512.avif', 'avif', 50, 2, 'image/avif', 512],
+      ['piece-512.webp', 'webp', 72, undefined, 'image/webp', 512],
     ],
   );
+});
+
+test('the job budget defaults to and is capped at the Worker deadline', () => {
+  for (const budget of [undefined, 'soon', -1, 0, Number.NaN, PLATE_BUDGET_MS * 4]) {
+    assert.equal(jobBudgetMs(budget), PLATE_BUDGET_MS, String(budget));
+  }
+  assert.equal(jobBudgetMs(24_000), 24_000);
+  assert.equal(jobBudgetMs(300), 300);
 });
 
 function rawFrame(width, height, border, inner) {

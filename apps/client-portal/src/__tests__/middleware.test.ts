@@ -13,7 +13,7 @@ jest.mock('@/lib/env', () => ({ env: { isProduction: false } }));
 jest.mock('next/server', () => ({
   NextResponse: {
     next: jest.fn(() => ({
-      headers: new Map(),
+      headers: new Map([['x-middleware-next', '1']]),
       cookies: { getAll: () => [] },
     })),
     redirect: jest.fn(),
@@ -24,7 +24,7 @@ describe('client middleware Universal Link exemption', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (NextResponse.next as jest.Mock).mockReturnValue({
-      headers: new Map(),
+      headers: new Map([['x-middleware-next', '1']]),
       cookies: { getAll: () => [] },
     });
     (NextResponse.redirect as jest.Mock).mockImplementation(
@@ -52,6 +52,54 @@ describe('client middleware Universal Link exemption', () => {
     } as never);
     expect(response).toBeDefined();
     expect(createMiddlewareClient).not.toHaveBeenCalled();
+  });
+
+  it('lets a signed-out visitor read the exact /privacy page', async () => {
+    const response = await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: '/privacy',
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never);
+
+    expect(response).toBe((NextResponse.next as jest.Mock).mock.results[0].value);
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it('still requires sign-in for /privacyx, not a privacy-prefix exemption', async () => {
+    await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: '/privacyx',
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never);
+
+    const url = (NextResponse.redirect as jest.Mock).mock.calls[0][0] as URL;
+    expect(url.pathname).toBe('/auth/signin');
+    expect(url.searchParams.get('callbackUrl')).toBe('/privacyx');
+  });
+
+  it('keeps /plates/x on the data-route path for route-owned authentication', async () => {
+    const response = await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: '/plates/x',
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never);
+
+    expect(response).toBeDefined();
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(createMiddlewareClient).toHaveBeenCalled();
   });
 
   it('stamps no-store + noindex headers on the /plans bearer surface', async () => {

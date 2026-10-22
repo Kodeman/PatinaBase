@@ -11,6 +11,7 @@
  */
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 
 const LONG_MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -162,7 +163,10 @@ export function LetterShell({
         data-testid="letter-colophon"
         className="mt-4 space-y-1 text-[12px] leading-relaxed text-[#8C8578]"
       >
-        <p>{name ? `Prepared by ${name} · Sent through Patina` : 'Sent through Patina'}</p>
+        <p>
+          {name ? `Prepared by ${name} · Sent through Patina · ` : 'Sent through Patina · '}
+          <Link className="inline-flex min-h-[44px] items-center text-[var(--ink-faint)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--focus-ring)]" href="/privacy">Privacy</Link>
+        </p>
       </footer>
     </main>
   );
