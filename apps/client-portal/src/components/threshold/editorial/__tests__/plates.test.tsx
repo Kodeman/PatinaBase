@@ -202,6 +202,24 @@ describe('editorial plates', () => {
     ]);
   });
 
+  it('captions what · whose when the when is withheld, with no dangling separator and no silhouette', () => {
+    const { container } = render(
+      <HeldPlate
+        scopeId={SCOPE}
+        asset={asset({ caption: { what: 'walnut sideboard', whose: 'Birchwood Studio', when: null } })}
+        fallback={fallback}
+      />,
+    );
+    expect(container.querySelector('img')).not.toBeNull();
+    expect(screen.queryByTestId('piece-silhouette')).toBeNull();
+    const caption = container.querySelector('figcaption');
+    expect(caption).toHaveTextContent(/^walnut sideboard · Birchwood Studio$/);
+    expect(Array.from(caption!.querySelectorAll('[data-caption-field]')).map((s) => s.getAttribute('data-caption-field'))).toEqual([
+      'what',
+      'whose',
+    ]);
+  });
+
   it('draws the silhouette when the asset holds no rendition of the crop', () => {
     const { container } = render(<RoomPlate scopeId={SCOPE} asset={asset({ crops: {} })} fallback={fallback} />);
     expect(container.querySelector('img')).toBeNull();

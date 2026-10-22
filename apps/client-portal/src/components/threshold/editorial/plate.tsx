@@ -17,15 +17,19 @@ export interface PlateCaptionProps {
   note?: string | null;
 }
 
-/** Exactly three segments; a qualifier is its own `plate-note` line, never a fourth. */
+/** Three segments, two when `when` is withheld; a qualifier is its own `plate-note` line, never a fourth. */
 export function PlateCaption({ caption, note }: PlateCaptionProps) {
   return (
     <figcaption className="ed-caption">
       <span data-caption-field="what">{caption.what}</span>
       {CAPTION_SEPARATOR}
       <span data-caption-field="whose">{caption.whose}</span>
-      {CAPTION_SEPARATOR}
-      <span data-caption-field="when">{caption.when}</span>
+      {caption.when ? (
+        <>
+          {CAPTION_SEPARATOR}
+          <span data-caption-field="when">{caption.when}</span>
+        </>
+      ) : null}
       {note ? <span className="plate-note">{note}</span> : null}
     </figcaption>
   );
