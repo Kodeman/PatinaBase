@@ -134,12 +134,15 @@ Because the Worker publication path lacks an authoritative deploy-relative bound
   - **The danger after 00848 is the legacy writer once it is live again, not the version being retired.** The new version never writes legacy keys, so there is no barrier to run *before* rolling back. Do not wait for observability silence on the serving version: `/health`, `/enqueue`, composer plate reads and media-jobs traffic keep it busy indefinitely.
   - **Drain the ingest caller before rolling back, while the new writer still serves.** Pausing cron does not stop a client-plate-copy run already in flight. Such a run may still be awaiting source resolution or geometry before it POSTs (`supabase/functions/client-plate-copy/lib.ts:397–403`, `ingest.ts:13–24`). If the legacy writer is serving by then, it overwrites frozen bytes.
     1. Pause cron 69 (`select cron.alter_job(job_id := 69, active := false);`) and forbid manual `begin_client_plate_copy_run`. Record the pause time `TP`.
-    2. **Pre-pause cron executions have ended (observed).** A cron tick that fired before the pause runs `dispatch_client_plate_copy` in SQL. It can block on a row lock before it writes its `job_runs` row or enqueues its edge call (`00843_client_plate_assets.sql:674–710`). Repeat until this returns `0`. Then record `TD`, the latest `end_time` it reports, or `TP` if that is later:
+    2. **Pre-pause cron executions have ended (observed).** A cron tick that fired before the pause runs `dispatch_client_plate_copy` in SQL. It can block on a row lock before it writes its `job_runs` row or enqueues its edge call (`00843_client_plate_assets.sql:674–710`).
+       - First confirm `show cron.log_run;` reads `on`. If it is off, `cron.job_run_details` gets no rows, and an empty result proves nothing; hold the rollback.
+       - pg_cron leaves `start_time` NULL while a run is `starting`, `connecting` or `sending`, and sets it at `running`. Filter on `runid`, never on `start_time`.
+       - Repeat until `live_cron_runs` is `0`. Then record `TD`, the later of `last_end` and `TP`:
        ```sql
-       select count(*) filter (where status in ('starting','running')) as live_cron_runs,
+       select count(*) filter (where status in ('starting','connecting','sending','running')) as live_cron_runs,
               max(end_time) as last_end
-       from cron.job_run_details
-       where jobid = 69 and start_time > now() - interval '1 day';
+       from (select status, end_time from cron.job_run_details
+             where jobid = 69 order by runid desc limit 50) recent;
        ```
     3. **The dispatched edge calls have left the queue.** `invoke_edge_function` enqueues the call through pg_net, and pg_net sends it later. Go on only when this returns `0`:
        ```sql
@@ -151,7 +154,7 @@ Because the Worker publication path lacks an authoritative deploy-relative bound
        select count(*) as live_leases from public.client_plate_requests
        where status = 'leased' and lease_expires_at > now();
        ```
-    5. Do not roll back before `max(TD, time step 3 first read 0) + 400 s`. 400 s is the Supabase paid-plan maximum edge worker duration cited in step 2b(a). It is measured from the last observed dispatch, not from the pause. If any of steps 2–4 cannot be read, hold the rollback and roll forward instead.
+    5. Do not roll back before `max(TD, time step 3 first read 0) + 400 s`. 400 s is the Supabase paid-plan maximum edge worker duration cited in step 2b(a). It is measured from the last observed dispatch, not from the pause. pg_net deletes a queued call in the same transaction that waits for the HTTP transfer to finish or time out (`timeout_milliseconds` = 60000 here). So once a call has left `net.http_request_queue`, its edge worker has already started. That worker started before step 3 first read 0, so the 400 s bound measured from that time covers it. This last step is an inference from pg_net's source (main branch, SQ-1740); the deployed version is not pinned. If any of steps 2–4 cannot be read, hold the rollback and roll forward instead.
   - Then roll back. Keep cron 69 paused and manual runs forbidden for as long as the legacy writer serves. `/health`, `/enqueue`, composer reads and media-jobs traffic are separate from plate ingest (`infra/media-worker/src/index.ts:159–184`) and may continue.
   - Never resume cron 69 on the legacy writer while 00848 is live. Roll forward to the new writer, record a fresh `T2` and the retiring **legacy** version UUID as `OLD_VERSION_ID`, and pass step 2b against that retired version. Resume cron 69 only after that.
   - Any legacy-prefix write found after freeze is a W2 incident, as in step 5. Rollback plus a short wait is never safe on its own.
