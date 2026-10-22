@@ -383,6 +383,36 @@ describe("the issue", () => {
     expect(withRoomOpening(null, null, "living", band)).toBe(band);
   });
 
+  it.each([true, false])("threads live showMakers=%s to shared-byte piece captions even with frozen null makers", (showMakers) => {
+    const data = editorial([WHITE]);
+    data.project.showMakers = showMakers;
+    const first = data.rooms[0].items[0];
+    data.rooms = [{ ...data.rooms[0], items: [
+      { ...first, nameAsSigned: "Harmon walnut sideboard", makerName: null },
+      { ...first, id: "second", nameAsSigned: "Harmon oak sideboard", makerName: null },
+    ] }];
+    const issue = houseIssue(data);
+    const chapters = editionChapters(issue, ["room-living"])!;
+    const { container } = render(<RoomOpening issue={issue} chapters={chapters} roomId="living" />);
+    const pieces = container.querySelector('ul[aria-label^="Pieces"]')!;
+    expect(Array.from(pieces.querySelectorAll('[data-caption-field="what"]')).map((node) => node.textContent)).toEqual(
+      showMakers
+        ? ["Harmon walnut sideboard, the same model", "Harmon oak sideboard, the same model"]
+        : ["Walnut sideboard, the same model", "Walnut sideboard, the same model"],
+    );
+  });
+
+  it("uses This piece instead of a maker-bearing category when makers are off", () => {
+    const data = editorial([{ ...WHITE, caption: { ...WHITE.caption, what: null } }]);
+    data.rooms = [{ ...data.rooms[0], items: [{ ...data.rooms[0].items[0], category: "Harmon seating", makerName: null }] }];
+    const issue = houseIssue(data);
+    const chapters = editionChapters(issue, ["room-living"])!;
+    const { container } = render(<RoomOpening issue={issue} chapters={chapters} roomId="living" />);
+    const caption = container.querySelector('ul[aria-label^="Pieces"] figcaption')!;
+    expect(caption.querySelector('[data-caption-field="what"]')?.textContent).toBe('This piece, the same model');
+    expect(caption).not.toHaveTextContent('Harmon seating');
+  });
+
   it("opens a room with at most three revealed children: head, plate, pieces; silhouettes for pieces with no photograph", () => {
     const issue = houseIssue(editorial([SCENE, WHITE]));
     const chapters = editionChapters(issue, ["room-living"])!;

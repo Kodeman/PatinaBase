@@ -87,6 +87,31 @@ describe('caption', () => {
     expect(catalogueCaption('Floor lamp', null, 'photographed 2024')!.whose).toBe("from the maker's catalogue");
   });
 
+  it.each(['–', '/', '   '])('uses This piece for a catalogue name without letters or digits: %s', (what) => {
+    expect(catalogueCaption(what, null, null)?.what).toBe('This piece, the same model');
+  });
+
+  it.each(['Étagère', '椅子', '123'])('keeps catalogue names containing Unicode letters or digits: %s', (what) => {
+    expect(catalogueCaption(what, null, null)?.what).toBe(`${what}, the same model`);
+  });
+
+  it.each([null, '–'])('uses This piece for makers-OFF category fallback: %s', (what) => {
+    expect(catalogueCaption(what, null, null, 'Harmon seating', false)?.what).toBe('This piece, the same model');
+  });
+
+  it('presents a slug category readably and preserves it with makers ON', () => {
+    expect(catalogueCaption(null, null, null, 'living_room-seating')?.what).toBe('Living room seating, the same model');
+    expect(catalogueCaption(null, null, null, 'Harmon seating', true)?.what).toBe('Harmon seating, the same model');
+  });
+
+  it.each(['– Walnut /', ' / — Walnut – / ', '— Walnut —'])('trims catalogue edge separators but keeps the name: %s', (what) => {
+    expect(catalogueCaption(what, null, null)?.what).toBe('Walnut, the same model');
+  });
+
+  it('preserves separators inside the catalogue name', () => {
+    expect(catalogueCaption('Oak / walnut — bench', null, null)?.what).toBe('Oak / walnut — bench, the same model');
+  });
+
   it('splits the silhouette caption into the three fields', () => {
     expect(silhouetteCaption('Floor lamp')).toEqual({
       what: 'Floor lamp',

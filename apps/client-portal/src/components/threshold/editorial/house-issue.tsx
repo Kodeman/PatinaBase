@@ -903,6 +903,7 @@ function Pieces({
         <li key={item.id}>
           <PiecePlate
             scopeId={issue.scopeId}
+            showMakers={issue.editorial.project.showMakers}
             item={item}
             asset={assets.get(item.id) ?? null}
             statusWords={statusWords(item.status)}

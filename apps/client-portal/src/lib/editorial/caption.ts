@@ -61,11 +61,23 @@ export function plateAlt(asset: Pick<EditorialAsset, 'alt' | 'caption' | 'source
   return parts.filter((p): p is string => Boolean(p)).join(CAPTION_SEPARATOR);
 }
 
+function catalogueKind(category: string | null, showMakers: boolean): string {
+  const kind = category?.trim() ?? '';
+  if (!showMakers || /^(?:uncategorized)?$/i.test(kind)) return 'This piece';
+  const words = kind.replace(/[_-]+/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 /** A retailer or catalogue photograph of the specified model, never of her piece. */
-export function catalogueCaption(itemName: string, makerName: string | null | undefined, when: string | null): CaptionTriplet | null {
+export function catalogueCaption(
+  itemName: string | null, makerName: string | null | undefined, when: string | null,
+  category: string | null = null, showMakers = true,
+): CaptionTriplet | null {
   const maker = field(makerName);
+  const name = (itemName ?? '').replace(/^[\s–—/]+|[\s–—/]+$/g, '');
+  const what = /[\p{L}\p{N}]/u.test(name) ? name : catalogueKind(category, showMakers);
   return captionTriplet({
-    what: `${itemName}, the same model`,
+    what: `${what}, the same model`,
     whose: maker ? `from ${maker}${/s$/i.test(maker) ? "'" : "'s"} catalogue` : "from the maker's catalogue",
     when,
   });

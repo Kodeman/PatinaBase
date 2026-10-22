@@ -74,7 +74,7 @@ function everyPlate() {
       <RoomPlate scopeId={SCOPE} asset={asset({ sourceKind: 'concept' })} fallback={fallback} />
       <HeldPlate scopeId={SCOPE} asset={asset()} fallback={fallback} />
       <PairPlate scopeId={SCOPE} asset={asset({ sourceKind: 'maker' })} swatches={[{ hex: '#E3DACB', brand: 'Halvorsen', name: 'Morning Oat' }]} fallback={fallback} />
-      <PiecePlate scopeId={SCOPE} item={item} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="In production" />
+      <PiecePlate showMakers scopeId={SCOPE} item={item} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="In production" />
       <SheetPlate scopeId={SCOPE} asset={asset({ sourceKind: 'sheet', ground: 'drawing' })} alt="Sheet A-101, first-floor plan" fallback={fallback} />
       <BoardPlate scopeId={SCOPE} asset={asset({ sourceKind: 'board' })} alt="Living room board" fallback={fallback} />
       <SilhouettePlate name="Floor lamp" silhouetteKind="light" />
@@ -176,9 +176,9 @@ describe('editorial plates', () => {
 
   it('captions a catalogue photograph as the same model, not her piece', () => {
     const { container } = render(
-      <PiecePlate scopeId={SCOPE} item={item} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="In production" />,
+      <PiecePlate showMakers scopeId={SCOPE} item={item} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="In production" />,
     );
-    expect(container.querySelector('[data-caption-field="what"]')).toHaveTextContent('Walnut top, planed, the same model');
+    expect(container.querySelector('[data-caption-field="what"]')).toHaveTextContent('Walnut sideboard, the same model');
     expect(container.querySelector('[data-caption-field="whose"]')).toHaveTextContent("from Harmon Bench Works' catalogue");
     expect(container.querySelector('.plate-note')).toHaveTextContent('Not her piece; hers is in production.');
     expect(container.querySelector('figure')).toHaveAttribute('data-ground', 'white');
@@ -187,13 +187,13 @@ describe('editorial plates', () => {
 
   it('drops the catalogue note once the piece is installed', () => {
     const { container } = render(
-      <PiecePlate scopeId={SCOPE} item={{ ...item, status: 'installed' }} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="Installed" />,
+      <PiecePlate showMakers scopeId={SCOPE} item={{ ...item, status: 'installed' }} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="Installed" />,
     );
     expect(container.querySelector('.plate-note')).toBeNull();
   });
 
   it('draws a piece with no photograph, captioned from the specification', () => {
-    const { container } = render(<PiecePlate scopeId={SCOPE} item={{ ...item, nameAsSigned: 'Floor lamp', silhouetteKind: null, category: 'lighting' }} asset={null} statusWords="Ordered" />);
+    const { container } = render(<PiecePlate showMakers scopeId={SCOPE} item={{ ...item, nameAsSigned: 'Floor lamp', silhouetteKind: null, category: 'lighting' }} asset={null} statusWords="Ordered" />);
     expect(screen.getByTestId('piece-silhouette')).toHaveAttribute('data-silhouette', 'light');
     expect(Array.from(container.querySelectorAll('[data-caption-field]')).map((s) => s.textContent)).toEqual([
       'Floor lamp',

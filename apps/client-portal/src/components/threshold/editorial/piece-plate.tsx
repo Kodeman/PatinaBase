@@ -12,6 +12,7 @@ const INSTALLED = /install/i;
 
 export interface PiecePlateProps {
   scopeId: string;
+  showMakers: boolean;
   item: Pick<EditorialItem, 'nameAsSigned' | 'status' | 'makerName' | 'category' | 'silhouetteKind'>;
   /** Null: no photograph yet, so the piece is drawn. */
   asset: EditorialAsset | null;
@@ -23,9 +24,12 @@ export interface PiecePlateProps {
 type PieceItem = PiecePlateProps['item'];
 
 /** A catalogue photograph says it shows the same model; an installed piece needs no note. */
-function pieceCaption(item: PieceItem, asset: EditorialAsset) {
+function pieceCaption(item: PieceItem, asset: EditorialAsset, showMakers: boolean) {
   if (tierOf(asset) !== TIER.catalogue) return { caption: captionTriplet(asset.caption), note: null };
-  const caption = catalogueCaption(asset.caption.what ?? item.nameAsSigned, item.makerName, asset.caption.when);
+  const caption = catalogueCaption(
+    showMakers ? item.nameAsSigned : asset.caption.what,
+    item.makerName, asset.caption.when, item.category, showMakers,
+  );
   return { caption, note: INSTALLED.test(item.status ?? '') ? null : NOTE_NOT_HER_PIECE };
 }
 
@@ -34,7 +38,7 @@ function pieceCaption(item: PieceItem, asset: EditorialAsset) {
  * contained with a tenth inset on stock; a catalogue photograph says it shows
  * the same model, not her piece.
  */
-export function PiecePlate({ scopeId, item, asset, statusWords, paletteHex }: PiecePlateProps) {
+export function PiecePlate({ scopeId, showMakers, item, asset, statusWords, paletteHex }: PiecePlateProps) {
   const fallback = { name: item.nameAsSigned, silhouetteKind: item.silhouetteKind, category: item.category };
   const lines = (
     <>
@@ -51,7 +55,7 @@ export function PiecePlate({ scopeId, item, asset, statusWords, paletteHex }: Pi
     );
   }
 
-  const { caption, note } = pieceCaption(item, asset);
+  const { caption, note } = pieceCaption(item, asset, showMakers);
   const white = asset.ground === 'white';
 
   return (
