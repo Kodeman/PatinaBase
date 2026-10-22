@@ -46,7 +46,7 @@
   // plate source must come from: the URLs client-plate-copy signs or builds from
   // its SUPABASE_URL. Empty refuses every non-hotlink source with a 403. A deploy
   // replaces dashboard vars with these values, so set it here, not in the dashboard.
-  "vars": { "SUPABASE_STORAGE_ORIGIN": "" },
+  "vars": { "SUPABASE_STORAGE_ORIGIN": "https://bkvcixdmuyejfzcijpdg.supabase.co" },
 
   "observability": { "enabled": true },
   "env": {
@@ -79,7 +79,7 @@
         { "binding": "PROCESSED", "bucket_name": "patina-processed-staging" },
         { "binding": "PLATES", "bucket_name": "patina-plates-staging" }
       ],
-      "vars": { "SUPABASE_STORAGE_ORIGIN": "" }
+      "vars": { "SUPABASE_STORAGE_ORIGIN": "https://bkvcixdmuyejfzcijpdg.supabase.co" }
     }
   }
 }
