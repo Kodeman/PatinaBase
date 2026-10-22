@@ -469,3 +469,101 @@ test.describe('The House Issue, as the studio approved it', { tag: '@edition' },
     }
   });
 });
+
+/*
+ * Garden Flat's two editions (the fixture's last block): Edition 2 is the
+ * plates-only edition the page published on its own, over Edition 1, which
+ * the studio approved and which heroes the workshop picture. Undo restores
+ * Edition 1 whole: its hero, its words, its line in Previously, and every
+ * plate under its own scope. Garden keeps no standing note, so each notice is
+ * the whole letter.
+ */
+const GARDEN_EDITIONS = {
+  published: 'b0000000-0000-0000-0000-0000000e2b02',
+  prior: 'b0000000-0000-0000-0000-0000000e2b01',
+  workshopSha: 'e1a0000000000000000000000000000000000000000000000000000000007a12',
+  coverHeadline: 'Your oak tallboy',
+  standing: 'The tallboy is made in oak, by hand.',
+  headlines: ['One room, and the tallboy in it', 'Oak, and the morning light', 'Made this autumn, here by winter'],
+  publishedNotice: 'The page now opens on your finished tallboy. Everything else is where it was.',
+  priorNotice: 'The page opens on your tallboy, on the workshop bench.',
+} as const;
+
+test.describe('The House Issue, a published edition undone', { tag: '@edition' }, () => {
+  test.beforeEach(async ({ page }) => servePlates(page));
+
+  test('undo of a plates-only edition restores the prior edition whole', async ({ page }) => {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    expect(serviceKey, 'Export the LOCAL service key to put the editions back').toBeTruthy();
+    const admin = createClient(LOCAL_SUPABASE.url, serviceKey!, { auth: { persistSession: false } });
+    const { data: rows, error: rowsError } = await admin
+      .from('client_editions')
+      .select('id, status, kind, auto_published, approved_at, superseded_at, superseded_by')
+      .in('id', [GARDEN_EDITIONS.published, GARDEN_EDITIONS.prior]);
+    expect(rowsError).toBeNull();
+    const published = rows?.find((row) => row.id === GARDEN_EDITIONS.published);
+    const prior = rows?.find((row) => row.id === GARDEN_EDITIONS.prior);
+    expect(published, "Garden Flat's editions block has not been seeded").toBeTruthy();
+    expect(published).toMatchObject({ status: 'approved', kind: 'plates_only', auto_published: true });
+    expect(prior).toMatchObject({ status: 'superseded', superseded_by: GARDEN_EDITIONS.published });
+
+    const hero = page.getByTestId('house-issue-hero');
+    const headlines = () => page.locator('.ed-tab__title, .ed-chapter-head__title').allTextContents();
+    const dayOf = (iso: string) =>
+      page.evaluate((at) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' }).format(new Date(at)), iso);
+    let plates = platesRequests(page);
+    await signInAsJune(page, `/projects/${GARDEN.id}`);
+    await expect(page.getByTestId('doorplate-title')).toHaveText(GARDEN.name, { timeout: 60000 });
+    await settled(page);
+
+    // Edition 2: the finished portrait, its notice the whole letter, no note invented around it.
+    await expect(hero.locator('h2')).toHaveText(GARDEN_EDITIONS.coverHeadline);
+    expect(await heroLoaded(page)).toContain(`/plates/${GARDEN_EDITIONS.published}/${GARDEN.sha}/`);
+    await expect(page.getByTestId('cover-standing')).toHaveText(GARDEN_EDITIONS.standing);
+    await expect(page.locator('#note').getByTestId('edition-notice')).toHaveText(GARDEN_EDITIONS.publishedNotice);
+    await expect(page.locator('#note').getByTestId('note-body')).toHaveCount(0);
+    await expect(page.locator('#previously').getByTestId('edition-line')).toHaveText(
+      `Edition 2 · published ${await dayOf(published!.approved_at as string)}`,
+    );
+    const words = await headlines();
+    expect(words).toEqual(expect.arrayContaining([...GARDEN_EDITIONS.headlines]));
+
+    const studio = createClient(LOCAL_SUPABASE.url, LOCAL_SUPABASE.anon, { auth: { persistSession: false } });
+    const signedIn = await studio.auth.signInWithPassword(STUDIO);
+    expect(signedIn.error).toBeNull();
+    try {
+      const undone = await studio.rpc('undo_client_edition', { p_edition_id: GARDEN_EDITIONS.published });
+      expect(undone.error).toBeNull();
+
+      plates = platesRequests(page);
+      await page.reload();
+      await expect(page.getByTestId('doorplate-title')).toHaveText(GARDEN.name, { timeout: 60000 });
+      await settled(page);
+
+      // Edition 1 again: the workshop picture, the same words, its own notice and line.
+      await expect(hero.locator('h2')).toHaveText(GARDEN_EDITIONS.coverHeadline);
+      expect(await heroLoaded(page)).toContain(`/plates/${GARDEN_EDITIONS.prior}/${GARDEN_EDITIONS.workshopSha}/`);
+      await expect(page.getByTestId('cover-standing')).toHaveText(GARDEN_EDITIONS.standing);
+      await expect(page.locator('#note').getByTestId('edition-notice')).toHaveText(GARDEN_EDITIONS.priorNotice);
+      await expect(page.locator('#previously').getByTestId('edition-line')).toHaveText(
+        `Edition 1 · approved by the studio · ${await dayOf(prior!.approved_at as string)}`,
+      );
+      expect(await headlines()).toEqual(words);
+      expect(plates.length).toBeGreaterThan(0);
+      expect(plates.filter((url) => !url.includes(`/plates/${GARDEN_EDITIONS.prior}/`))).toEqual([]);
+    } finally {
+      // Put Edition 2 back over Edition 1 for the next run: fixture housekeeping, not a studio act.
+      await studio.auth.signOut();
+      const superseded = await admin
+        .from('client_editions')
+        .update({ status: 'superseded', superseded_at: prior!.superseded_at, superseded_by: GARDEN_EDITIONS.published })
+        .eq('id', GARDEN_EDITIONS.prior);
+      expect(superseded.error).toBeNull();
+      const restored = await admin
+        .from('client_editions')
+        .update({ status: 'approved', superseded_at: null, superseded_by: null })
+        .eq('id', GARDEN_EDITIONS.published);
+      expect(restored.error).toBeNull();
+    }
+  });
+});

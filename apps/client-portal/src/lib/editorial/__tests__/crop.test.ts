@@ -1,4 +1,4 @@
-import { PHONE_MEDIA, objectPositionFromRect, platePicture } from '../crop';
+import { PHONE_MEDIA, SHORT_PHONE_FRAME, objectPositionFromRect, platePicture, shortFramePosition } from '../crop';
 import type { EditorialAsset } from '../types';
 
 const SHA = 'a'.repeat(64);
@@ -66,5 +66,59 @@ describe('crop', () => {
 
   it('returns null when the asset holds no rendition of the crop', () => {
     expect(platePicture('proj-1', asset({}), 'wide32', '100vw')).toBeNull();
+  });
+});
+
+/*
+ * SQ-1593 R5: a long headline shortens the phone hero from 39:34 to 39:30. The
+ * near-edge case: 1560 × 1360, subject box [.05, 0, .9, .7] touching the top.
+ * The phone draws cover_phone (39:34, the whole source); at 390 wide it stands
+ * 340 tall in a 300 frame, so 40px (160 source rows) must go.
+ */
+describe('the shorter phone frame', () => {
+  const nearEdge: EditorialAsset = {
+    ...asset({
+      wide32: { rect: [0, 0, 1560, 1040], widths: [768, 1024] },
+      cover_phone: { rect: [0, 0, 1560, 1360], widths: [640, 828, 1080] },
+    }),
+    width: 1560,
+    height: 1360,
+    subjectBox: [0.05, 0, 0.9, 0.7],
+  };
+
+  /** The rendered window, in source rows, for an object-position y share at 390 wide. */
+  function windowRows(positionY: number): [number, number] {
+    const drawn = 390 / (1560 / 1360); // the rendition's laid-out height
+    const frame = 390 / SHORT_PHONE_FRAME;
+    const top = (drawn - frame) * positionY;
+    const scale = 1360 / drawn;
+    return [top * scale, (top + frame) * scale];
+  }
+
+  it('keeps the near-edge subject whole: top-aligned, where the desktop crop centre would clip 61px off it', () => {
+    // The old position: the desktop crop's centre, applied to the phone rendition.
+    expect(objectPositionFromRect(nearEdge.crops.wide32!.rect, 1560, 1360)).toBe('50% 38.2%');
+    const [oldTop] = windowRows(0.382);
+    expect(oldTop).toBeGreaterThan(61);
+
+    const position = shortFramePosition(nearEdge);
+    expect(position).toBe('50% 0%');
+    const [top, bottom] = windowRows(0);
+    const [, boxY, , boxH] = nearEdge.subjectBox!;
+    expect(top).toBeLessThanOrEqual(boxY * 1360);
+    expect(bottom).toBeGreaterThanOrEqual((boxY + boxH) * 1360);
+  });
+
+  it('stays inside the subject from either edge, nearest the focal point', () => {
+    expect(shortFramePosition({ ...nearEdge, subjectBox: [0.05, 0.3, 0.9, 0.7] })).toBe('50% 100%');
+    expect(shortFramePosition({ ...nearEdge, subjectBox: [0.1, 0.4, 0.8, 0.2], focal: [0.5, 0.5] })).toBe('50% 50%');
+    // No subject box: the picture sits centred, as nothing needs protecting.
+    expect(shortFramePosition({ ...nearEdge, subjectBox: null })).toBe('50% 50%');
+  });
+
+  it('refuses the shorter frame when the subject is taller than it: the hero keeps 39:34', () => {
+    expect(shortFramePosition({ ...nearEdge, subjectBox: [0.05, 0, 0.9, 0.95] })).toBeNull();
+    // A hero with no phone rendition to measure keeps the taller frame too.
+    expect(shortFramePosition({ ...nearEdge, crops: {} })).toBeNull();
   });
 });

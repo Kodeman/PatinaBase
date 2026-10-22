@@ -126,6 +126,50 @@ export function heroPicture(asset: EditorialAsset): HeroPicture {
   return { layout, main, phone, ...HERO_BOX[layout] };
 }
 
+/** The phone hero's shorter frame under a long headline (editorial.css `[data-hero-frame='short']`). */
+export const SHORT_PHONE_FRAME = 39 / 30;
+
+/**
+ * One axis of an object-fit: cover window. `visible` is the share of the
+ * rendition the frame shows, `subject` the protected span in rendition
+ * shares, `centre` where the picture would sit. The object-position share
+ * that keeps the whole subject in view nearest that centre; null when the
+ * subject is longer than the window.
+ */
+function coverAxis(visible: number, subject: readonly [number, number], centre: number): number | null {
+  const slack = 1 - visible;
+  if (slack <= 1e-9) return 0.5;
+  const [from, to] = [Math.max(0, subject[0]), Math.min(1, subject[1])];
+  if (to - from > visible + 1e-9) return null;
+  const start = Math.min(Math.max(centre - visible / 2, to - visible, 0), from, slack);
+  return Math.max(0, start) / slack;
+}
+
+/**
+ * The object-position for the phone hero in its shorter frame, computed on the
+ * rendition the phone actually draws so the subject box stays whole. Null when
+ * the subject cannot fit the shorter frame: the hero keeps its taller 39:34.
+ */
+export function shortFramePosition(asset: EditorialAsset): string | null {
+  const hero = heroPicture(asset);
+  const rect = asset.crops[hero.phone ?? hero.main]?.rect;
+  if (!rect || !(asset.width > 0 && asset.height > 0)) return null;
+  const [rx, ry, rw, rh] = normalised(rect, asset.width, asset.height);
+  const aspect = (rw * asset.width) / (rh * asset.height);
+  const visible = aspect < SHORT_PHONE_FRAME ? [1, aspect / SHORT_PHONE_FRAME] : [SHORT_PHONE_FRAME / aspect, 1];
+  const box = asset.subjectBox ? normalised(asset.subjectBox, asset.width, asset.height) : null;
+  const span = (start: number, length: number, origin: number, size: number): [number, number] =>
+    [(start - origin) / size, (start + length - origin) / size];
+  const subjects = box
+    ? [span(box[0], box[2], rx, rw), span(box[1], box[3], ry, rh)]
+    : [[0.5, 0.5] as [number, number], [0.5, 0.5] as [number, number]];
+  const focal = asset.focal ?? (box ? [box[0] + box[2] / 2, box[1] + box[3] / 2] : null);
+  const centres = focal ? [(focal[0] - rx) / rw, (focal[1] - ry) / rh] : [0.5, 0.5];
+  const x = coverAxis(visible[0], subjects[0], centres[0]);
+  const y = coverAxis(visible[1], subjects[1], centres[1]);
+  return x === null || y === null ? null : `${pct(x)} ${pct(y)}`;
+}
+
 export interface HeroPreloadSource {
   imageSrcSet: string;
   imageSizes: string;

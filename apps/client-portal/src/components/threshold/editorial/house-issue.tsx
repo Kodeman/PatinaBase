@@ -21,7 +21,7 @@ import {
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
 import { plateAlt } from "@/lib/editorial/caption";
 import { chapterOrder, type Chapter } from "@/lib/editorial/chapters";
-import { heroPicture } from "@/lib/editorial/crop";
+import { heroPicture, shortFramePosition } from "@/lib/editorial/crop";
 import type { HeroDesktopLayout } from "@/lib/editorial/floors";
 import { roomPlates, type RoomPlateChoice } from "@/lib/editorial/rank";
 import type {
@@ -112,8 +112,44 @@ export interface HouseIssue {
 
 const LIVING = /living|sitting|family|great room|lounge/i;
 
+/** Phase 1, no approved edition: the first room whose chapter plate has a tall crop. */
 function heldRoom(choices: readonly RoomPlateChoice[]): string | null {
   return choices.find((c) => c.chapter?.crops.tall)?.roomId ?? null;
+}
+
+interface HeldPlacement {
+  roomId: string;
+  asset: EditorialAsset;
+}
+
+/**
+ * An approved edition's held plate: the lowest-ranked `held` image the
+ * composition approved, in the room its chapter key names. None when the
+ * edition approved none; the code never picks one in its place.
+ */
+function approvedHeld(editorial: ClientProjectEditorial): HeldPlacement | null {
+  const approved = new Set(editorial.composition?.held ?? []);
+  const rooms = new Map(editorial.rooms.map((r) => [r.anchor, r.id]));
+  const ranked = [...(editorial.images ?? [])].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
+  for (const image of ranked) {
+    if (image.plateRole !== "held" || !approved.has(image.assetId)) continue;
+    const roomId = image.chapterKey ? rooms.get(image.chapterKey) : undefined;
+    const asset = editorial.assets.find((a) => a.id === image.assetId);
+    if (roomId && asset?.crops.tall) return { roomId, asset };
+  }
+  return null;
+}
+
+/** Each room's choice, with an edition's held plate standing in its own room. */
+function roomChoices(
+  editorial: ClientProjectEditorial,
+  hero: EditorialAsset | null,
+  held: HeldPlacement | null,
+): RoomPlateChoice[] {
+  const placed = [hero?.id, held?.asset.id].filter((id): id is string => Boolean(id));
+  return roomPlates(editorial, placed).map((choice) =>
+    choice.roomId === held?.roomId ? { ...choice, chapter: held.asset } : choice,
+  );
 }
 
 function itemFor(
@@ -128,9 +164,15 @@ function itemFor(
   );
 }
 
+/**
+ * Which plate stands where. With an approved edition its own placement holds:
+ * the composition's hero and held plate (ranked Phase 1 picks never replace
+ * them); the code's rank fills only what the edition does not place.
+ */
 export function houseIssue(editorial: ClientProjectEditorial): HouseIssue {
   const hero = editionHero(editorial);
-  const choices = roomPlates(editorial, hero?.id ?? null);
+  const held = editorial.edition ? approvedHeld(editorial) : null;
+  const choices = roomChoices(editorial, hero, held);
   const living = editorial.rooms.find((r) => LIVING.test(r.name));
   return {
     editorial,
@@ -138,7 +180,7 @@ export function houseIssue(editorial: ClientProjectEditorial): HouseIssue {
     hero,
     heroItem: itemFor(editorial, hero?.id),
     rooms: new Map(choices.map((c) => [c.roomId, c])),
-    heldRoomId: heldRoom(choices),
+    heldRoomId: editorial.edition ? (held?.roomId ?? null) : heldRoom(choices),
     swatchRoomId: hero && living ? living.id : null,
   };
 }
@@ -433,17 +475,21 @@ const BLEED: Readonly<Record<HeroDesktopLayout, string>> = {
 /**
  * Past this many characters a hero headline takes the smaller display step
  * (editorial.css, `[data-headline='long']`): an edition may write up to 60,
- * and the standing rows keep their fold whatever it writes (R-v2-2).
+ * and the standing rows keep their fold whatever it writes (R-v2-2). At the
+ * phone the frame also shortens, but only when its subject still fits.
  */
 export const LONG_HEADLINE = 24;
 
 function Bleed({
   layout,
   headline,
+  shortFrame,
   children,
 }: {
   layout: HeroDesktopLayout;
   headline: string;
+  /** The phone frame gives up its extra lines (39:30): the subject fits it. */
+  shortFrame: boolean;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -464,6 +510,7 @@ function Bleed({
       ref={ref}
       data-testid="house-issue-hero"
       data-headline={headline.length > LONG_HEADLINE ? "long" : undefined}
+      data-hero-frame={shortFrame ? "short" : undefined}
       className={BLEED[layout]}
     >
       {children}
@@ -537,9 +584,18 @@ function HeroCover({
   chapter: Chapter;
 }) {
   const item = issue.heroItem;
+  // A long headline shortens the phone frame only where the subject box still
+  // fits it whole; otherwise the hero keeps its taller frame.
+  const phonePosition =
+    chapter.headline.length > LONG_HEADLINE ? shortFramePosition(hero) : null;
   return (
-    <Bleed layout={heroPicture(hero).layout} headline={chapter.headline}>
+    <Bleed
+      layout={heroPicture(hero).layout}
+      headline={chapter.headline}
+      shortFrame={phonePosition !== null}
+    >
       <HeroPlate
+        phoneObjectPosition={phonePosition}
         scopeId={issue.scopeId}
         asset={hero}
         eyebrow={chapter.eyebrow}
@@ -648,7 +704,23 @@ const AT_DESK = {
   rule: "hidden min-[601px]:col-span-2 min-[601px]:row-start-3 min-[601px]:mt-2 min-[601px]:block min-[601px]:h-px min-[601px]:bg-[var(--border-default)]",
   cover: "min-[601px]:col-span-2 min-[601px]:row-start-4 min-[601px]:mt-2",
   rows: "[&>ul]:mt-0 min-[601px]:col-span-2 min-[601px]:row-start-5",
+  standing:
+    "mt-3 max-w-[56ch] text-[16px] leading-[24px] text-[var(--text-body)] min-[601px]:col-span-2 min-[601px]:row-start-6",
 } as const;
+
+/**
+ * The approved cover's standing sentence, hero or drawn cover alike. It reads
+ * after the three operational rows, never between the cover and them: up to
+ * 160 characters above the rows would push them past their fold (R-v2-2).
+ */
+function CoverStanding({ chapter }: { chapter: EditionChapter | undefined }) {
+  if (!chapter?.standing) return null;
+  return (
+    <p data-testid="cover-standing" className={AT_DESK.standing}>
+      {chapter.standing}
+    </p>
+  );
+}
 
 function EditionHead(props: HouseIssueHeadProps & { issue: HouseIssue }) {
   const chapters = props.chapters ?? new Map<string, EditionChapter>();
@@ -671,6 +743,7 @@ function EditionHead(props: HouseIssueHeadProps & { issue: HouseIssue }) {
       <div className={AT_DESK.rows}>
         <Rows rows={arrival.rows} />
       </div>
+      <CoverStanding chapter={chapters.get("cover")} />
       <div className={AT_DESK.links}>{props.ledger}</div>
     </div>
   );

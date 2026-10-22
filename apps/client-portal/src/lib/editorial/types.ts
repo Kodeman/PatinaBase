@@ -113,7 +113,18 @@ export interface EditionChapterWords {
 /** The parts of the edition's composition the page draws (overrides merged by 00846). */
 export interface EditionComposition {
   hero: { assetId: string } | null;
+  /** The held pictures the edition approved; empty when it approved none. */
+  held: readonly string[];
   chapters: readonly EditionChapterWords[];
+}
+
+/** Where the edition placed a picture (`client_edition_images`). */
+export interface EditionImage {
+  assetId: string;
+  plateRole: string;
+  rank: number | null;
+  /** cover | house | a room's anchor. */
+  chapterKey: string | null;
 }
 
 /**
@@ -130,6 +141,7 @@ export interface ClientProjectEditorial {
   sheets: readonly EditorialSheet[];
   edition?: EditionMeta;
   composition?: EditionComposition;
+  images?: readonly EditionImage[];
 }
 
 /**

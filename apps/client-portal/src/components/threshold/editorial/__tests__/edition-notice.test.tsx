@@ -58,9 +58,36 @@ describe('the notice', () => {
     expect(render(<EditionNotice notice={null} />).container).toBeEmptyDOMElement();
   });
 
-  it('never prints a letter without a note to open', () => {
-    const { container } = render(<TheNote note={null} earlier={[]} enclosures={[]} notice={NOTICE} />);
-    expect(container).toBeEmptyDOMElement();
+  it('is the whole letter with no standing note: the notice alone, in the studio voice, nothing invented', () => {
+    render(
+      <TheNote
+        note={null}
+        earlier={[]}
+        enclosures={[]}
+        authorName="Maren Holt"
+        studioName="Birchwood Studio"
+        today={new Date('2026-10-21T12:00:00Z')}
+        notice={NOTICE}
+      />,
+    );
+    const letter = document.querySelector('#note')!;
+    expect(letter).toHaveAttribute('data-threshold-unit', 'note');
+    expect(letter).toHaveAttribute('aria-label', 'A note from the studio');
+    const lead = screen.getByTestId('edition-notice');
+    expect(lead).toHaveTextContent(NOTICE);
+    expect(letter.querySelector('blockquote')!.firstElementChild).toBe(lead);
+    // No note was sent: no body, no dateline, no signature, no author named.
+    for (const id of ['note-body', 'note-dateline', 'note-signature']) expect(screen.queryByTestId(id)).toBeNull();
+    expect(letter).not.toHaveTextContent('Maren Holt');
+    expect(letter.textContent).toBe(NOTICE);
+  });
+
+  it('prints nothing with neither a note nor a notice', () => {
+    for (const notice of [null, undefined, '', '   ']) {
+      const { container, unmount } = render(<TheNote note={null} earlier={[]} enclosures={[]} notice={notice} />);
+      expect(container).toBeEmptyDOMElement();
+      unmount();
+    }
   });
 });
 

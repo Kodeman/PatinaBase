@@ -7,6 +7,7 @@ import type {
   ClientProjectEditorial,
   EditionChapterWords,
   EditionComposition,
+  EditionImage,
   EditionMeta,
   EditionReaderFunctions,
   EditorialAsset,
@@ -66,7 +67,25 @@ function parseComposition(value: unknown): EditionComposition {
   const hero = isRecord(composition.hero) && typeof composition.hero.assetId === 'string'
     ? { assetId: composition.hero.assetId }
     : null;
-  return { hero, chapters: parseChapterWords(composition.chapters) };
+  const held = Array.isArray(composition.held)
+    ? composition.held.filter((id): id is string => typeof id === 'string')
+    : [];
+  return { hero, held, chapters: parseChapterWords(composition.chapters) };
+}
+
+/** The edition's placed pictures, as 00846 lists them. */
+function parseImages(value: unknown): EditionImage[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) =>
+    isRecord(entry) && typeof entry.assetId === 'string' && typeof entry.plateRole === 'string'
+      ? [{
+          assetId: entry.assetId,
+          plateRole: entry.plateRole,
+          rank: typeof entry.rank === 'number' ? entry.rank : null,
+          chapterKey: text(entry.chapterKey),
+        }]
+      : [],
+  );
 }
 
 /** The approved edition's envelope, or null: no edition, or not one we can read. */
@@ -74,7 +93,13 @@ export function parseClientEdition(data: unknown): ClientProjectEditorial | null
   const envelope = parseClientEditorial(data);
   const edition = envelope && isRecord(data) ? parseEditionMeta(data.edition) : null;
   if (!envelope || !edition) return null;
-  return { ...envelope, edition, composition: parseComposition((data as Record<string, unknown>).composition) };
+  const record = data as Record<string, unknown>;
+  return {
+    ...envelope,
+    edition,
+    composition: parseComposition(record.composition),
+    images: parseImages(record.images),
+  };
 }
 
 type ReaderName = keyof EditionReaderFunctions;

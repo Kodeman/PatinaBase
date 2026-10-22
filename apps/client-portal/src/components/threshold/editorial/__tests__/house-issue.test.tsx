@@ -545,7 +545,7 @@ function edition(
       approvedBy: "studio",
       notice: "The page now opens on your sideboard.",
     },
-    composition: { hero: { assetId: assets[0]?.id ?? "none" }, chapters: [], ...composition },
+    composition: { hero: { assetId: assets[0]?.id ?? "none" }, held: [], chapters: [], ...composition },
   };
 }
 
@@ -590,6 +590,8 @@ describe("the approved edition", () => {
       const { unmount } = cover(issue);
       const hero = screen.getByTestId("house-issue-hero");
       expect(hero.getAttribute("data-headline")).toBe(mark);
+      // No subject box to protect: a long headline always takes the shorter phone frame.
+      expect(hero.getAttribute("data-hero-frame")).toBe(mark ? "short" : null);
       expect(hero.querySelector("h2")).toHaveTextContent(headline);
       unmount();
     }
@@ -658,7 +660,7 @@ describe("the approved edition", () => {
   });
 
   it("ignores composed words without an approved edition", () => {
-    const loose = { ...editorial([SCENE]), composition: { hero: null, chapters: [{ key: "cover", headline: "Loose", standing: null }] } };
+    const loose = { ...editorial([SCENE]), composition: { hero: null, held: [], chapters: [{ key: "cover", headline: "Loose", standing: null }] } };
     const chapters = editionChapters(houseIssue(loose), [])!;
     expect(chapters.get("cover")?.headline).not.toBe("Loose");
     expect(houseIssue(loose).hero?.id).toBe(SCENE.id);
@@ -683,5 +685,179 @@ describe("the approved edition", () => {
 
     render(<>{withChapter(chapters, "road", <section id="road" />)}</>);
     expect(screen.getByTestId("chapter-standing")).toHaveTextContent("The workshop is planing the top.");
+  });
+
+  // ── SQ-1593 R2: the edition's own held placement, never Phase 1's rank ─────
+
+  /** The reviewer's two scans: 1800 × 2100, each in its own room, each with a tall crop. */
+  function twoScans(): ClientProjectEditorial {
+    const scan = (id: string) =>
+      asset(id, {
+        sourceKind: "scan",
+        width: 1800,
+        height: 2100,
+        crops: {
+          wide32: { rect: [0, 0, 1800, 1200], widths: [768, 1024] },
+          tall: { rect: [420, 0, 966, 2100], widths: [780, 1080] },
+          cover_phone: { rect: [0, 0, 1800, 1569], widths: [640, 828] },
+        },
+      });
+    const base = editorial([scan("scana"), scan("scanb")]);
+    const room = (id: string) => ({
+      id,
+      name: `Room ${id}`,
+      anchor: `room-${id}`,
+      conceptAssetId: null,
+      scanAssetIds: [`scan${id}`],
+      items: [],
+    });
+    return { ...base, rooms: [room("a"), room("b")] };
+  }
+
+  function placed(held: string[], images: NonNullable<ClientProjectEditorial["images"]>): ClientProjectEditorial {
+    const house = twoScans();
+    return { ...edition([...house.assets], { hero: null, held }), rooms: house.rooms, images };
+  }
+
+  function heldIn(issue: HouseIssue, roomId: string) {
+    const chapters = editionChapters(issue, issue.editorial.rooms.map((r) => r.anchor))!;
+    const view = render(<RoomOpening issue={issue} chapters={chapters} roomId={roomId} />);
+    const held = view.container.querySelector(".ed-held");
+    const src = held?.querySelector("img")?.getAttribute("src") ?? null;
+    view.unmount();
+    return { held: Boolean(held), src };
+  }
+
+  it("holds the plate the edition approved in the room it placed it, where Phase 1 would hold another", () => {
+    // Phase 1 (no edition) still ranks a held plate of its own.
+    expect(houseIssue(twoScans()).heldRoomId).not.toBeNull();
+
+    // approvedHeld=[b] with a room-B held row: b stands held in room B.
+    const issue = houseIssue(
+      placed(["scanb"], [{ assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "room-b" }]),
+    );
+    expect(issue.heldRoomId).toBe("b");
+    expect(issue.rooms.get("b")?.chapter?.id).toBe("scanb");
+    expect(issue.rooms.get("a")?.chapter?.id).toBe("scana");
+    const b = heldIn(issue, "b");
+    expect(b.held).toBe(true);
+    expect(b.src).toContain(`/plates/${EDITION_ID}/${"scanb".padStart(64, "a")}/`);
+    expect(heldIn(issue, "a").held).toBe(false);
+  });
+
+  it("holds nothing when the edition approved no held plate, or only placed one it did not approve", () => {
+    for (const house of [
+      placed([], []),
+      placed([], [{ assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "room-b" }]),
+      // Approved, but placed in no room the page draws.
+      placed(["scanb"], [{ assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "house" }]),
+    ]) {
+      const issue = houseIssue(house);
+      expect(issue.heldRoomId).toBeNull();
+      expect(heldIn(issue, "a").held).toBe(false);
+      expect(heldIn(issue, "b").held).toBe(false);
+    }
+  });
+
+  it("follows the edition's rank among held rows, and keeps a held picture out of every other room", () => {
+    const issue = houseIssue(
+      placed(
+        ["scana", "scanb"],
+        [
+          { assetId: "scana", plateRole: "held", rank: 2, chapterKey: "room-a" },
+          { assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "room-a" },
+        ],
+      ),
+    );
+    // Rank 1 is b, placed in room A: one held plate on the page, there.
+    expect(issue.heldRoomId).toBe("a");
+    expect(issue.rooms.get("a")?.chapter?.id).toBe("scanb");
+    expect(issue.rooms.get("b")?.chapter).toBeNull();
+  });
+
+  // ── SQ-1593 R3: the approved cover's standing sentence ───────────────────────
+
+  function arrival(issue: HouseIssue) {
+    return render(
+      <HouseIssueHead
+        issue={issue}
+        chapters={editionChapters(issue, [])}
+        doorplate={null}
+        letterhead={{ studioName: "Birchwood Studio", projectName: "Elm Street House", preparedFor: "June Brennan" }}
+        ledger={<nav data-testid="landmark-ledger" />}
+        todayLines={null}
+        rows={{ spoken: true, invoices: projection(), asks: [], gate: null, readFailed: false }}
+        plan={{ unread: true, rooms: null, marks: [] }}
+      />,
+    );
+  }
+
+  it("prints the cover's standing sentence under the hero and the drawn cover alike, after the three rows", () => {
+    const words = { key: "cover", headline: "Your sideboard", standing: "The workshop has planed the walnut top." };
+    for (const issue of [
+      houseIssue(edition([SCENE], { chapters: [words] })),
+      houseIssue(edition([SCENE], { hero: null, chapters: [words] })),
+    ]) {
+      const { container, unmount } = arrival(issue);
+      const standing = screen.getByTestId("cover-standing");
+      expect(standing).toHaveTextContent(words.standing);
+      const rows = container.querySelectorAll("[data-standing-row]");
+      // The three operational rows stand, in order, untouched; the sentence follows them.
+      expect([...rows].map((r) => r.getAttribute("data-standing-row"))).toEqual(["1", "2", "3"]);
+      expect([...rows].some((r) => r.textContent?.includes(words.standing))).toBe(false);
+      const cover = container.querySelector('[data-testid="house-issue-hero"], [data-testid="house-issue-cover"]')!;
+      for (const [before, after] of [
+        [cover, rows[2]],
+        [rows[2], standing],
+        [standing, screen.getByTestId("landmark-ledger")],
+      ] as const) {
+        expect(before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      }
+      unmount();
+    }
+  });
+
+  it("prints no cover sentence without an approved standing, and never the doorstep's", () => {
+    arrival(houseIssue(edition([SCENE], { chapters: [{ key: "cover", headline: "Your sideboard", standing: null }] })));
+    expect(screen.queryByTestId("cover-standing")).toBeNull();
+  });
+
+  // ── SQ-1593 R5: a long headline never crops the subject box ─────────────────
+
+  it("shortens the phone frame for a long headline only where the subject fits, at the position that keeps it whole", () => {
+    const sixty = "Your walnut sideboard is planed and waiting on the workbench";
+    const nearEdge = asset("nearedge", {
+      width: 1560,
+      height: 1360,
+      subjectBox: [0.05, 0, 0.9, 0.7],
+      crops: {
+        wide32: { rect: [0, 0, 1560, 1040], widths: [768, 1024] },
+        cover_phone: { rect: [0, 0, 1560, 1360], widths: [640, 828, 1080] },
+      },
+    });
+    const view = cover(houseIssue(edition([nearEdge], { chapters: [{ key: "cover", headline: sixty, standing: null }] })));
+    const hero = screen.getByTestId("house-issue-hero");
+    expect(hero.getAttribute("data-headline")).toBe("long");
+    expect(hero.getAttribute("data-hero-frame")).toBe("short");
+    const slot = hero.querySelector<HTMLElement>(".ed-hero-slot")!;
+    expect(slot.style.getPropertyValue("--ed-hero-phone-position")).toBe("50% 0%");
+    view.unmount();
+
+    // A portrait whose subject fills its 39:34 phone crop: the shorter frame would cut it,
+    // so the smaller type keeps the taller frame.
+    const tall = asset("portrait", {
+      width: 1100,
+      height: 1900,
+      subjectBox: [0.1, 0.2, 0.8, 0.5],
+      crops: {
+        cover_phone: { rect: [0, 376, 1100, 959], widths: [640, 828, 1080] },
+        tall: { rect: [113, 0, 874, 1900], widths: [640, 828] },
+      },
+    });
+    cover(houseIssue(edition([tall], { chapters: [{ key: "cover", headline: sixty, standing: null }] })));
+    const kept = screen.getByTestId("house-issue-hero");
+    expect(kept.getAttribute("data-headline")).toBe("long");
+    expect(kept.getAttribute("data-hero-frame")).toBeNull();
+    expect(kept.querySelector<HTMLElement>(".ed-hero-slot")!.style.getPropertyValue("--ed-hero-phone-position")).toBe("");
   });
 });
