@@ -5,6 +5,7 @@
   - Live: media worker, edge function, migrations, client portal, R2 buckets.
   - The plate ingest lane collapsed (F1) and is paused (section 8).
   - Flag `client-edition-page` is held at **0%**.
+  - Update (SQ-1631): lane repaired, queue drained, flag at **100%**; signed-in client checks still OWED. See "Phase 1 finish".
 - Source: main `9fd6863d7344a0702fb1230956c2b9a53e8d2b42` (SQ-1619 combined W2 gate green on this sha), deployed from a clean linked worktree at that commit (no `.env*` in `apps/client-portal`); `supabase db push` ran from the linked main checkout at the same commit (migrations dir byte-identical).
 - Authorization: Kody's "deliver this entirely to production" (orchestrator dispatch comment, 00:31Z).
 - Retired Coolify box: not touched.
@@ -262,3 +263,151 @@ Not done (OWED): see below.
 - Plate copy: already paused (`cron.alter_job(69, active := false)`, section 8); `active := true` resumes it.
 - Migrations 00842/00843 are additive, with no down migration; roll forward only.
 - R2 buckets stay; they are private, with r2.dev disabled.
+
+## Phase 1 finish (SQ-1631)
+
+- Date: 2026-10-22 (UTC). Deploy and watch 02:58Z–03:13Z; flag raised 11:15:00Z.
+  - The session was suspended between 03:13Z and 11:15Z, so the flag went up about eight hours after the watch. The lane had drained by then (see step 4).
+- Source: main `76ffeaa3a` (SQ-1634 lane repair, integrated; SQ-1635 Astra re-review accepted, recorded on SQ-1654). Deployed from a clean linked worktree at that commit.
+  - The privacy commits df82e6658 and 4094cce71 are in that tree but were not deployed: no portal deploy here. `/privacy` still 307s to sign-in on the live portal (0a2eec5e).
+- Authorization: Kody's full-chain ruling as relayed by the orchestrator (SQ-1631 GO comment, 02:54Z). Retired Coolify box: not touched.
+- Raw output: `~/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-1631/`.
+
+### 1. Deploy the repair
+
+- Media worker: `cd infra/media-worker && npx wrangler deploy` (README `DOCKER_CONFIG` workaround), 02:58:28Z.
+  - Container image rebuilt and pushed. App `patina-media-worker-mediaprocessor` (a03e87b7-…) now uses image `sha256:c392272a…ee2f`; before it was `2531c808…5292`.
+  - Bindings still list `env.PLATES (patina-plates)` and `env.SUPABASE_STORAGE_ORIGIN ("https://bkvcixdmuyejfzcijpdg.supabase...")`.
+  - `wrangler deployments list` bottom rows (oldest first):
+    - 2026-10-22T00:59:21Z Upload `148a345f-6802-4fe7-b045-cdff30bb3541` (pre-repair)
+    - **2026-10-22T02:58:32Z Upload `e49a8043-e3e6-4d46-9671-86add434db99` (bottom row)**
+  - Container rollout finished at 03:00:39Z: app version 6 on the new image, health active 0, healthy 5, failed 0, starting 0.
+  - Probe: `POST /plates/ingest` without a bearer → 401.
+- Edge function: `supabase functions deploy client-plate-copy --project-ref bkvcixdmuyejfzcijpdg` → "Deployed Functions." (98 kB).
+  - `supabase functions list` row: `client-plate-copy` id e64ba46a-728f-4047-a6cd-c4e62784ba25, ACTIVE, **version 2**, verify_jwt true, updated 2026-10-22T02:59:05Z.
+- Migrations: none. SQ-1634 added no migration file (`git diff 5a7c00120 76ffeaa3a -- supabase/migrations` is empty).
+  - Strata `schema_migrations` tail: `00842`, `00843`, `20260910152111`. The local directory has nothing newer, so nothing is pending and nothing was pushed. 00844–00846 are not on this main and were not pushed.
+
+### 2. Re-queue (cron 69 still paused)
+
+- Quiescence check 03:00:50Z: `quiescent` (0 running runs in 15 min).
+- (a) `UPDATE … WHERE status IN ('queued','failed') AND last_error LIKE 'ingest 504%'` at 03:00:56Z: **112 rows** (maker 104, scan 7, board 1). That equals the 112 `ingest 504` rows read at 02:58:04Z.
+- (b) Expired-lease statement at 03:01:04Z: **0 rows**. No row was leased.
+- Queue after re-queue: done maker 7; queued maker 216 (one at attempts 1, kept from a non-504 `ingest 502 … HTTP 403`), scan 21, board 1.
+
+### 3. Resume the cron
+
+- 03:01:09Z `SELECT cron.alter_job(job_id := 69, active := true)`. `cron.job` at 03:01:15Z: jobid 69 `client-plate-copy-dispatch`, `* * * * *`, `active: true`.
+  - The ticket's `UPDATE cron.job` form is permission-denied on Strata (section 8), so `cron.alter_job` was used.
+
+### 4. Watch (read-only)
+
+The 10-minute window ran 03:01:09Z–03:12:03Z.
+
+| Run | Start | Took | Claimed / recorded / failed | Status |
+|---|---|---|---|---|
+| 288282 | 03:02:00 | 31 s | 1 / 0 / 1 | failed: `ingest timed out after 30000 ms` |
+| 288284 | 03:03:00 | 26 s | 1 / 0 / 1 | failed: `ingest 504: processor did not finish within 25 s` |
+| 288286 | 03:04:00 | 25 s | 1 / 1 / 0 | succeeded |
+| 288288 | 03:05:00 | 33 s | 2 / 2 / 0 | succeeded |
+| 288294 | 03:06:00 | 35 s | 2 / 2 / 0 | succeeded |
+| 288296 | 03:07:00 | 34 s | 2 / 2 / 0 | succeeded |
+| 288298 | 03:08:00 | 22 s | 2 / 2 / 0 | succeeded |
+| 288300 | 03:09:00 | 29 s | 4 / 4 / 0 | succeeded |
+| 288302 | 03:10:00 | 23 s | 1 / 1 / 0 | succeeded |
+| 288309 | 03:11:00 | 33 s | 2 / 2 / 0 | succeeded |
+
+Against the runbook's four checks:
+
+- Every run finished in under 60 s (max 35 s).
+- No two runs overlapped: the overlap query returned 0 pairs.
+- `recorded` grew: assets went from 7 to 23 (maker 21, scan 2).
+- `ingest 504`: one, plus one edge 30 s timeout. Both came in the first two runs on the freshly rolled container, and each was a single claimed request.
+  - No run failed 10/10 (the stop condition), so the cron was not paused.
+  - From 03:04Z on, every run with queued work recorded > 0 and none failed. The first-ingest slowness is consistent with a container cold start after the rollout. It is not proven: no container logs were read.
+- After the watch, read-only follow-up at 11:15:21Z, covering everything since the resume:
+  - 98 runs: 92 succeeded, 6 failed, 0 running; max 45 s; 0 overlapping pairs; 235 recorded, 11 failed copies. The last run started 04:39:00Z, after which nothing was claimable.
+  - By 15-minute window (runs, failed runs, claimed/recorded/failed, max s):
+
+    | Window | Runs | Failed runs | Claimed / recorded / failed | Max |
+    |---|---|---|---|---|
+    | 03:00 | 13 | 2 | 22 / 20 / 2 | 35 s |
+    | 03:15 | 15 | 1 | 31 / 29 / 2 | 34 s |
+    | 03:30 | 15 | 0 | 28 / 28 / 0 | 35 s |
+    | 03:45 | 15 | 1 | 42 / 41 / 1 | 37 s |
+    | 04:00 | 15 | 0 | 42 / 41 / 1 | 45 s |
+    | 04:15 | 15 | 0 | 52 / 52 / 0 | 34 s |
+    | 04:30 | 10 | 2 | 29 / 24 / 5 | 42 s |
+
+  - Final queue: **done 242** (maker 220, scan 21, board 1); **failed 3**; queued 0; leased 0.
+  - Assets: 214 (maker 192, scan 21, board 1). Done requests outnumber assets because of shared-byte dedupe, UNIQUE(project_id, sha256).
+  - The three permanent failures, all project 008225a4, all maker, attempts 3:
+    - `ingest 400: sourceUrl must be an https URL`: an `http://` loloirugs.com hotlink, refused by the https-only policy (SQ-1602).
+    - `ingest 502: source returned HTTP 403`: upload.wikimedia.org hotlink denial.
+    - `ingest 504: processor did not finish within 25 s`: an images.quince.com source. This is the one source the repaired lane could not finish in budget three times.
+  - These render as silhouettes, the designed fallback. Re-queue by SQL only after a source fix.
+
+### 5. Signed private-source ingest proof (SQ-1613 condition): MET
+
+Two `scan` assets are recorded from the private `room-scans` bucket. `storage.buckets.public = false`, and client-plate-copy signs `room_scan_images` sources through `createSignedUrl` (`lib.ts` `PRIVATE_BUCKET_BY_TABLE`).
+
+- `9d35df16-c5f6-4557-8f59-7f3aadfdba7b`, project b8b20d16-29d1-460b-b42a-37e085d2d96d:
+  - sha `163b5af4…765f`, 1440×1920, ground `scene`, recorded 03:09:18Z;
+  - source `room_scan_images` 7df32093-…, object `photos/74056c2a-…/843b273a-…/auto_008.77.jpg` (301,127 B);
+  - `original_key plates/b8b20d16-…/163b5af4…/original.jpeg`;
+  - crops: `cover_phone` [640, 828, 1080, 1242], `tall` [640, 828], `wide32` [768, 1024], `pair` [768, 1024], `piece` [256, 512, 768].
+- `49c7420c-105b-4e68-9fca-124b636a153f`, same project:
+  - sha `68104…7cbe`, 1440×1920, recorded 03:09:29Z;
+  - object `…/auto_032.84.jpg`;
+  - the same crop set.
+- By the end, all 21 scans in prod were recorded, all on b8b20d16.
+- No storage-hosted board cover or concept render exists in prod. The single board request, now done, is a public hotlink.
+
+### 6. Plate route probe
+
+The only signed-in session is the Middle West Studio member SQ-1586 used (`kody@middlewest.studio`).
+
+- Scan plate (b8b20d16 / `163b5af4…` / `piece-512.avif`, `cover_phone-828.avif`, `tall-640.webp`) → **404**, empty, no-store.
+  - This is the correct deny: that session is not a member of b8b20d16. Under its JWT, `can_buy_for_project` = false and `client_can_read_plate` = NULL, and RLS hides the project.
+  - All 21 scans live on that one project, so a 200 on a scan plate is **OWED** a session that can read b8b20d16.
+- Plate recorded by the repaired worker on a member project (008225a4 / `fb2faf39…49f9`, recorded 03:05:33Z), 03:13:05Z:
+  - `wide-1280.avif` **200**, `image/avif`, 4,094 B, `cache-control: private, max-age=3600`, Vary ends `,Cookie`, etag `"4e1a8d39…"`;
+  - `cover_phone-828.avif` 200, `image/avif`, 3,733 B, same headers;
+  - `piece-512.webp` 200, `image/webp`, 4,048 B, same headers.
+
+### 7. Flag `client-edition-page` → 100%
+
+- 11:15:00Z `feature-flag-set-release-condition-rollout` on id 982269, condition 0, version 1 → 100.
+- Final state, read back: id **982269**, key `client-edition-page`, `active: true`, not archived, version 2, one release group, no properties, **`rollout_percentage: 100`**, `bucketing_identifier: distinct_id`, `evaluation_runtime: all`, updated 2026-10-22T11:15:00.894Z.
+- Probe at 11:15:10Z: `POST https://us.i.posthog.com/flags/?v=2` for three random distinct_ids → `enabled: true`, `reason: condition_match`, each time.
+- Portal after the raise, 11:15:37Z, signed out:
+  - `/` 307 to `/auth/signin` (TTFB 0.83 s);
+  - `/api/version` 200.
+- Studio-member session at 11:15:49Z: `/` 200, 10.7 kB, no error text, no hero, no `/plates/` preload. Expected: that account has no client project.
+
+### 8. Hero-present assertion: OWED (stopped here by Kody's ruling, flag left at 100)
+
+- No CLIENT session exists. The only available session, `kody@middlewest.studio` (19e7ae9b-…), is `client_id` on 0 of the 26 projects that have a client.
+- A real client's session was not minted or impersonated.
+- The TTFB before/after reading was skipped: there is no client page to time.
+
+## OWED after Phase 1 finish
+
+- **Hero-present assertion.** A signed-in CLIENT session on a project with at least one recorded plate. Fetch its server HTML (curl with the session cookie) and assert both:
+  - the hero `<figure>`;
+  - its `<link rel="preload">` for `/plates/…`.
+
+  Take TTFB at 100% against the 600 ms server-decision budget.
+- **Standing rows** render at 390 and 1440 for that client.
+- **R1 "%" title.** A scope-change title containing "%" shows "A request is waiting for you." in standing row 2.
+- **`#letterbox` pay-return.** An invoice pay link still resolves `#letterbox`.
+- **Scan-plate 200.** Probe a b8b20d16 scan plate with a session that can read that project.
+- **Three failed maker sources** on 008225a4: an http-only loloirugs URL, a wikimedia 403, and a quince source that ran over budget. They stay silhouettes until a source fix plus a re-queue.
+- **Privacy portal deploy.** `/privacy` (df82e6658, 4094cce71) is on main but not on the live portal. That belongs to SQ-1594's chain, not here.
+
+## Rollback after Phase 1 finish (recorded, not run)
+
+- Flag: set 982269 rollout to 0. Fail-closed: today's page renders.
+- Client portal: `cd apps/client-portal && npx wrangler rollback 02128e9a-a5b5-4b04-b52a-e8c50bc7b4a9`.
+- Media worker to pre-repair: `cd infra/media-worker && npx wrangler rollback 148a345f-6802-4fe7-b045-cdff30bb3541`, only together with `select cron.alter_job(job_id := 69, active := false);`.
+- client-plate-copy: redeploy the v1 source (main 5a7c00120) if needed.
