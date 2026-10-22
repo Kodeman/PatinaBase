@@ -4,7 +4,9 @@
  * query options (R2), a pre-project read that never runs (R6), published
  * provenance and the edition Undo restores (R5), and a closed job (R12).
  */
+import { useQuery } from '@tanstack/react-query';
 import {
+  createBrowserClient,
   CLIENT_EDITIONS_LIVE_MS,
   clientEditionsQueryOptions,
   normalizeClientEditions,
@@ -25,8 +27,99 @@ import {
   pendingEdition,
   wasPublished,
   projectMakerNames,
+  useProjectMakerNames,
   readerImageContent,
 } from '../client-editions';
+
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQuery: jest.fn(),
+}));
+
+jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
+  createBrowserClient: jest.fn(),
+}));
+
+describe('useProjectMakerNames', () => {
+  const queryOptions = () => {
+    useProjectMakerNames('p-1');
+    return (useQuery as jest.Mock).mock.calls[0][0];
+  };
+
+  const mockRead = () => {
+    const query = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      is: jest.fn().mockReturnThis(),
+      order: jest.fn().mockReturnThis(),
+      range: jest.fn(),
+      in: jest.fn(),
+    };
+    const from = jest.fn().mockReturnValue(query);
+    jest.mocked(createBrowserClient).mockReturnValue({ from } as never);
+    return { query, from };
+  };
+
+  it('reads removed-item and direct-vendor names across every page without the active-list filter', async () => {
+    const { query, from } = mockRead();
+    query.range
+      .mockResolvedValueOnce({ data: Array.from({ length: 500 }, (_, i) => ({ vendor_name: 'Active', vendor_id: `v-${i}` })), error: null })
+      .mockResolvedValueOnce({ data: [
+        { vendor_name: ' Retired Atelier ', vendor_id: 'v-500' },
+        { vendor_name: null, vendor_id: 'v-0' },
+        { vendor_name: null, vendor_id: null },
+      ], error: null });
+    query.in
+      .mockResolvedValueOnce({ data: [{ id: 'v-0', name: 'Joined Maker' }], error: null })
+      .mockResolvedValueOnce({ data: [{ id: 'v-500', name: 'Second Batch Maker' }], error: null });
+    const options = queryOptions();
+    expect(options.queryKey).toEqual(['project-ffe-items', 'p-1', 'mirror-maker-names']);
+    expect(options.enabled).toBe(true);
+    expect([...await options.queryFn()]).toEqual(['active', 'retired atelier', 'joined maker', 'second batch maker']);
+    expect(from.mock.calls).toEqual([['project_ffe_items'], ['project_ffe_items'], ['vendors'], ['vendors']]);
+    expect(query.select).toHaveBeenCalledWith('vendor_name, vendor_id');
+    expect(query.select).toHaveBeenCalledWith('id, name');
+    expect(query.eq).toHaveBeenCalledWith('project_id', 'p-1');
+    expect(query.is).not.toHaveBeenCalled();
+    expect(query.order).toHaveBeenCalledWith('id');
+    expect(query.range.mock.calls).toEqual([[0, 499], [500, 999]]);
+    expect(query.in.mock.calls).toEqual([
+      ['id', Array.from({ length: 500 }, (_, i) => `v-${i}`)],
+      ['id', ['v-500']],
+    ]);
+  });
+
+  it('rejects a later page error instead of publishing a partial maker-name set', async () => {
+    const { query } = mockRead();
+    const error = new Error('read denied');
+    query.range
+      .mockResolvedValueOnce({ data: Array.from({ length: 500 }, () => ({ vendor_name: 'Active', vendor: null })), error: null })
+      .mockResolvedValueOnce({ data: null, error });
+    await expect(queryOptions().queryFn()).rejects.toBe(error);
+  });
+
+  it('skips the vendors read when no item has a vendor id', async () => {
+    const { query, from } = mockRead();
+    query.range.mockResolvedValueOnce({ data: [{ vendor_name: ' Retired Atelier ', vendor_id: null }], error: null });
+    expect([...await queryOptions().queryFn()]).toEqual(['retired atelier']);
+    expect(from.mock.calls).toEqual([['project_ffe_items']]);
+    expect(query.in).not.toHaveBeenCalled();
+  });
+
+  it('rejects a vendor read error instead of publishing only item names', async () => {
+    const { query } = mockRead();
+    const error = new Error('vendor read denied');
+    query.range.mockResolvedValueOnce({ data: [{ vendor_name: 'Active', vendor_id: 'v-1' }], error: null });
+    query.in.mockResolvedValueOnce({ data: null, error });
+    await expect(queryOptions().queryFn()).rejects.toBe(error);
+  });
+
+  it('disables the name read without a project', () => {
+    useProjectMakerNames('');
+    expect((useQuery as jest.Mock).mock.calls[0][0].enabled).toBe(false);
+  });
+});
 
 const read = (rows: Record<string, unknown>[], showMakers = false) =>
   normalizeClientEditions(listEnvelope(rows, showMakers) as never);
@@ -150,6 +243,13 @@ describe('the reader image content policy (seq 53/59)', () => {
     const shown = readerImageContent(image({ captionWhat: 'Herman Miller chair · HERMAN MILLER', sourceKind: 'maker' }), undefined, policy);
     expect(shown.caption.what).toBe('chair');
     expect(shown.alt).toBe('chair · Nord Studio · product photograph');
+  });
+
+  it('strips overlapping maker names longest first', () => {
+    const shown = readerImageContent(image({ captionWhat: 'Nord Studio chair', sourceKind: 'maker' }), undefined, {
+      ...policy, makerNames: projectMakerNames(['Nord', 'Nord Studio']),
+    });
+    expect(shown.caption.what).toBe('chair');
   });
 
   it('uses trusted kind words when stripping leaves no what', () => {

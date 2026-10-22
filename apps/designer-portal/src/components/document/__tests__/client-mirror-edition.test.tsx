@@ -20,7 +20,9 @@ let mockEditions: unknown;
 let mockItemsReady = true;
 
 jest.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({
+  useQuery: ({ queryKey }: { queryKey: string[] }) => queryKey[2] === 'mirror-maker-names'
+    ? { data: mockItemsReady ? new Set(['herman miller', 'knoll', 'retired atelier', 'joined maker']) : undefined }
+    : ({
     data: {
       project: { name: 'Ridgeline', status: 'active', client_id: 'client-1' },
       decisions: [],
@@ -36,10 +38,6 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({}),
   useClientEditions: () => ({ data: mockEditions }),
-  useProjectFFEItems: () => ({ data: mockItemsReady ? [
-    { vendor_name: '  HERMAN MILLER  ', purchase_order: null },
-    { vendor_name: null, purchase_order: { vendor: { name: ' Knoll ' } } },
-  ] : undefined }),
   useClientEditionSourceUrls: () => ({
     data: { 'a-hero': 'https://example.com/hero.jpg', 'a-old': 'https://example.com/old.jpg' },
   }),
@@ -312,6 +310,22 @@ describe.each([
     renderMirror();
     return screen.getByRole('region', { name: region });
   };
+
+  it.each(['Retired Atelier', 'Joined Maker'])('masks the %s name from captions and alt while makers are off', (maker) => {
+    const section = show(
+      { captionWhat: `${maker} chair`, captionWhen: `${maker} in October`, alt: `${maker} chair` },
+      { whose: maker },
+    );
+    expect(section.querySelector('figcaption')).toHaveTextContent('chair · Birchwood Studio');
+    expect(section.querySelector('figcaption')?.textContent).not.toContain(maker);
+    expect(within(section).getByRole('img')).toHaveAttribute('alt', 'chair · Birchwood Studio · room scan');
+  });
+
+  it.each(['Retired Atelier', 'Joined Maker'])('keeps the %s name unchanged while makers show', (maker) => {
+    const section = show({ captionWhat: `${maker} chair`, alt: `${maker} chair` }, { whose: maker }, true);
+    expect(section.querySelector('figcaption')).toHaveTextContent(`${maker} chair · ${maker} · October`);
+    expect(within(section).getByRole('img')).toHaveAttribute('alt', `${maker} chair`);
+  });
 
   it('strips maker-bearing what before rebuilding a product alt', () => {
     const section = show({ sourceKind: 'maker', captionWhat: 'Herman Miller chair', alt: 'Herman Miller chair' });

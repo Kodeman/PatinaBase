@@ -4,7 +4,8 @@
  * these, so both name the same pending, current and published editions.
  */
 
-import type { ClientEdition, ClientEditionImage } from '@patina/supabase';
+import { useQuery } from '@tanstack/react-query';
+import { createBrowserClient, type ClientEdition, type ClientEditionImage } from '@patina/supabase';
 
 /** The edition waiting on the studio's Approve, if any. */
 export const pendingEdition = (editions: readonly ClientEdition[]) =>
@@ -56,6 +57,47 @@ export function projectMakerNames(names: readonly (string | null | undefined)[])
   return new Set(names.map((name) => name?.trim().toLowerCase() ?? '').filter((name) => name.length >= 3));
 }
 
+/** Unlike the live FF&E list, the reader masks names from removed items too. */
+export function useProjectMakerNames(projectId: string) {
+  return useQuery({
+    queryKey: ['project-ffe-items', projectId, 'mirror-maker-names'],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const names: (string | null)[] = [];
+      const vendorIds = new Set<string>();
+      // Stay below the API's row cap; no removed_at filter belongs on this read.
+      const pageSize = 500;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from('project_ffe_items')
+          .select('vendor_name, vendor_id')
+          .eq('project_id', projectId)
+          .order('id')
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const items = data ?? [];
+        for (const item of items) {
+          names.push(item.vendor_name);
+          if (item.vendor_id) vendorIds.add(item.vendor_id);
+        }
+        if (items.length < pageSize) break;
+      }
+      // vendor_id has no FK: resolve it explicitly rather than embedding vendors.
+      const ids = [...vendorIds];
+      for (let from = 0; from < ids.length; from += pageSize) {
+        const { data, error } = await supabase
+          .from('vendors')
+          .select('id, name')
+          .in('id', ids.slice(from, from + pageSize));
+        if (error) throw error;
+        names.push(...(data ?? []).map((vendor) => vendor.name));
+      }
+      return projectMakerNames(names);
+    },
+  });
+}
+
 export interface CaptionPolicy {
   showMakers: boolean;
   studioName: string | null;
@@ -92,7 +134,7 @@ export function readerImageContent(
     text != null && [...makerNames].some((name) => text.toLowerCase().includes(name));
   const makerKind = kind === 'maker' || kind === 'upload';
   if (namesMaker(caption.what)) {
-    for (const name of makerNames) {
+    for (const name of [...makerNames].sort((a, b) => b.length - a.length || a.localeCompare(b))) {
       let at = caption.what.toLowerCase().indexOf(name);
       while (at !== -1) {
         caption.what = caption.what.slice(0, at) + caption.what.slice(at + name.length);
