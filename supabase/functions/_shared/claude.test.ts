@@ -3,6 +3,8 @@ import {
   assertEquals,
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { FakeTime } from "https://deno.land/std@0.224.0/testing/time.ts";
+import { stub } from "https://deno.land/std@0.224.0/testing/mock.ts";
 import {
   APIConnectionTimeoutError,
   APIError,
@@ -16,6 +18,7 @@ import {
   callClaude,
   type ClaudeCaller,
   createLlmLedger,
+  LEDGER_SETTLE_MS,
   type LlmLedgerPort,
   type ModelResponse,
 } from "./claude.ts";
@@ -195,6 +198,202 @@ Deno.test("callClaude records failed API call as an error settlement", async () 
   assertEquals(settlements[0].fields.usd, 0);
 });
 
+Deno.test("callClaude returns a failed call's settled cost when the error reported usage", async () => {
+  const { ledger, settlements } = fakeLedger();
+  const billed = Object.assign(new Error("stream cut after the answer began"), {
+    usage: { input_tokens: 1000, output_tokens: 200 },
+  });
+  const result = await callClaude(options({
+    ledger,
+    caller: async () => {
+      throw billed;
+    },
+  }));
+  assert(!result.ok && "error" in result);
+  assertEquals(settlements.map((entry) => entry.fields.status), ["error"]);
+  assert(settlements[0].fields.usd > 0, "the billed usage is settled");
+  assertEquals(result.usd, settlements[0].fields.usd);
+});
+
+Deno.test("callClaude hands the caller its abort signal; an aborted call settles as an error", async () => {
+  const { ledger, settlements } = fakeLedger();
+  const controller = new AbortController();
+  const seen: (AbortSignal | undefined)[] = [];
+  const pending = callClaude(options({
+    ledger,
+    signal: controller.signal,
+    caller: (_params, signal) => {
+      seen.push(signal);
+      if (!signal) return Promise.reject(new Error("no signal to abort with"));
+      return new Promise<ModelResponse>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new Error("Request was aborted.")));
+      });
+    },
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  controller.abort();
+  const result = await pending;
+  assertEquals(seen.length, 1);
+  assert(seen[0]?.aborted, "the caller's signal did not abort with the call's");
+  assert(!result.ok && "error" in result);
+  assertStringIncludes(result.error, "aborted");
+  assertEquals(settlements.map((entry) => [entry.fields.status, entry.fields.usd]), [["error", 0]]);
+  assertEquals("usd" in result, false, "no usage known, no cost claimed");
+});
+
+/** Answers after `ms` real milliseconds, unless the signal it is handed aborts first. */
+function late<T>(ms: number, value: T, signal?: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => resolve(value), ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    }, { once: true });
+  });
+}
+
+Deno.test("callClaude gives up a reservation the ledger has not answered once its signal aborts", async () => {
+  const handed: (AbortSignal | undefined)[] = [];
+  const ledger: LlmLedgerPort = {
+    reserve: (_feature, _studio, _user, _usd, _role, _version, signal?: AbortSignal) => {
+      handed.push(signal);
+      return late(200, { granted: true, reason: null, usageId: 44 }, signal);
+    },
+    settle: async () => {},
+  };
+  const controller = new AbortController();
+  let invoked = false;
+  const pending = callClaude(options({
+    ledger,
+    signal: controller.signal,
+    caller: async () => {
+      invoked = true;
+      return response;
+    },
+  }));
+  setTimeout(() => controller.abort(new Error("no answer in time")), 5);
+  const result = await pending;
+  assert(!result.ok && "error" in result, "the call went ahead");
+  assertEquals([result.errorType, result.error], ["ledger_error", "no answer in time"]);
+  assertEquals(invoked, false);
+  assertEquals(handed.length, 1);
+  assert(handed[0]?.aborted, "the reservation's signal did not abort with the call's");
+});
+
+Deno.test("callClaude bounds settling by its ledger signal: a paid answer returns, and the unsettled row is logged", async () => {
+  const controller = new AbortController();
+  const ledger: LlmLedgerPort = {
+    reserve: async () => ({ granted: true, reason: null, usageId: 44 }),
+    settle: (_usageId, _fields, signal?: AbortSignal) => late(200, undefined, signal),
+  };
+  const { logs, clientOptions } = recorder();
+  const pending = callClaude(options({ ledger, ledgerSignal: controller.signal, caller: async () => paidResponse, clientOptions }));
+  setTimeout(() => controller.abort(new Error("no answer in time")), 5);
+  const result = await pending;
+  assert(result.ok);
+  assertEquals(result.usd, 0.003);
+  assertEquals(logs.filter((entry) => entry.event === "claude_ledger_settle_failed").length, 1, "the unsettled row was not logged");
+});
+
+Deno.test("callClaude settles inside its own window: a settle that never answers still returns the paid answer and its cost", async () => {
+  const time = new FakeTime(0);
+  try {
+    const ledger: LlmLedgerPort = {
+      reserve: async () => ({ granted: true, reason: null, usageId: 44 }),
+      // Never answers and never looks at its signal.
+      settle: () => new Promise<void>(() => {}),
+    };
+    const { logs, clientOptions } = recorder();
+    let result: Awaited<ReturnType<typeof callClaude>> | undefined;
+    void callClaude(options({ ledger, caller: async () => paidResponse, clientOptions })).then((r) => (result = r));
+    await time.tickAsync(LEDGER_SETTLE_MS - 1);
+    assertEquals(result, undefined, "the call returned before its settle window passed");
+    await time.tickAsync(1);
+    await time.runMicrotasks();
+    assert(result, "callClaude was still waiting on a settle that never answers");
+    assert(result.ok);
+    assertEquals(result.usd, 0.003);
+    assertEquals(result.response.content, paidResponse.content);
+    const unsettled = logs.filter((entry) => entry.event === "claude_ledger_settle_failed");
+    assertEquals(unsettled.length, 1, "the unsettled row was not logged");
+    assertEquals([unsettled[0].fields?.usage_id, unsettled[0].fields?.usd], [44, 0.003]);
+  } finally {
+    time.restore();
+  }
+});
+
+/** What the Messages API sends back, as the SDK reads it off the wire. */
+function wire(status: number, body: unknown, headers: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
+}
+
+/** Never answers; rejects once `signal` aborts. */
+function hang<T>(signal?: AbortSignal | null): Promise<T> {
+  return new Promise<T>((_resolve, reject) => signal?.addEventListener("abort", () => reject(signal.reason), { once: true }));
+}
+
+Deno.test("callClaude: the reservation and the model share timeoutMs, so an SDK retry ends with the call's window", async () => {
+  const time = new FakeTime(0);
+  const attempts: number[] = [];
+  // The real SDK path: no caller is injected, only the network under it.
+  const api = stub(globalThis, "fetch", (_input: string | URL | Request, init?: RequestInit) => {
+    attempts.push(Date.now());
+    if (attempts.length > 1) return hang<Response>(init?.signal);
+    // Overloaded 50 s into the first attempt, well inside its timeout; the SDK retries 1 s later.
+    const overloaded = wire(529, { type: "error", error: { type: "overloaded_error", message: "Overloaded" } }, { "retry-after-ms": "1000" });
+    return late(50_000, overloaded, init?.signal ?? undefined);
+  });
+  try {
+    const settled: { at: number; status: string }[] = [];
+    const ledger: LlmLedgerPort = {
+      reserve: () => late(4_000, { granted: true, reason: null, usageId: 44 }),
+      settle: async (_usageId, fields) => {
+        settled.push({ at: Date.now(), status: fields.status });
+      },
+    };
+    const { clientOptions } = recorder();
+    let result: Awaited<ReturnType<typeof callClaude>> | undefined;
+    void callClaude(options({ ledger, timeoutMs: 60_000, clientOptions })).then((r) => (result = r));
+    while (result === undefined && Date.now() < 200_000) await time.tickAsync(1_000);
+    assertEquals(attempts, [4_000, 55_000], "the SDK did not retry inside the window");
+    assertEquals(settled.map((entry) => entry.status), ["error"]);
+    assert(settled[0].at <= 60_000, `the model call ran to ${settled[0].at} ms, past the window that ends 60000 ms after the call starts`);
+    assert(result && !result.ok && "error" in result, "the call did not fail");
+    assertEquals([result.errorType, result.transient], ["timeout", true]);
+  } finally {
+    api.restore();
+    time.restore();
+  }
+});
+
+Deno.test("createLlmLedger hands its signal to llm_reserve and llm_settle", async () => {
+  const signals: Record<string, AbortSignal> = {};
+  // A query builder: awaited as is, or through abortSignal.
+  const reply = (name: string) => {
+    const answer = { data: name === "llm_reserve" ? granted().data : null, error: null };
+    return {
+      abortSignal(signal: AbortSignal) {
+        signals[name] = signal;
+        return Promise.resolve(answer);
+      },
+      then: (resolve: (value: typeof answer) => unknown, reject: (reason: unknown) => unknown) => Promise.resolve(answer).then(resolve, reject),
+    };
+  };
+  const admin = { rpc: (name: string) => reply(name) } as never;
+  const ledger = createLlmLedger(admin);
+  const signal = new AbortController().signal;
+  await ledger.reserve("test-feature", "studio-1", "user-1", 0.01, "extract", "v1", signal);
+  await ledger.settle(44, {
+    model: "claude-sonnet-5-5",
+    usage: { input_tokens: 1, output_tokens: 1 },
+    usd: 0,
+    status: "settled",
+    stopReason: null,
+    latencyMs: 1,
+  }, signal);
+  assertEquals(signals, { llm_reserve: signal, llm_settle: signal });
+});
+
 Deno.test("callClaude request helper removes rejected forced-tool and disabled-thinking options", async () => {
   const { ledger } = fakeLedger();
   let request: Record<string, unknown> = {};
@@ -226,10 +425,12 @@ function fakeAdmin(
     auth: {
       getUser: async () => ({ data: { user: { id: "user-1" } }, error: null }),
     },
-    rpc: async (name: string, args: Record<string, unknown>) => {
+    // Thenable like a PostgREST builder, which also takes an abort signal.
+    rpc: (name: string, args: Record<string, unknown>) => {
       calls.push({ name, args });
       const reply = handlers[name]?.(args) ?? {};
-      return { data: reply.data ?? null, error: reply.error ?? null };
+      const result = Promise.resolve({ data: reply.data ?? null, error: reply.error ?? null });
+      return Object.assign(result, { abortSignal: () => result });
     },
   };
   return { admin: admin as never, calls };
