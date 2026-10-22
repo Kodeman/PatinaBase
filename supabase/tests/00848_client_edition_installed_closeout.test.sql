@@ -509,10 +509,10 @@ SELECT is(
    FROM public.client_edition_requests
    WHERE project_id IN ('84800000-0000-4000-8000-000000000001', '84800000-0000-4000-8000-000000000002')
      AND (status = 'queued' OR close_reason IS NOT NULL)),
-  '[{"p": "1", "reason": "closed", "status": "done", "close": "closed"},
-    {"p": "1", "reason": "phase",  "status": "done", "close": "closed"},
-    {"p": "2", "reason": "closed", "status": "done", "close": "closed"}]'::jsonb,
-  'dispatcher: a closed job''s queued requests end done, close_reason closed');
+  '[{"p": "1", "reason": "closing", "status": "queued", "close": null},
+    {"p": "1", "reason": "phase", "status": "done", "close": "closed"},
+    {"p": "2", "reason": "closing", "status": "queued", "close": null}]'::jsonb,
+  'dispatcher: only the 00853 closing requests wait; ordinary closed requests end done');
 SELECT is(
   (SELECT status FROM public.client_edition_requests WHERE id = '84800000-0000-4000-8000-000000000821'),
   'leased',

@@ -1037,10 +1037,17 @@ UPDATE us49_editorial AS read
   FROM public.projects AS project
  WHERE project.id = read.project_id AND read.show_makers = project.show_makers AND read.before_text IS NULL;
 
+-- 00852 deliberately changed DD to FMDD. Normalize only that exact caption-date
+-- difference in the historical 00842 side, keeping every other envelope byte.
+UPDATE us49_editorial SET before_text = jsonb_set(before_text::jsonb, '{assets}',
+  COALESCE((SELECT jsonb_agg(CASE WHEN asset #>> '{caption,when}' ~ '^0[1-9] '
+    THEN jsonb_set(asset, '{caption,when}', to_jsonb(substr(asset #>> '{caption,when}', 2)))
+    ELSE asset END ORDER BY position)
+    FROM jsonb_array_elements(before_text::jsonb -> 'assets') WITH ORDINALITY AS a(asset,position)), '[]'::jsonb))::text;
 SELECT is(
   (SELECT count(*) FROM us49_editorial WHERE before_text IS DISTINCT FROM after_text OR after_text IS NULL),
   0::bigint,
-  'before/after: every envelope is byte-identical under the 00842 body and the shared builder');
+  'before/after: envelopes match 00842 except the ruled 00852 unpadded caption date');
 SELECT is(
   (SELECT count(*) FROM us49_editorial),
   (SELECT count(*) + 1 FROM public.projects WHERE client_id IS NOT NULL),
@@ -1052,5 +1059,5 @@ SELECT ok(
    WHERE project_id = '84500000-0000-4000-8000-000000000001' AND show_makers),
   'before/after: the fixture envelope is a real one (signed line, maker, plate)');
 
-SELECT * FROM finish();
+SELECT * FROM finish(true);
 ROLLBACK;

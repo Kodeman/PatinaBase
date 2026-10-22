@@ -1218,3 +1218,43 @@ Deno.test("deterministic headlines match the client portal's Phase 1 rule (share
     assertEquals(headlines.slice(2, 2 + rooms.length).map((h) => h.key), rooms.map((r) => r.anchor));
   }
 });
+
+Deno.test("closing: captured allowlisted facts compose once for review despite unchanged prose, without closed-plate perception", async () => {
+  const captured = { ...facts(), closing: true, portfolio_snapshot: { description: "PRIVATE-CLOSE-DESCRIPTION", value_cents: 987654321 } };
+  captured.project.phase = "final_walkthrough";
+  captured.rooms[0].items[0].material = "Captured walnut";
+  const live = facts();
+  live.rooms[0].items[0].material = "LIVE-CHANGED-MATERIAL";
+  const current = approved({ chapters: ANCHORED, doorstep: WORDS.doorstep }, await sourceHash(captured), captured);
+  const { db, called } = fakeDb({ facts: live, current });
+  const { claude, calls } = claudeOf(respond());
+  const outcome = await composeRequest({ ...REQUEST, closing: true, closing_facts: captured }, deps(db, claude));
+  assertEquals(outcome.result, "composed");
+  assertEquals(called("get_project_editorial_facts").length, 0);
+  assertEquals(called("begin_client_edition").length, 1);
+  assertEquals(called("close_client_edition_request").length, 0);
+  assertEquals(called("record_plate_perception").length, 0);
+  assertEquals(calls.filter((call) => call.role === "perceive").length, 0);
+  const args = finishArgs(called);
+  assertEquals([args.p_status, args.p_kind], ["awaiting_review", "full"]);
+  assertEquals((args.p_facts as typeof captured).portfolio_snapshot, captured.portfolio_snapshot);
+  const prompts = JSON.stringify(calls);
+  assert(prompts.includes("Captured walnut"));
+  assert(prompts.includes("final_walkthrough"));
+  for (const privateValue of ["PRIVATE-CLOSE-DESCRIPTION", "987654321", "portfolio_snapshot", "LIVE-CHANGED-MATERIAL"]) {
+    assert(!prompts.includes(privateValue), privateValue + " must not reach a prompt");
+  }
+});
+
+Deno.test("closing: missing or mismatched captured facts fail closed, never read live facts or open a draft", async () => {
+  for (const closing_facts of [undefined, {}, { ...facts(), closing: true }, { ...facts(), closing: true, project: { id: "another-project", phase: "final_walkthrough" } }]) {
+    const { db, called } = fakeDb();
+    const { claude, calls } = fakeClaude({});
+    const outcome = await composeRequest({ ...REQUEST, closing: true, closing_facts }, deps(db, claude));
+    assertEquals(outcome.result, "unsettled");
+    assertEquals(outcome.reason, "closing request has no captured editorial facts");
+    assertEquals(called("get_project_editorial_facts").length, 0);
+    assertEquals(called("begin_client_edition").length, 0);
+    assertEquals(calls.length, 0);
+  }
+});

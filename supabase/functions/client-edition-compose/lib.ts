@@ -98,6 +98,8 @@ export interface EditionRequest {
   project_id: string;
   lease_token: string;
   lease_expires_at?: string | null;
+  closing?: boolean;
+  closing_facts?: unknown;
 }
 
 export interface Composition {
@@ -1095,7 +1097,7 @@ export async function composeEdition(
   spend: { usd: number },
 ): Promise<EditionDraft> {
   const ctx = await context(facts, makers, deps, deadline, spend);
-  await perceive(ctx);
+  if (!facts.closing) await perceive(ctx);
   const hero = await pickHero(ctx);
   const plan = chapterPlan(facts);
   const words = await writeWords(ctx, plan, {
@@ -1106,8 +1108,8 @@ export async function composeEdition(
   });
   const { composition, platesOnly } = settleWords(buildComposition(hash, plan, words, hero, facts), current);
   return {
-    status: platesOnly ? "approved" : "awaiting_review",
-    kind: platesOnly ? "plates_only" : "full",
+    status: platesOnly && !facts.closing ? "approved" : "awaiting_review",
+    kind: platesOnly && !facts.closing ? "plates_only" : "full",
     composition,
     images: imageRows(ctx, hero),
     model: ctx.model,
@@ -1295,14 +1297,25 @@ function editionDeadline(deps: ComposeDeps, request: EditionRequest): number {
   return Number.isFinite(lease) ? Math.min(deps.deadline, lease - LEASE_MARGIN_MS) : deps.deadline;
 }
 
+/** Closing requests never fall back to live facts: that would silently rewrite the close. */
+function closingFacts(request: EditionRequest): EditorialFacts {
+  const facts = request.closing_facts;
+  if (!isPlainObject(facts) || facts.closing !== true || !isPlainObject(facts.project)
+    || facts.project.id !== request.project_id || facts.project.phase !== "final_walkthrough"
+    || !Array.isArray(facts.rooms) || !Array.isArray(facts.assets)) {
+    throw new Error("closing request has no captured editorial facts");
+  }
+  return facts as unknown as EditorialFacts;
+}
+
 async function settleRequest(request: EditionRequest, deps: ComposeDeps, spend: { usd: number }, edition: { id: string | null }): Promise<Settled> {
-  const read = await readFacts(deps, request.project_id);
+  const read = request.closing ? closingFacts(request) : await readFacts(deps, request.project_id);
   // Before the unchanged check, so an edition frozen from these facts reads the same next run.
   const makers = await makerNames(read, deps);
   const facts = withoutMakerAlts(read, makers);
   const current = await readCurrent(deps, request.project_id);
   const hash = await sourceHash(facts);
-  if (await unchanged(current, hash, facts)) return await closeRequest(deps, request, "unchanged");
+  if (!request.closing && await unchanged(current, hash, facts)) return await closeRequest(deps, request, "unchanged");
   edition.id = await beginEdition(deps, request);
   if (edition.id === null) return await closeRequest(deps, request, "daily_limit");
   const until = editionDeadline(deps, request);
