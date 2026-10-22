@@ -133,12 +133,12 @@ export function PressBand({
   const editions = data?.editions ?? [];
   const pending = pendingEdition(editions);
   const current = currentEdition(editions);
-  // A closed project's edition is frozen, and a closed job with none frozen
-  // (archived from active, or a draft never approved) takes no studio act
-  // either: nothing on the client page may move.
+  // Only the SQL-marked closing draft can be reviewed after the job closes.
   const frozen = editionsFrozen(editions, data?.projectClosed === true);
+  const closingPending = data?.projectClosed === true && pending?.closing === true;
   const { data: sourceUrls } = useClientEditionSourceUrls(
-    frozen ? [] : uniqueImages([...(pending?.images ?? []), ...(current?.images ?? [])]),
+    frozen ? (closingPending ? uniqueImages(pending.images) : [])
+      : uniqueImages([...(pending?.images ?? []), ...(current?.images ?? [])]),
   );
   // Before any edition the client page opens on the editorial cover.
   const { data: editorialAssets } = useClientEditorialAssets(projectId, !!data && !pending && !current);
@@ -155,12 +155,13 @@ export function PressBand({
       data-press-band
       className="mt-3 flex w-full max-w-[760px] flex-col gap-4 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-4 py-3 text-left"
     >
-      {pending && !frozen ? (
+      {pending && (!frozen || closingPending) ? (
         <PendingEdition
           key={pending.id}
           headingId={headingId}
           projectId={projectId}
           edition={pending}
+          allowEdit={!frozen}
           current={current}
           name={name}
           sourceUrls={urls}
@@ -279,8 +280,10 @@ function PendingEdition({
   current,
   name,
   sourceUrls,
+  allowEdit,
 }: {
   headingId: string;
+  allowEdit: boolean;
   projectId: string;
   edition: ClientEdition;
   current: ClientEdition | null;
@@ -341,7 +344,7 @@ function PendingEdition({
               Hold
             </DocumentAction>
           )}
-          <DocumentAction
+          {allowEdit && <DocumentAction
             actionKey="press-edit"
             variant="tertiary"
             aria-expanded={editing}
@@ -349,7 +352,7 @@ function PendingEdition({
             onClick={() => setEditing((open) => !open)}
           >
             Edit
-          </DocumentAction>
+          </DocumentAction>}
         </DocumentActionRow>
       </div>
       <ActFailLine error={approve.error ?? hold.error} />
@@ -359,7 +362,7 @@ function PendingEdition({
         overrides={overrides}
         sourceUrls={sourceUrls}
       />
-      {editing && (
+      {allowEdit && editing && (
         <EditTray
           id={trayId}
           projectId={projectId}
