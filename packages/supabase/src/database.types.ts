@@ -40015,6 +40015,7 @@ export type Database = {
         Returns: string
       }
       begin_client_edition_compose_run: { Args: never; Returns: number }
+      begin_client_plate_check_run: { Args: never; Returns: number }
       begin_client_plate_copy_run: { Args: never; Returns: number }
       begin_direction_from_discovery: {
         Args: { p_designer_client_id: string }
@@ -42492,6 +42493,15 @@ export type Database = {
       finish_client_edition_compose_run: {
         Args: {
           p_cost_usd?: number
+          p_detail?: Json
+          p_error?: string
+          p_run_id: number
+          p_status: string
+        }
+        Returns: undefined
+      }
+      finish_client_plate_check_run: {
+        Args: {
           p_detail?: Json
           p_error?: string
           p_run_id: number

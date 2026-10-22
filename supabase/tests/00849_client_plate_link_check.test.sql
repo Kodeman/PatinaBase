@@ -91,8 +91,8 @@ UPDATE public.project_ffe_item_images SET link_checked_at=NULL WHERE item_id='84
 SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM public.list_uncopied_library_images(200) WHERE project_id = '84900000-0000-4000-8000-000000000001'), 'deduplicated source request counts as copied');
 SELECT pg_temp.assert_true(public._build_project_editorial('84900000-0000-4000-8000-000000000001')->'rooms'->0->'items'->0->'assetIds' = '["84900000-0000-4000-8000-000000000501"]', 'live source exposes its copied plate');
 SELECT public.record_library_link_check(id,true) FROM public.project_ffe_item_images WHERE item_id='84900000-0000-4000-8000-000000000101';
-SELECT pg_temp.assert_true(public._build_project_editorial('84900000-0000-4000-8000-000000000001')->'rooms'->0->'items'->0->'assetIds' = '[]', 'dead source has no assetIds');
-SELECT pg_temp.assert_true(public._build_project_editorial('84900000-0000-4000-8000-000000000001')->'assets' = '[]', 'dead source disappears from envelope assets');
+SELECT pg_temp.assert_true(public._build_project_editorial('84900000-0000-4000-8000-000000000001')->'rooms'->0->'items'->0->'assetIds' = '["84900000-0000-4000-8000-000000000501"]', 'dead source keeps copied assetIds');
+SELECT pg_temp.assert_true(EXISTS(SELECT 1 FROM jsonb_array_elements(public._build_project_editorial('84900000-0000-4000-8000-000000000001')->'assets') AS asset WHERE asset->>'id'='84900000-0000-4000-8000-000000000501'), 'dead source keeps copied envelope asset');
 SELECT pg_temp.assert_true(public._build_project_editorial('84900000-0000-4000-8000-000000000001')->'rooms'->0->'items'->0->>'silhouetteKind' = 'seating', 'dead source retains silhouetteKind');
 
 INSERT INTO public.room_scans(id,user_id,project_id,project_room_id,name,status)
@@ -108,5 +108,20 @@ SELECT pg_temp.assert_true(public._build_project_editorial('84900000-0000-4000-8
 SELECT pg_temp.assert_true(EXISTS(SELECT 1 FROM jsonb_array_elements(public._build_project_editorial('84900000-0000-4000-8000-000000000001')->'assets') AS asset WHERE asset->>'id'='84900000-0000-4000-8000-000000000703' AND asset->>'sourceKind'='scan'), 'filed scan appears as scan asset');
 UPDATE public.room_scans SET project_room_id=NULL WHERE id='84900000-0000-4000-8000-000000000701';
 SELECT pg_temp.assert_true(public._build_project_editorial('84900000-0000-4000-8000-000000000001')->'rooms'->0->'scanAssetIds' = '[]', 'unfiled scan excluded from room scanAssetIds');
-SELECT pg_temp.assert_true(public._build_project_editorial('84900000-0000-4000-8000-000000000001')->'assets' = '[]', 'unfiled scan excluded from envelope assets');
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM jsonb_array_elements(public._build_project_editorial('84900000-0000-4000-8000-000000000001')->'assets') AS asset WHERE asset->>'id'='84900000-0000-4000-8000-000000000703'), 'unfiled scan excluded from envelope assets');
+SELECT pg_temp.assert_true(
+  NOT has_function_privilege('anon', 'public.begin_client_plate_check_run()', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.finish_client_plate_check_run(bigint,text,jsonb,text)', 'EXECUTE')
+  AND has_function_privilege('service_role', 'public.begin_client_plate_check_run()', 'EXECUTE'),
+  'run RPCs are service-role only');
+DO $$ DECLARE run_id bigint; BEGIN
+  run_id := public.begin_client_plate_check_run();
+  PERFORM pg_temp.assert_true(EXISTS(SELECT 1 FROM public.job_runs WHERE id=run_id AND job_name='client-plate-check' AND status='running'), 'run begins in job_runs');
+  PERFORM public.finish_client_plate_check_run(run_id, 'succeeded', '{"checked":3,"dead":1,"alive":2,"skipped":4,"errors":0}');
+  PERFORM pg_temp.assert_true(EXISTS(SELECT 1 FROM public.job_runs WHERE id=run_id AND status='succeeded' AND finished_at IS NOT NULL AND detail @> '{"checked":3,"dead":1,"alive":2,"skipped":4,"errors":0}'), 'run finishes with all classification counts');
+  BEGIN
+    PERFORM public.finish_client_plate_check_run(run_id, 'failed', '{}', 'late');
+    RAISE EXCEPTION 'assertion: terminal run accepted a second finish';
+  EXCEPTION WHEN no_data_found THEN NULL; END;
+END $$;
 ROLLBACK;

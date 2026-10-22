@@ -2,6 +2,8 @@ import { resolveSource } from "../client-plate-copy/lib.ts";
 import {
   assertHostResolvesSafe,
   assertSafeUrl,
+  denoPinnedHttpTransport,
+  type SafeFetchDependencies,
 } from "../_shared/product-page/ssrf.ts";
 
 export interface LibraryImage {
@@ -10,13 +12,16 @@ export interface LibraryImage {
   url: string;
 }
 
+// null means inconclusive: leave the row due, not checked or dead.
 export function isDeadLink(
   status: number,
   contentType: string | null,
-  timedOut = false,
-): boolean {
-  return timedOut || status < 200 || status >= 400 ||
-    !/^image\/[a-z0-9.+-]+(?:\s*;|\s*$)/i.test(contentType ?? "");
+): boolean | null {
+  if ([404, 410].includes(status)) return true;
+  if (!/^2\d\d$/.test(String(status))) return null;
+  const type = (contentType ?? "").split(";", 1)[0].trim().toLowerCase();
+  if (["", "binary/octet-stream"].includes(type)) return null;
+  return !/^image\//i.test(type);
 }
 
 export function libraryAddress(
@@ -37,114 +42,135 @@ export function libraryAddress(
   return source.url;
 }
 
-export interface LinkDependencies {
-  fetch: typeof fetch;
-  validate: (url: URL, timeoutMs: number) => Promise<unknown>;
-}
-
-const liveDependencies: LinkDependencies = {
-  fetch,
-  validate: (url, timeoutMs) =>
-    assertHostResolvesSafe(url.hostname, undefined, timeoutMs),
-};
-
-async function requestLink(
-  address: string,
-  method: "HEAD" | "GET",
-  signal: AbortSignal,
-  deadline: number,
-  deps: LinkDependencies,
-): Promise<Response> {
-  let url = assertSafeUrl(address);
-  for (let hop = 0; hop <= 3; hop++) {
-    signal.throwIfAborted();
-    await deps.validate(url, Math.max(1, deadline - Date.now()));
-    signal.throwIfAborted();
-    const response = await deps.fetch(url, {
-      method,
-      redirect: "manual",
-      signal,
-      headers: method === "GET"
-        ? { Accept: "image/*", Range: "bytes=0-0" }
-        : { Accept: "image/*" },
-    });
-    // Never buffer a body, even if a host ignores Range and sends the original.
-    await response.body?.cancel();
-    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
-    const location = response.headers.get("location");
-    if (!location || hop === 3) {
-      throw new Error("invalid or excessive redirect");
-    }
-    url = assertSafeUrl(new URL(location, url).href);
-  }
-  throw new Error("redirect limit");
+function redirectUrl(response: Response, url: URL, hop: number): URL {
+  const location = response.headers.get("location");
+  if (!location || hop === 3) throw new Error("invalid or excessive redirect");
+  return assertSafeUrl(new URL(location, url).href);
 }
 
 export async function checkLibraryLink(
   address: string,
-  deps: LinkDependencies = liveDependencies,
+  deps: SafeFetchDependencies = {},
   timeoutMs = 5_000,
-): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+): Promise<boolean | null> {
   const deadline = Date.now() + timeoutMs;
+  const remaining = () => {
+    const ms = deadline - Date.now();
+    if (ms <= 0) throw new Error("link check deadline");
+    return ms;
+  };
   try {
-    let response = await requestLink(
-      address,
-      "HEAD",
-      controller.signal,
-      deadline,
-      deps,
-    );
-    if (response.status === 405) {
-      response = await requestLink(
-        address,
-        "GET",
-        controller.signal,
-        deadline,
-        deps,
+    let url = assertSafeUrl(address);
+    for (let hop = 0; hop <= 3; hop++) {
+      const addresses = await assertHostResolvesSafe(
+        url.hostname,
+        deps.resolver,
+        remaining(),
       );
+      const response = await (deps.transport ?? denoPinnedHttpTransport)
+        .request(
+          url,
+          addresses[0],
+          {
+            headers: { Accept: "image/*", Range: "bytes=0-0" },
+            timeoutMs: remaining(),
+            maxBytes: 65_536,
+            truncate: true,
+          },
+        );
+      await response.body?.cancel();
+      remaining();
+      if (![301, 302, 303, 307, 308].includes(response.status)) {
+        return isDeadLink(
+          response.status,
+          response.headers.get("content-type"),
+        );
+      }
+      url = redirectUrl(response, url, hop);
     }
-    return isDeadLink(
-      response.status,
-      response.headers.get("content-type"),
-      controller.signal.aborted,
-    );
   } catch {
-    return true;
-  } finally {
-    clearTimeout(timer);
+    // DNS, transport and policy failures are not proof of a dead source.
   }
+  return null;
+}
+
+export async function checkLibraryImage(
+  image: LibraryImage,
+  supabaseUrl: string,
+): Promise<boolean | null> {
+  let address: string;
+  try {
+    address = libraryAddress(image, supabaseUrl);
+  } catch {
+    // An unaddressable row cannot recover through network retries.
+    return true;
+  }
+  return await checkLibraryLink(address);
 }
 
 export interface CheckSteps {
-  check: (image: LibraryImage) => Promise<boolean>;
+  check: (image: LibraryImage) => Promise<boolean | null>;
   record: (image: LibraryImage, dead: boolean) => Promise<void>;
 }
 
-// Two in-flight checks. Leave unstarted rows due for the next night rather
-// than outliving the edge invocation when every host uses the full timeout.
+export interface CheckCounts {
+  checked: number;
+  dead: number;
+  alive: number;
+  skipped: number;
+  errors: number;
+}
+
+// Two in-flight checks. Leave unstarted/inconclusive rows due next night.
 export async function checkBatch(
   images: LibraryImage[],
   steps: CheckSteps,
   deadline: number,
-) {
-  const counts = { checked: 0, dead: 0, errors: 0, deferred: images.length };
+): Promise<CheckCounts> {
+  const counts = {
+    checked: 0,
+    dead: 0,
+    alive: 0,
+    skipped: images.length,
+    errors: 0,
+  };
   let next = 0;
   async function worker() {
     while (next < images.length && Date.now() < deadline) {
       const image = images[next++];
-      counts.deferred--;
       try {
         const dead = await steps.check(image);
+        if (dead === null) continue;
         await steps.record(image, dead);
+        counts.skipped--;
         counts.checked++;
-        if (dead) counts.dead++;
+        counts.dead += Number(dead);
+        counts.alive += Number(!dead);
       } catch {
+        counts.skipped--;
         counts.errors++;
       }
     }
   }
   await Promise.all([worker(), worker()]);
+  return counts;
+}
+
+export interface RunSteps extends CheckSteps {
+  begin: () => Promise<number>;
+  finish: (runId: number, counts: CheckCounts) => Promise<void>;
+}
+
+export async function runChecks(
+  images: LibraryImage[],
+  steps: RunSteps,
+  deadline: number,
+): Promise<CheckCounts> {
+  if (!images.length) {
+    return { checked: 0, dead: 0, alive: 0, skipped: 0, errors: 0 };
+  }
+  const runId = await steps.begin();
+  const counts = await checkBatch(images, steps, deadline);
+  await steps.finish(runId, counts);
   return counts;
 }

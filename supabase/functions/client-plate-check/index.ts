@@ -1,12 +1,7 @@
 /// <reference lib="deno.ns" />
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isServiceCaller } from "../board-deck-import-resolve/auth.ts";
-import {
-  checkBatch,
-  checkLibraryLink,
-  libraryAddress,
-  type LibraryImage,
-} from "./lib.ts";
+import { checkLibraryImage, type LibraryImage, runChecks } from "./lib.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -52,8 +47,22 @@ Deno.serve(async (req) => {
       p_limit: 200,
     });
     if (error) throw error;
-    const counts = await checkBatch((data ?? []) as LibraryImage[], {
-      check: (image) => checkLibraryLink(libraryAddress(image, supabaseUrl)),
+    const counts = await runChecks((data ?? []) as LibraryImage[], {
+      check: (image) => checkLibraryImage(image, supabaseUrl),
+      async begin() {
+        const { data, error } = await admin.rpc("begin_client_plate_check_run");
+        if (error) throw error;
+        return data;
+      },
+      async finish(runId, counts) {
+        const { error } = await admin.rpc("finish_client_plate_check_run", {
+          p_run_id: runId,
+          p_status: counts.errors ? "failed" : "succeeded",
+          p_detail: counts,
+          p_error: counts.errors ? "library link recording errors" : null,
+        });
+        if (error) throw error;
+      },
       async record(image, dead) {
         const { error } = await admin.rpc("record_library_link_check", {
           p_image_id: image.id,
@@ -62,7 +71,6 @@ Deno.serve(async (req) => {
         if (error) throw error;
       },
     }, started + 100_000);
-    // No generic job_runs helper exists; copy/compose have job-specific RPCs.
     console.log("client-plate-check", JSON.stringify(counts));
     return json(counts, counts.errors ? 500 : 200);
   } catch (error) {

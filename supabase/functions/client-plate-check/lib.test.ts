@@ -1,32 +1,53 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  type PinnedHttpTransport,
+  PinnedTransportError,
+  type SafeFetchDependencies,
+} from "../_shared/product-page/ssrf.ts";
+import {
   checkBatch,
+  checkLibraryImage,
   checkLibraryLink,
   isDeadLink,
   libraryAddress,
   type LibraryImage,
-  type LinkDependencies,
+  runChecks,
 } from "./lib.ts";
-
-Deno.test("classifier: images are live, errors, timeout and non-images are dead", () => {
-  for (const status of [200, 206]) {
-    assertEquals(isDeadLink(status, "image/jpeg"), false);
-  }
-  assertEquals(isDeadLink(200, "IMAGE/WEBP; charset=binary"), false);
-  for (const status of [400, 403, 404, 410, 500, 503]) {
-    assertEquals(isDeadLink(status, "image/jpeg"), true);
-  }
-  for (
-    const type of [null, "", "text/html", "application/octet-stream", "image/"]
-  ) assertEquals(isDeadLink(200, type), true);
-  assertEquals(isDeadLink(200, "image/png", true), true);
-});
 
 const image: LibraryImage = {
   id: "image",
   project_id: "project",
   url: "https://maker.example/chair.jpg",
 };
+const publicAddress = { address: "93.184.216.34", family: 4 as const };
+function deps(request: PinnedHttpTransport["request"]): SafeFetchDependencies {
+  return {
+    resolver: () => Promise.resolve([publicAddress]),
+    transport: { request },
+  };
+}
+
+Deno.test("classifier: only definitive dead responses are recorded", () => {
+  for (const status of [200, 206]) {
+    assertEquals(isDeadLink(status, "image/jpeg"), false);
+    assertEquals(isDeadLink(status, "IMAGE/WEBP; charset=binary"), false);
+    assertEquals(isDeadLink(status, "text/html"), true);
+    assertEquals(isDeadLink(status, "application/octet-stream"), true);
+    for (
+      const type of [
+        null,
+        "",
+        "binary/octet-stream",
+        "Binary/Octet-Stream; x=y",
+      ]
+    ) assertEquals(isDeadLink(status, type), null);
+  }
+  for (const status of [404, 410]) assertEquals(isDeadLink(status, null), true);
+  for (const status of [301, 400, 401, 403, 416, 429, 500, 503]) {
+    assertEquals(isDeadLink(status, "image/jpeg"), null);
+  }
+});
+
 Deno.test("library address: reuse copier public URL builder", () => {
   assertEquals(libraryAddress(image, "https://local.example"), image.url);
   assertEquals(
@@ -38,126 +59,124 @@ Deno.test("library address: reuse copier public URL builder", () => {
   );
 });
 
-function deps(fetcher: typeof fetch): LinkDependencies {
-  return { fetch: fetcher, validate: () => Promise.resolve([]) };
-}
-
-Deno.test("HEAD success never downloads a GET", async () => {
-  const methods: string[] = [];
-  const dead = await checkLibraryLink(
-    image.url,
-    deps((_url, init) => {
-      methods.push(init!.method!);
-      return Promise.resolve(
-        new Response(null, { headers: { "content-type": "image/png" } }),
-      );
-    }),
-  );
-  assertEquals(dead, false);
-  assertEquals(methods, ["HEAD"]);
+Deno.test("pinned ranged GET uses validated address without a second DNS lookup", async () => {
+  let lookups = 0;
+  let requests = 0;
+  const result = await checkLibraryLink(image.url, {
+    resolver: () =>
+      Promise.resolve([
+        ++lookups === 1 ? publicAddress : { address: "127.0.0.1", family: 4 },
+      ]),
+    transport: {
+      request(url, address, options) {
+        requests++;
+        assertEquals(url.hostname, "maker.example");
+        assertEquals(address, publicAddress);
+        assertEquals(lookups, 1);
+        assertEquals(options.headers, {
+          Accept: "image/*",
+          Range: "bytes=0-0",
+        });
+        assertEquals(options.maxBytes, 65_536);
+        assertEquals(options.truncate, true);
+        assertEquals(options.allowedContentTypes, undefined);
+        assertEquals(options.timeoutMs > 0 && options.timeoutMs <= 5_000, true);
+        return Promise.resolve(
+          new Response(null, {
+            status: 206,
+            headers: { "content-type": "image/png" },
+          }),
+        );
+      },
+    },
+  });
+  assertEquals(result, false);
+  assertEquals(lookups, 1);
+  assertEquals(requests, 1);
 });
 
-Deno.test("HEAD 405 falls back to one-byte ranged GET and cancels ignored-range body", async () => {
-  const methods: string[] = [];
+Deno.test("ignored Range body is cancelled and content type is classified", async () => {
   let cancelled = false;
-  const dead = await checkLibraryLink(
-    image.url,
-    deps((_url, init) => {
-      methods.push(init!.method!);
-      if (init!.method === "HEAD") {
-        return Promise.resolve(new Response(null, { status: 405 }));
-      }
-      assertEquals(new Headers(init!.headers).get("range"), "bytes=0-0");
-      return Promise.resolve(
-        new Response(
-          new ReadableStream({
-            cancel() {
-              cancelled = true;
-            },
-          }),
-          {
-            status: 206,
-            headers: { "content-type": "image/jpeg" },
-          },
-        ),
-      );
-    }),
+  assertEquals(
+    await checkLibraryLink(
+      image.url,
+      deps(() =>
+        Promise.resolve(
+          new Response(
+            new ReadableStream({
+              cancel() {
+                cancelled = true;
+              },
+            }),
+            { headers: { "content-type": "text/html" } },
+          ),
+        )
+      ),
+    ),
+    true,
   );
-  assertEquals(dead, false);
-  assertEquals(methods, ["HEAD", "GET"]);
   assertEquals(cancelled, true);
 });
 
-Deno.test("GET fallback still classifies dead status and content type", async () => {
+Deno.test("timeout and network errors stay due rather than dead", async () => {
   for (
-    const [status, contentType] of [[404, "image/png"], [
-      200,
-      "text/html",
-    ]] as const
+    const error of [
+      new PinnedTransportError("timeout"),
+      new PinnedTransportError("too_large"),
+      new PinnedTransportError("failed"),
+      new Error("network"),
+    ]
   ) {
     assertEquals(
-      await checkLibraryLink(
-        image.url,
-        deps((_url, init) =>
-          Promise.resolve(
-            init!.method === "HEAD"
-              ? new Response(null, { status: 405 })
-              : new Response(null, {
-                status,
-                headers: { "content-type": contentType },
-              }),
-          )
-        ),
-      ),
-      true,
+      await checkLibraryLink(image.url, deps(() => Promise.reject(error))),
+      null,
     );
   }
-});
-
-Deno.test("403 is dead without GET fallback", async () => {
-  let calls = 0;
   assertEquals(
-    await checkLibraryLink(
-      image.url,
-      deps(() => {
-        calls++;
-        return Promise.resolve(new Response(null, { status: 403 }));
-      }),
-    ),
-    true,
+    await checkLibraryLink(image.url, {
+      resolver: () => Promise.reject(new Error("DNS")),
+      transport: {
+        request: () => {
+          throw new Error("must not connect");
+        },
+      },
+    }),
+    null,
   );
-  assertEquals(calls, 1);
 });
 
-Deno.test("timeout and network errors are dead", async () => {
+Deno.test("redirects resolve and pin each hop; unsafe targets never connect", async () => {
+  const hosts: string[] = [];
+  const connections: string[] = [];
   assertEquals(
-    await checkLibraryLink(
-      image.url,
-      deps((_url, init) =>
-        new Promise((_resolve, reject) => {
-          init!.signal!.addEventListener(
-            "abort",
-            () => reject(new DOMException("timed out", "AbortError")),
-            { once: true },
+    await checkLibraryLink(image.url, {
+      resolver(host) {
+        hosts.push(host);
+        return Promise.resolve([publicAddress]);
+      },
+      transport: {
+        request(url, address) {
+          connections.push(url.hostname);
+          assertEquals(address, publicAddress);
+          return Promise.resolve(
+            connections.length === 1
+              ? new Response(null, {
+                status: 302,
+                headers: { location: "https://other.example/picture" },
+              })
+              : new Response(null, {
+                headers: { "content-type": "image/jpeg" },
+              }),
           );
-        })
-      ),
-      10,
-    ),
-    true,
+        },
+      },
+    }),
+    false,
   );
-  assertEquals(
-    await checkLibraryLink(
-      image.url,
-      deps(() => Promise.reject(new Error("network"))),
-    ),
-    true,
-  );
-});
-
-Deno.test("redirect targets revalidate; private URL never fetches", async () => {
+  assertEquals(hosts, ["maker.example", "other.example"]);
+  assertEquals(connections, hosts);
   let calls = 0;
-  const fetcher: typeof fetch = () => {
+  const blocked = deps(() => {
     calls++;
     return Promise.resolve(
       new Response(null, {
@@ -165,94 +184,150 @@ Deno.test("redirect targets revalidate; private URL never fetches", async () => 
         headers: { location: "http://127.0.0.1/private" },
       }),
     );
-  };
-  assertEquals(await checkLibraryLink(image.url, deps(fetcher)), true);
-  assertEquals(calls, 1);
-  assertEquals(
-    await checkLibraryLink("http://169.254.169.254/", deps(fetcher)),
-    true,
-  );
-  assertEquals(calls, 1);
-});
-
-Deno.test("safe redirects are followed as HEAD; DNS refusal is dead", async () => {
-  const urls: string[] = [];
-  const dependencies = deps((url) => {
-    urls.push(String(url));
-    return Promise.resolve(
-      urls.length === 1
-        ? new Response(null, { status: 301, headers: { location: "/new.jpg" } })
-        : new Response(null, { headers: { "content-type": "image/jpeg" } }),
-    );
   });
-  assertEquals(await checkLibraryLink(image.url, dependencies), false);
-  assertEquals(urls, [image.url, "https://maker.example/new.jpg"]);
-  dependencies.validate = () => Promise.reject(new Error("blocked_host"));
-  assertEquals(await checkLibraryLink(image.url, dependencies), true);
-  assertEquals(urls.length, 2);
+  assertEquals(await checkLibraryLink(image.url, blocked), null);
+  for (
+    const url of [
+      "http://169.254.169.254/",
+      "https://maker.example:8080/a",
+      "https://user:password@maker.example/a",
+    ]
+  ) assertEquals(await checkLibraryLink(url, blocked), null);
+  assertEquals(calls, 1);
 });
 
-Deno.test("redirect limit is three hops; every hop validates with no credentials", async () => {
+Deno.test("redirect overflow stays due after three redirects", async () => {
   let calls = 0;
-  let validated = 0;
   assertEquals(
-    await checkLibraryLink(image.url, {
-      validate: () => {
-        validated++;
-        return Promise.resolve([]);
-      },
-      fetch: (_url, init) => {
+    await checkLibraryLink(
+      image.url,
+      deps(() => {
         calls++;
-        assertEquals(new Headers(init!.headers).get("authorization"), null);
-        assertEquals(new Headers(init!.headers).get("cookie"), null);
-        assertEquals(init!.redirect, "manual");
         return Promise.resolve(
           new Response(null, {
             status: 302,
             headers: { location: `/hop-${calls}` },
           }),
         );
-      },
-    }),
-    true,
+      }),
+    ),
+    null,
   );
   assertEquals(calls, 4);
-  assertEquals(validated, 4);
 });
 
-Deno.test("batch: records classifications with two workers; failures stay due", async () => {
-  const images = Array.from(
-    { length: 5 },
-    (_, n) => ({ ...image, id: String(n) }),
-  );
-  const records: string[] = [];
-  let active = 0;
-  let peak = 0;
-  const counts = await checkBatch(images, {
-    async check(row) {
-      active++;
-      peak = Math.max(peak, active);
-      await Promise.resolve();
-      active--;
-      return row.id === "1";
+Deno.test("per-row deadline covers DNS and transport together", async () => {
+  const originalNow = Date.now;
+  let now = 0;
+  Date.now = () => now;
+  try {
+    assertEquals(
+      await checkLibraryLink(image.url, {
+        resolver() {
+          now += 3_000;
+          return Promise.resolve([publicAddress]);
+        },
+        transport: {
+          request(_url, _address, options) {
+            assertEquals(options.timeoutMs, 2_000);
+            now += 2_001;
+            return Promise.resolve(
+              new Response(null, { headers: { "content-type": "image/jpeg" } }),
+            );
+          },
+        },
+      }),
+      null,
+    );
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+Deno.test("batch: two workers record alive/dead, skip inconclusive and isolate errors", async () => {
+  let active = 0, peak = 0;
+  const recorded: string[] = [];
+  const counts = await checkBatch(
+    Array.from({ length: 4 }, (_, n) => ({ ...image, id: String(n) })),
+    {
+      async check(row) {
+        active++;
+        peak = Math.max(peak, active);
+        await Promise.resolve();
+        active--;
+        return row.id === "2" ? null : row.id === "1";
+      },
+      record(row, dead) {
+        if (row.id === "3") throw new Error("DB");
+        recorded.push(`${row.id}:${dead}`);
+        return Promise.resolve();
+      },
     },
-    record(row, dead) {
-      if (row.id === "2") {
-        return Promise.reject(new Error("database unavailable"));
-      }
-      records.push(`${row.id}:${dead}`);
+    Date.now() + 1000,
+  );
+  assertEquals(peak, 2);
+  assertEquals(counts, {
+    checked: 2,
+    dead: 1,
+    alive: 1,
+    skipped: 1,
+    errors: 1,
+  });
+  assertEquals(recorded.sort(), ["0:false", "1:true"]);
+});
+
+Deno.test("run history: no work opens no run; work finishes with counts including unaddressable row", async () => {
+  let began = 0, finished = 0;
+  const recorded: boolean[] = [];
+  const steps = {
+    begin() {
+      began++;
+      return Promise.resolve(42);
+    },
+    async check(row: LibraryImage) {
+      return await checkLibraryImage(row, "https://local.example");
+    },
+    record(_row: LibraryImage, dead: boolean) {
+      recorded.push(dead);
       return Promise.resolve();
     },
-  }, Date.now() + 1_000);
-  assertEquals(peak, 2);
-  assertEquals(counts, { checked: 4, dead: 1, errors: 1, deferred: 0 });
-  assertEquals(records.includes("1:true"), true);
+    finish(id: number, counts: unknown) {
+      finished++;
+      assertEquals(id, 42);
+      assertEquals(counts, {
+        checked: 1,
+        dead: 1,
+        alive: 0,
+        skipped: 0,
+        errors: 0,
+      });
+      return Promise.resolve();
+    },
+  };
+  assertEquals(await runChecks([], steps, Date.now() + 1000), {
+    checked: 0,
+    dead: 0,
+    alive: 0,
+    skipped: 0,
+    errors: 0,
+  });
+  assertEquals(began, 0);
+  await runChecks([{ ...image, url: " " }], steps, Date.now() + 1000);
+  assertEquals(recorded, [true]);
+  assertEquals(began, 1);
+  assertEquals(finished, 1);
 });
 
 Deno.test("batch: expired run leaves unstarted rows due", async () => {
-  const counts = await checkBatch([image], {
-    check: () => Promise.reject(new Error("must not start")),
-    record: () => Promise.reject(new Error("must not record")),
-  }, Date.now() - 1);
-  assertEquals(counts, { checked: 0, dead: 0, errors: 0, deferred: 1 });
+  assertEquals(
+    await checkBatch([image], {
+      check: () => {
+        throw new Error("must not start");
+      },
+      record: () => {
+        throw new Error("must not record");
+      },
+    }, Date.now() - 1),
+    { checked: 0, dead: 0, alive: 0, skipped: 1, errors: 0 },
+  );
 });
