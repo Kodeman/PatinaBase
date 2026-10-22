@@ -16,7 +16,7 @@ const PROJECT = '6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b';
 const SHA = 'ab'.repeat(32);
 const WEBP = new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
 
-function harness() {
+function harness({ broken = false } = {}) {
   const reads = [];
   const objects = new Map([
     [`plates/${PROJECT}/${SHA}/piece-768.webp`, WEBP],
@@ -29,6 +29,7 @@ function harness() {
     PLATES: {
       async get(key) {
         reads.push(key);
+        if (broken) throw new Error('R2 unavailable');
         const bytes = objects.get(key);
         return bytes ? { body: new Blob([bytes]).stream() } : null;
       },
@@ -70,6 +71,14 @@ test('a missing or wrong bearer is 401 before anything is read', async () => {
   await bare(await get(`/plates/${PROJECT}/${SHA}/piece-768.webp`, `Basic ${SECRET}`), 401);
   await bare(await get('/plates/not-a-uuid/x/original.jpg', 'Bearer nope'), 401);
   assert.deepEqual(reads, []);
+});
+
+test('a bucket read that fails answers as a miss: 404 with no body, never a rejection', async () => {
+  const { get, reads } = harness({ broken: true });
+  const response = await get(`/plates/${PROJECT}/${SHA}/piece-768.webp`).catch((error) => error);
+  assert.ok(response instanceof Response, `the route rejected: ${response}`);
+  await bare(response, 404);
+  assert.equal(reads.length, 1);
 });
 
 test('a miss is 404', async () => {

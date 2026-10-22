@@ -46,6 +46,14 @@ Deno.test("lintText: the project's own names are blanked for attribution only", 
   assertEquals(lintText("The Opus 2 sofa."), { rule: "attribution", term: "Opus 2" }, "without the names a versioned model name is attribution");
 });
 
+Deno.test("lintText: an allowed name is blanked only as a whole name, never inside a vendor's", () => {
+  assertEquals(lintText("Written by Gemini.", ["Gem"]), { rule: "attribution", term: "Gemini" });
+  assertEquals(lintText("Written by OpenAI.", ["Op"]), { rule: "attribution", term: "OpenAI" });
+  assertEquals(lintText("The Gem side table and the Op lamp.", ["Gem", "Op"]), null);
+  assertEquals(lintText("The Claude chair beside the Opus 2 sofa.", ["Claude", "Opus 2"]), null);
+  assertEquals(lintText("The Opus 20 sofa.", ["Opus 2"]), { rule: "attribution", term: "Opus 2" }, "Opus 20 is not the name Opus 2");
+});
+
 // ── Call C inside a composition ────────────────────────────────────────────
 
 const PROJECT = "0b7d3c1e-0000-4000-8000-000000000002";
@@ -65,6 +73,9 @@ function fakeDb() {
       return Promise.resolve({ data: data[fn] ?? null, error: null });
     },
     approvedEdition: () => Promise.resolve({ data: null, error: null }),
+    provenancePage: () => Promise.resolve({ data: { rows: [], total: 0 }, error: null }),
+    editionStatus: () => Promise.resolve({ data: "drafting", error: null }),
+    // e5bdbaf4's port, kept so this file loads against it for the negative controls.
     provenance: () => Promise.resolve({ data: [], error: null }),
     // ad32ba43's port, kept so this file loads against it for the negative controls.
     plateSources: () => Promise.resolve({ data: [], error: null }),
@@ -99,7 +110,8 @@ async function compose(script: Record<string, CallClaudeResult[]>) {
     return Promise.resolve(next);
   };
   const legacy = { supabaseUrl: "https://project.supabase.co" };
-  await composeRequest(REQUEST, { ...legacy, db, claude, privacyLive: false, media: noMedia, now: () => 0, deadline: 120_000 });
+  const sleep = (_ms: number, signal: AbortSignal) => new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+  await composeRequest(REQUEST, { ...legacy, db, claude, privacyLive: false, media: noMedia, now: () => 0, deadline: 120_000, sleep });
   const draftTexts = calls.filter((c) => c.role === "draft").map((c) => JSON.stringify(c.params.messages));
   return { calls, draftTexts, composition: finished[0].p_composition as Record<string, unknown> };
 }

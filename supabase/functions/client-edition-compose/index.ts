@@ -5,9 +5,9 @@
 // read route (MEDIA_WORKER_URL, PLATE_INGEST_SECRET).
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller } from "../_shared/caller.ts";
-import { callClaude, createLlmLedger } from "../_shared/claude.ts";
+import { callClaude, type CallClaudeOptions, createLlmLedger } from "../_shared/claude.ts";
 import { parseJobRunId, shortenError } from "../client-plate-copy/lib.ts";
-import { type BatchSummary, type Db, privacyPageLive, RUN_BUDGET_MS, runBatch, runStatus } from "./lib.ts";
+import { type BatchSummary, type Db, privacyPageLive, RUN_BUDGET_MS, runBatch, runStatus, sleepFor } from "./lib.ts";
 import { type Media, mediaWorker, noMedia } from "./renditions.ts";
 
 const json = (body: unknown, status = 200) =>
@@ -15,32 +15,57 @@ const json = (body: unknown, status = 200) =>
 
 type Admin = SupabaseClient;
 
+/** finish_client_edition_compose_run and begin_client_edition_compose_run, at most. */
+const RUN_CALL_MS = 5_000;
+
+// Each call's signal aborts its fetch once lib's window for it has passed.
 function database(admin: Admin): Db {
   return {
-    async rpc(fn, args) {
-      const { data, error } = await admin.rpc(fn, args);
+    async rpc(fn, args, signal) {
+      const { data, error } = await admin.rpc(fn, args).abortSignal(signal);
       return { data, error };
     },
-    async approvedEdition(projectId) {
+    async approvedEdition(projectId, signal) {
       const { data, error } = await admin
         .from("client_editions")
         .select("id, source_hash, composition, facts, overrides")
         .eq("project_id", projectId)
         .eq("status", "approved")
+        .abortSignal(signal)
         .maybeSingle();
       return { data, error };
     },
-    // Every request row in any status: a queued or leased recrop still names
-    // the kind its bytes came from.
-    async provenance(projectId, assetIds) {
-      const { data, error } = await admin
+    // Every request row in any status (a queued or leased recrop still names
+    // the kind its bytes came from), in id order so pages never overlap; the
+    // first page counts them all, so a short read cannot pass for a whole one.
+    async provenancePage(projectId, assetIds, after, limit, signal) {
+      const rows = admin
         .from("client_plate_requests")
-        .select("asset_id, source_kind")
+        .select("id, asset_id, source_kind", { count: after === null ? "exact" : undefined })
         .eq("project_id", projectId)
         .in("asset_id", assetIds);
-      return { data, error };
+      const { data, error, count } = await (after === null ? rows : rows.gt("id", after))
+        .order("id")
+        .limit(limit)
+        .abortSignal(signal);
+      return { data: data ? { rows: data, total: count ?? null } : null, error };
+    },
+    async editionStatus(editionId, signal) {
+      const { data, error } = await admin
+        .from("client_editions")
+        .select("status")
+        .eq("id", editionId)
+        .abortSignal(signal)
+        .maybeSingle();
+      return { data: data?.status ?? null, error };
     },
   };
+}
+
+/** The caller's window and the call's own timeout: the whole call, SDK retries included, ends by the sooner. */
+function callSignal(opts: CallClaudeOptions & { timeoutMs: number }): AbortSignal {
+  const timeout = AbortSignal.timeout(opts.timeoutMs);
+  return opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
 }
 
 function media(): Media {
@@ -54,7 +79,9 @@ function media(): Media {
 async function finishRun(admin: Admin, runId: number, status: string, detail: unknown, error: string | null) {
   const args = { p_run_id: runId, p_status: status, p_detail: detail, p_error: error };
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const { error: finishError } = await admin.rpc("finish_client_edition_compose_run", args);
+    const { error: finishError } = await admin
+      .rpc("finish_client_edition_compose_run", args)
+      .abortSignal(AbortSignal.timeout(RUN_CALL_MS));
     if (!finishError) return;
     if (attempt === 2) console.error(`client-edition-compose: finish run ${runId}: ${shortenError(finishError.message)}`);
   }
@@ -64,7 +91,7 @@ async function finishRun(admin: Admin, runId: number, status: string, detail: un
 async function openRun(admin: Admin, body: unknown): Promise<number | null> {
   const given = parseJobRunId(body);
   if (given !== null) return given;
-  const { data, error } = await admin.rpc("begin_client_edition_compose_run");
+  const { data, error } = await admin.rpc("begin_client_edition_compose_run").abortSignal(AbortSignal.timeout(RUN_CALL_MS));
   return !error && typeof data === "number" ? data : null;
 }
 
@@ -74,12 +101,12 @@ async function composeBatch(admin: Admin, runId: number, deadline: number): Prom
   try {
     summary = await runBatch({
       db: database(admin),
-      // The signal bounds the whole call, SDK retry included, to the budget lib gave it.
-      claude: (opts) => callClaude({ ...opts, ledger, signal: AbortSignal.timeout(opts.timeoutMs) }),
+      claude: (opts) => callClaude({ ...opts, ledger, signal: callSignal(opts) }),
       privacyLive: privacyPageLive(),
       media: media(),
       now: Date.now,
       deadline,
+      sleep: sleepFor,
     });
   } catch (cause) {
     await finishRun(admin, runId, "failed", { claimed: 0 }, shortenError(cause));

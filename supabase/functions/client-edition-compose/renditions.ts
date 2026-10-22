@@ -71,10 +71,14 @@ async function readUpTo(reader: ReadableStreamDefaultReader<Uint8Array>, max: nu
   return joined(chunks, size);
 }
 
-/** The body, or null when it declares or reaches more than `max` bytes. */
+/** The body, or null when it declares or reaches more than `max` bytes; a body not read is canceled. */
 async function readCapped(response: Response, max: number): Promise<Uint8Array | null> {
   const declared = Number(response.headers.get("content-length") ?? 0);
-  if (!response.body || declared > max) return null;
+  if (!response.body) return null;
+  if (declared > max) {
+    await response.body.cancel();
+    return null;
+  }
   return await readUpTo(response.body.getReader(), max);
 }
 

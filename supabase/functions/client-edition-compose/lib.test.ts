@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import type { CallClaudeOptions, CallClaudeResult } from "../_shared/claude.ts";
+import { callClaude, type CallClaudeOptions, type CallClaudeResult, type LlmLedgerPort } from "../_shared/claude.ts";
 import {
   composeRequest,
   type CurrentEdition,
@@ -80,12 +80,20 @@ function facts(): EditorialFacts {
 }
 
 interface Row {
+  id: string;
   asset_id: string;
   source_kind: string;
   status: string;
 }
 
-const row = (asset_id: string, source_kind: string, status = "done"): Row => ({ asset_id, source_kind, status });
+let rowCount = 0;
+/** Ids rise in the order rows are made, so a later row sorts after an earlier one. */
+const row = (asset_id: string, source_kind: string, status = "done"): Row => ({
+  id: `p-${String(rowCount++).padStart(6, "0")}`,
+  asset_id,
+  source_kind,
+  status,
+});
 
 const ROWS: Row[] = [
   row("a-sofa", "upload"),
@@ -98,6 +106,51 @@ const ROWS: Row[] = [
   row("a-board", "board"),
 ];
 
+/** A clock that moves only when a bounded wait runs out or a slow call answers. */
+function fakeClock(start = 0) {
+  let time = start;
+  return {
+    now: () => time,
+    sleep: (ms: number, signal: AbortSignal) =>
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          time += ms;
+          resolve();
+        }, 1);
+        signal.addEventListener("abort", () => {
+          clearTimeout(timer);
+          resolve();
+        }, { once: true });
+      }),
+    /** Answers after `ms` on this clock (a few real milliseconds), unless `signal` aborts it first. */
+    slow<T>(ms: number, reply: () => T, signal?: AbortSignal): Promise<T> {
+      return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          time += ms;
+          try {
+            resolve(reply());
+          } catch (cause) {
+            reject(cause);
+          }
+        }, 20);
+        signal?.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(signal.reason);
+        }, { once: true });
+      });
+    },
+  };
+}
+
+type Clock = ReturnType<typeof fakeClock>;
+
+/** A wait that never runs out: nothing here is slow unless a clock says so. */
+const waitForAbort = (_ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+
+/** PostgREST's max_rows (supabase/config.toml): no one select returns more. */
+const MAX_ROWS = 1_000;
+
 interface DbOptions {
   facts?: EditorialFacts;
   current?: CurrentEdition | null;
@@ -106,19 +159,30 @@ interface DbOptions {
   closeError?: DbError;
   /** How many finish_client_edition calls return this error before one succeeds. */
   finishError?: { error: DbError; times: number };
-  finishThrows?: boolean;
-  /** Errors for successive claims (null: that claim succeeds). */
-  claimErrors?: (DbError | null)[];
+  /** How many finish_client_edition calls throw before one succeeds (true: every one). */
+  finishThrows?: boolean | number;
+  /** How many finish_client_edition calls land, then throw as if their answer were lost. */
+  ackLost?: number;
+  /** Errors for successive claims (null: that claim succeeds; "throw": that claim throws). */
+  claimErrors?: (DbError | "throw" | null)[];
   requests?: EditionRequest[];
+  /** Rows the first provenance page counts beyond those any page returns. */
+  uncounted?: number;
+  /** Calls (an rpc name, or "provenance") that answer only after `ms` on `clock`, unless their window aborts them. */
+  slow?: { clock: Clock; ms: number; fns: string[] };
 }
 
 function fakeDb(options: DbOptions = {}) {
   const calls: { fn: string; args?: Record<string, unknown> }[] = [];
   const queue = [...(options.requests ?? [REQUEST])];
   let finishErrors = options.finishError?.times ?? 0;
+  let finishThrows = options.finishThrows === true ? Infinity : Number(options.finishThrows ?? 0);
+  let ackLost = options.ackLost ?? 0;
+  let editionStatus = "drafting";
   const replies: Record<string, (args?: Record<string, unknown>) => DbResult<unknown>> = {
     claim_client_edition_requests: (args) => {
       const error = options.claimErrors?.shift() ?? null;
+      if (error === "throw") throw new Error("connection reset");
       const claimed = error ? [] : queue.splice(0, Number(args?.p_limit ?? 1));
       return { data: claimed.length ? claimed : null, error };
     },
@@ -126,26 +190,43 @@ function fakeDb(options: DbOptions = {}) {
     begin_client_edition: () => (options.beginError ? { data: null, error: options.beginError } : { data: "edition-1", error: null }),
     close_client_edition_request: () => ({ data: null, error: options.closeError ?? null }),
     client_plate_source_owned: () => ({ data: true, error: null }),
-    finish_client_edition: () => {
-      if (options.finishThrows) throw new Error("connection reset");
-      return finishErrors-- > 0 ? { data: null, error: options.finishError!.error } : { data: null, error: null };
+    finish_client_edition: (args) => {
+      if (finishThrows-- > 0) throw new Error("connection reset");
+      if (finishErrors-- > 0) return { data: null, error: options.finishError!.error };
+      editionStatus = String(args?.p_status);
+      if (ackLost-- > 0) throw new Error("connection reset after the write");
+      return { data: null, error: null };
     },
   };
   const rows = options.rows ?? ROWS;
   const named = (ids: string[]) => rows.filter((r) => ids.includes(r.asset_id));
+  const answer = <T>(fn: string, reply: () => T, signal?: AbortSignal): Promise<T> => {
+    if (options.slow?.fns.includes(fn)) return options.slow.clock.slow(options.slow.ms, reply, signal);
+    try {
+      return Promise.resolve(reply());
+    } catch (cause) {
+      return Promise.reject(cause);
+    }
+  };
+  const page = (ids: string[], after: string | null, limit: number) => {
+    const all = named(ids).sort((a, b) => (a.id < b.id ? -1 : 1));
+    const rows = all.filter((r) => after === null || r.id > after).slice(0, Math.min(limit, MAX_ROWS));
+    const total = after === null ? all.length + (options.uncounted ?? 0) : null;
+    return { data: { rows: rows.map(({ id, asset_id, source_kind }) => ({ id, asset_id, source_kind })), total }, error: null };
+  };
   const db = {
-    rpc(fn: string, args?: Record<string, unknown>) {
+    rpc(fn: string, args?: Record<string, unknown>, signal?: AbortSignal) {
       calls.push({ fn, args });
-      try {
-        const reply = replies[fn];
-        return Promise.resolve(reply ? reply(args) : { data: null, error: null });
-      } catch (cause) {
-        return Promise.reject(cause);
-      }
+      return answer(fn, () => replies[fn]?.(args) ?? { data: null, error: null }, signal);
     },
     approvedEdition: () => Promise.resolve({ data: options.current ?? null, error: null }),
+    provenancePage: (_project: string, ids: string[], after: string | null, limit: number, signal?: AbortSignal) =>
+      answer("provenance", () => page(ids, after, limit), signal),
+    editionStatus: () => Promise.resolve({ data: editionStatus, error: null }),
+    // e5bdbaf4's port, kept so each negative control fails there by assertion:
+    // one select, cut at max_rows as the server cuts it.
     provenance: (_project: string, ids: string[]) =>
-      Promise.resolve({ data: named(ids).map(({ asset_id, source_kind }) => ({ asset_id, source_kind })), error: null }),
+      answer("provenance", () => ({ data: named(ids).slice(0, MAX_ROWS).map(({ asset_id, source_kind }) => ({ asset_id, source_kind })), error: null })),
     // ad32ba43's port, kept so each negative control fails there by assertion:
     // its adapter read only done rows, each with the address it was copied from.
     plateSources: (_project: string, ids: string[]) =>
@@ -270,6 +351,7 @@ interface DepsOptions {
   media?: (path: string) => Promise<Response>;
   now?: () => number;
   deadline?: number;
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }
 
 function deps(db: Db, claude: (opts: CallClaudeOptions) => Promise<CallClaudeResult>, options: DepsOptions = {}) {
@@ -283,6 +365,7 @@ function deps(db: Db, claude: (opts: CallClaudeOptions) => Promise<CallClaudeRes
     media: options.media ?? fakeMedia().media,
     now: options.now ?? (() => 0),
     deadline: options.deadline ?? 120_000,
+    sleep: options.sleep ?? waitForAbort,
   };
 }
 
@@ -501,7 +584,7 @@ Deno.test("F6: a call that would not leave room for the words is not made; the c
 
   assertEquals(outcome.result, "composed");
   assertEquals(calls.map((c) => c.role), ["draft", "judge"], "no time for perception or the hero pick");
-  assertEquals(calls[0].timeoutMs, 50_000, "B keeps 15 s for the judge and 10 s for the finish");
+  assertEquals(calls[0].timeoutMs, 44_000, "B keeps 15 s for the judge, 6 s for its ledger and 10 s for the finish");
   assertEquals(called("record_plate_perception").length, 0);
 });
 
@@ -525,8 +608,12 @@ Deno.test("F7: unchanged is judged on every frozen fact; a palette colour or a n
   assert(!(await skipped(reordered)), "the same pictures in a new order");
 
   const live = facts();
-  Object.assign(live.assets[0], { focal: [0.2, 0.2], subjectBox: [0, 0, 1, 1], perceivedFlags: ["people"] });
-  assert(await skipped(live), "the reader reads framing and flags live");
+  Object.assign(live.assets[0], { focal: [0.2, 0.2], subjectBox: [0, 0, 1, 1] });
+  assert(await skipped(live), "the reader reads framing live");
+
+  const flagged = facts();
+  Object.assign(flagged.assets[0], { perceivedFlags: ["people"] });
+  assert(!(await skipped(flagged)), "a flag-only change: the reader does not re-check held pictures");
 });
 
 Deno.test("skip unchanged closes the request without an edition", async () => {
@@ -695,6 +782,148 @@ Deno.test("runBatch composes requests in turn and sums the cost", async () => {
   assertEquals(runStatus(summary), { status: "succeeded", error: null });
   assertEquals(runStatus({ ...summary, claimed: 0 }).status, "skipped");
   assertEquals(runStatus({ ...summary, composed: 0, failed: 1, unsettled: 1 }).status, "failed");
+});
+
+// ── SQ-1649 repairs ────────────────────────────────────────────────────────
+
+Deno.test("N1: a sheet row past the first thousand keeps the picture from every model and from the hero", async () => {
+  // A thousand recrops of the sofa's upload, then the drawing sheet its bytes also came from.
+  const rows = [...ROWS, ...Array.from({ length: 1_000 }, () => row("a-sofa", "upload")), row("a-sofa", "sheet")];
+  for (const privacyLive of [false, true]) {
+    const { db, called } = fakeDb({ rows });
+    const { claude, calls } = claudeOf(respond());
+    await composeRequest(REQUEST, deps(db, claude, { privacyLive }));
+    for (const call of calls) assert(!shown(call).includes("a-sofa"), `${call.role} was shown the sofa`);
+    assert(composition(finishArgs(called)).hero?.assetId !== "a-sofa", "the sofa opened the page");
+  }
+});
+
+Deno.test("N1: provenance that reads fewer rows than it counted fails the edition before any picture is sent", async () => {
+  const { db, called } = fakeDb({ uncounted: 1 });
+  const { claude, calls } = claudeOf(respond());
+  const outcome = await composeRequest(REQUEST, deps(db, claude, { privacyLive: true }));
+  assertEquals(calls.length, 0, "no model was asked anything");
+  const args = finishArgs(called);
+  assertEquals([args.p_status, args.p_error], ["failed", "provenance: read 8 of 9 rows"]);
+  assertEquals(outcome.result, "failed");
+});
+
+Deno.test("N2: an alt perceived while makers were shown never reaches a page that hides them", async () => {
+  const fixture = facts();
+  fixture.project.showMakers = false;
+  // Perceived while makers were shown; the facts' own alt is built from the masked caption.
+  Object.assign(fixture.assets[0], {
+    perceivedPromptVersion: "e1",
+    perceivedAlt: "A Kettle Joinery walnut sofa under the bay window.",
+    alt: "Walnut sofa · Larch Studio · studio photograph",
+  });
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  const args = finishArgs(called);
+  const images = args.p_images as { asset_id: string; alt: string }[];
+  assertEquals(images.map((r) => [r.asset_id, r.alt]), [["a-sofa", "Walnut sofa · Larch Studio · studio photograph"]]);
+  assert(!JSON.stringify([args.p_images, args.p_composition]).includes("Kettle"), "the hidden maker is named");
+});
+
+Deno.test("N3: a provenance read that never answers is abandoned in its window; the run ends in budget with the edition failed", async () => {
+  const clock = fakeClock();
+  const { db, called } = fakeDb({ slow: { clock, ms: 200_000, fns: ["provenance"] } });
+  const { claude, calls } = claudeOf(respond());
+  const summary = await runBatch(deps(db, claude, { now: clock.now, sleep: clock.sleep, deadline: 120_000 }));
+  assert(clock.now() <= 120_000, `the run ended at ${clock.now()} ms`);
+  assertEquals(calls.length, 0, "no model was asked anything");
+  const args = finishArgs(called);
+  assertEquals([args.p_status, args.p_error], ["failed", "provenance: no answer in time"]);
+  assertEquals(summary.outcomes, [{ request_id: "req-1", edition_id: "edition-1", result: "failed", reason: "provenance: no answer in time" }]);
+});
+
+Deno.test("N3: a ledger that never answers a reservation holds no call past its window; the run ends in budget with the edition failed", async () => {
+  const clock = fakeClock();
+  const handed: (AbortSignal | undefined)[] = [];
+  const ledger: LlmLedgerPort = {
+    reserve: (_feature, _studio, _user, _usd, _role, _version, signal?: AbortSignal) => {
+      handed.push(signal);
+      return clock.slow(200_000, () => ({ granted: true, reason: null, usageId: 7 }), signal);
+    },
+    settle: () => Promise.resolve(),
+  };
+  const response = { stop_reason: "end_turn", content: [{ type: "text", text: "{}" }], usage: { input_tokens: 10, output_tokens: 10 } };
+  const clientOptions = { apiKey: "test-key", log: () => {}, capture: async () => {} };
+  const claude = (opts: CallClaudeOptions) => callClaude({ ...opts, ledger, caller: () => Promise.resolve(response), clientOptions });
+  const { db, called } = fakeDb();
+  const summary = await runBatch(deps(db, claude, { now: clock.now, sleep: clock.sleep, deadline: 120_000 }));
+  assert(clock.now() <= 120_000, `the run ended at ${clock.now()} ms`);
+  const args = finishArgs(called);
+  assertEquals([args.p_status, args.p_error], ["failed", "words: no answer in time"]);
+  assertEquals([summary.failed, summary.outcomes[0].edition_id], [1, "edition-1"]);
+  assert(handed.length > 0 && handed.every((signal) => signal?.aborted), "every reservation was handed a signal that aborted");
+});
+
+Deno.test("N4: a finish that throws is retried, and the edition settles", async () => {
+  const { db, called } = fakeDb({ finishThrows: 1 });
+  const { claude } = claudeOf(respond());
+  const outcome = await composeRequest(REQUEST, deps(db, claude));
+  assertEquals([outcome.result, outcome.editionId, outcome.usd], ["composed", "edition-1", 0.031]);
+  assertEquals(called("finish_client_edition").map((c) => c.args!.p_status), ["awaiting_review", "awaiting_review"]);
+});
+
+Deno.test("N4: a finish that landed although its answer was lost is reconciled from the edition, never resent", async () => {
+  const { db, called } = fakeDb({ ackLost: 1 });
+  const { claude } = claudeOf(respond());
+  const outcome = await composeRequest(REQUEST, deps(db, claude));
+  assertEquals([outcome.result, outcome.editionId, outcome.usd], ["composed", "edition-1", 0.031]);
+  assertEquals(called("finish_client_edition").length, 1);
+});
+
+Deno.test("N4: a finish that never answers ends by the deadline with the edition, its spend and the sweep that recovers it", async () => {
+  const clock = fakeClock();
+  const { db, called } = fakeDb({ slow: { clock, ms: 200_000, fns: ["finish_client_edition"] } });
+  const { claude } = claudeOf(respond());
+  const summary = await runBatch(deps(db, claude, { now: clock.now, sleep: clock.sleep, deadline: 120_000 }));
+  assert(clock.now() <= 120_000, `the run ended at ${clock.now()} ms`);
+  assertEquals([summary.unsettled, summary.cost_usd, summary.outcomes[0].edition_id], [1, 0.031, "edition-1"]);
+  const reason = summary.outcomes[0].reason ?? "";
+  assert(reason.includes("sweep fails drafting edition edition-1") && reason.includes("next edition request"), reason);
+  assertEquals(called("finish_client_edition").map((c) => c.args!.p_status), ["awaiting_review", "awaiting_review", "failed"]);
+});
+
+Deno.test("N5: a later claim that throws ends the batch with what it has", async () => {
+  const second = { ...REQUEST, id: "req-2", lease_token: "lease-2" };
+  const { db, called } = fakeDb({ requests: [REQUEST, second], claimErrors: [null, "throw"] });
+  const summary = await runBatch(deps(db, claudeOf(respond()).claude)).catch((error: Error) => error);
+  assert(!(summary instanceof Error), `the batch was lost: ${summary}`);
+  assertEquals([summary.claimed, summary.composed, summary.cost_usd], [1, 1, 0.031]);
+  assertEquals(called("claim_client_edition_requests").length, 2);
+});
+
+Deno.test("N6: an approved held picture newly flagged composes again, and is not held again", async () => {
+  const fixture = facts();
+  const current = approved({ chapters: ANCHORED, hero: { assetId: "a-sofa", why: null }, held: ["a-table"] }, await sourceHash(fixture), fixture);
+  const read = facts();
+  Object.assign(read.assets[1], { perceivedPromptVersion: "e1", perceivedFlags: ["people"] });
+  const { db, called } = fakeDb({ facts: read, current });
+  const { claude } = claudeOf(respond({ hero: { hero: { index: 0, why: "Calm." }, held: [1] } }));
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(called("begin_client_edition").length, 1, "a flag-only change is not unchanged");
+  const written = composition(finishArgs(called));
+  assert(written.hero?.assetId !== "a-table" && !(written.held as string[]).includes("a-table"), "the flagged table was selected again");
+});
+
+Deno.test("N6: the frozen facts carry the flags this run recorded, so the next run finds nothing changed", async () => {
+  const flagSofa = (ids: string[]) => ({
+    images: ids.map((id, index) => ({ index, subject_box: [0.1, 0.1, 0.6, 0.6], focal: [0.4, 0.4], flags: id === "a-sofa" ? ["text_overlay"] : [], alt: "A piece." })),
+  });
+  const first = fakeDb();
+  await composeRequest(REQUEST, deps(first.db, claudeOf(respond({ perceive: flagSofa })).claude));
+  const args = finishArgs(first.called);
+  const frozen = args.p_facts as EditorialFacts;
+  assertEquals(frozen.assets.find((a) => a.id === "a-sofa")!.perceivedFlags, ["text_overlay"]);
+  const stored = facts();
+  Object.assign(stored.assets[0], { perceivedPromptVersion: "e1", perceivedFlags: ["text_overlay"], perceivedAlt: "A piece." });
+  const second = fakeDb({ facts: stored, current: approved(composition(args), await sourceHash(stored), frozen) });
+  await composeRequest(REQUEST, deps(second.db, claudeOf(respond()).claude));
+  assertEquals(second.called("begin_client_edition").length, 0, "the run's own flags are not a change");
 });
 
 // The Phase 1 rule lives in apps/client-portal/src/lib/editorial/chapters.ts.

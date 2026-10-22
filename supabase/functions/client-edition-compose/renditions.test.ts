@@ -70,6 +70,19 @@ Deno.test("readRendition: anything but a small WebP is no picture, and nothing t
   assert(!called, "no request without time or a path");
 });
 
+Deno.test("readRendition: a response declaring more than the cap is canceled unread", async () => {
+  let canceled = false;
+  const body = new ReadableStream<Uint8Array>({
+    pull: (controller) => controller.enqueue(webp()),
+    cancel: () => {
+      canceled = true;
+    },
+  });
+  const media = () => Promise.resolve(served(body, "image/webp", 200, { "content-length": String(RENDITION_MAX_BYTES + 1) }));
+  assertEquals(await readRendition(media, PROJECT, asset([512]), "hero", 1_000), null);
+  assert(canceled, "the oversized body was left open");
+});
+
 Deno.test("mediaWorker sends the plate bearer to the worker's origin with a timeout; noMedia serves nothing", async () => {
   const sent: { url: string; init?: RequestInit }[] = [];
   const fetcher = ((url: string, init?: RequestInit) => {

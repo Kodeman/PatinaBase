@@ -3,11 +3,12 @@
 // a database port, the media worker and a clock; index.ts supplies the real ones.
 //
 // Per run: one time budget for the whole invocation, and a request is claimed
-// only while an edition still fits in it. Per request: facts → skip when
-// nothing the page freezes changed → begin_client_edition → A1 perception
-// (unperceived pictures) → A2 hero pick (inside the top R142 tier) → B words →
-// C judge (one regeneration) → finish_client_edition. Every path settles the
-// request with its spend, or reports it unsettled for the dispatcher's sweep.
+// only while an edition still fits in it. Every database, ledger and model
+// await is bounded inside that budget. Per request: facts → skip when nothing
+// the page freezes changed → begin_client_edition → A1 perception (unperceived
+// pictures) → A2 hero pick (inside the top R142 tier) → B words → C judge (one
+// regeneration) → finish_client_edition. Every path settles the request with
+// its spend, or reports it unsettled with the sweep that recovers it.
 
 import type { CallClaudeOptions, CallClaudeResult, ModelResponse } from "../_shared/claude.ts";
 import type { ClaudeRole } from "../_shared/claude-models.ts";
@@ -54,7 +55,7 @@ export const RUN_BUDGET_MS = 120_000;
 export const CALL_TIMEOUT_MS = 60_000;
 /** A model call is made only when it can have at least this long. */
 export const MIN_CALL_MS = 15_000;
-/** Kept back for finish_client_edition (or the close) and its one retry. */
+/** Kept back for finish_client_edition, its retries and the reads that reconcile them. */
 export const FINISH_RESERVE_MS = 10_000;
 /** Kept back from perception and the hero pick for Call B and its judge. */
 export const WORDS_RESERVE_MS = 60_000;
@@ -62,6 +63,12 @@ export const WORDS_RESERVE_MS = 60_000;
 export const EDITION_MIN_MS = 90_000;
 /** An edition stops this long before its claim lease ends. */
 export const LEASE_MARGIN_MS = 30_000;
+/** One database read or write, at most. */
+export const DB_CALL_MS = 8_000;
+/** Kept after a model call's own timeout for settling its ledger row. */
+export const LEDGER_MS = 6_000;
+/** One finish (or close) attempt, or one read reconciling it, at most. */
+export const SETTLE_CALL_MS = 3_000;
 
 /** Photographs of her home reach a model only once the client privacy page is live (V2-5). */
 export function privacyPageLive(getEnv: (key: string) => string | undefined = (key) => Deno.env.get(key)): boolean {
@@ -116,16 +123,32 @@ export interface CurrentEdition {
 
 /** One client_plate_requests row, whatever its status: a kind the asset's bytes came from. */
 export interface ProvenanceRow {
+  id: string;
   asset_id: string;
   source_kind: string;
 }
 
+/** One page of request rows in id order; the first page also carries their exact count. */
+export interface ProvenancePage {
+  rows: ProvenanceRow[];
+  total: number | null;
+}
+
+/** Every call takes a signal that aborts once its window has passed. */
 export interface Db {
-  rpc(fn: string, args?: Record<string, unknown>): Promise<DbResult<unknown>>;
+  rpc(fn: string, args: Record<string, unknown>, signal: AbortSignal): Promise<DbResult<unknown>>;
   /** The project's approved edition, if any (client_editions, status 'approved'), with its overrides. */
-  approvedEdition(projectId: string): Promise<DbResult<CurrentEdition>>;
-  /** Every request row naming these assets, in any status. */
-  provenance(projectId: string, assetIds: string[]): Promise<DbResult<ProvenanceRow[]>>;
+  approvedEdition(projectId: string, signal: AbortSignal): Promise<DbResult<CurrentEdition>>;
+  /** At most `limit` request rows naming these assets, in any status, ordered by id after `after` (null: from the first). */
+  provenancePage(
+    projectId: string,
+    assetIds: string[],
+    after: string | null,
+    limit: number,
+    signal: AbortSignal,
+  ): Promise<DbResult<ProvenancePage>>;
+  /** An edition's status as it stands now. */
+  editionStatus(editionId: string, signal: AbortSignal): Promise<DbResult<string>>;
 }
 
 export type Claude = (opts: CallClaudeOptions) => Promise<CallClaudeResult>;
@@ -139,6 +162,64 @@ export interface ComposeDeps {
   now: () => number;
   /** When this invocation's budget ends, in the same clock. */
   deadline: number;
+  /** Resolves once `ms` pass on the same clock, or as soon as `signal` aborts. */
+  sleep: (ms: number, signal: AbortSignal) => Promise<void>;
+}
+
+/** The real clock's sleep. */
+export function sleepFor(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal.addEventListener("abort", done, { once: true });
+  });
+}
+
+// ── Bounded I/O ────────────────────────────────────────────────────────────
+
+const LATE = Symbol("late");
+
+/**
+ * The work's answer, or LATE once `ms` pass on the deps clock. The work's
+ * signal aborts as soon as either settles, so a call that honours it stops,
+ * and no await outlives its window.
+ */
+async function within<T>(deps: ComposeDeps, ms: number, work: (signal: AbortSignal) => Promise<T>): Promise<T | typeof LATE> {
+  const stop = new AbortController();
+  try {
+    return await Promise.race([work(stop.signal), deps.sleep(Math.max(0, ms), stop.signal).then((): typeof LATE => LATE)]);
+  } finally {
+    stop.abort(new Error("no answer in time"));
+  }
+}
+
+function dbFailure(message: string): DbResult<never> {
+  return { data: null, error: { message } };
+}
+
+/** A database call bounded to `ms`: a throw, no time or no answer in time comes back as its error, never thrown. */
+async function dbCall<T>(deps: ComposeDeps, ms: number, call: (signal: AbortSignal) => Promise<DbResult<T>>): Promise<DbResult<T>> {
+  if (ms <= 0) return dbFailure("no time left");
+  try {
+    const result = await within(deps, ms, call);
+    return result === LATE ? dbFailure("no answer in time") : result;
+  } catch (cause) {
+    return dbFailure(shortenError(cause));
+  }
+}
+
+/** A call's window: its cap, or what is left before `until`. */
+function windowTo(deps: ComposeDeps, until: number, cap: number): number {
+  return Math.min(cap, until - deps.now());
+}
+
+/** A database call outside an edition: the run's finish reserve stays untouched. */
+function runWindow(deps: ComposeDeps): number {
+  return windowTo(deps, deps.deadline - FINISH_RESERVE_MS, DB_CALL_MS);
 }
 
 // ── R142 rank and hero floors (ported from client-portal lib/editorial) ────
@@ -290,23 +371,31 @@ function without(value: unknown, keys: readonly string[]): Record<string, unknow
 }
 
 // The approved reader reads these live, by asset or project, not from the
-// frozen facts; and these are the composer's own, never rendered.
+// frozen facts; and these are the composer's own, never rendered. Perceived
+// flags are kept: the reader re-checks the hero against them live, but not
+// the held pictures, so a flag-only change must compose again.
 const LIVE_PROJECT = ["showMakers"];
 const LIVE_ASSET = ["sha256", "width", "height", "ground", "dominantHex", "lqip", "focal", "subjectBox", "crops"];
-const SERVICE_ASSET = ["perceivedPromptVersion", "focalOrigin", "perceivedAlt", "perceivedFlags"];
+const SERVICE_ASSET = ["perceivedPromptVersion", "focalOrigin", "perceivedAlt"];
 
 function listOf(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-/** The facts an approved page renders from its frozen copy, in order: every envelope key the reader projects. */
+/** A picture's frozen facts, its flags as a set. */
+function frozenAsset(asset: unknown): Record<string, unknown> | null {
+  const kept = without(asset, [...LIVE_ASSET, ...SERVICE_ASSET]);
+  return kept && { ...kept, perceivedFlags: [...new Set(listOf(kept.perceivedFlags).map(String))].sort() };
+}
+
+/** The facts an approved page renders or selects from its frozen copy, in order: every envelope key the reader projects. */
 export function frozenFacts(facts: unknown): unknown {
   const envelope = isPlainObject(facts) ? facts : {};
   const project = without(envelope.project, LIVE_PROJECT);
   return canonical({
     project: project && { ...project, studio: without(project.studio, ["id"]) },
     rooms: listOf(envelope.rooms),
-    assets: listOf(envelope.assets).map((asset) => without(asset, [...LIVE_ASSET, ...SERVICE_ASSET])),
+    assets: listOf(envelope.assets).map(frozenAsset),
     palette: listOf(envelope.palette),
     boards: listOf(envelope.boards),
     sheets: listOf(envelope.sheets),
@@ -334,6 +423,8 @@ interface Seen {
   flags: string[];
   alt: string;
   frame: { subjectBox: Box; focal: Point } | null;
+  /** record_plate_perception answered without an error. */
+  recorded: boolean;
 }
 
 interface Ctx {
@@ -364,25 +455,36 @@ function count(ctx: Ctx, role: ClaudeRole, result: CallClaudeResult): void {
   ctx.spend.usd += "usd" in result ? result.usd ?? 0 : 0;
 }
 
-/** One model call, bounded by the budget less `keep`. A denied call stops the edition. */
+/**
+ * One model call, bounded by the budget less `keep`: the ledger's reservation
+ * and the model share `timeoutMs`, settling the ledger has LEDGER_MS more, and
+ * nothing is awaited past that. A call with no answer by then is a failed call
+ * whose reservation the ledger's stale sweep settles. A denied call stops the edition.
+ */
 async function ask(ctx: Ctx, role: ClaudeRole, params: Record<string, unknown>, keep: number): Promise<Answer> {
-  const timeoutMs = Math.min(CALL_TIMEOUT_MS, timeLeft(ctx) - keep);
+  const timeoutMs = Math.min(CALL_TIMEOUT_MS, timeLeft(ctx) - keep - LEDGER_MS);
   if (timeoutMs < MIN_CALL_MS) return { ok: false, error: "out of time", late: true };
   const studioId = ctx.facts.project.studio?.id ?? null;
-  const result = await ctx.deps.claude({ feature: FEATURE, role, studioId, userId: null, promptVersion: PROMPT_VERSION, params, timeoutMs });
+  const call = { feature: FEATURE, role, studioId, userId: null, promptVersion: PROMPT_VERSION, params, timeoutMs };
+  const result = await within(ctx.deps, timeoutMs + LEDGER_MS, (signal) => ctx.deps.claude({ ...call, signal, ledgerSignal: signal }));
+  return result === LATE ? { ok: false, error: "no answer in time", late: false } : answered(ctx, role, result);
+}
+
+/** A call that answered in time, counted. A denied call stops the edition. */
+function answered(ctx: Ctx, role: ClaudeRole, result: CallClaudeResult): Answer {
   count(ctx, role, result);
   if (result.ok) return { ok: true, response: result.response };
   if ("denied" in result) throw new ComposeStopped(`claude ${result.denied}`);
   return { ok: false, error: result.error, late: false };
 }
 
-const NEVER_SENT = new Set(["sheet", "board"]);
+const ALWAYS_SENT = new Set(["upload", "maker", "concept"]);
 const HER_HOME = new Set(["scan", "installed"]);
 const NEVER_HERO = new Set(["sheet", "concept"]);
 
+/** Sheets, boards and any kind not named here never; her home only once the privacy page is live. */
 function kindSendable(kind: string, privacyLive: boolean): boolean {
-  if (NEVER_SENT.has(kind)) return false;
-  return HER_HOME.has(kind) ? privacyLive : true;
+  return HER_HOME.has(kind) ? privacyLive : ALWAYS_SENT.has(kind);
 }
 
 /** The asset's kind and every request kind behind it; null when no request row resolves. */
@@ -465,16 +567,17 @@ function frameArgs(frame: ReturnType<typeof onGrid> | null) {
  */
 async function recordPerception(ctx: Ctx, asset: FactsAsset, perception: Perception): Promise<void> {
   const frame = asset.focalOrigin === "designer" ? null : onGrid(perception.subjectBox, perception.focal);
-  const { error } = await ctx.deps.db.rpc("record_plate_perception", {
+  const args = {
     p_asset_id: asset.id,
     ...frameArgs(frame),
     p_flags: perception.flags,
     p_alt: perception.alt,
     p_prompt_version: PROMPT_VERSION,
-  });
+  };
+  const { error } = await dbCall(ctx.deps, Math.min(DB_CALL_MS, timeLeft(ctx)), (signal) => ctx.deps.db.rpc("record_plate_perception", args, signal));
   if (error) console.error(`client-edition-compose: perception ${asset.id}: ${shortenError(error.message)}`);
   // Flags count even when the write failed; a frame not stored is not the frame the crops will use.
-  ctx.seen.set(asset.id, { flags: perception.flags, alt: perception.alt, frame: error ? null : frame });
+  ctx.seen.set(asset.id, { flags: perception.flags, alt: perception.alt, frame: error ? null : frame, recorded: !error });
 }
 
 /** One A1 call over the pictures of `assets` that can be read; an answer the validator rejects records nothing. */
@@ -719,9 +822,24 @@ function roomAnchorOf(facts: EditorialFacts, assetId: string): string | null {
   return room?.anchor ?? null;
 }
 
-/** This run's perceived alt, else the one an earlier perception stored, else the caption's. */
+/** Pictures whose caption names a maker while the studio shows makers (_client_plate_alt's maker and upload). */
+const MAKER_ATTRIBUTED = new Set(["maker", "upload"]);
+
+/**
+ * This run's perceived alt, else the one an earlier perception stored, else
+ * the caption's. While the studio hides makers, a maker or upload picture
+ * takes the caption's alt, built from the masked caption, since a perceived
+ * one may have been written while makers were shown.
+ */
 function altOf(ctx: Ctx, asset: FactsAsset): string | null {
-  return ctx.seen.get(asset.id)?.alt ?? storedAlt(ctx, asset) ?? asset.alt ?? null;
+  const caption = asset.alt ?? null;
+  if (makerHidden(ctx, asset)) return caption;
+  return ctx.seen.get(asset.id)?.alt ?? storedAlt(ctx, asset) ?? caption;
+}
+
+/** A maker or upload picture while the studio hides makers. */
+function makerHidden(ctx: Ctx, asset: FactsAsset): boolean {
+  return ctx.facts.project.showMakers !== true && MAKER_ATTRIBUTED.has(asset.sourceKind);
 }
 
 /** The alt an earlier perception stored, while it still passes the lint. */
@@ -758,12 +876,55 @@ export interface EditionDraft {
   images: ImageRow[];
   model: string | null;
   error: string | null;
+  /** The facts to freeze, when this run changed what it read. */
+  facts?: EditorialFacts;
 }
 
 function kindsByAsset(rows: readonly ProvenanceRow[]): Map<string, string[]> {
   const sources = new Map<string, string[]>();
   for (const row of rows) sources.set(row.asset_id, [...(sources.get(row.asset_id) ?? []), row.source_kind]);
   return sources;
+}
+
+const PROVENANCE_PAGE = 1_000;
+const PROVENANCE_PAGES = 50;
+
+/**
+ * Every request row naming the facts' assets, read page by page in id order
+ * until a short page and held to the first page's exact count. An error, no
+ * answer in time or fewer rows than counted throws: the edition then fails
+ * before any picture is sent.
+ */
+async function readProvenance(facts: EditorialFacts, deps: ComposeDeps, until: number): Promise<ProvenanceRow[]> {
+  const ids = facts.assets.map((asset) => asset.id);
+  if (!ids.length) return [];
+  const read = (after: string | null) => provenancePage(deps, until, (signal) => deps.db.provenancePage(facts.project.id, ids, after, PROVENANCE_PAGE, signal));
+  const first = await read(null);
+  const rows = [...first.rows];
+  let last = first.rows.length;
+  for (let page = 1; page < PROVENANCE_PAGES && last >= PROVENANCE_PAGE; page += 1) {
+    const next = await read(rows[rows.length - 1].id);
+    rows.push(...next.rows);
+    last = next.rows.length;
+  }
+  return counted(rows, first.total);
+}
+
+/** One bounded page; an error or no answer in time throws. */
+async function provenancePage(
+  deps: ComposeDeps,
+  until: number,
+  query: (signal: AbortSignal) => Promise<DbResult<ProvenancePage>>,
+): Promise<ProvenancePage> {
+  const { data, error } = await dbCall(deps, windowTo(deps, until, DB_CALL_MS), query);
+  if (error || !data) throw new Error(`provenance: ${error?.message ?? "no answer"}`);
+  return data;
+}
+
+/** The rows, once they are as many as the first page counted; fewer, or no count, throws. */
+function counted(rows: ProvenanceRow[], total: number | null): ProvenanceRow[] {
+  if (total === null || rows.length < total) throw new Error(`provenance: read ${rows.length} of ${total ?? "an uncounted set of"} rows`);
+  return rows;
 }
 
 /** Every signed item name, and maker names when the studio shows makers. */
@@ -773,20 +934,27 @@ function allowedNames(facts: EditorialFacts): string[] {
 }
 
 async function context(facts: EditorialFacts, deps: ComposeDeps, deadline: number, spend: { usd: number }): Promise<Ctx> {
-  const ids = facts.assets.map((asset) => asset.id);
-  const { data, error } = ids.length ? await deps.db.provenance(facts.project.id, ids) : { data: [], error: null };
-  if (error) throw new Error(`provenance: ${error.message}`);
+  const rows = await readProvenance(facts, deps, deadline - FINISH_RESERVE_MS);
   return {
     facts,
     deps,
     deadline,
     spend,
     model: null,
-    sources: kindsByAsset(data ?? []),
+    sources: kindsByAsset(rows),
     names: allowedNames(facts),
     seen: new Map(),
     pictures: new Map(),
   };
+}
+
+/** The facts as this run leaves them: flags it recorded replace the ones it read, so the next run finds them unchanged. */
+function factsAsLeft(ctx: Ctx): EditorialFacts {
+  const assets = ctx.facts.assets.map((asset) => {
+    const seen = ctx.seen.get(asset.id);
+    return seen?.recorded ? { ...asset, perceivedFlags: seen.flags } : asset;
+  });
+  return { ...ctx.facts, assets };
 }
 
 /**
@@ -828,6 +996,7 @@ export async function composeEdition(
     images: imageRows(ctx, hero),
     model: ctx.model,
     error: null,
+    facts: factsAsLeft(ctx),
   };
 }
 
@@ -835,7 +1004,9 @@ export async function composeEdition(
 
 export interface RequestOutcome {
   requestId: string;
-  /** "unsettled": the request or edition is left leased for the dispatcher's sweep. */
+  /** The edition begin_client_edition opened, if it did. */
+  editionId: string | null;
+  /** "unsettled": the reason names what the dispatcher's sweep recovers. */
   result: "composed" | "skipped" | "failed" | "unsettled";
   reason: string | null;
   usd: number;
@@ -849,39 +1020,36 @@ export function isDailyLimit(error: DbError): boolean {
   return [error.message, error.details, error.hint].some((text) => !!text && DAILY_LIMIT.test(text));
 }
 
-async function readFacts(db: Db, projectId: string): Promise<EditorialFacts> {
-  const { data, error } = await db.rpc("get_project_editorial_facts", { p_project_id: projectId });
+async function readFacts(deps: ComposeDeps, projectId: string): Promise<EditorialFacts> {
+  const args = { p_project_id: projectId };
+  const { data, error } = await dbCall(deps, runWindow(deps), (signal) => deps.db.rpc("get_project_editorial_facts", args, signal));
   if (error || !data) throw new Error(`facts: ${error?.message ?? "none"}`);
   return data as EditorialFacts;
 }
 
-async function readCurrent(db: Db, projectId: string): Promise<CurrentEdition | null> {
-  const { data, error } = await db.approvedEdition(projectId);
+async function readCurrent(deps: ComposeDeps, projectId: string): Promise<CurrentEdition | null> {
+  const { data, error } = await dbCall(deps, runWindow(deps), (signal) => deps.db.approvedEdition(projectId, signal));
   if (error) throw new Error(`approved edition: ${error.message}`);
   return data;
 }
 
-/** A settling RPC, retried once when it returns an error; the last error, or null. */
-async function settleRpc(db: Db, fn: string, args: Record<string, unknown>): Promise<DbError | null> {
-  const first = await db.rpc(fn, args);
-  if (!first.error) return null;
-  return (await db.rpc(fn, args)).error;
-}
-
-async function closeRequest(db: Db, request: EditionRequest, reason: string): Promise<Settled> {
-  const error = await settleRpc(db, "close_client_edition_request", {
-    p_request_id: request.id,
-    p_lease_token: request.lease_token,
-    p_reason: reason,
-  });
-  if (!error) return ["skipped", reason];
-  console.error(`client-edition-compose: close ${request.id}: ${shortenError(error.message)}`);
-  return ["unsettled", `${reason}; close failed: ${shortenError(error.message)}`];
+/** close_client_edition_request, tried twice within the run; a close that fails leaves the request leased for the sweep to requeue. */
+async function closeRequest(deps: ComposeDeps, request: EditionRequest, reason: string): Promise<Settled> {
+  const args = { p_request_id: request.id, p_lease_token: request.lease_token, p_reason: reason };
+  let error: DbError | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    ({ error } = await dbCall(deps, windowTo(deps, deps.deadline, SETTLE_CALL_MS), (signal) => deps.db.rpc("close_client_edition_request", args, signal)));
+    if (!error) return ["skipped", reason];
+  }
+  const message = shortenError(error!.message);
+  console.error(`client-edition-compose: close ${request.id}: ${message}`);
+  return ["unsettled", `${reason}; close failed: ${message}`];
 }
 
 /** The new edition's id, or null when the project already has two today. */
-async function beginEdition(db: Db, request: EditionRequest): Promise<string | null> {
-  const { data, error } = await db.rpc("begin_client_edition", { p_request_id: request.id, p_lease_token: request.lease_token });
+async function beginEdition(deps: ComposeDeps, request: EditionRequest): Promise<string | null> {
+  const args = { p_request_id: request.id, p_lease_token: request.lease_token };
+  const { data, error } = await dbCall(deps, runWindow(deps), (signal) => deps.db.rpc("begin_client_edition", args, signal));
   if (error) {
     if (isDailyLimit(error)) return null;
     throw new Error(`begin: ${error.message}`);
@@ -897,7 +1065,7 @@ function finishArgs(editionId: string, request: EditionRequest, facts: Editorial
     p_status: draft.status,
     p_kind: draft.kind,
     p_composition: draft.composition,
-    p_facts: facts,
+    p_facts: draft.facts ?? facts,
     p_images: draft.images,
     p_prompt_version: PROMPT_VERSION,
     p_model: draft.model,
@@ -910,19 +1078,82 @@ function failedDraft(hash: string, cause: unknown): EditionDraft {
   return { status: "failed", kind: "full", composition: { sourceHash: hash }, images: [], model: null, error: shortenError(cause) };
 }
 
+interface Finish {
+  deps: ComposeDeps;
+  editionId: string;
+  request: EditionRequest;
+  facts: EditorialFacts;
+  hash: string;
+  usd: number;
+  /** Every attempt and read ends by then. */
+  until: number;
+}
+
+/** What the edition's own status says a finish did: null while it is still drafting, or when it cannot be read. */
+async function landed(finish: Finish): Promise<Settled | null> {
+  const { deps, editionId, until } = finish;
+  const { data } = await dbCall(deps, windowTo(deps, until, SETTLE_CALL_MS), (signal) => deps.db.editionStatus(editionId, signal));
+  if (data === "approved" || data === "awaiting_review") return ["composed", null];
+  return data === "failed" || data === "superseded" ? ["failed", `edition found ${data}`] : null;
+}
+
+/** One bounded finish_client_edition: its error, a throw or no answer in time all come back as an error. */
+async function finishOnce(finish: Finish, draft: EditionDraft): Promise<DbError | null> {
+  const { deps, editionId, request, facts, usd, until } = finish;
+  const args = finishArgs(editionId, request, facts, draft, usd);
+  const { error } = await dbCall(deps, windowTo(deps, until, SETTLE_CALL_MS), (signal) => deps.db.rpc("finish_client_edition", args, signal));
+  return error;
+}
+
+/** Recovery once no finish is confirmed: begin_client_edition already closed the request, so nothing requeues it. */
+function unconfirmed(finish: Finish, refused: string): Settled {
+  const recovery = `the dispatcher's sweep fails drafting edition ${finish.editionId} once its lease lapses; ` +
+    "its request is already done, so the project composes again on its next edition request";
+  console.error(`client-edition-compose: ${finish.editionId}: ${refused}; ${recovery}`);
+  return ["unsettled", `${refused}; ${recovery}`];
+}
+
 /**
- * finish_client_edition with the spend, retried once. A refused draft is then
- * recorded as failed, spend and all, rather than left drafting until its lease
- * lapses; only when that is refused too is the edition left unsettled.
+ * finish_client_edition with the spend: the draft, the draft again, then the
+ * same edition recorded failed, spend and all. A finish that threw or never
+ * answered may still have landed, so before each retry and after the last the
+ * edition's own status is read, and a refusal is never taken to mean nothing
+ * was written. Every attempt and read is bounded, and all of it ends by `until`.
  */
-async function finishEdition(db: Db, editionId: string, request: EditionRequest, facts: EditorialFacts, hash: string, draft: EditionDraft, usd: number): Promise<Settled> {
-  const error = await settleRpc(db, "finish_client_edition", finishArgs(editionId, request, facts, draft, usd));
-  if (!error) return [draft.status === "failed" ? "failed" : "composed", draft.error];
+async function finishEdition(finish: Finish, draft: EditionDraft): Promise<Settled> {
+  let refused = "finish refused";
+  for (const [index, send] of sends(finish, draft).entries()) {
+    const outcome = await attempt(finish, draft, send(refused), refused, index > 0);
+    if (typeof outcome !== "string") return outcome;
+    refused = outcome;
+  }
+  const found = await landed(finish);
+  return found ? foundAs(found, draft, refused) : unconfirmed(finish, refused);
+}
+
+/** The draft, the draft again, then (unless the draft already failed) the edition recorded failed with the last refusal. */
+function sends(finish: Finish, draft: EditionDraft): ((refused: string) => EditionDraft)[] {
+  const twice = [() => draft, () => draft];
+  return draft.status === "failed" ? twice : [...twice, (refused: string) => failedDraft(finish.hash, refused)];
+}
+
+/** One finish, after reading whether an earlier refused one landed: the outcome, or this attempt's refusal. */
+async function attempt(finish: Finish, draft: EditionDraft, sent: EditionDraft, refused: string, retry: boolean): Promise<Settled | string> {
+  const found = retry ? await landed(finish) : null;
+  return found ? foundAs(found, draft, refused) : await sendFinish(finish, sent);
+}
+
+async function sendFinish(finish: Finish, sent: EditionDraft): Promise<Settled | string> {
+  const error = await finishOnce(finish, sent);
+  if (!error) return [sent.status === "failed" ? "failed" : "composed", sent.error];
   const refused = `finish refused: ${shortenError(error.message)}`;
-  console.error(`client-edition-compose: ${editionId}: ${refused}`);
-  if (draft.status === "failed") return ["unsettled", refused];
-  const fallback = await settleRpc(db, "finish_client_edition", finishArgs(editionId, request, facts, failedDraft(hash, refused), usd));
-  return fallback ? ["unsettled", refused] : ["failed", refused];
+  console.error(`client-edition-compose: ${finish.editionId}: ${refused}`);
+  return refused;
+}
+
+/** A finish found landed: composed keeps the draft's note; otherwise the refusal and what the edition says. */
+function foundAs(found: Settled, draft: EditionDraft, refused: string): Settled {
+  return found[0] === "composed" ? ["composed", draft.error] : [found[0], `${refused}; ${found[1]}`];
 }
 
 async function draftOrFailure(
@@ -946,28 +1177,30 @@ function editionDeadline(deps: ComposeDeps, request: EditionRequest): number {
   return Number.isFinite(lease) ? Math.min(deps.deadline, lease - LEASE_MARGIN_MS) : deps.deadline;
 }
 
-async function settleRequest(request: EditionRequest, deps: ComposeDeps, spend: { usd: number }): Promise<Settled> {
-  const facts = await readFacts(deps.db, request.project_id);
-  const current = await readCurrent(deps.db, request.project_id);
+async function settleRequest(request: EditionRequest, deps: ComposeDeps, spend: { usd: number }, edition: { id: string | null }): Promise<Settled> {
+  const facts = await readFacts(deps, request.project_id);
+  const current = await readCurrent(deps, request.project_id);
   const hash = await sourceHash(facts);
-  if (await unchanged(current, hash, facts)) return await closeRequest(deps.db, request, "unchanged");
-  const editionId = await beginEdition(deps.db, request);
-  if (editionId === null) return await closeRequest(deps.db, request, "daily_limit");
-  const draft = await draftOrFailure(facts, current, hash, deps, editionDeadline(deps, request), spend);
-  return await finishEdition(deps.db, editionId, request, facts, hash, draft, spend.usd);
+  if (await unchanged(current, hash, facts)) return await closeRequest(deps, request, "unchanged");
+  edition.id = await beginEdition(deps, request);
+  if (edition.id === null) return await closeRequest(deps, request, "daily_limit");
+  const until = editionDeadline(deps, request);
+  const draft = await draftOrFailure(facts, current, hash, deps, until, spend);
+  return await finishEdition({ deps, editionId: edition.id, request, facts, hash, usd: spend.usd, until }, draft);
 }
 
-/** One claimed request, settled or reported unsettled; it never throws, and its spend is always carried. */
+/** One claimed request, settled or reported unsettled; it never throws, and its edition and spend are always carried. */
 export async function composeRequest(request: EditionRequest, deps: ComposeDeps): Promise<RequestOutcome> {
   const spend = { usd: 0 };
+  const edition: { id: string | null } = { id: null };
   let settled: Settled;
   try {
-    settled = await settleRequest(request, deps, spend);
+    settled = await settleRequest(request, deps, spend, edition);
   } catch (cause) {
-    // Whatever was not settled stays leased: the dispatcher's sweep requeues or fails it.
+    // Only before an edition settles: the request is still leased, and the dispatcher's sweep requeues it.
     settled = ["unsettled", shortenError(cause)];
   }
-  return { requestId: request.id, result: settled[0], reason: settled[1], usd: spend.usd };
+  return { requestId: request.id, editionId: edition.id, result: settled[0], reason: settled[1], usd: spend.usd };
 }
 
 // ── One run ────────────────────────────────────────────────────────────────
@@ -979,12 +1212,16 @@ export interface BatchSummary {
   failed: number;
   unsettled: number;
   cost_usd: number;
-  outcomes: { request_id: string; result: RequestOutcome["result"]; reason: string | null }[];
+  outcomes: { request_id: string; edition_id: string | null; result: RequestOutcome["result"]; reason: string | null }[];
 }
 
-/** One request at a time; a claim error before any request is the run's failure. */
-async function claimOne(db: Db, first: boolean): Promise<EditionRequest | null> {
-  const { data, error } = await db.rpc("claim_client_edition_requests", { p_limit: 1 });
+/**
+ * One request at a time; a claim error, throw or silence before any request is
+ * the run's failure, and a later one ends the batch with what it has.
+ */
+async function claimOne(deps: ComposeDeps, first: boolean): Promise<EditionRequest | null> {
+  const args = { p_limit: 1 };
+  const { data, error } = await dbCall(deps, runWindow(deps), (signal) => deps.db.rpc("claim_client_edition_requests", args, signal));
   if (!error) return ((data ?? []) as EditionRequest[])[0] ?? null;
   if (first) throw new Error(`claim failed: ${error.message}`);
   console.error(`client-edition-compose: claim: ${shortenError(error.message)}`);
@@ -995,14 +1232,14 @@ function tally(summary: BatchSummary, outcome: RequestOutcome): void {
   summary.claimed += 1;
   summary[outcome.result] += 1;
   summary.cost_usd = Number((summary.cost_usd + outcome.usd).toFixed(6));
-  summary.outcomes.push({ request_id: outcome.requestId, result: outcome.result, reason: outcome.reason });
+  summary.outcomes.push({ request_id: outcome.requestId, edition_id: outcome.editionId, result: outcome.result, reason: outcome.reason });
 }
 
 /** Claims and composes requests one by one while a whole edition still fits in the run's budget. */
 export async function runBatch(deps: ComposeDeps): Promise<BatchSummary> {
   const summary: BatchSummary = { claimed: 0, composed: 0, skipped: 0, failed: 0, unsettled: 0, cost_usd: 0, outcomes: [] };
   while (deps.deadline - deps.now() >= EDITION_MIN_MS) {
-    const request = await claimOne(deps.db, summary.claimed === 0);
+    const request = await claimOne(deps, summary.claimed === 0);
     if (!request) break;
     tally(summary, await composeRequest(request, deps));
   }

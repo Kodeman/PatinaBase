@@ -237,6 +237,87 @@ Deno.test("callClaude hands the caller its abort signal; an aborted call settles
   assertEquals("usd" in result, false, "no usage known, no cost claimed");
 });
 
+/** Answers after `ms` real milliseconds, unless the signal it is handed aborts first. */
+function late<T>(ms: number, value: T, signal?: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => resolve(value), ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    }, { once: true });
+  });
+}
+
+Deno.test("callClaude gives up a reservation the ledger has not answered once its signal aborts", async () => {
+  const handed: (AbortSignal | undefined)[] = [];
+  const ledger: LlmLedgerPort = {
+    reserve: (_feature, _studio, _user, _usd, _role, _version, signal?: AbortSignal) => {
+      handed.push(signal);
+      return late(200, { granted: true, reason: null, usageId: 44 }, signal);
+    },
+    settle: async () => {},
+  };
+  const controller = new AbortController();
+  let invoked = false;
+  const pending = callClaude(options({
+    ledger,
+    signal: controller.signal,
+    caller: async () => {
+      invoked = true;
+      return response;
+    },
+  }));
+  setTimeout(() => controller.abort(new Error("no answer in time")), 5);
+  const result = await pending;
+  assert(!result.ok && "error" in result, "the call went ahead");
+  assertEquals([result.errorType, result.error], ["ledger_error", "no answer in time"]);
+  assertEquals(invoked, false);
+  assertEquals(handed, [controller.signal]);
+});
+
+Deno.test("callClaude bounds settling by its ledger signal: a paid answer returns, and the unsettled row is logged", async () => {
+  const controller = new AbortController();
+  const ledger: LlmLedgerPort = {
+    reserve: async () => ({ granted: true, reason: null, usageId: 44 }),
+    settle: (_usageId, _fields, signal?: AbortSignal) => late(200, undefined, signal),
+  };
+  const { logs, clientOptions } = recorder();
+  const pending = callClaude(options({ ledger, ledgerSignal: controller.signal, caller: async () => paidResponse, clientOptions }));
+  setTimeout(() => controller.abort(new Error("no answer in time")), 5);
+  const result = await pending;
+  assert(result.ok);
+  assertEquals(result.usd, 0.003);
+  assertEquals(logs.filter((entry) => entry.event === "claude_ledger_settle_failed").length, 1, "the unsettled row was not logged");
+});
+
+Deno.test("createLlmLedger hands its signal to llm_reserve and llm_settle", async () => {
+  const signals: Record<string, AbortSignal> = {};
+  // A query builder: awaited as is, or through abortSignal.
+  const reply = (name: string) => {
+    const answer = { data: name === "llm_reserve" ? granted().data : null, error: null };
+    return {
+      abortSignal(signal: AbortSignal) {
+        signals[name] = signal;
+        return Promise.resolve(answer);
+      },
+      then: (resolve: (value: typeof answer) => unknown, reject: (reason: unknown) => unknown) => Promise.resolve(answer).then(resolve, reject),
+    };
+  };
+  const admin = { rpc: (name: string) => reply(name) } as never;
+  const ledger = createLlmLedger(admin);
+  const signal = new AbortController().signal;
+  await ledger.reserve("test-feature", "studio-1", "user-1", 0.01, "extract", "v1", signal);
+  await ledger.settle(44, {
+    model: "claude-sonnet-5-5",
+    usage: { input_tokens: 1, output_tokens: 1 },
+    usd: 0,
+    status: "settled",
+    stopReason: null,
+    latencyMs: 1,
+  }, signal);
+  assertEquals(signals, { llm_reserve: signal, llm_settle: signal });
+});
+
 Deno.test("callClaude request helper removes rejected forced-tool and disabled-thinking options", async () => {
   const { ledger } = fakeLedger();
   let request: Record<string, unknown> = {};

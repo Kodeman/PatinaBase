@@ -139,12 +139,16 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Every occurrence of an allowed name, blanked, in both readings of the text. */
+/**
+ * Every whole occurrence of an allowed name, blanked, in both readings of the
+ * text. Only a whole name counts: a piece called Gem never blanks part of Gemini.
+ */
 function maskNames(text: string, names: readonly string[]): string {
   const plain = names.map((name) => mapHomoglyphs(normalize(name)).trim()).filter(Boolean);
   if (!plain.length) return text;
   const longestFirst = [...new Set(plain)].sort((a, b) => b.length - a.length).map(escapeRegExp);
-  return text.replace(new RegExp(longestFirst.join("|"), "gi"), (name) => " ".repeat(name.length));
+  const whole = new RegExp(`(?<![\\p{L}\\p{N}])(?:${longestFirst.join("|")})(?![\\p{L}\\p{N}])`, "giu");
+  return text.replace(whole, (name) => " ".repeat(name.length));
 }
 
 function firstHit(rules: ReturnType<typeof compile>, plain: string, mapped: string): LintHit | null {

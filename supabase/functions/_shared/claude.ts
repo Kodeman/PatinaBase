@@ -39,6 +39,7 @@ export interface LlmLedgerPort {
     estUsd: number,
     role?: ClaudeRole,
     promptVersion?: string,
+    signal?: AbortSignal,
   ): Promise<{
     granted: boolean;
     reason: ClaudeLedgerReason | null;
@@ -52,7 +53,7 @@ export interface LlmLedgerPort {
     status: "settled" | "error";
     stopReason: string | null;
     latencyMs: number;
-  }): Promise<void>;
+  }, signal?: AbortSignal): Promise<void>;
 }
 
 export interface ClaudeClientOptions {
@@ -109,10 +110,15 @@ function buildClaudeParams(
   return result;
 }
 
+/** The query, cut short by `signal` when one is given. */
+function abortable<Q extends { abortSignal(signal: AbortSignal): Q }>(query: Q, signal?: AbortSignal): Q {
+  return signal ? query.abortSignal(signal) : query;
+}
+
 export function createLlmLedger(admin: SupabaseClient): LlmLedgerPort {
   return {
-    async reserve(feature, studioId, userId, estUsd, role, promptVersion) {
-      const { data, error } = await admin.rpc("llm_reserve", {
+    async reserve(feature, studioId, userId, estUsd, role, promptVersion, signal) {
+      const query = admin.rpc("llm_reserve", {
         p_feature: feature,
         p_studio_id: studioId,
         p_user_id: userId,
@@ -120,6 +126,7 @@ export function createLlmLedger(admin: SupabaseClient): LlmLedgerPort {
         p_role: role ?? null,
         p_prompt_version: promptVersion ?? null,
       });
+      const { data, error } = await abortable(query, signal);
       if (error) throw error;
       const result = data as {
         granted: boolean;
@@ -134,8 +141,8 @@ export function createLlmLedger(admin: SupabaseClient): LlmLedgerPort {
         resetsAt: result.resets_at ?? null,
       };
     },
-    async settle(usageId, fields) {
-      const { error } = await admin.rpc("llm_settle", {
+    async settle(usageId, fields, signal) {
+      const query = admin.rpc("llm_settle", {
         p_usage_id: usageId,
         p_model: fields.model,
         p_input_tokens: fields.usage.input_tokens,
@@ -147,6 +154,7 @@ export function createLlmLedger(admin: SupabaseClient): LlmLedgerPort {
         p_stop_reason: fields.stopReason,
         p_latency_ms: fields.latencyMs,
       });
+      const { error } = await abortable(query, signal);
       if (error) throw error;
     },
   };
@@ -160,8 +168,10 @@ export interface CallClaudeOptions {
   promptVersion: string;
   params: Record<string, unknown>;
   timeoutMs: number;
-  /** Cancels the whole call, SDK retries included; an aborted call settles as an error. */
+  /** Cancels the whole call, the ledger reservation and SDK retries included; an aborted call settles as an error. */
   signal?: AbortSignal;
+  /** Bounds settling the ledger row, which runs after `signal` may have aborted; unsettled rows are left to the stale-reservation sweep. */
+  ledgerSignal?: AbortSignal;
   caller?: ClaudeCaller;
   ledger?: LlmLedgerPort;
   clientOptions?: ClaudeClientOptions;
@@ -246,14 +256,16 @@ export async function callClaude(
 
   let reservation: Awaited<ReturnType<LlmLedgerPort["reserve"]>>;
   try {
-    reservation = await ledger.reserve(
-      opts.feature,
-      opts.studioId,
-      opts.userId,
-      estUsd,
-      opts.role,
-      opts.promptVersion,
-    );
+    reservation = await untilAborted(opts.signal, (signal) =>
+      ledger.reserve(
+        opts.feature,
+        opts.studioId,
+        opts.userId,
+        estUsd,
+        opts.role,
+        opts.promptVersion,
+        signal,
+      ));
   } catch (error) {
     return ledgerFailure(errorMessage(error));
   }
@@ -289,6 +301,7 @@ export async function callClaude(
       startedAt,
       log,
       feature: opts.feature,
+      signal: opts.ledgerSignal,
     });
   }
 
@@ -309,6 +322,7 @@ export async function callClaude(
     },
     log,
     opts.feature,
+    opts.ledgerSignal,
   );
   void capture("claude", "$ai_generation", {
     feature: opts.feature,
@@ -343,6 +357,7 @@ async function settleFailure(
     startedAt: number;
     log: NonNullable<ClaudeClientOptions["log"]>;
     feature: string;
+    signal?: AbortSignal;
   },
 ): Promise<ClaudeCallError> {
   const knownUsage = usageFromError(error);
@@ -360,6 +375,7 @@ async function settleFailure(
     },
     call.log,
     call.feature,
+    call.signal,
   );
   const failure = modelFailure(error);
   return knownUsage ? { ...failure, usd } : failure;
@@ -371,10 +387,11 @@ async function settleUsage(
   fields: Parameters<LlmLedgerPort["settle"]>[1],
   log: NonNullable<ClaudeClientOptions["log"]>,
   feature: string,
+  signal?: AbortSignal,
 ): Promise<void> {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      await ledger.settle(usageId, fields);
+      await untilAborted(signal, (bound) => ledger.settle(usageId, fields, bound));
       return;
     } catch (error) {
       if (attempt === 2) {
@@ -425,6 +442,25 @@ function modelFailure(error: unknown): ClaudeCallError {
     errorType: typeof fields.type === "string" ? fields.type : null,
     transient: status !== null && TRANSIENT_STATUSES.has(status),
   };
+}
+
+/**
+ * The work, handed `signal`, or a rejection as soon as `signal` aborts: a
+ * ledger that does not honour the signal still cannot hold the call.
+ */
+function untilAborted<T>(
+  signal: AbortSignal | undefined,
+  work: (signal?: AbortSignal) => Promise<T>,
+): Promise<T> {
+  if (!signal) return work();
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    work(signal).then(resolve, reject).finally(() =>
+      signal.removeEventListener("abort", abort)
+    );
+  });
 }
 
 function ledgerFailure(message: string): ClaudeCallError {

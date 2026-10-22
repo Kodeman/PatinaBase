@@ -546,12 +546,22 @@ function readKey(pathname: string): string | null {
   return match && READABLE_FILES.includes(match[3]) ? `plates/${match[1]}/${match[2]}/${match[3]}` : null;
 }
 
+/** The stored plate, or null when it is missing or the bucket fails: a failed read answers as a miss. */
+async function readPlate(env: PlatesEnv, key: string) {
+  try {
+    return await env.PLATES.get(key);
+  } catch {
+    console.error('Plate read failed');
+    return null;
+  }
+}
+
 export async function handlePlateRead(request: Request, env: PlatesEnv): Promise<Response> {
   if (!bearerMatches(request.headers.get('authorization'), env.PLATE_INGEST_SECRET)) {
     return new Response(null, { status: 401 });
   }
   const key = readKey(new URL(request.url).pathname);
-  const object = key ? await env.PLATES.get(key) : null;
+  const object = key ? await readPlate(env, key) : null;
   if (!object) return new Response(null, { status: 404 });
   return new Response(object.body, { headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'private, no-store' } });
 }

@@ -102,6 +102,12 @@ function fakeDb(source: EditorialFacts): Db {
       return Promise.resolve({ data: data[fn] ?? null, error: null });
     },
     approvedEdition: () => Promise.resolve({ data: null, error: null }),
+    provenancePage: (_project: string, ids: string[], after: string | null) => {
+      const rows = named(ids).map(({ asset_id, source_kind }, i) => ({ id: `p-${String(i).padStart(4, "0")}`, asset_id, source_kind }));
+      return Promise.resolve({ data: { rows: after === null ? rows : [], total: rows.length }, error: null });
+    },
+    editionStatus: () => Promise.resolve({ data: "drafting", error: null }),
+    // e5bdbaf4's port, kept so this file loads against it for the negative controls.
     provenance: (_project: string, ids: string[]) =>
       Promise.resolve({ data: named(ids).map(({ asset_id, source_kind }) => ({ asset_id, source_kind })), error: null }),
     // ad32ba43's port, kept so the address check fails there by assertion.
@@ -166,7 +172,8 @@ async function requestBodies(showMakers: boolean, privacyLive: boolean) {
   };
   const request = { id: "req-1", project_id: PROJECT, lease_token: "lease-1" };
   const legacy = { supabaseUrl: "https://project.supabase.co" };
-  await composeRequest(request, { ...legacy, db: fakeDb(facts(showMakers)), claude, privacyLive, media, now: () => 0, deadline: 120_000 });
+  const sleep = (_ms: number, signal: AbortSignal) => new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+  await composeRequest(request, { ...legacy, db: fakeDb(facts(showMakers)), claude, privacyLive, media, now: () => 0, deadline: 120_000, sleep });
   return { roles: calls.map((c) => c.role), bodies: calls.map(words), pictures: calls.flatMap(pictured), calls };
 }
 
