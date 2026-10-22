@@ -12,7 +12,7 @@
     "./auth": "./src/auth/index.ts"
   },
   "scripts": {
-    "generate": "supabase gen types typescript --db-url \"$SUPABASE_DB_URL\" > src/database.types.ts",
+    "generate": "f=$(mktemp) && supabase gen types typescript --db-url \"${SUPABASE_DB_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}\" > \"$f\" && chmod 644 \"$f\" && mv \"$f\" src/database.types.ts",
     "push": "supabase db push --db-url \"$SUPABASE_DB_URL\"",
     "studio": "supabase studio",
     "type-check": "tsc --noEmit",
