@@ -8,7 +8,7 @@ export const CAPTION_SEPARATOR = ' · ';
 const BANNED: readonly RegExp[] = [/\bAI\b/, /generated/i, /image of/i];
 
 export const NOTE_LOAD_FAILED = 'Picture did not load.';
-export const NOTE_NOT_HER_PIECE = 'Not her piece; hers is in production.';
+export const NOTE_NOT_YOUR_PIECE = 'Not your piece; yours is in production.';
 
 export function hasBannedWords(text: string): boolean {
   return BANNED.some((re) => re.test(text));

@@ -174,13 +174,13 @@ describe('editorial plates', () => {
     expect(screen.queryByText(CONCEPT_CHIP)).toBeNull();
   });
 
-  it('captions a catalogue photograph as the same model, not her piece', () => {
+  it('captions a catalogue photograph as the same model, not your piece', () => {
     const { container } = render(
       <PiecePlate showMakers scopeId={SCOPE} item={item} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="In production" />,
     );
     expect(container.querySelector('[data-caption-field="what"]')).toHaveTextContent('Walnut sideboard, the same model');
     expect(container.querySelector('[data-caption-field="whose"]')).toHaveTextContent("from Harmon Bench Works' catalogue");
-    expect(container.querySelector('.plate-note')).toHaveTextContent('Not her piece; hers is in production.');
+    expect(container.querySelector('.plate-note')).toHaveTextContent('Not your piece; yours is in production.');
     expect(container.querySelector('figure')).toHaveAttribute('data-ground', 'white');
     expect(screen.getByText('In production')).toBeInTheDocument();
   });

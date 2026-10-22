@@ -1,6 +1,6 @@
 'use client';
 
-import { NOTE_NOT_HER_PIECE, captionTriplet, catalogueCaption } from '@/lib/editorial/caption';
+import { NOTE_NOT_YOUR_PIECE, captionTriplet, catalogueCaption } from '@/lib/editorial/caption';
 import { SIZES } from '@/lib/editorial/crop';
 import { TIER, tierOf } from '@/lib/editorial/rank';
 import type { EditorialAsset, EditorialItem } from '@/lib/editorial/types';
@@ -30,13 +30,13 @@ function pieceCaption(item: PieceItem, asset: EditorialAsset, showMakers: boolea
     showMakers ? item.nameAsSigned : asset.caption.what,
     item.makerName, asset.caption.when, item.category, showMakers,
   );
-  return { caption, note: INSTALLED.test(item.status ?? '') ? null : NOTE_NOT_HER_PIECE };
+  return { caption, note: INSTALLED.test(item.status ?? '') ? null : NOTE_NOT_YOUR_PIECE };
 }
 
 /**
  * 1:1, 171 at the phone and 282 above 600. A white-ground photograph is
  * contained with a tenth inset on stock; a catalogue photograph says it shows
- * the same model, not her piece.
+ * the same model, not your piece.
  */
 export function PiecePlate({ scopeId, showMakers, item, asset, statusWords, paletteHex }: PiecePlateProps) {
   const fallback = { name: item.nameAsSigned, silhouetteKind: item.silhouetteKind, category: item.category };

@@ -8,7 +8,7 @@ export const STANDING_ORDER: readonly StandingRole[] = ['letterbox', 'approvals'
 
 /** PLAN R-v2-13 zero states, in the same role order. */
 export const STANDING_ZERO: Readonly<Record<StandingRole, string>> = {
-  letterbox: 'Nothing new since your last visit',
+  letterbox: 'Nothing new from the studio',
   approvals: 'Nothing waiting on you',
   ledger: 'No invoices open',
 };
