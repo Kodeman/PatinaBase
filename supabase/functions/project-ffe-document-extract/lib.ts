@@ -1,3 +1,5 @@
+import type { ClaudeCaller } from "../_shared/claude.ts";
+
 export const MAX_PDF_BYTES = 25 * 1024 * 1024;
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_ROWS = 5_000;
@@ -153,13 +155,14 @@ export function sourceContentBlock(contentType: SourceContentType, bytes: Uint8A
   return contentType === "application/pdf" ? { type: "document", source } : { type: "image", source };
 }
 
-export async function callExtractionWithFiles(
-  client: {
-    files: {
-      upload(args: { file: File }): Promise<{ id: string }>;
-      delete(id: string): Promise<unknown>;
-    };
-    messages: { create(params: Record<string, unknown>): Promise<{
+/** The Anthropic SDK surface extraction uses; each request takes the SDK's `{ signal }` option. */
+export type ExtractionClient = {
+  files: {
+    upload(args: { file: File }, options?: { signal?: AbortSignal }): Promise<{ id: string }>;
+    delete(id: string, params?: null, options?: { signal?: AbortSignal }): Promise<unknown>;
+  };
+  messages: {
+    create(params: Record<string, unknown>, options?: { signal?: AbortSignal }): Promise<{
       stop_reason: string | null;
       content: { type: string; text?: string }[];
       usage: {
@@ -168,33 +171,78 @@ export async function callExtractionWithFiles(
         cache_creation_input_tokens?: number;
         cache_read_input_tokens?: number;
       };
-    }> };
-  },
+    }>;
+  };
+};
+
+/** How long deleting the temporary Files API upload may run, after the answer has already returned. */
+export const FILE_CLEANUP_MS = 10_000;
+
+/** The callClaude caller for one source: callClaude's deadline signal reaches the upload and the model call. */
+export function extractionCaller(
+  client: ExtractionClient | null,
+  contentType: SourceContentType,
+  bytes: Uint8Array,
+): ClaudeCaller {
+  return async (params, signal) => {
+    if (!client) throw new Error("Anthropic client is unavailable");
+    return await callExtractionWithFiles(client, params, contentType, bytes, signal);
+  };
+}
+
+export async function callExtractionWithFiles(
+  client: ExtractionClient,
   params: Record<string, unknown>,
   contentType: SourceContentType,
   bytes: Uint8Array,
+  signal?: AbortSignal,
 ) {
   if (contentType !== "application/pdf" || bytes.byteLength <= FILES_API_THRESHOLD_BYTES) {
-    return await client.messages.create(params);
+    return await client.messages.create(params, { signal });
   }
   const fileBytes = new Uint8Array(bytes.byteLength);
   fileBytes.set(bytes);
   const uploaded = await client.files.upload({
     file: new File([fileBytes.buffer], "source.pdf", { type: "application/pdf" }),
-  });
+  }, { signal });
   try {
     const messages = params.messages as Array<{ content: unknown[] }>;
     const document = messages[0].content.find((block) =>
       (block as { type?: string }).type === "document"
     ) as { type: string; source: unknown };
     document.source = { type: "file", file_id: uploaded.id };
-    return await client.messages.create(params);
+    return await client.messages.create(params, { signal });
   } finally {
-    try {
-      await client.files.delete(uploaded.id);
-    } catch (error) {
-      console.warn("FFE extraction temporary file cleanup failed", error);
-    }
+    // Not awaited, so cleanup never holds a paid answer past callClaude's deadline.
+    inBackground(deleteTemporaryFile(client, uploaded.id));
+  }
+}
+
+/** Best effort and bounded by FILE_CLEANUP_MS; never rejects. */
+async function deleteTemporaryFile(client: ExtractionClient, fileId: string): Promise<void> {
+  const window = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      window.abort(new Error("temporary file cleanup window passed"));
+      reject(window.signal.reason);
+    }, FILE_CLEANUP_MS);
+  });
+  try {
+    await Promise.race([client.files.delete(fileId, null, { signal: window.signal }), expired]);
+  } catch (error) {
+    console.warn("FFE extraction temporary file cleanup failed", error);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Keeps the edge worker alive for `task` where the runtime offers EdgeRuntime.waitUntil; elsewhere it runs detached. */
+function inBackground(task: Promise<void>): void {
+  try {
+    (globalThis as { EdgeRuntime?: { waitUntil?(task: Promise<unknown>): void } }).EdgeRuntime?.waitUntil?.(task);
+  } catch {
+    // Unregistered, the task still runs, under its own bound.
   }
 }
 

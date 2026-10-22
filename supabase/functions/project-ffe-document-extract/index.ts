@@ -3,8 +3,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callClaude, createLlmLedger } from "../_shared/claude.ts";
 import { resolveCaller } from "../_shared/caller.ts";
 import {
-  callExtractionWithFiles,
   claudeFailureResponse,
+  type ExtractionClient,
+  extractionCaller,
   extractionPrompt,
   extractionStageArgs,
   extractionTool,
@@ -96,15 +97,11 @@ Deno.serve(async (req) => {
     promptVersion: `ffe-extract-v${payload.schemaVersion}`,
     timeoutMs: 120_000,
     ledger: createLlmLedger(admin),
-    caller: async (params) => {
-      if (!modelClient) throw new Error("Anthropic client is unavailable");
-      return await callExtractionWithFiles(
-        modelClient as unknown as Parameters<typeof callExtractionWithFiles>[0],
-        params,
-        source.contentType,
-        new Uint8Array(sourceBytes),
-      );
-    },
+    caller: extractionCaller(
+      modelClient as unknown as ExtractionClient | null,
+      source.contentType,
+      new Uint8Array(sourceBytes),
+    ),
     params: {
       max_tokens: 6000,
       system: extractionPrompt(payload.schemaVersion),

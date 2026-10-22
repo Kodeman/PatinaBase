@@ -1,13 +1,18 @@
-import { callClaude } from "../_shared/claude.ts";
-import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { callClaude, type CallClaudeResult } from "../_shared/claude.ts";
+import { computeCostUsd, ROLE_MODELS } from "../_shared/claude-models.ts";
+import { assert, assertEquals, assertRejects, assertStrictEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { FakeTime } from "https://deno.land/std@0.224.0/testing/time.ts";
 import {
   EXTRACTION_TOOL_NAME,
+  FILE_CLEANUP_MS,
   FILES_API_THRESHOLD_BYTES,
   MAX_IMAGE_BYTES,
   MAX_PDF_BYTES,
   base64Chunks,
   callExtractionWithFiles,
   claudeFailureResponse,
+  type ExtractionClient,
+  extractionCaller,
   parseClaudeExtraction,
   extractionStageArgs,
   extractionPrompt,
@@ -181,6 +186,200 @@ Deno.test("Files API delete failure preserves successful extraction and settled 
   });
   assertEquals(result.ok, true);
   assertEquals(settled, true);
+});
+
+// SQ-1706 R4: callClaude ends the model call 120 s after the call starts, so
+// the handler's adapter must take that deadline and must not hold a paid
+// answer while it deletes the temporary Files API upload.
+const paidAnswer = {
+  stop_reason: "end_turn",
+  content: [{ type: "text", text: "{}" }],
+  usage: { input_tokens: 100, output_tokens: 100 },
+};
+const paidUsd = computeCostUsd(ROLE_MODELS.extract.model, paidAnswer.usage);
+const fakeWait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+type Settlement = { at: number; status: string; usd: number };
+
+/** callClaude as the handler runs it, through the handler's own adapter, for a PDF that goes through the Files API. */
+function extractLargePdf(client: ExtractionClient, settled: Settlement[], handed: (signal?: AbortSignal) => void = () => {}) {
+  const adapter = extractionCaller(client, "application/pdf", new Uint8Array(FILES_API_THRESHOLD_BYTES + 1));
+  let returnedAt: number | null = null;
+  let result: CallClaudeResult | null = null;
+  const pending = callClaude({
+    feature: "ffe-extract",
+    role: "extract",
+    studioId: null,
+    userId: null,
+    promptVersion: "test",
+    timeoutMs: 120_000,
+    params: { max_tokens: 6000, messages: [{ role: "user", content: [{ type: "document", source: {} }] }] },
+    caller: (params, signal) => {
+      handed(signal);
+      return adapter(params, signal);
+    },
+    ledger: {
+      async reserve() { return { granted: true, reason: null, usageId: 1 }; },
+      async settle(_usageId, fields) { settled.push({ at: Date.now(), status: fields.status, usd: fields.usd }); },
+    },
+    clientOptions: { apiKey: "test-key", log: () => {}, capture: async () => undefined },
+  }).then((value) => {
+    result = value;
+    returnedAt = Date.now();
+  });
+  return { pending, outcome: () => ({ result: result as CallClaudeResult | null, returnedAt }) };
+}
+
+/** Advances fake time a second at a step until the call returns or `limit` passes. */
+async function tickUntilReturned(time: FakeTime, call: ReturnType<typeof extractLargePdf>, limit: number) {
+  while (call.outcome().returnedAt === null && Date.now() < limit) await time.tickAsync(1_000);
+}
+
+Deno.test("an extraction answer paid at 110 s is settled and returned while its 20 s temporary-file delete still runs", async () => {
+  const time = new FakeTime(0);
+  try {
+    let deleteStartedAt: number | null = null;
+    const client: ExtractionClient = {
+      files: {
+        upload: async () => ({ id: "file_slow_delete" }),
+        delete: async () => {
+          deleteStartedAt = Date.now();
+          await fakeWait(20_000);
+        },
+      },
+      messages: {
+        create: async () => {
+          await fakeWait(110_000);
+          return paidAnswer;
+        },
+      },
+    };
+    const settled: Settlement[] = [];
+    const call = extractLargePdf(client, settled);
+    await tickUntilReturned(time, call, 132_000);
+    await call.pending;
+    const { result, returnedAt } = call.outcome();
+    assertEquals(
+      result && { ok: result.ok, usd: result.ok ? result.usd : null },
+      { ok: true, usd: paidUsd },
+      "Already-paid extraction must not become a zero-cost retryable timeout during file cleanup",
+    );
+    assertEquals(settled, [{ at: 110_000, status: "settled", usd: paidUsd }]);
+    assertEquals(returnedAt, 110_000, "the answer returns when it arrives, not when cleanup ends");
+    assertEquals(deleteStartedAt, 110_000, "the temporary file is still deleted");
+  } finally {
+    time.restore();
+  }
+});
+
+Deno.test("a hung temporary-file delete never delays the answer; its cleanup goes to EdgeRuntime.waitUntil and ends within FILE_CLEANUP_MS", async () => {
+  const time = new FakeTime(0);
+  const runtime = globalThis as { EdgeRuntime?: unknown };
+  const handedOff: Promise<unknown>[] = [];
+  runtime.EdgeRuntime = { waitUntil: (task: Promise<unknown>) => handedOff.push(task) };
+  const warn = console.warn;
+  const warnings: unknown[] = [];
+  console.warn = (message: unknown) => warnings.push(message);
+  try {
+    let deleteSignal: AbortSignal | undefined;
+    const client: ExtractionClient = {
+      files: {
+        upload: async () => ({ id: "file_hung_delete" }),
+        delete: (_id, _params, options) => {
+          deleteSignal = options?.signal;
+          return new Promise(() => {});
+        },
+      },
+      messages: {
+        create: async () => {
+          await fakeWait(1_000);
+          return paidAnswer;
+        },
+      },
+    };
+    const settled: Settlement[] = [];
+    const call = extractLargePdf(client, settled);
+    await tickUntilReturned(time, call, 125_000);
+    await call.pending;
+    const { result, returnedAt } = call.outcome();
+    assertEquals(returnedAt, 1_000, "a delete that never answers does not hold the answer");
+    assertEquals(result?.ok, true);
+    assertEquals(settled, [{ at: 1_000, status: "settled", usd: paidUsd }]);
+    assertEquals(handedOff.length, 1, "the cleanup is kept alive past the response");
+    let cleanupEnded = false;
+    void handedOff[0].then(() => (cleanupEnded = true));
+    await time.tickAsync(FILE_CLEANUP_MS - 1);
+    assertEquals(cleanupEnded, false);
+    await time.tickAsync(1);
+    assertEquals(cleanupEnded, true, "the cleanup gives up after FILE_CLEANUP_MS");
+    assertEquals(deleteSignal?.aborted, true, "the delete request is cancelled when it gives up");
+    assertEquals(warnings, ["FFE extraction temporary file cleanup failed"]);
+  } finally {
+    delete runtime.EdgeRuntime;
+    console.warn = warn;
+    time.restore();
+  }
+});
+
+Deno.test("the handler's extraction caller hands callClaude's deadline signal to the Files API upload and the model call", async () => {
+  const time = new FakeTime(0);
+  try {
+    let handed: AbortSignal | undefined;
+    let uploadSignal: AbortSignal | undefined;
+    let createSignal: AbortSignal | undefined;
+    let createCancelledAt: number | null = null;
+    let deletedId: string | null = null;
+    const client: ExtractionClient = {
+      files: {
+        upload: async (_args, options) => {
+          uploadSignal = options?.signal;
+          return { id: "file_deadline" };
+        },
+        delete: async (id) => {
+          deletedId = id;
+        },
+      },
+      messages: {
+        // Runs until it is cancelled, as the SDK's request does.
+        create: (_params, options) => {
+          createSignal = options?.signal;
+          return new Promise((_resolve, reject) =>
+            options?.signal?.addEventListener("abort", () => {
+              createCancelledAt = Date.now();
+              reject(options.signal!.reason);
+            })
+          );
+        },
+      },
+    };
+    const settled: Settlement[] = [];
+    const call = extractLargePdf(client, settled, (signal) => (handed = signal));
+    await tickUntilReturned(time, call, 125_000);
+    await call.pending;
+    assert(handed instanceof AbortSignal, "callClaude hands the caller its deadline signal");
+    assertStrictEquals(uploadSignal, handed, "the upload is cancelled by the deadline");
+    assertStrictEquals(createSignal, handed, "the model call is cancelled by the deadline");
+    assertEquals(createCancelledAt, 120_000, "the model call ends when the 120 s window does");
+    const { result } = call.outcome();
+    assertEquals(result && !result.ok && "errorType" in result ? result.errorType : null, "timeout");
+    assertEquals(deletedId, "file_deadline", "a cancelled call still deletes its upload");
+
+    // Inline sources (small PDFs and images) skip the Files API; the model call takes the signal.
+    const controller = new AbortController();
+    let inlineSignal: AbortSignal | undefined;
+    const inline = extractionCaller({
+      ...client,
+      messages: {
+        create: async (_params, options) => {
+          inlineSignal = options?.signal;
+          return paidAnswer;
+        },
+      },
+    }, "image/jpeg", new Uint8Array([0xff, 0xd8, 0xff]));
+    await inline({ messages: [{ role: "user", content: [] }] }, controller.signal);
+    assertStrictEquals(inlineSignal, controller.signal);
+  } finally {
+    time.restore();
+  }
 });
 
 Deno.test("Anthropic request uses one schema-constrained staging shape", () => {
