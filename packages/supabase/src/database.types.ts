@@ -2923,6 +2923,219 @@ export type Database = {
           },
         ]
       }
+      client_edition_images: {
+        Row: {
+          alt: string | null
+          asset_id: string
+          caption_what: string | null
+          caption_when: string | null
+          caption_whose: string | null
+          chapter_key: string | null
+          crop_key: string
+          edition_id: string
+          id: string
+          plate_role: string
+          rank: number | null
+        }
+        Insert: {
+          alt?: string | null
+          asset_id: string
+          caption_what?: string | null
+          caption_when?: string | null
+          caption_whose?: string | null
+          chapter_key?: string | null
+          crop_key?: string
+          edition_id: string
+          id?: string
+          plate_role: string
+          rank?: number | null
+        }
+        Update: {
+          alt?: string | null
+          asset_id?: string
+          caption_what?: string | null
+          caption_when?: string | null
+          caption_whose?: string | null
+          chapter_key?: string | null
+          crop_key?: string
+          edition_id?: string
+          id?: string
+          plate_role?: string
+          rank?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_edition_images_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "client_plate_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_edition_images_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "client_editions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_edition_requests: {
+        Row: {
+          attempts: number
+          available_at: string
+          close_reason: string | null
+          created_at: string
+          debounce_key: string
+          id: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          project_id: string
+          reason: string
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          available_at?: string
+          close_reason?: string | null
+          created_at?: string
+          debounce_key: string
+          id?: string
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          project_id: string
+          reason: string
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          available_at?: string
+          close_reason?: string | null
+          created_at?: string
+          debounce_key?: string
+          id?: string
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          project_id?: string
+          reason?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      client_editions: {
+        Row: {
+          approved_at: string | null
+          auto_published: boolean
+          composition: Json | null
+          cost_usd: number | null
+          created_at: string
+          facts: Json | null
+          frozen_at: string | null
+          id: string
+          kind: string | null
+          lease_expires_at: string | null
+          lease_token: string | null
+          model: string | null
+          overrides: Json
+          project_id: string
+          prompt_version: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          seq: number
+          source_hash: string | null
+          status: string
+          superseded_at: string | null
+          superseded_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          auto_published?: boolean
+          composition?: Json | null
+          cost_usd?: number | null
+          created_at?: string
+          facts?: Json | null
+          frozen_at?: string | null
+          id?: string
+          kind?: string | null
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          model?: string | null
+          overrides?: Json
+          project_id: string
+          prompt_version?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          seq: number
+          source_hash?: string | null
+          status?: string
+          superseded_at?: string | null
+          superseded_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          auto_published?: boolean
+          composition?: Json | null
+          cost_usd?: number | null
+          created_at?: string
+          facts?: Json | null
+          frozen_at?: string | null
+          id?: string
+          kind?: string | null
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          model?: string | null
+          overrides?: Json
+          project_id?: string
+          prompt_version?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          seq?: number
+          source_hash?: string | null
+          status?: string
+          superseded_at?: string | null
+          superseded_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_editions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "client_editions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_editions_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_editions_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_editions_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "client_editions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_households: {
         Row: {
           co_threshold_cents: number | null
@@ -3521,11 +3734,13 @@ export type Database = {
           dominant_hex: string | null
           flags: string[]
           focal: number[] | null
+          focal_origin: string | null
           ground: string | null
           height: number
           id: string
           lqip: string | null
           original_key: string
+          perceived_alt: string | null
           perceived_prompt_version: string | null
           project_id: string
           sha256: string
@@ -3542,11 +3757,13 @@ export type Database = {
           dominant_hex?: string | null
           flags?: string[]
           focal?: number[] | null
+          focal_origin?: string | null
           ground?: string | null
           height: number
           id?: string
           lqip?: string | null
           original_key: string
+          perceived_alt?: string | null
           perceived_prompt_version?: string | null
           project_id: string
           sha256: string
@@ -3563,11 +3780,13 @@ export type Database = {
           dominant_hex?: string | null
           flags?: string[]
           focal?: number[] | null
+          focal_origin?: string | null
           ground?: string | null
           height?: number
           id?: string
           lqip?: string | null
           original_key?: string
+          perceived_alt?: string | null
           perceived_prompt_version?: string | null
           project_id?: string
           sha256?: string
@@ -36845,6 +37064,10 @@ export type Database = {
         Args: { p_version_id: string }
         Returns: string
       }
+      _build_project_editorial: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       _can_access_outbound_draft: {
         Args: {
           p_draft: Database["public"]["Tables"]["outbound_drafts"]["Row"]
@@ -36893,6 +37116,69 @@ export type Database = {
         }
         Returns: boolean
       }
+      _client_edition_check_overrides: {
+        Args: { p_overrides: Json }
+        Returns: undefined
+      }
+      _client_edition_for_studio: {
+        Args: { p_edition_id: string }
+        Returns: {
+          approved_at: string | null
+          auto_published: boolean
+          composition: Json | null
+          cost_usd: number | null
+          created_at: string
+          facts: Json | null
+          frozen_at: string | null
+          id: string
+          kind: string | null
+          lease_expires_at: string | null
+          lease_token: string | null
+          model: string | null
+          overrides: Json
+          project_id: string
+          prompt_version: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          seq: number
+          source_hash: string | null
+          status: string
+          superseded_at: string | null
+          superseded_by: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_editions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _client_edition_frozen: {
+        Args: { p_edition_id?: string; p_project_id: string }
+        Returns: boolean
+      }
+      _client_edition_hero_ok: {
+        Args: { p_composition: Json; p_overrides: Json; p_project_id: string }
+        Returns: boolean
+      }
+      _client_edition_lock: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
+      _client_edition_merge: {
+        Args: { p_base: Json; p_delta: Json }
+        Returns: Json
+      }
+      _client_edition_project_ready: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
+      _client_edition_prose: { Args: { p_composition: Json }; Returns: Json }
+      _client_edition_refuse_frozen: {
+        Args: { p_edition_id?: string; p_project_id: string }
+        Returns: undefined
+      }
       _client_line_rooms: {
         Args: {
           p_ffe_item_id: string
@@ -36904,9 +37190,25 @@ export type Database = {
         }
         Returns: Json
       }
+      _client_plate_alt: {
+        Args: { p_kind: string; p_what: string; p_whose: string }
+        Returns: string
+      }
       _client_plate_concept_revision: {
         Args: { p_uploaded_at: string }
         Returns: string
+      }
+      _client_plate_frame_valid: {
+        Args: { p_focal: number[]; p_subject_box: number[] }
+        Returns: boolean
+      }
+      _client_plate_lock_source: {
+        Args: { p_asset_id: string }
+        Returns: string
+      }
+      _client_plate_requeue: {
+        Args: { p_request_id: string }
+        Returns: undefined
       }
       _client_plate_scan_source: { Args: { p_url: string }; Returns: string }
       _clone_proposal_legacy_00399: {
@@ -37392,6 +37694,10 @@ export type Database = {
       _derive_working_budget_draft_00661_impl: {
         Args: { p_project_id: string }
         Returns: Json
+      }
+      _enqueue_client_edition_request: {
+        Args: { p_delay?: string; p_project_id: string; p_reason: string }
+        Returns: undefined
       }
       _enqueue_client_plate_request: {
         Args: {
@@ -39420,6 +39726,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      approve_client_edition: {
+        Args: { p_edition_id: string; p_overrides?: Json }
+        Returns: undefined
+      }
       approve_client_signoff: {
         Args: {
           p_client_consent_method?: string
@@ -39682,6 +39992,11 @@ export type Database = {
         Args: { p_import_id: string }
         Returns: number
       }
+      begin_client_edition: {
+        Args: { p_lease_token: string; p_request_id: string }
+        Returns: string
+      }
+      begin_client_edition_compose_run: { Args: never; Returns: number }
       begin_client_plate_copy_run: { Args: never; Returns: number }
       begin_direction_from_discovery: {
         Args: { p_designer_client_id: string }
@@ -40104,6 +40419,28 @@ export type Database = {
         Args: { p_content_revision: number; p_run_id: string }
         Returns: string
       }
+      claim_client_edition_requests: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          available_at: string
+          close_reason: string | null
+          created_at: string
+          debounce_key: string
+          id: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          project_id: string
+          reason: string
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_edition_requests"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_client_plate_requests: {
         Args: { p_limit?: number }
         Returns: {
@@ -40326,6 +40663,10 @@ export type Database = {
           p_source_id: string
         }
         Returns: string
+      }
+      close_client_edition_request: {
+        Args: { p_lease_token: string; p_reason: string; p_request_id: string }
+        Returns: undefined
       }
       close_project: {
         Args: { p_closure?: Json; p_project_id: string; p_snapshot?: Json }
@@ -41477,6 +41818,7 @@ export type Database = {
         Returns: number
       }
       dispatch_board_deck_import_resolve: { Args: never; Returns: number }
+      dispatch_client_edition_compose: { Args: never; Returns: number }
       dispatch_client_plate_copy: { Args: never; Returns: number }
       document_client_link_hold: {
         Args: { p_project_id: string }
@@ -42113,6 +42455,32 @@ export type Database = {
         }
         Returns: undefined
       }
+      finish_client_edition: {
+        Args: {
+          p_composition: Json
+          p_cost_usd: number
+          p_edition_id: string
+          p_error: string
+          p_facts: Json
+          p_images: Json
+          p_kind: string
+          p_lease_token: string
+          p_model: string
+          p_prompt_version: string
+          p_status: string
+        }
+        Returns: string
+      }
+      finish_client_edition_compose_run: {
+        Args: {
+          p_cost_usd?: number
+          p_detail?: Json
+          p_error?: string
+          p_run_id: number
+          p_status: string
+        }
+        Returns: undefined
+      }
       finish_client_plate_copy_run: {
         Args: {
           p_detail?: Json
@@ -42345,6 +42713,10 @@ export type Database = {
         Args: { p_project_id?: string; p_proposal_id?: string }
         Returns: Json
       }
+      get_client_project_edition: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       get_client_project_editorial: {
         Args: { p_project_id: string }
         Returns: Json
@@ -42573,6 +42945,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      get_project_editorial_facts: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       get_project_ffe_extract_upload: {
         Args: { p_actor_id: string; p_asset_id: string; p_project_id: string }
         Returns: Json
@@ -42778,6 +43154,10 @@ export type Database = {
         Returns: boolean
       }
       help_state_merge: { Args: { p_patch: Json }; Returns: Json }
+      hold_client_edition: {
+        Args: { p_edition_id: string }
+        Returns: undefined
+      }
       hold_install_window: {
         Args: { p_ends_on: string; p_project_id: string; p_starts_on: string }
         Returns: string
@@ -43185,6 +43565,7 @@ export type Database = {
         Args: { p_vendor_id: string }
         Returns: number
       }
+      list_client_editions: { Args: { p_project_id: string }; Returns: Json }
       list_client_proposals: { Args: never; Returns: Json }
       list_custom_commission_milestones: {
         Args: { p_configuration_id: string }
@@ -44783,6 +45164,17 @@ export type Database = {
           p_signed_name: string
         }
         Returns: Json
+      }
+      record_plate_perception: {
+        Args: {
+          p_alt: string
+          p_asset_id: string
+          p_flags: string[]
+          p_focal: number[]
+          p_prompt_version: string
+          p_subject_box: number[]
+        }
+        Returns: undefined
       }
       record_po_shipment: {
         Args: { p_local_date?: string; p_po_id: string; p_request: Json }
@@ -46717,6 +47109,10 @@ export type Database = {
         Args: { p_sheet_id: string; p_state: string }
         Returns: Json
       }
+      set_plate_focal: {
+        Args: { p_asset_id: string; p_focal: number[]; p_subject_box: number[] }
+        Returns: undefined
+      }
       set_project_decision_authority: {
         Args: {
           p_decision_lead_id: string
@@ -48277,6 +48673,10 @@ export type Database = {
         Returns: Json
       }
       triage_project_ffe_items: { Args: { p_request: Json }; Returns: Json }
+      undo_client_edition: {
+        Args: { p_edition_id: string }
+        Returns: undefined
+      }
       unkeep_board_deck_import_item: {
         Args: { p_item_id: string }
         Returns: Json

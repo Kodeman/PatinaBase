@@ -23670,6 +23670,354 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00844_client_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_editions_check_superseded_by() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00844_client_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_editions_keep_identity() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00844_client_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.client_editions FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00844_client_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.client_edition_images FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00844_client_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.client_edition_requests FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00844_client_editions.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.client_editions TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00844_client_editions.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.client_edition_images TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00844_client_editions.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.client_edition_requests TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00844_client_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._enqueue_client_edition_request(uuid, text, interval) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00844_client_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_edition_enqueue_change() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_plate_alt(text, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._build_project_editorial(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_editorial(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_editorial(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_editorial_facts(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_editorial_facts(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_lock(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_frozen(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_refuse_frozen(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_plate_lock_source(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_plate_requeue(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_project_ready(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_merge(jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_prose(jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_hero_ok(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_plate_frame_valid(numeric[], numeric[]) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_check_overrides(jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_for_studio(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_client_edition_requests(int) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.begin_client_edition(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.close_client_edition_request(uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.finish_client_edition(uuid, uuid, text, text, jsonb, jsonb, jsonb, text, text, numeric, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_plate_perception(uuid, numeric[], numeric[], text[], text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_client_edition_requests(int) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.begin_client_edition(uuid, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.close_client_edition_request(uuid, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.finish_client_edition(uuid, uuid, text, text, jsonb, jsonb, jsonb, text, text, numeric, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_plate_perception(uuid, numeric[], numeric[], text[], text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.approve_client_edition(uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.hold_client_edition(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.undo_client_edition(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_plate_focal(uuid, numeric[], numeric[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_client_editions(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.approve_client_edition(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.hold_client_edition(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.undo_client_edition(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_plate_focal(uuid, numeric[], numeric[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_client_editions(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.begin_client_edition_compose_run() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.finish_client_edition_compose_run(bigint, text, jsonb, text, numeric) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.dispatch_client_edition_compose() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.begin_client_edition_compose_run() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.finish_client_edition_compose_run(bigint, text, jsonb, text, numeric) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.dispatch_client_edition_compose() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00846_client_edition_reader.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_edition(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00846_client_edition_reader.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_edition(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00846_client_edition_reader.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_can_read_plate(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00846_client_edition_reader.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.client_can_read_plate(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
