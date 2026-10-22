@@ -33,8 +33,11 @@ const IMAGE = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8]);
 
 function bucket() {
   const objects = new Map();
+  // Every put's key, in the order the puts landed.
+  const log = [];
   return {
     objects,
+    log,
     async get(key) {
       const o = objects.get(key);
       return o ? { json: async () => JSON.parse(new TextDecoder().decode(o.body)) } : null;
@@ -45,6 +48,7 @@ function bucket() {
     async put(key, value, options) {
       const body = typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value);
       objects.set(key, { body, contentType: options?.httpMetadata?.contentType });
+      log.push(key);
     },
   };
 }
@@ -260,7 +264,7 @@ test('ingest writes every output, the original and crops.json, and returns the p
   ).join('');
   const base = `plates/${PROJECT}/${sha}`;
   // A framed ingest lands under its framing's own prefix and names it on every crop.
-  const rev = framingRevision([0.4, 0.5], [0.1, 0.1, 0.5, 0.6]);
+  const rev = await framingRevision([0.4, 0.5], [0.1, 0.1, 0.5, 0.6]);
   const prefix = `${base}/f/${rev}`;
   assert.deepEqual(record, {
     sha256: sha,
@@ -515,10 +519,12 @@ test('the same bytes as maker then board: board adds only its crop, the manifest
   assert.equal(h.jobs.length, 2);
   assert.deepEqual(h.jobs[1].job.skip, shared);
   assert.deepEqual(Object.keys(board.crops), [...shared, 'board']);
-  assert.deepEqual(board.crops.board, { rect: [0, 0, 2400, 1800], widths: [768, 1024, 1600, 2048] });
+  // Null framing is a framing like any other: its own prefix, named on every crop.
+  const rev = await framingRevision(null, null);
+  assert.deepEqual(board.crops.board, { rect: [0, 0, 2400, 1800], widths: [768, 1024, 1600, 2048], rev });
   for (const key of shared) assert.deepEqual(board.crops[key], maker.crops[key], key);
   assert.equal(board.originalKey, maker.originalKey);
-  const prefix = maker.originalKey.replace(/\/original\.jpeg$/, '');
+  const prefix = `${maker.originalKey.replace(/\/original\.jpeg$/, '')}/f/${rev}`;
   assert.ok(h.env.PLATES.objects.has(`${prefix}/board-2048.avif`));
   const manifest = JSON.parse(new TextDecoder().decode(h.env.PLATES.objects.get(`${prefix}/crops.json`).body));
   assert.deepEqual(manifest.sourceKinds, ['maker', 'board']);
@@ -530,39 +536,48 @@ test('the same bytes as maker then board: board adds only its crop, the manifest
   assert.equal(h.jobs.length, 2);
 });
 
-// ---- framing-versioned renditions (SQ-1727 F1) -----------------------------
+// ---- framing-versioned renditions (SQ-1727 F1, SQ-1731) ---------------------
 
-test('framingRevision: 16 hex of FNV-1a 64 over [focal, subjectBox], shared with the client route', () => {
-  // The same vectors pin apps/client-portal/src/lib/plates.ts framingRevision.
-  assert.equal(framingRevision(null, null), '7272b34ce903217b');
-  assert.equal(framingRevision([0.4, 0.5], null), '234dc778349cc289');
-  assert.equal(framingRevision([0.4, 0.5], [0.1, 0.1, 0.5, 0.6]), '2ceb50ab64e60e27');
-  assert.equal(framingRevision([0.3, 0.4], null), 'f443ad36e2b82d43');
-  assert.equal(framingRevision(null, [0, 0, 1, 1]), 'ea45f831d5fcaff0');
+// 32 hex: the first 128 bits of SHA-256 over JSON [focal, subjectBox]. The
+// client route test (apps/client-portal/src/app/plates/[scope]/[sha256]/[file]/
+// __tests__/route.test.ts) sends these same strings as `?r=` and expects f/<rev>/.
+const GOLDEN_REVISIONS = [
+  [null, null, '95cb9b4f84ceff132cc7a875d8c192bf'],
+  [[0.4, 0.5], null, '147a7fbdc34b04b129238958f8985fb4'],
+  [[0.4, 0.5], [0.1, 0.1, 0.5, 0.6], '7983e9d3bf586c5d4625775f572ab2c1'],
+];
+
+test('framingRevision: 32 hex of SHA-256 over [focal, subjectBox], pinned with the client route', async () => {
+  for (const [focal, subjectBox, rev] of GOLDEN_REVISIONS) {
+    assert.equal(await framingRevision(focal, subjectBox), rev);
+  }
 });
 
-// The container's planner on a 2400x1800 scene; each rendition's bytes carry
-// its crop rectangle, so two framings that crop differently write different bytes.
-function framedHarness() {
-  return harness({
-    processor: (_, job) => {
-      const crops = planCrops({ width: 2400, height: 1800, ground: 'scene', ...job });
-      const outputs = outputJobs(crops).map((o) => ({
-        key: o.key,
-        contentType: o.contentType,
-        dataB64: btoa(`${o.key}@${o.rect.join(',')}`),
-      }));
-      return Response.json(processorResult({ width: 2400, height: 1800, crops, outputs }));
-    },
-  });
+const SCENE = { width: 2400, height: 1800, ground: 'scene' };
+
+// The container's planner on a 2400x1800 scene. Each rendition's bytes are its
+// key and crop rectangle: a function of the framing alone, as a deterministic
+// encoder's are (test/plate-publication.test.mjs shows real Sharp is one).
+function framedAnswer(job) {
+  const crops = planCrops({ ...SCENE, ...job });
+  const outputs = outputJobs(crops).map((o) => ({
+    key: o.key,
+    contentType: o.contentType,
+    dataB64: btoa(`${o.key}@${o.rect.join(',')}`),
+  }));
+  return Response.json(processorResult({ width: SCENE.width, height: SCENE.height, crops, outputs }));
 }
+
+const framedHarness = () => harness({ processor: (_, job) => framedAnswer(job) });
 
 const BASE = `plates/${PROJECT}/${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', IMAGE)), (b) =>
   b.toString(16).padStart(2, '0'),
 ).join('')}`;
+const NULL_FRAMING = { focal: null, subjectBox: null };
 const FRAMING_A = { focal: [0.2, 0.2], subjectBox: null };
 const FRAMING_B = { focal: [0.8, 0.8], subjectBox: [0.5, 0.5, 0.4, 0.4] };
 const request = (n) => `${n}a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d`;
+const revOf = (framing) => framingRevision(framing.focal, framing.subjectBox);
 
 /** key → bytes for every object under `prefix/`; the unversioned prefix excludes f/. */
 function snapshot(objects, prefix) {
@@ -587,6 +602,19 @@ function bytesAt(objects, keys) {
   return new Map(keys.map((key) => [key, objects.has(key) ? Buffer.from(objects.get(key).body).toString('base64') : null]));
 }
 
+/** What one render of `framing` leaves at its prefix: every rendition, as framedAnswer encodes it. */
+function renderAt(framing, rev) {
+  const crops = planCrops({ ...SCENE, sourceKind: valid.sourceKind, ...framing, skip: [] });
+  return new Map(
+    outputJobs(crops).map((o) => [`${BASE}/f/${rev}/${o.key}`, Buffer.from(`${o.key}@${o.rect.join(',')}`).toString('base64')]),
+  );
+}
+
+/** The prefix's renditions (everything but crops.json). */
+function renditionsAt(objects, rev) {
+  return new Map([...snapshot(objects, `${BASE}/f/${rev}`)].filter(([key]) => !key.endsWith('/crops.json')));
+}
+
 test('(a) framing A then framing B of the same bytes: A stays byte-identical, B lands at its own keys', async () => {
   const h = framedHarness();
   const a = await (await h.ingest({ ...valid, requestId: request(1), ...FRAMING_A })).json();
@@ -605,8 +633,8 @@ test('(a) framing A then framing B of the same bytes: A stays byte-identical, B 
   assert.ok(bWide);
   assert.notEqual(bWide, before.get(`${BASE}/f/${a.crops.wide.rev}/${crop('wide')}`));
 
-  const revA = framingRevision(FRAMING_A.focal, FRAMING_A.subjectBox);
-  const revB = framingRevision(FRAMING_B.focal, FRAMING_B.subjectBox);
+  const revA = await revOf(FRAMING_A);
+  const revB = await revOf(FRAMING_B);
   assert.ok(Object.values(a.crops).every((c) => c.rev === revA));
   assert.ok(Object.values(b.crops).every((c) => c.rev === revB));
   assert.equal(a.originalKey, `${BASE}/original.jpeg`);
@@ -615,10 +643,10 @@ test('(a) framing A then framing B of the same bytes: A stays byte-identical, B 
   assert.deepEqual([...snapshot(h.env.PLATES.objects, BASE).keys()], [`${BASE}/original.jpeg`]);
 });
 
-test('(b) a first copy with null framing after a framed copy does not change the framed keys', async () => {
+test('(b) null framing has its own f/<rev>/ like any framing and leaves a framed copy alone', async () => {
   const h = framedHarness();
   const b = await (await h.ingest({ ...valid, requestId: request(1), ...FRAMING_B })).json();
-  const revB = framingRevision(FRAMING_B.focal, FRAMING_B.subjectBox);
+  const revB = await revOf(FRAMING_B);
   const bKeys = readerKeys(b);
   const read = bytesAt(h.env.PLATES.objects, bKeys);
   const framed = snapshot(h.env.PLATES.objects, `${BASE}/f/${revB}`);
@@ -630,49 +658,56 @@ test('(b) a first copy with null framing after a framed copy does not change the
   assert.deepEqual(bytesAt(h.env.PLATES.objects, bKeys), read);
   assert.deepEqual(snapshot(h.env.PLATES.objects, `${BASE}/f/${revB}`), framed);
   assert.ok(framed.size > 0);
-  // Null framing takes the unversioned prefix, which held no other framing; its crops name no rev.
-  assert.ok(h.env.PLATES.objects.has(`${BASE}/${crop('wide')}`));
-  assert.ok(Object.values(first.crops).every((c) => c.rev === undefined));
+  // Null framing lands under its own revision, and its crops name it.
+  const rev0 = await revOf(NULL_FRAMING);
+  assert.ok(Object.values(first.crops).every((c) => c.rev === rev0));
+  assert.deepEqual(renditionsAt(h.env.PLATES.objects, rev0), renderAt(NULL_FRAMING, rev0));
+  assert.deepEqual([...snapshot(h.env.PLATES.objects, BASE).keys()], [`${BASE}/original.jpeg`]);
 });
 
-test('(c) a framed copy after a legacy null-framing copy leaves the legacy objects intact', async () => {
-  const h = framedHarness();
-  await h.ingest({ ...valid, requestId: request(1) });
-  const legacy = snapshot(h.env.PLATES.objects, BASE);
-  assert.ok(legacy.has(`${BASE}/${crop('wide')}`) && legacy.has(`${BASE}/crops.json`) && legacy.has(`${BASE}/original.jpeg`));
+// What Phase 1 and 2 left at the unversioned prefix: a null-framing copy, a
+// re-crop's framing, or an orphan whose crops.json never landed.
+const LEGACY_STATES = [
+  ['a Phase 1 null-framing copy', { focal: null, subjectBox: null, crops: { wide: { rect: [0, 0, 2400, 1500], widths: [1280] } } }],
+  ['a Phase 2 re-crop', { focal: [0.6, 0.4], subjectBox: null, crops: { wide: { rect: [0, 0, 2400, 1500], widths: [1280] } } }],
+  ['an orphan with no crops.json', null],
+];
 
-  const framed = await (await h.ingest({ ...valid, requestId: request(2), ...FRAMING_A })).json();
-  assert.equal(h.jobs.length, 2);
-  assert.deepEqual(snapshot(h.env.PLATES.objects, BASE), legacy);
-  const revA = framingRevision(FRAMING_A.focal, FRAMING_A.subjectBox);
-  assert.ok(h.env.PLATES.objects.has(`${BASE}/f/${revA}/${crop('wide')}`));
-  assert.equal(framed.crops.wide.rev, revA);
-});
-
-test('null framing never overwrites a framing a Phase 2 re-crop left at the unversioned prefix', async () => {
-  const h = framedHarness();
-  const old = { focal: [0.6, 0.4], subjectBox: null, crops: { wide: { rect: [0, 0, 2400, 1500], widths: [1280] } } };
-  await h.env.PLATES.put(`${BASE}/crops.json`, JSON.stringify(old));
-  await h.env.PLATES.put(`${BASE}/${crop('wide')}`, new TextEncoder().encode('phase-2-wide'));
-  const legacy = snapshot(h.env.PLATES.objects, BASE);
-
-  const record = await (await h.ingest({ ...valid, requestId: request(1) })).json();
-  const rev0 = framingRevision(null, null);
-  assert.deepEqual(snapshot(h.env.PLATES.objects, BASE), new Map([...legacy, [`${BASE}/original.jpeg`, Buffer.from(IMAGE).toString('base64')]]));
-  assert.ok(h.env.PLATES.objects.has(`${BASE}/f/${rev0}/${crop('wide')}`));
-  assert.equal(record.crops.wide.rev, rev0);
-});
-
-test('a revision held by another framing, or an unreadable manifest there, fails and writes nothing', async () => {
-  const revA = framingRevision(FRAMING_A.focal, FRAMING_A.subjectBox);
-  for (const manifest of [JSON.stringify({ focal: [0.9, 0.9], subjectBox: null, crops: {} }), 'not json']) {
+test('(c) the unversioned prefix is read-only: no ingest, null framing included, writes a byte there', async () => {
+  for (const [state, manifest] of LEGACY_STATES) {
     const h = framedHarness();
-    await h.env.PLATES.put(`${BASE}/f/${revA}/crops.json`, manifest);
-    const keys = [...h.env.PLATES.objects.keys()];
-    assert.match(await expectError(await h.ingest({ ...valid, ...FRAMING_A }), 409), /already holds another framing/);
-    assert.equal(h.jobs.length, 0);
-    assert.deepEqual([...h.env.PLATES.objects.keys()], keys);
+    await h.env.PLATES.put(`${BASE}/${crop('wide')}`, new TextEncoder().encode('phase-2-wide'));
+    await h.env.PLATES.put(`${BASE}/original.jpeg`, IMAGE);
+    if (manifest) await h.env.PLATES.put(`${BASE}/crops.json`, JSON.stringify(manifest));
+    const legacy = snapshot(h.env.PLATES.objects, BASE);
+    const seeded = h.env.PLATES.log.length;
+
+    const records = [];
+    for (const [n, framing] of [NULL_FRAMING, FRAMING_A].entries()) {
+      records.push([framing, await (await h.ingest({ ...valid, requestId: request(n + 1), ...framing })).json()]);
+    }
+    assert.equal(h.jobs.length, 2, state);
+    // Byte-for-byte what was there, nothing beside it, and no put under it at all.
+    assert.deepEqual(snapshot(h.env.PLATES.objects, BASE), legacy, state);
+    const puts = h.env.PLATES.log.slice(seeded);
+    assert.ok(puts.every((key) => key.startsWith(`${BASE}/f/`)), `${state}: ${puts.filter((k) => !k.startsWith(`${BASE}/f/`))}`);
+    for (const [framing, record] of records) {
+      const rev = await revOf(framing);
+      assert.equal(record.originalKey, `${BASE}/original.jpeg`);
+      assert.ok(Object.values(record.crops).every((c) => c.rev === rev), state);
+      assert.deepEqual(renditionsAt(h.env.PLATES.objects, rev), renderAt(framing, rev), state);
+      assert.ok(readerKeys(record).every((key) => h.env.PLATES.objects.has(key)), state);
+    }
   }
+});
+
+test('an unreadable manifest at the framing prefix fails and writes nothing', async () => {
+  const h = framedHarness();
+  await h.env.PLATES.put(`${BASE}/f/${await revOf(FRAMING_A)}/crops.json`, 'not json');
+  const before = snapshot(h.env.PLATES.objects, 'plates');
+  await expectError(await h.ingest({ ...valid, ...FRAMING_A }), 500);
+  assert.equal(h.jobs.length, 0);
+  assert.deepEqual(snapshot(h.env.PLATES.objects, 'plates'), before);
 });
 
 test('a crop the manifest already holds is never rewritten, even if the processor sends it again', async () => {
@@ -687,11 +722,120 @@ test('a crop the manifest already holds is never rewritten, even if the processo
       })),
   });
   await h.ingest({ ...valid, ...FRAMING_A, sourceKind: 'maker', sourceUrl: hotlink.sourceUrl });
-  const rev = framingRevision(FRAMING_A.focal, FRAMING_A.subjectBox);
+  const rev = await revOf(FRAMING_A);
   const record = await (await h.ingest({ ...valid, ...FRAMING_A, sourceKind: 'board' })).json();
   assert.equal(new TextDecoder().decode(h.env.PLATES.objects.get(`${BASE}/f/${rev}/piece-256.webp`).body), 'piece-1');
   assert.ok(h.env.PLATES.objects.has(`${BASE}/f/${rev}/board-768.webp`));
   assert.deepEqual(record.crops.board, { rect: [0, 0, 3000, 2000], widths: [768], rev });
+});
+
+// ---- concurrent publication (SQ-1731 F1, F3) --------------------------------
+
+/**
+ * framedHarness, but each job waits at the processor until released, and every
+ * put first yields a macrotask so two publications interleave key by key.
+ * `arrived(n)` resolves once n jobs wait: each of those ingests has read its
+ * manifest and found none, and nothing has been written yet.
+ */
+function gatedHarness() {
+  const waiting = [];
+  let notify = () => {};
+  const h = harness({
+    processor: async (_, job) => {
+      const { promise, resolve } = Promise.withResolvers();
+      waiting.push({ job, release: resolve });
+      notify();
+      await promise;
+      return framedAnswer(job);
+    },
+  });
+  const put = h.env.PLATES.put;
+  h.env.PLATES.put = async (...args) => {
+    await new Promise((resolve) => setImmediate(resolve));
+    return put(...args);
+  };
+  const arrived = (n) =>
+    new Promise((resolve) => {
+      notify = () => waiting.length >= n && resolve();
+      notify();
+    });
+  // Releases one waiting job of `framing` that has not been released yet.
+  const release = (framing) => {
+    const same = ({ job, released }) =>
+      !released && JSON.stringify([job.focal, job.subjectBox]) === JSON.stringify([framing.focal, framing.subjectBox]);
+    const next = waiting.find(same);
+    next.released = true;
+    next.release();
+  };
+  return { ...h, arrived, release };
+}
+
+test('concurrent: framings A and B of one sha, both past their manifest read, each publish to their own f/<rev>/ and never change the other', async () => {
+  const revA = await revOf(FRAMING_A);
+  const revB = await revOf(FRAMING_B);
+  for (const schedule of [['A', 'B'], ['B', 'A'], ['A+B']]) {
+    const h = gatedHarness();
+    const framings = { A: FRAMING_A, B: FRAMING_B };
+    const pending = {
+      A: h.ingest({ ...valid, requestId: request(1), ...FRAMING_A }),
+      B: h.ingest({ ...valid, requestId: request(2), ...FRAMING_B }),
+    };
+    await h.arrived(2);
+    assert.equal(h.env.PLATES.log.length, 0);
+    const records = {};
+    const publish = async (name) => {
+      h.release(framings[name]);
+      records[name] = await (await pending[name]).json();
+    };
+    if (schedule.length === 1) {
+      await Promise.all([publish('A'), publish('B')]);
+      // The two publications really interleaved.
+      const owners = h.env.PLATES.log.filter((key) => key.includes('/f/')).map((key) => (key.includes(revA) ? 'A' : 'B')).join('');
+      assert.match(owners, /AB/);
+      assert.match(owners, /BA/);
+    } else {
+      const [first, second] = schedule;
+      const firstRev = first === 'A' ? revA : revB;
+      await publish(first);
+      const settled = snapshot(h.env.PLATES.objects, `${BASE}/f/${firstRev}`);
+      await publish(second);
+      assert.deepEqual(snapshot(h.env.PLATES.objects, `${BASE}/f/${firstRev}`), settled, `${schedule}: ${second} changed ${first}`);
+    }
+    // Each prefix holds its own render and nothing else; each record reads only its own prefix.
+    for (const [name, rev] of [['A', revA], ['B', revB]]) {
+      assert.deepEqual(renditionsAt(h.env.PLATES.objects, rev), renderAt(framings[name], rev), `${schedule}: ${name}`);
+      assert.ok(readerKeys(records[name]).every((key) => key.startsWith(`${BASE}/f/${rev}/`)));
+    }
+    assert.deepEqual([...snapshot(h.env.PLATES.objects, BASE).keys()], [`${BASE}/original.jpeg`]);
+
+    // Afterwards: late re-ingests of either framing change neither prefix.
+    const after = snapshot(h.env.PLATES.objects, 'plates');
+    for (const [n, framing] of [FRAMING_A, FRAMING_B].entries()) {
+      const late = h.ingest({ ...valid, requestId: request(n + 3), ...framing });
+      assert.deepEqual(await (await late).json(), records[n === 0 ? 'A' : 'B']);
+    }
+    assert.deepEqual(snapshot(h.env.PLATES.objects, 'plates'), after);
+  }
+});
+
+test('concurrent: two ingests of one framing race to the same f/<rev>/ and leave exactly one render\'s output', async () => {
+  const rev = await revOf(FRAMING_A);
+  const h = gatedHarness();
+  const pending = [1, 2].map((n) => h.ingest({ ...valid, requestId: request(n), ...FRAMING_A }));
+  await h.arrived(2);
+  assert.equal(h.env.PLATES.log.length, 0);
+  // Both see no manifest, so both render and both publish.
+  for (let n = 0; n < 2; n++) h.release(FRAMING_A);
+  const [first, second] = await Promise.all(pending.map(async (res) => (await res).json()));
+  assert.deepEqual(first, second);
+  const render = renderAt(FRAMING_A, rev);
+  for (const key of render.keys()) assert.equal(h.env.PLATES.log.filter((k) => k === key).length, 2, key);
+  // The prefix holds one render's renditions and a manifest of that framing.
+  assert.deepEqual(renditionsAt(h.env.PLATES.objects, rev), render);
+  const manifest = JSON.parse(new TextDecoder().decode(h.env.PLATES.objects.get(`${BASE}/f/${rev}/crops.json`).body));
+  assert.deepEqual([manifest.focal, manifest.subjectBox], [FRAMING_A.focal, FRAMING_A.subjectBox]);
+  assert.deepEqual(manifest.crops, first.crops);
+  assert.deepEqual([...snapshot(h.env.PLATES.objects, BASE).keys()], [`${BASE}/original.jpeg`]);
 });
 
 // ---- processor deadline (F6) ------------------------------------------------

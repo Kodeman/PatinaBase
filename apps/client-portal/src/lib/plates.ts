@@ -22,19 +22,7 @@ export const PLATE_SIZES = {
   board: '(min-width:1296px) 1248px, calc(100vw - 32px)',
 } as const;
 
-const FNV64_OFFSET = BigInt('0xcbf29ce484222325');
-const FNV64_PRIME = BigInt('0x100000001b3');
-const U64 = BigInt('0xffffffffffffffff');
-
-/** 16 hex: FNV-1a 64 over [focal, subjectBox]; the media worker keys a framing's renditions by it. */
-export function framingRevision(focal: readonly number[] | null, subjectBox: readonly number[] | null): string {
-  let hash = FNV64_OFFSET;
-  for (const char of JSON.stringify([focal, subjectBox])) {
-    hash = ((hash ^ BigInt(char.charCodeAt(0))) * FNV64_PRIME) & U64;
-  }
-  return hash.toString(16).padStart(16, '0');
-}
-
+/** `revision` is a crop's stored `rev` (the media worker's framing revision), sent as `?r=`. */
 export function plateUrl(
   scopeId: string,
   sha256: string,

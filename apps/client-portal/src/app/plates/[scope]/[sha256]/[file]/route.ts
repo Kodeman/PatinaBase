@@ -1,7 +1,5 @@
 import { createServerClient } from '@patina/supabase/server';
 
-import { framingRevision } from '@/lib/plates';
-
 type PlateParams = { scope: string; sha256: string; file: string };
 type PlateObject = {
   size: number;
@@ -26,12 +24,19 @@ function validParams({ scope, sha256, file }: PlateParams): boolean {
     && /^(wide|cover_phone|tall|wide32|pair|piece|sheet|board)-[1-9]\d{2,3}\.(avif|webp)(?![\s\S])/.test(file);
 }
 
-/** The framing revision `?r=` names, '' for none; null for bad params or anything but one well-formed `r`. */
-function requestedRevision(request: Request, values: PlateParams): string | null {
-  if (!validParams(values)) return null;
+/**
+ * The plate's R2 key. One `?r=` of 32 lowercase hex is a media-worker framing
+ * revision: its renditions are at f/{r}/ and nowhere else. Any other `r` (none,
+ * several, or the base36 cache-buster SQ-1643 pages still carry) names none,
+ * and the plate is read at its unversioned key, as before versioned keys.
+ * There is no fallback between the two: the worker stamps every crop it writes
+ * with the revision of the prefix it wrote, and never writes the unversioned
+ * prefix, so an unstamped crop's object there is what Phase 1 and 2 left.
+ */
+function plateKey(request: Request, base: string, file: string): string {
   const revisions = new URL(request.url).searchParams.getAll('r');
-  if (revisions.length === 0) return '';
-  return revisions.length === 1 && /^[0-9a-f]{16}(?![\s\S])/.test(revisions[0]) ? revisions[0] : null;
+  const rev = revisions.length === 1 && /^[0-9a-f]{32}(?![\s\S])/.test(revisions[0]) ? revisions[0] : null;
+  return rev ? `${base}/f/${rev}/${file}` : `${base}/${file}`;
 }
 
 async function plateBucket(): Promise<PlateBucket | null> {
@@ -60,43 +65,10 @@ function unavailable(status: 401 | 404 | 503): Response {
   return new Response(null, { status, headers: { 'Cache-Control': 'private, no-store' } });
 }
 
-async function manifestRevision(body: ReadableStream<Uint8Array>): Promise<string | null> {
-  try {
-    const { focal, subjectBox } = await new Response(body).json();
-    return framingRevision(focal ?? null, subjectBox ?? null);
-  } catch {
-    return null;
-  }
-}
-
-/** The framing of the unversioned prefix's manifest, or null when there is none to read. */
-async function unversionedRevision(bucket: PlateBucket, base: string): Promise<string | null> {
-  const manifest = await bucket.get(`${base}/crops.json`);
-  return manifest && 'body' in manifest ? manifestRevision(manifest.body) : null;
-}
-
-// A framing's renditions live under base/f/{rev}. Copies from before versioned
-// keys left a framing at the unversioned prefix: served for `rev` only when no
-// versioned object exists and that prefix's manifest is this same framing.
-async function framedPlate(
-  bucket: PlateBucket,
-  request: Request,
-  base: string,
-  file: string,
-  rev: string,
-): Promise<PlateRead> {
-  const framed = await bucket.get(`${base}/f/${rev}/${file}`, { onlyIf: request.headers });
-  if (framed) return framed;
-  if ((await unversionedRevision(bucket, base)) !== rev) return null;
-  return bucket.get(`${base}/${file}`, { onlyIf: request.headers });
-}
-
-async function servePlate(request: Request, base: string, file: string, rev: string): Promise<Response> {
+async function servePlate(request: Request, base: string, file: string): Promise<Response> {
   const bucket = await plateBucket();
   if (!bucket) return unavailable(503);
-  const object: PlateRead = rev
-    ? await framedPlate(bucket, request, base, file, rev)
-    : await bucket.get(`${base}/${file}`, { onlyIf: request.headers });
+  const object: PlateRead = await bucket.get(plateKey(request, base, file), { onlyIf: request.headers });
   if (!object) return unavailable(404);
   if (!('body' in object)) {
     return new Response(null, {
@@ -112,8 +84,7 @@ export async function GET(
   { params }: { params: Promise<PlateParams> },
 ): Promise<Response> {
   const values = await params;
-  const rev = requestedRevision(request, values);
-  if (rev === null) return unavailable(404);
+  if (!validParams(values)) return unavailable(404);
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return unavailable(401);
@@ -126,5 +97,5 @@ export async function GET(
     return unavailable(404);
   }
   if (!projectId) return unavailable(404);
-  return servePlate(request, `plates/${projectId}/${values.sha256}`, values.file, rev);
+  return servePlate(request, `plates/${projectId}/${values.sha256}`, values.file);
 }

@@ -1,12 +1,14 @@
 // POST /plates/ingest — the client plate lane (US-49). The client-plate-copy
 // edge function sends a source URL; this Worker fetches it once, hashes it,
-// has the container crop and encode it (op `plate_ingest`), and writes every
-// output to the private PLATES bucket under plates/{projectId}/{sha256}/.
-// Renditions are never rewritten for another framing (SQ-1727 F1): a framing's
-// crops go under plates/{projectId}/{sha256}/f/{rev}/ and name that rev, so a
-// re-crop, or a later copy of the same bytes, never changes a picture an
-// edition already shows. The unversioned prefix keeps what Phase 1 and 2
-// wrote, and null framing for bytes it holds no other framing for.
+// has the container crop and encode it (op `plate_ingest`), and writes the
+// outputs to the private PLATES bucket. Renditions are never rewritten for
+// another framing (SQ-1727 F1): every ingest, null framing included, writes a
+// framing's renditions and crops.json under plates/{projectId}/{sha256}/f/{rev}/
+// and names that rev on each crop, so a re-crop, or a later copy of the same
+// bytes, never changes a picture an edition already shows. The unversioned
+// prefix plates/{projectId}/{sha256}/ holds what Phase 1 and 2 wrote and is
+// read-only history: only the original, the same bytes under every framing,
+// is written there, once.
 // No runtime imports and erasable-only TypeScript, so test/ingest-route.test.mjs
 // loads this file directly under Node.
 
@@ -47,7 +49,8 @@ const OUTPUT_TYPES = new Set(['image/avif', 'image/webp']);
 const EDGE = 1e-9;
 
 type Rect = [number, number, number, number];
-// rev is set on crops stored under a framing's own prefix (see placement).
+// Stored crops name the rev of the prefix that holds them (see placement); the
+// container's crops have none, and neither do Phase 1–2 crops.
 type Crops = Record<string, { rect: Rect; widths: number[]; rev?: string }>;
 
 interface IngestBody {
@@ -364,68 +367,45 @@ function toRecord(plate: PlateRecord): PlateRecord {
   return { sha256, width, height, format, ground, dominantHex, lqip, originalKey, crops };
 }
 
-function sameInputs(stored: StoredPlate, body: IngestBody): boolean {
-  return (
-    JSON.stringify(stored.focal ?? null) === JSON.stringify(body.focal) &&
-    JSON.stringify(stored.subjectBox ?? null) === JSON.stringify(body.subjectBox)
-  );
-}
-
 // ---- framing revisions -----------------------------------------------------
 
-const FNV64_OFFSET = 0xcbf29ce484222325n;
-const FNV64_PRIME = 0x100000001b3n;
-const U64 = 0xffffffffffffffffn;
-
 /**
- * 16 hex digits naming one framing: FNV-1a 64 of JSON [focal, subjectBox].
- * The client portal's framingRevision (src/lib/plates.ts) is the same function;
- * both test suites pin the same vectors.
+ * 32 lowercase hex naming one framing: the first 128 bits of SHA-256 over JSON
+ * [focal, subjectBox]. It is an identity hash, not a checksum. A framing's
+ * renditions and crops.json live under f/{rev}/ and nowhere else, and no
+ * ingest writes renditions to the unversioned prefix, which is read-only
+ * history. So the only writer that can ever put a key again is one rendering
+ * the same framing (a retry, or two same-framing ingests racing), and the key
+ * keeps its framing. No lock or write precondition guards this: the safety
+ * rests on SHA-256's collision resistance at 128 bits plus that read-only prefix.
  */
-export function framingRevision(focal: readonly number[] | null, subjectBox: readonly number[] | null): string {
-  let hash = FNV64_OFFSET;
-  for (const char of JSON.stringify([focal, subjectBox])) {
-    hash = ((hash ^ BigInt(char.charCodeAt(0))) * FNV64_PRIME) & U64;
-  }
-  return hash.toString(16).padStart(16, '0');
+export async function framingRevision(
+  focal: readonly number[] | null,
+  subjectBox: readonly number[] | null,
+): Promise<string> {
+  return (await sha256Hex(new TextEncoder().encode(JSON.stringify([focal, subjectBox])))).slice(0, 32);
 }
 
 interface Placement {
   /** plates/{projectId}/{sha256}: the original sits here. */
   base: string;
-  /** Where this framing's renditions and crops.json go. */
+  /** base/f/{rev}: this framing's renditions and crops.json. */
   prefix: string;
-  /** Set when prefix is base/f/{rev}; every crop stored there names it. */
-  rev: string | null;
+  /** Every crop stored under prefix names it. */
+  rev: string;
   stored: StoredPlate | null;
 }
 
-/** The manifest at `prefix`: null when there is none, 'taken' when it is another framing's or unreadable. */
-async function manifestAt(env: PlatesEnv, prefix: string, body: IngestBody): Promise<StoredPlate | 'taken' | null> {
-  const existing = await env.PLATES.get(`${prefix}/crops.json`);
-  if (!existing) return null;
-  const stored = await existing.json<StoredPlate>().catch(() => null);
-  return stored && sameInputs(stored, body) ? stored : 'taken';
-}
-
-// Null framing keeps the unversioned prefix unless that prefix already holds
-// another framing (a Phase 2 re-crop wrote one there). Every other framing,
-// and that case, goes under base/f/{rev}. A prefix holding another framing is
-// never written: on a revision collision the ingest fails instead.
+// Every framing, null included, has its own prefix. An unreadable manifest
+// there throws before anything is written: what it holds is unknown.
 async function placement(env: PlatesEnv, base: string, body: IngestBody): Promise<Placement> {
-  if (body.focal === null && body.subjectBox === null) {
-    const legacy = await manifestAt(env, base, body);
-    if (legacy !== 'taken') return { base, prefix: base, rev: null, stored: legacy };
-  }
-  const rev = framingRevision(body.focal, body.subjectBox);
+  const rev = await framingRevision(body.focal, body.subjectBox);
   const prefix = `${base}/f/${rev}`;
-  const stored = await manifestAt(env, prefix, body);
-  if (stored === 'taken') throw new IngestError(409, `framing revision ${rev} already holds another framing`);
-  return { base, prefix, rev, stored };
+  const manifest = await env.PLATES.get(`${prefix}/crops.json`);
+  return { base, prefix, rev, stored: manifest ? await manifest.json<StoredPlate>() : null };
 }
 
-function stamped(crops: Crops, rev: string | null): Crops {
-  if (!rev) return crops;
+function stamped(crops: Crops, rev: string): Crops {
   return Object.fromEntries(Object.entries(crops).map(([key, crop]) => [key, { ...crop, rev }]));
 }
 
