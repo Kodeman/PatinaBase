@@ -175,6 +175,7 @@ export default {
     return routePlates(request, env, {
       fetchSource: (sourceUrl, init) => fetch(sourceUrl, init),
       // One named lane instance stays warm (sleepAfter) across the per-minute copy runs.
+      // It has one vCPU, so client-plate-copy sends one ingest at a time.
       processPlate: (req) => getContainer(env.MEDIA_PROCESSOR, 'plates').fetch(req),
     });
   },

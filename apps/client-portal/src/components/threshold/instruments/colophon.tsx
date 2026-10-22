@@ -8,6 +8,8 @@
    ABSENCE IS SILENCE: with no studio name there is nothing true to attribute,
    so the block renders nothing at all rather than a half sentence. ───────── */
 
+import Link from 'next/link';
+
 export interface ColophonProps {
   /** The studio's display name. */
   studioName?: string | null;
@@ -19,7 +21,8 @@ export function Colophon({ studioName }: ColophonProps) {
 
   return (
     <p className="t-meta text-left text-[var(--ink-faint)]">
-      {`Prepared by ${studio} · Sent through Patina`}
+      {`Prepared by ${studio} · Sent through Patina · `}
+      <Link className="inline-flex min-h-[44px] items-center text-inherit underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--focus-ring)]" href="/privacy">Privacy</Link>
     </p>
   );
 }

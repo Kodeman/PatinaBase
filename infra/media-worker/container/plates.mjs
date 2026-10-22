@@ -1,5 +1,6 @@
 // Plate geometry for the `plate_ingest` op: pure functions, no Sharp, so they
-// run under `node --test` (test/plates.test.mjs). server.mjs owns the Sharp I/O.
+// run under `node --test` (test/plates.test.mjs). plate-job.mjs owns the Sharp
+// I/O; plate-lane.mjs runs each job in its own process.
 // Floors, aspects and widths are the PLAN floors/serving tables
 // (artifacts/client-house-issue-2026-10-21/brief/PLAN.md, "Floors and crops").
 
@@ -25,10 +26,17 @@ export const MAX_DISCARD = 0.5;
 // Default crop centre (normalised) when no focal point is given: the thirds bias.
 export const DEFAULT_CENTRE = [0.5, 0.45];
 
+// AVIF effort 2, not Sharp's default 4: on a 2500x2500 source it cuts the AVIF
+// encodes from 5.8 s to 0.9 s for the same or fewer bytes (SQ-1629), which is
+// what keeps one ingest inside the Worker's 25 s deadline on a 1-vCPU instance.
 export const PLATE_FORMATS = [
-  { format: 'avif', quality: 50 },
+  { format: 'avif', quality: 50, effort: 2 },
   { format: 'webp', quality: 72 },
 ];
+
+// The Worker's processor deadline (src/plates.ts PROCESSOR_TIMEOUT_MS); a job
+// may ask for less, never more. The Worker sends what is left of it.
+export const PLATE_BUDGET_MS = 25_000;
 
 export const LQIP_WIDTH = 24;
 export const LQIP_MAX_CHARS = 800;
@@ -131,8 +139,8 @@ export function outputJobs(crops) {
   const jobs = [];
   for (const [crop, { rect, widths }] of Object.entries(crops)) {
     for (const width of widths) {
-      for (const { format, quality } of PLATE_FORMATS) {
-        jobs.push({ key: `${crop}-${width}.${format}`, rect, width, format, quality, contentType: `image/${format}` });
+      for (const { format, quality, effort } of PLATE_FORMATS) {
+        jobs.push({ key: `${crop}-${width}.${format}`, rect, width, format, quality, effort, contentType: `image/${format}` });
       }
     }
   }
@@ -211,15 +219,18 @@ export function disconnectSignal(res) {
 }
 
 /**
- * `encode` each job in turn, so one crop pipeline holds memory at a time, and
- * stop before the next one once `signal` aborts.
+ * A plate job's deadline in ms from its receipt: the job's `budgetMs`, never
+ * more than PLATE_BUDGET_MS, which is also the default.
+ * @param {unknown} budgetMs
  */
-export async function encodeInOrder(jobs, encode, signal) {
+export function jobBudgetMs(budgetMs) {
+  return Number.isFinite(budgetMs) && budgetMs > 0 ? Math.min(budgetMs, PLATE_BUDGET_MS) : PLATE_BUDGET_MS;
+}
+
+/** `encode` each job in turn, so one crop pipeline holds memory at a time. */
+export async function encodeInOrder(jobs, encode) {
   const outputs = [];
-  for (const job of jobs) {
-    signal.throwIfAborted();
-    outputs.push(await encode(job));
-  }
+  for (const job of jobs) outputs.push(await encode(job));
   return outputs;
 }
 

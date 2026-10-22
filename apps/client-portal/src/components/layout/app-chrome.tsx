@@ -26,6 +26,7 @@ const PUBLIC_PREFIXES = [
   '/paperwork',
   '/quiz',
   '/preferences/unsubscribe',
+  '/privacy',
   '/wrong-portal',
   '/unauthorized',
 ];

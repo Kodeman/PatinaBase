@@ -168,6 +168,81 @@ Not done (OWED): see below.
   - overlapping minute runs.
 
   Then re-queue the failed/attempted requests deliberately and resume jobid 69.
+
+  **Repair (SQ-1629, corrected by SQ-1634).** Root cause: one 1-vCPU container took every ingest. The edge ran 3 at a time, minute runs of about 105 s overlapped, abandoned work kept its CPU, and AVIF at Sharp's default effort 4 cost 5.8 of the 7.0 s that a 2500x2500 Herman Miller source needs. That class is 122 of the 238 queued.
+  - The media worker encodes AVIF at effort 2: a 2500x2500 source falls from 7.0 s to 2.2 s, with the same or fewer bytes.
+  - The container runs one plate job at a time, each in its own forked process. A second job meanwhile gets `503 {"error":"busy"}` at once. At the job's budget, or when the Worker hangs up, the container SIGKILLs the job's process and answers 504; it takes the next job only once that process has exited. The budget is what is left of the Worker's 25 s less 1 s, counted from when the request arrives.
+  - client-plate-copy claims one request at a time and keeps one ingest in flight. Its run clock starts at function entry: no copy starts after 20 s, and every awaited step (claim, ownership read, signing, ingest, record, fail, finish) has ended by 50 s. The ingest gets min(30 s, time left less 5 s). A row whose claim, ownership read or signing comes back after 20 s is failed unstarted as `run budget exceeded`. A `503 busy` ingest is failed as `ingest 503 busy` and ends that run.
+  - A claim still unanswered at 45 s is abandoned. If the database still leased a row for it, that row waits out its 10-minute lease and the dispatcher re-queues it.
+  - There is no new migration.
+
+  Finish steps (SQ-1631), in order, with jobid 69 still paused:
+  1. Deploy the media worker: `cd infra/media-worker && npx wrangler deploy`. This rebuilds the container image, because `container/` changed. Keep `SUPABASE_STORAGE_ORIGIN` at both levels.
+  2. Run `supabase functions deploy client-plate-copy`.
+  3. Quiescence check. Run it and print the result; go on only when it reads `quiescent`:
+     ```sql
+     SELECT CASE WHEN count(*) = 0 THEN 'quiescent' ELSE 'NOT quiescent: wait, then re-check' END AS verdict,
+            count(*) AS running_runs,
+            max(started_at) AS newest_running_start
+     FROM public.job_runs
+     WHERE job_name = 'client-plate-copy'
+       AND status = 'running'
+       AND started_at > now() - interval '15 minutes';
+     ```
+  4. Re-queue. Run these only while jobid 69 is paused.
+     - (a) The rows the broken lane spent attempts on. This includes `queued` rows, so that the 1-attempt requests get all 3 attempts back. It never touches a `leased` row:
+       ```sql
+       UPDATE public.client_plate_requests
+       SET status = 'queued', attempts = 0, last_error = NULL,
+           lease_token = NULL, lease_expires_at = NULL, updated_at = now()
+       WHERE status IN ('queued', 'failed')
+         AND last_error LIKE 'ingest 504%';
+       ```
+     - (b) Expired leases. This is a separate statement, run only after step 3 printed `quiescent`. It touches only leases that have already run out, and it repeats the step 3 check, so it changes nothing while a run is open:
+       ```sql
+       UPDATE public.client_plate_requests
+       SET status = 'queued', attempts = 0, last_error = NULL,
+           lease_token = NULL, lease_expires_at = NULL, updated_at = now()
+       WHERE status = 'leased'
+         AND lease_expires_at < now()
+         AND NOT EXISTS (
+           SELECT 1 FROM public.job_runs
+           WHERE job_name = 'client-plate-copy'
+             AND status = 'running'
+             AND started_at > now() - interval '15 minutes'
+         );
+       ```
+  5. Resume the cron: `select cron.alter_job(job_id := 69, active := true);`. Note the time.
+  6. Watch for 10 minutes. Pass means all four hold:
+     - every run finishes in under 60 s;
+     - two runs are never `running` at once;
+     - `recorded` grows;
+     - no request gets an `ingest 504` error.
+     ```sql
+     -- Each run: how long it took, and what it did.
+     SELECT id, status, started_at, finished_at - started_at AS took, detail, error
+     FROM public.job_runs
+     WHERE job_name = 'client-plate-copy' AND started_at > now() - interval '10 minutes'
+     ORDER BY started_at;
+
+     -- Overlapping runs: expect no rows.
+     SELECT a.id, b.id
+     FROM public.job_runs AS a
+     JOIN public.job_runs AS b
+       ON a.id < b.id
+      AND b.started_at < coalesce(a.finished_at, now())
+      AND a.started_at < coalesce(b.finished_at, now())
+     WHERE a.job_name = 'client-plate-copy' AND b.job_name = 'client-plate-copy'
+       AND a.started_at > now() - interval '10 minutes'
+       AND b.started_at > now() - interval '10 minutes';
+
+     -- Errors since the resume: expect 0 for 'ingest 504%'. Any 'ingest 503 busy' means two runs met at the processor.
+     SELECT last_error, count(*)
+     FROM public.client_plate_requests
+     WHERE updated_at > now() - interval '10 minutes' AND last_error IS NOT NULL
+     GROUP BY last_error;
+     ```
+     If any check fails, pause again with `select cron.alter_job(job_id := 69, active := false);`.
 - **(b) Flag → 100.** Raise `client-edition-page` (982269) to 100%, then assert that the hero figure and its `<link rel=preload>` for `/plates/…` are PRESENT in signed-in server HTML (view-source or a curl with the session cookie), not merely that nothing errored. Take one TTFB reading before and after the rise (600 ms server-decision budget).
 - **(c) Signed private-source ingest proof.** Queue, then a worker fetch pinned to `SUPABASE_STORAGE_ORIGIN`, then R2 renditions, then a `client_plate_assets` row.
   - No storage-hosted board cover exists in prod; the only board request is a public hotlink.
