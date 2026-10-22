@@ -254,3 +254,19 @@ The routed executor released before step 0. Its hard two-worker limit cannot run
 | Flag | `client-edition-page` 100% | set rollout to 0 |
 
 **Not verified:** signed-in plate probes, the hero/TTFB probe, prod walks and VoiceOver. Each needs a signed-in client or designer session. `CLIENT_PRIVACY_PAGE_LIVE` stays unset until Kody reads /privacy.
+
+### Follow-up — SQ-1735 media-worker deploy (2026-10-22)
+
+- **Change:** c68673855 — an atomic same-framing manifest union. R2 makes a conditional create, or an ETag-matched update, with at most five retries and then a 503.
+- **Review:** SQ-1744 (Astra) READY for the code. Its independent rerun passed 82/82. workerd `r2-bucket.c++` `buildSingleEtagArray` confirms that `etagDoesNotMatch: '*'` is sent as a wildcard.
+- **Residuals:**
+  - The SQL `crops = EXCLUDED.crops` stale-settle: filed as SQ-1745.
+  - The mixed-version rollout clobber: mitigated by the full drain below.
+- **Drain** (the rollback section's steps 1–6, not only the step-0 snapshot):
+  - Cron 69 paused at TP **19:16:30Z**.
+  - `cron.log_run` on; `live_cron_runs` 0 (last end 19:16:00Z); queued copy calls 0; live leases 0; `unproven` 0 (last finish 11:37:20Z). First all-zero read at 19:16:35Z.
+  - Waited until 19:23:15Z; re-read all zero at 19:23:25Z.
+- **Deploy:** `wrangler deploy` with the README `DOCKER_CONFIG` workaround, from main c68673855. Container image unchanged.
+  - Bottom row: version **552d4c8e-84a0-48ee-b40f-366b08700660**, 100%, 19:23:35.930Z. Rollback **47e88d03-9d7a-418e-91a3-212f098359b7**.
+  - `/health` 200.
+- **Cron 69 resumed** at 19:23:52Z.
