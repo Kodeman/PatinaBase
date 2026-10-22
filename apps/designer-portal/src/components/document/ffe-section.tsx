@@ -1978,7 +1978,9 @@ function FFESectionBody({
             ? '[data-testid="line-buy-cell"] [aria-label="Maker"]'
             : request?.cell === 'draft'
               ? '[data-testid="line-held-maker-note"]'
-              : null;
+              : request?.cell === 'pictures'
+                ? '[data-testid="line-pictures"]'
+                : null;
       const land = () => {
         const line = document.getElementById(`ffe-selection-${itemId}`);
         const cell = cellSelector ? line?.querySelector<HTMLElement>(cellSelector) : null;

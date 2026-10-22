@@ -85,6 +85,28 @@ afterEach(() => {
 });
 
 describe('ItemPictures', () => {
+  it('a dead maker picture has a calm status and a replacement link to the existing controls', () => {
+    mockImages.current = [{ ...picture('dead', 0, true), link_dead: true }];
+    renderPictures();
+    expect(screen.getByText("The maker's photograph no longer loads")).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Replace picture' });
+    expect(link).toHaveAttribute('href', '#picture-replacement-line-sofa');
+    fireEvent.click(link);
+    expect(screen.getByRole('button', { name: 'Upload pictures' })).toHaveFocus();
+    expect(mockUnlink).not.toHaveBeenCalled();
+  });
+
+  it('read-only dead pictures show their status without a replacement act', () => {
+    mockImages.current = [{ ...picture('dead', 0), link_dead: true }];
+    renderPictures(LIBRARY_LINE, false);
+    expect(screen.getByText("The maker's photograph no longer loads")).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Replace picture' })).toBeNull();
+  });
+
+  it('healthy pictures have no dead-link status', () => {
+    renderPictures();
+    expect(screen.queryByText("The maker's photograph no longer loads")).toBeNull();
+  });
   it('shows every picture in order and marks the primary in type, not a badge', () => {
     renderPictures();
     const list = screen.getByRole('list', { name: 'Pictures of Linen sofa' });

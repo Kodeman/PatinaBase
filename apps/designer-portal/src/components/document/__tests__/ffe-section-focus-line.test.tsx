@@ -26,6 +26,7 @@ const mockLineUnfold = jest.fn((props: Record<string, unknown>) => {
   );
   return (
     <>
+      <section data-testid="line-pictures" aria-label="Pictures"><button>Upload pictures</button></section>
       <div role="group" aria-label="Order" data-testid="line-po-cell">
         <button type="button" data-po-control aria-label="Open the order, PO WS-188">
           WS-188
@@ -222,6 +223,14 @@ afterEach(() => {
 });
 
 describe('⌘K lands on the line (F1, R28)', () => {
+  it('the Press replacement link unfolds Pieces and focuses the existing picture manager', async () => {
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
+    focusFfeLinePending.request = { itemId: 'line-sectional', cell: 'pictures' };
+    render(<FFESection projectId="project-1" projectName="Chen" mode="project" />);
+    await waitFor(() => expect(screen.getByTestId('line-pictures')).toHaveFocus());
+    expect(screen.getByRole('button', { name: /Custom Walnut Sectional/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(focusFfeLinePending.request).toBeNull();
+  });
   it('queues a request made before Pieces is mounted, and lands it on mount with Pieces folded', async () => {
     // Pieces closed by the designer on an earlier visit.
     window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');

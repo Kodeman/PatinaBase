@@ -765,7 +765,7 @@ export interface FocusFfeLineRequest {
    *  DraftReview, where `Answer the maker` lands.
    *  `price` (K7): the line's client price in the Price lens, which answers
    *  it; the Document's Pieces region does not. */
-  cell: 'order' | 'maker' | 'draft' | 'order-draft' | 'price';
+  cell: 'order' | 'maker' | 'draft' | 'order-draft' | 'price' | 'pictures';
 }
 
 /**

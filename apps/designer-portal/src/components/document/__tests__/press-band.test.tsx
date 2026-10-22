@@ -18,6 +18,7 @@ import {
   listEnvelope,
 } from '../__fixtures__/client-editions';
 import { objectPositionOf, plateCropWindow } from '@/lib/document/plate-crop';
+import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending } from '@/lib/document/registry';
 
 const { normalizeClientEditions } = jest.requireActual<typeof import('@patina/supabase')>('@patina/supabase');
 
@@ -43,10 +44,12 @@ const mockUseClientEditions = jest.fn();
 const mockSourceUrls = jest.fn();
 let mockData: ClientEditions | undefined;
 let mockEditorial: ClientEditorialAsset[] | undefined;
+let mockDeadPictures: { itemId: string; name: string }[] = [];
 
 const act = (mutate: jest.Mock) => ({ mutate, reset: jest.fn(), isPending: false, isSuccess: false, error: null });
 
 jest.mock('@patina/supabase', () => ({
+  useProjectDeadPictureLinks: () => ({ data: mockDeadPictures }),
   useClientEditions: (...args: unknown[]) => {
     mockUseClientEditions(...args);
     return { data: mockData };
@@ -105,6 +108,8 @@ const frameRect = (frame: HTMLElement) => {
 beforeEach(() => {
   mockData = undefined;
   mockEditorial = undefined;
+  mockDeadPictures = [];
+  focusFfeLinePending.request = null;
   jest.clearAllMocks();
 });
 
@@ -628,17 +633,50 @@ describe('PressBand — closure refresh', () => {
     expect(mockSourceUrls.mock.calls.every(([images]) => images.length === 0)).toBe(true);
   });
 
-  it.each(['closed', 'superseded', 'frozen'] as const)('an open Undo confirmation closes when the edition becomes %s', (reason) => {
+  it.each(['closed', 'superseded', 'frozen'] as const)('an open Undo closes when %s, and a fresh live confirmation takes the edition back', (reason) => {
     const { rerender } = renderBand([CURRENT_ROW, EARLIER_ROW]);
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    const confirm = within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Undo' });
+    expect(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Undo' })).toBeInTheDocument();
     mockData = normalizeClientEditions({
       ...listEnvelope([{ ...CURRENT_ROW, ...(reason === 'superseded' ? { status: 'superseded' } : reason === 'frozen' ? { frozenAt: '2026-10-22' } : {}) }, EARLIER_ROW]),
       projectClosed: reason === 'closed',
     } as never);
     rerender(<PressBand projectId="p-1" clientFirstName="June" />);
     expect(screen.queryByRole('alertdialog')).toBeNull();
-    fireEvent.click(confirm);
     expect(mockUndo).not.toHaveBeenCalled();
+    mockData = editions([CURRENT_ROW, EARLIER_ROW]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Undo' }));
+    expect(mockUndo).toHaveBeenCalledTimes(1);
+    expect(mockUndo).toHaveBeenCalledWith({ projectId: 'p-1', editionId: 'e-4' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+});
+
+
+describe('PressBand — unavailable maker pictures', () => {
+  it('names the unavailable picture and links to the existing item picture manager', () => {
+    mockDeadPictures = [{ itemId: 'line-sofa', name: 'Linen sofa' }];
+    renderBand([]);
+    const list = screen.getByRole('list', { name: 'Pictures to replace' });
+    expect(list).toHaveTextContent("Linen sofa · The maker's photograph no longer loads");
+    const link = within(list).getByRole('link', { name: 'Replace picture' });
+    expect(link).toHaveAttribute('href', '#pictures-head-line-sofa');
+    const heard = jest.fn();
+    window.addEventListener(FOCUS_FFE_LINE_EVENT, heard);
+    try {
+      fireEvent.click(link);
+      expect(heard).toHaveBeenCalledTimes(1);
+      expect(focusFfeLinePending.request).toEqual({ itemId: 'line-sofa', cell: 'pictures' });
+    } finally {
+      window.removeEventListener(FOCUS_FFE_LINE_EVENT, heard);
+    }
+  });
+
+  it('offers no replacement status when no maker pictures are marked dead', () => {
+    renderBand([]);
+    expect(screen.queryByRole('list', { name: 'Pictures to replace' })).toBeNull();
   });
 });

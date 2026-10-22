@@ -26,11 +26,13 @@ export type FfeItemImageSource = 'library' | 'upload';
 export const ffeItemImageKeys = {
   all: ['project-ffe-item-images'] as const,
   item: (itemId: string) => ['project-ffe-item-images', itemId] as const,
+  deadLinks: (projectId: string) => ['project-ffe-item-images', 'dead-links', projectId] as const,
 };
 
 /** The picture list itself, and every item list that shows the primary. */
 function invalidateFfeItemImages(queryClient: QueryClient, projectId: string, itemId: string): void {
   queryClient.invalidateQueries({ queryKey: ffeItemImageKeys.item(itemId) });
+  queryClient.invalidateQueries({ queryKey: ffeItemImageKeys.deadLinks(projectId) });
   // useProjectFFEItems (every filter variant) and the spec book workbench
   // both select primary_image_url.
   queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
@@ -52,6 +54,37 @@ export function useFfeItemImages(itemId: string | null | undefined) {
         .order('id', { ascending: true });
       if (error) throw error;
       return data ?? [];
+    },
+  });
+}
+
+/** Unavailable library pictures on retained lines, under the same studio RLS. */
+export function useProjectDeadPictureLinks(projectId: string) {
+  return useQuery({
+    queryKey: ffeItemImageKeys.deadLinks(projectId),
+    enabled: !!projectId,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const supabase = getSupabase();
+      const items = new Map<string, { itemId: string; name: string }>();
+      const pageSize = 500;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from('project_ffe_item_images')
+          .select('id, item_id, item:project_ffe_items!inner(name, removed_at)')
+          .eq('project_id', projectId)
+          .eq('source', 'library')
+          .eq('link_dead', true)
+          .is('item.removed_at', null)
+          .order('id')
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        for (const image of data ?? []) {
+          items.set(image.item_id, { itemId: image.item_id, name: image.item.name || 'This piece' });
+        }
+        if ((data ?? []).length < pageSize) break;
+      }
+      return [...items.values()];
     },
   });
 }

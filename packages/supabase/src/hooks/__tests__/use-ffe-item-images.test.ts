@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 function makeChain(result: { data: unknown; error: unknown }) {
   const calls: Array<[string, unknown[]]> = [];
   const chain: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'order']) {
+  for (const method of ['select', 'eq', 'is', 'order', 'range']) {
     chain[method] = (...args: unknown[]) => {
       calls.push([method, args]);
       return chain;
@@ -47,6 +47,7 @@ import {
   PROJECT_ITEM_IMAGES_BUCKET,
   useAddFfeItemImage,
   useFfeItemImages,
+  useProjectDeadPictureLinks,
   useReorderFfeItemImages,
   useSetFfeItemPrimaryImage,
   useUnlinkFfeItemImage,
@@ -72,6 +73,7 @@ const invalidatedKeys = () => invalidateQueries.mock.calls.map((call) => call[0]
 /** The picture list and both item-list readers that select primary_image_url. */
 const ITEM_IMAGE_KEYS = [
   ['project-ffe-item-images', 'i1'],
+  ['project-ffe-item-images', 'dead-links', 'p1'],
   ['project-ffe-items', 'p1'],
   specBookKeys.workbench('p1'),
 ];
@@ -202,5 +204,31 @@ describe('useUploadFfeItemImage', () => {
     );
     expect(upload).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('useProjectDeadPictureLinks', () => {
+  it('reads only the project dead library pictures on retained items, pages and deduplicates by item', async () => {
+    const image = { id: 'a', item_id: 'i1', item: { name: 'Linen sofa' } };
+    const first = makeChain({ data: Array.from({ length: 500 }, () => image), error: null });
+    const last = makeChain({ data: [{ id: 'b', item_id: 'i2', item: { name: 'Oak chair' } }], error: null });
+    from.mockReturnValueOnce(first.chain).mockReturnValueOnce(last.chain);
+    const config = useProjectDeadPictureLinks('p1') as unknown as { queryKey: unknown; queryFn: () => Promise<unknown> };
+    expect(config.queryKey).toEqual(ffeItemImageKeys.deadLinks('p1'));
+    await expect(config.queryFn()).resolves.toEqual([{ itemId: 'i1', name: 'Linen sofa' }, { itemId: 'i2', name: 'Oak chair' }]);
+    expect(from).toHaveBeenCalledWith('project_ffe_item_images');
+    expect(first.calls).toContainEqual(['eq', ['project_id', 'p1']]);
+    expect(first.calls).toContainEqual(['eq', ['source', 'library']]);
+    expect(first.calls).toContainEqual(['eq', ['link_dead', true]]);
+    expect(first.calls).toContainEqual(['is', ['item.removed_at', null]]);
+    expect(first.calls).toContainEqual(['range', [0, 499]]);
+    expect(last.calls).toContainEqual(['range', [500, 999]]);
+  });
+
+  it('surfaces a read failure rather than claiming an empty picture list', async () => {
+    from.mockReturnValue(makeChain({ data: null, error: new Error('read failed') }).chain);
+    const config = useProjectDeadPictureLinks('p1') as unknown as { queryFn: () => Promise<unknown> };
+    await expect(config.queryFn()).rejects.toThrow('read failed');
   });
 });

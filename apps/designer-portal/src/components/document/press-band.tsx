@@ -33,6 +33,7 @@ import {
   useClientEditions,
   useClientEditorialAssets,
   useHoldClientEdition,
+  useProjectDeadPictureLinks,
   useSetProjectShowMakers,
   useUndoClientEdition,
   type ClientEdition,
@@ -59,6 +60,8 @@ import {
   imageCaption,
 } from './press-band-preview';
 import { PressBandFocal } from './press-band-focal';
+import { DEAD_PICTURE_COPY } from './line-unfold/item-pictures';
+import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending } from '@/lib/document/registry';
 
 export const EDITION_READY = 'A new edition is ready';
 export const COVER_IS_A_DRAWING = 'The cover is a drawing until a photograph arrives';
@@ -188,6 +191,7 @@ export function PressBand({
           {editorialCoverLine(name)}
         </h2>
       )}
+      <DeadPictureLinks projectId={projectId} />
       {!frozen && (
         <JobControls
           projectId={projectId}
@@ -530,6 +534,34 @@ function EditTray({
         </fieldset>
       )}
     </div>
+  );
+}
+
+function DeadPictureLinks({ projectId }: { projectId: string }) {
+  const { data: items } = useProjectDeadPictureLinks(projectId);
+  if (!items?.length) return null;
+  return (
+    <ul aria-label="Pictures to replace" className="m-0 list-none p-0 text-[15px] text-[var(--text-muted)]">
+      {items.map((item) => (
+        <li key={item.itemId}>
+          {item.name} · {DEAD_PICTURE_COPY}
+          <DocumentAction
+            actionKey="press-replace-picture"
+            regionKey="press-band"
+            variant="secondary"
+            href={`#pictures-head-${item.itemId}`}
+            onClick={(event) => {
+              event.preventDefault();
+              const request = { itemId: item.itemId, cell: 'pictures' as const };
+              focusFfeLinePending.request = request;
+              window.dispatchEvent(new CustomEvent(FOCUS_FFE_LINE_EVENT, { detail: request }));
+            }}
+          >
+            Replace picture
+          </DocumentAction>
+        </li>
+      ))}
+    </ul>
   );
 }
 

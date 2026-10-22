@@ -27,6 +27,7 @@ import {
 import { DocumentAction } from '../document-action';
 
 export const UNLINK_COPY = 'Unlink — the file stays';
+export const DEAD_PICTURE_COPY = "The maker's photograph no longer loads";
 const REGION = 'ffe-line-pictures';
 const SAVE_FAILED = "That didn't save. Try again.";
 
@@ -277,6 +278,26 @@ export function ItemPictures({
                   aria-label={`${position}${image.is_primary ? ', primary' : ''}`}
                   className="flex min-w-0 flex-wrap content-start items-center gap-x-1"
                 >
+                  {image.link_dead && (
+                    <p className="w-full t-body-sm text-[var(--text-muted)]">
+                      {DEAD_PICTURE_COPY}
+                      {canEdit && (
+                        <DocumentAction
+                          actionKey="replace-ffe-picture"
+                          regionKey={REGION}
+                          variant="secondary"
+                          href={`#picture-replacement-${itemId}`}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            uploadControlRef.current?.scrollIntoView?.({ block: 'center' });
+                            uploadControlRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+                          }}
+                        >
+                          Replace picture
+                        </DocumentAction>
+                      )}
+                    </p>
+                  )}
                   {image.is_primary ? (
                     <span className="t-meta inline-flex min-h-[44px] items-center px-[6px] uppercase text-[var(--color-charcoal)]">
                       Primary
@@ -341,7 +362,7 @@ export function ItemPictures({
       )}
 
       {canEdit && (
-        <div ref={uploadControlRef} className="mt-2 flex flex-wrap items-center gap-x-1">
+        <div id={`picture-replacement-${itemId}`} ref={uploadControlRef} className="mt-2 flex flex-wrap items-center gap-x-1">
           <input
             ref={fileRef}
             type="file"
