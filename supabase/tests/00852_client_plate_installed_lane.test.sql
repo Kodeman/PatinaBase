@@ -14,8 +14,8 @@ VALUES
 ON CONFLICT(id) DO UPDATE SET is_designer=true;
 INSERT INTO public.organizations(id,type,name,slug)
 VALUES
- ('85200000-0000-4000-8000-0000000000f1','design_studio','Middle Studio','us49-852-middle'),
- ('85200000-0000-4000-8000-0000000000f2','design_studio','Other Studio','us49-852-other');
+ ('85200000-0000-4000-8000-0000000000f1','design_studio','Middle Studio','us49-852-owned-studio'),
+ ('85200000-0000-4000-8000-0000000000f2','design_studio','Other Studio','us49-852-foreign-studio');
 INSERT INTO public.organization_members(user_id,organization_id,role,status)
 VALUES
  ('85200000-0000-4000-8000-0000000000a1','85200000-0000-4000-8000-0000000000f1','owner','active'),
@@ -126,13 +126,21 @@ SELECT ok(EXISTS(SELECT 1 FROM envelope,jsonb_array_elements(body->'assets') AS 
  WHERE asset->>'id'='85200000-0000-4000-8000-000000000201' AND asset->>'sourceKind'='concept'),
  'builder: shared installed bytes never undo concept-never-hero provenance');
 SELECT ok(NOT (SELECT body::text LIKE '%private note%' FROM envelope),'builder: private Field notes never enter the envelope');
+SET LOCAL ROLE service_role;
 UPDATE public.organization_members SET status='suspended'
 WHERE user_id='85200000-0000-4000-8000-0000000000a1' AND organization_id='85200000-0000-4000-8000-0000000000f1';
+RESET ROLE;
 SELECT ok(NOT EXISTS(SELECT 1 FROM envelope,jsonb_array_elements(body->'assets') AS asset
  WHERE asset->>'id'='85200000-0000-4000-8000-000000000201'),'builder: inactive studio membership excludes the installed source');
+SET LOCAL ROLE service_role;
 UPDATE public.organization_members SET status='active'
 WHERE user_id='85200000-0000-4000-8000-0000000000a1' AND organization_id='85200000-0000-4000-8000-0000000000f1';
-UPDATE public.projects SET status='completed' WHERE id='85200000-0000-4000-8000-000000000001';
+RESET ROLE;
+SELECT set_config('request.jwt.claims', '{"sub":"85200000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
+SET LOCAL ROLE authenticated;
+SELECT (public.close_project('85200000-0000-4000-8000-000000000001',
+ '[{"key":"walkthrough","completed":true},{"key":"punch_list","completed":true},{"key":"payment","completed":true},{"key":"photography","completed":true},{"key":"photos","completed":true},{"key":"case_study","completed":true}]'::jsonb, NULL)).id;
+RESET ROLE;
 INSERT INTO public.client_plate_assets(id,project_id,sha256,source_kind,source_ref,original_key,width,height)
 VALUES ('85200000-0000-4000-8000-000000000204','85200000-0000-4000-8000-000000000001',repeat('d',64),'installed','{}','plates/test/d.jpg',2400,1600);
 SELECT ok(NOT EXISTS(SELECT 1 FROM public.client_edition_requests
