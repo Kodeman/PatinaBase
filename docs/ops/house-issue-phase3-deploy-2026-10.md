@@ -1,6 +1,6 @@
 # The House Issue — Phase 3 production deploy order (US-49)
 
-- Status: **plan, not yet run.** Nothing here has touched Strata or Cloudflare.
+- Status: **deployed** (SQ-1599, 2026-10-22, ~18:55Z). The orchestrator ran the procedure directly; the run log and final evidence are below.
 - Authorization: a prod deploy needs Kody's explicit request in the session that runs it.
 - Scope of this note: the order that framing-versioned plate keys (SQ-1728, repaired by SQ-1732) need. Other Phase 3 tickets add their own steps in this order.
 - SQ-1734 changes only this procedure and a read-only listing helper. No prod checks or mutations were run to prepare it.
@@ -168,3 +168,89 @@ Because the Worker publication path lacks an authoritative deploy-relative bound
   - Never resume cron 69 on the legacy writer while 00848 is live. Roll forward to the new writer, record a fresh `T2` and the retiring **legacy** version UUID as `OLD_VERSION_ID`, and pass step 2b against that retired version. Resume cron 69 only after that.
   - Any legacy-prefix write found after freeze is a W2 incident, as in step 5. Rollback plus a short wait is never safe on its own.
 - Legacy objects (about 242 copied before this change) are not automatically re-copied, rewritten or deleted. Their rows keep unstamped crops and read at the unversioned key; incident remediation is a separate authorized action.
+
+## Run log — SQ-1599, 2026-10-22
+
+### Preflight (production unchanged)
+
+- GO: ticket comment `c_mvjvbayp_652081`, main **247838af2d930136350aae34b9bd9d1dc9de6e0e**. Confirmed shared checkout `/Users/kody/Code/patina-merged` at that hash; staged paths empty. Both `patina-deploy` and `patina-prod-ops` loaded. The orchestrator transferred sole ownership of portal builds, media deploy, main checkout and Strata CLI to this executor.
+- Closeout ruling: leave this note as a working-tree delivery; the orchestrator owns its explicit-pathspec commit and push. Do not interpret the ticket's older commit/submit wording as this executor's closeout authority.
+- Read-only R2 feasibility check at **18:30Z**, not the step-2b barrier: existing credentials in `infra/.env` (values never printed), bucket `patina-plates`, `scanned:5502`, `hits:0`, `complete:true`, helper exit 0. No object writes or deletes. A fresh audit using the actual T2 remains mandatory.
+- Active media deployment before any change: deployment `eb8e1850-fc12-4fa8-89c3-af9a8c39505d`, version **d1ab1141-7e06-4ae8-997d-cd16167f49ec**, 100%, created **2026-10-22T11:24:19.271Z**. `wrangler deployments list` bottom row and `deployments status --json` agree. Saved old version metadata under the evidence directory below.
+- Deployed old-version dashboard settings: Logs enabled, Include Invocation logs checked, Persist logs checked, Logs sampling 100%. A known invocation row has `$metadata.type=cf-worker-event`, `$workers.scriptVersion.id=d1ab1141-7e06-4ae8-997d-cd16167f49ec`, `eventType=alarm`, `entrypoint=MediaProcessor`, `executionModel=durableObject`, `outcome=ok`, `wallTimeMs=180022`, start `timestampNs=1792693896448000000`. Thus durations exist in the dashboard even though the MCP events adapter cannot decode this row. The dashboard also warns that accounts exceeding 20M monthly events without accepting new pricing are sampled; absence of account-cap sampling is **not yet established**. Step 2b is **not passed**.
+- Cloudflare MCP upstream defect: events view with the verified service, version and invocation-type AND filters fails output-schema validation at `result.events.events[0].$workers` (`event` and `requestId` expected, undefined). Reproduces with `dry:false`; no error is interpreted as quiet. A `dry:false` count query returns 273 invocation rows in 11:24:19Z–18:30Z; default `dry:true` calculations are not execution evidence. The MCP numeric calculations returned empty/zero output despite the dashboard row's nonzero wall time, so they are not accepted as end-time proof.
+- Resource-fit question sent before any mutation: the literal portal script runs Turbo without a concurrency cap and neither portal pins Next's `experimental.cpus`. Requested an approved process-local two-core cap before builds. No cron pause, deploy, migration push, manual edge invocation or rollback has run.
+- Evidence directory: `/Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-1599/` (`preflight-r2.txt`, `old-media-version.json`). Free disk at preflight: 63 GiB. Existing instruments cover the R2 audit; no new project tooling or code was added.
+
+### STOP before step 0 — resource-contract contradiction
+
+- The orchestrator ruled that the canonical deploy command must remain unchanged and disallowed a scratch Node preload, CPU shim and RAYON overrides. It offered the whole machine's heavy budget, with builds serialized.
+- This launch's higher-priority executor contract nevertheless fixes heavy work at **at most two workers / two cores**. The local machine exposes 14 logical CPUs, `CIRCLE_NODE_TOTAL` is unset, and installed Next 16.2.1 `dist/server/config-shared.js:202` derives its default CPU count from the machine. Its `dist/build/index.js:309–326` uses `experimental.cpus` for build workers; neither portal's config overrides that value. `infra/deploy-portal.sh:563` also invokes Turbo without a concurrency cap. Serializing whole builds does not bound workers within one build.
+- No unapproved cap or config change was added, and no build was launched outside the hard budget. Requested corrected resource authority or an approved existing bounded build seam; releasing the deployment claim with this contradiction evidence.
+- Steps **0–5, designer deployment, manual nightly link check and all final production probes remain NOT RUN**. Cron 69/70 were not changed. No deployment, migration, function, flag, data, or R2 object was mutated. No background task is owned. No commit/push/submit was made; the orchestrator owns the retained note's commit under the working-tree ruling.
+- Pinned manual verifier: **could_not_run**; preflight listing success is not Phase 3 acceptance. No code bodies changed, so complexity/coverage measurement is not applicable. No broad suite was run. Account-cap sampling/ingestion completeness is still unestablished and must be checked before a future step-2b pass; the preflight is not a waiver.
+
+### Final handoff before step 0
+
+- The orchestrator subsequently authorized a scratch process-local Node CPU cap for the two portal builds, but that does not bound the **native Turbo** task launcher. Its documented control is `--concurrency`; the installed `turbo-darwin-arm64@2.8.14` binary has no `TURBO_CONCURRENCY` environment token. No preload, pnpm wrapper, Turbo shim or RAYON override was created or used.
+- Final orchestrator decision: **stop before step 0 and release SQ-1599 to todo**. The orchestrator will execute the deployment from main, continuing from this note. The unresolved Turbo/Next worker-budget fit, not an observed production fault or failed rollout, is the release reason.
+- R2 preflight passed; old-version observability is reachable through the dashboard alarm row with the version UUID and wall duration; the MCP events schema failure remains reported. Read-only SQL also observed 13 `awaiting_review` editions; the multi-statement MCP returned only its final result, so no other baseline rows are claimed from that call.
+- `git diff --check -- docs/ops/house-issue-phase3-deploy-2026-10.md` passed. This note is the only tracked path changed by this launch; it remains uncommitted. All production mutations remain NOT RUN, and no background process or browser tab remains owned after handoff.
+
+### Execution — orchestrator, direct (2026-10-22)
+
+The routed executor released before step 0. Its hard two-worker limit cannot run the canonical `deploy-portal.sh`. The orchestrator then claimed SQ-1599 directly and ran the procedure from the main checkout at **247838af2**, with Kody's in-session authorization. No CPU caps, shims or script changes were used.
+
+- **Pre-ship gate:** `pnpm --filter @patina/client-portal type-check` exit 0; `pnpm --filter @patina/designer-portal type-check` exit 0. Free disk 62 GiB.
+- **Step 0:** `cron.alter_job(69, active := false)` at **18:40:46Z**. Quiescence check `quiescent` at 18:40:50Z (0 running). Settle: more than 60 s elapsed before step 1's upload.
+- **Step 1:** client portal. Rollback **21329b68-2e80-4231-a206-0f7783ba943c**. The Supabase trio was exported from `apps/client-portal/wrangler.jsonc` in the same shell (anon key masked). `./infra/deploy-portal.sh client` exit 0, `==> Done: client portal deployed to production.` Bottom row: version **d37c2b30-ac81-431c-b67a-1780ea3dffc1**, 100%, created 2026-10-22T18:42:14.868Z.
+- **Step 2:** media worker, deployed with the README `DOCKER_CONFIG` workaround and `wrangler deploy` (exit 0). The container image was unchanged ("no changes"). Bottom two rows: previous **d1ab1141-7e06-4ae8-997d-cd16167f49ec** (= `OLD_VERSION_ID`, 100%, no split), new **47e88d03-9d7a-418e-91a3-212f098359b7**, 100%. `T2` = **2026-10-22T18:42:53.576Z**, `W` = 1800 s.
+- **Step 3:** `cron.alter_job(69, active := true)` at **18:43:17Z**, immediately after step 2, as the doc allows. Step 2b still gates 00848.
+- **Step 2b preparation (read-only):**
+  - Workers Observability calculations view (`dry:false`). Filters: `$workers.scriptName = patina-media-worker` AND `$workers.scriptVersion.id = d1ab1141-…` AND `$metadata.type = cf-worker-event`, over 11:20Z–18:55Z. 278 invocation events, max `$workers.wallTimeMs` **360047**. Event types: Container DO `alarm` keep-alives (~180 s), `POST /process`, `POST /plates/ingest`, and plate GETs. The latest old alarm was triggered 18:38:49; with ~180 s wall it ends ~18:41:49. The 18:42:20Z bucket is empty.
+  - Account-cap sampling: no sampling key exists in the dataset (keys searched: `sampl|rate|truncat`; only `$workers.truncated` found). Cross-check against ground truth: the old version served copy runs 289459–289490 (11:29–11:37Z), which recorded **25** ingests (7+2+2+2+4+2+2+4). Workers Logs holds **26** old-version `POST /plates/ingest` events. A sampled log would undercount; it does not. Logs are treated as unsampled for this Worker.
+  - Rule applied at check time `C`: zero old-version invocations end in `[C − W, C]`. Ends are bounded by the bucket start plus that bucket's max wall time.
+- **Step 2b waived by the release authority.** Kody, in session: "keep going, dont wait for the barrier check". The 30-minute `W` window was not waited out. Instant evidence taken in its place, before step 5:
+  - zero old-version (`d1ab1141-…`) fetch or ingest events since 11:40Z; the only later old-version events are alarm keep-alives;
+  - `node scripts/ops/plates-legacy-writes-since.mjs --since "$T2"` gave `scanned:5502`, `hits:0`, `complete:true`.
+  - This is a waiver, not a pass of the barrier as written. The step 5 post-check audit (below) is the remaining guard.
+- **Step 5, first run (18:52:06Z):**
+  - `supabase functions deploy client-plate-check` succeeded.
+  - `supabase db push --yes` failed with `DbPushMissingRemoteError`. The remote ledger row `20260910152111` sorts after the local numbered files, so the CLI refuses without `--include-all`. Nothing was applied.
+  - The block's post-check audit ran anyway: `hits:0`, `complete:true`.
+- **Step 5, re-run:**
+  - A dry run with `--include-all` listed exactly **00847, 00848, 00849** (Phases 1 and 2 used the same flag).
+  - Re-ran the block with `supabase db push --include-all --yes`. It applied 00847–00849 between 18:52:38Z and 18:52:45Z.
+  - Post-check audit: `hits:0`, `complete:true`. `step5_exit=0`.
+- **Functions after step 5:** all `ACTIVE`, all `verify_jwt` true — `client-plate-copy` v3, `client-edition-compose` v1, `client-plate-check` v1.
+- **Cron:** all active.
+  - 69 `client-plate-copy-dispatch` (`* * * * *`)
+  - 70 `client-edition-compose-dispatch` (`* * * * *`)
+  - 71 `client-plate-link-check` (`20 3 * * *`)
+- **Manual link check** (the nightly job, run once by hand):
+  - `public.invoke_edge_function` request **611504** at 18:53:14Z returned HTTP 200.
+  - `job_runs` **290417** `client-plate-check` succeeded: checked 2, alive 2, dead 0, errors 0, skipped 1, trigger `invocation`.
+  - 2 of 223 `project_ffe_item_images` rows now carry `link_checked_at`.
+- **Counts:** `client_plate_assets` 214; `client_editions` 13 `awaiting_review`. No copy or compose runs since cron 69 resumed; the dispatchers log only when work exists.
+- **Anonymous plate probes** on `client.patina.cloud/plates/…/piece-768.webp`: HTTP **401** with `cache-control: private, no-store` in all three cases — no `r`, base36 `?r=1k2j3h`, and a 32-hex `r`.
+  - **NOT RUN:** the signed-in probes (legacy 200, rev 200, unknown rev 404). They need a client session from Kody.
+- **Designer portal:**
+  - Rollback **28914e72-dbc7-4728-b1b3-39004f950580**.
+  - Trio exported from `apps/designer-portal/wrangler.jsonc` (same shell). `./infra/deploy-portal.sh designer` exit 0.
+  - Bottom row: version **83646c8e-f26c-48f4-89ca-1d5700390843**, 100%, created 2026-10-22T18:54:58.375Z.
+- **Liveness:** `/api/version` returns 200 on the designer workers.dev host, `app.patina.cloud` and `client.patina.cloud`. Media `/health` 200.
+- **Flag:** PostHog `client-edition-page` (982269) is active, one group, rollout **100**, unchanged.
+
+### Final evidence — Phase 3 shipped
+
+| Unit | Live | Rollback |
+|---|---|---|
+| Strata migrations | 00842–00849 applied (00847–00849 this run, 18:52:38–45Z) | roll forward only |
+| Edge functions | `client-plate-copy` v3 · `client-edition-compose` v1 · `client-plate-check` v1 (new) | prior function version |
+| Client portal | **d37c2b30-ac81-431c-b67a-1780ea3dffc1** | 21329b68-2e80-4231-a206-0f7783ba943c |
+| Media worker | **47e88d03-9d7a-418e-91a3-212f098359b7** | d1ab1141-7e06-4ae8-997d-cd16167f49ec |
+| Designer portal | **83646c8e-f26c-48f4-89ca-1d5700390843** | 28914e72-dbc7-4728-b1b3-39004f950580 |
+| Cron | 69/70 every minute, 71 nightly 03:20 UTC — all active | `cron.alter_job(…, active := false)` |
+| Flag | `client-edition-page` 100% | set rollout to 0 |
+
+**Not verified:** signed-in plate probes, the hero/TTFB probe, prod walks and VoiceOver. Each needs a signed-in client or designer session. `CLIENT_PRIVACY_PAGE_LIVE` stays unset until Kody reads /privacy.
