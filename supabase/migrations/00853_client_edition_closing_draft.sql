@@ -568,9 +568,11 @@ BEGIN
   UPDATE public.client_edition_requests AS request
   SET status = 'done',
       close_reason = 'closed'
-  WHERE request.status = 'queued'
+  FROM public.projects AS project
+  WHERE request.project_id = project.id
+    AND request.status = 'queued'
     AND NOT request.closing
-    AND public._client_edition_closed(request.project_id);
+    AND project.status IN ('completed', 'archived');
 
   -- Kill switch: composition off → requests wait, approved editions still render.
   IF NOT EXISTS (
@@ -586,7 +588,10 @@ BEGIN
     FROM public.client_edition_requests AS request
     WHERE request.status = 'queued'
       AND request.available_at <= now()
-      AND (request.closing OR NOT public._client_edition_closed(request.project_id))
+      AND (request.closing OR NOT EXISTS (
+        SELECT 1 FROM public.projects AS project
+        WHERE project.id = request.project_id
+          AND project.status IN ('completed', 'archived')))
       AND public._client_edition_project_ready(request.project_id)
   ) THEN
     RETURN NULL;
