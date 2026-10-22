@@ -1137,7 +1137,7 @@ Deno.test("N4: a finish that never answers ends by the deadline with the edition
   assert(clock.now() <= 120_000, `the run ended at ${clock.now()} ms`);
   assertEquals([summary.unsettled, summary.cost_usd, summary.outcomes[0].edition_id], [1, 0.031, "edition-1"]);
   const reason = summary.outcomes[0].reason ?? "";
-  assert(reason.includes("sweep fails drafting edition edition-1") && reason.includes("next edition request"), reason);
+  assert(reason.includes("sweep fails drafting edition edition-1") && reason.includes("bounded recovery") && reason.includes("closed/frozen, consecutive-failure cap, or an active request") && reason.includes("next edition request"), reason);
   assertEquals(called("finish_client_edition").map((c) => c.args!.p_status), ["awaiting_review", "awaiting_review", "failed"]);
 });
 

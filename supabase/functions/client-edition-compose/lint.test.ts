@@ -72,6 +72,8 @@ function fakeDb() {
       const data: Record<string, unknown> = { get_project_editorial_facts: structuredClone(FACTS), begin_client_edition: "edition-1" };
       return Promise.resolve({ data: data[fn] ?? null, error: null });
     },
+    makerLines: () => Promise.resolve({ data: { rows: [], total: 0 }, error: null }),
+    vendorNames: () => Promise.resolve({ data: [], error: null }),
     approvedEdition: () => Promise.resolve({ data: null, error: null }),
     provenancePage: () => Promise.resolve({ data: { rows: [], total: 0 }, error: null }),
     editionStatus: () => Promise.resolve({ data: "drafting", error: null }),

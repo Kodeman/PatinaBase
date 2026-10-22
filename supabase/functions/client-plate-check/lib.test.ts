@@ -118,7 +118,7 @@ Deno.test("ignored Range body is cancelled and content type is classified", asyn
   assertEquals(cancelled, true);
 });
 
-Deno.test("timeout and network errors stay due rather than dead", async () => {
+Deno.test("timeout and network errors remain inconclusive rather than dead", async () => {
   for (
     const error of [
       new PinnedTransportError("timeout"),
@@ -192,7 +192,10 @@ Deno.test("redirects resolve and pin each hop; unsafe targets never connect", as
       "https://maker.example:8080/a",
       "https://user:password@maker.example/a",
     ]
-  ) assertEquals(await checkLibraryLink(url, blocked), null);
+  ) {
+    assertEquals(await checkLibraryLink(url, blocked), null);
+    assertEquals(await checkLibraryImage({ ...image, url }, "https://local.example"), true);
+  }
   assertEquals(calls, 1);
 });
 
@@ -244,7 +247,7 @@ Deno.test("per-row deadline covers DNS and transport together", async () => {
   }
 });
 
-Deno.test("batch: two workers record alive/dead, skip inconclusive and isolate errors", async () => {
+Deno.test("batch: two workers stamp alive, dead and inconclusive answers and isolate errors", async () => {
   let active = 0, peak = 0;
   const recorded: string[] = [];
   const counts = await checkBatch(
@@ -267,18 +270,18 @@ Deno.test("batch: two workers record alive/dead, skip inconclusive and isolate e
   );
   assertEquals(peak, 2);
   assertEquals(counts, {
-    checked: 2,
+    checked: 3,
     dead: 1,
     alive: 1,
-    skipped: 1,
+    skipped: 0,
     errors: 1,
   });
-  assertEquals(recorded.sort(), ["0:false", "1:true"]);
+  assertEquals(recorded.sort(), ["0:false", "1:true", "2:null"]);
 });
 
 Deno.test("run history: no work opens no run; work finishes with counts including unaddressable row", async () => {
   let began = 0, finished = 0;
-  const recorded: boolean[] = [];
+  const recorded: (boolean | null)[] = [];
   const steps = {
     begin() {
       began++;
@@ -287,7 +290,7 @@ Deno.test("run history: no work opens no run; work finishes with counts includin
     async check(row: LibraryImage) {
       return await checkLibraryImage(row, "https://local.example");
     },
-    record(_row: LibraryImage, dead: boolean) {
+    record(_row: LibraryImage, dead: boolean | null) {
       recorded.push(dead);
       return Promise.resolve();
     },

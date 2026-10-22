@@ -12,7 +12,7 @@ export interface LibraryImage {
   url: string;
 }
 
-// null means inconclusive: leave the row due, not checked or dead.
+// null means inconclusive: stamp the check without changing the dead/live state.
 export function isDeadLink(
   status: number,
   contentType: string | null,
@@ -100,9 +100,9 @@ export async function checkLibraryImage(
 ): Promise<boolean | null> {
   let address: string;
   try {
-    address = libraryAddress(image, supabaseUrl);
+    address = assertSafeUrl(libraryAddress(image, supabaseUrl)).href;
   } catch {
-    // An unaddressable row cannot recover through network retries.
+    // An unaddressable or initially policy-blocked row cannot be checked.
     return true;
   }
   return await checkLibraryLink(address);
@@ -110,7 +110,7 @@ export async function checkLibraryImage(
 
 export interface CheckSteps {
   check: (image: LibraryImage) => Promise<boolean | null>;
-  record: (image: LibraryImage, dead: boolean) => Promise<void>;
+  record: (image: LibraryImage, dead: boolean | null) => Promise<void>;
 }
 
 export interface CheckCounts {
@@ -121,7 +121,7 @@ export interface CheckCounts {
   errors: number;
 }
 
-// Two in-flight checks. Leave unstarted/inconclusive rows due next night.
+// Two in-flight checks. Only unstarted rows and recording failures remain due.
 export async function checkBatch(
   images: LibraryImage[],
   steps: CheckSteps,
@@ -140,12 +140,11 @@ export async function checkBatch(
       const image = images[next++];
       try {
         const dead = await steps.check(image);
-        if (dead === null) continue;
         await steps.record(image, dead);
         counts.skipped--;
         counts.checked++;
         counts.dead += Number(dead);
-        counts.alive += Number(!dead);
+        counts.alive += Number(dead === false);
       } catch {
         counts.skipped--;
         counts.errors++;

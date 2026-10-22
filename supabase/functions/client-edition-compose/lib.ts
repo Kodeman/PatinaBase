@@ -1221,10 +1221,11 @@ async function finishOnce(finish: Finish, draft: EditionDraft): Promise<DbError 
   return error;
 }
 
-/** Recovery once no finish is confirmed: begin_client_edition already closed the request, so nothing requeues it. */
+/** The sweep may enqueue one bounded recovery (00847); begin already consumed the request. */
 function unconfirmed(finish: Finish, refused: string): Settled {
   const recovery = `the dispatcher's sweep fails drafting edition ${finish.editionId} once its lease lapses; ` +
-    "its request is already done, so the project composes again on its next edition request";
+    "its request is already done; the sweep may enqueue bounded recovery after 30 minutes, subject to the daily cap; " +
+    "closed/frozen, consecutive-failure cap, or an active request suppress recovery; otherwise the project waits for its next edition request";
   console.error(`client-edition-compose: ${finish.editionId}: ${refused}; ${recovery}`);
   return ["unsettled", `${refused}; ${recovery}`];
 }
