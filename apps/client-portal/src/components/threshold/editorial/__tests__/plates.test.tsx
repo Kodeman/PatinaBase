@@ -178,7 +178,7 @@ describe('editorial plates', () => {
     const { container } = render(
       <PiecePlate scopeId={SCOPE} item={item} asset={asset({ sourceKind: 'maker', ground: 'white' })} statusWords="In production" />,
     );
-    expect(container.querySelector('[data-caption-field="what"]')).toHaveTextContent('Walnut sideboard, the same model');
+    expect(container.querySelector('[data-caption-field="what"]')).toHaveTextContent('Walnut top, planed, the same model');
     expect(container.querySelector('[data-caption-field="whose"]')).toHaveTextContent("from Harmon Bench Works' catalogue");
     expect(container.querySelector('.plate-note')).toHaveTextContent('Not her piece; hers is in production.');
     expect(container.querySelector('figure')).toHaveAttribute('data-ground', 'white');

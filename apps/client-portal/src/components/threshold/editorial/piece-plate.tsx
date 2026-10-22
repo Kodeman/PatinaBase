@@ -25,7 +25,7 @@ type PieceItem = PiecePlateProps['item'];
 /** A catalogue photograph says it shows the same model; an installed piece needs no note. */
 function pieceCaption(item: PieceItem, asset: EditorialAsset) {
   if (tierOf(asset) !== TIER.catalogue) return { caption: captionTriplet(asset.caption), note: null };
-  const caption = catalogueCaption(item.nameAsSigned, item.makerName, asset.caption.when);
+  const caption = catalogueCaption(asset.caption.what ?? item.nameAsSigned, item.makerName, asset.caption.when);
   return { caption, note: INSTALLED.test(item.status ?? '') ? null : NOTE_NOT_HER_PIECE };
 }
 
