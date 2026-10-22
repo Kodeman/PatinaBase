@@ -48,6 +48,14 @@ export async function postJson(url: string, body: unknown): Promise<void> {
 
 const capInputClass = 'h-8 w-28 font-mono text-[0.8rem]';
 
+const FEATURE_LABELS: Record<string, string> = {
+  'client-edition-compose': 'Client page editions',
+};
+
+function featureLabel(feature: string): string | undefined {
+  return FEATURE_LABELS[feature];
+}
+
 // ─── Features ───────────────────────────────────────────────────────────────
 
 export interface FeatureSave {
@@ -80,7 +88,16 @@ export function FeatureRow({
 
   return (
     <TableRow>
-      <TableCell className="font-mono text-[0.8rem]">{row.feature}</TableCell>
+      <TableCell className="font-mono text-[0.8rem]">
+        {featureLabel(row.feature) ? (
+          <>
+            <span className="block font-sans text-sm">{featureLabel(row.feature)}</span>
+            {row.feature}
+          </>
+        ) : (
+          row.feature
+        )}
+      </TableCell>
       <TableCell>
         <Switch
           checked={enabled}

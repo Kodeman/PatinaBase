@@ -10,6 +10,7 @@ const overview: ModelUsageOverview = {
   features: [
     { feature: 'aesthete-dna-draft', enabled: true, dailyCapUsd: 20, studioMonthlyCapUsd: null, todayUsd: 1.5, monthUsd: 12.25 },
     { feature: 'field-parse', enabled: false, dailyCapUsd: null, studioMonthlyCapUsd: null, todayUsd: 0, monthUsd: 0 },
+    { feature: 'client-edition-compose', enabled: true, dailyCapUsd: 5, studioMonthlyCapUsd: null, todayUsd: 0.34, monthUsd: 0.34 },
   ],
   studios: [
     { studioId: '00000000-0000-0000-0000-0000000000aa', name: 'Leah Studio', monthUsd: 12.25, monthCalls: 40, hasOverride: false, overrideMonthlyCapUsd: null },
@@ -46,6 +47,8 @@ describe('ModelUsagePage', () => {
     setup();
     expect(await screen.findByText('aesthete-dna-draft')).toBeInTheDocument();
     expect(screen.getByText('field-parse')).toBeInTheDocument();
+    expect(screen.getByText('Client page editions')).toBeInTheDocument();
+    expect(screen.getByText('client-edition-compose')).toBeInTheDocument();
     expect(screen.getByText('Leah Studio')).toBeInTheDocument();
     expect(screen.getByText('ops@patina.cloud')).toBeInTheDocument();
     expect(screen.getByLabelText('aesthete-dna-draft daily cap in USD')).toHaveValue('20');
