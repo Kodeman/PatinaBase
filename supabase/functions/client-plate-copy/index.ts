@@ -33,10 +33,12 @@ interface WorkerEnv {
 }
 
 // Every request this client makes is cut off at the run's hard end, signing
-// included (createSignedUrl takes no signal of its own).
+// included (createSignedUrl takes no signal of its own). No auth refresh
+// timer: one client is made per signed source, and a warm isolate would
+// otherwise keep one never-stopped interval per sign.
 function adminClient(supabaseUrl: string, hardEnd: AbortSignal): Admin {
   return createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-    auth: { persistSession: false },
+    auth: { autoRefreshToken: false, persistSession: false },
     global: {
       fetch: (input, init) =>
         fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, hardEnd]) : hardEnd }),

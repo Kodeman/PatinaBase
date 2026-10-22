@@ -456,9 +456,12 @@ Deno.test("copyRun: a claim answered at 61 s is cut off at 45 s; the run ends be
   await clock.runUntil(70_000);
   assertEquals(log.aborts.claim, 45_000);
   assertEquals(ended.at, 45_000);
-  // SQ-1655 R1 ruling: a claim first seen after the hard end cannot be
-  // settled. No late ingest/fail; the 10-minute lease expiry recovers it.
-  // This attempt counts: the third expiry leaves it failed, not re-queued.
+  // SQ-1655 R1 ruling: a claim answered after its 45 s step deadline (not
+  // only after the 50 s hard end) is abandoned and never settled. No late
+  // ingest/fail; the 10-minute lease expiry recovers it. The attempt cap
+  // counts every claimed attempt (busy, 504, budget, abandoned), so a row
+  // that already has 2 attempts is failed on this first abandoned claim, and
+  // its last_error keeps the earlier text (COALESCE(last_error, ...)).
   assertEquals(log.ingests, []);
   assertEquals(log.fails, []);
   assertEquals(ended.summary, { status: "failed", detail: counts(0, 0, 0), error: RUN_BUDGET_EXCEEDED });

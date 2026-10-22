@@ -54,11 +54,15 @@ function post(body: BodyInit = JSON.stringify({ job_run_id: 42 })) {
   });
 }
 
-Deno.test("handler: hung production signing fetch is aborted by 50 s, even after shutdown at 45 s", () => withEnv(async () => {
+// Failing the row and finishing the run take until 48 s, so run shutdown
+// (run.close() in the handler's finally) cannot be what aborts the signing
+// fetch at 45 s: only the address step's own signal can.
+Deno.test("handler: hung production signing fetch is aborted by the address step at 45 s, before shutdown at 48 s", () => withEnv(async () => {
   const time = new FakeTime(0);
   let signedAt: number | null = null;
   let abortedAt: number | null = null;
   let finishedAt: number | null = null;
+  const settles: string[] = [];
   const transport = stub(globalThis, "fetch", (input, init) => {
     const url = String(input);
     if (url.includes("/object/sign/")) {
@@ -74,7 +78,8 @@ Deno.test("handler: hung production signing fetch is aborted by 50 s, even after
     if (url.endsWith("/claim_client_plate_requests")) return Promise.resolve(Response.json([ROW]));
     if (url.endsWith("/client_plate_source_owned")) return Promise.resolve(Response.json(true));
     if (url.endsWith("/fail_client_plate_request") || url.endsWith("/finish_client_plate_copy_run")) {
-      return Promise.resolve(Response.json(null));
+      settles.push(url.slice(url.lastIndexOf("/") + 1));
+      return new Promise<Response>((resolve) => setTimeout(() => resolve(Response.json(null)), 1_500));
     }
     throw new Error(`unexpected fetch ${url}`);
   });
@@ -82,8 +87,9 @@ Deno.test("handler: hung production signing fetch is aborted by 50 s, even after
     const response = handler(post()).then((value) => { finishedAt = Date.now(); return value; });
     await advance(time, 70_000);
     assertEquals(signedAt, 0, "the production Storage adapter actually started signing");
-    assertEquals(abortedAt, 45_000, "the address step cancels the signing transport");
-    assertEquals(finishedAt, 45_000);
+    assertEquals(settles, ["fail_client_plate_request", "finish_client_plate_copy_run"]);
+    assert(finishedAt !== null && finishedAt >= 48_000 && finishedAt <= 50_000, `shutdown at ${finishedAt}, after the delayed fail and finish`);
+    assertEquals(abortedAt, 45_000, "the address step cancels the signing transport before shutdown");
     assertEquals((await response).status, 200);
   } finally {
     transport.restore();
