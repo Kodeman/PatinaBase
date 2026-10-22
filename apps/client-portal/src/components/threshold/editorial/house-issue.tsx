@@ -153,9 +153,10 @@ export function useHouseIssue(
 export function useEditionIssue(
   projectId: string,
   editorial: ClientProjectEditorial | null,
+  serverEnabled = false,
 ): HouseIssue | null {
   const flag = useFeatureFlag("client-edition-page");
-  const on = flag.value && !flag.isLoading;
+  const on = serverEnabled && flag.value && !flag.isLoading;
   const query = useClientEditorial(projectId, editorial, on);
   return useHouseIssue(on ? query.data : null);
 }

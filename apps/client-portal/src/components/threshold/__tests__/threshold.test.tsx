@@ -545,6 +545,7 @@ function renderThreshold(
   milestones: MilestoneDetail[] = MILESTONES,
   otherHouses: { id: string; name: string }[] = [],
   editorial?: ClientProjectEditorial | null,
+  editionEnabled = true,
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -557,6 +558,7 @@ function renderThreshold(
         milestones={milestones}
         otherHouses={otherHouses}
         {...(editorial === undefined ? {} : { editorial })}
+        editionEnabled={editionEnabled}
       />
     </QueryClientProvider>,
   );
@@ -3943,6 +3945,13 @@ describe('Threshold — The House Issue flag (client-edition-page)', () => {
     const withRead = renderThreshold(MILESTONES, [], EDITORIAL);
     expect(markup(withRead.container.innerHTML)).toBe(todayHtml);
     expect(withRead.container.querySelector('[data-testid="house-issue-hero"], .ed-chapter-head, .ed-standing')).toBeNull();
+    expect(createEditorialClient).not.toHaveBeenCalled();
+  });
+
+  it('server off cannot be overridden by a resolved client flag or cached editorial', () => {
+    mockEditionFlag = { value: true, isLoading: false };
+    const { container } = renderThreshold(MILESTONES, [], EDITORIAL, false);
+    expect(container.querySelector('[data-testid="house-issue-hero"], .ed-chapter-head, .ed-standing')).toBeNull();
     expect(createEditorialClient).not.toHaveBeenCalled();
   });
 

@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { ELM, signInAsJune } from './fixtures/house-issue';
 
 /**
  * The Threshold (spec §7) — the homeowner's project page as ONE chrome-less
@@ -280,6 +281,29 @@ async function expectNoHeader(page: Page): Promise<void> {
 test.describe.configure({ timeout: 180_000 });
 
 test.describe('The Threshold — the client page', () => {
+  test('flag off makes no editorial RPC or plate request on either page', async ({ page }, info) => {
+    test.skip(info.project.name !== 'chromium', 'the shipped flag-off server');
+    const editorialRequests: string[] = [];
+    const plates: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('get_client_project_editorial')) editorialRequests.push(request.url());
+      if (new URL(request.url()).pathname.startsWith('/plates/')) plates.push(request.url());
+    });
+    // Elm holds eligible plate assets, so an accidental server preload is observable.
+    await signInAsJune(page, `/projects/${ELM.id}`);
+    for (const address of ['/', `/projects/${ELM.id}`]) {
+      await page.goto(address);
+      await settle(page);
+      await expect(page.locator('[data-testid="house-issue-hero"], .ed-standing')).toHaveCount(0);
+      await expect(page.locator('link[rel="preload"][as="image"][imagesrcset*="/plates/"]')).toHaveCount(0);
+      // Exercise lazy images and focus-triggered React Query refresh as well.
+      await page.locator('#mat').scrollIntoViewIfNeeded();
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      await expect(page.getByTestId('doorplate')).toBeAttached();
+    }
+    expect(editorialRequests).toEqual([]);
+    expect(plates).toEqual([]);
+  });
   test('opens chrome-less, with the house named on the doorplate', async ({ page }) => {
     await signInAsClient(page);
     await openTheHouse(page);

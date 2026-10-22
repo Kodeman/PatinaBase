@@ -642,14 +642,18 @@ const PROJECT_DETAIL_SELECT =
   'start_date, kickoff_date, target_end_date, expected_completion_date, updated_at, ' +
   'project_phases(id, name, phase_key, status, lane, follows_phase_id, sort_order, start_date, target_end_date, completed_at, progress, updated_at)';
 
+export const fetchClientUser = cache(async function authenticatedClientUser() {
+  const supabase = await createServerClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  return error ? null : user;
+});
+
 export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> => {
   if (env.useProjectFixtures) return devFallbackProjects;
 
   try {
     const supabase = (await createServerClient()) as any;
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await fetchClientUser();
     if (!user) return [];
 
     const { data, error } = await supabase
@@ -696,9 +700,7 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
 
   try {
     const supabase = (await createServerClient()) as any;
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await fetchClientUser();
     if (!user) throw new Error('Not authenticated');
 
     const { data: row, error } = await supabase

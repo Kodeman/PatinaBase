@@ -2,12 +2,13 @@ import { Threshold } from '@/components/threshold/threshold';
 import { LetterboxDoor } from '@/components/threshold/letterbox-door';
 import { HeroPreloadLinks } from '@/components/threshold/editorial/house-issue';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
-import { fetchClientEditorial, heroPreloads } from '@/lib/data/client-editorial';
+import { fetchEnabledClientEditorial, heroPreloads } from '@/lib/data/client-editorial';
 import {
   resolveActiveHouse,
   resolveHouseForInstrument,
 } from '@/lib/data/active-project';
-import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
+import { fetchClientProjectView, fetchClientProjects, fetchClientUser } from '@/lib/data/projects';
+import { clientEditionEnabled } from '@/lib/server-feature-flag';
 import { toOtherHouses } from '@/lib/threshold/other-houses';
 
 /**
@@ -23,6 +24,9 @@ import { toOtherHouses } from '@/lib/threshold/other-houses';
 export default async function HomePage(props: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const editionDecision = fetchClientUser()
+    .then((user) => clientEditionEnabled(user?.id))
+    .catch(() => false);
   const projects = await fetchClientProjects();
   const projectIds = projects.map((project) => project.id);
   const query = (await props?.searchParams) ?? {};
@@ -54,13 +58,13 @@ export default async function HomePage(props: {
     : projectIds;
 
   let projectView: Awaited<ReturnType<typeof fetchClientProjectView>> = null;
-  let editorial: Awaited<ReturnType<typeof fetchClientEditorial>> = null;
+  let editorial: Awaited<ReturnType<typeof fetchEnabledClientEditorial>> = null;
   for (const candidateId of candidates) {
     // The House Issue's plates read beside the house itself, so the hero's
     // preload is in this HTML. Null never blocks the house (it is today's page).
     [projectView, editorial] = await Promise.all([
       fetchClientProjectView(candidateId),
-      fetchClientEditorial(candidateId),
+      editionDecision.then((enabled) => fetchEnabledClientEditorial(candidateId, enabled)),
     ]);
     if (projectView) break;
   }
@@ -99,6 +103,7 @@ export default async function HomePage(props: {
     );
   }
 
+  const editionEnabled = await editionDecision;
   const { project, milestones } = projectView;
 
   return (
@@ -113,6 +118,7 @@ export default async function HomePage(props: {
           viewSource="front-door"
           namedProposalId={namedProposalId}
           editorial={editorial}
+          editionEnabled={editionEnabled}
         />
       </main>
     </div>

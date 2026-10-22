@@ -25,6 +25,11 @@ export async function fetchClientEditorial(projectId: string): Promise<ClientPro
   }
 }
 
+/** Rollout authority precedes acquisition; off never enters the reader. */
+export function fetchEnabledClientEditorial(projectId: string, enabled: boolean): Promise<ClientProjectEditorial | null> {
+  return enabled ? fetchClientEditorial(projectId) : Promise.resolve(null);
+}
+
 export type HeroPreload = HeroPreloadSource;
 
 /**
