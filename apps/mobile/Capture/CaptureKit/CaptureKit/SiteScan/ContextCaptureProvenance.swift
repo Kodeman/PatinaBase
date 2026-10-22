@@ -22,14 +22,8 @@
 //    siteScanContext.cameraPose    = "m00,m01,…,m33" row-major (absent on non-Pro)
 //    siteScanContext.capturedAt    = ISO8601
 //
-//  ROUTING NOTE: context captures land in the INBOX (destination='inbox'). The
-//  commit RPC's inbox path does NOT persist the project_id / project_room_id columns
-//  — an inbox row carries its project/room association in PROVENANCE ONLY, and item
-//  12 (the portal Inbox) must resolve it from these keys. `projectId` is still passed
-//  to the RPC (the ownership guard reads it), but the durable association lives here.
-//  (SiteScan's projectRoomID is a `public.rooms` id anyway — incompatible with
-//  `field_captures.project_room_id` → `project_rooms(id)` — so it never belongs in
-//  that column; it rides in provenance for the portal to reconcile.)
+//  Filing is separate from provenance: filingProjectRoomId is a project_rooms id;
+//  projectRoomId remains the legacy public.rooms id for existing portal readers.
 
 import Foundation
 
@@ -40,15 +34,17 @@ public struct ContextCaptureProvenance: Equatable, Sendable {
     public let scanSessionId: String?
     public let projectId: String?
     public let projectRoomId: String?
+    public let filingProjectRoomId: String?
     /// Row-major 4×4 camera pose (length 16), or nil on a non-Pro device (no ARKit).
     public let cameraPoseRowMajor: [Double]?
     public let capturedAt: String        // ISO8601
 
     public init(scanSessionId: String?, projectId: String?, projectRoomId: String?,
-                cameraPoseRowMajor: [Double]?, capturedAt: String) {
+                cameraPoseRowMajor: [Double]?, capturedAt: String, filingProjectRoomId: String? = nil) {
         self.scanSessionId = scanSessionId
         self.projectId = projectId
         self.projectRoomId = projectRoomId
+        self.filingProjectRoomId = filingProjectRoomId
         self.cameraPoseRowMajor = (cameraPoseRowMajor?.count == 16) ? cameraPoseRowMajor : nil
         self.capturedAt = capturedAt
     }
@@ -58,6 +54,7 @@ public struct ContextCaptureProvenance: Equatable, Sendable {
         static let scanId = "siteScanContext.scanId"
         static let projectId = "siteScanContext.projectId"
         static let projectRoomId = "siteScanContext.projectRoomId"
+        static let filingProjectRoomId = "siteScanContext.filingProjectRoomId"
         static let cameraPose = "siteScanContext.cameraPose"
         static let capturedAt = "siteScanContext.capturedAt"
     }
@@ -68,6 +65,7 @@ public struct ContextCaptureProvenance: Equatable, Sendable {
         if let scanSessionId { map[Key.scanId] = scanSessionId }
         if let projectId { map[Key.projectId] = projectId }
         if let projectRoomId { map[Key.projectRoomId] = projectRoomId }
+        if let filingProjectRoomId { map[Key.filingProjectRoomId] = filingProjectRoomId }
         if let cameraPoseRowMajor {
             map[Key.cameraPose] = cameraPoseRowMajor.map { String($0) }.joined(separator: ",")
         }
@@ -84,6 +82,7 @@ public struct ContextCaptureProvenance: Equatable, Sendable {
             projectId: map[Key.projectId],
             projectRoomId: map[Key.projectRoomId],
             cameraPoseRowMajor: pose,
-            capturedAt: map[Key.capturedAt] ?? "")
+            capturedAt: map[Key.capturedAt] ?? "",
+            filingProjectRoomId: map[Key.filingProjectRoomId])
     }
 }

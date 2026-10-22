@@ -62,6 +62,7 @@ final class SiteScanHostModel {
     @ObservationIgnored private let ownerScopeProvider: () -> CaptureLocalListScope
     private let projectID: String?
     private let projectRoomID: String?
+    private let filingProjectRoomID: String?
     private let voiceService: any VoiceNoteService
     private let analytics: any CaptureAnalytics
     /// The signed-in designer — distinct from `session`, the scan.
@@ -73,6 +74,7 @@ final class SiteScanHostModel {
         ownerScope: ownerScopeProvider,
         projectID: projectID,
         projectRoomID: projectRoomID,
+        filingProjectRoomID: filingProjectRoomID,
         voice: voiceService,
         analytics: analytics,
         session: userSession,
@@ -87,6 +89,7 @@ final class SiteScanHostModel {
         ownerScope: @escaping () -> CaptureLocalListScope,
         projectID: String?,
         projectRoomID: String?,
+        filingProjectRoomID: String?,
         voice: any VoiceNoteService,
         analytics: any CaptureAnalytics,
         userSession: any SessionProviding
@@ -98,6 +101,7 @@ final class SiteScanHostModel {
         self.ownerScopeProvider = ownerScope
         self.projectID = projectID
         self.projectRoomID = projectRoomID
+        self.filingProjectRoomID = filingProjectRoomID
         self.voiceService = voice
         self.analytics = analytics
         self.userSession = userSession
@@ -192,6 +196,7 @@ struct SiteScanHostScreen: View {
     let coordinator: CaptureCoordinator
     let projectID: String?
     let projectRoomID: String?
+    private let filingProjectRoomID: String?
     private let handoffProjectName: String?
 
     @State private var model: SiteScanHostModel
@@ -203,6 +208,10 @@ struct SiteScanHostScreen: View {
         self.coordinator = coordinator
         self.projectID = projectID
         self.projectRoomID = projectRoomID
+        // A stale handoff must never file a deep-linked scan into another room.
+        let filingRoom = handoff.projectID == projectID && handoff.scanRoomID == projectRoomID
+            ? handoff.filingProjectRoomID : nil
+        self.filingProjectRoomID = filingRoom
         self.handoffProjectName = handoff.projectName
         let name = handoff.name.isEmpty ? SiteScanSetupModel.defaultName() : handoff.name
         _model = State(wrappedValue: SiteScanHostModel(
@@ -218,6 +227,7 @@ struct SiteScanHostScreen: View {
             },
             projectID: projectID,
             projectRoomID: projectRoomID,
+            filingProjectRoomID: filingRoom,
             voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
                                           analytics: container.analytics,
                                           surface: "f2"),
@@ -306,6 +316,7 @@ struct SiteScanHostScreen: View {
             SiteScanUploadStep(
                 result: result, name: model.name,
                 projectID: projectID, projectRoomID: projectRoomID,
+                filingProjectRoomID: filingProjectRoomID,
                 projectName: uploadProjectName, container: container,
                 onDone: { coordinator.popToRoot() })
         }

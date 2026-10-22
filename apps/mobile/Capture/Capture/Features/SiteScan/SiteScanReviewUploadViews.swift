@@ -116,9 +116,10 @@ final class SiteScanUploadModel {
     private let name: String
     private let projectID: String?
     private let projectRoomID: String?
+    private let filingProjectRoomID: String?
 
     init(container: AppContainer, result: FieldScanResult, name: String,
-         projectID: String?, projectRoomID: String?) {
+         projectID: String?, projectRoomID: String?, filingProjectRoomID: String?) {
         self.siteScan = container.siteScan
         self.projects = container.projects
         self.analytics = container.analytics
@@ -126,6 +127,7 @@ final class SiteScanUploadModel {
         self.name = name
         self.projectID = projectID
         self.projectRoomID = projectRoomID
+        self.filingProjectRoomID = filingProjectRoomID
     }
 
     /// Resolve the project's display name for the destination summary (best-effort).
@@ -141,7 +143,8 @@ final class SiteScanUploadModel {
         phase = .uploading
         do {
             let receipt = try await siteScan.upload(
-                result: result, projectID: projectID, projectRoomID: projectRoomID, name: name)
+                result: result, projectID: projectID, projectRoomID: projectRoomID,
+                filingProjectRoomID: filingProjectRoomID, name: name)
             analytics.event("siteScan.upload_success", ["scan_id": receipt.remoteScanID])
             phase = .done(receipt.remoteScanID)
         } catch {
@@ -161,24 +164,26 @@ struct SiteScanUploadStep: View {
     let name: String
     let projectID: String?
     let projectRoomID: String?
+    let filingProjectRoomID: String?
     let projectName: String?
     let container: AppContainer
     let onDone: () -> Void
 
     @State private var model: SiteScanUploadModel
 
-    init(result: FieldScanResult, name: String, projectID: String?, projectRoomID: String?,
+    init(result: FieldScanResult, name: String, projectID: String?, projectRoomID: String?, filingProjectRoomID: String? = nil,
          projectName: String?, container: AppContainer, onDone: @escaping () -> Void) {
         self.result = result
         self.name = name
         self.projectID = projectID
         self.projectRoomID = projectRoomID
+        self.filingProjectRoomID = filingProjectRoomID
         self.projectName = projectName
         self.container = container
         self.onDone = onDone
         _model = State(wrappedValue: SiteScanUploadModel(
             container: container, result: result, name: name,
-            projectID: projectID, projectRoomID: projectRoomID))
+            projectID: projectID, projectRoomID: projectRoomID, filingProjectRoomID: filingProjectRoomID))
     }
 
     var body: some View {

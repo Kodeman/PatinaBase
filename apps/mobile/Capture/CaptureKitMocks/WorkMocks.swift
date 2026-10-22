@@ -450,7 +450,7 @@ public final class MockSiteScanService: SiteScanService {
         MockScanSession(owner: owner)
     }
     public func upload(result: FieldScanResult, projectID: String?, projectRoomID: String?,
-                       name: String) async throws -> FieldScanUploadReceipt {
+                       filingProjectRoomID: String?, name: String) async throws -> FieldScanUploadReceipt {
         if MockFailure.failUpload {
             let id = result.localBundleURL.lastPathComponent
             if !pending.contains(where: { $0.id == id }) {

@@ -4,7 +4,7 @@
 //  Enqueues a mid-scan context capture (detail photo or voice note) into the EXISTING
 //  offline-first outbox (Field Capture P1 · item 7). It produces a `Piece` routed
 //  to the Capture Inbox, exactly like the core capture flow — set the media +
-//  provenance, mark `.ready`, save; `CaptureSyncService.drain()` then uploads it to
+//  provenance and explicit project filing, mark `.ready`, save; `CaptureSyncService.drain()` then uploads it to
 //  `capture-media` + `commit_field_capture` → `field_captures`. This is a
 //  capture-SOURCE extension: no new sync plumbing, no migration, no change to the
 //  frozen `FieldCapturePayload` wire contract.
@@ -35,6 +35,7 @@ public final class ContextCaptureService {
                              provenance: ContextCaptureProvenance) -> Piece {
         let draft = store.newDraft(owner: owner)
         apply(provenance, to: draft)
+        draft.captureKindRaw = "context"
         let filename = "\(UUID().uuidString.lowercased()).\(filenameExtension)"
         try? store.writeMedia(imageData, filename: filename)
         let photo = CapturePhoto(filename: filename, width: width, height: height,
@@ -67,9 +68,8 @@ public final class ContextCaptureService {
 
     private func apply(_ provenance: ContextCaptureProvenance, to draft: Piece) {
         draft.provenanceRaw = provenance.provenanceEntries()
-        // Route on project_id only (projects-compatible); the SiteScan rooms-id +
-        // scan-id ride in provenance (see ContextCaptureProvenance routing note).
-        draft.venue = VenueStamp(projectId: provenance.projectId)
+        draft.venue = VenueStamp(projectId: provenance.projectId,
+                                 projectRoomId: provenance.projectId == nil ? nil : provenance.filingProjectRoomId)
         draft.destination = .inbox
     }
 

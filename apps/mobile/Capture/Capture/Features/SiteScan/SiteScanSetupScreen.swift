@@ -35,7 +35,13 @@ final class SiteScanSetupModel {
 
     var allProjects: [FieldProject] = []
     var selectedProjectID: String?
-    var rooms: [FieldProjectRoom] = []
+    var rooms: [FieldVisitRoomOption] = []
+    var selectedScanRoomID: String? {
+        rooms.first { $0.id == selectedRoomID }?.scanRoomID
+    }
+    var selectedFilingRoomID: String? {
+        rooms.first { $0.id == selectedRoomID }?.projectRoomID
+    }
     var selectedRoomID: String?
     var name: String
     var loadError: String?
@@ -101,7 +107,10 @@ final class SiteScanSetupModel {
            ownableProjectIDs.contains(projectID) {
             await selectProject(projectID)
             if case .collapsed = setupState {
-                selectedRoomID = context.scanRoomID
+                selectedRoomID = rooms.first {
+                    $0.projectRoomID == context.routing.projectRoomID
+                        && $0.scanRoomID == context.scanRoomID
+                }?.id
             }
         }
     }
@@ -113,7 +122,10 @@ final class SiteScanSetupModel {
         rooms = []
         guard let id else { return }
         // Room pick is optional — on failure we just make a new room at upload.
-        rooms = (try? await projects.projectDetail(id: id).rooms) ?? []
+        guard let detail = try? await projects.projectDetail(id: id) else { return }
+        rooms = FieldVisitRoomMerge.merge(
+            specRooms: detail.specRooms.map { CaptureCachedRoom(id: $0.id, name: $0.name) },
+            rooms: detail.rooms.map { CaptureCachedRoom(id: $0.id, name: $0.name) })
     }
 
     nonisolated static func defaultName() -> String {
@@ -178,7 +190,8 @@ struct SiteScanSetupScreen: View {
         .fullScreenCover(isPresented: $showContextCapture) {
             SiteScanContextScreen(container: container,
                                   projectID: model.selectedProjectID,
-                                  projectRoomID: model.selectedRoomID,
+                                  projectRoomID: model.selectedScanRoomID,
+                                  filingProjectRoomID: model.selectedFilingRoomID,
                                   visit: model.visitState,
                                   onDone: { showContextCapture = false })
         }
@@ -303,6 +316,9 @@ struct SiteScanSetupScreen: View {
         let trimmed = model.name.trimmingCharacters(in: .whitespacesAndNewlines)
         handoff.name = trimmed.isEmpty ? SiteScanSetupModel.defaultName() : trimmed
         handoff.projectName = model.selectedProjectName
+        handoff.projectID = model.selectedProjectID
+        handoff.scanRoomID = model.selectedScanRoomID
+        handoff.filingProjectRoomID = model.selectedFilingRoomID
         container.analytics.event("siteScan.start", [
             "has_project": model.selectedProjectID != nil ? "true" : "false",
             "has_room": model.selectedRoomID != nil ? "true" : "false"
@@ -310,7 +326,7 @@ struct SiteScanSetupScreen: View {
         // Pro → instrumented scan; non-Pro → context capture only (never a scan, R108.2).
         if entryMode == .scan {
             coordinator.navigate(to: .siteScan(projectID: model.selectedProjectID,
-                                               projectRoomID: model.selectedRoomID))
+                                               projectRoomID: model.selectedScanRoomID))
         } else {
             showContextCapture = true
         }
