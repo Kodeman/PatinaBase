@@ -3,14 +3,31 @@
  * SQ-1590's 00845_client_edition_rpcs.sql (585281bb6, list_client_editions,
  * lines 1231–1293) and the composition the compose function writes (story
  * seq 34: {sourceHash, voice, hero{assetId,why}, held, chapters, doorstep,
- * notice}; images crop_key 'none'). Tests feed these through the hook's own
+ * notice}; images crop_key 'none'). Each image also carries the three keys
+ * SQ-1659 adds to list_client_editions: `ground` (the asset's, as planCrops
+ * reads it), `attributionKind` (the reader's frozen kind; here the source kind
+ * unless a test says otherwise) and `sourceTable` (the same request row's
+ * source_ref->>'table'). Tests feed these through the hook's own
  * `normalizeClientEditions`, so a drift between the SQL and the hook shows.
  */
 
 type Row = Record<string, unknown>;
 
+/** 00843's enqueue table for each request kind. */
+const SOURCE_TABLE: Record<string, string> = {
+  upload: 'project_ffe_item_images',
+  maker: 'project_ffe_item_images',
+  concept: 'project_rooms',
+  scan: 'room_scan_images',
+  board: 'project_boards',
+};
+
 export function imageRow(assetId: string, over: Row = {}): Row {
+  const sourceKind = (over.sourceKind as string | undefined) ?? 'upload';
   return {
+    ground: 'scene',
+    attributionKind: sourceKind,
+    sourceTable: SOURCE_TABLE[sourceKind] ?? null,
     assetId,
     plateRole: 'held',
     cropKey: 'none',

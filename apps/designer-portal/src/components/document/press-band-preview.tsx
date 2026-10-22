@@ -17,7 +17,13 @@ import type {
   ClientEditionOverrides,
 } from '@patina/supabase';
 import { getOptimizedImageUrl } from '@/lib/media-utils';
-import { coverCropShown, objectPositionOf, plateCropWindow } from '@/lib/document/plate-crop';
+import {
+  coverCropShown,
+  plateCrop,
+  plateCropWindow,
+  type PlateRect,
+  type PlateWindow,
+} from '@/lib/document/plate-crop';
 
 /** The hero asset an edition opens on, the studio's choice first. */
 export function editionHeroId(
@@ -65,18 +71,54 @@ export interface CaptionPolicy {
 const MAKER_KINDS: ReadonlySet<string> = new Set(['maker', 'upload']);
 
 /**
+ * The kind the homeowner reader attributes a picture to: its frozen
+ * attribution kind; the request's source kind only for a list without one.
+ */
+function attributionKindOf(image: Pick<ClientEditionImage, 'attributionKind' | 'sourceKind'>) {
+  return image.attributionKind ?? image.sourceKind ?? null;
+}
+
+/**
  * The caption "whose" the homeowner reader shows (00846, story seq 48): with
  * makers off a maker picture names the studio and no override brings the maker
  * back; otherwise an explicit override wins, then the composed credit while
  * makers show, the studio while they do not.
  */
 export function readerWhose(
-  image: Pick<ClientEditionImage, 'sourceKind' | 'captionWhose'>,
+  image: Pick<ClientEditionImage, 'attributionKind' | 'sourceKind' | 'captionWhose'>,
   override: string | null | undefined,
   { showMakers, studioName }: CaptionPolicy,
 ): string {
-  if (!showMakers && MAKER_KINDS.has(image.sourceKind ?? '')) return studioName ?? '';
+  if (!showMakers && MAKER_KINDS.has(attributionKindOf(image) ?? '')) return studioName ?? '';
   return override ?? (showMakers ? image.captionWhose : studioName) ?? '';
+}
+
+/** 00845 _client_plate_alt: what kind of picture, in the alt's last words. */
+const ALT_KIND_WORDS: Readonly<Record<string, string>> = {
+  maker: 'product photograph',
+  upload: 'studio photograph',
+  installed: 'installed photograph',
+  scan: 'room scan',
+  board: 'studio board',
+  sheet: 'drawing',
+  concept: 'concept render, not installed',
+};
+
+/**
+ * The image's alt as the homeowner reader gives it (00846): while makers are
+ * off it is rebuilt from the caption shown (what · whose · kind, 00845
+ * _client_plate_alt), so it names no maker the caption does not; while they
+ * show, the edition's own alt.
+ */
+export function readerAlt(
+  image: ClientEditionImage,
+  caption: { what: string; whose: string },
+  { showMakers }: CaptionPolicy,
+): string {
+  if (showMakers) return image.alt ?? '';
+  const kind = attributionKindOf(image);
+  const kindWords = kind ? ALT_KIND_WORDS[kind] : undefined;
+  return [caption.what, caption.whose, kindWords].filter(Boolean).join(' · ');
 }
 
 /**
@@ -148,18 +190,75 @@ export function editionDelta(
 const EYEBROW =
   'font-mono text-[12px] font-medium uppercase leading-normal tracking-[0.12em] text-[var(--text-muted)]';
 
+/** PLAN C2: designer-side photography stays within 120px tall. */
+const COVER_HEIGHT = 120;
+
 /**
- * Where the crop the client page's desktop draws sits in the hero's source
- * picture, as the worker cuts it (subject box and focal point); the 3:2
- * thirds when the source's size is unknown, the centre when it cuts none.
+ * The crop the client page's desktop draws from the hero's source picture,
+ * as the worker cuts it (ground, floors, subject box and focal point): its
+ * rect in source pixels and the window it shows. Null when the source's size
+ * is unknown or the worker cuts no cover from it.
  */
-export function heroObjectPosition(hero: ClientEditionImage): string {
-  const width = hero.width && hero.width > 0 ? hero.width : 1500;
-  const height = hero.height && hero.height > 0 ? hero.height : 1000;
-  const source = { width, height, focal: hero.focal, subjectBox: hero.subjectBox };
+export function heroCoverCrop(
+  hero: ClientEditionImage,
+): { rect: PlateRect; window: PlateWindow } | null {
+  if (!(hero.width && hero.width > 0 && hero.height && hero.height > 0)) return null;
+  const source = {
+    width: hero.width,
+    height: hero.height,
+    focal: hero.focal,
+    subjectBox: hero.subjectBox,
+    ground: hero.ground,
+  };
   const shown = coverCropShown(source, 'desktop');
+  const rect = shown ? plateCrop(source, shown) : null;
   const window = shown ? plateCropWindow(source, shown) : null;
-  return window ? objectPositionOf(window) : '50% 50%';
+  return rect && window ? { rect, window } : null;
+}
+
+/**
+ * The cover thumbnail: the crop's own window of the source, clipped to the
+ * crop's aspect and at most 120px tall — the picture scaled so the window
+ * fills the frame and moved so the window's corner meets the frame's.
+ */
+function CoverThumbnail({ src, alt, hero }: { src: string; alt: string; hero: ClientEditionImage | null }) {
+  const crop = hero ? heroCoverCrop(hero) : null;
+  if (!crop) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        className="block h-[120px] w-[192px] max-w-full border border-[var(--border-subtle)] object-cover"
+        data-press-cover
+      />
+    );
+  }
+  const [, , cropWidth, cropHeight] = crop.rect;
+  const { left, top, vx, vy } = crop.window;
+  return (
+    <div
+      className="relative max-h-[120px] max-w-full overflow-hidden border border-[var(--border-subtle)]"
+      style={{
+        // max-w-full may narrow it; the aspect ratio then keeps the window exact.
+        width: `${(COVER_HEIGHT * cropWidth) / cropHeight}px`,
+        aspectRatio: `${cropWidth} / ${cropHeight}`,
+      }}
+      data-press-cover-window={crop.rect.join(' ')}
+    >
+      <img
+        src={src}
+        alt={alt}
+        className="absolute block max-w-none"
+        style={{
+          width: `${100 / vx}%`,
+          height: `${100 / vy}%`,
+          left: `${(-left / vx) * 100}%`,
+          top: `${(-top / vy) * 100}%`,
+        }}
+        data-press-cover
+      />
+    </div>
+  );
 }
 
 export function PressBandPreview({
@@ -184,6 +283,9 @@ export function PressBandPreview({
   const heroId = editionHeroId(edition, overrides);
   const hero = edition.images.find((image) => image.assetId === heroId) ?? null;
   const heroUrl = heroId ? sourceUrls[heroId] : undefined;
+  const heroCaption = hero ? imageCaption(edition, hero, overrides, captionPolicy) : null;
+  const heroAlt =
+    hero && heroCaption && captionPolicy ? readerAlt(hero, heroCaption, captionPolicy) : (hero?.alt ?? '');
   const chapters = editionChapters(edition, overrides);
   const doorstep = edition.composition?.doorstep?.standing;
   const notice = edition.composition?.notice;
@@ -196,15 +298,8 @@ export function PressBandPreview({
         </p>
       )}
       <figure className="m-0 flex flex-col gap-2">
-        {/* PLAN C2: designer-side photography stays within 120px tall. */}
         {heroUrl ? (
-          <img
-            src={getOptimizedImageUrl(heroUrl, { width: 400 })}
-            alt={hero?.alt ?? ''}
-            className="block h-[120px] w-[192px] max-w-full border border-[var(--border-subtle)] object-cover"
-            style={hero ? { objectPosition: heroObjectPosition(hero) } : undefined}
-            data-press-cover
-          />
+          <CoverThumbnail src={getOptimizedImageUrl(heroUrl, { width: 400 })} alt={heroAlt} hero={hero} />
         ) : (
           <div
             className="flex h-[120px] w-[192px] max-w-full items-center justify-center border border-dashed border-[var(--border-subtle)] px-2 text-center text-[15px] text-[var(--text-muted)]"
@@ -213,9 +308,9 @@ export function PressBandPreview({
             The cover is a drawing
           </div>
         )}
-        {hero && (
+        {heroCaption && (
           <figcaption className="text-[15px] leading-snug">
-            {Object.values(imageCaption(edition, hero, overrides, captionPolicy)).filter(Boolean).join(' · ')}
+            {Object.values(heroCaption).filter(Boolean).join(' · ')}
           </figcaption>
         )}
       </figure>

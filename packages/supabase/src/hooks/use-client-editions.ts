@@ -77,9 +77,16 @@ export interface ClientEditionImage {
   captionWhat: string | null;
   captionWhose: string | null;
   captionWhen: string | null;
+  /** The kind of the request row the picture was fetched from (its address's provenance). */
   sourceKind: PlateSourceKind | null;
   /** A storage object path (upload, concept, scan, board) or a hotlink. */
   sourceUrl: string | null;
+  /** That same request row's `source_ref->>'table'`: which bucket a bare path lives in. */
+  sourceTable: string | null;
+  /** The homeowner reader's frozen attribution kind; may differ from sourceKind. */
+  attributionKind: PlateSourceKind | null;
+  /** The worker's ground, as planCrops reads it ('white' | 'scene' | 'drawing'). */
+  ground: string | null;
   width: number | null;
   height: number | null;
   /** [x, y], each 0–1 of the source. */
@@ -150,7 +157,14 @@ export function normalizeClientEditions(data: Json | null): ClientEditions {
         autoPublished: edition.autoPublished === true,
         held: edition.held === true,
         supersededBy: edition.supersededBy ?? null,
-        images: Array.isArray(edition.images) ? edition.images : [],
+        // An older list (before 00845 carried them) has no sourceTable,
+        // attributionKind or ground: each reads as null.
+        images: (Array.isArray(edition.images) ? edition.images : []).map((image) => ({
+          ...image,
+          sourceTable: image.sourceTable ?? null,
+          attributionKind: image.attributionKind ?? null,
+          ground: image.ground ?? null,
+        })),
       }))
       .sort((a, b) => b.seq - a.seq),
   };
@@ -247,8 +261,18 @@ export function useClientEditorialAssets(projectId: string | null | undefined, e
   });
 }
 
-/** The private bucket each source kind's object path lives in (00843;
- *  client-plate-copy lib.ts). Uploads are in the public item-images bucket. */
+/** The bucket each source table's object path lives in: client-plate-copy
+ *  lib.ts PRIVATE_BUCKET_BY_TABLE / PUBLIC_BUCKET_BY_TABLE (00843 queues a
+ *  path, not a URL, for these). */
+const PRIVATE_BUCKET_BY_TABLE: Record<string, string> = {
+  project_rooms: "room-renders",
+  room_scan_images: "room-scans",
+  project_boards: "proposal-mood-boards",
+};
+const PUBLIC_BUCKET_BY_TABLE: Record<string, string> = {
+  project_ffe_item_images: "project-item-images",
+};
+/** A list without sourceTable: the bucket by the request's kind instead. */
 const PRIVATE_BUCKET_BY_KIND: Partial<Record<PlateSourceKind, string>> = {
   concept: "room-renders",
   scan: "room-scans",
@@ -259,34 +283,53 @@ const PUBLIC_BUCKET_BY_KIND: Partial<Record<PlateSourceKind, string>> = {
 };
 const SOURCE_URL_SECONDS = 3600;
 
+/** Where a bare object path lives: by its source table, else by its kind. */
+function sourceBucket(
+  table: string | null,
+  kind: PlateSourceKind | null,
+): { bucket: string; public: boolean } | null {
+  const own = (map: Record<string, string | undefined>, key: string | null) =>
+    key !== null && Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined;
+  const byTable = table !== null;
+  const publicBucket = byTable ? own(PUBLIC_BUCKET_BY_TABLE, table) : own(PUBLIC_BUCKET_BY_KIND, kind);
+  if (publicBucket) return { bucket: publicBucket, public: true };
+  const privateBucket = byTable ? own(PRIVATE_BUCKET_BY_TABLE, table) : own(PRIVATE_BUCKET_BY_KIND, kind);
+  return privateBucket ? { bucket: privateBucket, public: false } : null;
+}
+
 /**
  * A viewable address for each edition image's SOURCE picture, by asset id: a
  * hotlink as it is, an upload's public object URL, a private object signed
- * under the studio's own storage policy. Never the client page's plate route.
+ * under the studio's own storage policy. The bucket follows the request's
+ * source table as the plate copy does; an unknown table gets no preview.
+ * Never the client page's plate route.
  */
 export function useClientEditionSourceUrls(images: readonly ClientEditionImage[]) {
   const sources = images
     .filter((image) => image.sourceUrl)
-    .map((image) => [image.assetId, image.sourceKind ?? "", image.sourceUrl!] as const);
+    .map(
+      (image) =>
+        [image.assetId, image.sourceTable ?? null, image.sourceKind ?? null, image.sourceUrl!] as const,
+    );
   return useQuery({
     queryKey: ["client-edition-sources", sources],
     queryFn: async () => {
       const supabase = getSupabase();
       const urls: Record<string, string> = {};
       const toSign = new Map<string, Array<[string, string]>>();
-      for (const [assetId, kind, address] of sources) {
+      for (const [assetId, table, kind, address] of sources) {
         if (/^https?:\/\//i.test(address)) {
           urls[assetId] = address;
           continue;
         }
         const path = address.replace(/^\/+/, "");
-        const publicBucket = PUBLIC_BUCKET_BY_KIND[kind as PlateSourceKind];
-        if (publicBucket) {
-          urls[assetId] = supabase.storage.from(publicBucket).getPublicUrl(path).data.publicUrl;
+        const where = sourceBucket(table, kind);
+        if (!where) continue;
+        if (where.public) {
+          urls[assetId] = supabase.storage.from(where.bucket).getPublicUrl(path).data.publicUrl;
           continue;
         }
-        const bucket = PRIVATE_BUCKET_BY_KIND[kind as PlateSourceKind];
-        if (bucket) toSign.set(bucket, [...(toSign.get(bucket) ?? []), [assetId, path]]);
+        toSign.set(where.bucket, [...(toSign.get(where.bucket) ?? []), [assetId, path]]);
       }
       for (const [bucket, entries] of toSign) {
         const { data } = await supabase.storage

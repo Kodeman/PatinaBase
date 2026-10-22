@@ -5,9 +5,9 @@
  * is one act; opened, the source picture stands in the two frames the client
  * page delivers, the desktop cover at 16:10 and the phone cover at 39:34, each
  * cut as the worker cuts it (lib/document/plate-crop: the point, held inside
- * the subject box). A frame the worker cuts no crop for (a subject box it
- * cannot hold, a source under the floor) shows no picture and says which crop
- * those screens draw instead. The point is stored once per photograph, so dragging it
+ * the subject box). A frame the worker cuts no crop for (a white-ground
+ * picture, a subject box it cannot hold, a source under the floor) shows no
+ * picture and says which crop those screens draw instead. The point is stored once per photograph, so dragging it
  * in either frame moves it in both; the frames re-centre on it when the drag
  * ends. "Use this crop" saves it with the photograph's subject box, or with
  * none when the photograph has none — a box is a hard constraint on every
@@ -28,7 +28,7 @@ import {
   objectPositionOf,
   plateCropWindow,
   type PlateBox,
-  type PlateCropKey,
+  type CoverCropKey,
   type PlatePoint,
   type PlateSource,
   type PlateWindow,
@@ -60,7 +60,7 @@ const FRAMES = [
   },
 ] as const;
 
-const CROP_WORDS: Record<PlateCropKey, string> = {
+const CROP_WORDS: Record<CoverCropKey, string> = {
   wide: 'the wide cover',
   cover_phone: 'the phone cover',
   wide32: 'the 3:2 cover',
@@ -153,6 +153,7 @@ function FocalEditor({
     width: image.width && image.width > 0 ? image.width : 1500,
     height: image.height && image.height > 0 ? image.height : 1000,
     subjectBox: box,
+    ground: image.ground,
   };
 
   const moveTo = (next: PlatePoint) => {

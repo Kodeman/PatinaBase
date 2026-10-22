@@ -185,4 +185,96 @@ describe('the mirror credits captions as the homeowner reader does (N2, story se
     renderMirror();
     expect(caption()).toContain('Atelier Nord');
   });
+
+  /*
+   * F4 — the reader credits by its frozen attribution kind, which can differ
+   * from the request kind the list's address came from (deduplicated bytes
+   * first captioned as a maker picture, later also referenced by a scan).
+   */
+  it('masks by attributionKind, not the source kind (F4)', () => {
+    const shared = { ...scanHero, attributionKind: 'maker', captionWhose: 'Herman Miller' };
+    read([approvedOn(shared, 'Atelier Nord')], false);
+    renderMirror();
+    expect(caption()).toContain('Birchwood Studio');
+    expect(caption()).not.toContain('Atelier Nord');
+  });
+
+  it('falls back to the source kind only when a list carries no attributionKind (F4)', () => {
+    const legacy: Record<string, unknown> = { ...makerHero };
+    delete legacy.attributionKind;
+    read([approvedOn(legacy, 'Atelier Nord')], false);
+    renderMirror();
+    expect(caption()).toContain('Birchwood Studio');
+    expect(caption()).not.toContain('Atelier Nord');
+  });
+});
+
+/*
+ * F3 — the cover's accessible name follows the caption shown, as 00846
+ * rebuilds it (00845 _client_plate_alt: what · whose · kind words) while
+ * makers are off; while they show it is the edition's own alt.
+ */
+describe('the mirror cover’s alt follows the caption the reader shows (F3)', () => {
+  afterEach(() => {
+    mockEditions = undefined;
+  });
+
+  const hero = (over: Record<string, unknown>) =>
+    imageRow('a-old', { plateRole: 'hero', rank: 0, chapterKey: 'cover', ...over });
+  const approvedOn = (image: Record<string, unknown>, whose?: string) => ({
+    ...CURRENT_ROW,
+    composition: composition('a-old'),
+    overrides: whose ? { captions: { 'a-old': { whose } } } : {},
+    images: [image],
+  });
+  const waitingOn = (image: Record<string, unknown>, whose?: string) => ({
+    ...PENDING_ROW,
+    composition: composition('a-old'),
+    overrides: whose ? { captions: { 'a-old': { whose } } } : {},
+    images: [image],
+  });
+  const makerPhoto = hero({ sourceKind: 'maker', captionWhose: 'Herman Miller', alt: 'Chair · Herman Miller · product photograph' });
+  const scanPhoto = hero({ sourceKind: 'scan', alt: 'What a-old · Birchwood Studio · room scan' });
+
+  it.each([
+    ['approved', approvedOn, 'Edition 4'],
+    ['waiting', waitingOn, 'What June will see if approved'],
+  ] as const)('%s: makers off, a maker photograph is named for the studio, never the maker', (_state, on, region) => {
+    read(on === waitingOn ? [on(makerPhoto), CURRENT_ROW] : [on(makerPhoto)], false);
+    renderMirror();
+    const section = screen.getByRole('region', { name: region });
+    expect(
+      within(section).getByRole('img', { name: 'What a-old · Birchwood Studio · product photograph' }),
+    ).toBeInTheDocument();
+    expect(within(section).queryByRole('img', { name: /Herman Miller/ })).toBeNull();
+  });
+
+  it.each([
+    ['approved', approvedOn, 'Edition 4'],
+    ['waiting', waitingOn, 'What June will see if approved'],
+  ] as const)('%s: makers off, an override on a non-maker picture is named in the alt', (_state, on, region) => {
+    read(on === waitingOn ? [on(scanPhoto, 'Atelier Nord'), CURRENT_ROW] : [on(scanPhoto, 'Atelier Nord')], false);
+    renderMirror();
+    const section = screen.getByRole('region', { name: region });
+    expect(within(section).getByRole('img', { name: 'What a-old · Atelier Nord · room scan' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['approved', approvedOn, 'Edition 4'],
+    ['waiting', waitingOn, 'What June will see if approved'],
+  ] as const)('%s: makers off, an override cannot put a maker in the alt', (_state, on, region) => {
+    read(on === waitingOn ? [on(makerPhoto, 'Atelier Nord'), CURRENT_ROW] : [on(makerPhoto, 'Atelier Nord')], false);
+    renderMirror();
+    const section = screen.getByRole('region', { name: region });
+    expect(
+      within(section).getByRole('img', { name: 'What a-old · Birchwood Studio · product photograph' }),
+    ).toBeInTheDocument();
+    expect(within(section).queryByRole('img', { name: /Atelier Nord/ })).toBeNull();
+  });
+
+  it('makers showing, the cover keeps the edition’s own alt', () => {
+    read([approvedOn(makerPhoto, 'Atelier Nord')], true);
+    renderMirror();
+    expect(screen.getByRole('img', { name: 'Chair · Herman Miller · product photograph' })).toBeInTheDocument();
+  });
 });

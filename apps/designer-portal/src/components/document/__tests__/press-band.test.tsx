@@ -8,7 +8,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ClientEdition, ClientEditions, ClientEditorialAsset } from '@patina/supabase';
 import { PressBand, publishedLine } from '../press-band';
-import { editionDelta, heroObjectPosition } from '../press-band-preview';
+import { editionDelta, heroCoverCrop } from '../press-band-preview';
 import {
   CURRENT_ROW,
   EARLIER_ROW,
@@ -89,6 +89,9 @@ function allWords(root: HTMLElement): string {
   );
   return `${root.textContent} ${labels.join(' ')}`;
 }
+
+const coverImage = () => document.querySelector('[data-press-cover]') as HTMLImageElement;
+const coverWindow = () => document.querySelector('[data-press-cover-window]') as HTMLElement;
 
 const frameRect = (frame: HTMLElement) => {
   frame.getBoundingClientRect = () =>
@@ -416,7 +419,7 @@ describe('PressBand — focal point', () => {
     });
     renderBand([{ ...PENDING_ROW, images: [square] }]);
     const wide = objectPositionOf({ left: 0, top: 200 / 2000, vx: 1, vy: 1250 / 2000 });
-    expect(screen.getByRole('img', { name: 'Picture a-hero' }).style.objectPosition).toBe(wide);
+    expect(coverWindow()).toHaveAttribute('data-press-cover-window', '0 200 2000 1250');
 
     const tray = openHeroFocal();
     const frameImage = (key: string) =>
@@ -451,11 +454,81 @@ describe('PressBand — focal point', () => {
     expect(wide.querySelector('img')).not.toBeNull();
   });
 
+  it('a white-ground picture has no cover frames: the worker cuts it only as a pair and a piece (F1)', () => {
+    // planCrops on 2000×1250, ground white, maker → {pair, piece} only.
+    const clipping = imageRow('a-hero', {
+      plateRole: 'hero',
+      chapterKey: 'cover',
+      sourceKind: 'maker',
+      ground: 'white',
+      width: 2000,
+      height: 1250,
+    });
+    renderBand([{ ...PENDING_ROW, images: [clipping] }]);
+    const tray = openHeroFocal();
+    for (const key of ['wide', 'cover_phone']) {
+      const frame = tray.querySelector(`[data-focal-frame="${key}"]`) as HTMLElement;
+      expect(frame).toHaveAttribute('data-focal-unavailable');
+      expect(frame.querySelector('img')).toBeNull();
+    }
+    expect(within(tray).getAllByText('No cover is cut from this photograph.')).toHaveLength(2);
+    // The same scene-ground picture keeps both frames.
+    expect(heroCoverCrop(one({ ...PENDING_ROW, images: [{ ...clipping, ground: 'scene' }] }).images[0])).not.toBeNull();
+  });
+
   it('designer photography stays within 120px tall (R10)', () => {
     renderBand([PENDING_ROW]);
-    const cover = screen.getByRole('img', { name: 'Picture a-hero' });
-    expect(cover.className).toMatch(/\bh-\[120px\]/);
-    expect(cover.className).not.toMatch(/(^|\s)w-full(\s|$)/);
+    const frame = coverWindow();
+    expect(frame.className).toMatch(/\bmax-h-\[120px\]/);
+    // 2000×1250 draws the 16:10 wide crop: 192px wide at the 120px cap.
+    expect(frame.style.width).toBe('192px');
+    expect(frame.className).not.toMatch(/(^|\s)w-full(\s|$)/);
+  });
+});
+
+/*
+ * F2 — the band cover clips the source to the crop's own window: a frame of
+ * the crop's aspect, the picture scaled by 1/vx × 1/vy and moved so the
+ * window's corner meets the frame's. Values are native planCrops rects.
+ */
+describe('PressBand — the cover thumbnail is the crop window (F2)', () => {
+  const coverOn = (over: Record<string, unknown>) =>
+    renderBand([{ ...PENDING_ROW, images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', ...over })] }]);
+  const pct = (value: string) => parseFloat(value);
+
+  it('1400×900 draws the 3:2 wide32 window [25, 0, 1350, 900]', () => {
+    // planCrops 1400×900 → wide32 [25, 0, 1350, 900] (no wide: under its floor).
+    coverOn({ width: 1400, height: 900 });
+    const frame = coverWindow();
+    expect(frame).toHaveAttribute('data-press-cover-window', '25 0 1350 900');
+    expect(frame.style.aspectRatio).toBe('1350 / 900');
+    expect(frame.style.width).toBe('180px');
+    const img = coverImage();
+    expect(pct(img.style.width)).toBeCloseTo((1400 / 1350) * 100, 6);
+    expect(pct(img.style.height)).toBeCloseTo(100, 6);
+    expect(pct(img.style.left)).toBeCloseTo((-25 / 1350) * 100, 6);
+    expect(pct(img.style.top)).toBeCloseTo(0, 6);
+    expect(img.style.objectPosition).toBe('');
+  });
+
+  it('a 1100×2000 portrait draws the tall window [90, 0, 920, 2000]', () => {
+    // planCrops 1100×2000 → {tall: [90, 0, 920, 2000], piece}; the page's portrait layout draws tall.
+    coverOn({ width: 1100, height: 2000 });
+    const frame = coverWindow();
+    expect(frame).toHaveAttribute('data-press-cover-window', '90 0 920 2000');
+    expect(frame.style.aspectRatio).toBe('920 / 2000');
+    // 120px tall at 0.46 → 55.2px wide.
+    expect(pct(frame.style.width)).toBeCloseTo(55.2, 6);
+    const img = coverImage();
+    expect(pct(img.style.width)).toBeCloseTo((1100 / 920) * 100, 6);
+    expect(pct(img.style.height)).toBeCloseTo(100, 6);
+    expect(pct(img.style.left)).toBeCloseTo((-90 / 920) * 100, 6);
+  });
+
+  it('a source of unknown size keeps the plain 120px box', () => {
+    coverOn({ width: null, height: null });
+    expect(document.querySelector('[data-press-cover-window]')).toBeNull();
+    expect(coverImage().className).toMatch(/\bh-\[120px\]/);
   });
 });
 
@@ -482,9 +555,9 @@ describe('PressBand — the delta line', () => {
     expect(editionDelta(PENDING, null)).toBe('The first edition');
   });
 
-  it('positions an unboxed cover on the worker’s thirds crop', () => {
-    expect(heroObjectPosition(CURRENT.images[0])).toBe(
-      objectPositionOf(plateCropWindow({ width: 2000, height: 1250 }, 'wide')!),
+  it('frames an unboxed cover on the worker’s thirds crop', () => {
+    expect(heroCoverCrop(CURRENT.images[0])?.window).toEqual(
+      plateCropWindow({ width: 2000, height: 1250 }, 'wide'),
     );
   });
 });

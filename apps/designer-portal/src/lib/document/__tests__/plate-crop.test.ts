@@ -10,6 +10,7 @@ import {
   objectPositionOf,
   plateCrop,
   plateCropRect,
+  plateCrops,
   plateCropWindow,
 } from '../plate-crop';
 
@@ -83,6 +84,31 @@ describe('plateCrop / plateCropWindow — unavailable where planCrops cuts nothi
     expect(plateCrop(source, 'wide32')).toEqual([25, 0, 1350, 900]);
     expect(coverCropShown(source, 'desktop')).toBe('wide32');
     expect(coverCropShown(source, 'phone')).toBe('cover_phone');
+  });
+
+  it('2000×1250, ground white, maker: the worker cuts only pair and piece (F1)', () => {
+    // planCrops({width: 2000, height: 1250, ground: 'white', sourceKind: 'maker'})
+    //   → {pair: {rect: [125, 0, 1750, 1250]}, piece: {rect: [0, 0, 2000, 1250]}}
+    const source = { width: 2000, height: 1250, ground: 'white' };
+    expect(plateCrops(source)).toEqual({ pair: [125, 0, 1750, 1250], piece: [0, 0, 2000, 1250] });
+    for (const key of ['wide', 'cover_phone', 'wide32', 'tall'] as const) {
+      expect(plateCropWindow(source, key)).toBeNull();
+    }
+    expect(coverCropShown(source, 'desktop')).toBeNull();
+    expect(coverCropShown(source, 'phone')).toBeNull();
+  });
+
+  it('the same picture on a scene ground, or of unknown ground, keeps its cover crops', () => {
+    // planCrops({width: 2000, height: 1250, ground: 'scene', sourceKind: 'maker'})
+    const scene = {
+      wide: [0, 0, 2000, 1250],
+      cover_phone: [283, 0, 1434, 1250],
+      wide32: [63, 0, 1875, 1250],
+      pair: [125, 0, 1750, 1250],
+      piece: [0, 0, 2000, 1250],
+    };
+    expect(plateCrops({ width: 2000, height: 1250, ground: 'scene' })).toEqual(scene);
+    expect(plateCrops({ width: 2000, height: 1250, ground: null })).toEqual(scene);
   });
 
   it('900×600: under every cover floor, no cover at all', () => {
