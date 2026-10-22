@@ -287,6 +287,37 @@ describe('PressBand — a closed job (R12)', () => {
     return render(<PressBand projectId="p-1" clientFirstName="June" />);
   };
 
+  it('closed without a closing draft stays frozen with no actions', () => {
+    renderClosedBand([]);
+    expect(screen.getByRole('heading', { name: 'Closed' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(mockSourceUrls).toHaveBeenLastCalledWith([]);
+  });
+
+  it('closed pending closing draft permits only Approve and Hold through existing hooks', () => {
+    renderClosedBand([{ ...PENDING_ROW, closing: true }, FROZEN_CURRENT]);
+    expect(mockData?.editions[0].closing).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(mockApprove).toHaveBeenCalledWith(
+      { projectId: 'p-1', editionId: PENDING.id, overrides: {} }, expect.any(Object),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Hold' }));
+    expect(mockHold).toHaveBeenCalledWith({ projectId: 'p-1', editionId: PENDING.id });
+    for (const name of ['Edit', 'Undo']) expect(screen.queryByRole('button', { name })).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Set the focal point/ })).toBeNull();
+    expect(mockSourceUrls).toHaveBeenLastCalledWith(PENDING.images);
+  });
+
+  it('closed after closing approval is frozen again', () => {
+    renderClosedBand([{ ...FROZEN_CURRENT, closing: true }]);
+    expect(screen.getByText('Closed')).toBeInTheDocument();
+    for (const name of ['Approve', 'Hold', 'Edit', 'Undo']) expect(screen.queryByRole('button', { name })).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(mockSourceUrls).toHaveBeenLastCalledWith([]);
+  });
+
   it('closed with only an edition awaiting review: no Approve, Hold, Edit or job control, nothing published', () => {
     renderClosedBand([PENDING_ROW]);
     for (const name of ['Approve', 'Hold', 'Edit', 'Undo']) {

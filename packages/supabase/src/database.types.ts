@@ -2985,6 +2985,8 @@ export type Database = {
           attempts: number
           available_at: string
           close_reason: string | null
+          closing: boolean
+          closing_facts: Json | null
           created_at: string
           debounce_key: string
           id: string
@@ -2998,6 +3000,8 @@ export type Database = {
           attempts?: number
           available_at?: string
           close_reason?: string | null
+          closing?: boolean
+          closing_facts?: Json | null
           created_at?: string
           debounce_key: string
           id?: string
@@ -3011,6 +3015,8 @@ export type Database = {
           attempts?: number
           available_at?: string
           close_reason?: string | null
+          closing?: boolean
+          closing_facts?: Json | null
           created_at?: string
           debounce_key?: string
           id?: string
@@ -3026,6 +3032,7 @@ export type Database = {
         Row: {
           approved_at: string | null
           auto_published: boolean
+          closing: boolean
           composition: Json | null
           cost_usd: number | null
           created_at: string
@@ -3051,6 +3058,7 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           auto_published?: boolean
+          closing?: boolean
           composition?: Json | null
           cost_usd?: number | null
           created_at?: string
@@ -3076,6 +3084,7 @@ export type Database = {
         Update: {
           approved_at?: string | null
           auto_published?: boolean
+          closing?: boolean
           composition?: Json | null
           cost_usd?: number | null
           created_at?: string
@@ -37138,6 +37147,7 @@ export type Database = {
         Returns: {
           approved_at: string | null
           auto_published: boolean
+          closing: boolean
           composition: Json | null
           cost_usd: number | null
           created_at: string
@@ -40451,6 +40461,8 @@ export type Database = {
           attempts: number
           available_at: string
           close_reason: string | null
+          closing: boolean
+          closing_facts: Json | null
           created_at: string
           debounce_key: string
           id: string

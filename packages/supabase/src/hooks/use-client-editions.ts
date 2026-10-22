@@ -122,6 +122,8 @@ export interface ClientEdition {
   status: ClientEditionStatus;
   kind: "full" | "plates_only" | null;
   autoPublished: boolean;
+  /** The one studio-reviewed final issue captured when the job closed. */
+  closing?: boolean;
   held: boolean;
   approvedAt: string | null;
   reviewedAt: string | null;
@@ -158,6 +160,7 @@ export function normalizeClientEditions(data: Json | null): ClientEditions {
       .map((edition) => ({
         ...edition,
         autoPublished: edition.autoPublished === true,
+        closing: edition.closing === true,
         held: edition.held === true,
         supersededBy: edition.supersededBy ?? null,
         // An older list (before 00845 carried them) has no sourceTable,

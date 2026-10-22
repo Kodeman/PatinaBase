@@ -60,6 +60,8 @@ export interface FactsAsset {
 }
 
 export interface EditorialFacts {
+  /** SQL-captured final issue; private snapshot metadata is never prompt input. */
+  closing?: boolean;
   project: {
     id: string;
     name: string;
