@@ -139,11 +139,13 @@ export interface ClientEdition {
 
 export interface ClientEditions {
   showMakers: boolean;
+  /** The job is completed or archived (00848): no edition of it changes. */
+  projectClosed: boolean;
   /** Newest first (seq descending). */
   editions: ClientEdition[];
 }
 
-const EMPTY_EDITIONS: ClientEditions = { showMakers: false, editions: [] };
+const EMPTY_EDITIONS: ClientEditions = { showMakers: false, projectClosed: false, editions: [] };
 
 export function normalizeClientEditions(data: Json | null): ClientEditions {
   if (!data || typeof data !== "object" || Array.isArray(data)) return EMPTY_EDITIONS;
@@ -151,6 +153,7 @@ export function normalizeClientEditions(data: Json | null): ClientEditions {
   const editions = Array.isArray(raw.editions) ? raw.editions : [];
   return {
     showMakers: raw.showMakers === true,
+    projectClosed: raw.projectClosed === true,
     editions: editions
       .map((edition) => ({
         ...edition,

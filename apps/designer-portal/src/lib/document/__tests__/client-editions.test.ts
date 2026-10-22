@@ -151,8 +151,8 @@ describe('normalizeClientEditions over the SQL’s rows', () => {
   });
 
   it('reads an empty or malformed result as no editions', () => {
-    expect(normalizeClientEditions(null)).toEqual({ showMakers: false, editions: [] });
-    expect(normalizeClientEditions([] as never)).toEqual({ showMakers: false, editions: [] });
+    expect(normalizeClientEditions(null)).toEqual({ showMakers: false, projectClosed: false, editions: [] });
+    expect(normalizeClientEditions([] as never)).toEqual({ showMakers: false, projectClosed: false, editions: [] });
     const bare = read([{ id: 'e-1', seq: 1, status: 'drafting' }]).editions[0];
     expect(bare).toMatchObject({ autoPublished: false, held: false, supersededBy: null, images: [] });
   });
@@ -224,6 +224,13 @@ describe('pending, current and a closed job', () => {
   it('a frozen current edition closes the job (R12)', () => {
     const { editions } = read([PENDING_ROW, { ...CURRENT_ROW, frozenAt: '2026-10-22T12:00:00+00:00' }]);
     expect(editionsFrozen(editions)).toBe(true);
+  });
+
+  it('a closed job with no frozen edition is closed too (00848 projectClosed)', () => {
+    const { editions } = read([PENDING_ROW]);
+    expect(editionsFrozen(editions, true)).toBe(true);
+    expect(editionsFrozen(read([CURRENT_ROW]).editions, true)).toBe(true);
+    expect(editionsFrozen(editions, false)).toBe(false);
   });
 });
 

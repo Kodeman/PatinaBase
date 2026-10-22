@@ -271,6 +271,32 @@ describe('PressBand — a closed job (R12)', () => {
     expect(screen.getByRole('heading', { name: 'Edition 4 is what June sees' })).toBeInTheDocument();
     expect(screen.getByText('Closed')).toBeInTheDocument();
   });
+
+  // 00848 projectClosed: a closed job with no frozen edition takes no act either.
+  const renderClosedBand = (rows: Record<string, unknown>[]) => {
+    mockData = normalizeClientEditions({ ...listEnvelope(rows), projectClosed: true } as never);
+    return render(<PressBand projectId="p-1" clientFirstName="June" />);
+  };
+
+  it('closed with only an edition awaiting review: no Approve, Hold, Edit or job control, nothing published', () => {
+    renderClosedBand([PENDING_ROW]);
+    for (const name of ['Approve', 'Hold', 'Edit', 'Undo']) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+    expect(screen.queryByRole('button', { name: /^Set the focal point/ })).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'A new edition is ready' })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Published editions' })).toBeNull();
+  });
+
+  it('archived with an approved edition that was never frozen: Closed, no Undo, no job control', () => {
+    renderClosedBand([CURRENT_ROW, EARLIER_ROW]);
+    expect(screen.getByRole('heading', { name: 'Edition 4 is what June sees' })).toBeInTheDocument();
+    expect(screen.getByText('Closed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Set the focal point/ })).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
 });
 
 describe('PressBand — published editions and Undo', () => {

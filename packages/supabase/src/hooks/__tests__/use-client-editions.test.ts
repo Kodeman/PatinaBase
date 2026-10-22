@@ -157,3 +157,14 @@ describe('normalizeClientEditions — the image keys 00845 adds', () => {
     expect(edition.images[0].sourceTable).toBeNull();
   });
 });
+
+describe('normalizeClientEditions — projectClosed (00848)', () => {
+  it('keeps a closed job as the list sends it', () => {
+    expect(normalizeClientEditions({ showMakers: false, projectClosed: true, editions: [] } as never).projectClosed).toBe(true);
+  });
+
+  it('reads an older list, or nothing, as open', () => {
+    expect(normalizeClientEditions({ showMakers: false, editions: [] } as never).projectClosed).toBe(false);
+    expect(normalizeClientEditions(null).projectClosed).toBe(false);
+  });
+});

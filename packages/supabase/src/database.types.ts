@@ -3817,6 +3817,7 @@ export type Database = {
         Row: {
           asset_id: string | null
           attempts: number
+          close_reason: string | null
           created_at: string
           id: string
           last_error: string | null
@@ -3833,6 +3834,7 @@ export type Database = {
         Insert: {
           asset_id?: string | null
           attempts?: number
+          close_reason?: string | null
           created_at?: string
           id?: string
           last_error?: string | null
@@ -3849,6 +3851,7 @@ export type Database = {
         Update: {
           asset_id?: string | null
           attempts?: number
+          close_reason?: string | null
           created_at?: string
           id?: string
           last_error?: string | null
@@ -37220,6 +37223,10 @@ export type Database = {
         Args: { p_asset_id: string }
         Returns: string
       }
+      _client_plate_refuse_closed: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
       _client_plate_requeue: {
         Args: { p_request_id: string }
         Returns: undefined
@@ -40465,6 +40472,7 @@ export type Database = {
         Returns: {
           asset_id: string | null
           attempts: number
+          close_reason: string | null
           created_at: string
           id: string
           last_error: string | null

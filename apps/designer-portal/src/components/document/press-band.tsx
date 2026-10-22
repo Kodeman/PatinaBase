@@ -130,8 +130,10 @@ export function PressBand({
   const editions = data?.editions ?? [];
   const pending = pendingEdition(editions);
   const current = currentEdition(editions);
-  // A closed project's edition is frozen: nothing on the client page may move.
-  const frozen = editionsFrozen(editions);
+  // A closed project's edition is frozen, and a closed job with none frozen
+  // (archived from active, or a draft never approved) takes no studio act
+  // either: nothing on the client page may move.
+  const frozen = editionsFrozen(editions, data?.projectClosed === true);
   const { data: sourceUrls } = useClientEditionSourceUrls(
     uniqueImages([...(pending?.images ?? []), ...(current?.images ?? [])]),
   );
@@ -194,7 +196,13 @@ export function PressBand({
         />
       )}
       {published.length > 0 && (
-        <PublishedEditions projectId={projectId} editions={editions} published={published} name={name} />
+        <PublishedEditions
+          projectId={projectId}
+          editions={editions}
+          published={published}
+          name={name}
+          closed={frozen}
+        />
       )}
     </section>
   );
@@ -528,11 +536,14 @@ function PublishedEditions({
   editions,
   published,
   name,
+  closed,
 }: {
   projectId: string;
   editions: ClientEdition[];
   published: ClientEdition[];
   name: string;
+  /** The job is closed: its approved edition reads Closed, never Undo. */
+  closed: boolean;
 }) {
   const undo = useUndoClientEdition();
   const [asking, setAsking] = useState<ClientEdition | null>(null);
@@ -555,7 +566,7 @@ function PublishedEditions({
             data-published-edition={edition.seq}
           >
             <span>{publishedLine(edition)}</span>
-            {edition.frozenAt ? (
+            {edition.frozenAt || (closed && edition.status === 'approved') ? (
               <span className="font-mono text-[12px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
                 Closed
               </span>

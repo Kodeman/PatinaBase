@@ -24044,6 +24044,12 @@ END $g$;
 
 -- 00848_client_edition_installed_closeout.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_lock(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._client_edition_freeze(uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -24051,6 +24057,12 @@ END $g$;
 -- 00848_client_edition_installed_closeout.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.client_edition_freeze_on_close() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_edition_keep_snapshot() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -24068,6 +24080,30 @@ END $g$;
 
 -- 00848_client_edition_installed_closeout.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.hold_client_edition(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.hold_client_edition(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.begin_client_edition(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.begin_client_edition(uuid, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.dispatch_client_edition_compose() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -24080,6 +24116,18 @@ END $g$;
 
 -- 00848_client_edition_installed_closeout.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_client_edition_requests(int) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_client_edition_requests(int) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.client_plate_source_owned(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -24087,6 +24135,72 @@ END $g$;
 -- 00848_client_edition_installed_closeout.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.client_plate_source_owned(uuid, text, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_plate_refuse_closed(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_plate_focal(uuid, numeric[], numeric[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_plate_focal(uuid, numeric[], numeric[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_plate_perception(uuid, numeric[], numeric[], text[], text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_plate_perception(uuid, numeric[], numeric[], text[], text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_client_plate_requests(int) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_client_plate_asset(uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_client_plate_requests(int) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_client_plate_asset(uuid, uuid, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_client_editions(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_client_editions(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

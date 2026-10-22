@@ -47,10 +47,11 @@ export function editionUndoRestores(
   );
 }
 
-/** The project is closed: its current edition is frozen (00847), so nothing
- *  on the client page may change from here. */
-export const editionsFrozen = (editions: readonly ClientEdition[]) =>
-  editions.some((edition) => edition.status === 'approved' && edition.frozenAt != null);
+/** The project is closed: its current edition is frozen (00847), or the job
+ *  is completed or archived with none frozen (00848 projectClosed), so
+ *  nothing on the client page may change from here. */
+export const editionsFrozen = (editions: readonly ClientEdition[], projectClosed = false) =>
+  projectClosed || editions.some((edition) => edition.status === 'approved' && edition.frozenAt != null);
 
 /** Project maker spellings, matching 00846's trimmed, case-insensitive substring policy. */
 export function projectMakerNames(names: readonly (string | null | undefined)[]): ReadonlySet<string> {
