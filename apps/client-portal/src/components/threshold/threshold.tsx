@@ -44,6 +44,7 @@ import {
 } from '@/hooks/use-commercial-client';
 import {
   HouseIssueHead,
+  HouseHeldPlate,
   groundFloorChapters,
   sheetChapters,
   useEditionIssue,
@@ -1651,7 +1652,12 @@ export function Threshold({
       <GroundFloor
         doorstep={withChapter(chapters, 'doorstep', doorstep)}
         note={withChapter(chapters, 'note', note)}
-        enclosures={withChapter(chapters, 'approvals', asks)}
+        enclosures={
+          <>
+            {withChapter(chapters, 'approvals', asks)}
+            <HouseHeldPlate issue={issue} />
+          </>
+        }
         bench={withChapter(chapters, 'road', road)}
         toll={letterbox}
         previously={withChapter(chapters, 'previously', previouslySection)}

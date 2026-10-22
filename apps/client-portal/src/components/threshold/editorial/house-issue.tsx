@@ -807,6 +807,26 @@ function ChapterOpening({ chapter }: { chapter: EditionChapter }) {
   );
 }
 
+function ChapterHeldPlate({ chapter }: { chapter: EditionChapter | undefined }) {
+  if (!chapter?.heldPlate) return null;
+  return (
+    <Reveal>
+      <HeldPlate
+        scopeId={chapter.heldPlate.scopeId}
+        asset={chapter.heldPlate.asset}
+        alt={plateAlt(chapter.heldPlate.asset)}
+        paletteHex={chapter.heldPlate.asset.dominantHex}
+        fallback={{ name: chapter.headline }}
+      />
+    </Reveal>
+  );
+}
+
+/** GroundFloor has no key chapter; its approved house plate follows approvals. */
+export function HouseHeldPlate({ issue }: { issue: HouseIssue | null }) {
+  return <ChapterHeldPlate chapter={editionChapters(issue, ["key"])?.get("key")} />;
+}
+
 /**
  * The chapter head over a section. Returns the section untouched when the
  * edition is off (`chapters` null) or the section did not render, so the
@@ -825,17 +845,7 @@ export function withChapter(
       <Reveal className="mt-12">
         <ChapterOpening chapter={chapter} />
       </Reveal>
-      {chapter.heldPlate ? (
-        <Reveal>
-          <HeldPlate
-            scopeId={chapter.heldPlate.scopeId}
-            asset={chapter.heldPlate.asset}
-            alt={plateAlt(chapter.heldPlate.asset)}
-            paletteHex={chapter.heldPlate.asset.dominantHex}
-            fallback={{ name: chapter.headline }}
-          />
-        </Reveal>
-      ) : null}
+      <ChapterHeldPlate chapter={chapter} />
       {node}
     </>
   );

@@ -15,6 +15,7 @@ import {
   useEditionIssue,
   HeroPreloadLinks,
   HouseIssueHead,
+  HouseHeldPlate,
   LONG_HEADLINE,
   RoomOpening,
   approvalsRow,
@@ -806,6 +807,32 @@ describe("the approved edition", () => {
     expect(issue.rooms.get("b")?.chapter).toBeNull();
     expect(heldIn(issue, "a").held).toBe(false);
     expect(heldIn(issue, "b").held).toBe(false);
+  });
+
+  it("renders the ground-floor house held plate with the key chapter's exact crop, caption and fallback", () => {
+    const house = placed(["scanb"], [{ assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "house" }]);
+    const issue = houseIssue({ ...house, rooms: [] });
+    const chapters = editionChapters(issue, ["key"])!;
+    const key = render(<>{withChapter(chapters, "key", <section id="key" />)}</>);
+    const keyPlate = key.container.querySelector(".ed-held")!.outerHTML;
+    key.unmount();
+    const ground = render(<HouseHeldPlate issue={issue} />);
+    expect(ground.container.querySelectorAll(".ed-held")).toHaveLength(1);
+    expect(ground.container.querySelector(".ed-held")!.outerHTML).toBe(keyPlate);
+    expect(ground.container.querySelectorAll("[id]")).toHaveLength(0);
+  });
+
+  it("renders no ground-floor house plate without an approved house placement", () => {
+    for (const issue of [
+      null,
+      houseIssue(editorial([SCENE])),
+      houseIssue(placed([], [{ assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "house" }])),
+      houseIssue(placed(["scanb"], [{ assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "room-b" }])),
+    ]) {
+      const view = render(<HouseHeldPlate issue={issue} />);
+      expect(view.container.innerHTML).toBe("");
+      view.unmount();
+    }
   });
 
   it("follows the edition's rank among held rows, and keeps a held picture out of every other room", () => {

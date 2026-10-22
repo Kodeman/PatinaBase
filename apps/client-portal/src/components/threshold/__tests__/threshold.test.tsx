@@ -3948,6 +3948,61 @@ describe('Threshold — The House Issue flag (client-edition-page)', () => {
     expect(createEditorialClient).not.toHaveBeenCalled();
   });
 
+  function groundFloorEdition(held: boolean): ClientProjectEditorial {
+    const board = {
+      ...EDITORIAL.assets[0],
+      id: 'held-board',
+      sourceKind: 'board' as const,
+      crops: {
+        ...PLATE_CROPS,
+        tall: { rect: [0, 0, 780, 1600] as const, widths: [780] },
+      },
+      caption: { what: 'The direction board', whose: 'Fieldwork Studio', when: '14 October 2026' },
+    };
+    return {
+      ...EDITORIAL,
+      rooms: [],
+      assets: [board],
+      boards: [{ id: 'board-1', name: 'The direction', assetId: board.id }],
+      edition: { id: 'approved-edition', seq: 2, approvedAt: '2026-10-21T10:00:00Z', approvedBy: 'studio', notice: null },
+      composition: { hero: null, held: held ? [board.id] : [], chapters: [] },
+      images: [{ assetId: board.id, plateRole: 'held', rank: 1, chapterKey: 'house' }],
+    };
+  }
+
+  it('ground floor renders the approved house held plate once after approvals and before the road', () => {
+    mockEditionFlag = { value: true, isLoading: false };
+    roomsMock.mockReturnValue(settled([]));
+    const { container } = renderThreshold(MILESTONES, [], groundFloorEdition(true));
+    const groundFloor = screen.getByTestId('ground-floor');
+    const held = groundFloor.querySelector('.ed-held')!;
+    expect(groundFloor.querySelectorAll('.ed-held')).toHaveLength(1);
+    expect(held.querySelector('figcaption')).toHaveTextContent('The direction board · Fieldwork Studio · 14 October 2026');
+    expect(held.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/plates/approved-edition/'));
+    for (const anchor of ['doorstep', 'ledger', 'approvals']) {
+      const act = container.querySelector(`#${anchor}`)!;
+      expect(act.compareDocumentPosition(held) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(held.compareDocumentPosition(container.querySelector('#road')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector('#key')).toBeNull();
+    expect(held.closest('[data-dimmable]')).toBeNull();
+  });
+
+  it('ground floor without an approved held plate stays byte-identical even with an unapproved held row', () => {
+    mockEditionFlag = { value: true, isLoading: false };
+    roomsMock.mockReturnValue(settled([]));
+    const noHeld = groundFloorEdition(false);
+    const markup = (html: string) => html.replace(/_r_[0-9a-z]+_/g, '_r_id_');
+    const today = renderThreshold(MILESTONES, [], { ...noHeld, images: [] });
+    const todayHtml = markup(today.container.innerHTML);
+    expect(today.container.querySelector('.ed-held')).toBeNull();
+    today.unmount();
+    const withUnapproved = renderThreshold(MILESTONES, [], noHeld);
+    expect(markup(withUnapproved.container.innerHTML)).toBe(todayHtml);
+    expect(withUnapproved.container.querySelector('.ed-held')).toBeNull();
+    expect(withUnapproved.container.querySelector('#key')).toBeNull();
+  });
+
   it('server off cannot be overridden by a resolved client flag or cached editorial', () => {
     mockEditionFlag = { value: true, isLoading: false };
     const { container } = renderThreshold(MILESTONES, [], EDITORIAL, false);
