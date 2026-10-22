@@ -154,16 +154,16 @@ Because the Worker publication path lacks an authoritative deploy-relative bound
        select count(*) as live_leases from public.client_plate_requests
        where status = 'leased' and lease_expires_at > now();
        ```
-    5. **Every dispatch has a proven completion.** A call that left the queue has finished its HTTP transfer *or* timed out (`timeout_milliseconds` = 60000, `00081`/`00258`). A 2xx response proves that the copy run returned, because `client-plate-copy` answers only after its run ends (hard deadline 50 s from entry, `supabase/functions/client-plate-copy/lib.ts:59`). A timeout or an error proves nothing: the edge worker may never have started, or it may start later. pg_net keeps each response in `net._http_response` (6 h by default) without its URL, so read every response from one hour before `TP` onward, substituting the recorded `TP`:
+    5. **Every dispatch has a proven completion.** A call that left the queue has finished its HTTP transfer *or* timed out (`timeout_milliseconds` = 60000, `supabase/migrations/00258_edge_settings_vault.sql:78`). A timeout proves nothing: the edge worker may never have started, or it may start later. pg_net's own responses are no proof either, because `net._http_response` keeps them for only 6 h by default. The proof is each run's own row. `dispatch_client_plate_copy()` writes one `job_runs` row per dispatch, carrying `request_id` (`supabase/migrations/00843_client_plate_assets.sql`). Only the edge function moves that row out of `running`, through `finish_client_plate_copy_run`, and it does so before it answers (`supabase/functions/client-plate-copy/index.ts:129–142`). The dispatcher's sweep closes a run that never reported back with the error `no completion reported`. So read every run ever dispatched, with no time window:
        ```sql
-       select count(*) filter (where timed_out or status_code is null
-                                  or status_code not between 200 and 299) as unproven,
-              max(created) as last_response
-       from net._http_response
-       where created >= timestamptz 'TP' - interval '1 hour';
+       select count(*) filter (where status = 'running'
+                                  or error = 'no completion reported') as unproven,
+              max(finished_at) as last_finish
+       from public.job_runs
+       where job_name = 'client-plate-copy';
        ```
-       Go on only when `unproven` is `0`. A timeout or error from another function also holds, because this table cannot tell the functions apart. Fail closed on any unproven call, whichever function it belongs to.
-    6. Do not roll back before `max(TD, last_response, time step 3 first read 0) + 400 s`. 400 s is the Supabase paid-plan maximum edge worker duration cited in step 2b(a). It is a margin for work after a proven response, not a bound on when a worker that timed out might start; step 5 already holds every such call. The one-hour lookback is an assumption: it does not cover a call that timed out more than an hour before `TP`. If any of steps 2–5 cannot be read, or any response is unproven, hold the rollback and roll forward instead.
+       Go on only when `unproven` is `0`. A run that is still `running` may have a worker that has not started yet. A run the sweep closed may have a worker that starts late. Either one holds the rollback. A `claim_failed` exit leaves its row `running` until the sweep closes it, so it holds too. Fail closed on all of them. On 2026-10-22, all 118 runs since Phase 1 read as edge-finished (`succeeded`, or `failed` with the function's own copy error).
+    6. Do not roll back before `max(TD, last_finish, time step 3 first read 0) + 400 s`. 400 s is the Supabase paid-plan maximum edge worker duration cited in step 2b(a). It is a margin for work after a proven finish, not a bound on when a worker that timed out might start; step 5 already holds every such run. If any of steps 2–5 cannot be read, or `unproven` is not `0`, hold the rollback and roll forward instead.
   - Then roll back. Keep cron 69 paused and manual runs forbidden for as long as the legacy writer serves. `/health`, `/enqueue`, composer reads and media-jobs traffic are separate from plate ingest (`infra/media-worker/src/index.ts:159–184`) and may continue.
   - Never resume cron 69 on the legacy writer while 00848 is live. Roll forward to the new writer, record a fresh `T2` and the retiring **legacy** version UUID as `OLD_VERSION_ID`, and pass step 2b against that retired version. Resume cron 69 only after that.
   - Any legacy-prefix write found after freeze is a W2 incident, as in step 5. Rollback plus a short wait is never safe on its own.
