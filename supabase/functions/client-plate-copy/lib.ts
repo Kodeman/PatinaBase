@@ -8,6 +8,7 @@ export interface PlateRequest {
   source_kind: string;
   source_ref: { table?: string; id?: string } | null;
   source_url: string;
+  asset_id?: string | null;
   lease_token: string;
 }
 
@@ -140,6 +141,7 @@ export async function fetchAddress(
   if (!source) throw new Error(`no fetch address for a ${request.source_kind} source`);
   if (source.kind === "direct") return source.url;
   if (source.kind === "not_owned" || !(await authority.owned(request, signal))) throw new SourceNotOwned();
+  signal?.throwIfAborted();
   return await authority.sign(source.bucket, source.path, signal);
 }
 
@@ -280,7 +282,7 @@ export const systemClock: Clock = {
 /** One run's clock, from function entry: whether a copy may start, and per-step deadlines. */
 export class RunDeadline {
   readonly startedAt: number;
-  #timers = new Set<unknown>();
+  #pending = new Map<AbortController, unknown>();
 
   constructor(private readonly clock: Clock) {
     this.startedAt = clock.now();
@@ -303,16 +305,19 @@ export class RunDeadline {
       return controller.signal;
     }
     const id = this.clock.setTimeout(() => {
-      this.#timers.delete(id);
+      this.#pending.delete(controller);
       controller.abort(new Error(reason));
     }, wait);
-    this.#timers.add(id);
+    this.#pending.set(controller, id);
     return controller.signal;
   }
 
   close(): void {
-    for (const id of this.#timers) this.clock.clearTimeout(id);
-    this.#timers.clear();
+    for (const [controller, id] of this.#pending) {
+      this.clock.clearTimeout(id);
+      controller.abort(new Error(RUN_BUDGET_EXCEEDED));
+    }
+    this.#pending.clear();
   }
 }
 

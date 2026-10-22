@@ -42,8 +42,20 @@ beforeEach(() => {
   (resolveActiveHouse as jest.Mock).mockResolvedValue('p1');
   (resolveHouseForInstrument as jest.Mock).mockResolvedValue(null);
   (createServerClient as jest.Mock).mockResolvedValue({ rpc });
-  rpc.mockResolvedValue({ data: editorial, error: null });
+  // No approved edition: the edition reader answers null and the page reads Phase 1.
+  rpc.mockImplementation(async (fn: string) => ({
+    data: fn === 'get_client_project_editorial' ? editorial : null,
+    error: null,
+  }));
 });
+
+/** The edition read first, then the Phase 1 envelope. */
+function expectBothReads() {
+  expect(rpc.mock.calls).toEqual([
+    ['get_client_project_edition', { p_project_id: 'p1' }],
+    ['get_client_project_editorial', { p_project_id: 'p1' }],
+  ]);
+}
 
 it.each([
   ['front door', () => HomePage({})],
@@ -62,8 +74,7 @@ it.each([
   (clientEditionEnabled as jest.Mock).mockClear().mockResolvedValue(true);
   render(await page());
   expect(clientEditionEnabled).toHaveBeenCalledTimes(1);
-  expect(rpc).toHaveBeenCalledTimes(1);
-  expect(rpc).toHaveBeenCalledWith('get_client_project_editorial', { p_project_id: 'p1' });
+  expectBothReads();
   const preloads = document.querySelectorAll('link[rel="preload"][as="image"]');
   expect(preloads.length).toBeGreaterThan(0);
   for (const link of preloads) expect(link.getAttribute('imagesrcset')).toContain('/plates/p1/');
@@ -89,7 +100,41 @@ it.each(pages)('%s reads the house before a pending flag resolves and reuses the
   expect(rpc).not.toHaveBeenCalled();
   resolveDecision(true);
   render(await rendering);
-  expect(rpc).toHaveBeenCalledTimes(1);
+  expectBothReads();
+});
+
+it.each(pages)('%s reads the approved edition alone and preloads its hero under the edition scope', async (_name, page) => {
+  (clientEditionEnabled as jest.Mock).mockResolvedValue(true);
+  rpc.mockImplementation(async (fn: string) => ({
+    data: fn === 'get_client_project_edition'
+      ? {
+          ...editorial,
+          composition: { hero: { assetId: 'plate-1' }, chapters: [], notice: 'The page now opens on the library.' },
+          edition: { id: 'ed-1', seq: 2, approvedAt: '2026-10-21T10:00:00Z', approvedBy: 'studio', notice: 'The page now opens on the library.' },
+        }
+      : editorial,
+    error: null,
+  }));
+  render(await page());
+  expect(rpc.mock.calls).toEqual([['get_client_project_edition', { p_project_id: 'p1' }]]);
+  const preloads = document.querySelectorAll('link[rel="preload"][as="image"]');
+  expect(preloads.length).toBeGreaterThan(0);
+  for (const link of preloads) {
+    expect(link.getAttribute('imagesrcset')).toContain('/plates/ed-1/');
+    expect(link.getAttribute('imagesrcset')).not.toContain('/plates/p1/');
+  }
+});
+
+it.each(pages)('%s falls back to the Phase 1 read when the edition reader errors', async (_name, page) => {
+  (clientEditionEnabled as jest.Mock).mockResolvedValue(true);
+  rpc.mockImplementation(async (fn: string) =>
+    fn === 'get_client_project_edition'
+      ? { data: null, error: { code: 'PGRST202', message: 'function not found' } }
+      : { data: editorial, error: null },
+  );
+  render(await page());
+  expectBothReads();
+  expect(screen.getByTestId('surface')).toHaveAttribute('data-editorial', 'present');
 });
 
 it.each(pages)('%s keeps the page closed when the decision rejects', async (_name, page) => {

@@ -184,6 +184,37 @@
   color: var(--ink);
 }
 
+/* A long headline (house-issue.tsx LONG_HEADLINE; an edition may write up to
+   60 characters) takes the smaller display step, and at the phone the plate
+   gives up the extra lines: the standing rows hold their fold (R-v2-2). Words
+   are never cut. Sixty characters measure 3 lines at the phone (room for a
+   4th) and 1 at 1440 (room for a 2nd): house-issue.spec.ts pins both. */
+[data-headline='long'] .ed-tab__title {
+  font-size: 24px;
+  line-height: 26px;
+}
+
+/* The shorter frame stands only when the phone rendition's subject box fits
+   it whole, at the position crop.ts `shortFramePosition` computed for that
+   rendition (house-issue.tsx sets both); otherwise the hero keeps 39:34. The
+   inline object-position is the desktop crop's, so the phone one must win. */
+@media (max-width: 600px) {
+  [data-hero-frame='short'] .ed-hero .ed-plate__img,
+  [data-hero-frame='short'] .ed-silhouette.ed-hero > .ed-plate__frame {
+    aspect-ratio: 39 / 30;
+  }
+  [data-hero-frame='short'] .ed-hero .ed-plate__img {
+    object-position: var(--ed-hero-phone-position, 50% 50%) !important;
+  }
+}
+
+@media (min-width: 601px) {
+  [data-headline='long'] .ed-tab__title {
+    font-size: 34px;
+    line-height: 36px;
+  }
+}
+
 @media (min-width: 601px) {
   .ed-hero {
     margin: 0;

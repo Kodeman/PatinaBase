@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { EditionNotice } from '@/components/threshold/editorial/edition-notice';
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { DAY_MONTH_FORMAT as DAY_MONTH, legalDate } from '@/lib/threshold/dates';
 import {
@@ -20,7 +21,9 @@ import {
 
    ABSENCE IS SILENCE. With no standing note the section renders nothing at all
    — the Doorstep's sentence already carries the page, and an empty letter is
-   worse than no letter. ──────────────────────────────────────────────────── */
+   worse than no letter — unless an approved edition has a notice: then the
+   letter is that one sentence, in the studio's voice, with no dateline and no
+   signature, because no one sent it as a note. ─────────────────────────── */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -63,6 +66,24 @@ export interface NoteEnclosure extends ThresholdNoteEnclosure {
   anchor: string;
 }
 
+/** The letter an approved edition opens on its own: its notice, nothing invented around it. */
+function NoticeLetter({ notice }: { notice?: string | null }) {
+  if (!notice?.trim()) return null;
+  return (
+    <section
+      id="note"
+      tabIndex={-1}
+      data-threshold-unit="note"
+      aria-label="A note from the studio"
+      className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
+    >
+      <blockquote className="mt-3 max-w-[44ch] border-0 p-0">
+        <EditionNotice notice={notice} />
+      </blockquote>
+    </section>
+  );
+}
+
 export interface TheNoteProps {
   /**
    * CONTRACT: the standing note is rendered EITHER here or pinned to a
@@ -81,6 +102,8 @@ export interface TheNoteProps {
   today?: Date;
   /** The reply field, wired next door. Absent when there is nothing to write to. */
   reply?: ReactNode;
+  /** The approved edition's notice: the letter's opening sentence (The House Issue). */
+  notice?: string | null;
 }
 
 export function TheNote({
@@ -91,10 +114,11 @@ export function TheNote({
   studioName,
   today = new Date(),
   reply,
+  notice,
 }: TheNoteProps) {
   const [unrolled, setUnrolled] = useState(false);
 
-  if (!note) return null;
+  if (!note) return <NoticeLetter notice={notice} />;
 
   const line = dateline(note.sentAt, today);
   // R8 — a frozen byline is the whole signature, already dated and already
@@ -124,6 +148,7 @@ export function TheNote({
       )}
 
       <blockquote className="mt-3 max-w-[44ch] border-0 p-0">
+        <EditionNotice notice={notice} />
         <p
           data-testid="note-body"
           className="whitespace-pre-line font-heading text-[1.2rem] leading-relaxed"

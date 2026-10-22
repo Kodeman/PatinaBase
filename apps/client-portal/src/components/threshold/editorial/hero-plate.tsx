@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, type CSSProperties } from 'react';
 
 import { SIZES, heroPicture, heroPreloadSources, objectPositionFromRect } from '@/lib/editorial/crop';
 import type { CaptionTriplet, EditorialAsset } from '@/lib/editorial/types';
@@ -44,6 +44,8 @@ export interface HeroPlateProps {
   fallback: PlateFallback;
   /** Forces a tab mode; otherwise computed from the plate, zoom and width. */
   tabMode?: PaperTabMode;
+  /** The phone rendition's object-position in the shorter frame (crop.ts `shortFramePosition`). */
+  phoneObjectPosition?: string | null;
 }
 
 export function HeroPlate(props: HeroPlateProps) {
@@ -53,7 +55,15 @@ export function HeroPlate(props: HeroPlateProps) {
   const rect = props.asset.crops[main]?.rect;
 
   return (
-    <div ref={ref} className="ed-hero-slot">
+    <div
+      ref={ref}
+      className="ed-hero-slot"
+      style={
+        props.phoneObjectPosition
+          ? ({ '--ed-hero-phone-position': props.phoneObjectPosition } as CSSProperties)
+          : undefined
+      }
+    >
       <Plate
         role="hero"
         className={`ed-hero ed-hero--${layout}`}

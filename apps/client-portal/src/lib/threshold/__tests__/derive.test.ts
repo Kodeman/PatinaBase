@@ -1376,6 +1376,28 @@ describe('deriveThreshold — every unit the change tick can reach', () => {
     expect(model.changed.has('note')).toBe(false);
   });
 
+  it('ticks a read note once when a new edition opens it with its notice: one change', () => {
+    const notes = [note({ id: 'n-1', sentAt: BEFORE })];
+    const model = deriveThreshold(input({ previousReadAt: PREVIOUS, notes, editionNoticeAt: AFTER }));
+    expect([...model.changed]).toEqual(['note']);
+    // An edition she has already read, or a first visit: no tick.
+    expect(deriveThreshold(input({ previousReadAt: PREVIOUS, notes, editionNoticeAt: BEFORE })).changed.has('note')).toBe(false);
+    expect(deriveThreshold(input({ previousReadAt: null, notes, editionNoticeAt: AFTER })).changed.size).toBe(0);
+  });
+
+  it('ticks the notice as the one change unit when no standing note stands behind it', () => {
+    const model = deriveThreshold(input({ previousReadAt: PREVIOUS, notes: [], editionNoticeAt: AFTER }));
+    // Hero and notice are one change, told on the letter the notice is.
+    expect([...model.changed]).toEqual(['note']);
+    // Nothing is invented: no note stands, and no note joins the record.
+    expect(model.note).toBeNull();
+    expect(model.previously.filter((entry) => entry.kind === 'note')).toEqual([]);
+    // Read already, a first visit, or no notice printed: no tick.
+    expect(deriveThreshold(input({ previousReadAt: PREVIOUS, notes: [], editionNoticeAt: BEFORE })).changed.size).toBe(0);
+    expect(deriveThreshold(input({ previousReadAt: null, notes: [], editionNoticeAt: AFTER })).changed.size).toBe(0);
+    expect(deriveThreshold(input({ previousReadAt: PREVIOUS, notes: [], editionNoticeAt: null })).changed.size).toBe(0);
+  });
+
   it('shows no ticks at all on a first visit, note and all', () => {
     const model = deriveThreshold(
       input({

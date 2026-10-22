@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { EditionLine } from '@/components/threshold/editorial/edition-notice';
+import type { EditionMeta } from '@/lib/editorial/types';
 import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
 import type { PreviouslyEntry, PreviouslyState } from '@/lib/threshold/derive';
 
@@ -74,14 +76,17 @@ export interface PreviouslyProps {
   entries: PreviouslyEntry[];
   /** The letters and the notices, wired next door. */
   correspondence?: ReactNode;
+  /** The House Issue's approved edition: one line at the top of the record. */
+  edition?: EditionMeta | null;
 }
 
-export function Previously({ entries, correspondence }: PreviouslyProps) {
+export function Previously({ entries, correspondence, edition }: PreviouslyProps) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   // The correspondence is back matter too: a house with no closed instruments
-  // but a letter in it still has a Previously to keep the letter in.
-  if (entries.length === 0 && !correspondence) return null;
+  // but a letter in it still has a Previously to keep the letter in; so does
+  // the edition the page now prints.
+  if (entries.length === 0 && !correspondence && !edition) return null;
 
   return (
     <section
@@ -97,6 +102,8 @@ export function Previously({ entries, correspondence }: PreviouslyProps) {
       >
         Previously
       </h2>
+
+      <EditionLine edition={edition} />
 
       <ul className="mt-3 list-none">
         {entries.map((entry) => {

@@ -104,7 +104,7 @@ describe('rank', () => {
         }),
       ],
     };
-    const [choice] = roomPlates(editorial, hero.id);
+    const [choice] = roomPlates(editorial, [hero.id]);
     expect(choice.chapter).toBe(scan);
     expect(choice.concept).toBe(concept);
     expect(choice.pieces).toEqual([

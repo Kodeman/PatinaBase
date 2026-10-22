@@ -151,6 +151,12 @@ export interface ThresholdInput {
   selectionUpdatedAt?: Record<string, string> | null;
   /** When each letter on the project's correspondence thread was sent. */
   messageSentAts?: (string | null)[] | null;
+  /**
+   * The House Issue: when the approved edition whose notice opens the note
+   * (or is the whole letter, with no standing note) was approved. Null when
+   * no edition, or one with no notice, is printed.
+   */
+  editionNoticeAt?: string | null;
 }
 
 // ── model ────────────────────────────────────────────────────────────────────
@@ -665,6 +671,10 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
       }
     : null;
   if (standing && movedSince(standing.sentAt)) changed.add('note');
+  // A new edition re-sets the hero and opens the note with its notice: one
+  // change, ticked on the note it is told in (the hero never dims or ticks).
+  // With no standing note the notice is the whole letter, and still the unit.
+  if (movedSince(input.editionNoticeAt)) changed.add('note');
 
   const previously: PreviouslyEntry[] = [
     ...notes
