@@ -5,7 +5,7 @@
 // service role only (verify_jwt = true, then resolveCaller).
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller } from "../_shared/caller.ts";
-import { ingestPlate } from "./ingest.ts";
+import { ingestPlate, type PlateFraming, recordPlate } from "./ingest.ts";
 import {
   bounded,
   copyRun,
@@ -13,7 +13,6 @@ import {
   finishRun,
   parseJobRunId,
   type PlateRequest,
-  recordPayload,
   RUN_HARD_END_MS,
   RunDeadline,
   SIGNED_URL_TTL_SECONDS,
@@ -84,6 +83,7 @@ function finishStep(admin: Admin, runId: number): CopySteps["finish"] {
 }
 
 function copySteps(admin: Admin, runId: number, worker: WorkerEnv, supabaseUrl: string): CopySteps {
+  const framings = new WeakMap<PlateRequest, PlateFraming>();
   return {
     async claim(signal) {
       const { data, error } = await admin.rpc("claim_client_plate_requests", { p_limit: 1 }).abortSignal(signal);
@@ -91,15 +91,13 @@ function copySteps(admin: Admin, runId: number, worker: WorkerEnv, supabaseUrl: 
       return ((data ?? []) as PlateRequest[])[0] ?? null;
     },
     authority: sourceAuthority(admin, supabaseUrl),
-    ingest: (request, sourceUrl, signal) => ingestPlate(admin, worker, request, sourceUrl, signal),
-    async record(request, asset, signal) {
-      const { error } = await admin.rpc("record_client_plate_asset", {
-        p_request_id: request.id,
-        p_lease_token: request.lease_token,
-        p_asset: recordPayload(asset, request),
-      }).abortSignal(signal);
-      if (error) throw new Error(`record failed: ${error.message}`);
+    async ingest(request, sourceUrl, signal) {
+      const { response, framing } = await ingestPlate(admin, worker, request, sourceUrl, signal);
+      framings.set(request, framing);
+      return response;
     },
+    record: (request, asset, signal) =>
+      recordPlate(admin, request, asset, framings.get(request) ?? null, signal),
     async fail(request, cause, signal) {
       const { error } = await admin.rpc("fail_client_plate_request", {
         p_request_id: request.id,
