@@ -14,6 +14,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ClientMirror } from '../client-mirror';
 
+import { CURRENT_ROW, PENDING_ROW, listEnvelope } from '../__fixtures__/client-editions';
+const { normalizeClientEditions } = jest.requireActual('@patina/supabase');
+let mockEditions: unknown;
 const mockMirror: { data: unknown } = { data: null };
 
 jest.mock('@tanstack/react-query', () => ({
@@ -23,7 +26,7 @@ jest.mock('@tanstack/react-query', () => ({
 // The edition at the top of the mirror has its own suite (client-mirror-edition).
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({}),
-  useClientEditions: () => ({ data: undefined }),
+  useClientEditions: () => ({ data: mockEditions }),
   useClientEditionSourceUrls: () => ({ data: undefined }),
   useProjectFFEItems: () => ({ data: undefined }),
   useStudioIdentity: () => ({ data: undefined }),
@@ -94,5 +97,25 @@ describe('the client mirror marks an answered approval in mocha', () => {
       'utf8',
     );
     expect(source).not.toMatch(/color-sage/);
+  });
+});
+
+describe('closed-job edition authority', () => {
+  afterEach(() => { mockEditions = undefined; });
+
+  it('an archived job previews the approved edition, never the pending edition', () => {
+    mockEditions = normalizeClientEditions({ ...listEnvelope([PENDING_ROW, CURRENT_ROW], true), projectClosed: true });
+    renderMirror([]);
+    expect(screen.getByRole('region', { name: 'Edition 4' })).toHaveAttribute('data-mirror-edition', '4');
+    expect(screen.queryByRole('region', { name: /will see if approved/ })).toBeNull();
+    expect(document.querySelector('[data-mirror-edition="5"]')).toBeNull();
+  });
+
+  it('a closed pending-only job keeps the no-edition fallback without promising approval', () => {
+    mockEditions = normalizeClientEditions({ ...listEnvelope([PENDING_ROW], true), projectClosed: true });
+    renderMirror([]);
+    expect(document.querySelector('[data-mirror-edition]')).toBeNull();
+    expect(screen.queryByText(/will see if approved/)).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Ridgeline' })).toBeInTheDocument();
   });
 });

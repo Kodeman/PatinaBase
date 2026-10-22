@@ -16,7 +16,7 @@
  * its photographs. A closed project's frozen edition offers no act at all.
  */
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -135,7 +135,7 @@ export function PressBand({
   // either: nothing on the client page may move.
   const frozen = editionsFrozen(editions, data?.projectClosed === true);
   const { data: sourceUrls } = useClientEditionSourceUrls(
-    uniqueImages([...(pending?.images ?? []), ...(current?.images ?? [])]),
+    frozen ? [] : uniqueImages([...(pending?.images ?? []), ...(current?.images ?? [])]),
   );
   // Before any edition the client page opens on the editorial cover.
   const { data: editorialAssets } = useClientEditorialAssets(projectId, !!data && !pending && !current);
@@ -166,6 +166,8 @@ export function PressBand({
         <h2 id={headingId} className={HEADING}>
           Edition {current.seq} is what {name} sees
         </h2>
+      ) : frozen ? (
+        <h2 id={headingId} className={HEADING}>Closed</h2>
       ) : editorialAssets && !editorialAssets.some(heroEligible) ? (
         <div className="flex flex-col gap-1">
           <h2 id={headingId} className={HEADING}>
@@ -547,6 +549,12 @@ function PublishedEditions({
 }) {
   const undo = useUndoClientEdition();
   const [asking, setAsking] = useState<ClientEdition | null>(null);
+  const canUndo = asking !== null && !closed && editions.some(
+    (edition) => edition.id === asking.id && edition.status === 'approved' && !edition.frozenAt,
+  );
+  useEffect(() => {
+    if (!canUndo) setAsking(null);
+  }, [canUndo]);
   // The edition the server restores, not merely an earlier number.
   const before = asking ? editionUndoRestores(editions, asking) : null;
   const consequence = asking
@@ -587,7 +595,7 @@ function PublishedEditions({
         ))}
       </ul>
       <ActFailLine error={undo.error} />
-      <AlertDialog open={asking !== null} onOpenChange={(open) => !open && setAsking(null)}>
+      <AlertDialog open={canUndo} onOpenChange={(open) => !open && setAsking(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Undo edition {asking?.seq}?</AlertDialogTitle>
@@ -597,7 +605,7 @@ function PublishedEditions({
             <AlertDialogCancel>Keep edition {asking?.seq}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (asking) undo.mutate({ projectId, editionId: asking.id });
+                if (canUndo && asking) undo.mutate({ projectId, editionId: asking.id });
                 setAsking(null);
               }}
             >

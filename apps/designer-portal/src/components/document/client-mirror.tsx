@@ -107,7 +107,7 @@ function MirrorEdition({ projectId, name }: { projectId: string; name: string })
   const { data: studio } = useStudioIdentity({ projectId });
   const { data: makerNames } = useProjectMakerNames(projectId);
   const editions = data?.editions ?? [];
-  const pending = editionsFrozen(editions) ? null : pendingEdition(editions);
+  const pending = editionsFrozen(editions, data?.projectClosed === true) ? null : pendingEdition(editions);
   const edition = pending ?? currentEdition(editions);
   const { data: sourceUrls } = useClientEditionSourceUrls(edition?.images ?? []);
   // Without the project names, an OFF preview cannot yet mask its captions.

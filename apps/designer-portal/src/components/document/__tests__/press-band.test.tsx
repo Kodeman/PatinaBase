@@ -40,6 +40,7 @@ const mockUndo = jest.fn();
 const mockSetFocal = jest.fn();
 const mockShowMakers = jest.fn();
 const mockUseClientEditions = jest.fn();
+const mockSourceUrls = jest.fn();
 let mockData: ClientEditions | undefined;
 let mockEditorial: ClientEditorialAsset[] | undefined;
 
@@ -53,13 +54,16 @@ jest.mock('@patina/supabase', () => ({
   useClientEditorialAssets: (_projectId: string, enabled: boolean) => ({
     data: enabled ? mockEditorial : undefined,
   }),
-  useClientEditionSourceUrls: () => ({
+  useClientEditionSourceUrls: (images: unknown) => {
+    mockSourceUrls(images);
+    return ({
     data: {
       'a-hero': 'https://example.com/hero.jpg',
       'a-room': 'https://example.com/room.jpg',
       'a-old': 'https://example.com/old.jpg',
     },
-  }),
+  });
+  },
   useApproveClientEdition: () => act(mockApprove),
   useHoldClientEdition: () => act(mockHold),
   useUndoClientEdition: () => act(mockUndo),
@@ -287,6 +291,8 @@ describe('PressBand — a closed job (R12)', () => {
     expect(screen.queryByRole('switch')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'A new edition is ready' })).toBeNull();
     expect(screen.queryByRole('list', { name: 'Published editions' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Closed' })).toBeInTheDocument();
+    expect(screen.queryByText(/until an edition is approved/)).toBeNull();
   });
 
   it('archived with an approved edition that was never frozen: Closed, no Undo, no job control', () => {
@@ -601,5 +607,38 @@ describe('PressBand — voice', () => {
     renderBand([CURRENT_ROW, EARLIER_ROW]);
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(allWords(screen.getByRole('alertdialog'))).not.toMatch(FORBIDDEN);
+  });
+});
+
+describe('PressBand — closure refresh', () => {
+  it('a closed job with no editions or photo says Closed without an add-cover act', () => {
+    mockEditorial = [];
+    mockData = normalizeClientEditions({ ...listEnvelope([]), projectClosed: true } as never);
+    render(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(screen.getByRole('heading', { name: 'Closed' })).toBeInTheDocument();
+    expect(screen.queryByText(/until an edition is approved/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Add a photograph for the cover' })).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
+
+  it('a closed band requests no source signing even with current and pending pictures', () => {
+    mockData = normalizeClientEditions({ ...listEnvelope([PENDING_ROW, CURRENT_ROW]), projectClosed: true } as never);
+    render(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(mockSourceUrls).toHaveBeenCalledWith([]);
+    expect(mockSourceUrls.mock.calls.every(([images]) => images.length === 0)).toBe(true);
+  });
+
+  it.each(['closed', 'superseded', 'frozen'] as const)('an open Undo confirmation closes when the edition becomes %s', (reason) => {
+    const { rerender } = renderBand([CURRENT_ROW, EARLIER_ROW]);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    const confirm = within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Undo' });
+    mockData = normalizeClientEditions({
+      ...listEnvelope([{ ...CURRENT_ROW, ...(reason === 'superseded' ? { status: 'superseded' } : reason === 'frozen' ? { frozenAt: '2026-10-22' } : {}) }, EARLIER_ROW]),
+      projectClosed: reason === 'closed',
+    } as never);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    fireEvent.click(confirm);
+    expect(mockUndo).not.toHaveBeenCalled();
   });
 });

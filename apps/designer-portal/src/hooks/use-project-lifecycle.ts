@@ -29,6 +29,7 @@ function invalidateProjectDocument(qc: QueryClient, projectId: string | null) {
   void qc.invalidateQueries({ queryKey: ['document-state'] });
   void qc.invalidateQueries({ queryKey: ['projects'] });
   if (projectId) {
+    void qc.invalidateQueries({ queryKey: ['client-editions', projectId] });
     void qc.invalidateQueries({ queryKey: ['project-v2', projectId] });
     void qc.invalidateQueries({ queryKey: ['project-phases', projectId] });
   }
@@ -185,6 +186,36 @@ export function useCloseProject() {
     },
     onError: (_error, { projectId }) => {
       invalidateProjectCloseoutTruth(qc, projectId);
+    },
+  });
+}
+
+export function useSetProjectStatus(projectId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      status,
+      expectedStatus,
+    }: {
+      status: 'active' | 'on_hold' | 'archived';
+      expectedStatus: 'active' | 'on_hold' | 'completed';
+    }) => {
+      if (!projectId) throw new Error('Project is required');
+      const supabase = getSupabase();
+      const { error } = status === 'archived'
+        ? await supabase.rpc('archive_project', {
+            p_project_id: projectId,
+            p_expected_status: expectedStatus,
+          })
+        : await supabase.rpc('set_project_operational_status', {
+            p_project_id: projectId,
+            p_expected_status: expectedStatus,
+            p_status: status,
+          });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateProjectDocument(qc, projectId);
     },
   });
 }

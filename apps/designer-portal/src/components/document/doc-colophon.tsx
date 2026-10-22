@@ -12,8 +12,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
+import { useSetProjectStatus } from '@/hooks/use-project-lifecycle';
 import { openLedger } from './command-bar';
 import {
   DocumentAction,
@@ -39,37 +40,6 @@ function useStudioName(designerId: string | null) {
         (m: any) => m.organization?.type === 'design_studio',
       );
       return studio?.organization?.name ?? null;
-    },
-  });
-}
-
-function useSetProjectStatus(projectId: string | null) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      status,
-      expectedStatus,
-    }: {
-      status: 'active' | 'on_hold' | 'archived';
-      expectedStatus: 'active' | 'on_hold' | 'completed';
-    }) => {
-      if (!projectId) throw new Error('Project is required');
-      const supabase = getSupabase();
-      const { error } = status === 'archived'
-        ? await supabase.rpc('archive_project', {
-            p_project_id: projectId,
-            p_expected_status: expectedStatus,
-          })
-        : await supabase.rpc('set_project_operational_status', {
-            p_project_id: projectId,
-            p_expected_status: expectedStatus,
-            p_status: status,
-          });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['document-state'] });
-      void qc.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }
