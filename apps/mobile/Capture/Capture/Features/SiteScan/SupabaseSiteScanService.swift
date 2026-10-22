@@ -265,6 +265,7 @@ final class SupabaseSiteScanService: SiteScanService {
         result: FieldScanResult,
         projectID: String?,
         projectRoomID: String?,
+        filingProjectRoomID: String?,
         name: String
     ) async throws -> FieldScanUploadReceipt {
         guard let owner = activeOwner else {
@@ -291,6 +292,7 @@ final class SupabaseSiteScanService: SiteScanService {
                 result: result,
                 projectID: projectID,
                 projectRoomID: projectRoomID,
+                filingProjectRoomID: filingProjectRoomID,
                 name: name,
                 owner: owner
             )
@@ -303,6 +305,7 @@ final class SupabaseSiteScanService: SiteScanService {
         result: FieldScanResult,
         projectID: String?,
         projectRoomID: String?,
+        filingProjectRoomID: String?,
         name: String,
         owner: CaptureOwnerIdentity
     ) async throws -> FieldScanUploadReceipt {
@@ -311,6 +314,7 @@ final class SupabaseSiteScanService: SiteScanService {
                 result: result,
                 projectID: projectID,
                 projectRoomID: projectRoomID,
+                filingProjectRoomID: filingProjectRoomID,
                 name: name,
                 owner: owner
             )
@@ -350,6 +354,7 @@ final class SupabaseSiteScanService: SiteScanService {
         result: FieldScanResult,
         projectID: String?,
         projectRoomID: String?,
+        filingProjectRoomID: String?,
         name: String,
         owner: CaptureOwnerIdentity
     ) async throws -> FieldScanUploadReceipt {
@@ -357,6 +362,7 @@ final class SupabaseSiteScanService: SiteScanService {
             result: result,
             projectID: projectID,
             projectRoomID: projectRoomID,
+            filingProjectRoomID: filingProjectRoomID,
             name: name,
             owner: owner
         )
@@ -418,6 +424,7 @@ final class SupabaseSiteScanService: SiteScanService {
         result: FieldScanResult,
         projectID: String?,
         projectRoomID: String?,
+        filingProjectRoomID: String?,
         name: String,
         owner: CaptureOwnerIdentity
     ) async throws -> PreparedUpload {
@@ -433,6 +440,7 @@ final class SupabaseSiteScanService: SiteScanService {
             for: result.localBundleURL,
             projectID: projectID,
             projectRoomID: projectRoomID,
+            filingProjectRoomID: filingProjectRoomID,
             name: name,
             owner: owner
         )
@@ -511,7 +519,7 @@ final class SupabaseSiteScanService: SiteScanService {
             user_id: userID,
             room_id: reserved.roomID,
             project_id: projectID.flatMap { UUID(uuidString: $0) },
-            project_room_id: nil,
+            project_room_id: reserved.record.filingProjectRoomID.flatMap(UUID.init(uuidString:)),
             name: name,
             status: "processing",
             dimensions: metrics.dims.map {
@@ -960,6 +968,7 @@ final class SupabaseSiteScanService: SiteScanService {
         for bundleURL: URL,
         projectID: String?,
         projectRoomID: String?,
+        filingProjectRoomID: String?,
         name: String,
         owner: CaptureOwnerIdentity
     ) throws -> ScanReservation {
@@ -995,6 +1004,7 @@ final class SupabaseSiteScanService: SiteScanService {
             name: name,
             projectID: projectID,
             projectRoomID: projectRoomID,
+            filingProjectRoomID: filingProjectRoomID,
             owner: owner
         ))
         return ScanReservation(
@@ -1061,6 +1071,7 @@ final class SupabaseSiteScanService: SiteScanService {
             ),
             projectID: record.projectID,
             projectRoomID: record.projectRoomID,
+            filingProjectRoomID: record.filingProjectRoomID,
             name: record.name
         )
     }
@@ -1115,6 +1126,7 @@ final class SupabaseSiteScanService: SiteScanService {
                 result: result,
                 projectID: record.projectID,
                 projectRoomID: record.projectRoomID,
+                filingProjectRoomID: record.filingProjectRoomID,
                 name: record.name
             )
         }

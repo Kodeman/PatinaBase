@@ -96,7 +96,7 @@ public final class CaptureStore {
 
     /// The newest version in `CaptureMigrationPlan` (CaptureSchema.swift).
     /// Containers are built from the plan, never from this schema alone.
-    public static let schema = Schema(versionedSchema: CaptureSchemaV2.self)
+    public static let schema = Schema(versionedSchema: CaptureSchemaV3.self)
 
     public let container: ModelContainer
     public var context: ModelContext { container.mainContext }

@@ -92,7 +92,7 @@ build() {
   dest="$(sim_destination)" || return $?
   generate
   xcodebuild build -project Capture.xcodeproj -scheme Capture \
-    -sdk iphonesimulator -destination "$dest" \
+    -sdk iphonesimulator -destination "$dest" -jobs 2 \
     -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO -quiet
   echo "✔ build"
 }
@@ -103,7 +103,7 @@ test_() {
   dest="$(sim_destination)" || return $?
   generate
   xcodebuild test -project Capture.xcodeproj -scheme CaptureKit \
-    -sdk iphonesimulator -destination "$dest" \
+    -sdk iphonesimulator -destination "$dest" -jobs 2 \
     -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO -quiet
   echo "✔ tests"
 }

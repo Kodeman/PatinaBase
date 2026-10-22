@@ -67,12 +67,31 @@ public enum CaptureSchemaV2: VersionedSchema {
     }
 }
 
+/// V3 adds optional explicit project-room filing to durable scan transfers.
+/// V1 and V2 remain frozen so installed outboxes can migrate without resetting.
+public enum CaptureSchemaV3: VersionedSchema {
+    public static var versionIdentifier: Schema.Version { Schema.Version(3, 0, 0) }
+
+    public static var models: [any PersistentModel.Type] {
+        [
+            CaptureSchemaV2.Piece.self,
+            CaptureSchemaV2.CapturePhoto.self,
+            CaptureSchemaV2.CaptureMeasurement.self,
+            CaptureSchemaV1.CaptureProjectRef.self,
+            ScanUploadRecord.self,
+            CaptureSchemaV1.SiteRequestOutboxRecord.self,
+            CaptureSchemaV1.FieldVisitCloseRecord.self,
+            CaptureSchemaV1.TimeEntryOutboxRecord.self
+        ]
+    }
+}
+
 /// Every version Field has shipped, oldest first, and the stages between them.
 /// A new version is appended here with its stage. Every `ModelContainer` Field
 /// opens is built from this plan (`CaptureStore.makeContainer(configuration:)`).
 public enum CaptureMigrationPlan: SchemaMigrationPlan {
     public static var schemas: [any VersionedSchema.Type] {
-        [CaptureSchemaV1.self, CaptureSchemaV2.self]
+        [CaptureSchemaV1.self, CaptureSchemaV2.self, CaptureSchemaV3.self]
     }
 
     /// V1→V2 is custom because SwiftData cannot rename an entity: a lightweight
@@ -83,7 +102,8 @@ public enum CaptureMigrationPlan: SchemaMigrationPlan {
         [
             .custom(fromVersion: CaptureSchemaV1.self, toVersion: CaptureSchemaV2.self,
                     willMigrate: { context in try PieceMigrationCarry.write(from: context) },
-                    didMigrate: nil)
+                    didMigrate: nil),
+            .lightweight(fromVersion: CaptureSchemaV2.self, toVersion: CaptureSchemaV3.self)
         ]
     }
 }
@@ -94,7 +114,7 @@ public typealias Piece = CaptureSchemaV2.Piece
 public typealias CapturePhoto = CaptureSchemaV2.CapturePhoto
 public typealias CaptureMeasurement = CaptureSchemaV2.CaptureMeasurement
 public typealias CaptureProjectRef = CaptureSchemaV1.CaptureProjectRef
-public typealias ScanUploadRecord = CaptureSchemaV1.ScanUploadRecord
+public typealias ScanUploadRecord = CaptureSchemaV3.ScanUploadRecord
 public typealias SiteRequestOutboxRecord = CaptureSchemaV1.SiteRequestOutboxRecord
 public typealias FieldVisitCloseRecord = CaptureSchemaV1.FieldVisitCloseRecord
 public typealias TimeEntryOutboxRecord = CaptureSchemaV1.TimeEntryOutboxRecord

@@ -22,6 +22,7 @@ final class SiteScanContextModel {
     private let scanSessionIdProvider: () -> String?
     private let projectID: String?
     private let projectRoomID: String?
+    private let filingProjectRoomID: String?
     private let voice: any VoiceNoteService
     private let analytics: any CaptureAnalytics
     private let session: any SessionProviding
@@ -55,6 +56,7 @@ final class SiteScanContextModel {
         ownerScope: @escaping () -> CaptureLocalListScope,
         projectID: String?,
         projectRoomID: String?,
+        filingProjectRoomID: String?,
         voice: any VoiceNoteService,
         analytics: any CaptureAnalytics,
         session: any SessionProviding,
@@ -66,6 +68,7 @@ final class SiteScanContextModel {
         self.ownerScopeProvider = ownerScope
         self.projectID = projectID
         self.projectRoomID = projectRoomID
+        self.filingProjectRoomID = filingProjectRoomID
         self.voice = voice
         self.analytics = analytics
         self.session = session
@@ -79,7 +82,8 @@ final class SiteScanContextModel {
             projectId: projectID,
             projectRoomId: projectRoomID,
             cameraPoseRowMajor: pose,
-            capturedAt: ISO8601DateFormatter().string(from: Date()))
+            capturedAt: ISO8601DateFormatter().string(from: Date()),
+            filingProjectRoomId: filingProjectRoomID)
     }
 
     func capturePhoto() async {
@@ -336,6 +340,7 @@ struct SiteScanContextScreen: View {
     let container: AppContainer
     let projectID: String?
     let projectRoomID: String?
+    var filingProjectRoomID: String? = nil
     let visit: CaptureVisitState
     let onDone: () -> Void
 
@@ -371,6 +376,7 @@ struct SiteScanContextScreen: View {
                             workspaceID: container.session.workspaceID)
                     },
                     projectID: projectID, projectRoomID: projectRoomID,
+                    filingProjectRoomID: filingProjectRoomID,
                     voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
                                                   analytics: container.analytics,
                                                   surface: "f2"),
