@@ -34,9 +34,13 @@
 --   images       [{assetId, plateRole, cropKey, rank, chapterKey}] by rank.
 --                Captions and alt live on assets[]: an edition image's
 --                caption/alt first (lowest rank), then the facts' own, then
---                captions overrides (whose, when). While makers are off and
---                the edition was composed with them on, every alt is
---                rebuilt from the caption shown, so none names a maker.
+--                captions overrides (whose, when). The live switch outranks
+--                a saved whose (story seq 48): while makers are off, an
+--                item picture's plate (sourceKind maker or upload) is the
+--                studio's whatever its override says; any other plate's
+--                whose override still shows. While makers are off and the
+--                edition was composed with them on, every alt is rebuilt
+--                from the caption shown, so none names a maker.
 --   Override hero  a heroAssetId the edition does not name is still a plate
 --                when it is this project's and no concept: its words are the
 --                builder's record-derived entry, else the studio's name and
@@ -178,11 +182,15 @@ BEGIN
   shown AS (
     SELECT worded.*,
            COALESCE(worded.caption_what, worded.fact -> 'caption' ->> 'what') AS shown_what,
-           COALESCE(
-             worded.caption_override ->> 'whose',
-             CASE WHEN v_show_makers
-                  THEN COALESCE(worded.caption_whose, worded.fact -> 'caption' ->> 'whose')
-                  ELSE v_studio_name END) AS shown_whose,
+           -- Makers off: an item picture is the studio's, an override
+           -- notwithstanding (seq 48); other plates keep their override.
+           CASE WHEN NOT v_show_makers AND worded.kind IN ('maker', 'upload')
+                THEN v_studio_name
+                ELSE COALESCE(
+                       worded.caption_override ->> 'whose',
+                       CASE WHEN v_show_makers
+                            THEN COALESCE(worded.caption_whose, worded.fact -> 'caption' ->> 'whose')
+                            ELSE v_studio_name END) END AS shown_whose,
            COALESCE(
              worded.caption_override ->> 'when',
              worded.caption_when,

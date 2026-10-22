@@ -66,7 +66,9 @@
 --   set_plate_focal(p_asset_id, p_subject_box, p_focal)  designer focal on the
 --                         asset (focal_origin 'designer'; the box may be NULL)
 --                         and the asset's source re-queued so the media worker
---                         re-crops.
+--                         re-crops. Both re-crop writers lock that source
+--                         request before the asset, the order 00843's
+--                         record_client_plate_asset settles in.
 --   list_client_editions(p_project_id)  every edition, newest first. An
 --                         image's sourceKind and sourceUrl come from one
 --                         request row of its asset.
@@ -561,30 +563,42 @@ BEGIN
 END;
 $$;
 
--- Re-crop a plate: its latest source request goes back to the media worker,
--- keeping its asset, so the plate stays on the page meanwhile.
-CREATE OR REPLACE FUNCTION public._client_plate_requeue(p_asset_id uuid)
+-- A re-crop locks the asset's latest source request before it writes the
+-- asset: the order record_client_plate_asset (00843) settles in, request then
+-- asset, so a re-crop waits behind a settling copy instead of deadlocking
+-- with it (SQ-1644 R2). Returns that request, or NULL when none.
+CREATE OR REPLACE FUNCTION public._client_plate_lock_source(p_asset_id uuid)
+RETURNS uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+  SELECT latest.id
+  FROM public.client_plate_requests AS latest
+  JOIN public.client_plate_assets AS asset
+    ON asset.id = latest.asset_id AND asset.project_id = latest.project_id
+  WHERE latest.asset_id = p_asset_id
+  ORDER BY latest.updated_at DESC, latest.id
+  LIMIT 1
+  FOR UPDATE OF latest;
+$$;
+
+-- Re-crop a plate: the source request its caller locked goes back to the
+-- media worker, keeping its asset, so the plate stays on the page meanwhile.
+CREATE OR REPLACE FUNCTION public._client_plate_requeue(p_request_id uuid)
 RETURNS void
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $$
-  UPDATE public.client_plate_requests AS request
+  UPDATE public.client_plate_requests
   SET status = 'queued',
       attempts = 0,
       last_error = NULL,
       lease_token = NULL,
       lease_expires_at = NULL,
       updated_at = now()
-  WHERE request.id = (
-    SELECT latest.id
-    FROM public.client_plate_requests AS latest
-    JOIN public.client_plate_assets AS asset
-      ON asset.id = latest.asset_id AND asset.project_id = latest.project_id
-    WHERE latest.asset_id = p_asset_id
-    ORDER BY latest.updated_at DESC, latest.id
-    LIMIT 1
-  );
+  WHERE id = p_request_id;
 $$;
 
 -- A project's queued request may be claimed: the job exists and is not
@@ -784,6 +798,7 @@ $$;
 REVOKE ALL ON FUNCTION public._client_edition_lock(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._client_edition_frozen(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._client_edition_refuse_frozen(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._client_plate_lock_source(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._client_plate_requeue(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._client_edition_project_ready(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._client_edition_merge(jsonb, jsonb) FROM PUBLIC, anon, authenticated;
@@ -1109,6 +1124,7 @@ SET search_path TO 'public', 'pg_temp'
 AS $$
 DECLARE
   v_before public.client_plate_assets%ROWTYPE;
+  v_source uuid;
 BEGIN
   IF NOT public._client_plate_frame_valid(p_subject_box, p_focal) THEN
     RAISE EXCEPTION 'subject box and focal must be normalised 0-1 inside the frame'
@@ -1126,6 +1142,8 @@ BEGIN
     RAISE EXCEPTION 'perception needs its prompt version' USING ERRCODE = 'check_violation';
   END IF;
 
+  -- The source request before the asset (00843 settlement order).
+  v_source := public._client_plate_lock_source(p_asset_id);
   SELECT * INTO v_before FROM public.client_plate_assets WHERE id = p_asset_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'plate asset % not found', p_asset_id USING ERRCODE = 'no_data_found';
@@ -1149,7 +1167,7 @@ BEGIN
   IF v_before.focal_origin IS DISTINCT FROM 'designer'
      AND (v_before.subject_box IS DISTINCT FROM p_subject_box
           OR v_before.focal IS DISTINCT FROM p_focal) THEN
-    PERFORM public._client_plate_requeue(p_asset_id);
+    PERFORM public._client_plate_requeue(v_source);
   END IF;
 END;
 $$;
@@ -1290,6 +1308,7 @@ SET search_path TO 'public', 'pg_temp'
 AS $$
 DECLARE
   v_project_id uuid;
+  v_source uuid;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'authentication required' USING ERRCODE = 'insufficient_privilege';
@@ -1305,6 +1324,8 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- The source request before the asset (00843 settlement order).
+  v_source := public._client_plate_lock_source(p_asset_id);
   UPDATE public.client_plate_assets
   SET subject_box = p_subject_box,
       focal = p_focal,
@@ -1312,7 +1333,7 @@ BEGIN
       updated_at = now()
   WHERE id = p_asset_id;
 
-  PERFORM public._client_plate_requeue(p_asset_id);
+  PERFORM public._client_plate_requeue(v_source);
 END;
 $$;
 

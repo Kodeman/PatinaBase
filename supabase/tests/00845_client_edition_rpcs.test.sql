@@ -40,6 +40,11 @@
 --               version, focal origin, perceivedAlt and perceivedFlags
 --   dispatch    kill switch off: no run; expired drafts fail, expired leases
 --               return to the queue; the run cost lands from p_detail
+--   lock order  two dblink sessions: a focal save waits behind a settling
+--               copy's source request holding no plate lock, so the copy
+--               takes the plate at once (NOWAIT) and settles, the save
+--               completes without 40P01 and re-queues the settled source
+--               (SQ-1644 R2; committed fixtures, removed by this run's ids)
 --   before/after  get_client_project_editorial is byte-identical under the
 --               00842 body and the 00845 shared builder for every project
 --               with a client, makers on and off (00842 re-run from its file)
@@ -50,7 +55,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(101);
+SELECT plan(106);
 
 -- ─── grants ────────────────────────────────────────────────────────────────
 
@@ -773,6 +778,177 @@ SELECT is(
    FROM public.job_runs WHERE id = current_setting('us49.run')::bigint),
   row('succeeded', 0.12::numeric(8,2), '0.123456', '1')::text,
   'dispatch: the run records its cost (rounded column, exact in detail)');
+
+-- ─── lock order: a re-crop waits behind a settling copy (SQ-1644 R2) ──────
+-- Two dblink sessions on committed fixtures (both must see them), cleaned by
+-- this run's UUIDs. B is record_client_plate_asset part way: it holds the
+-- source request. A is the designer's focal save. A must wait on the request
+-- holding nothing, so B then takes the plate at once (NOWAIT) and settles;
+-- the old asset-first order fails NOWAIT with 55P03 instead of deadlocking.
+-- Runs before the before/after case: 00842's ALTER TABLE locks projects.
+CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA extensions;
+CREATE TEMP TABLE recrop_lock_results (name text PRIMARY KEY, passed boolean, detail text);
+DO $test$
+DECLARE
+  v_dsn text := format(
+    'host=%s port=54322 dbname=%s user=postgres password=postgres connect_timeout=5',
+    host(network(set_masklen(inet_server_addr(), 16)) + 1), current_database());
+  v_actor uuid := gen_random_uuid();
+  v_project uuid := gen_random_uuid();
+  v_asset uuid := gen_random_uuid();
+  v_request uuid := gen_random_uuid();
+  v_token uuid := gen_random_uuid();
+  v_sha text;
+  v_org uuid;
+  v_a_pid integer;
+  v_b_pid integer;
+  v_wait boolean := false;
+  v_a_result text;
+  v_b_result text;
+  v_ok boolean;
+  v_conn text;
+  v_detail text := '';
+BEGIN
+  v_sha := md5(v_asset::text) || md5(v_project::text);
+  FOREACH v_conn IN ARRAY ARRAY['sq1659_a', 'sq1659_b'] LOOP
+    PERFORM extensions.dblink_connect(v_conn, v_dsn);
+    PERFORM extensions.dblink_exec(v_conn, 'SET statement_timeout = ''12s''');
+    PERFORM extensions.dblink_exec(v_conn, 'SET lock_timeout = ''5s''');
+  END LOOP;
+  BEGIN
+    PERFORM extensions.dblink_exec('sq1659_b', format($fixture$
+      INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+                              instance_id, aud, role)
+      VALUES (%1$L, 'sq1659-' || %1$L || '@test.invalid', '', now(), now(), now(),
+              '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+      INSERT INTO public.profiles (id, email, full_name, is_designer)
+      VALUES (%1$L, 'sq1659-' || %1$L || '@test.invalid', 'SQ1659 Designer', true)
+      ON CONFLICT (id) DO UPDATE SET is_designer = true;
+      INSERT INTO public.projects (id, name, designer_id, created_by, studio_id, status)
+      VALUES (%2$L, 'SQ1659 recrop lock', %1$L, %1$L, public._primary_studio_for(%1$L), 'active');
+      INSERT INTO public.client_plate_assets (id, project_id, sha256, source_kind, source_ref, original_key,
+                                              width, height)
+      VALUES (%3$L, %2$L, %5$L, 'upload', jsonb_build_object('table', 'project_files', 'id', %3$L::text),
+              'plates/' || %2$L || '/' || %5$L || '/original.jpg', 1600, 1200);
+      INSERT INTO public.client_plate_requests (id, project_id, source_kind, source_ref, source_url, status,
+                                                lease_token, lease_expires_at, attempts, asset_id)
+      VALUES (%4$L, %2$L, 'upload', jsonb_build_object('table', 'project_files', 'id', %3$L::text),
+              'https://img.test/sq1659.jpg', 'leased', %6$L, now() + interval '10 minutes', 1, %3$L);
+    $fixture$, v_actor, v_project, v_asset, v_request, v_sha, v_token));
+    SELECT id INTO v_org FROM extensions.dblink('sq1659_b', format(
+      'SELECT public._primary_studio_for(%L)', v_actor)) AS r(id uuid);
+    PERFORM extensions.dblink_exec('sq1659_a', 'SET ROLE authenticated');
+    PERFORM * FROM extensions.dblink('sq1659_a', format(
+      'SELECT set_config(''request.jwt.claims'', %L, false)',
+      jsonb_build_object('sub', v_actor, 'role', 'authenticated')::text)) AS r(x text);
+    SELECT pid INTO v_a_pid FROM extensions.dblink('sq1659_a', 'SELECT pg_backend_pid()') AS r(pid integer);
+    SELECT pid INTO v_b_pid FROM extensions.dblink('sq1659_b', 'SELECT pg_backend_pid()') AS r(pid integer);
+
+    -- B: the settlement's first lock, the source request.
+    PERFORM extensions.dblink_exec('sq1659_b', 'BEGIN');
+    PERFORM * FROM extensions.dblink('sq1659_b', format(
+      'SELECT id::text FROM public.client_plate_requests WHERE id = %L FOR UPDATE', v_request)) AS r(x text);
+    -- A: the designer moves the focal point meanwhile.
+    PERFORM extensions.dblink_exec('sq1659_a', 'BEGIN');
+    PERFORM extensions.dblink_send_query('sq1659_a', format($focal$
+      DO $call$ BEGIN
+        PERFORM public.set_plate_focal(%L, '{0.2,0.2,0.4,0.4}', '{0.3,0.3}');
+        PERFORM set_config('sq1659.result', 'ok', true);
+      EXCEPTION WHEN OTHERS THEN
+        PERFORM set_config('sq1659.result', SQLSTATE || ': ' || SQLERRM, true);
+      END $call$;
+    $focal$, v_asset));
+    FOR attempt IN 1..100 LOOP
+      SELECT v_b_pid = ANY(pg_blocking_pids(pid)) INTO v_wait FROM pg_stat_activity WHERE pid = v_a_pid;
+      EXIT WHEN v_wait OR extensions.dblink_is_busy('sq1659_a') = 0;
+      PERFORM pg_sleep(0.025);
+      PERFORM pg_stat_clear_snapshot();
+    END LOOP;
+    INSERT INTO recrop_lock_results VALUES ('wait', COALESCE(v_wait, false),
+      format('A=%s B=%s A blocked by B=%s', v_a_pid, v_b_pid, v_wait));
+    -- B: the settlement's next lock, the plate, at once; then it settles.
+    PERFORM extensions.dblink_exec('sq1659_b', format($settle$
+      DO $call$ BEGIN
+        PERFORM 1 FROM public.client_plate_assets WHERE id = %1$L FOR UPDATE NOWAIT;
+        PERFORM public.record_client_plate_asset(%2$L, %3$L, jsonb_build_object(
+          'sha256', %4$L, 'originalKey', 'plates/' || %5$L || '/' || %4$L || '/original.jpg',
+          'width', 1600, 'height', 1200,
+          'crops', '{"wide": {"rect": [0, 0, 1600, 1000], "widths": [800]}}'::jsonb));
+        PERFORM set_config('sq1659.result', 'ok', true);
+      EXCEPTION WHEN OTHERS THEN
+        PERFORM set_config('sq1659.result', SQLSTATE || ': ' || SQLERRM, true);
+      END $call$;
+    $settle$, v_asset, v_request, v_token, v_sha, v_project));
+    SELECT x INTO v_b_result FROM extensions.dblink('sq1659_b',
+      'SELECT current_setting(''sq1659.result'')') AS r(x text);
+    PERFORM extensions.dblink_exec('sq1659_b', 'COMMIT');
+    PERFORM * FROM extensions.dblink_get_result('sq1659_a') AS r(x text);
+    PERFORM * FROM extensions.dblink_get_result('sq1659_a') AS r(x text);
+    SELECT x INTO v_a_result FROM extensions.dblink('sq1659_a',
+      'SELECT current_setting(''sq1659.result'')') AS r(x text);
+    PERFORM extensions.dblink_exec('sq1659_a', 'COMMIT');
+    INSERT INTO recrop_lock_results VALUES ('order', v_b_result = 'ok', format('B=%s', v_b_result));
+    INSERT INTO recrop_lock_results VALUES ('complete', v_a_result = 'ok', format('A=%s', v_a_result));
+    SELECT passed INTO v_ok FROM extensions.dblink('sq1659_b', format($state$
+      SELECT (SELECT status = 'queued' AND attempts = 0 AND lease_token IS NULL AND asset_id = %2$L::uuid
+              FROM public.client_plate_requests WHERE id = %1$L)
+         AND (SELECT focal = '{0.3,0.3}'::numeric[] AND focal_origin = 'designer' AND crops ? 'wide'
+              FROM public.client_plate_assets WHERE id = %2$L)
+    $state$, v_request, v_asset)) AS r(passed boolean);
+    INSERT INTO recrop_lock_results VALUES ('state', COALESCE(v_ok, false), '');
+  EXCEPTION WHEN OTHERS THEN
+    v_detail := SQLSTATE || ': ' || SQLERRM;
+  END;
+  FOREACH v_conn IN ARRAY ARRAY['sq1659_a', 'sq1659_b'] LOOP
+    IF extensions.dblink_is_busy(v_conn) = 1 THEN
+      PERFORM extensions.dblink_cancel_query(v_conn);
+    END IF;
+    BEGIN
+      PERFORM * FROM extensions.dblink_get_result(v_conn, false) AS r(x text);
+      PERFORM * FROM extensions.dblink_get_result(v_conn, false) AS r(x text);
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+    PERFORM extensions.dblink_exec(v_conn, 'ROLLBACK');
+    PERFORM extensions.dblink_exec(v_conn, 'RESET ROLE');
+  END LOOP;
+  PERFORM extensions.dblink_exec('sq1659_b', format($cleanup$
+    SET app.ffe_mutation_rpc = 'on';
+    DELETE FROM public.client_plate_requests WHERE project_id = %1$L;
+    DELETE FROM public.client_edition_requests WHERE project_id = %1$L;
+    DELETE FROM public.projects WHERE id = %1$L;
+    DELETE FROM public.audit_logs WHERE user_id = %2$L OR organization_id = %3$L;
+    SET ROLE service_role;
+    DELETE FROM public.organizations WHERE id = %3$L;
+    RESET ROLE;
+    DELETE FROM public.profiles WHERE id = %2$L;
+    DELETE FROM auth.users WHERE id = %2$L;
+  $cleanup$, v_project, v_actor, v_org));
+  SELECT passed INTO v_ok FROM extensions.dblink('sq1659_b', format($clean$
+    SELECT NOT EXISTS (SELECT 1 FROM public.projects WHERE id = %1$L)
+      AND NOT EXISTS (SELECT 1 FROM public.client_plate_requests WHERE project_id = %1$L)
+      AND NOT EXISTS (SELECT 1 FROM public.client_plate_assets WHERE project_id = %1$L)
+      AND NOT EXISTS (SELECT 1 FROM auth.users WHERE id = %2$L)
+  $clean$, v_project, v_actor)) AS r(passed boolean);
+  INSERT INTO recrop_lock_results VALUES ('cleanup', v_ok, v_detail);
+  FOREACH v_conn IN ARRAY ARRAY['sq1659_a', 'sq1659_b'] LOOP
+    PERFORM extensions.dblink_disconnect(v_conn);
+  END LOOP;
+  INSERT INTO recrop_lock_results
+    SELECT name, false, v_detail FROM unnest(ARRAY['wait', 'order', 'complete', 'state']) AS name
+    ON CONFLICT (name) DO NOTHING;
+END
+$test$;
+SELECT diag(name || ': ' || detail) FROM recrop_lock_results WHERE detail <> '';
+SELECT ok(passed, 'lock order: the focal save waits behind the settling copy''s source request')
+FROM recrop_lock_results WHERE name = 'wait';
+SELECT ok(passed, 'lock order: while it waits the focal save holds no plate lock; the copy takes the plate at once and settles')
+FROM recrop_lock_results WHERE name = 'order';
+SELECT ok(passed, 'lock order: the focal save then completes, no 40P01')
+FROM recrop_lock_results WHERE name = 'complete';
+SELECT ok(passed, 'lock order: the re-crop lands after the settlement: source queued, designer framing, settled crops kept')
+FROM recrop_lock_results WHERE name = 'state';
+SELECT ok(passed, 'lock order: only this run''s synthetic fixtures are removed')
+FROM recrop_lock_results WHERE name = 'cleanup';
 
 -- ─── before/after: the Phase 1 reader, 00842 body against 00845 builder ────
 -- The re-crop is put back to done (the one state 00842 reads), then every

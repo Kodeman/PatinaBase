@@ -24,6 +24,10 @@
 --               bare upload worded from the studio and its kind; a board
 --               ingested after compose and approved, from the board record);
 --               a concept-seen one is neither shown nor the hero
+--   makers switch  approved with whose overrides while makers are on (the
+--               chair: Atelier Nord; the board: a joiner): off → the chair's
+--               caption and alt name the studio, the board's override
+--               stays; back on → Atelier Nord (story seq 48)
 --   plate scope an approved edition id scopes its project for its client and
 --               studio; a superseded edition id, a stranger who is the
 --               client of another project holding the same bytes, and
@@ -35,7 +39,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(34);
+SELECT plan(39);
 
 -- ─── grants ────────────────────────────────────────────────────────────────
 
@@ -408,6 +412,62 @@ SELECT is(
    WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000504'),
   '[3, "84600000-0000-4000-8000-000000000504", "board", "Kitchen scheme"]'::jsonb,
   'override hero: the reader projects it as the hero, captioned from the board record');
+RESET ROLE;
+
+-- ─── the makers switch outranks a saved whose (story seq 48) ──────────────
+-- Approved while makers are on: Atelier Nord on the chair (a maker plate),
+-- a joiner on the board (a plate no maker is credited on).
+
+UPDATE public.projects SET show_makers = true WHERE id = '84600000-0000-4000-8000-000000000001';
+INSERT INTO public.client_editions (id, project_id, seq, status, kind, composition, facts)
+SELECT '84600000-0000-4000-8000-000000000904', project_id, 4, 'awaiting_review', 'full', composition, facts
+FROM public.client_editions WHERE id = '84600000-0000-4000-8000-000000000902';
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+SELECT lives_ok(
+  $$SELECT public.approve_client_edition('84600000-0000-4000-8000-000000000904',
+      '{"heroAssetId": "84600000-0000-4000-8000-000000000504",
+        "captions": {"84600000-0000-4000-8000-000000000501": {"whose": "Atelier Nord"},
+                     "84600000-0000-4000-8000-000000000504": {"whose": "Hudson Joinery"}}}')$$,
+  'makers switch: the studio approves a whose override on the chair and on the board, makers on');
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT is(
+  (SELECT jsonb_object_agg(asset ->> 'id', asset -> 'caption' -> 'whose')
+   FROM jsonb_array_elements(
+     public.get_client_project_edition('84600000-0000-4000-8000-000000000001') -> 'assets') AS asset
+   WHERE asset ->> 'id' IN ('84600000-0000-4000-8000-000000000501', '84600000-0000-4000-8000-000000000504')),
+  '{"84600000-0000-4000-8000-000000000501": "Atelier Nord",
+    "84600000-0000-4000-8000-000000000504": "Hudson Joinery"}'::jsonb,
+  'makers switch: makers on → each whose override shows');
+RESET ROLE;
+
+UPDATE public.projects SET show_makers = false WHERE id = '84600000-0000-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT 'read' AS us49 FROM (SELECT set_config('us49.edition_switch_off',
+  public.get_client_project_edition('84600000-0000-4000-8000-000000000001')::text, true)) AS stash;
+SELECT is(
+  (SELECT jsonb_build_array(asset -> 'caption' ->> 'whose', asset ->> 'alt')
+   FROM jsonb_array_elements(current_setting('us49.edition_switch_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000501'),
+  '["US49 846 Studio", "Lounge chair · US49 846 Studio · product photograph"]'::jsonb,
+  'makers switch: makers off → the chair''s caption and alt name the studio, not its Atelier Nord override');
+SELECT is(
+  (SELECT asset -> 'caption' ->> 'whose'
+   FROM jsonb_array_elements(current_setting('us49.edition_switch_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000504'),
+  'Hudson Joinery',
+  'makers switch: makers off → a board''s whose override still shows');
+RESET ROLE;
+
+UPDATE public.projects SET show_makers = true WHERE id = '84600000-0000-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT is(
+  (SELECT asset -> 'caption' ->> 'whose'
+   FROM jsonb_array_elements(
+     public.get_client_project_edition('84600000-0000-4000-8000-000000000001') -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000501'),
+  'Atelier Nord',
+  'makers switch: makers back on → the chair''s override is Atelier Nord again');
 RESET ROLE;
 
 SELECT * FROM finish();

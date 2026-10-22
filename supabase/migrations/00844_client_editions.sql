@@ -11,8 +11,10 @@
 --                            awaiting_review → approved → superseded, or
 --                            failed. At most one approved row per project
 --                            (partial unique index); superseded_by names a
---                            later edition of the same project (trigger).
---                            composition, facts and
+--                            later edition of the same project (trigger),
+--                            and project_id and seq never change once
+--                            written (trigger), so no edge into a row goes
+--                            stale. composition, facts and
 --                            overrides are frozen jsonb; lease fields belong
 --                            to the compose run that is writing a draft.
 --   client_edition_images    the plates an edition sets: an asset of
@@ -146,6 +148,32 @@ DROP TRIGGER IF EXISTS trg_client_editions_superseded_by ON public.client_editio
 CREATE TRIGGER trg_client_editions_superseded_by
   BEFORE INSERT OR UPDATE OF superseded_by, project_id, seq ON public.client_editions
   FOR EACH ROW EXECUTE FUNCTION public.client_editions_check_superseded_by();
+
+-- An edition keeps its project and seq for life. The trigger above checks a
+-- row's own edge; this one keeps every edge into the row true as well: a
+-- successor never moves to another project or back behind its predecessor,
+-- so no later write builds a cross-project link or a cycle (SQ-1644 R1). No
+-- RPC changes either column.
+CREATE OR REPLACE FUNCTION public.client_editions_keep_identity()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public', 'pg_temp'
+AS $$
+BEGIN
+  RAISE EXCEPTION 'edition % keeps its project and seq', OLD.id
+    USING ERRCODE = 'check_violation';
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.client_editions_keep_identity()
+  FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_client_editions_keep_identity ON public.client_editions;
+CREATE TRIGGER trg_client_editions_keep_identity
+  BEFORE UPDATE ON public.client_editions
+  FOR EACH ROW
+  WHEN (OLD.project_id IS DISTINCT FROM NEW.project_id OR OLD.seq IS DISTINCT FROM NEW.seq)
+  EXECUTE FUNCTION public.client_editions_keep_identity();
 
 CREATE TABLE IF NOT EXISTS public.client_edition_images (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),

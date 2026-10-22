@@ -9,7 +9,9 @@
 --               unique per project
 --   supersession edges  superseded_by is refused for the edition itself, an
 --               earlier edition and another project's edition; a later
---               edition of the same project is accepted
+--               edition of the same project is accepted; a target never
+--               moves to another project or behind its predecessor, so
+--               the 904 → 905 → 904 cycle cannot be built (SQ-1644 R1)
 --   enqueue    each listed change queues one request for its reason, 30
 --               minutes out, keyed <project>:<reason>: item image insert,
 --               primary picture change, item delivered, project phase,
@@ -29,7 +31,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(30);
+SELECT plan(33);
 
 -- ─── lockdown ──────────────────────────────────────────────────────────────
 
@@ -140,9 +142,32 @@ SELECT lives_ok(
   $$UPDATE public.client_editions SET superseded_by = '84400000-0000-4000-8000-000000000902'
     WHERE id = '84400000-0000-4000-8000-000000000901'$$,
   'supersession edges: a later edition of the same project supersedes');
+-- An edge into a row stays true after later writes: its target keeps its
+-- project and seq (SQ-1644 R1).
+SELECT throws_ok(
+  $$UPDATE public.client_editions SET project_id = '84400000-0000-4000-8000-000000000002'
+    WHERE id = '84400000-0000-4000-8000-000000000902'$$,
+  '23514', NULL, 'supersession edges: a superseded-by target never moves to another project');
+INSERT INTO public.client_editions (id, project_id, seq, status)
+VALUES ('84400000-0000-4000-8000-000000000904', '84400000-0000-4000-8000-000000000001', 4, 'superseded'),
+       ('84400000-0000-4000-8000-000000000905', '84400000-0000-4000-8000-000000000001', 5, 'awaiting_review');
+UPDATE public.client_editions SET superseded_by = '84400000-0000-4000-8000-000000000905'
+WHERE id = '84400000-0000-4000-8000-000000000904';
+SELECT throws_ok(
+  $$UPDATE public.client_editions SET seq = 3 WHERE id = '84400000-0000-4000-8000-000000000905'$$,
+  '23514', NULL, 'supersession edges: a target''s seq never moves behind the edition it superseded');
+SELECT throws_ok(
+  $sql$DO $cycle$ BEGIN
+    UPDATE public.client_editions SET seq = 3 WHERE id = '84400000-0000-4000-8000-000000000905';
+    UPDATE public.client_editions SET superseded_by = '84400000-0000-4000-8000-000000000904'
+    WHERE id = '84400000-0000-4000-8000-000000000905';
+  END $cycle$
+  $sql$,
+  '23514', NULL, 'supersession edges: the 904 → 905 → 904 cycle cannot be built');
 UPDATE public.client_editions SET superseded_by = NULL WHERE id = '84400000-0000-4000-8000-000000000901';
 DELETE FROM public.client_editions
-WHERE id IN ('84400000-0000-4000-8000-000000000902', '84400000-0000-4000-8000-000000000903');
+WHERE id IN ('84400000-0000-4000-8000-000000000902', '84400000-0000-4000-8000-000000000903',
+             '84400000-0000-4000-8000-000000000904', '84400000-0000-4000-8000-000000000905');
 
 -- ─── enqueue ───────────────────────────────────────────────────────────────
 

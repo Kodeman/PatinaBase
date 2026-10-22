@@ -37202,8 +37202,12 @@ export type Database = {
         Args: { p_focal: number[]; p_subject_box: number[] }
         Returns: boolean
       }
-      _client_plate_requeue: {
+      _client_plate_lock_source: {
         Args: { p_asset_id: string }
+        Returns: string
+      }
+      _client_plate_requeue: {
+        Args: { p_request_id: string }
         Returns: undefined
       }
       _client_plate_scan_source: { Args: { p_url: string }; Returns: string }
