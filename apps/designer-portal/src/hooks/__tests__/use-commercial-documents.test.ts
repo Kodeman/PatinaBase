@@ -1360,6 +1360,7 @@ describe('saved purchasing authorization preview', () => {
   });
 
   it('rejects mismatched document, project, malformed prices and missing reviewed tokens', async () => {
+    const previewQuery = usePreviewQuery();
     for (const change of [
       (p: any) => { p.proposalId = 'other'; },
       (p: any) => { p.furnishingsPreview.proposalId = 'other'; },
@@ -1369,7 +1370,7 @@ describe('saved purchasing authorization preview', () => {
       (p: any) => { p.furnishingsPreview.body.items = []; },
     ]) {
       const p = snapshot(); change(p); rpc.mockResolvedValue({ data: p, error: null });
-      await expect(usePreviewQuery().queryFn()).rejects.toThrow();
+      await expect(previewQuery.queryFn()).rejects.toThrow();
     }
     expect(invoke).not.toHaveBeenCalled();
   });
