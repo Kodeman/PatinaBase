@@ -24090,6 +24090,30 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00849_client_plate_link_check.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_uncopied_library_images(int) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00849_client_plate_link_check.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_uncopied_library_images(int) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00849_client_plate_link_check.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_library_link_check(uuid, boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00849_client_plate_link_check.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_library_link_check(uuid, boolean) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

@@ -724,6 +724,10 @@ verify_jwt = true
 [functions.client-edition-compose]
 verify_jwt = true
 
+# Nightly library HEAD checks: gateway JWT validation, then service role only.
+[functions.client-plate-check]
+verify_jwt = true
+
 # US-15 W4b web tier (SQ-361): designer-pressed "Search the web for this piece".
 # User JWT only; the pieces are re-read under RLS. GOOGLE_VISION_API_KEY is
 # optional — without it POST answers 503 {code:'no_key'} and GET ?probe=1

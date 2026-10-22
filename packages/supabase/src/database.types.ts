@@ -19042,6 +19042,8 @@ export type Database = {
           id: string
           is_primary: boolean
           item_id: string
+          link_checked_at: string | null
+          link_dead: boolean
           position: number
           project_id: string
           source: string
@@ -19055,6 +19057,8 @@ export type Database = {
           id?: string
           is_primary?: boolean
           item_id: string
+          link_checked_at?: string | null
+          link_dead?: boolean
           position?: number
           project_id: string
           source: string
@@ -19068,6 +19072,8 @@ export type Database = {
           id?: string
           is_primary?: boolean
           item_id?: string
+          link_checked_at?: string | null
+          link_dead?: boolean
           position?: number
           project_id?: string
           source?: string
@@ -37786,6 +37792,8 @@ export type Database = {
           id: string
           is_primary: boolean
           item_id: string
+          link_checked_at: string | null
+          link_dead: boolean
           position: number
           project_id: string
           source: string
@@ -39193,6 +39201,8 @@ export type Database = {
           id: string
           is_primary: boolean
           item_id: string
+          link_checked_at: string | null
+          link_dead: boolean
           position: number
           project_id: string
           source: string
@@ -43603,6 +43613,14 @@ export type Database = {
       }
       list_trade_agreements: { Args: { p_project_id: string }; Returns: Json }
       list_trade_scopes: { Args: { p_project_id: string }; Returns: Json }
+      list_uncopied_library_images: {
+        Args: { p_limit?: number }
+        Returns: {
+          id: string
+          project_id: string
+          url: string
+        }[]
+      }
       list_vendor_profiles: {
         Args: never
         Returns: {
@@ -44947,6 +44965,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_library_link_check: {
+        Args: { p_dead: boolean; p_image_id: string }
+        Returns: undefined
+      }
       record_notice: {
         Args: { p_project_id: string; p_told?: string[]; p_what: string }
         Returns: {
@@ -45936,6 +45958,8 @@ export type Database = {
           id: string
           is_primary: boolean
           item_id: string
+          link_checked_at: string | null
+          link_dead: boolean
           position: number
           project_id: string
           source: string
@@ -47016,6 +47040,8 @@ export type Database = {
           id: string
           is_primary: boolean
           item_id: string
+          link_checked_at: string | null
+          link_dead: boolean
           position: number
           project_id: string
           source: string
