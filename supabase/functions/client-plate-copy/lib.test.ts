@@ -142,6 +142,7 @@ Deno.test("resolveSource: an unknown table or a blank address has no source", ()
 });
 
 const PRIVATE_SOURCES = [
+  { table: "field_captures", kind: "installed", bucket: "capture-media", path: `${OWNER}/${SCAN}/photo.jpg` },
   { table: "project_rooms", kind: "concept", bucket: "room-renders", path: RENDER_PATH },
   { table: "room_scan_images", kind: "scan", bucket: "room-scans", path: SCAN_PATH },
   { table: "project_boards", kind: "board", bucket: "proposal-mood-boards", path: BOARD_PATH },
@@ -617,4 +618,12 @@ Deno.test("copyRun: a claim error ends the run with the counts so far", async ()
   assertEquals(shortenError(ended.claimError), "claim boom");
   assertEquals(ended.summary, { status: "failed", detail: counts(2, 2, 0), error: "claim boom" });
   assertEquals(log.finishes, [ended.summary!]);
+});
+
+Deno.test("fetchAddress: Field URLs and traversal never bypass private ownership", async () => {
+  for (const path of ["https://img.test/photo.jpg", OWNER + "/" + SCAN + "/%2e%2e/photo.jpg"]) {
+    const { value, calls } = authority(true);
+    await assertRejects(() => fetchAddress(request("field_captures", "installed", path), SUPABASE, value), SourceNotOwned);
+    assertEquals(calls, { owned: 0, signed: [] });
+  }
 });

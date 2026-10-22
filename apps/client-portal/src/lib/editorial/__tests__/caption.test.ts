@@ -125,3 +125,10 @@ describe('caption', () => {
     });
   });
 });
+
+it('keeps the installed photograph caption from its three stored fields', () => {
+  const stored = { what: 'Living room', whose: 'Middle Studio', when: 'photographed 2 August 2026' };
+  expect(captionTriplet(stored)).toEqual(stored);
+  expect(captionText(captionTriplet(stored)!)).toBe('Living room · Middle Studio · photographed 2 August 2026');
+  expect(plateAlt({ sourceKind: 'installed', caption: stored, alt: null })).toBe('Living room · Middle Studio · photograph');
+});

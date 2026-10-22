@@ -8,7 +8,7 @@ import { RunDeadline, systemClock } from "./lib.ts";
 let handler: (req: Request) => Promise<Response>;
 const serve = stub(Deno, "serve", (fn: unknown) => {
   handler = fn as typeof handler;
-  return {} as Deno.HttpServer;
+  return {} as Deno.HttpServer<Deno.NetAddr>;
 });
 try {
   await import("./index.ts");

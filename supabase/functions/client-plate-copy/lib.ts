@@ -73,6 +73,7 @@ const PRIVATE_BUCKET_BY_TABLE: Record<string, string> = {
   project_rooms: "room-renders",
   room_scan_images: "room-scans",
   project_boards: "proposal-mood-boards",
+  field_captures: "capture-media",
 };
 
 const PUBLIC_BUCKET_BY_TABLE: Record<string, string> = {
@@ -107,6 +108,8 @@ function pathMayBelong(bucket: string, path: string, projectId: string): boolean
 export function resolveSource(request: PlateRequest, supabaseUrl: string): PlateSource | null {
   const address = request.source_url.trim();
   if (!address) return null;
+  // Field media is always a private object path, never an outside URL.
+  if (request.source_ref?.table === "field_captures" && /^https?:\/\//i.test(address)) return { kind: "not_owned" };
   if (/^https?:\/\//i.test(address)) return { kind: "direct", url: address };
   return storageSource(request, address, supabaseUrl);
 }
