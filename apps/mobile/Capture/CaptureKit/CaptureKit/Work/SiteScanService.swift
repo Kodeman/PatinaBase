@@ -168,9 +168,10 @@ public protocol SiteScanService: AnyObject {
     var isSupported: Bool { get }
     /// Begin a scan session.
     func startSession() async throws -> any FieldScanSession
-    /// Upload a finished scan, tying it to a project/room; returns the remote id.
+    /// Upload a finished scan. projectRoomID is the legacy public.rooms storage
+    /// lane; filingProjectRoomID is the explicit project_rooms filing lane.
     func upload(result: FieldScanResult, projectID: String?, projectRoomID: String?,
-                name: String) async throws -> FieldScanUploadReceipt
+                filingProjectRoomID: String?, name: String) async throws -> FieldScanUploadReceipt
     /// Discover transfers that survived leaving the upload flow or a relaunch.
     func pendingUploads() async -> [FieldScanPendingUpload]
     /// Idempotently resume the same durable reservations. Startup callers pass

@@ -18,6 +18,9 @@ import CaptureKit
 final class SiteScanHandoff {
     var name: String = ""
     var projectName: String?
+    var projectID: String?
+    var scanRoomID: String?
+    var filingProjectRoomID: String?
 }
 
 enum SiteScanScreens {

@@ -121,12 +121,56 @@ struct CaptureStoreMigrationTests {
     /// fixture, which is V1, has a stage to reach it.
     @Test func theStoreSchemaIsTheNewestVersionInThePlan() throws {
         let schemas = CaptureMigrationPlan.schemas.map(ObjectIdentifier.init)
-        #expect(schemas == [ObjectIdentifier(CaptureSchemaV1.self), ObjectIdentifier(CaptureSchemaV2.self)])
-        #expect(CaptureMigrationPlan.stages.count == 1)
+        #expect(schemas == [ObjectIdentifier(CaptureSchemaV1.self), ObjectIdentifier(CaptureSchemaV2.self),
+                            ObjectIdentifier(CaptureSchemaV3.self)])
+        #expect(CaptureMigrationPlan.stages.count == 2)
         #expect(CaptureSchemaV1.versionIdentifier == Schema.Version(1, 0, 0))
         #expect(CaptureSchemaV2.versionIdentifier == Schema.Version(2, 0, 0))
+        #expect(CaptureSchemaV3.versionIdentifier == Schema.Version(3, 0, 0))
         #expect(Set(CaptureStore.schema.entities.map(\.name))
             == Set(StoreFixtureProjection.entityNames.map(StoreFixtureProjection.storedEntityName)))
+    }
+
+    @Test func aV2ScanMigratesToV3KeepingLegacyStorageAndRetryState() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("capture.store")
+        let legacyRoom = UUID().uuidString
+        let scanID = UUID().uuidString
+        do {
+            let schema = Schema(versionedSchema: CaptureSchemaV2.self)
+            let container = try ModelContainer(for: schema,
+                configurations: [ModelConfiguration(schema: schema, url: url)])
+            let record = CaptureSchemaV1.ScanUploadRecord(
+                bundlePath: "SiteScans/v2", scanID: scanID, roomID: legacyRoom,
+                name: "Living room", projectID: UUID().uuidString,
+                projectRoomID: legacyRoom, owner: Self.ownerA)
+            record.statusRaw = "failed"
+            record.retryCount = 3
+            record.lastError = "offline"
+            container.mainContext.insert(record)
+            try container.mainContext.save()
+        }
+        let schema = CaptureStore.schema
+        let container = try CaptureStore.makeContainer(
+            configuration: ModelConfiguration(schema: schema, url: url))
+        let record = try #require(try container.mainContext.fetch(
+            FetchDescriptor<ScanUploadRecord>()).first)
+        #expect(record.filingProjectRoomID == nil)
+        #expect(record.filingProjectRoomID.flatMap(UUID.init(uuidString:)) == nil)
+        #expect(record.roomID == legacyRoom)
+        #expect(record.projectRoomID == legacyRoom)
+        #expect(record.scanID == scanID)
+        #expect(record.retryCount == 3)
+        #expect(record.lastError == "offline")
+        #expect(record.statusRaw == "failed")
+        #expect(record.ownerUserID == Self.ownerA.userID)
+        // Nil filing must not be replaced with the legacy storage-room id.
+        let source = try SourcePin.readCode("Capture/Features/SiteScan/SupabaseSiteScanService.swift")
+        #expect(source.contains("project_room_id: reserved.record.filingProjectRoomID.flatMap(UUID.init(uuidString:))"))
+        #expect(source.contains("room_id: reserved.roomID"))
     }
 
     // MARK: - Every row, every attribute
