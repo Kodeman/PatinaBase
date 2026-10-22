@@ -103,6 +103,25 @@ describe('the client mirror marks an answered approval in mocha', () => {
 describe('closed-job edition authority', () => {
   afterEach(() => { mockEditions = undefined; });
 
+  it.each([true, false])('previews the closing awaiting_review draft on a closed job (prior approved: %s)', (hasApproved) => {
+    const closing = { ...PENDING_ROW, closing: true };
+    const editions = hasApproved ? [closing, { ...CURRENT_ROW, frozenAt: '2026-10-22T09:00:00+00:00' }] : [closing];
+    mockEditions = normalizeClientEditions({ ...listEnvelope(editions, true), projectClosed: true });
+    renderMirror([]);
+    expect(screen.getByRole('region', { name: 'What Leah will see if approved' })).toHaveAttribute('data-mirror-edition', '5');
+    expect(document.querySelector('[data-mirror-edition="4"]')).toBeNull();
+  });
+
+  it('a frozen approved edition still suppresses an ordinary waiting draft without projectClosed', () => {
+    mockEditions = normalizeClientEditions(listEnvelope([
+      PENDING_ROW,
+      { ...CURRENT_ROW, frozenAt: '2026-10-22T09:00:00+00:00' },
+    ], true));
+    renderMirror([]);
+    expect(screen.getByRole('region', { name: 'Edition 4' })).toHaveAttribute('data-mirror-edition', '4');
+    expect(screen.queryByRole('region', { name: /will see if approved/ })).toBeNull();
+  });
+
   it('an archived job previews the approved edition, never the pending edition', () => {
     mockEditions = normalizeClientEditions({ ...listEnvelope([PENDING_ROW, CURRENT_ROW], true), projectClosed: true });
     renderMirror([]);

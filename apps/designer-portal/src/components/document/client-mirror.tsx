@@ -18,6 +18,7 @@ import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   createBrowserClient,
+  type ClientEdition,
   useClientEditionSourceUrls,
   useClientEditions,
   useStudioIdentity,
@@ -93,6 +94,13 @@ export function useClientMirrorData(projectId: string) {
   });
 }
 
+function mirrorPendingEdition(editions: readonly ClientEdition[], projectClosed: boolean) {
+  const pending = pendingEdition(editions);
+  const frozen = editionsFrozen(editions, projectClosed);
+  const closingPending = projectClosed === true && pending?.closing === true;
+  return !frozen || closingPending ? pending : null;
+}
+
 /**
  * US-49 Phase 2 — the client's House Issue at the top of the mirror: the
  * edition waiting on Approve, named as what the client will see if approved,
@@ -107,7 +115,7 @@ function MirrorEdition({ projectId, name }: { projectId: string; name: string })
   const { data: studio } = useStudioIdentity({ projectId });
   const { data: makerNames } = useProjectMakerNames(projectId);
   const editions = data?.editions ?? [];
-  const pending = editionsFrozen(editions, data?.projectClosed === true) ? null : pendingEdition(editions);
+  const pending = mirrorPendingEdition(editions, data?.projectClosed === true);
   const edition = pending ?? currentEdition(editions);
   const { data: sourceUrls } = useClientEditionSourceUrls(edition?.images ?? []);
   if (data?.refreshRequired) {
