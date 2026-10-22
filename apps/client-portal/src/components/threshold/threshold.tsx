@@ -436,6 +436,9 @@ export function Threshold({
   // The House Issue: null with `client-edition-page` off or loading, and then
   // every edition helper below hands back today's page.
   const issue = useEditionIssue(projectId, editorial, editionEnabled);
+  // The approved edition the issue prints, if any: its notice opens the note
+  // (or, with no standing note, is the whole letter) and its line heads Earlier.
+  const edition = issue?.editorial.edition ?? null;
 
   // ── the studio's own letters ───────────────────────────────────────────────
   // An invoice drawn against no house at all (ruling S1) belongs to the
@@ -883,7 +886,10 @@ export function Threshold({
     heldDrawCentsByProposalId,
     selectionUpdatedAt,
     messageSentAts: correspondence.sentAts,
+    editionNoticeAt: edition?.notice ? edition.approvedAt : null,
   });
+  // The letter stands for a standing note, or for an edition's notice alone.
+  const letterStands = Boolean(model.note || edition?.notice);
   // A complete read that proved a held invoice settled retires its hold, so a
   // refund that reopens it this visit is judged on its own read. Adjusted in
   // render: the same holds come back when nothing retires.
@@ -1399,6 +1405,7 @@ export function Threshold({
       studioName={studioName}
       today={today}
       reply={replyHeadsTheRecord ? undefined : writeBack}
+      notice={edition?.notice}
     />
   );
   // Gated HERE, not inside Previously: a React element is truthy even when the
@@ -1420,6 +1427,7 @@ export function Threshold({
       )}
       <Previously
         entries={model.previously}
+        edition={edition}
         correspondence={
           hasRecord ? (
             <Letters
@@ -1582,7 +1590,7 @@ export function Threshold({
    */
   const houseHasSpoken = hydrated && !loading && !model.pending;
   // The standing note, else the back matter that keeps the past ones.
-  const updatesAnchor = model.note ? 'note' : model.previously.length > 0 || hasRecord ? 'previously' : null;
+  const updatesAnchor = letterStands ? 'note' : model.previously.length > 0 || hasRecord ? 'previously' : null;
   // `help` (#contact) stands once the presentation read has answered.
   const presentedDesigner = words(presentationQuery.data?.designerName);
   const contactLandmark = help
@@ -1597,7 +1605,11 @@ export function Threshold({
   // its sections. Null with the edition off: `withChapter` hands back the
   // section itself and the page is today's tree.
   let chapters: ReturnType<typeof sheetChapters> = null;
-  const printed = { note: model.note, previously: model.previously.length, hasRecord };
+  const printed = {
+    note: letterStands,
+    previously: model.previously.length + (edition ? 1 : 0),
+    hasRecord,
+  };
 
   // NEVER REVERSE. The house speaks only once every source it speaks FROM has
   // answered — the papers, the goods, the ledger, the rooms and the letter.
@@ -1681,7 +1693,11 @@ export function Threshold({
         short: band.name,
       })),
       ...(road ? [{ id: "road", label: "Orders in progress", short: "orders in progress" }] : []),
-      ...(model.note ? [{ id: "note", label: "Message from your designer", short: "designer message" }] : []),
+      ...(model.note
+        ? [{ id: "note", label: "Message from your designer", short: "designer message" }]
+        : letterStands
+          ? [{ id: "note", label: "A note from the studio", short: "studio note" }]
+          : []),
       ...(model.previously.length > 0
         ? [{ id: "previously", label: "Previously", short: "Previously" }]
         : []),

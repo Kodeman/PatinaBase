@@ -77,9 +77,10 @@ export interface RoomPlateChoice {
   pieces: PieceChoice[];
 }
 
+/** Each room's plates; a picture in `placed` (the hero, an edition's held plate) stands elsewhere. */
 export function roomPlates(
   editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms'>,
-  heroId: string | null = null,
+  placed: readonly string[] = [],
 ): RoomPlateChoice[] {
   const byId = new Map(editorial.assets.map((a) => [a.id, a]));
   const lookup = (ids: readonly string[]) =>
@@ -91,7 +92,7 @@ export function roomPlates(
       own
         .filter(
           (a) =>
-            a.id !== heroId &&
+            !placed.includes(a.id) &&
             tierOf(a) !== null &&
             a.ground !== 'white' &&
             placeRole('room', a.width, a.height, a.subjectBox) === 'room',

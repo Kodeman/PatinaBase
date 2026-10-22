@@ -278,6 +278,98 @@ BEGIN
   ON CONFLICT (project_id, user_id) DO NOTHING;
 END $$;
 
+-- ── Elm Street House's editions (US-49 Phase 2, SQ-1591) ──────────────────
+-- Edition 1 failed to compose; Edition 2 is approved by the studio a day ago
+-- (after June's last reading, so the note it opens is ticked as one change);
+-- Edition 3 waits for the studio and never reaches the homeowner. The rows
+-- are what finish_client_edition and approve_client_edition would have
+-- written; the facts are the house as get_project_editorial_facts reads it.
+-- Edition 2 heroes the sideboard's workshop picture with its own caption,
+-- and nothing approved stands behind it: undo_client_edition returns the page
+-- to the Phase 1 composition. Idempotent on Edition 2's id.
+
+DO $$
+DECLARE
+  uid_designer UUID := 'a0000000-0000-0000-0000-000000000004';
+  v_elm        UUID := 'b0000000-0000-0000-0000-0000000e1a01';
+  v_living     UUID := 'b0000000-0000-0000-0000-0000000e1b01';
+  v_plate      UUID := 'b0000000-0000-0000-0000-0000000e1f01';
+  v_failed     UUID := 'b0000000-0000-0000-0000-0000000e2a01';
+  v_approved   UUID := 'b0000000-0000-0000-0000-0000000e2a02';
+  v_waiting    UUID := 'b0000000-0000-0000-0000-0000000e2a03';
+  v_facts      JSONB;
+  ts           TIMESTAMPTZ := NOW();
+BEGIN
+  IF to_regclass('public.client_editions') IS NULL THEN
+    RAISE NOTICE 'client_house_issue_fixture.sql: client_editions (00844) is not migrated, skipping the editions';
+    RETURN;
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.client_editions WHERE id = v_approved) THEN
+    RETURN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.client_plate_assets WHERE id = v_plate) THEN
+    RAISE NOTICE 'client_house_issue_fixture.sql: Elm Street House is not seeded yet, skipping its editions';
+    RETURN;
+  END IF;
+
+  v_facts := public.get_project_editorial_facts(v_elm);
+
+  INSERT INTO public.client_editions (
+    id, project_id, seq, status, kind, source_hash, composition, facts, overrides,
+    prompt_version, model, cost_usd, auto_published,
+    reviewed_by, reviewed_at, approved_at, created_at, updated_at
+  ) VALUES
+    (v_failed, v_elm, 1, 'failed', NULL, NULL, NULL, NULL, '{}'::jsonb,
+     'e1', NULL, 0, FALSE,
+     NULL, NULL, NULL, ts - INTERVAL '5 days', ts - INTERVAL '5 days'),
+    (v_approved, v_elm, 2, 'approved', 'full', repeat('e2', 32),
+     jsonb_build_object(
+       'sourceHash', repeat('e2', 32),
+       'voice', 'model',
+       'hero', jsonb_build_object('assetId', v_plate, 'why', 'The workshop photographed her sideboard.'),
+       'held', '[]'::jsonb,
+       'chapters', jsonb_build_array(
+         jsonb_build_object('key', 'cover', 'headline', 'Your walnut sideboard is planed and waiting on the workbench',
+                            'standing', 'The workshop has planed the walnut top.'),
+         jsonb_build_object('key', 'house', 'headline', 'Three rooms, and the light between them',
+                            'standing', 'Every room is drawn and agreed.'),
+         jsonb_build_object('key', 'room-' || v_living, 'headline', 'Walnut, linen and a lot of light',
+                            'standing', 'The sideboard is on the bench; the sofa is ordered.'),
+         jsonb_build_object('key', 'progress', 'headline', 'Planed this week, shipped in the new year',
+                            'standing', 'Nothing is late.')
+       ),
+       'doorstep', jsonb_build_object('standing', 'The house is being made.'),
+       'notice', 'The page now opens on your sideboard; the workshop sent photographs on 15 October. Everything else is where it was.'
+     ),
+     v_facts, '{}'::jsonb,
+     'e1', 'fixture', 0, FALSE,
+     uid_designer, ts - INTERVAL '1 day', ts - INTERVAL '1 day', ts - INTERVAL '2 days', ts - INTERVAL '1 day'),
+    (v_waiting, v_elm, 3, 'awaiting_review', 'full', repeat('e3', 32),
+     jsonb_build_object(
+       'sourceHash', repeat('e3', 32),
+       'voice', 'model',
+       'hero', jsonb_build_object('assetId', v_plate, 'why', NULL),
+       'held', '[]'::jsonb,
+       'chapters', jsonb_build_array(
+         jsonb_build_object('key', 'cover', 'headline', 'Not yet approved by the studio', 'standing', NULL)
+       ),
+       'doorstep', jsonb_build_object('standing', NULL),
+       'notice', 'This edition waits for the studio and is never shown.'
+     ),
+     v_facts, '{}'::jsonb,
+     'e1', 'fixture', 0, FALSE,
+     NULL, NULL, NULL, ts - INTERVAL '2 hours', ts - INTERVAL '2 hours');
+
+  INSERT INTO public.client_edition_images (
+    edition_id, asset_id, plate_role, crop_key, rank, chapter_key,
+    alt, caption_what, caption_whose, caption_when
+  ) VALUES
+    (v_approved, v_plate, 'hero', 'none', 0, 'cover',
+     'A walnut sideboard top on a workshop bench', 'Walnut top, planed', 'Harmon Bench Works', '15 October 2026'),
+    (v_waiting, v_plate, 'hero', 'none', 0, 'cover',
+     'A walnut sideboard top on a workshop bench', 'Not yet approved', 'Harmon Bench Works', '20 October 2026');
+END $$;
+
 -- ── Garden Flat: the portrait hero (SQ-1614) ──────────────────────────────
 -- One signed line, an oak tallboy, whose one picture is a portrait 1100 × 1900.
 -- floors.ts places it as the `portrait` hero: under `wide`'s 1600 floor and
@@ -413,4 +505,140 @@ BEGIN
   INSERT INTO public.project_reading_marks (project_id, user_id, read_at)
   VALUES (v_garden, uid_june, ts)
   ON CONFLICT (project_id, user_id) DO NOTHING;
+END $$;
+
+-- ── Garden Flat's editions: a plates-only successor over an approved one (SQ-1670) ─
+-- A second picture of the tallboy, on the workshop bench (2400 × 1600, a
+-- landscape plate), then two editions with the same words. Edition 1 was
+-- approved by the studio ten days ago and heroes the workshop picture;
+-- Edition 2 is the plates-only edition the page published on its own a day
+-- ago (C3), heroing the finished portrait. undo_client_edition on Edition 2
+-- restores Edition 1 (its superseded_by edge). LOCAL fixture only. Garden Flat
+-- keeps no standing note, so each edition's notice is the whole letter.
+-- Idempotent on Edition 2's id.
+
+DO $$
+DECLARE
+  uid_designer UUID := 'a0000000-0000-0000-0000-000000000004';
+  v_garden     UUID := 'b0000000-0000-0000-0000-0000000e1a03';
+  v_bedroom    UUID := 'b0000000-0000-0000-0000-0000000e1b05';
+  v_tallboy    UUID := 'b0000000-0000-0000-0000-0000000e1d03';
+  v_portrait   UUID := 'b0000000-0000-0000-0000-0000000e1f03';
+  v_picture    UUID := 'b0000000-0000-0000-0000-0000000e1e04';
+  v_workshop   UUID := 'b0000000-0000-0000-0000-0000000e1f04';
+  v_sha        TEXT := 'e1a0000000000000000000000000000000000000000000000000000000007a12';
+  v_prior      UUID := 'b0000000-0000-0000-0000-0000000e2b01';
+  v_published  UUID := 'b0000000-0000-0000-0000-0000000e2b02';
+  v_facts      JSONB;
+  v_words      JSONB;
+  ts           TIMESTAMPTZ := NOW();
+BEGIN
+  IF to_regclass('public.client_editions') IS NULL THEN
+    RAISE NOTICE 'client_house_issue_fixture.sql: client_editions (00844) is not migrated, skipping Garden Flat''s editions';
+    RETURN;
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.client_editions WHERE id = v_published) THEN
+    RETURN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.client_plate_assets WHERE id = v_portrait) THEN
+    RAISE NOTICE 'client_house_issue_fixture.sql: Garden Flat is not seeded yet, skipping its editions';
+    RETURN;
+  END IF;
+
+  INSERT INTO public.project_ffe_item_images (
+    id, item_id, project_id, url, source, position, is_primary, created_by, created_at
+  ) VALUES (
+    v_picture, v_tallboy, v_garden,
+    'https://images.example.test/birchwood/oak-tallboy-workshop.jpg', 'library', 1, FALSE,
+    uid_designer, ts - INTERVAL '45 days'
+  ) ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO public.client_plate_assets (
+    id, project_id, sha256, source_kind, source_ref, original_key,
+    width, height, ground, dominant_hex, lqip, crops, created_at, updated_at
+  ) VALUES (
+    v_workshop, v_garden, v_sha, 'maker',
+    jsonb_build_object('table', 'project_ffe_item_images', 'id', v_picture),
+    'plates/' || v_garden || '/' || v_sha || '/original',
+    2400, 1600, 'scene', '#8C6F52', NULL,
+    '{"wide":        {"rect": [0, 0, 2400, 1500],    "widths": [1280, 1600, 2048]},
+      "cover_phone": {"rect": [282, 0, 1835, 1600], "widths": [640, 828, 1080]},
+      "wide32":      {"rect": [0, 0, 2400, 1600],    "widths": [768, 1024, 1600]},
+      "piece":       {"rect": [400, 0, 1600, 1600],  "widths": [256, 512, 768]}}'::jsonb,
+    ts - INTERVAL '44 days', ts - INTERVAL '44 days'
+  ) ON CONFLICT (id) DO NOTHING;
+
+  UPDATE public.client_plate_requests AS request
+     SET status = 'done',
+         asset_id = v_workshop,
+         attempts = 1,
+         updated_at = ts - INTERVAL '44 days'
+   WHERE request.project_id = v_garden
+     AND request.source_ref ->> 'table' = 'project_ffe_item_images'
+     AND request.source_ref ->> 'id' = v_picture::text;
+
+  v_facts := public.get_project_editorial_facts(v_garden);
+
+  -- The same words in both: that is what makes Edition 2 plates-only.
+  v_words := jsonb_build_array(
+    jsonb_build_object('key', 'cover', 'headline', 'Your oak tallboy',
+                       'standing', 'The tallboy is made in oak, by hand.'),
+    jsonb_build_object('key', 'house', 'headline', 'One room, and the tallboy in it',
+                       'standing', 'The bedroom is drawn and agreed.'),
+    jsonb_build_object('key', 'room-' || v_bedroom, 'headline', 'Oak, and the morning light',
+                       'standing', 'The tallboy stands by the east window.'),
+    jsonb_build_object('key', 'progress', 'headline', 'Made this autumn, here by winter',
+                       'standing', 'Nothing is late.')
+  );
+
+  -- Edition 2 first: Edition 1's superseded_by must name an edition that exists.
+  INSERT INTO public.client_editions (
+    id, project_id, seq, status, kind, source_hash, composition, facts, overrides,
+    prompt_version, model, cost_usd, auto_published,
+    reviewed_by, reviewed_at, approved_at, created_at, updated_at
+  ) VALUES (
+    v_published, v_garden, 2, 'approved', 'plates_only', repeat('b2', 32),
+    jsonb_build_object(
+      'sourceHash', repeat('b2', 32),
+      'voice', 'model',
+      'hero', jsonb_build_object('assetId', v_portrait, 'why', NULL),
+      'held', '[]'::jsonb,
+      'chapters', v_words,
+      'doorstep', jsonb_build_object('standing', 'The house is being made.'),
+      'notice', 'The page now opens on your finished tallboy. Everything else is where it was.'
+    ),
+    v_facts, '{}'::jsonb,
+    'e1', 'fixture', 0, TRUE,
+    NULL, NULL, ts - INTERVAL '1 day', ts - INTERVAL '1 day', ts - INTERVAL '1 day'
+  );
+
+  INSERT INTO public.client_editions (
+    id, project_id, seq, status, kind, source_hash, composition, facts, overrides,
+    prompt_version, model, cost_usd, auto_published,
+    reviewed_by, reviewed_at, approved_at, superseded_at, superseded_by, created_at, updated_at
+  ) VALUES (
+    v_prior, v_garden, 1, 'superseded', 'full', repeat('b1', 32),
+    jsonb_build_object(
+      'sourceHash', repeat('b1', 32),
+      'voice', 'model',
+      'hero', jsonb_build_object('assetId', v_workshop, 'why', 'The workshop photographed her tallboy.'),
+      'held', '[]'::jsonb,
+      'chapters', v_words,
+      'doorstep', jsonb_build_object('standing', 'The house is being made.'),
+      'notice', 'The page opens on your tallboy, on the workshop bench.'
+    ),
+    v_facts, '{}'::jsonb,
+    'e1', 'fixture', 0, FALSE,
+    uid_designer, ts - INTERVAL '10 days', ts - INTERVAL '10 days', ts - INTERVAL '1 day', v_published,
+    ts - INTERVAL '11 days', ts - INTERVAL '1 day'
+  );
+
+  INSERT INTO public.client_edition_images (
+    edition_id, asset_id, plate_role, crop_key, rank, chapter_key,
+    alt, caption_what, caption_whose, caption_when
+  ) VALUES
+    (v_prior, v_workshop, 'hero', 'none', 0, 'cover',
+     'An oak tallboy on a workshop bench', 'Oak tallboy, on the bench', 'Birchwood Studio', '11 October 2026'),
+    (v_published, v_portrait, 'hero', 'none', 0, 'cover',
+     'A finished oak tallboy against a pale wall', 'Oak tallboy, finished', 'Birchwood Studio', '20 October 2026');
 END $$;
