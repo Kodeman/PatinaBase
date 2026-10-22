@@ -2,6 +2,11 @@
 // edge function sends a source URL; this Worker fetches it once, hashes it,
 // has the container crop and encode it (op `plate_ingest`), and writes every
 // output to the private PLATES bucket under plates/{projectId}/{sha256}/.
+// Renditions are never rewritten for another framing (SQ-1727 F1): a framing's
+// crops go under plates/{projectId}/{sha256}/f/{rev}/ and name that rev, so a
+// re-crop, or a later copy of the same bytes, never changes a picture an
+// edition already shows. The unversioned prefix keeps what Phase 1 and 2
+// wrote, and null framing for bytes it holds no other framing for.
 // No runtime imports and erasable-only TypeScript, so test/ingest-route.test.mjs
 // loads this file directly under Node.
 
@@ -42,6 +47,8 @@ const OUTPUT_TYPES = new Set(['image/avif', 'image/webp']);
 const EDGE = 1e-9;
 
 type Rect = [number, number, number, number];
+// rev is set on crops stored under a framing's own prefix (see placement).
+type Crops = Record<string, { rect: Rect; widths: number[]; rev?: string }>;
 
 interface IngestBody {
   projectId: string;
@@ -66,7 +73,7 @@ interface PlateRecord {
   dominantHex: string;
   lqip: string | null;
   originalKey: string;
-  crops: Record<string, { rect: Rect; widths: number[] }>;
+  crops: Crops;
 }
 
 // crops.json = the response record, the inputs that shaped the crops, and the
@@ -364,10 +371,62 @@ function sameInputs(stored: StoredPlate, body: IngestBody): boolean {
   );
 }
 
-async function storedPlate(env: PlatesEnv, prefix: string, body: IngestBody): Promise<StoredPlate | null> {
+// ---- framing revisions -----------------------------------------------------
+
+const FNV64_OFFSET = 0xcbf29ce484222325n;
+const FNV64_PRIME = 0x100000001b3n;
+const U64 = 0xffffffffffffffffn;
+
+/**
+ * 16 hex digits naming one framing: FNV-1a 64 of JSON [focal, subjectBox].
+ * The client portal's framingRevision (src/lib/plates.ts) is the same function;
+ * both test suites pin the same vectors.
+ */
+export function framingRevision(focal: readonly number[] | null, subjectBox: readonly number[] | null): string {
+  let hash = FNV64_OFFSET;
+  for (const char of JSON.stringify([focal, subjectBox])) {
+    hash = ((hash ^ BigInt(char.charCodeAt(0))) * FNV64_PRIME) & U64;
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
+interface Placement {
+  /** plates/{projectId}/{sha256}: the original sits here. */
+  base: string;
+  /** Where this framing's renditions and crops.json go. */
+  prefix: string;
+  /** Set when prefix is base/f/{rev}; every crop stored there names it. */
+  rev: string | null;
+  stored: StoredPlate | null;
+}
+
+/** The manifest at `prefix`: null when there is none, 'taken' when it is another framing's or unreadable. */
+async function manifestAt(env: PlatesEnv, prefix: string, body: IngestBody): Promise<StoredPlate | 'taken' | null> {
   const existing = await env.PLATES.get(`${prefix}/crops.json`);
-  const stored = existing && (await existing.json<StoredPlate>().catch(() => null));
-  return stored && sameInputs(stored, body) ? stored : null;
+  if (!existing) return null;
+  const stored = await existing.json<StoredPlate>().catch(() => null);
+  return stored && sameInputs(stored, body) ? stored : 'taken';
+}
+
+// Null framing keeps the unversioned prefix unless that prefix already holds
+// another framing (a Phase 2 re-crop wrote one there). Every other framing,
+// and that case, goes under base/f/{rev}. A prefix holding another framing is
+// never written: on a revision collision the ingest fails instead.
+async function placement(env: PlatesEnv, base: string, body: IngestBody): Promise<Placement> {
+  if (body.focal === null && body.subjectBox === null) {
+    const legacy = await manifestAt(env, base, body);
+    if (legacy !== 'taken') return { base, prefix: base, rev: null, stored: legacy };
+  }
+  const rev = framingRevision(body.focal, body.subjectBox);
+  const prefix = `${base}/f/${rev}`;
+  const stored = await manifestAt(env, prefix, body);
+  if (stored === 'taken') throw new IngestError(409, `framing revision ${rev} already holds another framing`);
+  return { base, prefix, rev, stored };
+}
+
+function stamped(crops: Crops, rev: string | null): Crops {
+  if (!rev) return crops;
+  return Object.fromEntries(Object.entries(crops).map(([key, crop]) => [key, { ...crop, rev }]));
 }
 
 const isPlateOutput = (o: ProcessorOutput): boolean =>
@@ -471,34 +530,47 @@ async function putManifest(env: PlatesEnv, prefix: string, stored: StoredPlate):
   return toRecord(stored);
 }
 
+// The same bytes under every framing, so written once: an existing original stays.
+async function putOriginal(env: PlatesEnv, base: string, source: Source, result: ProcessorResult): Promise<string> {
+  const key = `${base}/original.${extension(result.format)}`;
+  if (!(await env.PLATES.head(key))) {
+    await env.PLATES.put(key, source.bytes, { httpMetadata: { contentType: source.contentType } });
+  }
+  return key;
+}
+
 async function storePlate(
   env: PlatesEnv,
-  prefix: string,
+  place: Placement,
   body: IngestBody,
   source: Source,
   sha256: string,
   result: ProcessorResult,
 ): Promise<PlateRecord> {
-  await putOutputs(env, prefix, result.outputs);
-  const originalKey = `${prefix}/original.${extension(result.format)}`;
-  await env.PLATES.put(originalKey, source.bytes, { httpMetadata: { contentType: source.contentType } });
-  const record = toRecord({ ...result, sha256, originalKey });
-  return putManifest(env, prefix, { ...record, focal: body.focal, subjectBox: body.subjectBox, sourceKinds: [body.sourceKind] });
+  await putOutputs(env, place.prefix, result.outputs);
+  const originalKey = await putOriginal(env, place.base, source, result);
+  const record = toRecord({ ...result, crops: stamped(result.crops, place.rev), sha256, originalKey });
+  return putManifest(env, place.prefix, { ...record, focal: body.focal, subjectBox: body.subjectBox, sourceKinds: [body.sourceKind] });
 }
 
+const cropOf = (outputKey: string): string => outputKey.replace(/-\d+\.(avif|webp)$/, '');
+
 // Same bytes and inputs, a source kind the manifest has not planned for: the
-// processor encoded only the crops that kind adds, and the manifest keeps the union.
+// processor encoded only the crops that kind adds, and the manifest keeps the
+// union. A crop the manifest already holds is never written again.
 async function addCrops(
   env: PlatesEnv,
-  prefix: string,
+  place: Placement,
   body: IngestBody,
   stored: StoredPlate,
   result: ProcessorResult,
 ): Promise<PlateRecord> {
-  await putOutputs(env, prefix, result.outputs);
-  return putManifest(env, prefix, {
+  const held = (key: string) => Object.hasOwn(stored.crops, key);
+  const added = Object.fromEntries(Object.entries(result.crops).filter(([key]) => !held(key)));
+  await putOutputs(env, place.prefix, result.outputs.filter((o) => !held(cropOf(o.key))));
+  return putManifest(env, place.prefix, {
     ...stored,
-    crops: { ...stored.crops, ...result.crops },
+    crops: { ...stored.crops, ...stamped(added, place.rev) },
     sourceKinds: [...(stored.sourceKinds ?? []), body.sourceKind],
   });
 }
@@ -506,11 +578,11 @@ async function addCrops(
 async function ingest(env: PlatesEnv, deps: PlateIngestDeps, body: IngestBody): Promise<PlateRecord> {
   const source = await readSource(body.sourceUrl, originPolicy(body.sourceKind, body.sourceUrl, env.SUPABASE_STORAGE_ORIGIN), deps);
   const sha256 = await sha256Hex(source.bytes);
-  const prefix = `plates/${body.projectId}/${sha256}`;
-  const stored = await storedPlate(env, prefix, body);
-  if (!stored) return storePlate(env, prefix, body, source, sha256, await runProcessor(deps, body, source.bytes, []));
+  const place = await placement(env, `plates/${body.projectId}/${sha256}`, body);
+  const { stored } = place;
+  if (!stored) return storePlate(env, place, body, source, sha256, await runProcessor(deps, body, source.bytes, []));
   if (stored.sourceKinds?.includes(body.sourceKind)) return toRecord(stored);
-  return addCrops(env, prefix, body, stored, await runProcessor(deps, body, source.bytes, Object.keys(stored.crops)));
+  return addCrops(env, place, body, stored, await runProcessor(deps, body, source.bytes, Object.keys(stored.crops)));
 }
 
 function errorResponse(err: unknown): Response {
@@ -533,17 +605,17 @@ export async function handlePlateIngest(request: Request, env: PlatesEnv, deps: 
 
 // GET /plates/{projectId}/{sha256}/{file} — the client-edition-compose edge
 // function reads a plate's full-frame rendition (the `piece` crop: uncropped,
-// immutable per sha256) to show a model. Same bearer as ingest. Only the two
-// piece widths it reads are served, so no free path segment reaches R2; the
-// answer is 401, 404 or the bytes, and nothing else.
+// the same picture under every framing) to show a model. Same bearer as
+// ingest. Only the two piece widths it reads are served, so no free path
+// segment reaches R2; the answer is 401, 404 or the bytes, and nothing else.
 export const READABLE_FILES = ['piece-512.webp', 'piece-768.webp'];
 const READ_SHAPE = /^\/plates\/[^/]+\/[^/]+\/[^/]+$/;
 const READ_PATH = /^\/plates\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([0-9a-f]{64})\/([^/]+)$/;
 
-/** The R2 key a read may touch, or null: a uuid, a sha256 and an allowlisted file. */
-function readKey(pathname: string): string | null {
+/** The plate's base and an allowlisted file, or null: a uuid, a sha256 and a readable file. */
+function readTarget(pathname: string): { base: string; file: string } | null {
   const match = READ_PATH.exec(pathname);
-  return match && READABLE_FILES.includes(match[3]) ? `plates/${match[1]}/${match[2]}/${match[3]}` : null;
+  return match && READABLE_FILES.includes(match[3]) ? { base: `plates/${match[1]}/${match[2]}`, file: match[3] } : null;
 }
 
 /** The stored plate, or null when it is missing or the bucket fails: a failed read answers as a miss. */
@@ -556,12 +628,33 @@ async function readPlate(env: PlatesEnv, key: string) {
   }
 }
 
+async function framingPrefixes(env: PlatesEnv, base: string): Promise<string[]> {
+  try {
+    return (await env.PLATES.list({ prefix: `${base}/f/`, delimiter: '/' })).delimitedPrefixes;
+  } catch {
+    console.error('Plate list failed');
+    return [];
+  }
+}
+
+// The unversioned piece, else any framing's: bytes first copied with a framing
+// have no unversioned prefix, and the whole frame is the same under each.
+async function readPiece(env: PlatesEnv, target: { base: string; file: string }) {
+  const unversioned = await readPlate(env, `${target.base}/${target.file}`);
+  if (unversioned) return unversioned;
+  for (const prefix of await framingPrefixes(env, target.base)) {
+    const framed = await readPlate(env, `${prefix}${target.file}`);
+    if (framed) return framed;
+  }
+  return null;
+}
+
 export async function handlePlateRead(request: Request, env: PlatesEnv): Promise<Response> {
   if (!bearerMatches(request.headers.get('authorization'), env.PLATE_INGEST_SECRET)) {
     return new Response(null, { status: 401 });
   }
-  const key = readKey(new URL(request.url).pathname);
-  const object = key ? await readPlate(env, key) : null;
+  const target = readTarget(new URL(request.url).pathname);
+  const object = target ? await readPiece(env, target) : null;
   if (!object) return new Response(null, { status: 404 });
   return new Response(object.body, { headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'private, no-store' } });
 }

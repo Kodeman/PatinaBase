@@ -5,6 +5,7 @@ import { createServerClient } from '@patina/supabase/server';
 import { createAdminClient, createMiddlewareClient } from '@patina/supabase/client';
 import { getCloudflareContext } from '@opennextjs/cloudflare/cloudflare-context';
 import { config, middleware } from '@/middleware';
+import { framingRevision } from '@/lib/plates';
 import { GET } from '../route';
 
 jest.mock('@patina/supabase/server', () => ({ createServerClient: jest.fn() }));
@@ -195,6 +196,93 @@ describe('private plate GET', () => {
       expect((await call({ file: `${crop}-1024.webp` })).status).toBe(200);
       expect(mockGet).toHaveBeenLastCalledWith(`plates/${PROJECT}/${SHA}/${crop}-1024.webp`, { onlyIf: expect.any(Headers) });
     }
+  });
+});
+
+describe('framing-versioned plate GET (?r=)', () => {
+  const REV = framingRevision([0.4, 0.5], null);
+  const BASE = `plates/${PROJECT}/${SHA}`;
+  const onlyIf = { onlyIf: expect.any(Headers) };
+
+  function callAt(query: string) {
+    return GET(new Request(`https://client.patina.test/plates/${SCOPE}/${SHA}/${FILE}${query}`), {
+      params: Promise.resolve({ scope: SCOPE, sha256: SHA, file: FILE }),
+    });
+  }
+
+  function manifest(focal: number[] | null, subjectBox: number[] | null) {
+    const json = JSON.stringify({ focal, subjectBox, crops: {} });
+    return { ...object(), body: new Response(json).body!, size: json.length };
+  }
+
+  function bucketWith(objects: Record<string, () => unknown>) {
+    mockGet.mockImplementation((key: string) => Promise.resolve(objects[key]?.() ?? null));
+  }
+
+  it('serves the revision\'s own key and never the unversioned one', async () => {
+    bucketWith({ [`${BASE}/f/${REV}/${FILE}`]: () => object(), [`${BASE}/${FILE}`]: () => object() });
+    const response = await callAt(`?r=${REV}`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('plate');
+    expect(response.headers.get('Cache-Control')).toBe('private, max-age=3600');
+    expect(mockGet.mock.calls).toEqual([[`${BASE}/f/${REV}/${FILE}`, onlyIf]]);
+  });
+
+  it('without ?r= reads only the unversioned key', async () => {
+    bucketWith({ [`${BASE}/${FILE}`]: () => object() });
+    expect((await callAt('')).status).toBe(200);
+    expect(mockGet.mock.calls).toEqual([[`${BASE}/${FILE}`, onlyIf]]);
+  });
+
+  it('falls back to the unversioned prefix only when its manifest is the same framing', async () => {
+    bucketWith({ [`${BASE}/crops.json`]: () => manifest([0.4, 0.5], null), [`${BASE}/${FILE}`]: () => object() });
+    const response = await callAt(`?r=${REV}`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('plate');
+    expect(mockGet.mock.calls).toEqual([
+      [`${BASE}/f/${REV}/${FILE}`, onlyIf],
+      [`${BASE}/crops.json`],
+      [`${BASE}/${FILE}`, onlyIf],
+    ]);
+  });
+
+  it('is 404 when the unversioned prefix holds another framing, an unreadable manifest or none', async () => {
+    const unreadable = () => ({ ...object(), body: new Response('not json').body! });
+    for (const crops of [() => manifest([0.7, 0.5], null), () => manifest(null, null), unreadable, () => null]) {
+      mockGet.mockReset();
+      bucketWith({ [`${BASE}/crops.json`]: crops, [`${BASE}/${FILE}`]: () => object() });
+      const response = await callAt(`?r=${REV}`);
+      expect(response.status).toBe(404);
+      expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+      expect(mockGet.mock.calls).toEqual([[`${BASE}/f/${REV}/${FILE}`, onlyIf], [`${BASE}/crops.json`]]);
+    }
+  });
+
+  it('a manifest with no framing fields is the null framing', async () => {
+    const rev0 = framingRevision(null, null);
+    const bare = JSON.stringify({ crops: {} });
+    bucketWith({ [`${BASE}/crops.json`]: () => ({ ...object(), body: new Response(bare).body! }), [`${BASE}/${FILE}`]: () => object() });
+    expect((await callAt(`?r=${rev0}`)).status).toBe(200);
+  });
+
+  it('rejects a malformed or repeated revision before auth or storage', async () => {
+    for (const query of [
+      '?r=', '?r=XYZ', `?r=${REV.toUpperCase()}`, `?r=${REV.slice(1)}`, `?r=${REV}0`, `?r=${REV}%0A`,
+      `?r=${REV}&r=${REV}`, '?r=1k2j3h', `?r=../${REV}`,
+    ]) {
+      const response = await callAt(query);
+      expect(response.status).toBe(404);
+      expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    }
+    expect(createServerClient).not.toHaveBeenCalled();
+    expect(getCloudflareContext).not.toHaveBeenCalled();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('a revision never bypasses membership', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: null });
+    expect((await callAt(`?r=${REV}`)).status).toBe(404);
+    expect(mockGet).not.toHaveBeenCalled();
   });
 });
 

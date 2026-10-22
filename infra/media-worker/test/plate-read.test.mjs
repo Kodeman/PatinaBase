@@ -16,12 +16,18 @@ const PROJECT = '6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b';
 const SHA = 'ab'.repeat(32);
 const WEBP = new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
 
+const FRAMED = `plates/${PROJECT}/${'cd'.repeat(32)}`;
+
 function harness({ broken = false } = {}) {
   const reads = [];
   const objects = new Map([
     [`plates/${PROJECT}/${SHA}/piece-768.webp`, WEBP],
     [`plates/${PROJECT}/${SHA}/wide-1600.webp`, WEBP],
     [`plates/${PROJECT}/${SHA}/original.jpg`, WEBP],
+    // Bytes first copied with a framing: renditions only under f/{rev}/.
+    [`${FRAMED}/original.jpg`, WEBP],
+    [`${FRAMED}/f/0123456789abcdef/crops.json`, WEBP],
+    [`${FRAMED}/f/fedcba9876543210/piece-512.webp`, WEBP],
   ]);
   const env = {
     PLATE_INGEST_SECRET: SECRET,
@@ -32,6 +38,11 @@ function harness({ broken = false } = {}) {
         if (broken) throw new Error('R2 unavailable');
         const bytes = objects.get(key);
         return bytes ? { body: new Blob([bytes]).stream() } : null;
+      },
+      async list({ prefix, delimiter }) {
+        const below = [...objects.keys()].filter((key) => key.startsWith(prefix));
+        const folders = below.map((key) => key.slice(prefix.length)).filter((rest) => rest.includes(delimiter));
+        return { objects: [], delimitedPrefixes: [...new Set(folders.map((rest) => `${prefix}${rest.split(delimiter)[0]}${delimiter}`))].sort() };
       },
     },
   };
@@ -62,6 +73,19 @@ test('a hit returns the stored bytes as private, uncached WebP', async () => {
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), WEBP);
   assert.deepEqual(reads, [`plates/${PROJECT}/${SHA}/piece-768.webp`]);
+});
+
+test('bytes first copied with a framing serve the piece from their framing prefix', async () => {
+  const { get, reads } = harness();
+  const response = await get(`/plates/${PROJECT}/${'cd'.repeat(32)}/piece-512.webp`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), WEBP);
+  assert.deepEqual(reads, [
+    `${FRAMED}/piece-512.webp`,
+    `${FRAMED}/f/0123456789abcdef/piece-512.webp`,
+    `${FRAMED}/f/fedcba9876543210/piece-512.webp`,
+  ]);
+  await bare(await get(`/plates/${PROJECT}/${'cd'.repeat(32)}/piece-768.webp`), 404);
 });
 
 test('a missing or wrong bearer is 401 before anything is read', async () => {

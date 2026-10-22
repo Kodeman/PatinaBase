@@ -22,14 +22,17 @@ export const PLATE_SIZES = {
   board: '(min-width:1296px) 1248px, calc(100vw - 32px)',
 } as const;
 
-/** The source SHA is in the path; geometry distinguishes re-crops of those bytes. */
-export function plateRevision(focal: readonly number[] | null, subjectBox: readonly number[] | null): string | undefined {
-  if (focal === null && subjectBox === null) return undefined;
-  let hash = 2166136261;
+const FNV64_OFFSET = BigInt('0xcbf29ce484222325');
+const FNV64_PRIME = BigInt('0x100000001b3');
+const U64 = BigInt('0xffffffffffffffff');
+
+/** 16 hex: FNV-1a 64 over [focal, subjectBox]; the media worker keys a framing's renditions by it. */
+export function framingRevision(focal: readonly number[] | null, subjectBox: readonly number[] | null): string {
+  let hash = FNV64_OFFSET;
   for (const char of JSON.stringify([focal, subjectBox])) {
-    hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+    hash = ((hash ^ BigInt(char.charCodeAt(0))) * FNV64_PRIME) & U64;
   }
-  return (hash >>> 0).toString(36);
+  return hash.toString(16).padStart(16, '0');
 }
 
 export function plateUrl(

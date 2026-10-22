@@ -652,8 +652,8 @@ VALUES
   ('84800000-0000-4000-8000-000000000511', '84800000-0000-4000-8000-000000000001', repeat('a', 64), 'upload',
    '{"table": "project_files", "id": "84800000-0000-4000-8000-000000000511"}'::jsonb,
    'plates/84800000-0000-4000-8000-000000000001/' || repeat('a', 64) || '/original.jpg', 1600, 1200,
-   '{"wide": {"rect": [0, 0, 1600, 1000], "widths": [800]}}'::jsonb, '{0.5,0.5}', '{0.1,0.1,0.8,0.8}',
-   'model', '{}', 'A kitchen'),
+   '{"wide": {"rect": [0, 0, 1600, 1000], "widths": [800], "rev": "75b7d03e00fd5d65"}}'::jsonb, '{0.5,0.5}',
+   '{0.1,0.1,0.8,0.8}', 'model', '{}', 'A kitchen'),
   ('84800000-0000-4000-8000-000000000541', '84800000-0000-4000-8000-000000000004', repeat('b', 64), 'upload',
    '{"table": "project_files", "id": "84800000-0000-4000-8000-000000000541"}'::jsonb,
    'plates/84800000-0000-4000-8000-000000000004/' || repeat('b', 64) || '/original.jpg', 1600, 1200,
@@ -716,7 +716,8 @@ SELECT is(
     jsonb_build_object('sha256', repeat('a', 64),
                        'originalKey', 'plates/84800000-0000-4000-8000-000000000001/' || repeat('a', 64) || '/original.jpg',
                        'width', 1600, 'height', 1200,
-                       'crops', '{"wide": {"rect": [200, 0, 1400, 1000], "widths": [800, 1200]}}'::jsonb)),
+                       'crops', '{"wide": {"rect": [200, 0, 1400, 1000], "widths": [800, 1200],
+                                  "rev": "df9491d5f296d8c9"}}'::jsonb)),
   '84800000-0000-4000-8000-000000000511'::uuid,
   'plates: a re-crop leased before the close settles onto the same plate');
 SELECT is(
@@ -742,7 +743,7 @@ SELECT is(
      SELECT focal, subject_box, focal_origin, crops, original_key, width, height, flags, perceived_alt
      FROM public.client_plate_assets WHERE id = '84800000-0000-4000-8000-000000000511') AS now_row),
   (SELECT to_jsonb(x1_before) FROM x1_before),
-  'plates: the frozen edition''s plate keeps its framing, crops and perception through all of it');
+  'plates: the frozen edition''s plate keeps its framing, crops (their rendition rev too) and perception through all of it');
 
 -- ─── band (R6) ─────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 /* Crop geometry the page needs: object-position from a crop rectangle and the
    `<picture>` sources built from an asset's stored crops. */
 
-import { plateRevision, plateSrcSet, plateUrl, type PlateFormat } from '@/lib/plates';
+import { plateSrcSet, plateUrl, type PlateFormat } from '@/lib/plates';
 
 import { heroDesktopLayout, type HeroDesktopLayout } from './floors';
 import type { EditorialAsset, PlateCropKey, Rect } from './types';
@@ -55,14 +55,13 @@ function sourcesFor(scopeId: string, asset: EditorialAsset, cropKey: PlateCropKe
   const crop = asset.crops[cropKey];
   if (!crop || crop.widths.length === 0) return null;
   const widths = [...crop.widths].sort((a, b) => a - b);
-  const revision = plateRevision(asset.focal, asset.subjectBox);
   const sources: PictureSource[] = PLATE_FORMATS.map((format) => ({
     type: `image/${format}` as const,
-    srcSet: plateSrcSet(scopeId, asset.sha256, cropKey, widths, format, revision),
+    srcSet: plateSrcSet(scopeId, asset.sha256, cropKey, widths, format, crop.rev),
     sizes,
     ...(media ? { media } : {}),
   }));
-  return { sources, src: plateUrl(scopeId, asset.sha256, cropKey, widths[widths.length - 1], 'webp', revision) };
+  return { sources, src: plateUrl(scopeId, asset.sha256, cropKey, widths[widths.length - 1], 'webp', crop.rev) };
 }
 
 export interface PhoneCrop {
@@ -189,9 +188,10 @@ export function heroPreloadSources(scopeId: string, asset: EditorialAsset): Hero
       ]
     : [{ cropKey: hero.main, sizes: hero.sizes }];
   return sources.flatMap(({ cropKey, sizes, media }) => {
-    const widths = asset.crops[cropKey]?.widths ?? [];
+    const crop = asset.crops[cropKey];
+    const widths = crop?.widths ?? [];
     if (widths.length === 0) return [];
-    const imageSrcSet = plateSrcSet(scopeId, asset.sha256, cropKey, [...widths].sort((a, b) => a - b), 'avif', plateRevision(asset.focal, asset.subjectBox));
+    const imageSrcSet = plateSrcSet(scopeId, asset.sha256, cropKey, [...widths].sort((a, b) => a - b), 'avif', crop?.rev);
     return [{ imageSrcSet, imageSizes: sizes, ...(media ? { media } : {}) }];
   });
 }

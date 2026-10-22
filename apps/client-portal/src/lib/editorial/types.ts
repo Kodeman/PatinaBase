@@ -18,6 +18,8 @@ export type Point = readonly [number, number];
 export interface PlateCrop {
   rect: Rect;
   widths: readonly number[];
+  /** The framing revision whose prefix holds these renditions; absent for the unversioned (legacy) prefix. */
+  rev?: string;
 }
 
 export interface CaptionFields {

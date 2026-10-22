@@ -77,9 +77,12 @@
 --    leases a request of a closed job. A losing writer refuses with 55000.
 --
 -- 6. A closed job's plates keep what its edition showed (SQ-1725 R1). The
---    media worker writes a re-crop's renditions over the same R2 keys
---    (plates/<project>/<sha256>/<crop>-<width>.<ext>), so the boundary is
---    before the worker: set_plate_focal and record_plate_perception lock
+--    media worker keys each framing's renditions apart
+--    (plates/<project>/<sha256>/f/<rev>/…, the crops naming <rev>) and
+--    never rewrites a key with another framing (SQ-1728), so a re-crop
+--    that settles late leaves the frozen bytes in place; the row's crops
+--    are what the edition's URLs name, so the boundary is still
+--    here: set_plate_focal and record_plate_perception lock
 --    the project FOR SHARE and refuse a closed job (55000); a queued
 --    re-crop (a request that keeps its asset) of a closed job is closed
 --    by claim_client_plate_requests, status done, close_reason 'closed',
@@ -931,6 +934,7 @@ BEGIN
   END IF;
 
   IF v_kept THEN
+    -- Deliberate exception (R142): concept_seen only rises, even on a closed job's kept asset.
     UPDATE public.client_plate_assets
     SET concept_seen = true,
         updated_at = now()
