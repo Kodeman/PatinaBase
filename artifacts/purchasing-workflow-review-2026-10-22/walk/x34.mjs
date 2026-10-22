@@ -1,0 +1,14 @@
+import { open, shot, dump, BASE, PROJECT, vshot, txt } from "./lib.mjs";
+const L = "US-50 Walk Table lamp (pair) · ×2";
+const { browser, page } = await open();
+await page.setViewportSize({ width: 390, height: 844 });
+await page.goto(`${BASE}/doc/${PROJECT}`, { waitUntil: "domcontentloaded" }); await page.waitForTimeout(7000);
+await page.getByRole("button", { name: /Open project contents/ }).click();
+await page.getByText("Pieces", { exact: true }).locator("visible=true").first().click(); await page.waitForTimeout(2500);
+await shot(page, "56-phone-pieces-status-390", false);
+await page.getByText(L, { exact: true }).first().click(); await page.waitForTimeout(2500);
+await vshot(page, "57-phone-movement-tracking-390", page.getByTestId("line-movement-cell"));
+console.log("overflow:", await page.evaluate(()=>document.documentElement.scrollWidth+" vs "+innerWidth));
+const mv = page.getByTestId("line-movement-cell");
+console.log("tracking link:", await mv.getByRole("link", { name: "1Z999AA10123456784" }).getAttribute("href"));
+await browser.close();

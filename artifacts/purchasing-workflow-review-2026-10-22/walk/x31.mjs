@@ -1,0 +1,10 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+let { browser, page } = await open("us50-owner@patina.dev");
+await page.waitForTimeout(5000);
+await page.getByRole("button", { name: "Skip for now" }).click({ timeout: 8000 }).catch(()=>{});
+await page.getByRole("link", { name: /^Approve release/ }).click(); await page.waitForTimeout(2500);
+await page.getByRole("dialog").getByRole("link", { name: "Approve release" }).or(page.getByRole("dialog").getByRole("button", { name: "Approve release" })).first().click();
+await page.waitForTimeout(7000);
+await shot(page, "53-owner-after-approve-release-1440", false);
+console.log("after:", (await page.innerText("body")).replace(/\n+/g," | ").slice(0,500));
+await browser.close();

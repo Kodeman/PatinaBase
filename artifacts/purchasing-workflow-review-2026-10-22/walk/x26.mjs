@@ -1,0 +1,13 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const D = "US-50 Walk Dining chair (set of 6) · ×6";
+const { browser, page } = await open();
+await openLine(page, D);
+await page.getByRole("button", { name: "Order", exact: true }).first().click();
+const paper = page.getByRole("dialog", { name: "The order paper" });
+await paper.waitFor(); await page.waitForTimeout(3000);
+await paper.getByRole("radio", { name: /Receiving Warehouse/ }).check();
+await paper.evaluate(el => el.querySelectorAll("*").forEach(e=>{ if(e.scrollHeight>e.clientHeight+20) e.scrollTop=99999; }));
+await shot(page, "50-paper-over-threshold-1440", false);
+await dump(page, "dialog button");
+console.log((await txt(paper)).slice(-500));
+await browser.close();

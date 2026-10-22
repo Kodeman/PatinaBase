@@ -1,0 +1,10 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const { browser, page } = await open();
+await openLine(page, "US-50 Walk Channel-back sofa");
+const mv = page.getByTestId("line-movement-cell");
+await mv.getByRole("button", { name: "Record a shipment" }).click();
+await page.waitForTimeout(1500);
+await vshot(page, "13-record-shipment-form-1440", page.getByTestId("record-shipment-form"));
+console.log(await txt(page.getByTestId("record-shipment-form")));
+await dump(page, '[data-testid=record-shipment-form] input, [data-testid=record-shipment-form] select, [data-testid=record-shipment-form] button, [data-testid=record-shipment-form] label');
+await browser.close();

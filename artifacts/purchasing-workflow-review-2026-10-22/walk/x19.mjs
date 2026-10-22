@@ -1,0 +1,28 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const RUG = "US-50 Walk Hand-knotted rug 9x12", SOFA="US-50 Walk Channel-back sofa";
+const { browser, page } = await open();
+await openLine(page, RUG);
+await page.getByRole("button", { name: "Request a sample" }).first().click();
+await page.getByPlaceholder(/./).filter({ hasText: "" }).first();
+const buy = page.getByTestId("line-buy-cell");
+await buy.getByLabel("Description").fill("Wool swatch, colorway Dune");
+await buy.getByRole("button", { name: "Record it" }).click(); await page.waitForTimeout(3000);
+await vshot(page, "36-sample-recorded-1440", buy);
+console.log("buy cell after sample:", (await txt(buy)).slice(0,500));
+// antique: Bought it already
+await page.goto(`${BASE}/doc/${PROJECT}`, { waitUntil: "domcontentloaded" });
+await page.getByRole("button", { name: /^Pieces \d+ lines?/i }).first().click({ timeout: 90000 }).catch(()=>{});
+await page.getByRole("button", { name: "Add room selection" }).first().click({ timeout: 30000 });
+await page.waitForTimeout(1200);
+await shot(page, "37-add-room-selection-menu-1440", false);
+await dump(page, "dialog button, [role=menu] button, [role=menuitem]");
+await page.getByRole("button", { name: /^Bought it already/ }).click();
+const pf = page.getByTestId("purchase-record-form"); await pf.waitFor({ timeout: 20000 });
+await shot(page, "38-purchase-record-form-1440", false);
+console.log("purchase form:", await txt(pf));
+await pf.getByRole("button", { name: "Find", exact: true }).click();
+await pf.getByPlaceholder("Pair of table lamps").fill("US-50 Walk Antique brass mirror (dealer find)");
+await pf.getByPlaceholder("CB2 · Chicago").fill("US-50 Walk Antiques Dealer, Galena IL");
+await pf.getByLabel("Amount paid").fill("950.00");
+await pf.getByLabel("Line", { exact: true }).selectOption({ label: /Antique/.test("") ? "" : undefined }).catch(async()=>{ const opts = await pf.getByLabel("Line",{exact:true}).locator("option").allInnerTexts(); console.log("line opts", opts); });
+await browser.close();

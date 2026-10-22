@@ -1,0 +1,14 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const { browser, page } = await open();
+const fails=[]; page.on("response", r=>{ if((r.url().includes("/functions/v1/")||r.url().includes("/rpc/")) && !r.ok() && r.request().method()!=="OPTIONS") fails.push(r.status()+" "+r.url().slice(-50)); });
+await openLine(page, "US-50 Walk Channel-back sofa");
+await page.getByRole("button", { name: "Log inspection" }).first().click();
+const d = page.getByRole("dialog", { name: /^Log inspection for / });
+await d.waitFor();
+await d.getByRole("button", { name: "Log inspection" }).click();
+await page.waitForTimeout(4000);
+console.log("drawer hidden?", !(await d.isVisible()), fails);
+await openLine(page, "US-50 Walk Channel-back sofa");
+await vshot(page, "17-sofa-after-receive-1440", page.getByTestId("line-receiving-cell"));
+for (const id of ["line-next-act","line-po-cell","line-movement-cell","line-receiving-cell","line-money-out-cell"]) console.log("==", id, await txt(page.getByTestId(id)));
+await browser.close();

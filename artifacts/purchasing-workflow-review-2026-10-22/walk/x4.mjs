@@ -1,0 +1,17 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const { browser, page } = await open();
+await openLine(page, "US-50 Walk Channel-back sofa");
+await page.getByRole("button", { name: /Record a quote/ }).first().click();
+await page.waitForTimeout(1500);
+await vshot(page, "04-quote-open-1440", page.getByTestId("line-quote-cell"));
+console.log("quote:", await txt(page.getByRole("dialog")));
+await dump(page, "dialog button, dialog input, dialog label, dialog select");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(500);
+await page.getByRole("button", { name: "Order", exact: true }).first().click();
+const paper = page.getByRole("dialog", { name: "The order paper" });
+await paper.waitFor({ timeout: 30000 }); await page.waitForTimeout(3000);
+await shot(page, "05-order-paper-sofa-1440", false);
+console.log("paper:", await txt(paper));
+await dump(page, "dialog button, dialog input, dialog label, dialog select, dialog legend");
+await browser.close();

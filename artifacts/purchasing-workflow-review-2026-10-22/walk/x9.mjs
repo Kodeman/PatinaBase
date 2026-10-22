@@ -1,0 +1,17 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const { browser, page } = await open();
+await openLine(page, "US-50 Walk Channel-back sofa");
+const mv = page.getByTestId("line-movement-cell");
+await mv.getByRole("button", { name: "Record a shipment" }).click();
+const f = page.getByTestId("record-shipment-form");
+await f.getByLabel("Shipment mode").selectOption({ label: "LTL" });
+await f.getByLabel("Shipment carrier").fill("Estes");
+await f.getByLabel("Shipment tracking").fill("US50-PRO-4471120");
+await f.getByLabel("US-50 Walk Channel-back sofa pieces shipped").fill("1");
+await vshot(page, "14-shipment-filled-1440", f);
+await f.getByRole("button", { name: "Save as shipped" }).click();
+await page.waitForTimeout(3500);
+await vshot(page, "15-after-shipment-saved-1440", page.getByTestId("line-movement-cell"));
+for (const id of ["line-next-act","line-po-cell","line-movement-cell","line-receiving-cell"]) console.log("==", id, await txt(page.getByTestId(id)));
+await dump(page, '[data-testid=line-movement-cell] a, [data-testid=line-movement-cell] button');
+await browser.close();

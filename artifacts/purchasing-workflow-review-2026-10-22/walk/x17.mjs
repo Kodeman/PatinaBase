@@ -1,0 +1,23 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const CH = "US-50 Walk Custom lounge chair (COM)", FAB = "US-50 Walk COM velvet for lounge chair";
+const { browser, page } = await open();
+await openLine(page, CH);
+await shot(page, "30-chair-com-unfold-1440", false);
+console.log("chair buy:", await txt(page.getByTestId("line-buy-cell")));
+await vshot(page, "30b-chair-buy-cell-1440", page.getByTestId("line-buy-cell"));
+// fabric order -> workroom as "Somewhere else"
+await openLine(page, FAB);
+await vshot(page, "31-fabric-line-1440", page.getByTestId("line-buy-cell"));
+console.log("fabric buy:", await txt(page.getByTestId("line-buy-cell")));
+await page.getByRole("button", { name: "Order", exact: true }).first().click();
+const paper = page.getByRole("dialog", { name: "The order paper" });
+await paper.waitFor(); await page.waitForTimeout(3000);
+await paper.getByRole("radio", { name: /Somewhere else/ }).check();
+await paper.getByPlaceholder(/Receiver, street/).fill("US-50 Walk Hollis Workroom, 22 Mill St, Madison, WI 53704");
+await shot(page, "32-fabric-paper-ship-to-workroom-1440", false);
+await paper.getByRole("button", { name: /^Send to / }).click();
+await page.waitForTimeout(6000);
+console.log("sent:", (await txt(paper)).slice(-100));
+await paper.getByRole("button", { name: "Done" }).click();
+await page.waitForTimeout(1000);
+await browser.close();

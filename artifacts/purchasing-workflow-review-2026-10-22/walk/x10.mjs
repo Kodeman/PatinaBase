@@ -1,0 +1,10 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const { browser, page } = await open();
+await openLine(page, "US-50 Walk Channel-back sofa");
+await page.getByRole("button", { name: "Log inspection" }).first().click();
+const d = page.getByRole("dialog", { name: /^Log inspection for / });
+await d.waitFor(); await page.waitForTimeout(1500);
+await shot(page, "16-receive-drawer-warehouse-1440", false);
+console.log(await txt(d));
+await dump(page, "dialog button, dialog input, dialog select, dialog label");
+await browser.close();

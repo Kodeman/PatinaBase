@@ -1,0 +1,13 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const { browser, page } = await open();
+await openLine(page, "US-50 Walk Channel-back sofa");
+const ack = page.getByTestId("ack-check");
+await ack.getByPlaceholder("NA-2026-…").fill("HF-US50-1001");
+await vshot(page, "11-ack-check-1440", ack);
+await ack.getByRole("button", { name: /Everything agrees/ }).click();
+await page.waitForTimeout(3000);
+await openLine(page, "US-50 Walk Channel-back sofa");
+await vshot(page, "12-after-ack-1440", page.getByTestId("line-movement-cell"));
+for (const id of ["line-next-act","line-po-cell","line-movement-cell","line-receiving-cell"]) console.log("==", id, await txt(page.getByTestId(id)));
+await dump(page, '[data-testid=line-movement-cell] button, [data-testid=line-next-act] button, [data-testid=line-po-cell] button');
+await browser.close();

@@ -1,0 +1,30 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const L = "US-50 Walk Table lamp (pair) · ×2";
+const { browser, page } = await open();
+await page.setViewportSize({ width: 390, height: 844 });
+await page.goto(`${BASE}/desk`, { waitUntil: "domcontentloaded" }); await page.waitForTimeout(6000);
+await shot(page, "21-phone-desk-390", false);
+console.log("desk:", (await page.innerText("body")).replace(/\n+/g," | ").slice(0,600));
+await page.goto(`${BASE}/doc/${PROJECT}`, { waitUntil: "domcontentloaded" }); await page.waitForTimeout(7000);
+await shot(page, "22-phone-document-390", false);
+console.log("overflow-x:", await page.evaluate(()=>document.documentElement.scrollWidth+" vs "+innerWidth));
+try {
+  await openLine(page, L);
+} catch (e) { console.log("openLine failed", e.message.slice(0,200)); 
+  await dump(page); }
+await vshot(page, "23-phone-lamps-line-390", page.getByTestId("line-next-act"));
+console.log("next:", await txt(page.getByTestId("line-next-act")));
+await page.getByRole("button", { name: "Log inspection" }).first().click();
+const d = page.getByRole("dialog", { name: /^Log inspection for / });
+await d.waitFor(); await page.waitForTimeout(1500);
+await shot(page, "24-phone-inspection-drawer-390", false);
+await d.getByRole("button", { name: /^Damaged/ }).click();
+await page.waitForTimeout(800);
+await shot(page, "25-phone-inspection-damaged-390", false);
+await d.getByLabel(/Condition of/).selectOption("damaged").catch(e=>console.log("cond fail"));
+const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==","base64");
+console.log("file inputs:", await d.locator('input[type="file"]').count(), "capture attr:", await d.locator('input[type="file"]').first().getAttribute("capture"), await d.locator('input[type="file"]').first().getAttribute("accept"));
+await dump(page, "dialog button, dialog select, dialog label, dialog input");
+await d.evaluate(el=>el.querySelectorAll("*").forEach(e=>{ if(e.scrollHeight>e.clientHeight+20) e.scrollTop=99999; }));
+await shot(page, "26-phone-inspection-bottom-390", false);
+await browser.close();

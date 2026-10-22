@@ -1,0 +1,14 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const D = "US-50 Walk Dining chair (set of 6) · ×6";
+const { browser, page } = await open();
+await openLine(page, D);
+for (const id of ["line-next-act","line-po-cell"]) console.log("==", id, await txt(page.getByTestId(id)));
+await vshot(page, "54-member-after-owner-approved-1440", page.getByTestId("line-po-cell"));
+await dump(page, "[data-testid=line-po-cell] button, [data-testid=line-next-act] button");
+await page.getByRole("button", { name: /^Order$|Open the order|Send/ }).first().click().catch(()=>{});
+await page.waitForTimeout(3000);
+const paper = page.getByRole("dialog").first();
+console.log((await txt(paper)).slice(-400));
+await dump(page, "dialog button");
+await shot(page, "55-member-paper-after-release-1440", false);
+await browser.close();

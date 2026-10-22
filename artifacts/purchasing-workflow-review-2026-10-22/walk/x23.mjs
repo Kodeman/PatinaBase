@@ -1,0 +1,10 @@
+import { open, shot, dump, BASE, PROJECT, txt } from "./lib.mjs";
+const { browser, page } = await open();
+await page.goto(`${BASE}/desk`, { waitUntil: "domcontentloaded" }); await page.waitForTimeout(5000);
+await page.getByRole("button", { name: "Skip for now" }).click({timeout:5000}).catch(()=>{});
+await shot(page,"43b-desk-closeup-1440",false);
+await page.getByText("Purchase orders, receiving and claims").first().click({timeout:20000}); await page.waitForTimeout(4000);
+await shot(page, "44-orders-book-1440", false);
+console.log(page.url()); console.log((await page.innerText("body")).replace(/\n+/g," | ").slice(0,2500));
+await dump(page, "[role=dialog] button, [role=dialog] a, nav button, [role=tab]");
+await browser.close();

@@ -1,0 +1,18 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+let { browser, page } = await open("us50-owner@patina.dev");
+await page.waitForTimeout(5000);
+await page.getByRole("button", { name: "Skip for now" }).click({ timeout: 8000 }).catch(()=>{});
+await shot(page, "52-owner-desk-release-need-1440", false);
+await page.getByRole("link", { name: /^Approve release/ }).click(); await page.waitForTimeout(4000);
+console.log(page.url());
+await shot(page, "52b-owner-after-approve-click-1440", false);
+await dump(page, "[data-orders-held-for-release] button, dialog button");
+const held = page.locator("[data-orders-held-for-release]");
+if (await held.count()) await held.getByRole("button", { name: "open →" }).first().click();
+await page.waitForTimeout(2500);
+await shot(page, "53-owner-paper-release-1440", false);
+const rel = page.getByRole("button", { name: /^Release to / }).first();
+console.log("rel count", await rel.count());
+await rel.click(); await page.waitForTimeout(6000);
+console.log("released:", (await txt(page.getByRole("dialog").first())).slice(-160));
+await browser.close();

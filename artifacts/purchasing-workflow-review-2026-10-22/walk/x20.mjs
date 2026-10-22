@@ -1,0 +1,16 @@
+import { open, shot, dump, BASE, PROJECT, openLine, vshot, txt } from "./lib.mjs";
+const { browser, page } = await open();
+await page.goto(`${BASE}/doc/${PROJECT}`, { waitUntil: "domcontentloaded" });
+await page.getByRole("button", { name: /^Pieces \d+ lines?|^Pieces/i }).first().click({ timeout: 90000 }).catch(()=>{});
+await page.waitForTimeout(3000);
+await page.getByRole("button", { name: "Add items", exact: true }).first().click({ timeout: 30000 });
+await page.waitForTimeout(1500);
+await shot(page, "37b-add-items-menu-1440", false);
+await dump(page, "dialog button, [role=menu] button, [role=menuitem], dialog a");
+console.log(await txt(page.getByRole("dialog")));
+await page.keyboard.press("Escape");
+await page.getByRole("button", { name: "More ⌄" }).first().click().catch(()=>{});
+await page.waitForTimeout(800);
+await shot(page, "37c-pieces-head-more-1440", false);
+await dump(page, "[role=menu] button, [role=menuitem], [role=menu] a");
+await browser.close();
