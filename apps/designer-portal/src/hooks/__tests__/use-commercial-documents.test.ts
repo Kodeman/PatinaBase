@@ -1334,7 +1334,7 @@ describe('saved purchasing authorization preview', () => {
     } },
   });
   type PreviewQuery = { queryKey: unknown; enabled: boolean; queryFn: () => Promise<any> };
-  const query = (id: string | null = 'proposal-1', projectId = 'project-1') => useFurnishingsAuthorizationPreview(id, projectId) as unknown as PreviewQuery;
+  const usePreviewQuery = (id: string | null = 'proposal-1', projectId = 'project-1') => useFurnishingsAuthorizationPreview(id, projectId) as unknown as PreviewQuery;
   beforeEach(() => { rpc.mockReset(); invoke.mockReset(); invalidateQueries.mockReset(); });
 
   it('reads a saved body and its reviewed fingerprint atomically without mutations or invoice data', async () => {
@@ -1342,7 +1342,7 @@ describe('saved purchasing authorization preview', () => {
     Object.assign(payload.furnishingsPreview.body, { depositPaidCents: 90000, depositRequiredCents: 123400 });
     Object.assign(payload.furnishingsPreview.body.items[0], { tradeUnitPriceCents: 777, notes: 'private' });
     rpc.mockResolvedValue({ data: payload, error: null });
-    const preview = await query().queryFn();
+    const preview = await usePreviewQuery().queryFn();
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalledWith('get_commercial_document_send_snapshot', { p_proposal_id: 'proposal-1' });
     expect(preview.documentFingerprint).toBe('reviewed-1');
@@ -1352,10 +1352,10 @@ describe('saved purchasing authorization preview', () => {
   });
 
   it('keys reads by project and document and disables reads without a saved identity', async () => {
-    expect(query().queryKey).toEqual(['furnishings-authorization-preview', 'project-1', 'proposal-1']);
-    expect(query('proposal-2', 'project-2').queryKey).toEqual(['furnishings-authorization-preview', 'project-2', 'proposal-2']);
-    expect(query(null).enabled).toBe(false);
-    await expect(query(null).queryFn()).rejects.toThrow('Choose a saved authorization');
+    expect(usePreviewQuery().queryKey).toEqual(['furnishings-authorization-preview', 'project-1', 'proposal-1']);
+    expect(usePreviewQuery('proposal-2', 'project-2').queryKey).toEqual(['furnishings-authorization-preview', 'project-2', 'proposal-2']);
+    expect(usePreviewQuery(null).enabled).toBe(false);
+    await expect(usePreviewQuery(null).queryFn()).rejects.toThrow('Choose a saved authorization');
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -1369,7 +1369,7 @@ describe('saved purchasing authorization preview', () => {
       (p: any) => { p.furnishingsPreview.body.items = []; },
     ]) {
       const p = snapshot(); change(p); rpc.mockResolvedValue({ data: p, error: null });
-      await expect(query().queryFn()).rejects.toThrow();
+      await expect(usePreviewQuery().queryFn()).rejects.toThrow();
     }
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -1377,7 +1377,7 @@ describe('saved purchasing authorization preview', () => {
   it('fails closed on read errors without creating or sending an authorization', async () => {
     const error = { code: '42501', message: 'unavailable' };
     rpc.mockResolvedValue({ data: null, error });
-    await expect(query().queryFn()).rejects.toEqual(error);
+    await expect(usePreviewQuery().queryFn()).rejects.toEqual(error);
     expect(invoke).not.toHaveBeenCalled();
     expect(rpc.mock.calls.every(call => call[0] === 'get_commercial_document_send_snapshot')).toBe(true);
   });

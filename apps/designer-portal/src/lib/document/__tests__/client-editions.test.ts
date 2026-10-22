@@ -42,7 +42,7 @@ jest.mock('@patina/supabase', () => ({
 }));
 
 describe('useProjectMakerNames', () => {
-  const queryOptions = () => {
+  const useQueryOptions = () => {
     useProjectMakerNames('p-1');
     return (useQuery as jest.Mock).mock.calls[0][0];
   };
@@ -73,7 +73,7 @@ describe('useProjectMakerNames', () => {
     query.in
       .mockResolvedValueOnce({ data: [{ id: 'v-0', name: 'Joined Maker' }], error: null })
       .mockResolvedValueOnce({ data: [{ id: 'v-500', name: 'Second Batch Maker' }], error: null });
-    const options = queryOptions();
+    const options = useQueryOptions();
     expect(options.queryKey).toEqual(['project-ffe-items', 'p-1', 'mirror-maker-names']);
     expect(options.enabled).toBe(true);
     expect([...await options.queryFn()]).toEqual(['active', 'retired atelier', 'joined maker', 'second batch maker']);
@@ -96,13 +96,13 @@ describe('useProjectMakerNames', () => {
     query.range
       .mockResolvedValueOnce({ data: Array.from({ length: 500 }, () => ({ vendor_name: 'Active', vendor: null })), error: null })
       .mockResolvedValueOnce({ data: null, error });
-    await expect(queryOptions().queryFn()).rejects.toBe(error);
+    await expect(useQueryOptions().queryFn()).rejects.toBe(error);
   });
 
   it('skips the vendors read when no item has a vendor id', async () => {
     const { query, from } = mockRead();
     query.range.mockResolvedValueOnce({ data: [{ vendor_name: ' Retired Atelier ', vendor_id: null }], error: null });
-    expect([...await queryOptions().queryFn()]).toEqual(['retired atelier']);
+    expect([...await useQueryOptions().queryFn()]).toEqual(['retired atelier']);
     expect(from.mock.calls).toEqual([['project_ffe_items']]);
     expect(query.in).not.toHaveBeenCalled();
   });
@@ -112,7 +112,7 @@ describe('useProjectMakerNames', () => {
     const error = new Error('vendor read denied');
     query.range.mockResolvedValueOnce({ data: [{ vendor_name: 'Active', vendor_id: 'v-1' }], error: null });
     query.in.mockResolvedValueOnce({ data: null, error });
-    await expect(queryOptions().queryFn()).rejects.toBe(error);
+    await expect(useQueryOptions().queryFn()).rejects.toBe(error);
   });
 
   it('disables the name read without a project', () => {
