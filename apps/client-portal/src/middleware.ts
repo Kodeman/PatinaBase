@@ -159,9 +159,12 @@ export async function middleware(req: NextRequest) {
   // session more often than not; gating it bounced her to
   // /auth/signin?callbackUrl=/preferences/unsubscribe, i.e. a sign-in wall in
   // front of an outcome page for an action already taken.
-  const isUnsubscribeOutcomePage =
-    req.nextUrl.pathname === '/preferences/unsubscribe' ||
-    req.nextUrl.pathname === '/preferences/unsubscribe/';
+  // /privacy is the public notice explaining how project records and pictures are used.
+  const isPublicNoticePage = [
+    '/preferences/unsubscribe',
+    '/preferences/unsubscribe/',
+    '/privacy',
+  ].includes(req.nextUrl.pathname);
   // Bearer-URL surfaces must never be cached by an intermediary: the HTML is
   // keyed on the token URL, so a cached copy would keep serving a revoked
   // link's sheet list. force-dynamic + meta tags govern Next and crawlers that
@@ -204,7 +207,7 @@ export async function middleware(req: NextRequest) {
     isPayPage ||
     isPaperworkPage ||
     isPiecePage ||
-    isUnsubscribeOutcomePage;
+    isPublicNoticePage;
   const isDataRoute = /^\/(?:api(?:\/|$)|plates\/)/.test(req.nextUrl.pathname);
   // The wrong-portal interstitial is the redirect target for wrong-role users;
   // it must be exempt from the gate or a wrong-role user would loop. /unauthorized

@@ -1466,7 +1466,7 @@ describe('Threshold — the acts the house owes', () => {
     renderThreshold();
 
     expect(
-      screen.getByText('Prepared by Quist Interiors · Sent through Patina'),
+      screen.getByText(/Prepared by Quist Interiors · Sent through Patina/),
     ).toBeInTheDocument();
   });
 
@@ -1489,7 +1489,7 @@ describe('Threshold — the acts the house owes', () => {
       'Mara Quist · mara@quist.test · +1 555 0142',
     );
     // Page furniture over the colophon, not a banner at the top of the house.
-    const colophon = screen.getByText('Prepared by Quist Interiors · Sent through Patina');
+    const colophon = screen.getByText(/Prepared by Quist Interiors · Sent through Patina/);
     expect(
       presented.compareDocumentPosition(colophon) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
