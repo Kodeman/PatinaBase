@@ -11,6 +11,8 @@ import { deriveDaySheet, groupSheetByJob, type SheetNeedState } from '@/lib/docu
 import { DaySheet } from '../day-sheet';
 
 jest.mock('@patina/supabase', () => ({
+  // US-49 — the Desk card's edition line (desk-job-card.test.tsx covers it).
+  useClientEditions: () => ({ data: undefined }),
   useSetNeedState: () => ({ mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false }),
 }));
 jest.mock('../acts/need-act-sheet', () => ({ useNeedActSheet: () => ({ open: () => false }) }));

@@ -38,6 +38,8 @@ const answeredFacts = () => ({ data: new Map(), isSuccess: true });
 let mockTeammateActed: (organizationId: string) => unknown = answeredFacts;
 
 jest.mock('@patina/supabase', () => ({
+  // US-49 — the Desk card's edition line (desk-job-card.test.tsx covers it).
+  useClientEditions: () => ({ data: undefined }),
   useProfile: () =>
     mockPendingRead === 'profile'
       ? { data: undefined, isLoading: true }

@@ -363,6 +363,8 @@ export function deriveDaySheet(input: DaySheetInput): DaySheet {
 export interface SheetCard {
   /** `project_id ?? engagement_id` — the key the sheet's lines carry. */
   jobId: string;
+  /** The job's real project, from the roster; null for a lead or proposal. */
+  projectId?: string | null;
   name: string;
   /** The job's stage, from the full roster; null where the roster has none. */
   stage: SectionKey | null;
@@ -380,7 +382,7 @@ export interface SheetCard {
  */
 export function groupSheetByJob(
   lines: readonly SheetEntry[],
-  rosterJobs: ReadonlyMap<string, Pick<RosterLine, 'name' | 'stage'>>,
+  rosterJobs: ReadonlyMap<string, Pick<RosterLine, 'name' | 'stage' | 'projectId'>>,
   holderOf?: (jobId: string) => DeskHolder,
 ): SheetCard[] {
   const cards = new Map<string, SheetCard>();
@@ -390,6 +392,7 @@ export function groupSheetByJob(
       const job = rosterJobs.get(line.projectId);
       card = {
         jobId: line.projectId,
+        projectId: job?.projectId ?? null,
         name: job?.name ?? line.projectName,
         stage: job?.stage ?? null,
         holder: holderOf ? holderOf(line.projectId) : null,

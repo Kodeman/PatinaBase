@@ -59,6 +59,7 @@ import { openVitalsEditor } from './letterhead-vitals';
 import { openKeys } from './overlays/keys-sheet';
 import { bandNextAct } from './overlays/active-dialog';
 import { ClientMirror } from './client-mirror';
+import { PressBand } from './press-band';
 import {
   DocumentAction,
   DocumentActionGroup,
@@ -794,6 +795,12 @@ export function LetterheadInstruments({
         <NoLoginRepairProbe designerClientId={designerClientId} onRepair={setNoLoginRepair} />
       )}
 
+      {/* US-49 Phase 2 — the Press band: the client's House Issue, approved
+          here. In flow before the note composer, so an open composer never
+          puts Send ahead of the edition under review. */}
+      {projectId && !briefPaper && (
+        <PressBand projectId={projectId} clientFirstName={firstName} />
+      )}
       {composing && (
         <div
           ref={composerRef}

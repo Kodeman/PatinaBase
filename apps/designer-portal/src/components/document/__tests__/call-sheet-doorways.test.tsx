@@ -121,6 +121,8 @@ jest.mock('../mobile/mobile-shell', () => ({
   useMobilePrimaryActionValue: () => null,
 }));
 jest.mock('../client-mirror', () => ({ ClientMirror: () => null }));
+// US-49 — the Press band reads editions; it has its own suite (press-band.test.tsx).
+jest.mock('../press-band', () => ({ PressBand: () => null }));
 jest.mock('../proposal-preview', () => ({ ProposalPreview: () => null }));
 
 // Imported AFTER the jest.mock calls above (hoisting makes the ordering here

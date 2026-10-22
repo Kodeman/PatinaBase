@@ -30,6 +30,8 @@ jest.mock('@/components/document/command-bar', () => ({
 
 let mockProject: Record<string, unknown> | undefined;
 jest.mock('@patina/supabase', () => ({
+  // US-49 — the Desk card's edition line (desk-job-card.test.tsx covers it).
+  useClientEditions: () => ({ data: undefined }),
   useProjectV2: () => ({ data: mockProject }),
   useSetNeedState: () => ({ mutate: jest.fn(), isPending: false }),
 }));
