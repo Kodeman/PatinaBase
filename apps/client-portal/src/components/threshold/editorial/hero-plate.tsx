@@ -53,7 +53,7 @@ export function HeroPlate(props: HeroPlateProps) {
   const computed = usePaperTabMode(props.asset, ref);
   const { layout, main, phone, sizes, width, height } = heroPicture(props.asset);
   const rect = props.asset.crops[main]?.rect;
-  const [phonePosition, setPhonePosition] = useState<string | null>(null);
+  const [phonePosition, setPhonePosition] = useState<string | null>();
 
   useLayoutEffect(() => {
     if (!props.phoneObjectPosition) return;
@@ -83,7 +83,7 @@ export function HeroPlate(props: HeroPlateProps) {
         props.phoneObjectPosition
           ? ({
               '--ed-hero-phone-position': phonePosition ?? props.phoneObjectPosition,
-              // Until measured, or when cover cannot fit the subject, show the whole rendition.
+              // Start at the nominal cover; only a measured non-fit needs contain.
               '--ed-hero-phone-fit': phonePosition === null ? 'contain' : 'cover',
             } as CSSProperties)
           : undefined

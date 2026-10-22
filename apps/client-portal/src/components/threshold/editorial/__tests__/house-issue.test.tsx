@@ -1,4 +1,5 @@
 import { act, render, renderHook, screen } from "@testing-library/react";
+import { renderToString } from "react-dom/server.node";
 
 import { heroPreloads } from "@/lib/data/client-editorial";
 import type {
@@ -28,7 +29,8 @@ import {
   type HouseIssue,
   type HouseIssueHeadProps,
 } from "../house-issue";
-import { preloadLink } from "../hero-plate";
+import { HeroPlate, preloadLink } from "../hero-plate";
+import { shortFramePosition } from "@/lib/editorial/crop";
 
 const PROJECT = "b0000000-0000-0000-0000-0000000e1a01";
 
@@ -840,6 +842,38 @@ describe("the approved edition", () => {
   });
 
   // ── SQ-1593 R5: a long headline never crops the subject box ─────────────────
+
+  it("server-renders and starts an unmeasured short phone hero with cover at its nominal position", () => {
+    const scan = asset("firstpaint", {
+      sourceKind: "scan", width: 1200, height: 1600,
+      subjectBox: [0.05, 0, 0.9, 0.57],
+      crops: { cover_phone: { rect: [0, 0, 1200, 1046], widths: [640, 828, 1080] } },
+    });
+    const nominalPosition = shortFramePosition(scan);
+    expect(nominalPosition).toBe("50% 0%");
+    const plate = (
+      <HeroPlate
+        scopeId={PROJECT}
+        asset={scan}
+        eyebrow="01 · Elm Street House"
+        headline="Your scan, from the room upstairs"
+        phoneObjectPosition={nominalPosition}
+        fallback={{ name: "The room upstairs" }}
+      />
+    );
+    const server = document.createElement("div");
+    server.innerHTML = renderToString(plate);
+    // A zero-sized box keeps the client in its pre-measure state, as on the server.
+    jest.spyOn(HTMLImageElement.prototype, "getBoundingClientRect").mockReturnValue(
+      { width: 0, height: 0 } as DOMRect,
+    );
+    const client = render(plate);
+    for (const container of [server, client.container]) {
+      const slot = container.querySelector<HTMLElement>(".ed-hero-slot")!;
+      expect(slot.style.getPropertyValue("--ed-hero-phone-fit")).toBe("cover");
+      expect(slot.style.getPropertyValue("--ed-hero-phone-position")).toBe(nominalPosition);
+    }
+  });
 
   it("contains a short-frame scan when the 72svh box cannot cover its subject, and remeasures on resize", () => {
     let height = 288; // 72svh at a 390 × 400 viewport; nominal 39:30 would be 300.
