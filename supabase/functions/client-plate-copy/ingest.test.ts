@@ -1,6 +1,6 @@
 import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { stub } from "https://deno.land/std@0.224.0/testing/mock.ts";
-import { ingestPlate } from "./ingest.ts";
+import { ingestPlate, recordPlate } from "./ingest.ts";
 import type { PlateRequest } from "./lib.ts";
 
 const request: PlateRequest = {
@@ -62,4 +62,34 @@ Deno.test("geometry lookup errors fail rather than silently ingesting default cr
     Error, "plate geometry lookup failed: offline",
   );
   assertEquals(send.calls.length, 0);
+});
+
+Deno.test("settle payload carries the exact framing sent to ingest despite a later focal change", async () => {
+  const original = { focal: [0.7, 0.4], subject_box: [0.2, 0.1, 0.6, 0.8] };
+  const db = database(original);
+  const signal = new AbortController().signal;
+  let sent: Record<string, unknown> = {};
+  using send = stub(globalThis, "fetch", (_url, init) => {
+    sent = JSON.parse(String(init?.body));
+    return Promise.resolve(new Response("{}"));
+  });
+  const { response, framing } = await ingestPlate(db.admin, worker, request, request.source_url, signal);
+  await response.text();
+  original.focal = [0.1, 0.2];
+  original.subject_box = [0, 0, 1, 1];
+  const calls: unknown[] = [];
+  const admin = { rpc(name: string, args: unknown) {
+    calls.push([name, args]);
+    return { abortSignal(given: AbortSignal) { calls.push(given); return Promise.resolve({ error: null }); } };
+  } } as unknown as Parameters<typeof recordPlate>[0];
+  const asset = { sha256: "a".repeat(64), width: 1600, height: 1200, format: "jpeg", ground: null,
+    dominantHex: null, lqip: null, originalKey: "plates/project/a/original.jpg", crops: {} };
+  await recordPlate(admin, request, asset, framing, signal);
+  assertEquals(framing, { focal: sent.focal, subjectBox: sent.subjectBox });
+  assertEquals(calls, [["record_client_plate_asset", {
+    p_request_id: request.id, p_lease_token: request.lease_token,
+    p_asset: { ...asset, source_kind: request.source_kind, source_ref: request.source_ref },
+    p_framing: { focal: [0.7, 0.4], subjectBox: [0.2, 0.1, 0.6, 0.8] },
+  }], signal]);
+  assertEquals(send.calls.length, 1);
 });

@@ -23594,12 +23594,6 @@ END $g$;
 
 -- 00843_client_plate_assets.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.record_client_plate_asset(uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00843_client_plate_assets.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.fail_client_plate_request(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -23607,12 +23601,6 @@ END $g$;
 -- 00843_client_plate_assets.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.claim_client_plate_requests(int) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00843_client_plate_assets.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.record_client_plate_asset(uuid, uuid, jsonb) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -24176,19 +24164,7 @@ END $g$;
 
 -- 00848_client_edition_installed_closeout.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.record_client_plate_asset(uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00848_client_edition_installed_closeout.sql
-DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.claim_client_plate_requests(int) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00848_client_edition_installed_closeout.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.record_client_plate_asset(uuid, uuid, jsonb) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -24249,6 +24225,18 @@ END $g$;
 -- 00849_client_plate_link_check.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.finish_client_plate_check_run(bigint, text, jsonb, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00850_client_plate_crops_union.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_client_plate_asset(uuid, uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00850_client_plate_crops_union.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_client_plate_asset(uuid, uuid, jsonb, jsonb) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

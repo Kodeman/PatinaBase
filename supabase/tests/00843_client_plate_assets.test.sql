@@ -63,7 +63,7 @@ SELECT ok(NOT has_table_privilege('authenticated', 'public.client_plate_requests
           'lockdown: authenticated cannot read client_plate_requests');
 SELECT ok(NOT has_function_privilege('authenticated', 'public.claim_client_plate_requests(integer)', 'EXECUTE'),
           'lockdown: authenticated cannot claim');
-SELECT ok(NOT has_function_privilege('authenticated', 'public.record_client_plate_asset(uuid, uuid, jsonb)', 'EXECUTE'),
+SELECT ok(NOT has_function_privilege('authenticated', 'public.record_client_plate_asset(uuid, uuid, jsonb, jsonb)', 'EXECUTE'),
           'lockdown: authenticated cannot record');
 SELECT ok(NOT has_function_privilege('authenticated', 'public.fail_client_plate_request(uuid, uuid, text)', 'EXECUTE'),
           'lockdown: authenticated cannot fail a request');

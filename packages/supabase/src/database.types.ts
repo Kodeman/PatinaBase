@@ -44913,7 +44913,12 @@ export type Database = {
         }
       }
       record_client_plate_asset: {
-        Args: { p_asset: Json; p_lease_token: string; p_request_id: string }
+        Args: {
+          p_asset: Json
+          p_framing?: Json
+          p_lease_token: string
+          p_request_id: string
+        }
         Returns: string
       }
       record_custom_commission_milestone: {
