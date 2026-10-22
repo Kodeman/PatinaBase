@@ -36,7 +36,7 @@ The `client-plate-copy` edge function posts
 subject box normalised 0–1) with `Authorization: Bearer <PLATE_INGEST_SECRET>`.
 The Worker fetches the source once (10 s for the whole redirect chain, `image/*`
 only, ≤ 20 MB), hashes it, and runs container op `plate_ingest` (`container/plates.mjs`
-holds the crop geometry, `server.mjs` the Sharp I/O): EXIF-orient, ground (`white` |
+holds the crop geometry, `plate-job.mjs` the Sharp I/O): EXIF-orient, ground (`white` |
 `drawing` | `scene`), dominant colour, a ≤ 800-char WebP LQIP, and every PLAN crop
 the source meets (`wide`, `cover_phone`, `tall`, `wide32`, `pair`, `piece`; sheets and
 boards also get an uncropped `sheet` / `board` plate) as AVIF q50 + WebP q72.
@@ -60,8 +60,13 @@ board-cover hotlinks are open by design (no host allowlist). Source kind still
 drives crop requirements unchanged.
 
 **Deadline.** The Worker gives the container 25 s (the edge abandons the call at
-30 s); past that it answers 504 and aborts the container request, and the container
-stops encoding before its next crop once the client has hung up.
+30 s); past that it answers 504 and aborts the container request. The job carries
+`budgetMs`, what is left of those 25 s less 1 s. The container runs one plate job at
+a time (`container/plate-lane.mjs`), each in its own forked `plate-job.mjs` process;
+a second job meanwhile gets `503 {"error":"busy"}`, which the Worker passes on as
+503 `busy`. At the budget (counted from when the request arrives) or when the Worker
+hangs up, the container SIGKILLs the job process and answers 504, and takes the next
+job only once that process has exited. A result that lands after the budget is a 504.
 
 Objects land in the **private** `PLATES` bucket:
 
