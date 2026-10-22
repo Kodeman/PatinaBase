@@ -271,6 +271,7 @@ const PRIVATE_BUCKET_BY_TABLE: Record<string, string> = {
   project_rooms: "room-renders",
   room_scan_images: "room-scans",
   project_boards: "proposal-mood-boards",
+  field_captures: "capture-media",
 };
 const PUBLIC_BUCKET_BY_TABLE: Record<string, string> = {
   project_ffe_item_images: "project-item-images",
@@ -280,6 +281,7 @@ const PRIVATE_BUCKET_BY_KIND: Partial<Record<PlateSourceKind, string>> = {
   concept: "room-renders",
   scan: "room-scans",
   board: "proposal-mood-boards",
+  installed: "capture-media",
 };
 const PUBLIC_BUCKET_BY_KIND: Partial<Record<PlateSourceKind, string>> = {
   upload: "project-item-images",

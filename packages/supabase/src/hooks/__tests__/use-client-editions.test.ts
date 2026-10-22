@@ -96,8 +96,33 @@ describe('useClientEditionSourceUrls — the bucket follows the source table (D3
     expect(getPublicUrl).toHaveBeenCalledWith('items/chair.jpg');
   });
 
+  it('signs a field capture in capture-media even when its kind says otherwise', async () => {
+    const urls = await previews([
+      image({ assetId: 'a-capture', sourceKind: 'maker', sourceTable: 'field_captures', sourceUrl: '/u-1/c-1/photo.jpg' }),
+    ]);
+    expect(urls).toEqual({ 'a-capture': 'signed:u-1/c-1/photo.jpg' });
+    expect(storageFrom).toHaveBeenCalledTimes(1);
+    expect(storageFrom).toHaveBeenCalledWith('capture-media');
+    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(createSignedUrls).toHaveBeenCalledWith(['u-1/c-1/photo.jpg'], 3600);
+    expect(getPublicUrl).not.toHaveBeenCalled();
+  });
+
+  it('signs a legacy installed source without a source table in capture-media', async () => {
+    const urls = await previews([
+      image({ assetId: 'a-installed', sourceKind: 'installed', sourceUrl: 'u-1/c-1/photo.jpg' }),
+    ]);
+    expect(urls).toEqual({ 'a-installed': 'signed:u-1/c-1/photo.jpg' });
+    expect(storageFrom).toHaveBeenCalledTimes(1);
+    expect(storageFrom).toHaveBeenCalledWith('capture-media');
+    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(createSignedUrls).toHaveBeenCalledWith(['u-1/c-1/photo.jpg'], 3600);
+    expect(getPublicUrl).not.toHaveBeenCalled();
+  });
+
   it('an unknown source table gets no preview', async () => {
     const urls = await previews([
+      image({ assetId: 'a-installed', sourceKind: 'installed', sourceTable: 'unknown_captures', sourceUrl: 'u-1/c-1/photo.jpg' }),
       image({ assetId: 'a-x', sourceKind: 'scan', sourceTable: 'site_photos', sourceUrl: 'x/y.jpg' }),
       image({ assetId: 'a-proto', sourceKind: 'upload', sourceTable: 'toString', sourceUrl: 'x/z.jpg' }),
     ]);
