@@ -94,17 +94,20 @@ Because the Worker publication path lacks an authoritative deploy-relative bound
    New invocations use the stamped/versioned writer; an old invocation already in flight is why step 2b still exists.
 4. **client-plate-copy:** no deploy for this change. It passes `crops` through unchanged, and its `originalKey` prefix check accepts the sha-level original.
 5. **Migrations 00847–00849**, only after step 2b passes and its assumption is accepted. Deploy client-plate-check first, since 00849 schedules it:
-   Paste this as one block. The subshell fails closed without closing your shell: it never pushes after a failed function deploy, it always runs the post-check after the push returns (a failed push may already have applied 00848), and it reports a failure of either.
+   Paste this as one block. It is fail-closed in bash and zsh, with or without `set -e`, and it never closes your shell. Every command whose failure matters runs in an `||` context, so errexit cannot cut the block short. The block never pushes after a failed function deploy. It always runs the post-check after the push returns, because a failed push may already have applied 00848. A failure of either is reported in `step5_exit`.
    ```sh
+   step5_exit=0
    (
      supabase functions deploy client-plate-check \
        || { echo 'STOP: client-plate-check deploy failed; db push NOT run'; exit 1; }
-     supabase db push; push_status=$?
-     node scripts/ops/plates-legacy-writes-since.mjs --since "$T2"; audit_status=$?
+     push_status=0; supabase db push || push_status=$?
+     audit_status=0; node scripts/ops/plates-legacy-writes-since.mjs --since "$T2" || audit_status=$?
      echo "push_status=$push_status audit_status=$audit_status"
-     [ "$push_status" -eq 0 ] && [ "$audit_status" -eq 0 ] \
-       || { echo 'STOP: push or post-check failed; halt the rollout'; exit 1; }
-   ); echo "step5_exit=$?"
+     if [ "$push_status" -ne 0 ] || [ "$audit_status" -ne 0 ]; then
+       echo 'STOP: push or post-check failed; halt the rollout'; exit 1
+     fi
+   ) || step5_exit=$?
+   echo "step5_exit=$step5_exit"
    ```
    - Continue past step 5 only on `step5_exit=0`. A nonzero exit halts the whole rollout: record `supabase migration list` and the post-check output, and escalate. Do not retry the push blindly.
    - The push applies 00847–00849 in **one batch**. Per the orchestrator's SQ-1734 ruling, run the post-check immediately when it returns, before any further operation; no between-migrations stop or manual ledger manipulation. 00849 touches neither Worker. The pre-push barrier, not the post-check, gates 00848.
@@ -129,7 +132,16 @@ Because the Worker publication path lacks an authoritative deploy-relative bound
 - **Client portal:** the old route reads only unversioned keys. After step 3, copies the new worker made exist only under `f/<rev>/`, so they show the silhouette. Roll forward instead where possible.
 - **Media worker:** rollback restores overwrite-in-place at the unversioned key (W2); the new client reads its unstamped crops.
   - **The danger after 00848 is the legacy writer once it is live again, not the version being retired.** The new version never writes legacy keys, so there is no barrier to run *before* rolling back. Do not wait for observability silence on the serving version: `/health`, `/enqueue`, composer plate reads and media-jobs traffic keep it busy indefinitely.
-  - Before rollback, pause cron 69 (`select cron.alter_job(job_id := 69, active := false);`) and forbid manual `begin_client_plate_copy_run`. Keep both paused for as long as the legacy writer serves. With no ingest caller, the legacy writer has nothing to publish.
+  - **Drain the ingest caller before rolling back, while the new writer still serves.** Pausing cron does not stop a client-plate-copy run already in flight. Such a run may still be awaiting source resolution or geometry before it POSTs (`supabase/functions/client-plate-copy/lib.ts:397–403`, `ingest.ts:13–24`). If the legacy writer is serving by then, it overwrites frozen bytes.
+    1. Pause cron 69 (`select cron.alter_job(job_id := 69, active := false);`) and forbid manual `begin_client_plate_copy_run`. Record the pause time `TP`.
+    2. Wait at least 2 minutes after `TP`. A tick that cron fired just before the pause may not have written its `job_runs` row yet.
+    3. Run the Phase 1 quiescence check (`house-issue-phase1-deploy-2026-10.md`, SQ-1631 finish step 3) until it reads `quiescent`. Also run this, and go on only when it returns `0`, which means no request is still leased to a live run:
+       ```sql
+       select count(*) as live_leases from public.client_plate_requests
+       where status = 'leased' and lease_expires_at > now();
+       ```
+    4. Do not roll back before `TP + 400 s`, the Supabase paid-plan maximum edge worker duration cited in step 2b(a). Past that point, no edge worker started before the pause is still alive to POST.
+  - Then roll back. Keep cron 69 paused and manual runs forbidden for as long as the legacy writer serves. `/health`, `/enqueue`, composer reads and media-jobs traffic are separate from plate ingest (`infra/media-worker/src/index.ts:159–184`) and may continue.
   - Never resume cron 69 on the legacy writer while 00848 is live. Roll forward to the new writer, record a fresh `T2` and the retiring **legacy** version UUID as `OLD_VERSION_ID`, and pass step 2b against that retired version. Resume cron 69 only after that.
   - Any legacy-prefix write found after freeze is a W2 incident, as in step 5. Rollback plus a short wait is never safe on its own.
 - Legacy objects (about 242 copied before this change) are not automatically re-copied, rewritten or deleted. Their rows keep unstamped crops and read at the unversioned key; incident remediation is a separate authorized action.
