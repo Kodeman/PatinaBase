@@ -18,7 +18,7 @@ try {
     imageBytes += (await stat(file)).size;
     images.set(name, `data:image/jpeg;base64,${(await readFile(file)).toString('base64')}`);
   }
-  if (imageBytes > 5_000_000) throw new Error(`JPEG collection is ${imageBytes} bytes; limit is 5 MB.`);
+  if (imageBytes > 6_000_000) throw new Error(`JPEG collection is ${imageBytes} bytes; limit is 6 MB.`);
   const built = source.replace(/\{\{IMG:([^}]+)\}\}/g, (_token, name) => {
     if (!images.has(name)) throw new Error(`Missing image: ${name}`);
     return images.get(name);
