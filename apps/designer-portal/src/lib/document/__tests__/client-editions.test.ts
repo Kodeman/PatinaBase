@@ -16,6 +16,7 @@ import {
   PENDING_ROW,
   editionRow,
   listEnvelope,
+  imageRow,
 } from '@/components/document/__fixtures__/client-editions';
 import {
   currentEdition,
@@ -23,6 +24,8 @@ import {
   editionsFrozen,
   pendingEdition,
   wasPublished,
+  projectMakerNames,
+  readerImageContent,
 } from '../client-editions';
 
 const read = (rows: Record<string, unknown>[], showMakers = false) =>
@@ -128,5 +131,46 @@ describe('pending, current and a closed job', () => {
   it('a frozen current edition closes the job (R12)', () => {
     const { editions } = read([PENDING_ROW, { ...CURRENT_ROW, frozenAt: '2026-10-22T12:00:00+00:00' }]);
     expect(editionsFrozen(editions)).toBe(true);
+  });
+});
+
+
+describe('the reader image content policy (seq 53/59)', () => {
+  const policy = {
+    showMakers: false, studioName: 'Nord Studio',
+    makerNames: projectMakerNames(['  HERMAN MILLER ', 'Nord', 'Studio', 'Art', 'AB', '', null, 'Nord']),
+  };
+  const image = (over = {}) => read([{ ...CURRENT_ROW, images: [imageRow('a-old', over)] }]).editions[0].images[0];
+
+  it('normalises and deduplicates project maker names with a three-character floor', () => {
+    expect([...policy.makerNames]).toEqual(['herman miller', 'nord', 'studio', 'art']);
+  });
+
+  it('strips every case-insensitive maker occurrence and trims separators', () => {
+    const shown = readerImageContent(image({ captionWhat: 'Herman Miller chair · HERMAN MILLER', sourceKind: 'maker' }), undefined, policy);
+    expect(shown.caption.what).toBe('chair');
+    expect(shown.alt).toBe('chair · Nord Studio · product photograph');
+  });
+
+  it('uses trusted kind words when stripping leaves no what', () => {
+    const shown = readerImageContent(image({ captionWhat: ' · Nord — ', sourceKind: 'maker' }), undefined, policy);
+    expect(shown.caption.what).toBe('product photograph');
+    expect(shown.caption.whose).toBe('Nord Studio');
+    expect(shown.alt).toBe('product photograph · Nord Studio · product photograph');
+  });
+
+  it('accepts fail-safe substring over-masking', () => {
+    expect(readerImageContent(image({ captionWhat: 'cart', sourceKind: 'scan' }), undefined, policy).caption.what).toBe('c');
+  });
+
+  it.each(['scan', 'installed', 'board', 'sheet', 'concept'] as const)('preserves neutral %s alts, but rebuilds maker-bearing alts', (kind) => {
+    const neutral = image({ sourceKind: kind, alt: '  Morning light along the restored oak stair  ' });
+    expect(readerImageContent(neutral, { whose: 'June' }, policy).alt).toBe(neutral.alt);
+    expect(readerImageContent({ ...neutral, alt: 'Herman Miller chair' }, { whose: 'Herman Miller' }, policy).alt).not.toContain('Herman Miller');
+  });
+
+  it('uses attributionKind before sourceKind for item-picture rebuilding', () => {
+    const shown = readerImageContent(image({ sourceKind: 'scan', attributionKind: 'upload', alt: 'Neutral original' }), undefined, policy);
+    expect(shown.alt).toBe('What a-old · Nord Studio · studio photograph');
   });
 });

@@ -21,11 +21,17 @@ import {
   useClientEditionSourceUrls,
   useClientEditions,
   useStudioIdentity,
+  useProjectFFEItems,
 } from '@patina/supabase';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { householdDisplayName } from '@/lib/document/act-names';
-import { currentEdition, editionsFrozen, pendingEdition } from '@/lib/document/client-editions';
+import {
+  currentEdition,
+  editionsFrozen,
+  pendingEdition,
+  projectMakerNames,
+} from '@/lib/document/client-editions';
 import { PressBandPreview } from './press-band-preview';
 
 const getSupabase = () => createBrowserClient() as any;
@@ -100,11 +106,17 @@ export function useClientMirrorData(projectId: string) {
 function MirrorEdition({ projectId, name }: { projectId: string; name: string }) {
   const { data } = useClientEditions(projectId);
   const { data: studio } = useStudioIdentity({ projectId });
+  const { data: items } = useProjectFFEItems(projectId);
+  const makerNames = projectMakerNames((items ?? []).flatMap((item: {
+    vendor_name: string | null;
+    purchase_order: { vendor: { name: string | null } | null } | null;
+  }) => [item.vendor_name, item.purchase_order?.vendor?.name]));
   const editions = data?.editions ?? [];
   const pending = editionsFrozen(editions) ? null : pendingEdition(editions);
   const edition = pending ?? currentEdition(editions);
   const { data: sourceUrls } = useClientEditionSourceUrls(edition?.images ?? []);
-  if (!edition) return null;
+  // Without the project names, an OFF preview cannot yet mask its captions.
+  if (!edition || (data?.showMakers !== true && !items)) return null;
   const label = pending ? `What ${name} will see if approved` : `Edition ${edition.seq}`;
   return (
     <section aria-label={label} className="mx-auto mb-8 max-w-[720px]" data-mirror-edition={edition.seq}>
@@ -116,7 +128,7 @@ function MirrorEdition({ projectId, name }: { projectId: string; name: string })
         current={null}
         sourceUrls={sourceUrls ?? {}}
         delta={false}
-        captionPolicy={{ showMakers: data?.showMakers === true, studioName: studio?.name ?? null }}
+        captionPolicy={{ showMakers: data?.showMakers === true, studioName: studio?.name ?? null, makerNames }}
       />
     </section>
   );

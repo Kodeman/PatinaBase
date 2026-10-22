@@ -4,7 +4,7 @@
  * these, so both name the same pending, current and published editions.
  */
 
-import type { ClientEdition } from '@patina/supabase';
+import type { ClientEdition, ClientEditionImage } from '@patina/supabase';
 
 /** The edition waiting on the studio's Approve, if any. */
 export const pendingEdition = (editions: readonly ClientEdition[]) =>
@@ -50,3 +50,68 @@ export function editionUndoRestores(
  *  on the client page may change from here. */
 export const editionsFrozen = (editions: readonly ClientEdition[]) =>
   editions.some((edition) => edition.status === 'approved' && edition.frozenAt != null);
+
+/** Project maker spellings, matching 00846's trimmed, case-insensitive substring policy. */
+export function projectMakerNames(names: readonly (string | null | undefined)[]): ReadonlySet<string> {
+  return new Set(names.map((name) => name?.trim().toLowerCase() ?? '').filter((name) => name.length >= 3));
+}
+
+export interface CaptionPolicy {
+  showMakers: boolean;
+  studioName: string | null;
+  makerNames: ReadonlySet<string>;
+}
+
+const KIND_WORDS: Readonly<Record<string, string>> = {
+  maker: 'product photograph',
+  upload: 'studio photograph',
+  installed: 'installed photograph',
+  scan: 'room scan',
+  board: 'studio board',
+  sheet: 'drawing',
+  concept: 'concept render, not installed',
+};
+
+/** The mirror's caption and alt under the live reader consent policy (seq 53/59). */
+export function readerImageContent(
+  image: ClientEditionImage,
+  override: { whose?: string; when?: string } | undefined,
+  { showMakers, studioName, makerNames }: CaptionPolicy,
+): { caption: { what: string; whose: string; when: string | null }; alt: string } {
+  const kind = image.attributionKind ?? image.sourceKind ?? '';
+  const kindWords = KIND_WORDS[kind] ?? '';
+  const caption = {
+    what: image.captionWhat ?? '',
+    whose: override?.whose ?? image.captionWhose ?? '',
+    when: override?.when ?? image.captionWhen,
+  };
+  const alt = image.alt ?? '';
+  if (showMakers) return { caption, alt };
+
+  const namesMaker = (text: string | null) =>
+    text != null && [...makerNames].some((name) => text.toLowerCase().includes(name));
+  const makerKind = kind === 'maker' || kind === 'upload';
+  if (namesMaker(caption.what)) {
+    for (const name of makerNames) {
+      let at = caption.what.toLowerCase().indexOf(name);
+      while (at !== -1) {
+        caption.what = caption.what.slice(0, at) + caption.what.slice(at + name.length);
+        at = caption.what.toLowerCase().indexOf(name);
+      }
+    }
+    caption.what = caption.what.replace(/^[\s·,;:–—-]+|[\s·,;:–—-]+$/g, '') || kindWords;
+  }
+  caption.whose = makerKind || namesMaker(override?.whose ?? null)
+    ? studioName ?? ''
+    : override?.whose ?? studioName ?? '';
+  // list_client_editions has no frozen fact date: safe-null rather than the
+  // reader's fact-date fallback (SQ-1690 ruling); never reuse maker-bearing text.
+  if (namesMaker(caption.when)) caption.when = null;
+  // Studio identity and fixed kind words are trusted; the rebuilt alt is final.
+  return {
+    caption,
+    alt: makerKind || namesMaker(alt)
+      ? [caption.what, caption.whose, kindWords].filter(Boolean).join(' · ')
+      : alt,
+  };
+}

@@ -16,6 +16,7 @@ import type {
   ClientEditionImage,
   ClientEditionOverrides,
 } from '@patina/supabase';
+import { readerImageContent, type CaptionPolicy } from '@/lib/document/client-editions';
 import { getOptimizedImageUrl } from '@/lib/media-utils';
 import {
   coverCropShown,
@@ -61,82 +62,17 @@ export function editionChapters(
   });
 }
 
-/** The project's maker switch and studio name, as the homeowner reader reads them. */
-export interface CaptionPolicy {
-  showMakers: boolean;
-  studioName: string | null;
-}
-
-/** The item-picture kinds, the ones a caption may credit to a maker (story seq 48). */
-const MAKER_KINDS: ReadonlySet<string> = new Set(['maker', 'upload']);
-
-/**
- * The kind the homeowner reader attributes a picture to: its frozen
- * attribution kind; the request's source kind only for a list without one.
- */
-function attributionKindOf(image: Pick<ClientEditionImage, 'attributionKind' | 'sourceKind'>) {
-  return image.attributionKind ?? image.sourceKind ?? null;
-}
-
-/**
- * The caption "whose" the homeowner reader shows (00846, story seq 48): with
- * makers off a maker picture names the studio and no override brings the maker
- * back; otherwise an explicit override wins, then the composed credit while
- * makers show, the studio while they do not.
- */
-export function readerWhose(
-  image: Pick<ClientEditionImage, 'attributionKind' | 'sourceKind' | 'captionWhose'>,
-  override: string | null | undefined,
-  { showMakers, studioName }: CaptionPolicy,
-): string {
-  if (!showMakers && MAKER_KINDS.has(attributionKindOf(image) ?? '')) return studioName ?? '';
-  return override ?? (showMakers ? image.captionWhose : studioName) ?? '';
-}
-
-/** 00845 _client_plate_alt: what kind of picture, in the alt's last words. */
-const ALT_KIND_WORDS: Readonly<Record<string, string>> = {
-  maker: 'product photograph',
-  upload: 'studio photograph',
-  installed: 'installed photograph',
-  scan: 'room scan',
-  board: 'studio board',
-  sheet: 'drawing',
-  concept: 'concept render, not installed',
-};
-
-/**
- * The image's alt as the homeowner reader gives it (00846): while makers are
- * off it is rebuilt from the caption shown (what · whose · kind, 00845
- * _client_plate_alt), so it names no maker the caption does not; while they
- * show, the edition's own alt.
- */
-export function readerAlt(
-  image: ClientEditionImage,
-  caption: { what: string; whose: string },
-  { showMakers }: CaptionPolicy,
-): string {
-  if (showMakers) return image.alt ?? '';
-  const kind = attributionKindOf(image);
-  const kindWords = kind ? ALT_KIND_WORDS[kind] : undefined;
-  return [caption.what, caption.whose, kindWords].filter(Boolean).join(' · ');
-}
-
-/**
- * One image's caption triplet, edits laid over it; with a `policy`, "whose"
- * as the homeowner reader projects it.
- */
+/** One image's caption triplet, with the studio's edits laid over it. */
 export function imageCaption(
   edition: ClientEdition,
   image: ClientEditionImage,
   overrides?: ClientEditionOverrides | null,
-  policy?: CaptionPolicy,
 ): { what: string; whose: string; when: string } {
   const own = edition.overrides?.captions?.[image.assetId];
   const edit = overrides?.captions?.[image.assetId];
-  const whose = edit?.whose ?? own?.whose;
   return {
     what: image.captionWhat ?? '',
-    whose: policy ? readerWhose(image, whose, policy) : (whose ?? image.captionWhose ?? ''),
+    whose: edit?.whose ?? own?.whose ?? image.captionWhose ?? '',
     when: edit?.when ?? own?.when ?? image.captionWhen ?? '',
   };
 }
@@ -277,15 +213,20 @@ export function PressBandPreview({
   sourceUrls: Record<string, string>;
   /** The what-moved line; the client mirror shows the edition alone. */
   delta?: boolean;
-  /** The client mirror's caption projection (readerWhose); the band shows raw words. */
+  /** The client mirror's consent policy; the band shows raw editing words. */
   captionPolicy?: CaptionPolicy;
 }) {
   const heroId = editionHeroId(edition, overrides);
   const hero = edition.images.find((image) => image.assetId === heroId) ?? null;
   const heroUrl = heroId ? sourceUrls[heroId] : undefined;
-  const heroCaption = hero ? imageCaption(edition, hero, overrides, captionPolicy) : null;
-  const heroAlt =
-    hero && heroCaption && captionPolicy ? readerAlt(hero, heroCaption, captionPolicy) : (hero?.alt ?? '');
+  const content = hero && captionPolicy
+    ? readerImageContent(hero, {
+        whose: overrides?.captions?.[hero.assetId]?.whose ?? edition.overrides?.captions?.[hero.assetId]?.whose,
+        when: overrides?.captions?.[hero.assetId]?.when ?? edition.overrides?.captions?.[hero.assetId]?.when,
+      }, captionPolicy)
+    : null;
+  const heroCaption = content?.caption ?? (hero ? imageCaption(edition, hero, overrides) : null);
+  const heroAlt = content?.alt ?? hero?.alt ?? '';
   const chapters = editionChapters(edition, overrides);
   const doorstep = edition.composition?.doorstep?.standing;
   const notice = edition.composition?.notice;

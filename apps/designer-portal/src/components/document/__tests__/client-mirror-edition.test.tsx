@@ -17,6 +17,7 @@ import {
 const { normalizeClientEditions } = jest.requireActual<typeof import('@patina/supabase')>('@patina/supabase');
 
 let mockEditions: unknown;
+let mockItemsReady = true;
 
 jest.mock('@tanstack/react-query', () => ({
   useQuery: () => ({
@@ -35,6 +36,10 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({}),
   useClientEditions: () => ({ data: mockEditions }),
+  useProjectFFEItems: () => ({ data: mockItemsReady ? [
+    { vendor_name: '  HERMAN MILLER  ', purchase_order: null },
+    { vendor_name: null, purchase_order: { vendor: { name: ' Knoll ' } } },
+  ] : undefined }),
   useClientEditionSourceUrls: () => ({
     data: { 'a-hero': 'https://example.com/hero.jpg', 'a-old': 'https://example.com/old.jpg' },
   }),
@@ -60,6 +65,16 @@ const mirrorEdition = () => document.querySelector('[data-mirror-edition]') as H
 describe('the client mirror shows the House Issue (R3)', () => {
   afterEach(() => {
     mockEditions = undefined;
+  });
+
+  it('waits for project maker names before projecting an OFF edition', () => {
+    read([CURRENT_ROW], false);
+    mockItemsReady = false;
+    const { rerender } = renderMirror();
+    expect(mirrorEdition()).toBeNull();
+    mockItemsReady = true;
+    rerender(<ClientMirror projectId="p-1" clientName="June" onClose={() => {}} />);
+    expect(mirrorEdition()).toHaveAttribute('data-mirror-edition', '4');
   });
 
   it('shows nothing about editions before the first', () => {
@@ -211,8 +226,8 @@ describe('the mirror credits captions as the homeowner reader does (N2, story se
 
 /*
  * F3 — the cover's accessible name follows the caption shown, as 00846
- * rebuilds it (00845 _client_plate_alt: what · whose · kind words) while
- * makers are off; while they show it is the edition's own alt.
+ * rebuilds maker-bearing and item-picture alts only (seq 53); neutral
+ * non-maker descriptions stay byte-for-byte. Makers ON keeps the stored alt.
  */
 describe('the mirror cover’s alt follows the caption the reader shows (F3)', () => {
   afterEach(() => {
@@ -252,11 +267,11 @@ describe('the mirror cover’s alt follows the caption the reader shows (F3)', (
   it.each([
     ['approved', approvedOn, 'Edition 4'],
     ['waiting', waitingOn, 'What June will see if approved'],
-  ] as const)('%s: makers off, an override on a non-maker picture is named in the alt', (_state, on, region) => {
+  ] as const)('%s: makers off, a neutral non-maker alt survives a credit override', (_state, on, region) => {
     read(on === waitingOn ? [on(scanPhoto, 'Atelier Nord'), CURRENT_ROW] : [on(scanPhoto, 'Atelier Nord')], false);
     renderMirror();
     const section = screen.getByRole('region', { name: region });
-    expect(within(section).getByRole('img', { name: 'What a-old · Atelier Nord · room scan' })).toBeInTheDocument();
+    expect(within(section).getByRole('img', { name: 'What a-old · Birchwood Studio · room scan' })).toBeInTheDocument();
   });
 
   it.each([
@@ -276,5 +291,60 @@ describe('the mirror cover’s alt follows the caption the reader shows (F3)', (
     read([approvedOn(makerPhoto, 'Atelier Nord')], true);
     renderMirror();
     expect(screen.getByRole('img', { name: 'Chair · Herman Miller · product photograph' })).toBeInTheDocument();
+  });
+});
+
+
+describe.each([
+  ['approved', CURRENT_ROW, 'Edition 4'],
+  ['waiting', PENDING_ROW, 'What June will see if approved'],
+] as const)('SQ-1662 content policy: %s', (_state, row, region) => {
+  const show = (fields: Record<string, unknown>, override = {}, makers = false) => {
+    read([{
+      ...row,
+      composition: composition('a-old'),
+      overrides: { captions: { 'a-old': override } },
+      images: [imageRow('a-old', {
+        plateRole: 'hero', rank: 0, chapterKey: 'cover', sourceKind: 'scan',
+        captionWhat: 'Chair', captionWhose: 'Birchwood Studio', ...fields,
+      })],
+    }], makers);
+    renderMirror();
+    return screen.getByRole('region', { name: region });
+  };
+
+  it('strips maker-bearing what before rebuilding a product alt', () => {
+    const section = show({ sourceKind: 'maker', captionWhat: 'Herman Miller chair', alt: 'Herman Miller chair' });
+    expect(section.querySelector('figcaption')).toHaveTextContent('chair · Birchwood Studio · October');
+    expect(within(section).getByRole('img')).toHaveAttribute('alt', 'chair · Birchwood Studio · product photograph');
+    expect(section.textContent).not.toContain('Herman Miller');
+  });
+
+  it('masks a maker-naming whose override and alt on a scan', () => {
+    const section = show({ alt: 'Chair · Herman Miller · room scan' }, { whose: 'Herman Miller' });
+    expect(section.querySelector('figcaption')).toHaveTextContent('Chair · Birchwood Studio · October');
+    expect(within(section).getByRole('img')).toHaveAttribute('alt', 'Chair · Birchwood Studio · room scan');
+  });
+
+  it.each(['caption', 'override'] as const)('masks a maker-bearing %s when to a renderable null', (source) => {
+    const section = show(
+      { captionWhen: source === 'caption' ? 'Knoll in October' : 'October', alt: 'A chair by the stair' },
+      source === 'override' ? { when: 'Knoll in October' } : {},
+    );
+    expect(section.querySelector('figcaption')?.textContent).toBe('Chair · Birchwood Studio');
+    expect(within(section).getByRole('img')).toHaveAttribute('alt', 'A chair by the stair');
+  });
+
+  it('preserves a neutral scan alt byte-for-byte', () => {
+    const alt = '  Morning light along the restored oak stair  ';
+    const section = show({ alt });
+    expect(within(section).getByRole('img')).toHaveAttribute('alt', alt);
+  });
+
+  it('makers ON leaves all caption fields and alt unchanged', () => {
+    const section = show({ captionWhat: 'Herman Miller chair', alt: 'Herman Miller at home' },
+      { whose: 'Herman Miller', when: 'Knoll in October' }, true);
+    expect(section.querySelector('figcaption')?.textContent).toBe('Herman Miller chair · Herman Miller · Knoll in October');
+    expect(within(section).getByRole('img')).toHaveAttribute('alt', 'Herman Miller at home');
   });
 });
