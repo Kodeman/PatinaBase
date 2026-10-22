@@ -154,7 +154,16 @@ Because the Worker publication path lacks an authoritative deploy-relative bound
        select count(*) as live_leases from public.client_plate_requests
        where status = 'leased' and lease_expires_at > now();
        ```
-    5. Do not roll back before `max(TD, time step 3 first read 0) + 400 s`. 400 s is the Supabase paid-plan maximum edge worker duration cited in step 2b(a). It is measured from the last observed dispatch, not from the pause. pg_net deletes a queued call in the same transaction that waits for the HTTP transfer to finish or time out (`timeout_milliseconds` = 60000 here). So once a call has left `net.http_request_queue`, its edge worker has already started. That worker started before step 3 first read 0, so the 400 s bound measured from that time covers it. This last step is an inference from pg_net's source (main branch, SQ-1740); the deployed version is not pinned. If any of steps 2–4 cannot be read, hold the rollback and roll forward instead.
+    5. **Every dispatch has a proven completion.** A call that left the queue has finished its HTTP transfer *or* timed out (`timeout_milliseconds` = 60000, `00081`/`00258`). A 2xx response proves that the copy run returned, because `client-plate-copy` answers only after its run ends (hard deadline 50 s from entry, `supabase/functions/client-plate-copy/lib.ts:59`). A timeout or an error proves nothing: the edge worker may never have started, or it may start later. pg_net keeps each response in `net._http_response` (6 h by default) without its URL, so read every response from one hour before `TP` onward, substituting the recorded `TP`:
+       ```sql
+       select count(*) filter (where timed_out or status_code is null
+                                  or status_code not between 200 and 299) as unproven,
+              max(created) as last_response
+       from net._http_response
+       where created >= timestamptz 'TP' - interval '1 hour';
+       ```
+       Go on only when `unproven` is `0`. A timeout or error from another function also holds, because this table cannot tell the functions apart. Fail closed on any unproven call, whichever function it belongs to.
+    6. Do not roll back before `max(TD, last_response, time step 3 first read 0) + 400 s`. 400 s is the Supabase paid-plan maximum edge worker duration cited in step 2b(a). It is a margin for work after a proven response, not a bound on when a worker that timed out might start; step 5 already holds every such call. The one-hour lookback is an assumption: it does not cover a call that timed out more than an hour before `TP`. If any of steps 2–5 cannot be read, or any response is unproven, hold the rollback and roll forward instead.
   - Then roll back. Keep cron 69 paused and manual runs forbidden for as long as the legacy writer serves. `/health`, `/enqueue`, composer reads and media-jobs traffic are separate from plate ingest (`infra/media-worker/src/index.ts:159–184`) and may continue.
   - Never resume cron 69 on the legacy writer while 00848 is live. Roll forward to the new writer, record a fresh `T2` and the retiring **legacy** version UUID as `OLD_VERSION_ID`, and pass step 2b against that retired version. Resume cron 69 only after that.
   - Any legacy-prefix write found after freeze is a W2 incident, as in step 5. Rollback plus a short wait is never safe on its own.
