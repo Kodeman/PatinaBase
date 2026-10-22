@@ -11,6 +11,7 @@
 import { useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useClientEditions } from "@patina/supabase";
 import { queryClient } from "@/lib/react-query";
 import { documentEngagementQueryOptions } from "@/hooks/use-document-state";
 import { STAGE_WORD } from "@/lib/document/act-names";
@@ -32,6 +33,20 @@ export function clockTime(at: string | null | undefined): string {
   const date = at ? new Date(at) : null;
   if (!date || Number.isNaN(date.getTime())) return "";
   return `${date.getHours() % 12 || 12}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+/** US-49 Phase 2 — one line, not a card, when a new client edition waits for
+ *  the studio's Approve. Never why it changed. */
+export const DESK_EDITION_READY = "A new edition is ready";
+
+function EditionReadyLine({ jobId }: { jobId: string }) {
+  const { data } = useClientEditions(jobId);
+  if (!data?.editions.some((edition) => edition.status === "awaiting_review")) return null;
+  return (
+    <p className="t-body card-state" data-edition-ready>
+      {DESK_EDITION_READY}
+    </p>
+  );
 }
 
 /** US-43 R7 — the card's one state sentence, in body type under its name. */
@@ -111,6 +126,7 @@ export function DeskJobCard({
           </Link>
         </h3>
         <CardState words={state} />
+        <EditionReadyLine jobId={card.jobId} />
       </div>
       <ul className="lines">{children}</ul>
     </article>

@@ -2654,6 +2654,10 @@ export * from "./use-trade-pricing";
 // US-37 #4: the approved pricing snapshot and the post-approval change log (00810).
 export * from "./use-pricing-approval";
 
+// US-49 Phase 2: the studio's side of The House Issue — editions, approve /
+// hold / undo, the plate focal point, and the show-makers switch (00842/00845).
+export * from "./use-client-editions";
+
 // US-34 N2: optimistic ink for internal records, and the never-optimistic list.
 export {
   useOptimisticMutation,

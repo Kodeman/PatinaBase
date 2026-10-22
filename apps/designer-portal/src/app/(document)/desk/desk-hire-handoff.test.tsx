@@ -22,6 +22,8 @@ const mockContacts = jest.fn();
 const mockRecentBoards = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
+  // US-49 — the Desk card's edition line (desk-job-card.test.tsx covers it).
+  useClientEditions: () => ({ data: undefined }),
   useProfile: () => ({ data: { display_name: 'Leah Warner' } }),
   useOrganizations: () => ({ data: mockOrgs() }),
   useOrganizationMembers: () => ({ data: mockMembers() }),

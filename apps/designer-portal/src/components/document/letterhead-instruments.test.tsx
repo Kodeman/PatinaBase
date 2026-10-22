@@ -103,6 +103,8 @@ jest.mock('./lens-band', () => ({
   OPEN_STANDING_SHEET_EVENT: 'document:open-standing-sheet',
 }));
 jest.mock('./client-mirror', () => ({ ClientMirror: () => null }));
+// US-49 — the Press band reads editions; it has its own suite (press-band.test.tsx).
+jest.mock('./press-band', () => ({ PressBand: () => null }));
 jest.mock('./proposal-preview', () => ({ ProposalPreview: () => null }));
 jest.mock('./overlays/household-sheet', () => ({
   HouseholdSheet: ({

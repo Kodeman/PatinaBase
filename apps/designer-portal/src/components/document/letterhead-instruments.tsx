@@ -59,6 +59,7 @@ import { openVitalsEditor } from './letterhead-vitals';
 import { openKeys } from './overlays/keys-sheet';
 import { bandNextAct } from './overlays/active-dialog';
 import { ClientMirror } from './client-mirror';
+import { PressBand } from './press-band';
 import {
   DocumentAction,
   DocumentActionGroup,
@@ -907,6 +908,12 @@ export function LetterheadInstruments({
             onClose={() => setMirrorOpen(false)}
           />
         ) : null)}
+      {/* US-49 Phase 2 — the Press band: the client's House Issue, approved
+          here. The mirror above is a full-screen layer, so in the page's flow
+          the band stands under the message composer. */}
+      {projectId && !briefPaper && (
+        <PressBand projectId={projectId} clientFirstName={firstName} />
+      )}
     </>
   );
 }

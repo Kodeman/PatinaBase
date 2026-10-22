@@ -112,6 +112,8 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 }));
 jest.mock('../mobile/mobile-shell', () => ({ useMobilePrimaryAction: jest.fn() }));
 jest.mock('../client-mirror', () => ({ ClientMirror: () => null }));
+// US-49 — the Press band reads editions; it has its own suite (press-band.test.tsx).
+jest.mock('../press-band', () => ({ PressBand: () => null }));
 jest.mock('../proposal-preview', () => ({ ProposalPreview: () => null }));
 
 function scan(

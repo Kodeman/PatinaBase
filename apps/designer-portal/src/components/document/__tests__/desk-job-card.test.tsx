@@ -15,6 +15,17 @@ jest.mock("@/lib/react-query", () => ({
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ prefetch: mockRouterPrefetch }),
 }));
+let mockEditionStatuses: string[] = [];
+const mockUseClientEditions = jest.fn((_jobId: string) => ({
+  data: {
+    showMakers: false,
+    editions: mockEditionStatuses.map((status, i) => ({ id: `e-${i}`, seq: i + 1, status })),
+  },
+}));
+jest.mock("@patina/supabase", () => ({
+  ...jest.requireActual("@patina/supabase"),
+  useClientEditions: (jobId: string) => mockUseClientEditions(jobId),
+}));
 
 // Monday 12 October 2026, 10:40am local.
 const NOW = new Date(2026, 9, 12, 10, 40);
@@ -151,6 +162,27 @@ describe("DeskJobCard", () => {
     );
     fireEvent.pointerEnter(screen.getByRole("link", { name: "Holloway Den" }));
     expect(mockPrefetchQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("prints one line when a new client edition waits for review (US-49)", () => {
+    mockEditionStatuses = ["awaiting_review", "approved"];
+    const { container } = renderCard();
+    expect(mockUseClientEditions).toHaveBeenCalledWith("p-holloway");
+    const line = container.querySelectorAll("[data-edition-ready]");
+    expect(line).toHaveLength(1);
+    expect(line[0]).toHaveTextContent(/^A new edition is ready$/);
+    expect(line[0].closest(".card-up")).not.toBeNull();
+  });
+
+  it("prints nothing about editions when none waits", () => {
+    for (const statuses of [[], ["approved", "superseded"], ["drafting", "failed"]]) {
+      mockEditionStatuses = statuses;
+      const { container, unmount } = renderCard();
+      expect(container.querySelector("[data-edition-ready]")).toBeNull();
+      expect(container.textContent).not.toMatch(/edition/i);
+      unmount();
+    }
+    mockEditionStatuses = [];
   });
 
   it("writes no shadow, badge or count", () => {

@@ -16,6 +16,8 @@ const mockMutate = jest.fn();
 const mockMutateAsync = jest.fn();
 const mockSetNeedStateOptions: unknown[] = [];
 jest.mock('@patina/supabase', () => ({
+  // US-49 — the Desk card's edition line (desk-job-card.test.tsx covers it).
+  useClientEditions: () => ({ data: undefined }),
   useSetNeedState: (options?: unknown) => {
     mockSetNeedStateOptions.push(options);
     return { mutate: mockMutate, mutateAsync: mockMutateAsync, isPending: false };
