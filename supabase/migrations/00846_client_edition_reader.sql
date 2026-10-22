@@ -36,7 +36,9 @@
 --                caption/alt first (lowest rank), then the facts' own, then
 --                captions overrides (whose, when). The live switch outranks
 --                a saved whose (story seq 48): while makers are off, an
---                item picture's plate (sourceKind maker or upload) is the
+--                item picture's plate (sourceKind maker or upload — the
+--                attributionKind 00845's list_client_editions returns, so
+--                the designer mirror masks the same plates) is the
 --                studio's whatever its override says; any other plate's
 --                whose override still shows. While makers are off and the
 --                edition was composed with them on, every alt is rebuilt
@@ -165,6 +167,8 @@ BEGIN
   ),
   worded AS (
     SELECT plate.*,
+           -- The attribution kind; list_client_editions' attributionKind is
+           -- this expression over the same first facts entry.
            CASE WHEN plate.concept_seen OR plate.source_kind = 'concept' THEN 'concept'
                 ELSE COALESCE(plate.fact ->> 'sourceKind', plate.source_kind) END AS kind,
            first_image.alt AS image_alt,

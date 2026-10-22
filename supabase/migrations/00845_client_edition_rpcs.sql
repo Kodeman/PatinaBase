@@ -70,8 +70,11 @@
 --                         request before the asset, the order 00843's
 --                         record_client_plate_asset settles in.
 --   list_client_editions(p_project_id)  every edition, newest first. An
---                         image's sourceKind and sourceUrl come from one
---                         request row of its asset.
+--                         image's sourceKind, sourceUrl and sourceTable come
+--                         from one request row of its asset (address
+--                         provenance); its attributionKind is the kind
+--                         00846's reader captions and masks by (the frozen
+--                         fact's, concept kept); ground is the asset's.
 --
 -- Overrides (approve_client_edition; SQ-1588 sends this shape):
 --   {heroAssetId?: uuid, chapters?: {<key>: {headline?, standing?}},
@@ -1402,6 +1405,13 @@ BEGIN
                             CASE WHEN asset.concept_seen OR asset.source_kind = 'concept'
                                  THEN 'concept' ELSE asset.source_kind END),
             'sourceUrl', source.source_url,
+            'sourceTable', source.source_ref ->> 'table',
+            -- 00846 get_client_project_edition's kind, the one its makers-off
+            -- masking keys on: concept once any concept render produced the
+            -- bytes, else the edition's frozen fact, else the first source.
+            'attributionKind', CASE WHEN asset.concept_seen OR asset.source_kind = 'concept' THEN 'concept'
+                                    ELSE COALESCE(fact.source_kind, asset.source_kind) END,
+            'ground', asset.ground,
             'width', asset.width,
             'height', asset.height,
             'focal', to_jsonb(asset.focal),
@@ -1410,15 +1420,26 @@ BEGIN
           ) ORDER BY image.rank NULLS LAST, image.id)
           FROM public.client_edition_images AS image
           JOIN public.client_plate_assets AS asset ON asset.id = image.asset_id
-          -- Kind and URL from one source row (the preview signs the URL in
-          -- the kind's bucket); a concept source first (R142), then latest.
+          -- Kind, URL and table from one source row (the preview signs the URL
+          -- in the kind's bucket); a concept source first (R142), then latest.
           LEFT JOIN LATERAL (
-            SELECT request.source_kind, request.source_url
+            SELECT request.source_kind, request.source_url, request.source_ref
             FROM public.client_plate_requests AS request
             WHERE request.asset_id = asset.id
             ORDER BY request.source_kind = 'concept' DESC, request.updated_at DESC, request.id
             LIMIT 1
           ) AS source ON true
+          -- The asset's first entry in the edition's facts, as 00846 reads it.
+          LEFT JOIN LATERAL (
+            SELECT entry.value ->> 'sourceKind' AS source_kind
+            FROM jsonb_array_elements(
+              CASE WHEN jsonb_typeof(edition.facts -> 'assets') = 'array'
+                   THEN edition.facts -> 'assets' ELSE '[]'::jsonb END
+            ) WITH ORDINALITY AS entry(value, ordinality)
+            WHERE lower(entry.value ->> 'id') = image.asset_id::text
+            ORDER BY entry.ordinality
+            LIMIT 1
+          ) AS fact ON true
           WHERE image.edition_id = edition.id
         ), '[]'::jsonb)
       ) ORDER BY edition.seq DESC)
@@ -1447,7 +1468,7 @@ GRANT EXECUTE ON FUNCTION public.set_plate_focal(uuid, numeric[], numeric[]) TO 
 GRANT EXECUTE ON FUNCTION public.list_client_editions(uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.list_client_editions(uuid) IS
-  'US-49 Press band: {showMakers, editions:[{id,seq,status,kind,autoPublished,held,approvedAt,reviewedAt,reviewedBy{id,name},createdAt,supersededAt,supersededBy,frozenAt,promptVersion,hero,headlines[{key,headline}],composition,overrides,images[{assetId,plateRole,cropKey,rank,chapterKey,alt,captionWhat,captionWhose,captionWhen,sourceKind,sourceUrl,width,height,focal,subjectBox,focalOrigin}]}]} newest first. Caller must hold can_buy_for_project.';
+  'US-49 Press band: {showMakers, editions:[{id,seq,status,kind,autoPublished,held,approvedAt,reviewedAt,reviewedBy{id,name},createdAt,supersededAt,supersededBy,frozenAt,promptVersion,hero,headlines[{key,headline}],composition,overrides,images[{assetId,plateRole,cropKey,rank,chapterKey,alt,captionWhat,captionWhose,captionWhen,sourceKind,sourceUrl,sourceTable,attributionKind,ground,width,height,focal,subjectBox,focalOrigin}]}]} newest first. Caller must hold can_buy_for_project.';
 
 -- ─── 6. job_runs: begin (manual), finish, dispatch (cron) — 00677 shape ─────
 

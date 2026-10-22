@@ -24,8 +24,11 @@
 --               hold keeps awaiting_review with facts.held; approve
 --               validates overrides, refuses a concept hero, merges,
 --               records the reviewer, refuses twice; list shows the rows
---               and takes an image's sourceKind and sourceUrl from one
---               source row; undo restores the approved edition it
+--               and takes an image's sourceKind, sourceUrl and
+--               sourceTable from one source row, its ground from the
+--               asset and its attributionKind from the frozen fact (maker
+--               bytes later scanned stay maker); undo restores the approved
+--               edition it
 --               superseded and is refused on a frozen edition
 --   frozen      claim leases nothing for a frozen job and closes its queued
 --               request; begin, approve and finish are refused (55000,
@@ -55,7 +58,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(106);
+SELECT plan(109);
 
 -- ─── grants ────────────────────────────────────────────────────────────────
 
@@ -376,7 +379,44 @@ SELECT is(
    WHERE image ->> 'assetId' = '84500000-0000-4000-8000-000000000501'),
   '["upload", "studio/845/chair-again.jpg"]'::jsonb,
   'studio: list takes an image''s sourceKind and sourceUrl from one source row');
+SELECT is(
+  (SELECT jsonb_agg(jsonb_build_array(image -> 'ground', image -> 'attributionKind', image -> 'sourceTable')
+                    ORDER BY (image ->> 'rank')::int)
+   FROM jsonb_array_elements(current_setting('us49.list2')::jsonb -> 'editions' -> 0 -> 'images') AS image),
+  '[["white", "maker", "project_files"], [null, "upload", null]]'::jsonb,
+  'studio: list adds ground, attributionKind, and sourceTable from the sourceKind/sourceUrl row (none without a request)');
 DELETE FROM public.client_plate_requests WHERE id = '84500000-0000-4000-8000-000000000701';
+
+-- The chair's bytes, captioned as the maker's when composed, later reached by
+-- a scan still; and the upload frozen as a maker's picture. Address
+-- provenance follows the latest request, attribution the frozen fact.
+UPDATE public.client_editions
+   SET facts = facts || '{"assets": [
+         {"id": "84500000-0000-4000-8000-000000000501", "sourceKind": "maker"},
+         {"id": "84500000-0000-4000-8000-000000000502", "sourceKind": "maker"}]}'::jsonb
+ WHERE id = current_setting('us49.e1')::uuid;
+INSERT INTO public.client_plate_requests (id, project_id, source_kind, source_ref, source_url, status, asset_id, updated_at)
+VALUES ('84500000-0000-4000-8000-000000000703', '84500000-0000-4000-8000-000000000001', 'scan',
+        '{"table": "room_scan_images", "id": "84500000-0000-4000-8000-000000000704"}'::jsonb,
+        'scans/845/still.jpg', 'done', '84500000-0000-4000-8000-000000000501', now());
+SET LOCAL ROLE authenticated;
+SELECT 'listed' AS us49 FROM (SELECT set_config('us49.list3',
+  public.list_client_editions('84500000-0000-4000-8000-000000000001')::text, true)) AS stash;
+RESET ROLE;
+SELECT is(
+  (SELECT jsonb_build_array(image -> 'sourceKind', image -> 'sourceUrl', image -> 'sourceTable', image -> 'attributionKind')
+   FROM jsonb_array_elements(current_setting('us49.list3')::jsonb -> 'editions' -> 0 -> 'images') AS image
+   WHERE image ->> 'assetId' = '84500000-0000-4000-8000-000000000501'),
+  '["scan", "scans/845/still.jpg", "room_scan_images", "maker"]'::jsonb,
+  'studio: deduplicated maker bytes later scanned keep attributionKind maker while sourceKind is scan');
+SELECT is(
+  (SELECT image -> 'attributionKind'
+   FROM jsonb_array_elements(current_setting('us49.list3')::jsonb -> 'editions' -> 0 -> 'images') AS image
+   WHERE image ->> 'assetId' = '84500000-0000-4000-8000-000000000502'),
+  '"maker"'::jsonb,
+  'studio: attributionKind is the edition''s frozen fact, not the plate''s first source');
+DELETE FROM public.client_plate_requests WHERE id = '84500000-0000-4000-8000-000000000703';
+UPDATE public.client_editions SET facts = facts - 'assets' WHERE id = current_setting('us49.e1')::uuid;
 
 -- ─── a second edition today supersedes an unreviewed draft ─────────────────
 
