@@ -795,6 +795,12 @@ export function LetterheadInstruments({
         <NoLoginRepairProbe designerClientId={designerClientId} onRepair={setNoLoginRepair} />
       )}
 
+      {/* US-49 Phase 2 — the Press band: the client's House Issue, approved
+          here. In flow before the note composer, so an open composer never
+          puts Send ahead of the edition under review. */}
+      {projectId && !briefPaper && (
+        <PressBand projectId={projectId} clientFirstName={firstName} />
+      )}
       {composing && (
         <div
           ref={composerRef}
@@ -908,12 +914,6 @@ export function LetterheadInstruments({
             onClose={() => setMirrorOpen(false)}
           />
         ) : null)}
-      {/* US-49 Phase 2 — the Press band: the client's House Issue, approved
-          here. The mirror above is a full-screen layer, so in the page's flow
-          the band stands under the message composer. */}
-      {projectId && !briefPaper && (
-        <PressBand projectId={projectId} clientFirstName={firstName} />
-      )}
     </>
   );
 }

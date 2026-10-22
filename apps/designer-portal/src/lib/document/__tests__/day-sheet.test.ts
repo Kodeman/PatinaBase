@@ -954,14 +954,14 @@ describe('groupSheetByJob (US-28 change 1)', () => {
     const cards = groupSheetByJob([ash1, birch, ashHandoff], roster, () => holder);
 
     expect(cards).toEqual([
-      { jobId: 'p-ash', name: 'Ash House', stage: 'project', holder, lines: [ashHandoff, ash1] },
-      { jobId: 'p-birch', name: 'Birch Lane', stage: 'install', holder, lines: [birch] },
+      { jobId: 'p-ash', projectId: null, name: 'Ash House', stage: 'project', holder, lines: [ashHandoff, ash1] },
+      { jobId: 'p-birch', projectId: null, name: 'Birch Lane', stage: 'install', holder, lines: [birch] },
     ]);
   });
 
   it('falls back to the line’s own name, no stage and no holder', () => {
     expect(groupSheetByJob([birch], new Map())).toEqual([
-      { jobId: 'p-birch', name: 'Job 2', stage: null, holder: null, lines: [birch] },
+      { jobId: 'p-birch', projectId: null, name: 'Job 2', stage: null, holder: null, lines: [birch] },
     ]);
   });
 });

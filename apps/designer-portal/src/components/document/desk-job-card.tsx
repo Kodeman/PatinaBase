@@ -39,8 +39,9 @@ export function clockTime(at: string | null | undefined): string {
  *  the studio's Approve. Never why it changed. */
 export const DESK_EDITION_READY = "A new edition is ready";
 
-function EditionReadyLine({ jobId }: { jobId: string }) {
-  const { data } = useClientEditions(jobId);
+function EditionReadyLine({ projectId }: { projectId: string | null }) {
+  // A lead or proposal card has no project: no edition read at all.
+  const { data } = useClientEditions(projectId);
   if (!data?.editions.some((edition) => edition.status === "awaiting_review")) return null;
   return (
     <p className="t-body card-state" data-edition-ready>
@@ -126,7 +127,7 @@ export function DeskJobCard({
           </Link>
         </h3>
         <CardState words={state} />
-        <EditionReadyLine jobId={card.jobId} />
+        <EditionReadyLine projectId={card.projectId ?? null} />
       </div>
       <ul className="lines">{children}</ul>
     </article>

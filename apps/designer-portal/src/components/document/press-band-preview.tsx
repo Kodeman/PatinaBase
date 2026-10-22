@@ -17,6 +17,7 @@ import type {
   ClientEditionOverrides,
 } from '@patina/supabase';
 import { getOptimizedImageUrl } from '@/lib/media-utils';
+import { COVER_ASPECT, objectPositionOf, plateCropWindow } from '@/lib/document/plate-crop';
 
 /** The hero asset an edition opens on, the studio's choice first. */
 export function editionHeroId(
@@ -69,6 +70,17 @@ export function imageCaption(
   };
 }
 
+/** Each picture's caption triplet by asset id, the first row of an asset kept. */
+function captionsById(edition: ClientEdition, overrides?: ClientEditionOverrides | null) {
+  const captions = new Map<string, string>();
+  for (const image of edition.images) {
+    if (!captions.has(image.assetId)) {
+      captions.set(image.assetId, JSON.stringify(imageCaption(edition, image, overrides)));
+    }
+  }
+  return captions;
+}
+
 function editionWords(edition: ClientEdition, overrides?: ClientEditionOverrides | null): string {
   return JSON.stringify([
     editionChapters(edition, overrides),
@@ -88,15 +100,12 @@ export function editionDelta(
 ): string {
   if (!current) return 'The first edition';
   const hero = editionHeroId(next, overrides) === editionHeroId(current) ? 'Hero unchanged' : 'Hero changed';
-  const before = new Map(
-    current.images.map((image) => [image.assetId, JSON.stringify(imageCaption(current, image))]),
-  );
-  const seen = new Set<string>();
+  const before = captionsById(current);
+  const after = captionsById(next, overrides);
+  // Every caption either edition carries: one dropped counts as changed too.
   let changed = 0;
-  for (const image of next.images) {
-    if (seen.has(image.assetId)) continue;
-    seen.add(image.assetId);
-    if (before.get(image.assetId) !== JSON.stringify(imageCaption(next, image, overrides))) changed += 1;
+  for (const assetId of new Set([...before.keys(), ...after.keys()])) {
+    if (before.get(assetId) !== after.get(assetId)) changed += 1;
   }
   const captions =
     changed === 0
@@ -110,11 +119,25 @@ export function editionDelta(
 const EYEBROW =
   'font-mono text-[12px] font-medium uppercase leading-normal tracking-[0.12em] text-[var(--text-muted)]';
 
+/**
+ * Where the desktop cover's crop sits in the hero's source picture, as the
+ * worker cuts it (subject box and focal point); the 3:2 thirds when the
+ * source's size is unknown.
+ */
+export function heroObjectPosition(hero: ClientEditionImage): string {
+  const width = hero.width && hero.width > 0 ? hero.width : 1500;
+  const height = hero.height && hero.height > 0 ? hero.height : 1000;
+  return objectPositionOf(
+    plateCropWindow({ width, height, focal: hero.focal, subjectBox: hero.subjectBox }, COVER_ASPECT.wide),
+  );
+}
+
 export function PressBandPreview({
   edition,
   current,
   overrides,
   sourceUrls,
+  delta = true,
 }: {
   edition: ClientEdition;
   /** The approved edition the client sees now; null before the first. */
@@ -122,6 +145,8 @@ export function PressBandPreview({
   overrides?: ClientEditionOverrides | null;
   /** Viewable source addresses by asset id (useClientEditionSourceUrls). */
   sourceUrls: Record<string, string>;
+  /** The what-moved line; the client mirror shows the edition alone. */
+  delta?: boolean;
 }) {
   const heroId = editionHeroId(edition, overrides);
   const hero = edition.images.find((image) => image.assetId === heroId) ?? null;
@@ -132,24 +157,24 @@ export function PressBandPreview({
 
   return (
     <div className="flex flex-col gap-4" data-press-preview={edition.id}>
-      <p className="text-[15px] leading-snug text-[var(--text-muted)]" data-press-delta>
-        {editionDelta(edition, current, overrides)}
-      </p>
+      {delta && (
+        <p className="text-[15px] leading-snug text-[var(--text-muted)]" data-press-delta>
+          {editionDelta(edition, current, overrides)}
+        </p>
+      )}
       <figure className="m-0 flex flex-col gap-2">
+        {/* PLAN C2: designer-side photography stays within 120px tall. */}
         {heroUrl ? (
           <img
-            src={getOptimizedImageUrl(heroUrl, { width: 1200 })}
+            src={getOptimizedImageUrl(heroUrl, { width: 400 })}
             alt={hero?.alt ?? ''}
-            className="block aspect-[16/10] w-full border border-[var(--border-subtle)] object-cover"
-            style={
-              hero?.focal?.length === 2
-                ? { objectPosition: `${hero.focal[0] * 100}% ${hero.focal[1] * 100}%` }
-                : undefined
-            }
+            className="block h-[120px] w-[192px] max-w-full border border-[var(--border-subtle)] object-cover"
+            style={hero ? { objectPosition: heroObjectPosition(hero) } : undefined}
+            data-press-cover
           />
         ) : (
           <div
-            className="flex aspect-[16/10] w-full items-center justify-center border border-dashed border-[var(--border-subtle)] text-[15px] text-[var(--text-muted)]"
+            className="flex h-[120px] w-[192px] max-w-full items-center justify-center border border-dashed border-[var(--border-subtle)] px-2 text-center text-[15px] text-[var(--text-muted)]"
             data-press-drawn-cover
           >
             The cover is a drawing

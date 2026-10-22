@@ -1,12 +1,25 @@
 /**
- * US-49 Phase 2 — the Press band: three states, Approve with the studio's
- * gathered edits, Hold, Undo behind a confirm in words, the focal drag, the
- * one-line delta, and never a word about how the edition was made.
+ * US-49 Phase 2 — the Press band: its states, Approve with the studio's
+ * gathered edits, Hold, Undo behind a confirm in words, the job's own
+ * controls outside any draft, the focal drag, the one-line delta, a closed
+ * job, and never a word about how the edition was made. Editions are the
+ * SQL's own rows (__fixtures__/client-editions) through the hook's normaliser.
  */
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import type { ClientEdition, ClientEditions } from '@patina/supabase';
+import type { ClientEdition, ClientEditions, ClientEditorialAsset } from '@patina/supabase';
 import { PressBand, publishedLine } from '../press-band';
-import { editionDelta } from '../press-band-preview';
+import { editionDelta, heroObjectPosition } from '../press-band-preview';
+import {
+  CURRENT_ROW,
+  EARLIER_ROW,
+  PENDING_ROW,
+  editionRow,
+  imageRow,
+  listEnvelope,
+} from '../__fixtures__/client-editions';
+import { COVER_ASPECT, objectPositionOf, plateCropWindow } from '@/lib/document/plate-crop';
+
+const { normalizeClientEditions } = jest.requireActual<typeof import('@patina/supabase')>('@patina/supabase');
 
 // jsdom has no PointerEvent, so fireEvent.pointer* would drop clientX/clientY;
 // a MouseEvent subclass carries them as a browser's PointerEvent does.
@@ -26,12 +39,20 @@ const mockHold = jest.fn();
 const mockUndo = jest.fn();
 const mockSetFocal = jest.fn();
 const mockShowMakers = jest.fn();
+const mockUseClientEditions = jest.fn();
 let mockData: ClientEditions | undefined;
+let mockEditorial: ClientEditorialAsset[] | undefined;
 
 const act = (mutate: jest.Mock) => ({ mutate, reset: jest.fn(), isPending: false, isSuccess: false, error: null });
 
 jest.mock('@patina/supabase', () => ({
-  useClientEditions: () => ({ data: mockData }),
+  useClientEditions: (...args: unknown[]) => {
+    mockUseClientEditions(...args);
+    return { data: mockData };
+  },
+  useClientEditorialAssets: (_projectId: string, enabled: boolean) => ({
+    data: enabled ? mockEditorial : undefined,
+  }),
   useClientEditionSourceUrls: () => ({
     data: {
       'a-hero': 'https://example.com/hero.jpg',
@@ -46,98 +67,19 @@ jest.mock('@patina/supabase', () => ({
   useSetProjectShowMakers: () => act(mockShowMakers),
 }));
 
-const CHAPTERS = [
-  { key: 'living', headline: 'The living room', standing: 'The sofa leaves the workshop on Friday.' },
-];
+const editions = (rows: Record<string, unknown>[], showMakers = false) =>
+  normalizeClientEditions(listEnvelope(rows, showMakers) as never);
+const one = (row: Record<string, unknown>): ClientEdition => editions([row]).editions[0];
 
-function image(assetId: string, over: Partial<ClientEdition['images'][number]> = {}) {
-  return {
-    assetId,
-    plateRole: 'room',
-    cropKey: 'wide',
-    rank: 1,
-    chapterKey: 'living',
-    alt: `Picture ${assetId}`,
-    captionWhat: `What ${assetId}`,
-    captionWhose: 'Birchwood Studio',
-    captionWhen: 'October',
-    sourceKind: 'upload' as const,
-    sourceUrl: `${assetId}.jpg`,
-    width: 2000,
-    height: 1250,
-    focal: null,
-    subjectBox: null,
-    focalOrigin: null,
-    ...over,
-  };
-}
+const PENDING = one(PENDING_ROW);
+const CURRENT = one(CURRENT_ROW);
 
-function edition(over: Partial<ClientEdition>): ClientEdition {
-  return {
-    id: 'e',
-    seq: 1,
-    status: 'approved',
-    kind: 'full',
-    autoPublished: false,
-    held: false,
-    approvedAt: null,
-    reviewedAt: null,
-    reviewedBy: null,
-    createdAt: '2026-10-21T12:00:00Z',
-    supersededAt: null,
-    frozenAt: null,
-    composition: {
-      chapters: CHAPTERS,
-      doorstep: { standing: 'Nothing waits on you this week.' },
-      notice: 'Maren has a new issue for you.',
-    },
-    overrides: {},
-    images: [],
-    ...over,
-  };
-}
-
-const PENDING = edition({
-  id: 'e-5',
-  seq: 5,
-  status: 'awaiting_review',
-  composition: {
-    hero: { assetId: 'a-hero' },
-    chapters: CHAPTERS,
-    doorstep: { standing: 'Nothing waits on you this week.' },
-    notice: 'Maren has a new issue for you.',
-    candidates: ['a-hero', 'a-room', 'a-concept'],
-  },
-  images: [
-    image('a-hero', { plateRole: 'hero', focal: [0.5, 0.45] }),
-    image('a-room', { sourceKind: 'scan' }),
-    image('a-concept', { sourceKind: 'concept' }),
-  ],
-});
-
-const CURRENT = edition({
-  id: 'e-4',
-  seq: 4,
-  status: 'approved',
-  approvedAt: '2026-10-21T12:00:00Z',
-  reviewedBy: { id: 'u-maren', name: 'Maren Holt' },
-  composition: { ...PENDING.composition, hero: { assetId: 'a-old' }, candidates: null },
-  images: [image('a-old', { plateRole: 'hero' }), image('a-room', { sourceKind: 'scan' })],
-});
-
-const EARLIER = edition({
-  id: 'e-3',
-  seq: 3,
-  status: 'superseded',
-  kind: 'plates_only',
-  autoPublished: true,
-  approvedAt: '2026-10-20T12:00:00Z',
-});
-
-function renderBand(editions: ClientEdition[], clientFirstName: string | null = 'June') {
-  mockData = { showMakers: false, editions };
+function renderBand(rows: Record<string, unknown>[], clientFirstName: string | null = 'June') {
+  mockData = editions(rows);
   return render(<PressBand projectId="p-1" clientFirstName={clientFirstName} />);
 }
+
+const FROZEN_CURRENT = { ...CURRENT_ROW, frozenAt: '2026-10-22T12:00:00+00:00' };
 
 const FORBIDDEN = /\bAI\b|generated/i;
 
@@ -148,13 +90,20 @@ function allWords(root: HTMLElement): string {
   return `${root.textContent} ${labels.join(' ')}`;
 }
 
+const frameRect = (frame: HTMLElement) => {
+  frame.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, width: 400, height: 250, right: 400, bottom: 250, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+};
+
 beforeEach(() => {
   mockData = undefined;
+  mockEditorial = undefined;
+  jest.clearAllMocks();
 });
 
-describe('PressBand — the three states', () => {
+describe('PressBand — the states', () => {
   it('says a new edition is ready, with its preview, when one waits for review', () => {
-    renderBand([PENDING, CURRENT, EARLIER]);
+    renderBand([PENDING_ROW, CURRENT_ROW, EARLIER_ROW]);
     expect(screen.getByRole('heading', { name: 'A new edition is ready' })).toBeInTheDocument();
     expect(screen.getByText(/Approve puts it on June’s page\. Hold keeps edition 4 there\./)).toBeInTheDocument();
     const chapters = screen.getByRole('list', { name: 'Chapters' });
@@ -168,18 +117,41 @@ describe('PressBand — the three states', () => {
     expect(cover.getAttribute('src')).not.toMatch(/\/plates\//);
   });
 
+  it('reads the open job live: every minute and on focus (R2)', () => {
+    renderBand([CURRENT_ROW]);
+    expect(mockUseClientEditions).toHaveBeenCalledWith('p-1', { live: true });
+  });
+
   it('names the edition the client sees when nothing waits', () => {
-    renderBand([CURRENT, EARLIER]);
+    renderBand([CURRENT_ROW, EARLIER_ROW]);
     expect(screen.getByRole('heading', { name: 'Edition 4 is what June sees' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
   });
 
   it('falls back to "the client" when no first name is known', () => {
-    renderBand([CURRENT], null);
+    renderBand([CURRENT_ROW], null);
     expect(screen.getByRole('heading', { name: 'Edition 4 is what the client sees' })).toBeInTheDocument();
   });
 
-  it('says the cover is a drawing, with one link to the item pictures, when nothing exists', () => {
+  it('before any edition, says the page shows the editorial cover — no claim about drawings (R11)', () => {
+    mockEditorial = [
+      { id: 'x-1', sourceKind: 'upload', ground: 'scene', width: 2000, height: 1250, subjectBox: null },
+    ];
+    renderBand([]);
+    expect(
+      screen.getByRole('heading', { name: 'June’s page shows the editorial cover until an edition is approved' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/drawing/i)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Add a photograph for the cover' })).toBeNull();
+  });
+
+  it('says the cover is a drawing only when the editorial read has no eligible photograph (R11)', () => {
+    mockEditorial = [
+      // A concept render, a small upload and a white-ground clipping: none may open the page.
+      { id: 'x-1', sourceKind: 'concept', ground: 'scene', width: 3000, height: 2000, subjectBox: null },
+      { id: 'x-2', sourceKind: 'upload', ground: 'scene', width: 900, height: 600, subjectBox: null },
+      { id: 'x-3', sourceKind: 'maker', ground: 'white', width: 3000, height: 2000, subjectBox: null },
+    ];
     renderBand([]);
     expect(
       screen.getByRole('heading', { name: 'The cover is a drawing until a photograph arrives' }),
@@ -191,6 +163,14 @@ describe('PressBand — the three states', () => {
     expect(screen.queryByRole('list', { name: 'Published editions' })).toBeNull();
   });
 
+  it('a draft that never reached review is still "no edition yet" (R11)', () => {
+    mockEditorial = undefined; // the editorial read is still out
+    renderBand([editionRow({ id: 'e-1', seq: 1, status: 'drafting' })]);
+    expect(
+      screen.getByRole('heading', { name: 'June’s page shows the editorial cover until an edition is approved' }),
+    ).toBeInTheDocument();
+  });
+
   it('renders nothing until the editions are read', () => {
     mockData = undefined;
     const { container } = render(<PressBand projectId="p-1" clientFirstName="June" />);
@@ -198,23 +178,24 @@ describe('PressBand — the three states', () => {
   });
 });
 
-describe('PressBand — acts', () => {
+describe('PressBand — acts on the waiting edition', () => {
   it('Approve sends the edits gathered in Edit as overrides', () => {
-    renderBand([PENDING, CURRENT]);
+    renderBand([PENDING_ROW, CURRENT_ROW]);
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const tray = document.querySelector('[data-press-edit]') as HTMLElement;
 
     // The concept render is never offered for the cover (R142).
-    expect(screen.queryByRole('button', { name: 'What a-concept' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'What a-room' }));
-    expect(screen.getByRole('button', { name: 'What a-room' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(tray).queryByRole('button', { name: 'What a-concept' })).toBeNull();
+    fireEvent.click(within(tray).getByRole('button', { name: 'What a-room' }));
+    expect(within(tray).getByRole('button', { name: 'What a-room' })).toHaveAttribute('aria-pressed', 'true');
 
-    const headline = screen.getByLabelText('Headline');
+    const headline = within(tray).getByLabelText('Headline');
     expect(headline).toHaveAttribute('maxLength', '60');
     fireEvent.change(headline, { target: { value: 'The long room' } });
-    expect(screen.getByText('13/60')).toBeInTheDocument();
-    expect(screen.getByLabelText('Standing sentence')).toHaveAttribute('maxLength', '160');
+    expect(within(tray).getByText('13/60')).toBeInTheDocument();
+    expect(within(tray).getByLabelText('Standing sentence')).toHaveAttribute('maxLength', '160');
 
-    fireEvent.change(screen.getAllByLabelText('Whose')[0], { target: { value: 'Her piece' } });
+    fireEvent.change(within(tray).getAllByLabelText('Whose')[0], { target: { value: 'Her piece' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
     expect(mockApprove).toHaveBeenCalledTimes(1);
@@ -223,51 +204,110 @@ describe('PressBand — acts', () => {
       editionId: 'e-5',
       overrides: {
         heroAssetId: 'a-room',
-        chapters: { living: { headline: 'The long room' } },
+        chapters: { 'room-living': { headline: 'The long room' } },
         captions: { 'a-hero': { whose: 'Her piece' } },
       },
     });
   });
 
   it('Approve with no edits sends empty overrides', () => {
-    renderBand([PENDING]);
+    renderBand([PENDING_ROW]);
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
     expect(mockApprove.mock.calls[0][0]).toEqual({ projectId: 'p-1', editionId: 'e-5', overrides: {} });
   });
 
   it('Hold holds the waiting edition', () => {
-    renderBand([PENDING, CURRENT]);
+    renderBand([PENDING_ROW, CURRENT_ROW]);
     fireEvent.click(screen.getByRole('button', { name: 'Hold' }));
     expect(mockHold).toHaveBeenCalledWith({ projectId: 'p-1', editionId: 'e-5' });
   });
 
   it('a held edition says so and offers no second Hold', () => {
-    renderBand([{ ...PENDING, held: true }, CURRENT]);
+    renderBand([{ ...PENDING_ROW, held: true }, CURRENT_ROW]);
     expect(screen.getByText('Held. Edition 4 stays on June’s page.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Hold' })).toBeNull();
   });
+});
 
-  it('the show-makers switch saves on its own', () => {
-    renderBand([PENDING]);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+describe('PressBand — the job’s own controls, outside any draft (R4)', () => {
+  it('the show-makers switch is there before any edition, and saves on its own', () => {
+    mockEditorial = [];
+    renderBand([], 'June');
     fireEvent.click(screen.getByRole('switch', { name: 'Name the makers on June’s page' }));
     expect(mockShowMakers).toHaveBeenCalledWith({ projectId: 'p-1', show: true });
+    expect(mockApprove).not.toHaveBeenCalled();
+  });
+
+  it('with only an approved edition: the switch and the focal point of each of its photographs, no Approve', () => {
+    renderBand([CURRENT_ROW]);
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Name the makers on June’s page' })).toBeInTheDocument();
+    const job = document.querySelector('[data-press-job]') as HTMLElement;
+    expect(within(job).getByRole('button', { name: 'Set the focal point of What a-old' })).toBeInTheDocument();
+    expect(within(job).getByRole('button', { name: 'Set the focal point of What a-room' })).toBeInTheDocument();
+  });
+
+  it('an auto-published plates-only edition can have its crop corrected too', () => {
+    renderBand([{ ...CURRENT_ROW, kind: 'plates_only', autoPublished: true, reviewedBy: null }]);
+    const job = document.querySelector('[data-press-job]') as HTMLElement;
+    fireEvent.click(within(job).getByRole('button', { name: 'Set the focal point of What a-old' }));
+    expect(job.querySelector('[data-focal-frame="wide"]')).not.toBeNull();
+  });
+});
+
+describe('PressBand — a closed job (R12)', () => {
+  it('pending beside a frozen current edition: no Approve, Hold, Edit or asset write', () => {
+    renderBand([PENDING_ROW, FROZEN_CURRENT]);
+    for (const name of ['Approve', 'Hold', 'Edit', 'Undo']) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+    expect(screen.queryByRole('button', { name: /^Set the focal point/ })).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'A new edition is ready' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Edition 4 is what June sees' })).toBeInTheDocument();
+    expect(screen.getByText('Closed')).toBeInTheDocument();
   });
 });
 
 describe('PressBand — published editions and Undo', () => {
   it('lists every published edition newest first, studio-approved and plates-only', () => {
-    renderBand([PENDING, CURRENT, EARLIER]);
+    renderBand([PENDING_ROW, CURRENT_ROW, EARLIER_ROW]);
     const rows = within(screen.getByRole('list', { name: 'Published editions' })).getAllByRole('listitem');
     expect(rows.map((row) => row.textContent)).toEqual([
       'Edition 4 · approved by Maren · 21 OctoberUndo',
       'Edition 3 · plates only · published 20 October',
     ]);
-    expect(publishedLine(EARLIER)).toBe('Edition 3 · plates only · published 20 October');
+    expect(publishedLine(one(EARLIER_ROW))).toBe('Edition 3 · plates only · published 20 October');
+  });
+
+  it('a superseded draft that was never approved is not published, and Undo promises the last APPROVED edition (R5)', () => {
+    const five = editionRow({
+      id: 'e-5',
+      seq: 5,
+      status: 'approved',
+      approvedAt: '2026-10-22T09:00:00+00:00',
+      reviewedBy: { id: 'u-maren', name: 'Maren Holt' },
+    });
+    // Begin superseded #4 while it waited; it never reached the client.
+    const four = editionRow({ id: 'e-4', seq: 4, status: 'superseded', supersededBy: 'e-5' });
+    const three = editionRow({
+      id: 'e-3',
+      seq: 3,
+      status: 'superseded',
+      approvedAt: '2026-10-20T09:00:00+00:00',
+      reviewedBy: { id: 'u-maren', name: 'Maren Holt' },
+      supersededBy: 'e-5',
+    });
+    renderBand([five, four, three]);
+    const rows = within(screen.getByRole('list', { name: 'Published editions' })).getAllByRole('listitem');
+    expect(rows.map((row) => row.getAttribute('data-published-edition'))).toEqual(['5', '3']);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(within(screen.getByRole('alertdialog')).getByText('June will see edition 3 again.')).toBeInTheDocument();
   });
 
   it('Undo asks in words, then takes the edition back', () => {
-    renderBand([CURRENT, EARLIER]);
+    renderBand([CURRENT_ROW, EARLIER_ROW]);
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     const dialog = screen.getByRole('alertdialog');
     expect(within(dialog).getByText('June will see edition 3 again.')).toBeInTheDocument();
@@ -276,8 +316,16 @@ describe('PressBand — published editions and Undo', () => {
     expect(mockUndo).toHaveBeenCalledWith({ projectId: 'p-1', editionId: 'e-4' });
   });
 
+  it('with nothing it superseded, Undo says the page goes back to before the edition', () => {
+    renderBand([CURRENT_ROW]);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(
+      within(screen.getByRole('alertdialog')).getByText('June will see the page as it was before edition 4.'),
+    ).toBeInTheDocument();
+  });
+
   it('Keep closes the confirm without taking anything back', () => {
-    renderBand([CURRENT, EARLIER]);
+    renderBand([CURRENT_ROW, EARLIER_ROW]);
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     fireEvent.click(screen.getByRole('button', { name: 'Keep edition 4' }));
     expect(mockUndo).not.toHaveBeenCalled();
@@ -285,21 +333,40 @@ describe('PressBand — published editions and Undo', () => {
   });
 
   it('a closed (frozen) edition shows Closed and no Undo', () => {
-    renderBand([{ ...CURRENT, frozenAt: '2026-10-22T12:00:00Z' }, EARLIER]);
+    renderBand([FROZEN_CURRENT, EARLIER_ROW]);
     expect(screen.getByText('Closed')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
   });
 });
 
-describe('PressBand — focal drag', () => {
-  it('a drag release then "Use this crop" saves a focal point inside 0–1', () => {
-    renderBand([PENDING]);
+describe('PressBand — focal point', () => {
+  const openHeroFocal = () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    const frame = document.querySelector('[data-focal-frame="wide"]') as HTMLElement;
-    frame.getBoundingClientRect = () =>
-      ({ left: 0, top: 0, width: 400, height: 250, right: 400, bottom: 250, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    const tray = document.querySelector('[data-press-edit]') as HTMLElement;
+    fireEvent.click(within(tray).getByRole('button', { name: 'Set the focal point of What a-hero' }));
+    return tray;
+  };
 
-    const useCrop = screen.getByRole('button', { name: 'Use this crop' });
+  it('frames appear only while the focal editor is open (R10)', () => {
+    renderBand([PENDING_ROW]);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(document.querySelector('[data-focal-frame]')).toBeNull();
+    const open = screen.getByRole('button', { name: 'Set the focal point of What a-hero' });
+    expect(open).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(open);
+    expect(open).toHaveAttribute('aria-expanded', 'true');
+    expect(document.querySelectorAll('[data-focal-frame]')).toHaveLength(2);
+    fireEvent.click(open);
+    expect(document.querySelector('[data-focal-frame]')).toBeNull();
+  });
+
+  it('an unboxed photograph saves its focal point with NO subject box (R1)', () => {
+    renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    const frame = tray.querySelector('[data-focal-frame="wide"]') as HTMLElement;
+    frameRect(frame);
+
+    const useCrop = within(tray).getByRole('button', { name: 'Use this crop' });
     expect(useCrop).toBeDisabled();
     fireEvent.pointerDown(frame, { clientX: 300, clientY: 50, pointerId: 1 });
     // Dragged past the frame's edge: the point stops at the edge of the picture.
@@ -307,69 +374,109 @@ describe('PressBand — focal drag', () => {
     fireEvent.pointerUp(frame, { clientX: 900, clientY: 50, pointerId: 1 });
 
     // Both frames' handles name the same point.
-    expect(screen.getAllByRole('button', { name: /^Focal point at 100 across, 20 down/ })).toHaveLength(2);
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 100 across, 20 down/ })).toHaveLength(2);
 
     fireEvent.click(useCrop);
     expect(mockSetFocal).toHaveBeenCalledTimes(1);
     const { projectId, assetId, subjectBox, focal } = mockSetFocal.mock.calls[0][0];
     expect({ projectId, assetId }).toEqual({ projectId: 'p-1', assetId: 'a-hero' });
-    expect(subjectBox).toEqual([0, 0, 1, 1]);
-    expect(focal).toHaveLength(2);
-    for (const n of [...focal, ...subjectBox]) {
-      expect(n).toBeGreaterThanOrEqual(0);
-      expect(n).toBeLessThanOrEqual(1);
-    }
+    expect(subjectBox).toBeNull();
     expect(focal[0]).toBeCloseTo(1);
     expect(focal[1]).toBeCloseTo(0.2);
   });
 
-  it('keeps the point inside the subject box', () => {
+  it('keeps the point inside the subject box, and saves that box', () => {
     const boxed = {
-      ...PENDING,
-      images: [image('a-hero', { plateRole: 'hero', subjectBox: [0.2, 0.2, 0.5, 0.5], focal: [0.4, 0.4] })],
+      ...PENDING_ROW,
+      images: [
+        imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', subjectBox: [0.2, 0.2, 0.5, 0.5], focal: [0.4, 0.4] }),
+      ],
     };
     renderBand([boxed]);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    const frame = document.querySelector('[data-focal-frame="wide"]') as HTMLElement;
-    frame.getBoundingClientRect = () =>
-      ({ left: 0, top: 0, width: 400, height: 250, right: 400, bottom: 250, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    const tray = openHeroFocal();
+    const frame = tray.querySelector('[data-focal-frame="wide"]') as HTMLElement;
+    frameRect(frame);
     fireEvent.pointerDown(frame, { clientX: 0, clientY: 0, pointerId: 1 });
     fireEvent.pointerUp(frame, { pointerId: 1 });
-    fireEvent.click(screen.getByRole('button', { name: 'Use this crop' }));
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
     const { subjectBox, focal } = mockSetFocal.mock.calls[0][0];
     expect(subjectBox).toEqual([0.2, 0.2, 0.5, 0.5]);
     expect(focal).toEqual([0.2, 0.2]);
+  });
+
+  it('the frames and the band cover show the crop the worker cuts, subject box first (R8)', () => {
+    // Review reproduction 2: 2000² source, box [.1,.1,.8,.5], focal [.5,.6] → wide [0,200,2000,1250].
+    const square = imageRow('a-hero', {
+      plateRole: 'hero',
+      chapterKey: 'cover',
+      width: 2000,
+      height: 2000,
+      subjectBox: [0.1, 0.1, 0.8, 0.5],
+      focal: [0.5, 0.6],
+    });
+    renderBand([{ ...PENDING_ROW, images: [square] }]);
+    const wide = objectPositionOf({ left: 0, top: 200 / 2000, vx: 1, vy: 1250 / 2000 });
+    expect(screen.getByRole('img', { name: 'Picture a-hero' }).style.objectPosition).toBe(wide);
+
+    const tray = openHeroFocal();
+    const frameImage = (key: string) =>
+      tray.querySelector(`[data-focal-frame="${key}"] img`) as HTMLImageElement;
+    expect(frameImage('wide').style.objectPosition).toBe(wide);
+    const source = { width: 2000, height: 2000, focal: [0.5, 0.6], subjectBox: [0.1, 0.1, 0.8, 0.5] };
+    expect(frameImage('cover_phone').style.objectPosition).toBe(
+      objectPositionOf(plateCropWindow(source, COVER_ASPECT.cover_phone)),
+    );
+  });
+
+  it('designer photography stays within 120px tall (R10)', () => {
+    renderBand([PENDING_ROW]);
+    const cover = screen.getByRole('img', { name: 'Picture a-hero' });
+    expect(cover.className).toMatch(/\bh-\[120px\]/);
+    expect(cover.className).not.toMatch(/(^|\s)w-full(\s|$)/);
   });
 });
 
 describe('PressBand — the delta line', () => {
   it('says what moved against the edition the client sees, in one line', () => {
-    renderBand([PENDING, CURRENT]);
-    expect(screen.getByText('Hero changed · 2 captions changed · words unchanged')).toBeInTheDocument();
+    renderBand([PENDING_ROW, CURRENT_ROW]);
+    // a-hero and a-concept are new, a-old is gone; a-room is unchanged.
+    expect(screen.getByText('Hero changed · 3 captions changed · words unchanged')).toBeInTheDocument();
+  });
+
+  it('counts a caption the next edition drops (R13)', () => {
+    const dropped = { ...CURRENT, id: 'e-6', images: CURRENT.images.filter((image) => image.assetId !== 'a-room') };
+    expect(editionDelta(dropped, CURRENT)).toBe('Hero unchanged · 1 caption changed · words unchanged');
   });
 
   it('counts edits laid over the edition', () => {
     expect(editionDelta(CURRENT, CURRENT)).toBe('Hero unchanged · captions unchanged · words unchanged');
     expect(
       editionDelta(CURRENT, CURRENT, {
-        chapters: { living: { headline: 'The long room' } },
+        chapters: { 'room-living': { headline: 'The long room' } },
         captions: { 'a-room': { when: 'November' } },
       }),
     ).toBe('Hero unchanged · 1 caption changed · words changed');
     expect(editionDelta(PENDING, null)).toBe('The first edition');
   });
+
+  it('positions an unboxed cover on the worker’s thirds crop', () => {
+    expect(heroObjectPosition(CURRENT.images[0])).toBe(
+      objectPositionOf(plateCropWindow({ width: 2000, height: 1250 }, COVER_ASPECT.wide)),
+    );
+  });
 });
 
 describe('PressBand — voice', () => {
   it('never says how an edition was made', () => {
-    for (const editions of [[PENDING, CURRENT, EARLIER], [CURRENT, EARLIER], []]) {
-      const { container, unmount } = renderBand(editions);
+    mockEditorial = [];
+    for (const rows of [[PENDING_ROW, CURRENT_ROW, EARLIER_ROW], [CURRENT_ROW, EARLIER_ROW], []]) {
+      const { container, unmount } = renderBand(rows);
       const edit = screen.queryByRole('button', { name: 'Edit' });
       if (edit) fireEvent.click(edit);
       expect(allWords(container)).not.toMatch(FORBIDDEN);
       unmount();
     }
-    renderBand([CURRENT, EARLIER]);
+    renderBand([CURRENT_ROW, EARLIER_ROW]);
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(allWords(screen.getByRole('alertdialog'))).not.toMatch(FORBIDDEN);
   });

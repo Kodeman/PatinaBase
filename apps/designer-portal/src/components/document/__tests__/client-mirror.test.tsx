@@ -20,8 +20,11 @@ jest.mock('@tanstack/react-query', () => ({
   useQuery: () => ({ data: mockMirror.data }),
 }));
 
+// The edition at the top of the mirror has its own suite (client-mirror-edition).
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({}),
+  useClientEditions: () => ({ data: undefined }),
+  useClientEditionSourceUrls: () => ({ data: undefined }),
 }));
 
 const answeredDecision = {

@@ -7,17 +7,25 @@
  * only client-visible material — pending decisions and gates, the project
  * thread, folio files flagged client_visible, payment milestones. It must
  * NEVER render the Account Page, section tasks, margin notes, or unflagged
- * files — a CI test (client-mirror.test.tsx) holds that line (R26).
+ * files — a CI test (client-mirror.test.tsx) holds that line (R26). Its one
+ * not-yet-visible part is a House Issue edition waiting on Approve (US-49),
+ * labelled as what the client will see if approved.
  *
  * Read-only by construction: the close banner is the only interactive act.
  */
 
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import {
+  createBrowserClient,
+  useClientEditionSourceUrls,
+  useClientEditions,
+} from '@patina/supabase';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { householdDisplayName } from '@/lib/document/act-names';
+import { currentEdition, editionsFrozen, pendingEdition } from '@/lib/document/client-editions';
+import { PressBandPreview } from './press-band-preview';
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -79,6 +87,31 @@ export function useClientMirrorData(projectId: string) {
   });
 }
 
+/**
+ * US-49 Phase 2 — the client's House Issue at the top of the mirror: the
+ * edition waiting on Approve, named as what the client will see if approved,
+ * else the approved edition the client sees now; nothing before the first.
+ * Read through the Press band's own edition read, so Approve and Undo change
+ * it as they change the band.
+ */
+function MirrorEdition({ projectId, name }: { projectId: string; name: string }) {
+  const { data } = useClientEditions(projectId);
+  const editions = data?.editions ?? [];
+  const pending = editionsFrozen(editions) ? null : pendingEdition(editions);
+  const edition = pending ?? currentEdition(editions);
+  const { data: sourceUrls } = useClientEditionSourceUrls(edition?.images ?? []);
+  if (!edition) return null;
+  const label = pending ? `What ${name} will see if approved` : `Edition ${edition.seq}`;
+  return (
+    <section aria-label={label} className="mx-auto mb-8 max-w-[720px]" data-mirror-edition={edition.seq}>
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        {label}
+      </p>
+      <PressBandPreview edition={edition} current={null} sourceUrls={sourceUrls ?? {}} delta={false} />
+    </section>
+  );
+}
+
 export function ClientMirror({
   projectId,
   clientName,
@@ -133,6 +166,7 @@ export function ClientMirror({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-7 py-8 min-[980px]:px-16">
+        <MirrorEdition projectId={projectId} name={shown || 'the client'} />
         {!data ? (
           <p className="text-[12px] italic text-[var(--text-muted)]">Opening their copy…</p>
         ) : (

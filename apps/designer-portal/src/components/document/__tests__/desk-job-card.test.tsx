@@ -16,15 +16,18 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ prefetch: mockRouterPrefetch }),
 }));
 let mockEditionStatuses: string[] = [];
-const mockUseClientEditions = jest.fn((_jobId: string) => ({
-  data: {
-    showMakers: false,
-    editions: mockEditionStatuses.map((status, i) => ({ id: `e-${i}`, seq: i + 1, status })),
-  },
+// As the real read: no project → the query is disabled and holds no data.
+const mockUseClientEditions = jest.fn((projectId: string | null, _options?: { live?: boolean }) => ({
+  data: projectId
+    ? {
+        showMakers: false,
+        editions: mockEditionStatuses.map((status, i) => ({ id: `e-${i}`, seq: i + 1, status })),
+      }
+    : undefined,
 }));
 jest.mock("@patina/supabase", () => ({
   ...jest.requireActual("@patina/supabase"),
-  useClientEditions: (jobId: string) => mockUseClientEditions(jobId),
+  useClientEditions: (...args: [string | null, { live?: boolean }?]) => mockUseClientEditions(...args),
 }));
 
 // Monday 12 October 2026, 10:40am local.
@@ -33,6 +36,7 @@ const NOW = new Date(2026, 9, 12, 10, 40);
 function card(over: Partial<SheetCard> = {}): SheetCard {
   return {
     jobId: "p-holloway",
+    projectId: "p-holloway",
     name: "Holloway Den",
     stage: "project",
     holder: { userId: "me", name: "Leah", mine: true },
@@ -167,11 +171,27 @@ describe("DeskJobCard", () => {
   it("prints one line when a new client edition waits for review (US-49)", () => {
     mockEditionStatuses = ["awaiting_review", "approved"];
     const { container } = renderCard();
+    // The Desk reads the project's editions without the open job's polling.
     expect(mockUseClientEditions).toHaveBeenCalledWith("p-holloway");
+    expect(mockUseClientEditions.mock.calls.every(([, options]) => !options?.live)).toBe(true);
     const line = container.querySelectorAll("[data-edition-ready]");
     expect(line).toHaveLength(1);
     expect(line[0]).toHaveTextContent(/^A new edition is ready$/);
     expect(line[0].closest(".card-up")).not.toBeNull();
+  });
+
+  it("reads no edition for a pre-project card: its job id is an engagement, not a project (R6)", () => {
+    mockEditionStatuses = ["awaiting_review"];
+    mockUseClientEditions.mockClear();
+    const { container } = render(
+      <DeskJobCard card={card({ jobId: "eng-lead-7", projectId: null })} scope="studio" now={NOW}>
+        <li>a line</li>
+      </DeskJobCard>,
+    );
+    expect(mockUseClientEditions).toHaveBeenCalledWith(null);
+    expect(mockUseClientEditions).not.toHaveBeenCalledWith("eng-lead-7");
+    expect(container.querySelector("[data-edition-ready]")).toBeNull();
+    mockEditionStatuses = [];
   });
 
   it("prints nothing about editions when none waits", () => {

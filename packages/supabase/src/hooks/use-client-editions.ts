@@ -28,7 +28,9 @@ type EditionFunctions = {
   hold_client_edition: { Args: { p_edition_id: string }; Returns: undefined };
   undo_client_edition: { Args: { p_edition_id: string }; Returns: undefined };
   set_plate_focal: {
-    Args: { p_asset_id: string; p_subject_box: number[]; p_focal: number[] };
+    // A photograph with no subject box keeps it null: the worker reads a box
+    // as hard containment, so a manufactured whole-frame box drops crops.
+    Args: { p_asset_id: string; p_subject_box: number[] | null; p_focal: number[] };
     Returns: undefined;
   };
   set_project_show_makers: {
@@ -98,8 +100,6 @@ export interface ClientEditionComposition {
   chapters?: ClientEditionChapter[] | null;
   doorstep?: { standing?: string | null } | null;
   notice?: string | null;
-  /** The hero candidates offered to the studio (Call A2), when present. */
-  candidates?: Array<string | { assetId?: string | null }> | null;
 }
 
 /** What Approve may lay over an edition (approve_client_edition p_overrides). */
@@ -121,6 +121,9 @@ export interface ClientEdition {
   reviewedBy: { id: string; name: string | null } | null;
   createdAt: string | null;
   supersededAt: string | null;
+  /** The edition that replaced this one (00845); Undo restores the approved
+   *  edition whose supersededBy is the edition taken back. */
+  supersededBy: string | null;
   frozenAt: string | null;
   composition: ClientEditionComposition | null;
   overrides: ClientEditionOverrides | null;
@@ -135,7 +138,7 @@ export interface ClientEditions {
 
 const EMPTY_EDITIONS: ClientEditions = { showMakers: false, editions: [] };
 
-function normalizeClientEditions(data: Json | null): ClientEditions {
+export function normalizeClientEditions(data: Json | null): ClientEditions {
   if (!data || typeof data !== "object" || Array.isArray(data)) return EMPTY_EDITIONS;
   const raw = data as unknown as Partial<ClientEditions>;
   const editions = Array.isArray(raw.editions) ? raw.editions : [];
@@ -146,6 +149,7 @@ function normalizeClientEditions(data: Json | null): ClientEditions {
         ...edition,
         autoPublished: edition.autoPublished === true,
         held: edition.held === true,
+        supersededBy: edition.supersededBy ?? null,
         images: Array.isArray(edition.images) ? edition.images : [],
       }))
       .sort((a, b) => b.seq - a.seq),
@@ -172,12 +176,22 @@ export function invalidateClientEditions(queryClient: QueryClient, projectId: st
 
 // ── Reads ────────────────────────────────────────────────────────────────────
 
+/** How often the open job's band re-reads its editions: the compose lane
+ *  publishes plates-only editions with no studio act (C3). */
+export const CLIENT_EDITIONS_LIVE_MS = 60_000;
+
 /**
- * Every edition of a job, newest first. A refusal (not a studio member of the
- * project, or not a project) is final, so it is not retried.
+ * The editions read. `live` is for the open job (the Press band): it re-reads
+ * every minute while mounted and whenever the window regains focus, so an
+ * edition the lane publishes shows up with its Undo. The Desk line reads the
+ * same key without polling. A refusal (not a studio member of the project, or
+ * not a project) is final, so it is not retried.
  */
-export function useClientEditions(projectId: string | null | undefined) {
-  return useQuery({
+export function clientEditionsQueryOptions(
+  projectId: string | null | undefined,
+  { live = false }: { live?: boolean } = {},
+) {
+  return {
     queryKey: clientEditionsKey(projectId ?? ""),
     queryFn: async () => {
       const { data, error } = await getSupabase().rpc("list_client_editions", {
@@ -187,6 +201,48 @@ export function useClientEditions(projectId: string | null | undefined) {
       return normalizeClientEditions(data);
     },
     enabled: !!projectId,
+    retry: false,
+    ...(live
+      ? { refetchInterval: CLIENT_EDITIONS_LIVE_MS, refetchOnWindowFocus: "always" as const }
+      : {}),
+  };
+}
+
+/** Every edition of a job, newest first. No project → no read. */
+export function useClientEditions(
+  projectId: string | null | undefined,
+  options?: { live?: boolean },
+) {
+  return useQuery(clientEditionsQueryOptions(projectId, options));
+}
+
+/** The editorial envelope's assets as the cover choice reads them (00842). */
+export interface ClientEditorialAsset {
+  id: string;
+  sourceKind: PlateSourceKind | null;
+  ground: "white" | "scene" | "drawing" | null;
+  width: number;
+  height: number;
+  subjectBox: number[] | null;
+}
+
+/**
+ * The Phase 1 editorial read (get_client_project_editorial, 00842; its guard
+ * admits the studio) for what the client page opens on before any edition is
+ * approved. Only its assets are kept.
+ */
+export function useClientEditorialAssets(projectId: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["client-editorial-assets", projectId ?? ""],
+    queryFn: async () => {
+      const { data, error } = await getSupabase().rpc("get_client_project_editorial", {
+        p_project_id: projectId!,
+      });
+      if (error) throw error;
+      const assets = (data as { assets?: unknown } | null)?.assets;
+      return (Array.isArray(assets) ? assets : []) as ClientEditorialAsset[];
+    },
+    enabled: !!projectId && enabled,
     retry: false,
   });
 }
@@ -300,8 +356,8 @@ export function useUndoClientEdition() {
 export interface SetPlateFocalInput {
   projectId: string;
   assetId: string;
-  /** [x, y, w, h], each 0–1. */
-  subjectBox: number[];
+  /** [x, y, w, h], each 0–1; null when the photograph has no subject box. */
+  subjectBox: number[] | null;
   /** [x, y], each 0–1. */
   focal: number[];
 }

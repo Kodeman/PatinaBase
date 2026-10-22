@@ -4,14 +4,16 @@
  * US-49 Phase 2 — the Press band (PLAN §designer loop; canvas board
  * Press-Band-Designer). The studio's one place for the client's House Issue:
  *   · a new edition waiting → its preview and Approve / Hold / Edit;
- *   · otherwise which edition the client sees, or that the cover is still a
- *     drawing;
+ *   · otherwise which edition the client sees; before any, that the page
+ *     shows the editorial cover, or that the cover is still a drawing when
+ *     no photograph can open it;
  *   · every published edition, studio-approved or plates-only, newest first,
  *     with Undo on the one the client sees now.
  * The band says an edition is ready, never why. Edits (cover, chapter words,
  * caption whose/when) gather into overrides that go with Approve; there is no
  * way to ask for a different edition. The show-makers switch and the focal
- * point save on their own, as they belong to the job and the photograph.
+ * points save on their own, outside any draft, as they belong to the job and
+ * its photographs. A closed project's frozen edition offers no act at all.
  */
 
 import { useId, useState } from 'react';
@@ -29,6 +31,7 @@ import {
   useApproveClientEdition,
   useClientEditionSourceUrls,
   useClientEditions,
+  useClientEditorialAssets,
   useHoldClientEdition,
   useSetProjectShowMakers,
   useUndoClientEdition,
@@ -40,6 +43,14 @@ import { Input, Textarea } from '@/components/ui/controls';
 import { ActFailLine } from '@/components/feedback/act-fail-line';
 import { getThumbnailUrl } from '@/lib/media-utils';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
+import {
+  currentEdition,
+  editionUndoRestores,
+  editionsFrozen,
+  pendingEdition,
+  wasPublished,
+} from '@/lib/document/client-editions';
+import { heroEligible } from '@/lib/document/plate-crop';
 import { DocumentAction, DocumentActionRow } from './document-action';
 import {
   PressBandPreview,
@@ -93,17 +104,18 @@ function prune(overrides: ClientEditionOverrides): ClientEditionOverrides {
   return out;
 }
 
-/** The pictures offered for the cover: the composer's candidates when it named
- *  them, else every picture of the edition. Never a concept render (R142). */
-function heroChoices(edition: ClientEdition): ClientEditionImage[] {
-  const unique = new Map<string, ClientEditionImage>();
-  for (const image of edition.images) if (!unique.has(image.assetId)) unique.set(image.assetId, image);
-  const named = (edition.composition?.candidates ?? [])
-    .map((candidate) => (typeof candidate === 'string' ? candidate : candidate?.assetId))
-    .filter((id): id is string => !!id && unique.has(id));
-  const offered = named.length ? named.map((id) => unique.get(id)!) : [...unique.values()];
-  return offered.filter((image) => image.sourceKind !== 'concept');
+/** An edition's pictures, one per asset, in its own order. */
+function uniqueImages(images: readonly ClientEditionImage[]): ClientEditionImage[] {
+  return [...new Map(images.map((image) => [image.assetId, image] as const)).values()];
 }
+
+/** The pictures offered for the cover: every picture of the edition, never a
+ *  concept render (R142). */
+function heroChoices(edition: ClientEdition): ClientEditionImage[] {
+  return uniqueImages(edition.images).filter((image) => image.sourceKind !== 'concept');
+}
+
+const HEADING = 'font-display text-[22px] font-normal leading-tight';
 
 export function PressBand({
   projectId,
@@ -113,19 +125,24 @@ export function PressBand({
   /** The client's first name as the letterhead prints it; null → "the client". */
   clientFirstName: string | null;
 }) {
-  const { data } = useClientEditions(projectId);
+  // The open job reads live: the compose lane publishes with no studio act.
+  const { data } = useClientEditions(projectId, { live: true });
   const editions = data?.editions ?? [];
-  const pending = editions.find((edition) => edition.status === 'awaiting_review') ?? null;
-  const current = editions.find((edition) => edition.status === 'approved') ?? null;
-  const images = pending?.images ?? current?.images ?? [];
-  const { data: sourceUrls } = useClientEditionSourceUrls(images);
+  const pending = pendingEdition(editions);
+  const current = currentEdition(editions);
+  // A closed project's edition is frozen: nothing on the client page may move.
+  const frozen = editionsFrozen(editions);
+  const { data: sourceUrls } = useClientEditionSourceUrls(
+    uniqueImages([...(pending?.images ?? []), ...(current?.images ?? [])]),
+  );
+  // Before any edition the client page opens on the editorial cover.
+  const { data: editorialAssets } = useClientEditorialAssets(projectId, !!data && !pending && !current);
   const headingId = useId();
   if (!data) return null;
 
   const name = clientFirstName || 'the client';
-  const published = editions.filter(
-    (edition) => edition.status === 'approved' || edition.status === 'superseded',
-  );
+  const published = editions.filter(wasPublished);
+  const urls = sourceUrls ?? {};
 
   return (
     <section
@@ -133,7 +150,7 @@ export function PressBand({
       data-press-band
       className="mt-3 flex w-full max-w-[760px] flex-col gap-4 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-4 py-3 text-left"
     >
-      {pending ? (
+      {pending && !frozen ? (
         <PendingEdition
           key={pending.id}
           headingId={headingId}
@@ -141,16 +158,15 @@ export function PressBand({
           edition={pending}
           current={current}
           name={name}
-          showMakers={data.showMakers}
-          sourceUrls={sourceUrls ?? {}}
+          sourceUrls={urls}
         />
       ) : current ? (
-        <h2 id={headingId} className="font-display text-[22px] font-normal leading-tight">
+        <h2 id={headingId} className={HEADING}>
           Edition {current.seq} is what {name} sees
         </h2>
-      ) : (
+      ) : editorialAssets && !editorialAssets.some(heroEligible) ? (
         <div className="flex flex-col gap-1">
-          <h2 id={headingId} className="font-display text-[22px] font-normal leading-tight">
+          <h2 id={headingId} className={HEADING}>
             {COVER_IS_A_DRAWING}
           </h2>
           <DocumentActionRow surfaceKey="open-document" regionKey="press-band" aria-label="Cover">
@@ -163,11 +179,82 @@ export function PressBand({
             </DocumentAction>
           </DocumentActionRow>
         </div>
+      ) : (
+        <h2 id={headingId} className={HEADING}>
+          {editorialCoverLine(name)}
+        </h2>
+      )}
+      {!frozen && (
+        <JobControls
+          projectId={projectId}
+          name={name}
+          showMakers={data.showMakers}
+          current={current}
+          sourceUrls={urls}
+        />
       )}
       {published.length > 0 && (
-        <PublishedEditions projectId={projectId} published={published} name={name} />
+        <PublishedEditions projectId={projectId} editions={editions} published={published} name={name} />
       )}
     </section>
+  );
+}
+
+/** Before the first approved edition, when the page has a photograph to open on. */
+export const editorialCoverLine = (name: string) =>
+  `${sentenceStart(name)}’s page shows the editorial cover until an edition is approved`;
+
+/**
+ * What belongs to the job and its photographs rather than to one edition's
+ * words, so it saves on its own whenever the job has a project: whether the
+ * makers are named, and the focal point of each photograph the client sees.
+ */
+function JobControls({
+  projectId,
+  name,
+  showMakers,
+  current,
+  sourceUrls,
+}: {
+  projectId: string;
+  name: string;
+  showMakers: boolean;
+  current: ClientEdition | null;
+  sourceUrls: Record<string, string>;
+}) {
+  const setShowMakers = useSetProjectShowMakers();
+  const photographs = current
+    ? uniqueImages(current.images).filter((image) => sourceUrls[image.assetId])
+    : [];
+  return (
+    <div className="flex flex-col gap-4 border-t border-[var(--border-subtle)] pt-3" data-press-job>
+      {current && photographs.length > 0 && (
+        <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
+          <legend className={EYEBROW}>Focal points · edition {current.seq}</legend>
+          {photographs.map((image) => (
+            <div key={image.assetId} className="flex flex-col gap-1">
+              <p className="text-[15px] leading-snug">{image.captionWhat || image.alt || 'A photograph'}</p>
+              <PressBandFocal projectId={projectId} image={image} sourceUrl={sourceUrls[image.assetId]} />
+            </div>
+          ))}
+        </fieldset>
+      )}
+      <div className="flex flex-col gap-1">
+        <label className="inline-flex min-h-[44px] items-center gap-3 text-[15px]">
+          <input
+            type="checkbox"
+            role="switch"
+            aria-checked={showMakers}
+            checked={showMakers}
+            disabled={setShowMakers.isPending}
+            onChange={(event) => setShowMakers.mutate({ projectId, show: event.target.checked })}
+            className="h-5 w-5 accent-[var(--ink)]"
+          />
+          Name the makers on {name}’s page
+        </label>
+        <ActFailLine error={setShowMakers.error} />
+      </div>
+    </div>
   );
 }
 
@@ -177,7 +264,6 @@ function PendingEdition({
   edition,
   current,
   name,
-  showMakers,
   sourceUrls,
 }: {
   headingId: string;
@@ -185,7 +271,6 @@ function PendingEdition({
   edition: ClientEdition;
   current: ClientEdition | null;
   name: string;
-  showMakers: boolean;
   sourceUrls: Record<string, string>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -267,8 +352,6 @@ function PendingEdition({
           edition={edition}
           overrides={overrides}
           onChange={setOverrides}
-          name={name}
-          showMakers={showMakers}
           sourceUrls={sourceUrls}
         />
       )}
@@ -317,8 +400,6 @@ function EditTray({
   edition,
   overrides,
   onChange,
-  name,
-  showMakers,
   sourceUrls,
 }: {
   id: string;
@@ -326,15 +407,12 @@ function EditTray({
   edition: ClientEdition;
   overrides: ClientEditionOverrides;
   onChange: (next: ClientEditionOverrides) => void;
-  name: string;
-  showMakers: boolean;
   sourceUrls: Record<string, string>;
 }) {
-  const setShowMakers = useSetProjectShowMakers();
   const heroId = editionHeroId(edition, overrides);
   const hero = edition.images.find((image) => image.assetId === heroId) ?? null;
   const choices = heroChoices(edition);
-  const captioned = [...new Map(edition.images.map((image) => [image.assetId, image])).values()];
+  const captioned = uniqueImages(edition.images);
 
   const setChapter = (key: string, field: 'headline' | 'standing', value: string) =>
     onChange({
@@ -441,38 +519,25 @@ function EditTray({
           })}
         </fieldset>
       )}
-
-      <div className="flex flex-col gap-1">
-        <label className="inline-flex min-h-[44px] items-center gap-3 text-[15px]">
-          <input
-            type="checkbox"
-            role="switch"
-            aria-checked={showMakers}
-            checked={showMakers}
-            disabled={setShowMakers.isPending}
-            onChange={(event) => setShowMakers.mutate({ projectId, show: event.target.checked })}
-            className="h-5 w-5 accent-[var(--ink)]"
-          />
-          Name the makers on {name}’s page
-        </label>
-        <ActFailLine error={setShowMakers.error} />
-      </div>
     </div>
   );
 }
 
 function PublishedEditions({
   projectId,
+  editions,
   published,
   name,
 }: {
   projectId: string;
+  editions: ClientEdition[];
   published: ClientEdition[];
   name: string;
 }) {
   const undo = useUndoClientEdition();
   const [asking, setAsking] = useState<ClientEdition | null>(null);
-  const before = asking ? published.find((edition) => edition.seq < asking.seq) ?? null : null;
+  // The edition the server restores, not merely an earlier number.
+  const before = asking ? editionUndoRestores(editions, asking) : null;
   const consequence = asking
     ? before
       ? `${sentenceStart(name)} will see edition ${before.seq} again.`
