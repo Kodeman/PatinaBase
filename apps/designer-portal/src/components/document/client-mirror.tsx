@@ -110,6 +110,9 @@ function MirrorEdition({ projectId, name }: { projectId: string; name: string })
   const pending = editionsFrozen(editions, data?.projectClosed === true) ? null : pendingEdition(editions);
   const edition = pending ?? currentEdition(editions);
   const { data: sourceUrls } = useClientEditionSourceUrls(edition?.images ?? []);
+  if (data?.refreshRequired) {
+    return <p role="status" className="mx-auto mb-8 max-w-[720px] text-[15px]">Refresh the editions in the Document to see the latest preview.</p>;
+  }
   // Without the project names, an OFF preview cannot yet mask its captions.
   if (!edition || (data?.showMakers !== true && !makerNames)) return null;
   const label = pending ? `What ${name} will see if approved` : `Edition ${edition.seq}`;

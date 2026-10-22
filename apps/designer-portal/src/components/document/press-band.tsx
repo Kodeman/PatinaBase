@@ -129,7 +129,7 @@ export function PressBand({
   clientFirstName: string | null;
 }) {
   // The open job reads live: the compose lane publishes with no studio act.
-  const { data } = useClientEditions(projectId, { live: true });
+  const { data, refetch, isFetching } = useClientEditions(projectId, { live: true });
   const editions = data?.editions ?? [];
   const pending = pendingEdition(editions);
   const current = currentEdition(editions);
@@ -141,9 +141,28 @@ export function PressBand({
       : uniqueImages([...(pending?.images ?? []), ...(current?.images ?? [])]),
   );
   // Before any edition the client page opens on the editorial cover.
-  const { data: editorialAssets } = useClientEditorialAssets(projectId, !!data && !pending && !current);
+  const { data: editorialAssets } = useClientEditorialAssets(projectId, !!data && !data.refreshRequired && !pending && !current);
   const headingId = useId();
   if (!data) return null;
+  if (data.refreshRequired) {
+    return (
+      <section aria-labelledby={headingId} data-press-band className="mt-3 flex flex-col gap-2 text-left">
+        <h2 id={headingId} className={HEADING}>Edition approved</h2>
+        <p role="status" className="text-[15px]">Refresh to see the latest edition.</p>
+        <DocumentAction
+          actionKey="press-refresh-editions"
+          surfaceKey="open-document"
+          regionKey="press-band"
+          variant="secondary"
+          loading={isFetching}
+          loadingLabel="Refreshing…"
+          onClick={() => { void refetch(); }}
+        >
+          Refresh editions
+        </DocumentAction>
+      </section>
+    );
+  }
 
   const name = clientFirstName || 'the client';
   const published = editions.filter(wasPublished);

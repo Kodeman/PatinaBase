@@ -140,6 +140,8 @@ export interface ClientEdition {
 }
 
 export interface ClientEditions {
+  /** Client-only: approval succeeded, but publication/preview awaits a fresh list. */
+  refreshRequired?: boolean;
   showMakers: boolean;
   /** The job is completed or archived (00848): no edition of it changes. */
   projectClosed: boolean;
@@ -374,12 +376,14 @@ export function useApproveClientEdition() {
       });
       if (error) throw error;
     },
-    onSuccess: (_data, { projectId, editionId }) => {
+    onSuccess: async (_data, { projectId }) => {
+      // The void RPC cannot supply publication metadata or merged overrides.
+      // Retire pre-approval reads too: their late result must not restore Undo.
+      await queryClient.cancelQueries({ queryKey: clientEditionsKey(projectId) });
       queryClient.setQueryData<ClientEditions>(clientEditionsKey(projectId), (data) => data && ({
         ...data,
-        editions: data.editions.map((edition) => edition.id === editionId
-          ? { ...edition, status: "approved" }
-          : edition),
+        editions: [],
+        refreshRequired: true,
       }));
     },
     onSettled: (_data, _error, { projectId }) => invalidateClientEditions(queryClient, projectId),

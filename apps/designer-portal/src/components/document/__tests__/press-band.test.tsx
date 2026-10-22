@@ -42,6 +42,7 @@ const mockSetFocal = jest.fn();
 const mockShowMakers = jest.fn();
 const mockUseClientEditions = jest.fn();
 const mockSourceUrls = jest.fn();
+const mockRefetchEditions = jest.fn();
 let mockData: ClientEditions | undefined;
 let mockEditorial: ClientEditorialAsset[] | undefined;
 let mockDeadPictures: { itemId: string; name: string }[] = [];
@@ -52,7 +53,7 @@ jest.mock('@patina/supabase', () => ({
   useProjectDeadPictureLinks: () => ({ data: mockDeadPictures }),
   useClientEditions: (...args: unknown[]) => {
     mockUseClientEditions(...args);
-    return { data: mockData };
+    return { data: mockData, refetch: mockRefetchEditions, isFetching: false };
   },
   useClientEditorialAssets: (_projectId: string, enabled: boolean) => ({
     data: enabled ? mockEditorial : undefined,
@@ -127,6 +128,24 @@ describe('PressBand — the states', () => {
     const cover = screen.getByRole('img', { name: 'Picture a-hero' });
     expect(cover).toHaveAttribute('src', expect.stringContaining('https://example.com/hero.jpg'));
     expect(cover.getAttribute('src')).not.toMatch(/\/plates\//);
+  });
+
+  it('withholds stale Undo and preview until Refresh editions supplies the authoritative projection', () => {
+    mockData = { ...editions([]), refreshRequired: true };
+    const { rerender } = render(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Refresh to see the latest edition.');
+    for (const name of ['Approve', 'Hold', 'Edit', 'Undo']) expect(screen.queryByRole('button', { name })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Published editions' })).toBeNull();
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.queryByText(/until an edition is approved/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh editions' }));
+    expect(mockRefetchEditions).toHaveBeenCalledTimes(1);
+    mockData = editions([CURRENT_ROW, EARLIER_ROW]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(screen.queryByRole('button', { name: 'Refresh editions' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Edition 4 is what June sees' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
   });
 
   it('reads the open job live: every minute and on focus (R2)', () => {

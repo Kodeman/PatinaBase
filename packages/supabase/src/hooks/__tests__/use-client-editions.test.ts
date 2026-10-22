@@ -230,11 +230,52 @@ describe('edition acts — confirmed success survives a failed list refetch', ()
       // PressBand offers Approve only for awaiting_review; Hold only if not held.
       if (act === 'approve') {
         expect(cached.editions.some((edition) => edition.status === 'awaiting_review')).toBe(false);
-        expect(cached.editions[0].status).toBe('approved');
+        expect(cached.editions).toEqual([]);
+        expect(cached.refreshRequired).toBe(true);
       } else {
         expect(cached.editions[0]).toMatchObject({ status: 'awaiting_review', held: true });
       }
       expect(cached.projectClosed).toBe(true);
+    } finally {
+      unsubscribe();
+      queryClient.clear();
+    }
+  });
+
+  it('withholds publication and preview after approval until an authoritative list refresh succeeds', async () => {
+    const projectId = 'p-1';
+    const key = clientEditionsKey(projectId);
+    const initial = normalizeClientEditions({ showMakers: true, editions: [
+      { id: 'e-2', seq: 2, status: 'awaiting_review', approvedAt: null, overrides: {}, images: [], composition: { chapters: [{ key: 'house', headline: 'Original words' }] } },
+      { id: 'e-1', seq: 1, status: 'approved', approvedAt: '2026-10-21T09:00:00Z', images: [] },
+    ] } as never);
+    queryClient.setQueryData(key, initial);
+    const observer = new QueryObserver(queryClient, { ...clientEditionsQueryOptions(projectId), staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
+    rpc.mockImplementation(async (name: string) => name === 'list_client_editions'
+      ? { data: null, error: new Error('list unavailable') }
+      : { data: null, error: null });
+    // A list request already in flight carries the pre-approval projection.
+    let finishOldRead!: (value: { data: never; error: null }) => void;
+    rpc.mockImplementationOnce(() => new Promise<{ data: never; error: null }>((resolve) => { finishOldRead = resolve; }));
+    const oldRead = observer.refetch();
+    const overrides = { chapters: { house: { headline: 'Studio correction' } } };
+    const options = useApproveClientEdition() as unknown as UseMutationOptions<void, Error, { projectId: string; editionId: string; overrides: typeof overrides }>;
+    try {
+      await new MutationObserver(queryClient, options).mutate({ projectId, editionId: 'e-2', overrides });
+      await vi.waitFor(() => expect(observer.getCurrentResult().isRefetchError).toBe(true));
+      finishOldRead({ data: initial as never, error: null });
+      await oldRead;
+      expect(rpc).toHaveBeenCalledWith('approve_client_edition', { p_edition_id: 'e-2', p_overrides: overrides });
+      expect(queryClient.getQueryData(key)).toEqual({ ...initial, editions: [], refreshRequired: true });
+      const refreshed = { showMakers: true, editions: [
+        { id: 'e-2', seq: 2, status: 'approved', approvedAt: '2026-10-22T10:00:00Z', reviewedBy: { id: 'designer', name: 'Maren' }, overrides, images: [] },
+        { id: 'e-1', seq: 1, status: 'superseded', approvedAt: '2026-10-21T09:00:00Z', supersededBy: 'e-2', images: [] },
+      ] };
+      rpc.mockResolvedValue({ data: refreshed, error: null });
+      await observer.refetch();
+      expect(queryClient.getQueryData(key)).toEqual(normalizeClientEditions(refreshed as never));
+      expect(queryClient.getQueryData<ClientEditions>(key)?.refreshRequired).not.toBe(true);
     } finally {
       unsubscribe();
       queryClient.clear();
