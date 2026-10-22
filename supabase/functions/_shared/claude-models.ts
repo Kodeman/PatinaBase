@@ -1,4 +1,10 @@
-export type ClaudeRole = "triage" | "judge" | "extract" | "answer" | "draft";
+export type ClaudeRole =
+  | "triage"
+  | "judge"
+  | "extract"
+  | "answer"
+  | "draft"
+  | "perceive";
 export type ClaudeEffort = "low" | "medium" | "high";
 
 export const ROLE_MODELS: Record<
@@ -10,6 +16,8 @@ export const ROLE_MODELS: Record<
   extract: { model: "claude-sonnet-5-5", effort: "medium" },
   answer: { model: "claude-sonnet-5-5", effort: "medium" },
   draft: { model: "claude-sonnet-5-5", effort: "high" },
+  // Vision: a plate's subject box, focal point, flags and alt (US-49 Call A1).
+  perceive: { model: "claude-sonnet-5-5", effort: "high" },
 };
 
 // First-party API rates per million tokens, verified 2026-10-13:
