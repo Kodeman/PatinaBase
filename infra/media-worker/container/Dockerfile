@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev
 
-COPY server.mjs plates.mjs ./
+COPY server.mjs plates.mjs plate-lane.mjs plate-job.mjs ./
 
 ENV PORT=8080
 EXPOSE 8080

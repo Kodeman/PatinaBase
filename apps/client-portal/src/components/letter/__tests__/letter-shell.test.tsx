@@ -27,9 +27,18 @@ it('PP-1 — the studio is on top and Patina appears once, in the colophon', () 
   expect(screen.getByText('Prepared for Dave Okonkwo')).toHaveClass('text-[15px]', 'text-[#4B463E]');
   expect(screen.getByTestId('letter-expiry')).toHaveClass('text-[15px]', 'text-[#4B463E]');
   expect((container.textContent ?? '').match(/Patina/g) ?? []).toHaveLength(1);
+  expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
   expect(screen.getByTestId('letter-colophon')).toHaveTextContent(
     'Prepared by Middle West Studio · Sent through Patina',
   );
+});
+
+it('makes the Privacy link focus-visible and legible without changing the surrounding colophon ink', () => {
+  render(<LetterShell snapshot={SNAP}>{null}</LetterShell>);
+  const link = screen.getByRole('link', { name: 'Privacy' });
+  expect(link).toHaveClass('inline-flex', 'min-h-[44px]', 'items-center', 'underline', 'underline-offset-4', 'text-[var(--ink-faint)]', 'focus-visible:outline', 'focus-visible:outline-2', 'focus-visible:outline-offset-[3px]', 'focus-visible:outline-[var(--focus-ring)]');
+  expect(link).not.toHaveClass('focus-ring', 'text-inherit');
+  expect(screen.getByTestId('letter-colophon')).toHaveClass('text-[#8C8578]');
 });
 
 it('R6 — the headline is the house, never "Welcome to Patina."', () => {

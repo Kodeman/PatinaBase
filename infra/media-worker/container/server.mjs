@@ -11,18 +11,8 @@
 import { createServer } from 'node:http';
 import sharp from 'sharp';
 import { encode as blurhashEncode } from 'blurhash';
-import {
-  LQIP_WIDTH,
-  borderLuminance,
-  classifyGround,
-  disconnectSignal,
-  encodeInOrder,
-  fitLqip,
-  outputJobs,
-  planCrops,
-  runnerFor,
-  toHex,
-} from './plates.mjs';
+import { createPlateLane } from './plate-lane.mjs';
+import { runnerFor } from './plates.mjs';
 
 const PORT = Number(process.env.PORT || 8080);
 
@@ -176,84 +166,48 @@ async function runJob(job, imageBuffer) {
   return { success: true, jobId: job.jobId, assetId, results };
 }
 
-// Client plate lane (POST /plates/ingest on the Worker): EXIF-orient and decode
-// once, classify the ground, then encode every planned crop × width × format.
-// Geometry lives in plates.mjs; outputs travel as base64 like renditions. A
-// Sharp error throws to the /process handler, which answers 500 {error}.
-async function encodePlate(data, raw, out) {
-  const [left, top, width, height] = out.rect;
-  const bytes = await sharp(data, raw)
-    .extract({ left, top, width, height })
-    .resize({ width: out.width, withoutEnlargement: true })
-    .toFormat(out.format, { quality: out.quality })
-    .toBuffer();
-  return { key: out.key, contentType: out.contentType, dataB64: bytes.toString('base64') };
+function sendJson(res, status, body) {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(body));
 }
 
-function encodePlates(data, raw, crops, signal) {
-  return encodeInOrder(outputJobs(crops), (out) => encodePlate(data, raw, out), signal);
-}
-
-// `signal` aborts when the Worker gives up on this request (its 25 s deadline);
-// encoding stops before the next crop.
-async function runPlateIngest(job, imageBuffer, signal) {
-  const { format } = await sharp(imageBuffer).metadata();
-  const { data, info } = await sharp(imageBuffer)
-    .rotate()
-    .flatten({ background: '#ffffff' })
-    .toColourspace('srgb')
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const raw = { raw: { width: info.width, height: info.height, channels: info.channels } };
-  const ground = classifyGround(borderLuminance(data, info.width, info.height, info.channels));
-  const { dominant } = await sharp(data, raw).stats();
-  const crops = planCrops({
-    width: info.width,
-    height: info.height,
-    ground,
-    sourceKind: job.sourceKind,
-    focal: job.focal,
-    subjectBox: job.subjectBox,
-    skip: job.skip,
+// The media ops run in this process once the body is in.
+function runMediaJob(req, res, job) {
+  const chunks = [];
+  req.on('data', (c) => chunks.push(c));
+  req.on('end', async () => {
+    try {
+      const result = await runJob(job, Buffer.concat(chunks));
+      sendJson(res, result.success ? 200 : 422, result);
+    } catch (err) {
+      sendJson(res, 500, { success: false, error: String(err?.message || err) });
+    }
   });
-  return {
-    success: true,
-    width: info.width,
-    height: info.height,
-    format,
-    ground,
-    dominantHex: toHex(dominant),
-    lqip: await fitLqip((quality) => sharp(data, raw).resize({ width: LQIP_WIDTH }).webp({ quality }).toBuffer()),
-    crops,
-    outputs: await encodePlates(data, raw, crops, signal),
-  };
 }
 
-const RUNNERS = { plateIngest: runPlateIngest, mediaJob: runJob };
+// Client plate lane (POST /plates/ingest on the Worker): one plate_ingest job
+// at a time, each in a forked plate-job.mjs (plate-lane.mjs).
+const RUNNERS = { plateIngest: createPlateLane(), mediaJob: runMediaJob };
 
 const server = createServer((req, res) => {
+  // A plate job's deadline counts from here, before its body is read.
+  const receivedAt = performance.now();
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
     return;
   }
   if (req.method === 'POST' && req.url === '/process') {
-    const jobHeader = req.headers['x-media-job'];
-    const signal = disconnectSignal(res);
-    const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', async () => {
-      try {
-        const job = JSON.parse(Buffer.from(String(jobHeader || ''), 'base64').toString('utf8'));
-        const body = Buffer.concat(chunks);
-        const result = await runnerFor(job, RUNNERS)(job, body, signal);
-        res.writeHead(result.success ? 200 : 422, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(result));
-      } catch (err) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, error: String(err?.message || err) }));
-      }
-    });
+    let job;
+    try {
+      job = JSON.parse(Buffer.from(String(req.headers['x-media-job'] || ''), 'base64').toString('utf8'));
+      if (typeof job !== 'object' || job === null) throw new Error('x-media-job must be a JSON object');
+    } catch (err) {
+      req.resume();
+      sendJson(res, 500, { success: false, error: String(err?.message || err) });
+      return;
+    }
+    runnerFor(job, RUNNERS)(req, res, job, receivedAt);
     return;
   }
   res.writeHead(404, { 'Content-Type': 'text/plain' });

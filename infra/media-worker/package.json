@@ -6,7 +6,7 @@
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
-    "test": "node --test test/*.test.mjs",
+    "test": "(test -d container/node_modules/sharp || npm ci --prefix container --no-audit --no-fund) && node --test test/*.test.mjs",
     "types": "wrangler types",
     "tail": "wrangler tail"
   },
