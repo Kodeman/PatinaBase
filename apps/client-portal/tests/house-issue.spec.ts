@@ -1,13 +1,18 @@
 import { test, expect, type Page } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
 
 import {
   ANCHORS,
   ANCHOR_PATTERNS,
   ELM,
+  ELM_EDITION,
+  ELM_PLATE_SCOPE,
   ELM_UNDRAWN,
   GARDEN,
   LAKE,
+  LOCAL_SUPABASE,
   MEASURE,
+  STUDIO,
   box,
   servePlates,
   settled,
@@ -23,7 +28,15 @@ import {
  * with "Picture did not load." — asserted below, never hidden.
  */
 
-test.describe.configure({ timeout: 180_000 });
+/*
+ * One worker reads this file, in order: the last test undoes Elm's Edition 2
+ * and puts it back, and the fold tests above pin that edition's sixty-character
+ * headline, so no test here may read Elm while it is undone.
+ */
+test.describe.configure({ mode: 'default', timeout: 180_000 });
+
+/** The composer's ceiling, and Elm's Edition 2 cover headline. */
+const LONGEST_HEADLINE = ELM_EDITION.coverHeadline;
 
 function platesRequests(page: Page): string[] {
   const urls: string[] = [];
@@ -105,6 +118,9 @@ test.describe('The House Issue', { tag: '@edition' }, () => {
     // plate cannot be served locally, so it stands drawn and says so.
     const hero = page.locator('[data-testid="house-issue-hero"] figure.ed-hero');
     await expect(hero).toBeVisible();
+    // The worst case: Edition 2's headline is sixty characters, whole, and the fold below still holds.
+    expect(LONGEST_HEADLINE).toHaveLength(60);
+    await expect(hero.locator('h2')).toHaveText(LONGEST_HEADLINE);
     await expect(hero.locator('figcaption [data-caption-field]')).toHaveCount(3);
     await expect(hero.locator('.plate-note')).toHaveText('Picture did not load.', { timeout: 30000 });
     await expect(hero.locator('figcaption [data-caption-field]')).toHaveCount(3);
@@ -114,9 +130,10 @@ test.describe('The House Issue', { tag: '@edition' }, () => {
     const doorstep = await box(page, '#doorstep');
     const ledgerRow = await box(page, '[data-testid="landmark-ledger"]');
     const heroBox = await box(page, '[data-testid="house-issue-hero"] figure.ed-hero');
+    const title = await box(page, '[data-testid="house-issue-hero"] h2');
     info.annotations.push({
       type: 'measured-390',
-      description: `hero ${heroBox.top.toFixed(0)}–${heroBox.bottom.toFixed(0)} w${heroBox.width.toFixed(0)}; rows ${[first, third].map((b) => `${b.top.toFixed(0)}–${b.bottom.toFixed(0)}`).join(' … ')}; link row ${ledgerRow.top.toFixed(0)}; #doorstep ${doorstep.top.toFixed(0)}`,
+      description: `hero ${heroBox.top.toFixed(0)}–${heroBox.bottom.toFixed(0)} w${heroBox.width.toFixed(0)}; headline ${title.width.toFixed(0)}×${title.height.toFixed(0)}; rows ${[first, third].map((b) => `${b.top.toFixed(0)}–${b.bottom.toFixed(0)}`).join(' … ')}; link row ${ledgerRow.top.toFixed(0)}; #doorstep ${doorstep.top.toFixed(0)}`,
     });
     console.log(`[measured-390] ${info.annotations.at(-1)!.description}`);
     expect(first.top).toBeLessThanOrEqual(620);
@@ -157,11 +174,13 @@ test.describe('The House Issue', { tag: '@edition' }, () => {
     await settled(page);
     const frame = '[data-testid="house-issue-hero"] figure.ed-hero > .ed-plate__frame';
     await expect(page.locator(frame)).toBeVisible();
+    await expect(page.locator('[data-testid="house-issue-hero"] h2')).toHaveText(LONGEST_HEADLINE);
     const hero = await box(page, frame);
+    const title = await box(page, '[data-testid="house-issue-hero"] h2');
     const rows = await Promise.all([1, 2, 3].map((n) => box(page, `[data-standing-row="${n}"]`)));
     info.annotations.push({
       type: 'measured-1440',
-      description: `hero frame ${hero.width.toFixed(0)}×${hero.height.toFixed(0)} at ${hero.top.toFixed(0)}; rows ${rows.map((r) => `${r.top.toFixed(0)}–${r.bottom.toFixed(0)}`).join(', ')}`,
+      description: `hero frame ${hero.width.toFixed(0)}×${hero.height.toFixed(0)} at ${hero.top.toFixed(0)}; headline ${title.width.toFixed(0)}×${title.height.toFixed(0)}; rows ${rows.map((r) => `${r.top.toFixed(0)}–${r.bottom.toFixed(0)}`).join(', ')}`,
     });
     console.log(`[measured-1440] ${info.annotations.at(-1)!.description}`);
     expect(Math.abs(hero.width - 1440)).toBeLessThanOrEqual(1);
@@ -176,7 +195,7 @@ test.describe('The House Issue', { tag: '@edition' }, () => {
     await settled(page);
     const html = await (await page.request.get(`/projects/${ELM.id}`)).text();
     const preloads = html.match(/<link[^>]+rel="preload"[^>]+as="image"[^>]*>/g) ?? [];
-    const hero = preloads.filter((tag) => tag.includes(`/plates/${ELM.id}/`));
+    const hero = preloads.filter((tag) => ELM_PLATE_SCOPE.test(tag));
     expect(hero.length).toBeGreaterThan(0);
     for (const tag of hero) {
       expect(tag).toMatch(/imageSrcSet="|imagesrcset="/i);
@@ -199,7 +218,7 @@ test.describe('The House Issue', { tag: '@edition' }, () => {
     await expect(sideboard.locator('.plate-note')).toHaveText('Picture did not load.', { timeout: 30000 });
     // Every plate request named a plate the house holds; none was for the sofa.
     expect(plates.length).toBeGreaterThan(0);
-    for (const url of plates) expect(url).toContain(`/plates/${ELM.id}/`);
+    for (const url of plates) expect(url).toMatch(ELM_PLATE_SCOPE);
     await expectAnchors(page);
   });
 
@@ -368,4 +387,85 @@ test.describe('The House Issue, its pictures served', { tag: '@edition' }, () =>
       }
     });
   }
+});
+
+/**
+ * US-49 Phase 2: Elm's approved Edition 2 (the fixture's editions block) is
+ * what June reads. The studio then undoes it, and the page falls back to the
+ * Phase 1 composition. One test, so no other worker reads a half-undone house;
+ * every other Elm test accepts either plate scope (ELM_PLATE_SCOPE).
+ */
+test.describe('The House Issue, as the studio approved it', { tag: '@edition' }, () => {
+  test.beforeEach(async ({ page }) => servePlates(page));
+
+  test('Edition 2 opens the page; undone by the studio, the page is Phase 1 again', async ({ page }) => {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    expect(serviceKey, 'Export the LOCAL service key to put the edition back').toBeTruthy();
+    const admin = createClient(LOCAL_SUPABASE.url, serviceKey!, { auth: { persistSession: false } });
+    const { data: row, error: rowError } = await admin
+      .from('client_editions')
+      .select('status, approved_at')
+      .eq('id', ELM_EDITION.id)
+      .single();
+    expect(rowError, 'the fixture editions block has not been seeded').toBeNull();
+    expect(row!.status).toBe('approved');
+
+    const headlines = () => page.locator('.ed-tab__title, .ed-chapter-head__title').allTextContents();
+    const plates = platesRequests(page);
+    await signInAsJune(page, `/projects/${ELM.id}`);
+    await settled(page);
+
+    // The hero and its words are the edition's: a caption it wrote, a headline it composed.
+    const hero = page.getByTestId('house-issue-hero');
+    await expect(hero.locator('h2')).toHaveText(ELM_EDITION.coverHeadline);
+    await expect(hero.locator('figcaption [data-caption-field="what"]')).toHaveText(ELM_EDITION.captionWhat);
+    await expect(hero.locator('figcaption [data-caption-field]')).toHaveCount(3);
+    await heroLoaded(page);
+    expect(await headlines()).toEqual(expect.arrayContaining(Object.values(ELM_EDITION.headlines)));
+    expect(plates.some((url) => url.includes(`/plates/${ELM_EDITION.id}/`))).toBe(true);
+
+    // Maren's notice opens the letter; Earlier names the edition, who approved it and the day.
+    const notice = page.getByTestId('edition-notice');
+    await expect(notice).toHaveText(ELM_EDITION.notice);
+    expect(await page.locator('#note blockquote').evaluate((el) => el.firstElementChild?.getAttribute('data-testid'))).toBe(
+      'edition-notice',
+    );
+    const day = await page.evaluate(
+      (iso) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' }).format(new Date(iso)),
+      row!.approved_at as string,
+    );
+    await expect(page.locator('#previously').getByTestId('edition-line')).toHaveText(
+      `Edition ${ELM_EDITION.seq} · approved by the studio · ${day}`,
+    );
+    await expectAnchors(page);
+
+    // The studio's undo, signed in as the studio (undo is never service_role's).
+    const studio = createClient(LOCAL_SUPABASE.url, LOCAL_SUPABASE.anon, { auth: { persistSession: false } });
+    const signedIn = await studio.auth.signInWithPassword(STUDIO);
+    expect(signedIn.error).toBeNull();
+    try {
+      const undone = await studio.rpc('undo_client_edition', { p_edition_id: ELM_EDITION.id });
+      expect(undone.error).toBeNull();
+
+      await page.reload();
+      await settled(page);
+      await expect(page.getByTestId('house-issue-head')).toBeVisible();
+      await expect(page.getByTestId('edition-notice')).toHaveCount(0);
+      await expect(page.getByTestId('edition-line')).toHaveCount(0);
+      const phase1 = await headlines();
+      expect(phase1.length).toBeGreaterThan(0);
+      for (const words of [ELM_EDITION.coverHeadline, ...Object.values(ELM_EDITION.headlines)]) {
+        expect(phase1).not.toContain(words);
+      }
+      await expectAnchors(page);
+    } finally {
+      // Put Edition 2 back for the next run: fixture housekeeping, not a studio act.
+      await studio.auth.signOut();
+      const restored = await admin
+        .from('client_editions')
+        .update({ status: 'approved', superseded_at: null, superseded_by: null })
+        .eq('id', ELM_EDITION.id);
+      expect(restored.error).toBeNull();
+    }
+  });
 });

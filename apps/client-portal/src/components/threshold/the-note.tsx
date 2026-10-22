@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { EditionNotice } from '@/components/threshold/editorial/edition-notice';
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { DAY_MONTH_FORMAT as DAY_MONTH, legalDate } from '@/lib/threshold/dates';
 import {
@@ -81,6 +82,8 @@ export interface TheNoteProps {
   today?: Date;
   /** The reply field, wired next door. Absent when there is nothing to write to. */
   reply?: ReactNode;
+  /** The approved edition's notice: the letter's opening sentence (The House Issue). */
+  notice?: string | null;
 }
 
 export function TheNote({
@@ -91,6 +94,7 @@ export function TheNote({
   studioName,
   today = new Date(),
   reply,
+  notice,
 }: TheNoteProps) {
   const [unrolled, setUnrolled] = useState(false);
 
@@ -124,6 +128,7 @@ export function TheNote({
       )}
 
       <blockquote className="mt-3 max-w-[44ch] border-0 p-0">
+        <EditionNotice notice={notice} />
         <p
           data-testid="note-body"
           className="whitespace-pre-line font-heading text-[1.2rem] leading-relaxed"

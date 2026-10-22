@@ -436,6 +436,9 @@ export function Threshold({
   // The House Issue: null with `client-edition-page` off or loading, and then
   // every edition helper below hands back today's page.
   const issue = useEditionIssue(projectId, editorial, editionEnabled);
+  // The approved edition the issue prints, if any: its notice opens the note
+  // and its line heads Earlier.
+  const edition = issue?.editorial.edition ?? null;
 
   // ── the studio's own letters ───────────────────────────────────────────────
   // An invoice drawn against no house at all (ruling S1) belongs to the
@@ -883,6 +886,7 @@ export function Threshold({
     heldDrawCentsByProposalId,
     selectionUpdatedAt,
     messageSentAts: correspondence.sentAts,
+    editionNoticeAt: edition?.notice ? edition.approvedAt : null,
   });
   // A complete read that proved a held invoice settled retires its hold, so a
   // refund that reopens it this visit is judged on its own read. Adjusted in
@@ -1399,6 +1403,7 @@ export function Threshold({
       studioName={studioName}
       today={today}
       reply={replyHeadsTheRecord ? undefined : writeBack}
+      notice={edition?.notice}
     />
   );
   // Gated HERE, not inside Previously: a React element is truthy even when the
@@ -1420,6 +1425,7 @@ export function Threshold({
       )}
       <Previously
         entries={model.previously}
+        edition={edition}
         correspondence={
           hasRecord ? (
             <Letters
@@ -1597,7 +1603,11 @@ export function Threshold({
   // its sections. Null with the edition off: `withChapter` hands back the
   // section itself and the page is today's tree.
   let chapters: ReturnType<typeof sheetChapters> = null;
-  const printed = { note: model.note, previously: model.previously.length, hasRecord };
+  const printed = {
+    note: model.note,
+    previously: model.previously.length + (edition ? 1 : 0),
+    hasRecord,
+  };
 
   // NEVER REVERSE. The house speaks only once every source it speaks FROM has
   // answered — the papers, the goods, the ledger, the rooms and the letter.

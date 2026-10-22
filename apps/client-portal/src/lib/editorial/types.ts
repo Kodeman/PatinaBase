@@ -94,15 +94,6 @@ export interface EditorialSheet {
   assetId: string | null;
 }
 
-export interface ClientProjectEditorial {
-  project: EditorialProject;
-  rooms: readonly EditorialRoom[];
-  assets: readonly EditorialAsset[];
-  palette: readonly PaletteSwatch[];
-  boards: readonly EditorialBoard[];
-  sheets: readonly EditorialSheet[];
-}
-
 /** Phase 2 (`get_client_project_edition`): the approved edition's own record. */
 export interface EditionMeta {
   id: string;
@@ -112,8 +103,43 @@ export interface EditionMeta {
   notice: string | null;
 }
 
-export interface ClientProjectEdition extends ClientProjectEditorial {
+/** A composed chapter's words; key is cover | house | progress | a room's anchor. */
+export interface EditionChapterWords {
+  key: string;
+  headline: string | null;
+  standing: string | null;
+}
+
+/** The parts of the edition's composition the page draws (overrides merged by 00846). */
+export interface EditionComposition {
+  hero: { assetId: string } | null;
+  chapters: readonly EditionChapterWords[];
+}
+
+/**
+ * The 00842 envelope. Read through `get_client_project_edition` (00846) it also
+ * carries the approved edition and its composition; read through
+ * `get_client_project_editorial` it carries neither.
+ */
+export interface ClientProjectEditorial {
+  project: EditorialProject;
+  rooms: readonly EditorialRoom[];
+  assets: readonly EditorialAsset[];
+  palette: readonly PaletteSwatch[];
+  boards: readonly EditorialBoard[];
+  sheets: readonly EditorialSheet[];
   edition?: EditionMeta;
+  composition?: EditionComposition;
+}
+
+/**
+ * LOCAL TYPE OVERLAY (SQ-1591): the two homeowner readers as the page calls
+ * them. Remove once SQ-1642 lands `get_client_project_edition` in the
+ * regenerated packages/supabase/src/database.types.ts.
+ */
+export interface EditionReaderFunctions {
+  get_client_project_edition: { Args: { p_project_id: string }; Returns: unknown };
+  get_client_project_editorial: { Args: { p_project_id: string }; Returns: unknown };
 }
 
 /** What · whose · when: exactly three stored fields, never a fourth. */

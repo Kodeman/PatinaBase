@@ -14,6 +14,7 @@ import {
   useEditionIssue,
   HeroPreloadLinks,
   HouseIssueHead,
+  LONG_HEADLINE,
   RoomOpening,
   approvalsRow,
   editionChapters,
@@ -525,4 +526,162 @@ it.each([undefined, false])('server gate %p is closed despite a resolved true cl
   });
   expect(result.current).toBeNull();
   expect(createBrowserClient).not.toHaveBeenCalled();
+});
+
+// ── Phase 2: the approved edition (00846) ─────────────────────────────────────
+
+const EDITION_ID = "e0000000-0000-0000-0000-0000000ed002";
+
+function edition(
+  assets: EditorialAsset[],
+  composition: Partial<NonNullable<ClientProjectEditorial["composition"]>> = {},
+): ClientProjectEditorial {
+  return {
+    ...editorial(assets),
+    edition: {
+      id: EDITION_ID,
+      seq: 2,
+      approvedAt: "2026-10-21T10:00:00Z",
+      approvedBy: "studio",
+      notice: "The page now opens on your sideboard.",
+    },
+    composition: { hero: { assetId: assets[0]?.id ?? "none" }, chapters: [], ...composition },
+  };
+}
+
+/** A white-ground catalogue shot that meets the hero floor: V2-1 lets the studio pick it. */
+const CATALOGUE = asset("catalogue1", { ground: "white" });
+
+describe("the approved edition", () => {
+  function cover(issue: HouseIssue) {
+    return render(
+      <HouseIssueHead
+        issue={issue}
+        chapters={editionChapters(issue, [])}
+        doorplate={null}
+        letterhead={{ studioName: "Birchwood Studio", projectName: "Elm Street House", preparedFor: "June Brennan" }}
+        ledger={null}
+        todayLines={null}
+        rows={{ spoken: false, invoices: null, asks: [], gate: null, readFailed: false }}
+        plan={{ unread: true, rooms: null, marks: [] }}
+      />,
+    );
+  }
+
+  it("heroes the composition's pick, a white-ground catalogue shot included, where Phase 1 would draw the cover", () => {
+    expect(houseIssue(editorial([CATALOGUE])).hero).toBeNull();
+    const issue = houseIssue(edition([CATALOGUE, SCENE], { hero: { assetId: CATALOGUE.id } }));
+    expect(issue.hero?.id).toBe(CATALOGUE.id);
+    cover(issue);
+    expect(screen.getByTestId("house-issue-hero")).toBeInTheDocument();
+    expect(screen.queryByTestId("house-issue-cover")).toBeNull();
+  });
+
+  it("marks a hero headline past LONG_HEADLINE for the smaller step, whole, and leaves a short one alone", () => {
+    const sixty = "Your walnut sideboard is planed and waiting on the workbench";
+    expect(sixty).toHaveLength(60);
+    for (const [headline, mark] of [
+      [sixty, "long"],
+      ["x".repeat(LONG_HEADLINE + 1), "long"],
+      ["x".repeat(LONG_HEADLINE), null],
+      ["Your sideboard", null],
+    ] as const) {
+      const issue = houseIssue(edition([SCENE], { chapters: [{ key: "cover", headline, standing: null }] }));
+      const { unmount } = cover(issue);
+      const hero = screen.getByTestId("house-issue-hero");
+      expect(hero.getAttribute("data-headline")).toBe(mark);
+      expect(hero.querySelector("h2")).toHaveTextContent(headline);
+      unmount();
+    }
+  });
+
+  it("draws the cover, never another photograph, when the edition names no hero, a concept, or one under the floor", () => {
+    for (const [assets, hero] of [
+      [[SCENE], null],
+      [[asset("concept1", { sourceKind: "concept" }), SCENE], { assetId: "concept1" }],
+      [[WHITE, SCENE], { assetId: WHITE.id }],
+      [[SCENE], { assetId: "not-in-the-envelope" }],
+    ] as const) {
+      const issue = houseIssue(edition([...assets], { hero }));
+      expect(issue.hero).toBeNull();
+      const { unmount } = cover(issue);
+      expect(screen.queryByTestId("house-issue-hero")).toBeNull();
+      expect(screen.getByTestId("house-issue-cover")).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("scopes every plate and the hero preload to the edition, and to the project without one", () => {
+    const withEdition = edition([SCENE]);
+    expect(houseIssue(withEdition).scopeId).toBe(EDITION_ID);
+    const preloads = heroPreloads(withEdition);
+    expect(preloads.length).toBeGreaterThan(0);
+    for (const p of preloads) {
+      expect(p.imageSrcSet).toContain(`/plates/${EDITION_ID}/`);
+      expect(p.imageSrcSet).not.toContain(`/plates/${PROJECT}/`);
+    }
+    expect(houseIssue(editorial([SCENE])).scopeId).toBe(PROJECT);
+    for (const p of heroPreloads(editorial([SCENE]))) expect(p.imageSrcSet).toContain(`/plates/${PROJECT}/`);
+  });
+
+  it("takes headlines and standing sentences from the composition, keeping the PLAN's order and anchors", () => {
+    const phase1 = editionChapters(houseIssue(editorial([SCENE])), ["doorstep", "approvals", "key", "room-living", "road", "note", "mat"])!;
+    const issue = houseIssue(
+      edition([SCENE], {
+        // Reversed, with keys the composition may not set: order and anchors stay the PLAN's.
+        chapters: [
+          { key: "progress", headline: "The sideboard is on the bench", standing: "The workshop is planing the top." },
+          { key: "room-living", headline: "Walnut, and the light it takes", standing: "The sofa is ordered." },
+          { key: "note", headline: "Not the studio's to rename", standing: null },
+          { key: "doorstep", headline: "Not composed", standing: null },
+          { key: "room-stranger", headline: "No such room", standing: null },
+          { key: "house", headline: "Three rooms, read from the front door", standing: null },
+          { key: "cover", headline: "Your sideboard, in the workshop", standing: "It ships in January." },
+        ],
+      }),
+    );
+    const chapters = editionChapters(issue, ["doorstep", "approvals", "key", "room-living", "road", "note", "mat"])!;
+    expect([...chapters.keys()]).toEqual([...phase1.keys()]);
+    expect([...chapters.values()].map((c) => c.number)).toEqual([...phase1.values()].map((c) => c.number));
+    expect(chapters.get("cover")?.headline).toBe("Your sideboard, in the workshop");
+    expect(chapters.get("key")?.headline).toBe("Three rooms, read from the front door");
+    expect(chapters.get("room-living")).toMatchObject({ headline: "Walnut, and the light it takes", standing: "The sofa is ordered." });
+    expect(chapters.get("road")).toMatchObject({ headline: "The sideboard is on the bench", standing: "The workshop is planing the top." });
+    for (const anchor of ["doorstep", "approvals", "note", "mat"]) {
+      expect(chapters.get(anchor)?.headline).toBe(phase1.get(anchor)?.headline);
+      expect(chapters.get(anchor)?.standing).toBeUndefined();
+    }
+
+    // The hero's tab carries the composed cover headline.
+    cover(issue);
+    expect(screen.getByTestId("house-issue-hero")).toHaveTextContent("Your sideboard, in the workshop");
+  });
+
+  it("ignores composed words without an approved edition", () => {
+    const loose = { ...editorial([SCENE]), composition: { hero: null, chapters: [{ key: "cover", headline: "Loose", standing: null }] } };
+    const chapters = editionChapters(houseIssue(loose), [])!;
+    expect(chapters.get("cover")?.headline).not.toBe("Loose");
+    expect(houseIssue(loose).hero?.id).toBe(SCENE.id);
+  });
+
+  it("prints a chapter's standing sentence under its head, inside one revealed child", () => {
+    const issue = houseIssue(
+      edition([SCENE, WHITE], {
+        chapters: [
+          { key: "room-living", headline: "Walnut, and the light it takes", standing: "The sofa is ordered." },
+          { key: "progress", headline: "On the bench", standing: "The workshop is planing the top." },
+        ],
+      }),
+    );
+    const chapters = editionChapters(issue, ["room-living", "road"])!;
+    const room = render(<RoomOpening issue={issue} chapters={chapters} roomId="living" />);
+    const reveal = room.container.querySelector(".ed-reveal")!;
+    expect(reveal.children.length).toBeLessThanOrEqual(3);
+    expect(reveal.children[0]).toHaveTextContent("Walnut, and the light it takes");
+    expect(reveal.children[0].querySelector('[data-testid="chapter-standing"]')).toHaveTextContent("The sofa is ordered.");
+    room.unmount();
+
+    render(<>{withChapter(chapters, "road", <section id="road" />)}</>);
+    expect(screen.getByTestId("chapter-standing")).toHaveTextContent("The workshop is planing the top.");
+  });
 });

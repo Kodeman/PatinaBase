@@ -278,6 +278,98 @@ BEGIN
   ON CONFLICT (project_id, user_id) DO NOTHING;
 END $$;
 
+-- ── Elm Street House's editions (US-49 Phase 2, SQ-1591) ──────────────────
+-- Edition 1 failed to compose; Edition 2 is approved by the studio a day ago
+-- (after June's last reading, so the note it opens is ticked as one change);
+-- Edition 3 waits for the studio and never reaches the homeowner. The rows
+-- are what finish_client_edition and approve_client_edition would have
+-- written; the facts are the house as get_project_editorial_facts reads it.
+-- Edition 2 heroes the sideboard's workshop picture with its own caption,
+-- and nothing approved stands behind it: undo_client_edition returns the page
+-- to the Phase 1 composition. Idempotent on Edition 2's id.
+
+DO $$
+DECLARE
+  uid_designer UUID := 'a0000000-0000-0000-0000-000000000004';
+  v_elm        UUID := 'b0000000-0000-0000-0000-0000000e1a01';
+  v_living     UUID := 'b0000000-0000-0000-0000-0000000e1b01';
+  v_plate      UUID := 'b0000000-0000-0000-0000-0000000e1f01';
+  v_failed     UUID := 'b0000000-0000-0000-0000-0000000e2a01';
+  v_approved   UUID := 'b0000000-0000-0000-0000-0000000e2a02';
+  v_waiting    UUID := 'b0000000-0000-0000-0000-0000000e2a03';
+  v_facts      JSONB;
+  ts           TIMESTAMPTZ := NOW();
+BEGIN
+  IF to_regclass('public.client_editions') IS NULL THEN
+    RAISE NOTICE 'client_house_issue_fixture.sql: client_editions (00844) is not migrated, skipping the editions';
+    RETURN;
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.client_editions WHERE id = v_approved) THEN
+    RETURN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.client_plate_assets WHERE id = v_plate) THEN
+    RAISE NOTICE 'client_house_issue_fixture.sql: Elm Street House is not seeded yet, skipping its editions';
+    RETURN;
+  END IF;
+
+  v_facts := public.get_project_editorial_facts(v_elm);
+
+  INSERT INTO public.client_editions (
+    id, project_id, seq, status, kind, source_hash, composition, facts, overrides,
+    prompt_version, model, cost_usd, auto_published,
+    reviewed_by, reviewed_at, approved_at, created_at, updated_at
+  ) VALUES
+    (v_failed, v_elm, 1, 'failed', NULL, NULL, NULL, NULL, '{}'::jsonb,
+     'e1', NULL, 0, FALSE,
+     NULL, NULL, NULL, ts - INTERVAL '5 days', ts - INTERVAL '5 days'),
+    (v_approved, v_elm, 2, 'approved', 'full', repeat('e2', 32),
+     jsonb_build_object(
+       'sourceHash', repeat('e2', 32),
+       'voice', 'model',
+       'hero', jsonb_build_object('assetId', v_plate, 'why', 'The workshop photographed her sideboard.'),
+       'held', '[]'::jsonb,
+       'chapters', jsonb_build_array(
+         jsonb_build_object('key', 'cover', 'headline', 'Your walnut sideboard is planed and waiting on the workbench',
+                            'standing', 'The workshop has planed the walnut top.'),
+         jsonb_build_object('key', 'house', 'headline', 'Three rooms, and the light between them',
+                            'standing', 'Every room is drawn and agreed.'),
+         jsonb_build_object('key', 'room-' || v_living, 'headline', 'Walnut, linen and a lot of light',
+                            'standing', 'The sideboard is on the bench; the sofa is ordered.'),
+         jsonb_build_object('key', 'progress', 'headline', 'Planed this week, shipped in the new year',
+                            'standing', 'Nothing is late.')
+       ),
+       'doorstep', jsonb_build_object('standing', 'The house is being made.'),
+       'notice', 'The page now opens on your sideboard; the workshop sent photographs on 15 October. Everything else is where it was.'
+     ),
+     v_facts, '{}'::jsonb,
+     'e1', 'fixture', 0, FALSE,
+     uid_designer, ts - INTERVAL '1 day', ts - INTERVAL '1 day', ts - INTERVAL '2 days', ts - INTERVAL '1 day'),
+    (v_waiting, v_elm, 3, 'awaiting_review', 'full', repeat('e3', 32),
+     jsonb_build_object(
+       'sourceHash', repeat('e3', 32),
+       'voice', 'model',
+       'hero', jsonb_build_object('assetId', v_plate, 'why', NULL),
+       'held', '[]'::jsonb,
+       'chapters', jsonb_build_array(
+         jsonb_build_object('key', 'cover', 'headline', 'Not yet approved by the studio', 'standing', NULL)
+       ),
+       'doorstep', jsonb_build_object('standing', NULL),
+       'notice', 'This edition waits for the studio and is never shown.'
+     ),
+     v_facts, '{}'::jsonb,
+     'e1', 'fixture', 0, FALSE,
+     NULL, NULL, NULL, ts - INTERVAL '2 hours', ts - INTERVAL '2 hours');
+
+  INSERT INTO public.client_edition_images (
+    edition_id, asset_id, plate_role, crop_key, rank, chapter_key,
+    alt, caption_what, caption_whose, caption_when
+  ) VALUES
+    (v_approved, v_plate, 'hero', 'none', 0, 'cover',
+     'A walnut sideboard top on a workshop bench', 'Walnut top, planed', 'Harmon Bench Works', '15 October 2026'),
+    (v_waiting, v_plate, 'hero', 'none', 0, 'cover',
+     'A walnut sideboard top on a workshop bench', 'Not yet approved', 'Harmon Bench Works', '20 October 2026');
+END $$;
+
 -- ── Garden Flat: the portrait hero (SQ-1614) ──────────────────────────────
 -- One signed line, an oak tallboy, whose one picture is a portrait 1100 × 1900.
 -- floors.ts places it as the `portrait` hero: under `wide`'s 1600 floor and
