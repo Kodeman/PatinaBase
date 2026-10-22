@@ -37120,6 +37120,10 @@ export type Database = {
         Args: { p_overrides: Json }
         Returns: undefined
       }
+      _client_edition_closed: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
       _client_edition_for_studio: {
         Args: { p_edition_id: string }
         Returns: {
@@ -37153,6 +37157,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _client_edition_freeze: {
+        Args: { p_project_id: string }
+        Returns: undefined
       }
       _client_edition_frozen: {
         Args: { p_edition_id?: string; p_project_id: string }

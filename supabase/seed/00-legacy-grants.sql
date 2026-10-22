@@ -24024,6 +24024,72 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_closed(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_frozen(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_refuse_frozen(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_freeze(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_edition_freeze_on_close() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.undo_client_edition(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.undo_client_edition(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.dispatch_client_edition_compose() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.dispatch_client_edition_compose() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_plate_source_owned(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00848_client_edition_installed_closeout.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.client_plate_source_owned(uuid, text, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
