@@ -23672,6 +23672,12 @@ END $g$;
 
 -- 00844_client_editions.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_editions_check_superseded_by() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00844_client_editions.sql
+DO $g$ BEGIN
   REVOKE ALL ON TABLE public.client_editions FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -23720,6 +23726,12 @@ END $g$;
 
 -- 00845_client_edition_rpcs.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_plate_alt(text, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._build_project_editorial(uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -23751,6 +23763,24 @@ END $g$;
 -- 00845_client_edition_rpcs.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._client_edition_lock(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_frozen(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_edition_refuse_frozen(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00845_client_edition_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_plate_requeue(uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

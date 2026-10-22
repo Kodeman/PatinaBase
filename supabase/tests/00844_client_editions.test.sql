@@ -7,7 +7,10 @@
 --               them
 --   one approved  a second approved edition of a project is refused; seq is
 --               unique per project
---   enqueue     each listed change queues one request for its reason, 30
+--   supersession edges  superseded_by is refused for the edition itself, an
+--               earlier edition and another project's edition; a later
+--               edition of the same project is accepted
+--   enqueue    each listed change queues one request for its reason, 30
 --               minutes out, keyed <project>:<reason>: item image insert,
 --               primary picture change, item delivered, project phase,
 --               project closed, concept render set, palette change,
@@ -26,7 +29,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(26);
+SELECT plan(30);
 
 -- ─── lockdown ──────────────────────────────────────────────────────────────
 
@@ -112,6 +115,34 @@ SELECT throws_ok(
   $$INSERT INTO public.client_editions (project_id, seq, status)
     VALUES ('84400000-0000-4000-8000-000000000001', 1, 'awaiting_review')$$,
   '23505', NULL, 'one approved: seq is unique per project');
+
+-- ─── supersession edges ────────────────────────────────────────────────────
+
+INSERT INTO public.projects (id, name, designer_id, created_by, status, current_phase)
+VALUES ('84400000-0000-4000-8000-000000000002', 'US49 844 Other House',
+        '84400000-0000-4000-8000-0000000000a1', '84400000-0000-4000-8000-0000000000a1', 'active', 'design');
+INSERT INTO public.client_editions (id, project_id, seq, status)
+VALUES ('84400000-0000-4000-8000-000000000902', '84400000-0000-4000-8000-000000000001', 2, 'awaiting_review'),
+       ('84400000-0000-4000-8000-000000000903', '84400000-0000-4000-8000-000000000002', 3, 'awaiting_review');
+SELECT throws_ok(
+  $$UPDATE public.client_editions SET superseded_by = id
+    WHERE id = '84400000-0000-4000-8000-000000000902'$$,
+  '23514', NULL, 'supersession edges: an edition never supersedes itself');
+SELECT throws_ok(
+  $$UPDATE public.client_editions SET superseded_by = '84400000-0000-4000-8000-000000000901'
+    WHERE id = '84400000-0000-4000-8000-000000000902'$$,
+  '23514', NULL, 'supersession edges: never by an earlier edition');
+SELECT throws_ok(
+  $$UPDATE public.client_editions SET superseded_by = '84400000-0000-4000-8000-000000000903'
+    WHERE id = '84400000-0000-4000-8000-000000000901'$$,
+  '23514', NULL, 'supersession edges: never by another project''s edition');
+SELECT lives_ok(
+  $$UPDATE public.client_editions SET superseded_by = '84400000-0000-4000-8000-000000000902'
+    WHERE id = '84400000-0000-4000-8000-000000000901'$$,
+  'supersession edges: a later edition of the same project supersedes');
+UPDATE public.client_editions SET superseded_by = NULL WHERE id = '84400000-0000-4000-8000-000000000901';
+DELETE FROM public.client_editions
+WHERE id IN ('84400000-0000-4000-8000-000000000902', '84400000-0000-4000-8000-000000000903');
 
 -- ─── enqueue ───────────────────────────────────────────────────────────────
 

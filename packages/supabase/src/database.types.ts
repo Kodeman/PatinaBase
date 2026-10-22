@@ -3740,6 +3740,7 @@ export type Database = {
           id: string
           lqip: string | null
           original_key: string
+          perceived_alt: string | null
           perceived_prompt_version: string | null
           project_id: string
           sha256: string
@@ -3762,6 +3763,7 @@ export type Database = {
           id?: string
           lqip?: string | null
           original_key: string
+          perceived_alt?: string | null
           perceived_prompt_version?: string | null
           project_id: string
           sha256: string
@@ -3784,6 +3786,7 @@ export type Database = {
           id?: string
           lqip?: string | null
           original_key?: string
+          perceived_alt?: string | null
           perceived_prompt_version?: string | null
           project_id?: string
           sha256?: string
@@ -37151,6 +37154,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _client_edition_frozen: {
+        Args: { p_edition_id?: string; p_project_id: string }
+        Returns: boolean
+      }
       _client_edition_hero_ok: {
         Args: { p_composition: Json; p_overrides: Json; p_project_id: string }
         Returns: boolean
@@ -37168,6 +37175,10 @@ export type Database = {
         Returns: boolean
       }
       _client_edition_prose: { Args: { p_composition: Json }; Returns: Json }
+      _client_edition_refuse_frozen: {
+        Args: { p_edition_id?: string; p_project_id: string }
+        Returns: undefined
+      }
       _client_line_rooms: {
         Args: {
           p_ffe_item_id: string
@@ -37179,6 +37190,10 @@ export type Database = {
         }
         Returns: Json
       }
+      _client_plate_alt: {
+        Args: { p_kind: string; p_what: string; p_whose: string }
+        Returns: string
+      }
       _client_plate_concept_revision: {
         Args: { p_uploaded_at: string }
         Returns: string
@@ -37186,6 +37201,10 @@ export type Database = {
       _client_plate_frame_valid: {
         Args: { p_focal: number[]; p_subject_box: number[] }
         Returns: boolean
+      }
+      _client_plate_requeue: {
+        Args: { p_asset_id: string }
+        Returns: undefined
       }
       _client_plate_scan_source: { Args: { p_url: string }; Returns: string }
       _clone_proposal_legacy_00399: {

@@ -10,7 +10,9 @@
 --                            1, 2, … (UNIQUE project_id, seq). drafting →
 --                            awaiting_review → approved → superseded, or
 --                            failed. At most one approved row per project
---                            (partial unique index). composition, facts and
+--                            (partial unique index); superseded_by names a
+--                            later edition of the same project (trigger).
+--                            composition, facts and
 --                            overrides are frozen jsonb; lease fields belong
 --                            to the compose run that is writing a draft.
 --   client_edition_images    the plates an edition sets: an asset of
@@ -113,6 +115,37 @@ DROP TRIGGER IF EXISTS set_updated_at ON public.client_editions;
 CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON public.client_editions
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- superseded_by names a later edition of the same project: never itself,
+-- never another job's, never an earlier one, so undo's lineage only runs
+-- forward (SQ-1638 F7). Every writer, the service role's direct ones too.
+CREATE OR REPLACE FUNCTION public.client_editions_check_superseded_by()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public', 'pg_temp'
+AS $$
+BEGIN
+  IF NEW.superseded_by IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.client_editions AS successor
+    WHERE successor.id = NEW.superseded_by
+      AND successor.id <> NEW.id
+      AND successor.project_id = NEW.project_id
+      AND successor.seq > NEW.seq
+  ) THEN
+    RAISE EXCEPTION 'edition % can only be superseded by a later edition of the same project', NEW.id
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.client_editions_check_superseded_by()
+  FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_client_editions_superseded_by ON public.client_editions;
+CREATE TRIGGER trg_client_editions_superseded_by
+  BEFORE INSERT OR UPDATE OF superseded_by, project_id, seq ON public.client_editions
+  FOR EACH ROW EXECUTE FUNCTION public.client_editions_check_superseded_by();
 
 CREATE TABLE IF NOT EXISTS public.client_edition_images (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),

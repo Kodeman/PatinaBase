@@ -6,7 +6,9 @@
 -- Service role (the client-edition-compose edge function):
 --   claim_client_edition_requests(p_limit)   lease queued, available requests,
 --                         at most one per project, only for a project with no
---                         compose in flight and fewer than two editions today.
+--                         compose in flight, fewer than two editions today and
+--                         no frozen edition. A frozen project's queued
+--                         requests are closed (done, close_reason) instead.
 --   begin_client_edition(p_request_id, p_lease_token) → edition id
 --                         a new drafting row (next seq) holding the lease; any
 --                         awaiting_review or drafting row of the project is
@@ -15,9 +17,14 @@
 --                         Refuses (54000, message token
 --                         'client_edition_daily_limit') when two editions were
 --                         created today.
+--   Frozen projects       begin, finish and approve take the per-project lock,
+--                         then refuse (55000, message token
+--                         'client_edition_frozen') when the edition or the
+--                         project's approved edition has frozen_at set.
 --   close_client_edition_request(p_request_id, p_lease_token, p_reason)
 --                         a claimed request that ends without an edition
 --                         (facts unchanged, daily limit): done, close_reason.
+--                         Needs its token and an unexpired lease (55000).
 --   finish_client_edition(…) → the status the edition landed in
 --                         p_lease_token is the request's (begin hands it to the
 --                         draft); composition.sourceHash → source_hash; p_images
@@ -35,15 +42,18 @@
 --                         and the hero is no concept render (R142). When it is
 --                         not, the edition lands awaiting_review instead and
 --                         facts.autoPublishRefused says why.
---   record_plate_perception(…)  subject box, focal, flags and prompt version
---                         on the asset (focal_origin 'model'). A designer focal
---                         is never overwritten: its box and focal stay, flags
---                         and prompt version still land. p_alt is not stored:
---                         alt lives on client_edition_images (finish).
+--   record_plate_perception(…)  subject box, focal, flags, alt (at most 125
+--                         characters, perceived_alt) and prompt version on the
+--                         asset (focal_origin 'model'). A designer focal is
+--                         never overwritten: its box and focal stay, flags,
+--                         alt and prompt version still land. Changed model
+--                         geometry re-queues the asset's latest source, as
+--                         set_plate_focal does, so the crops follow the frame.
 --   get_project_editorial_facts(p_project_id)  the editorial envelope with no
---                         membership check, for the composer, plus three
---                         service-only fields: project.studio.id,
---                         assets[].perceivedPromptVersion, assets[].focalOrigin.
+--                         membership check, for the composer, plus service-only
+--                         fields: project.studio.id, assets[].perceivedPromptVersion,
+--                         assets[].focalOrigin, assets[].perceivedAlt (null when
+--                         absent), assets[].perceivedFlags ([] when none).
 --
 -- Studio (can_buy_for_project, the set_project_show_makers guard, 00842:90):
 --   approve_client_edition(p_edition_id, p_overrides)  awaiting_review only;
@@ -54,9 +64,12 @@
 --                         approved edition it superseded is approved again.
 --                         Refused when the edition is frozen.
 --   set_plate_focal(p_asset_id, p_subject_box, p_focal)  designer focal on the
---                         asset (focal_origin 'designer') and the asset's
---                         source re-queued so the media worker re-crops.
---   list_client_editions(p_project_id)  every edition, newest first.
+--                         asset (focal_origin 'designer'; the box may be NULL)
+--                         and the asset's source re-queued so the media worker
+--                         re-crops.
+--   list_client_editions(p_project_id)  every edition, newest first. An
+--                         image's sourceKind and sourceUrl come from one
+--                         request row of its asset.
 --
 -- Overrides (approve_client_edition; SQ-1588 sends this shape):
 --   {heroAssetId?: uuid, chapters?: {<key>: {headline?, standing?}},
@@ -93,7 +106,7 @@
 -- ON CONFLICT DO NOTHING.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- ─── 1. Who set the focal point ─────────────────────────────────────────────
+-- ─── 1. Who set the focal point; what perception saw ───────────────────────
 
 ALTER TABLE public.client_plate_assets
   ADD COLUMN IF NOT EXISTS focal_origin text CHECK (focal_origin IN ('model', 'designer'));
@@ -101,9 +114,39 @@ ALTER TABLE public.client_plate_assets
 COMMENT ON COLUMN public.client_plate_assets.focal_origin IS
   'US-49 Phase 2: who set subject_box/focal — ''model'' (record_plate_perception) or ''designer'' (set_plate_focal). A designer focal is never overwritten by perception.';
 
+ALTER TABLE public.client_plate_assets
+  ADD COLUMN IF NOT EXISTS perceived_alt text
+    CHECK (perceived_alt IS NULL OR char_length(perceived_alt) BETWEEN 1 AND 125);
+
+COMMENT ON COLUMN public.client_plate_assets.perceived_alt IS
+  'US-49 Phase 2: the accessible description perception (Call A1) wrote for these bytes, at most 125 characters, so later editions keep it (get_project_editorial_facts).';
+
 -- ─── 2. The editorial envelope, shared ──────────────────────────────────────
 
--- 00842's body after its guard, verbatim except the plate predicate (header).
+-- A plate's alt text from its caption: what · whose · what kind of picture
+-- (00842's wording). The builder and the edition reader (00846) both use it.
+CREATE OR REPLACE FUNCTION public._client_plate_alt(p_what text, p_whose text, p_kind text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path TO 'public', 'pg_temp'
+AS $$
+  SELECT concat_ws(' · ', p_what, p_whose,
+    CASE p_kind
+      WHEN 'maker' THEN 'product photograph'
+      WHEN 'upload' THEN 'studio photograph'
+      WHEN 'installed' THEN 'installed photograph'
+      WHEN 'scan' THEN 'room scan'
+      WHEN 'board' THEN 'studio board'
+      WHEN 'sheet' THEN 'drawing'
+      WHEN 'concept' THEN 'concept render, not installed'
+    END);
+$$;
+
+REVOKE ALL ON FUNCTION public._client_plate_alt(text, text, text) FROM PUBLIC, anon, authenticated;
+
+-- 00842's body after its guard, verbatim except the plate predicate (header)
+-- and the alt wording, which now lives in _client_plate_alt.
 CREATE OR REPLACE FUNCTION public._build_project_editorial(p_project_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -348,16 +391,7 @@ BEGIN
           'whose', caption.whose,
           'when', caption.taken_on
         ),
-        'alt', concat_ws(' · ', caption.what, caption.whose,
-          CASE provenance.kind
-            WHEN 'maker' THEN 'product photograph'
-            WHEN 'upload' THEN 'studio photograph'
-            WHEN 'installed' THEN 'installed photograph'
-            WHEN 'scan' THEN 'room scan'
-            WHEN 'board' THEN 'studio board'
-            WHEN 'sheet' THEN 'drawing'
-            WHEN 'concept' THEN 'concept render, not installed'
-          END)
+        'alt', public._client_plate_alt(caption.what, caption.whose, provenance.kind)
       ) ORDER BY caption.asset_id)
       FROM caption
       JOIN public.client_plate_assets AS asset
@@ -459,7 +493,9 @@ AS $$
          || jsonb_build_object('assets', COALESCE((
               SELECT jsonb_agg(entry.value || jsonb_build_object(
                        'perceivedPromptVersion', asset.perceived_prompt_version,
-                       'focalOrigin', asset.focal_origin)
+                       'focalOrigin', asset.focal_origin,
+                       'perceivedAlt', asset.perceived_alt,
+                       'perceivedFlags', to_jsonb(COALESCE(asset.flags, '{}'::text[])))
                      ORDER BY entry.ordinality)
               FROM jsonb_array_elements(envelope -> 'assets') WITH ORDINALITY AS entry(value, ordinality)
               LEFT JOIN public.client_plate_assets AS asset
@@ -480,7 +516,7 @@ REVOKE ALL ON FUNCTION public.get_project_editorial_facts(uuid)
 GRANT EXECUTE ON FUNCTION public.get_project_editorial_facts(uuid) TO service_role;
 
 COMMENT ON FUNCTION public.get_project_editorial_facts(uuid) IS
-  'US-49 Phase 2: the editorial envelope of get_client_project_editorial (shared builder _build_project_editorial) with no membership check, for the client-edition-compose function, plus project.studio.id, assets[].perceivedPromptVersion and assets[].focalOrigin. NULL for an unknown project. Service role only.';
+  'US-49 Phase 2: the editorial envelope of get_client_project_editorial (shared builder _build_project_editorial) with no membership check, for the client-edition-compose function, plus project.studio.id, assets[].perceivedPromptVersion, assets[].focalOrigin, assets[].perceivedAlt (null when absent) and assets[].perceivedFlags (text[], [] when none). NULL for an unknown project. Service role only.';
 
 -- ─── 3. Helpers ─────────────────────────────────────────────────────────────
 
@@ -494,8 +530,66 @@ AS $$
   SELECT pg_advisory_xact_lock(hashtextextended('client_editions:' || p_project_id::text, 0));
 $$;
 
--- A project's queued request may be claimed: the job exists, no compose of it
--- is in flight, and it has fewer than two editions created today.
+-- A closed-out job: the given edition or the project's approved edition has
+-- frozen_at set. Nothing composes, finishes or publishes over it.
+CREATE OR REPLACE FUNCTION public._client_edition_frozen(p_project_id uuid, p_edition_id uuid DEFAULT NULL)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.client_editions AS edition
+    WHERE edition.project_id = p_project_id
+      AND edition.frozen_at IS NOT NULL
+      AND (edition.status = 'approved' OR edition.id = p_edition_id));
+$$;
+
+-- The refusal, taken under the per-project lock by begin, finish and approve.
+CREATE OR REPLACE FUNCTION public._client_edition_refuse_frozen(p_project_id uuid, p_edition_id uuid DEFAULT NULL)
+RETURNS void
+LANGUAGE plpgsql
+STABLE
+SET search_path TO 'public', 'pg_temp'
+AS $$
+BEGIN
+  IF public._client_edition_frozen(p_project_id, p_edition_id) THEN
+    RAISE EXCEPTION 'client_edition_frozen: this job is closed out and its edition is frozen'
+      USING ERRCODE = 'object_not_in_prerequisite_state', HINT = 'client_edition_frozen';
+  END IF;
+END;
+$$;
+
+-- Re-crop a plate: its latest source request goes back to the media worker,
+-- keeping its asset, so the plate stays on the page meanwhile.
+CREATE OR REPLACE FUNCTION public._client_plate_requeue(p_asset_id uuid)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+  UPDATE public.client_plate_requests AS request
+  SET status = 'queued',
+      attempts = 0,
+      last_error = NULL,
+      lease_token = NULL,
+      lease_expires_at = NULL,
+      updated_at = now()
+  WHERE request.id = (
+    SELECT latest.id
+    FROM public.client_plate_requests AS latest
+    JOIN public.client_plate_assets AS asset
+      ON asset.id = latest.asset_id AND asset.project_id = latest.project_id
+    WHERE latest.asset_id = p_asset_id
+    ORDER BY latest.updated_at DESC, latest.id
+    LIMIT 1
+  );
+$$;
+
+-- A project's queued request may be claimed: the job exists and is not
+-- frozen, no compose of it is in flight, and it has fewer than two editions
+-- created today.
 CREATE OR REPLACE FUNCTION public._client_edition_project_ready(p_project_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -504,6 +598,7 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $$
   SELECT EXISTS (SELECT 1 FROM public.projects AS project WHERE project.id = p_project_id)
+    AND NOT public._client_edition_frozen(p_project_id)
     AND NOT EXISTS (
       SELECT 1 FROM public.client_edition_requests AS request
       WHERE request.project_id = p_project_id AND request.status = 'leased')
@@ -687,6 +782,9 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public._client_edition_lock(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._client_edition_frozen(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._client_edition_refuse_frozen(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._client_plate_requeue(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._client_edition_project_ready(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._client_edition_merge(jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._client_edition_prose(jsonb) FROM PUBLIC, anon, authenticated;
@@ -698,12 +796,19 @@ REVOKE ALL ON FUNCTION public._client_edition_for_studio(uuid) FROM PUBLIC, anon
 -- ─── 4. The compose lane (service role) ─────────────────────────────────────
 
 -- Lease up to p_limit available requests (10 minutes each), one per project.
+-- A frozen project's queued requests are closed, never leased.
 CREATE OR REPLACE FUNCTION public.claim_client_edition_requests(p_limit int DEFAULT 5)
 RETURNS SETOF public.client_edition_requests
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $$
+  UPDATE public.client_edition_requests AS request
+  SET status = 'done',
+      close_reason = 'project closed out: its edition is frozen'
+  WHERE request.status = 'queued'
+    AND public._client_edition_frozen(request.project_id);
+
   WITH candidate AS (
     SELECT DISTINCT ON (request.project_id) request.id, request.available_at, request.created_at
     FROM public.client_edition_requests AS request
@@ -755,6 +860,7 @@ BEGIN
   END IF;
 
   PERFORM public._client_edition_lock(v_request.project_id);
+  PERFORM public._client_edition_refuse_frozen(v_request.project_id);
 
   IF (SELECT count(*) FROM public.client_editions AS edition
       WHERE edition.project_id = v_request.project_id
@@ -821,7 +927,8 @@ BEGIN
       lease_expires_at = NULL
   WHERE id = p_request_id
     AND status = 'leased'
-    AND lease_token::text = lower(btrim(p_lease_token));
+    AND lease_token::text = lower(btrim(p_lease_token))
+    AND lease_expires_at > now();
   IF NOT FOUND THEN
     RAISE EXCEPTION 'edition request % is not leased to this token', p_request_id
       USING ERRCODE = 'object_not_in_prerequisite_state';
@@ -867,6 +974,7 @@ BEGIN
     RAISE EXCEPTION 'edition % is not drafting under this token', p_edition_id
       USING ERRCODE = 'object_not_in_prerequisite_state';
   END IF;
+  PERFORM public._client_edition_refuse_frozen(v_edition.project_id, v_edition.id);
   IF p_status IS NULL OR p_status NOT IN ('approved', 'awaiting_review', 'failed') THEN
     RAISE EXCEPTION 'an edition finishes approved, awaiting_review or failed, not %', p_status
       USING ERRCODE = 'check_violation';
@@ -999,6 +1107,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $$
+DECLARE
+  v_before public.client_plate_assets%ROWTYPE;
 BEGIN
   IF NOT public._client_plate_frame_valid(p_subject_box, p_focal) THEN
     RAISE EXCEPTION 'subject box and focal must be normalised 0-1 inside the frame'
@@ -1009,11 +1119,18 @@ BEGIN
     RAISE EXCEPTION 'plate flags are watermark, people or text_overlay'
       USING ERRCODE = 'check_violation';
   END IF;
+  IF char_length(btrim(p_alt)) > 125 THEN
+    RAISE EXCEPTION 'perceived alt is at most 125 characters' USING ERRCODE = 'check_violation';
+  END IF;
   IF NULLIF(btrim(p_prompt_version), '') IS NULL THEN
     RAISE EXCEPTION 'perception needs its prompt version' USING ERRCODE = 'check_violation';
   END IF;
 
-  -- p_alt is not stored here: alt lives on client_edition_images.
+  SELECT * INTO v_before FROM public.client_plate_assets WHERE id = p_asset_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'plate asset % not found', p_asset_id USING ERRCODE = 'no_data_found';
+  END IF;
+
   UPDATE public.client_plate_assets
   SET subject_box = CASE WHEN focal_origin = 'designer' THEN subject_box ELSE p_subject_box END,
       focal = CASE WHEN focal_origin = 'designer' THEN focal ELSE p_focal END,
@@ -1023,11 +1140,16 @@ BEGIN
         ELSE 'model'
       END,
       flags = COALESCE(p_flags, '{}'::text[]),
+      perceived_alt = NULLIF(btrim(p_alt), ''),
       perceived_prompt_version = btrim(p_prompt_version),
       updated_at = now()
   WHERE id = p_asset_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'plate asset % not found', p_asset_id USING ERRCODE = 'no_data_found';
+
+  -- New model framing needs new crops; designer framing is never touched.
+  IF v_before.focal_origin IS DISTINCT FROM 'designer'
+     AND (v_before.subject_box IS DISTINCT FROM p_subject_box
+          OR v_before.focal IS DISTINCT FROM p_focal) THEN
+    PERFORM public._client_plate_requeue(p_asset_id);
   END IF;
 END;
 $$;
@@ -1062,6 +1184,7 @@ DECLARE
   v_edition public.client_editions%ROWTYPE := public._client_edition_for_studio(p_edition_id);
   v_overrides jsonb;
 BEGIN
+  PERFORM public._client_edition_refuse_frozen(v_edition.project_id, v_edition.id);
   IF v_edition.status <> 'awaiting_review' THEN
     RAISE EXCEPTION 'edition % is %, not awaiting review', p_edition_id, v_edition.status
       USING ERRCODE = 'object_not_in_prerequisite_state';
@@ -1177,8 +1300,7 @@ BEGIN
     RAISE EXCEPTION 'project not found or not accessible'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
-  IF p_subject_box IS NULL OR p_focal IS NULL
-     OR NOT public._client_plate_frame_valid(p_subject_box, p_focal) THEN
+  IF p_focal IS NULL OR NOT public._client_plate_frame_valid(p_subject_box, p_focal) THEN
     RAISE EXCEPTION 'subject box and focal must be normalised 0-1 inside the frame'
       USING ERRCODE = 'check_violation';
   END IF;
@@ -1190,22 +1312,7 @@ BEGIN
       updated_at = now()
   WHERE id = p_asset_id;
 
-  -- The worker re-crops from the asset's source. The request keeps its
-  -- asset, so the plate stays on the page meanwhile (header).
-  UPDATE public.client_plate_requests AS request
-  SET status = 'queued',
-      attempts = 0,
-      last_error = NULL,
-      lease_token = NULL,
-      lease_expires_at = NULL,
-      updated_at = now()
-  WHERE request.id = (
-    SELECT latest.id FROM public.client_plate_requests AS latest
-    WHERE latest.asset_id = p_asset_id
-      AND latest.project_id = v_project_id
-    ORDER BY latest.updated_at DESC, latest.id
-    LIMIT 1
-  );
+  PERFORM public._client_plate_requeue(p_asset_id);
 END;
 $$;
 
@@ -1270,11 +1377,10 @@ BEGIN
             'captionWhat', image.caption_what,
             'captionWhose', image.caption_whose,
             'captionWhen', image.caption_when,
-            'sourceKind', CASE WHEN asset.concept_seen OR asset.source_kind = 'concept'
-                               THEN 'concept' ELSE asset.source_kind END,
-            'sourceUrl', (SELECT request.source_url FROM public.client_plate_requests AS request
-                          WHERE request.asset_id = asset.id
-                          ORDER BY request.updated_at DESC, request.id LIMIT 1),
+            'sourceKind', COALESCE(source.source_kind,
+                            CASE WHEN asset.concept_seen OR asset.source_kind = 'concept'
+                                 THEN 'concept' ELSE asset.source_kind END),
+            'sourceUrl', source.source_url,
             'width', asset.width,
             'height', asset.height,
             'focal', to_jsonb(asset.focal),
@@ -1283,6 +1389,15 @@ BEGIN
           ) ORDER BY image.rank NULLS LAST, image.id)
           FROM public.client_edition_images AS image
           JOIN public.client_plate_assets AS asset ON asset.id = image.asset_id
+          -- Kind and URL from one source row (the preview signs the URL in
+          -- the kind's bucket); a concept source first (R142), then latest.
+          LEFT JOIN LATERAL (
+            SELECT request.source_kind, request.source_url
+            FROM public.client_plate_requests AS request
+            WHERE request.asset_id = asset.id
+            ORDER BY request.source_kind = 'concept' DESC, request.updated_at DESC, request.id
+            LIMIT 1
+          ) AS source ON true
           WHERE image.edition_id = edition.id
         ), '[]'::jsonb)
       ) ORDER BY edition.seq DESC)

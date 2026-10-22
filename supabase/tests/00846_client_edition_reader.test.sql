@@ -14,8 +14,16 @@
 --               origin), no price or SKU; a plate of another project named in
 --               the facts is left out; descriptionAsSigned cut to 280
 --   live        showMakers is today's: off → no maker, caption whose = the
---               studio; on → the maker; plate bytes facts are the asset row
+--               studio, every alt rebuilt from the caption shown (an edition
+--               image's and a frozen-facts-only alt alike); on → the maker
+--               and the stored alts; plate bytes facts are the asset row
 --               now; a concept plate reads concept and is never the hero
+--   hero        a flagged plate is never the hero, by override neither; a
+--               null headline/standing override restores the composed text;
+--               an override hero the edition never named is projected (a
+--               bare upload worded from the studio and its kind; a board
+--               ingested after compose and approved, from the board record);
+--               a concept-seen one is neither shown nor the hero
 --   plate scope an approved edition id scopes its project for its client and
 --               studio; a superseded edition id, a stranger who is the
 --               client of another project holding the same bytes, and
@@ -27,7 +35,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(25);
+SELECT plan(34);
 
 -- ─── grants ────────────────────────────────────────────────────────────────
 
@@ -79,7 +87,10 @@ VALUES
    'plates/846/f/original.jpg', 1600, 1200, '{}'::jsonb),
   ('84600000-0000-4000-8000-000000000509', '84600000-0000-4000-8000-000000000002', repeat('e', 64), 'maker',
    '{"table": "project_ffe_item_images", "id": "84600000-0000-4000-8000-000000000299"}'::jsonb,
-   'plates/846q/e/original.jpg', 2400, 1600, '{}'::jsonb);
+   'plates/846q/e/original.jpg', 2400, 1600, '{}'::jsonb),
+  ('84600000-0000-4000-8000-000000000503', '84600000-0000-4000-8000-000000000001', repeat('a', 64), 'maker',
+   '{"table": "project_ffe_item_images", "id": "84600000-0000-4000-8000-000000000293"}'::jsonb,
+   'plates/846/a/original.jpg', 1200, 1200, '{}'::jsonb);
 UPDATE public.client_plate_assets SET concept_seen = true WHERE id = '84600000-0000-4000-8000-000000000502';
 
 -- ─── no edition yet ────────────────────────────────────────────────────────
@@ -123,7 +134,10 @@ VALUES
                  "caption": {"what": "Living room", "whose": "US49 846 Studio", "when": "1 October 2026"},
                  "alt": "Living room · US49 846 Studio · studio photograph"},
                 {"id": "84600000-0000-4000-8000-000000000509", "sourceKind": "maker",
-                 "caption": {"what": "Elsewhere", "whose": "Elsewhere", "when": "1 October 2026"}, "alt": "Elsewhere"}],
+                 "caption": {"what": "Elsewhere", "whose": "Elsewhere", "when": "1 October 2026"}, "alt": "Elsewhere"},
+                {"id": "84600000-0000-4000-8000-000000000503", "sourceKind": "maker",
+                 "caption": {"what": "Side table", "whose": "Atelier Nord", "when": "1 October 2026"},
+                 "alt": "Side table · Atelier Nord · product photograph"}],
      "palette": [{"hex": "#d9d2c5", "brand": "Farrow", "name": "Plaster", "sku": "FB-1"}],
      "boards": [], "sheets": []}$j$::jsonb,
      '{rooms,0,items,0,descriptionAsSigned}', to_jsonb(repeat('x', 300))),
@@ -138,7 +152,7 @@ INSERT INTO public.client_edition_images (edition_id, asset_id, plate_role, crop
                                           caption_what, caption_whose, caption_when)
 VALUES
   ('84600000-0000-4000-8000-000000000902', '84600000-0000-4000-8000-000000000501', 'hero', 'none', 1, 'cover',
-   'Lounge chair in the window', 'Lounge chair', 'Atelier Nord', '21 October 2026'),
+   'Atelier Nord lounge chair in the window', 'Lounge chair', 'Atelier Nord', '21 October 2026'),
   ('84600000-0000-4000-8000-000000000902', '84600000-0000-4000-8000-000000000502', 'held', 'none', 2, 'cover',
    'Living room, concept render', 'Living room', 'US49 846 Studio', '1 October 2026');
 
@@ -198,7 +212,8 @@ SELECT is(
   (SELECT jsonb_agg(asset ->> 'id' ORDER BY asset ->> 'id')
    FROM (SELECT current_setting('us49.edition_off')::jsonb AS envelope) AS read,
         jsonb_array_elements(envelope -> 'assets') AS asset),
-  '["84600000-0000-4000-8000-000000000501", "84600000-0000-4000-8000-000000000502"]'::jsonb,
+  '["84600000-0000-4000-8000-000000000501", "84600000-0000-4000-8000-000000000502",
+    "84600000-0000-4000-8000-000000000503"]'::jsonb,
   'allowlist: a plate of another project named in the facts is left out');
 SELECT is(
   (SELECT jsonb_build_object('sha256', asset -> 'sha256', 'width', asset -> 'width', 'sourceKind', asset -> 'sourceKind',
@@ -208,9 +223,9 @@ SELECT is(
    WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000501'),
   jsonb_build_object('sha256', repeat('e', 64), 'width', 2400, 'sourceKind', 'maker',
                      'caption', '{"what": "Lounge chair", "whose": "US49 846 Studio", "when": "Autumn 2026"}'::jsonb,
-                     'alt', 'Lounge chair in the window',
+                     'alt', 'Lounge chair · US49 846 Studio · product photograph',
                      'crops', '{"wide": {"rect": [0, 0, 2400, 1350], "widths": [800, 1600]}}'::jsonb),
-  'live: bytes facts from the asset row; caption from the edition image, whose = studio (makers off), when override');
+  'live: bytes facts from the asset row; caption from the edition image, whose = studio (makers off), when override; alt rebuilt from that caption');
 SELECT is(
   (SELECT asset ->> 'sourceKind'
    FROM (SELECT current_setting('us49.edition_off')::jsonb AS envelope) AS read,
@@ -230,6 +245,14 @@ SELECT is(
    FROM (SELECT public.get_client_project_edition('84600000-0000-4000-8000-000000000001') AS envelope) AS read),
   '[true, "Atelier Nord", "Atelier Nord"]'::jsonb,
   'live: makers on → the maker on the line and in the caption');
+SELECT is(
+  (SELECT jsonb_object_agg(asset ->> 'id', asset -> 'alt')
+   FROM jsonb_array_elements(
+     public.get_client_project_edition('84600000-0000-4000-8000-000000000001') -> 'assets') AS asset
+   WHERE asset ->> 'id' IN ('84600000-0000-4000-8000-000000000501', '84600000-0000-4000-8000-000000000503')),
+  jsonb_build_object('84600000-0000-4000-8000-000000000501', 'Atelier Nord lounge chair in the window',
+                     '84600000-0000-4000-8000-000000000503', 'Side table · Atelier Nord · product photograph'),
+  'live: makers on → the edition image''s alt, else the frozen facts'' alt');
 SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a1","role":"authenticated"}';
 SELECT is(
   (SELECT envelope -> 'edition' ->> 'id'
@@ -237,6 +260,25 @@ SELECT is(
   '84600000-0000-4000-8000-000000000902',
   'envelope: the studio reads the approved edition too');
 RESET ROLE;
+
+-- Makers on → off: no alt keeps the maker, a frozen-facts-only alt included.
+UPDATE public.projects SET show_makers = false WHERE id = '84600000-0000-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT 'read' AS us49 FROM (SELECT set_config('us49.edition_off_again',
+  public.get_client_project_edition('84600000-0000-4000-8000-000000000001')::text, true)) AS stash;
+RESET ROLE;
+SELECT is(
+  (SELECT count(*) FROM jsonb_array_elements(current_setting('us49.edition_off_again')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'alt' ~* '(atelier|nord|portugal)'),
+  0::bigint,
+  'live: makers on → off, no alt names the maker or origin');
+SELECT is(
+  (SELECT asset ->> 'alt'
+   FROM jsonb_array_elements(current_setting('us49.edition_off_again')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000503'),
+  'Side table · US49 846 Studio · product photograph',
+  'live: a frozen-facts alt is rebuilt from the caption shown once makers are off');
 
 UPDATE public.client_editions
    SET overrides = overrides || '{"heroAssetId": "84600000-0000-4000-8000-000000000502"}'::jsonb, auto_published = false
@@ -271,6 +313,101 @@ SELECT is(public.client_can_read_plate('84600000-0000-4000-8000-000000000902', r
 SELECT is(public.client_can_read_plate('84600000-0000-4000-8000-000000000002', repeat('e', 64)),
           '84600000-0000-4000-8000-000000000002'::uuid,
           'plate scope: that client still reads her own project');
+RESET ROLE;
+
+-- ─── hero eligibility, null resets, an override hero never named ───────────
+
+UPDATE public.client_editions
+   SET overrides = overrides || '{"heroAssetId": "84600000-0000-4000-8000-000000000501"}'::jsonb
+ WHERE id = '84600000-0000-4000-8000-000000000902';
+UPDATE public.client_plate_assets SET flags = '{people}' WHERE id = '84600000-0000-4000-8000-000000000501';
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT is(
+  public.get_client_project_edition('84600000-0000-4000-8000-000000000001') -> 'composition' -> 'hero',
+  'null'::jsonb,
+  'hero: a plate perception flagged (people) is never the hero, a studio override included');
+RESET ROLE;
+UPDATE public.client_plate_assets SET flags = '{}' WHERE id = '84600000-0000-4000-8000-000000000501';
+
+UPDATE public.client_editions
+   SET overrides = jsonb_set(overrides, '{chapters,cover}', '{"headline": null, "standing": null}'::jsonb)
+ WHERE id = '84600000-0000-4000-8000-000000000902';
+SET LOCAL ROLE authenticated;
+SELECT is(
+  (SELECT jsonb_build_array(envelope -> 'composition' -> 'chapters', envelope -> 'composition' -> 'hero')
+   FROM (SELECT public.get_client_project_edition('84600000-0000-4000-8000-000000000001') AS envelope) AS read),
+  '[[{"key": "cover", "headline": "The house, so far", "standing": "Two rooms are set."}],
+    {"assetId": "84600000-0000-4000-8000-000000000501"}]'::jsonb,
+  'overrides: a null headline or standing restores the composed text; the unflagged plate is the hero again');
+RESET ROLE;
+
+-- A plate of the job the edition never named: the studio's hero still.
+INSERT INTO public.client_plate_assets (id, project_id, sha256, source_kind, source_ref, original_key, width, height,
+                                        concept_seen)
+VALUES
+  ('84600000-0000-4000-8000-000000000505', '84600000-0000-4000-8000-000000000001', repeat('1', 64), 'upload',
+   '{"table": "project_files", "id": "84600000-0000-4000-8000-000000000295"}'::jsonb,
+   'plates/846/1/original.jpg', 1200, 800, false),
+  ('84600000-0000-4000-8000-000000000506', '84600000-0000-4000-8000-000000000001', repeat('3', 64), 'scan',
+   '{"table": "room_scans", "id": "84600000-0000-4000-8000-000000000296"}'::jsonb,
+   'plates/846/3/original.jpg', 1200, 800, true);
+UPDATE public.client_editions
+   SET overrides = overrides || '{"heroAssetId": "84600000-0000-4000-8000-000000000505"}'::jsonb
+ WHERE id = '84600000-0000-4000-8000-000000000902';
+SET LOCAL ROLE authenticated;
+SELECT is(
+  (SELECT jsonb_build_array(envelope -> 'composition' -> 'hero' -> 'assetId', asset -> 'sourceKind',
+                            asset -> 'caption', asset -> 'alt')
+   FROM (SELECT public.get_client_project_edition('84600000-0000-4000-8000-000000000001') AS envelope) AS read,
+        jsonb_array_elements(envelope -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000505'),
+  '["84600000-0000-4000-8000-000000000505", "upload",
+    {"what": null, "whose": "US49 846 Studio", "when": null}, "US49 846 Studio · studio photograph"]'::jsonb,
+  'override hero: a plate the edition never named is the hero, worded from the studio and its kind');
+RESET ROLE;
+UPDATE public.client_editions
+   SET overrides = overrides || '{"heroAssetId": "84600000-0000-4000-8000-000000000506"}'::jsonb
+ WHERE id = '84600000-0000-4000-8000-000000000902';
+SET LOCAL ROLE authenticated;
+SELECT is(
+  (SELECT jsonb_build_array(envelope -> 'composition' -> 'hero',
+                            envelope -> 'assets' @> '[{"id": "84600000-0000-4000-8000-000000000506"}]'::jsonb)
+   FROM (SELECT public.get_client_project_edition('84600000-0000-4000-8000-000000000001') AS envelope) AS read),
+  '[null, false]'::jsonb,
+  'override hero: a concept-seen plate the edition never named is neither shown nor the hero');
+RESET ROLE;
+
+-- A board ingested after the compose, approved as the hero of the next edition.
+INSERT INTO public.project_boards (id, project_id, name, cover_image_url)
+VALUES ('84600000-0000-4000-8000-000000000601', '84600000-0000-4000-8000-000000000001', 'Kitchen scheme',
+        'https://img.test/us49-846-board.jpg');
+INSERT INTO public.client_plate_assets (id, project_id, sha256, source_kind, source_ref, original_key, width, height)
+VALUES ('84600000-0000-4000-8000-000000000504', '84600000-0000-4000-8000-000000000001', repeat('2', 64), 'board',
+        jsonb_build_object('table', 'project_boards', 'id', '84600000-0000-4000-8000-000000000601'),
+        'plates/846/2/original.jpg', 1600, 1000);
+UPDATE public.client_plate_requests
+   SET status = 'done', asset_id = '84600000-0000-4000-8000-000000000504'
+ WHERE project_id = '84600000-0000-4000-8000-000000000001' AND source_kind = 'board'
+   AND source_ref = jsonb_build_object('table', 'project_boards', 'id', '84600000-0000-4000-8000-000000000601');
+INSERT INTO public.client_editions (id, project_id, seq, status, kind, composition, facts)
+SELECT '84600000-0000-4000-8000-000000000903', project_id, 3, 'awaiting_review', 'full', composition, facts
+FROM public.client_editions WHERE id = '84600000-0000-4000-8000-000000000902';
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+SELECT lives_ok(
+  $$SELECT public.approve_client_edition('84600000-0000-4000-8000-000000000903',
+      '{"heroAssetId": "84600000-0000-4000-8000-000000000504"}')$$,
+  'override hero: the studio approves a board ingested after the compose as the hero');
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT is(
+  (SELECT jsonb_build_array(envelope -> 'edition' -> 'seq', envelope -> 'composition' -> 'hero' -> 'assetId',
+                            asset -> 'sourceKind', asset -> 'caption' -> 'what')
+   FROM (SELECT public.get_client_project_edition('84600000-0000-4000-8000-000000000001') AS envelope) AS read,
+        jsonb_array_elements(envelope -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000504'),
+  '[3, "84600000-0000-4000-8000-000000000504", "board", "Kitchen scheme"]'::jsonb,
+  'override hero: the reader projects it as the hero, captioned from the board record');
 RESET ROLE;
 
 SELECT * FROM finish();

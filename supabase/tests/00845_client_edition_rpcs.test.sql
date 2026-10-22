@@ -13,7 +13,7 @@
 --               third edition in a day refused (54000,
 --               client_edition_daily_limit)
 --   close       a claimed request ends without an edition only under its
---               lease, with its reason
+--               unexpired lease, with its reason
 --   finish      refusals (status, approved full, a stranger's plate, not
 --               drafting); full → awaiting_review with images and the
 --               composition's sourceHash; plates_only approved →
@@ -23,15 +23,21 @@
 --   studio      a stranger and the client are refused every act (42501);
 --               hold keeps awaiting_review with facts.held; approve
 --               validates overrides, refuses a concept hero, merges,
---               records the reviewer, refuses twice; list shows the rows;
---               undo restores the approved edition it superseded and is
---               refused on a frozen edition
---   perception  model writes box/focal/flags/version (origin model); bad
---               flags and boxes refused; a designer focal is kept by later
---               perception; set_plate_focal re-queues the source and the
---               plate stays in the facts while it re-crops
+--               records the reviewer, refuses twice; list shows the rows
+--               and takes an image's sourceKind and sourceUrl from one
+--               source row; undo restores the approved edition it
+--               superseded and is refused on a frozen edition
+--   frozen      claim leases nothing for a frozen job and closes its queued
+--               request; begin, approve and finish are refused (55000,
+--               client_edition_frozen)
+--   perception  model writes box/focal/flags/alt/version (origin model);
+--               bad flags, boxes and long alts refused; changed model
+--               framing re-queues the source, the same framing does not; a
+--               designer focal is kept by later perception and not
+--               re-queued; set_plate_focal re-queues the source, takes a
+--               NULL box, and the plate stays in the facts while it re-crops
 --   facts       get_project_editorial_facts adds studio id, perception
---               version and focal origin
+--               version, focal origin, perceivedAlt and perceivedFlags
 --   dispatch    kill switch off: no run; expired drafts fail, expired leases
 --               return to the queue; the run cost lands from p_detail
 --   before/after  get_client_project_editorial is byte-identical under the
@@ -44,7 +50,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(85);
+SELECT plan(101);
 
 -- ─── grants ────────────────────────────────────────────────────────────────
 
@@ -349,6 +355,24 @@ SELECT is(
     "84500000-0000-4000-8000-000000000501", 2, "maker", "upload", true]'::jsonb,
   'studio: list shows the edition, its reviewer, headlines, hero and plates');
 
+-- The chair's bytes reached again from a studio upload (one sha, two kinds):
+-- kind and URL name the same source row.
+INSERT INTO public.client_plate_requests (id, project_id, source_kind, source_ref, source_url, status, asset_id, updated_at)
+VALUES ('84500000-0000-4000-8000-000000000701', '84500000-0000-4000-8000-000000000001', 'upload',
+        '{"table": "project_files", "id": "84500000-0000-4000-8000-000000000702"}'::jsonb,
+        'studio/845/chair-again.jpg', 'done', '84500000-0000-4000-8000-000000000501', now());
+SET LOCAL ROLE authenticated;
+SELECT 'listed' AS us49 FROM (SELECT set_config('us49.list2',
+  public.list_client_editions('84500000-0000-4000-8000-000000000001')::text, true)) AS stash;
+RESET ROLE;
+SELECT is(
+  (SELECT jsonb_build_array(image -> 'sourceKind', image -> 'sourceUrl')
+   FROM jsonb_array_elements(current_setting('us49.list2')::jsonb -> 'editions' -> 0 -> 'images') AS image
+   WHERE image ->> 'assetId' = '84500000-0000-4000-8000-000000000501'),
+  '["upload", "studio/845/chair-again.jpg"]'::jsonb,
+  'studio: list takes an image''s sourceKind and sourceUrl from one source row');
+DELETE FROM public.client_plate_requests WHERE id = '84500000-0000-4000-8000-000000000701';
+
 -- ─── a second edition today supersedes an unreviewed draft ─────────────────
 
 UPDATE public.client_edition_requests SET available_at = now() - interval '1 minute'
@@ -394,6 +418,16 @@ SELECT is(
 SELECT throws_ok(
   $$SELECT public.close_client_edition_request('84500000-0000-4000-8000-000000000604', '84500000-0000-4000-8000-0000000007a4', 'again')$$,
   '55000', NULL, 'close: a closed request cannot be closed again');
+-- Its token, but the lease ran out: the dispatcher owns it now.
+INSERT INTO public.client_edition_requests (id, project_id, reason, debounce_key, status, lease_token, lease_expires_at, attempts)
+VALUES ('84500000-0000-4000-8000-000000000611', '84500000-0000-4000-8000-000000000001', 'phase',
+        '84500000-0000-4000-8000-000000000001:phase', 'leased',
+        '84500000-0000-4000-8000-0000000007b1', now() - interval '1 minute', 1);
+SELECT throws_ok(
+  $$SELECT public.close_client_edition_request('84500000-0000-4000-8000-000000000611', '84500000-0000-4000-8000-0000000007b1', 'daily limit')$$,
+  '55000', NULL, 'close: the right token on an expired lease is refused');
+UPDATE public.client_edition_requests SET status = 'done', lease_token = NULL, lease_expires_at = NULL
+WHERE id = '84500000-0000-4000-8000-000000000611';
 
 INSERT INTO public.client_edition_requests (id, project_id, reason, debounce_key, available_at)
 VALUES ('84500000-0000-4000-8000-000000000605', '84500000-0000-4000-8000-000000000001', 'palette',
@@ -469,12 +503,38 @@ SELECT throws_ok(format('SELECT public.undo_client_edition(%L)', current_setting
                  '55000', NULL, 'undo: a frozen edition is refused');
 RESET ROLE;
 
--- ─── plates only, changed words: held for review ───────────────────────────
+-- ─── frozen: the closed-out job takes no new edition ───────────────────────
+
+INSERT INTO public.client_edition_requests (id, project_id, reason, debounce_key, available_at)
+VALUES ('84500000-0000-4000-8000-000000000612', '84500000-0000-4000-8000-000000000001', 'palette',
+        '84500000-0000-4000-8000-000000000001:palette', now() - interval '1 minute');
+SET LOCAL ROLE service_role;
+SELECT 'claimed' AS us49 FROM (SELECT set_config('us49.claim_frozen',
+  (SELECT COALESCE(jsonb_agg(claimed.id), '[]'::jsonb) FROM public.claim_client_edition_requests(5) AS claimed
+   WHERE claimed.project_id = '84500000-0000-4000-8000-000000000001')::text,
+  true)) AS stash;
+RESET ROLE;
+SELECT is(
+  (SELECT jsonb_build_array(current_setting('us49.claim_frozen')::jsonb, status, close_reason)
+   FROM public.client_edition_requests WHERE id = '84500000-0000-4000-8000-000000000612'),
+  '[[], "done", "project closed out: its edition is frozen"]'::jsonb,
+  'frozen: claim leases nothing for a frozen job and closes its queued request');
 
 INSERT INTO public.client_edition_requests (id, project_id, reason, debounce_key, status, lease_token, lease_expires_at, attempts)
 VALUES ('84500000-0000-4000-8000-000000000606', '84500000-0000-4000-8000-000000000001', 'item_image',
         '84500000-0000-4000-8000-000000000001:item_image', 'leased',
         '84500000-0000-4000-8000-0000000007a6', now() + interval '10 minutes', 1);
+SET LOCAL ROLE service_role;
+SELECT throws_ok(
+  $$SELECT public.begin_client_edition('84500000-0000-4000-8000-000000000606', '84500000-0000-4000-8000-0000000007a6')$$,
+  '55000', 'client_edition_frozen: this job is closed out and its edition is frozen',
+  'frozen: begin is refused while the approved edition is frozen');
+RESET ROLE;
+UPDATE public.client_editions SET frozen_at = NULL
+ WHERE project_id = '84500000-0000-4000-8000-000000000001' AND seq = 1;
+
+-- ─── plates only, changed words: held for review ───────────────────────────
+
 SET LOCAL ROLE service_role;
 SELECT 'begun' AS us49 FROM (SELECT set_config('us49.e4',
   public.begin_client_edition('84500000-0000-4000-8000-000000000606', '84500000-0000-4000-8000-0000000007a6')::text,
@@ -494,6 +554,14 @@ SELECT is(
   row('awaiting_review', 'plates_only', false, 'prose changed')::text,
   'finish: it says why it was not published');
 
+UPDATE public.client_editions SET frozen_at = now() WHERE id = current_setting('us49.e4')::uuid;
+SET LOCAL ROLE authenticated;
+SELECT throws_ok(format('SELECT public.approve_client_edition(%L)', current_setting('us49.e4')),
+                 '55000', 'client_edition_frozen: this job is closed out and its edition is frozen',
+                 'frozen: approve is refused for a frozen edition');
+RESET ROLE;
+UPDATE public.client_editions SET frozen_at = NULL WHERE id = current_setting('us49.e4')::uuid;
+
 -- ─── failed ────────────────────────────────────────────────────────────────
 
 UPDATE public.client_editions SET created_at = created_at - interval '1 day'
@@ -506,6 +574,19 @@ SET LOCAL ROLE service_role;
 SELECT 'begun' AS us49 FROM (SELECT set_config('us49.e5',
   public.begin_client_edition('84500000-0000-4000-8000-000000000607', '84500000-0000-4000-8000-0000000007a7')::text,
   true)) AS stash;
+RESET ROLE;
+UPDATE public.client_editions SET frozen_at = now()
+ WHERE project_id = '84500000-0000-4000-8000-000000000001' AND status = 'approved';
+SET LOCAL ROLE service_role;
+SELECT throws_ok(
+  format($$SELECT public.finish_client_edition(%L, '84500000-0000-4000-8000-0000000007a7',
+    'failed', NULL, NULL, NULL, NULL, 'e1', 'claude-test', 0.0005, 'model timed out')$$, current_setting('us49.e5')),
+  '55000', 'client_edition_frozen: this job is closed out and its edition is frozen',
+  'frozen: finish is refused once the approved edition is frozen');
+RESET ROLE;
+UPDATE public.client_editions SET frozen_at = NULL
+ WHERE project_id = '84500000-0000-4000-8000-000000000001' AND status = 'approved';
+SET LOCAL ROLE service_role;
 SELECT is(
   public.finish_client_edition(current_setting('us49.e5')::uuid, '84500000-0000-4000-8000-0000000007a7',
     'failed', NULL, NULL, NULL, NULL, 'e1', 'claude-test', 0.0005, 'model timed out'),
@@ -530,17 +611,45 @@ SELECT lives_ok(
                                           '{people}', 'A kitchen', 'e1')$$,
   'perception: the model records a plate');
 SELECT is(
-  (SELECT row(subject_box, focal, flags, perceived_prompt_version, focal_origin)::text
+  (SELECT row(subject_box, focal, flags, perceived_prompt_version, focal_origin, perceived_alt)::text
    FROM public.client_plate_assets WHERE id = '84500000-0000-4000-8000-000000000502'),
-  row('{0.1,0.1,0.5,0.5}'::numeric[], '{0.3,0.3}'::numeric[], '{people}'::text[], 'e1', 'model')::text,
-  'perception: box, focal, flags and version land; origin model');
+  row('{0.1,0.1,0.5,0.5}'::numeric[], '{0.3,0.3}'::numeric[], '{people}'::text[], 'e1', 'model', 'A kitchen')::text,
+  'perception: box, focal, flags, alt and version land; origin model');
 SELECT throws_ok(
   $$SELECT public.record_plate_perception('84500000-0000-4000-8000-000000000502', NULL, NULL, '{face}', NULL, 'e1')$$,
   '23514', NULL, 'perception: an unknown flag is refused');
 SELECT throws_ok(
   $$SELECT public.record_plate_perception('84500000-0000-4000-8000-000000000502', '{0.6,0,0.5,1}', '{0.5,0.5}', '{}', NULL, 'e1')$$,
   '23514', NULL, 'perception: a box outside the frame is refused');
+SELECT throws_ok(
+  format($$SELECT public.record_plate_perception('84500000-0000-4000-8000-000000000502', NULL, NULL, '{}', %L, 'e1')$$,
+         repeat('x', 126)),
+  '23514', NULL, 'perception: an alt over 125 characters is refused');
+
+-- New model framing re-queues the chair's source; the same framing does not.
+SELECT lives_ok(
+  $$SELECT public.record_plate_perception('84500000-0000-4000-8000-000000000501', '{0.1,0.1,0.8,0.8}', '{0.5,0.5}',
+                                          '{}', 'A lounge chair by a window', 'e1')$$,
+  'perception: the model frames the chair');
 RESET ROLE;
+SELECT is(
+  (SELECT row(count(*), min(status), min(attempts))::text
+   FROM public.client_plate_requests WHERE asset_id = '84500000-0000-4000-8000-000000000501'),
+  row(1::bigint, 'queued', 0)::text,
+  'perception: changed model framing re-queues the source for new crops');
+UPDATE public.client_plate_requests SET status = 'done', attempts = 1
+WHERE asset_id = '84500000-0000-4000-8000-000000000501';
+SET LOCAL ROLE service_role;
+SELECT lives_ok(
+  $$SELECT public.record_plate_perception('84500000-0000-4000-8000-000000000501', '{0.10,0.10,0.80,0.80}', '{0.50,0.50}',
+                                          '{}', 'A lounge chair by a window', 'e1b')$$,
+  'perception: the model frames the chair the same way again');
+RESET ROLE;
+SELECT is(
+  (SELECT row(count(*), min(status), min(attempts))::text
+   FROM public.client_plate_requests WHERE asset_id = '84500000-0000-4000-8000-000000000501'),
+  row(1::bigint, 'done', 1)::text,
+  'perception: unchanged framing queues nothing');
 
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"84500000-0000-4000-8000-0000000000a1","role":"authenticated"}';
@@ -565,6 +674,10 @@ SELECT is(
 SET LOCAL ROLE service_role;
 SELECT 'read' AS us49 FROM (SELECT set_config('us49.facts',
   public.get_project_editorial_facts('84500000-0000-4000-8000-000000000001')::text, true)) AS stash;
+RESET ROLE;
+UPDATE public.client_plate_requests SET status = 'done', attempts = 1
+WHERE asset_id = '84500000-0000-4000-8000-000000000501';
+SET LOCAL ROLE service_role;
 SELECT lives_ok(
   $$SELECT public.record_plate_perception('84500000-0000-4000-8000-000000000501', '{0,0,1,1}', '{0.5,0.5}',
                                           '{watermark}', NULL, 'e2')$$,
@@ -575,6 +688,22 @@ SELECT is(
    FROM public.client_plate_assets WHERE id = '84500000-0000-4000-8000-000000000501'),
   row('{0.2,0.2,0.4,0.4}'::numeric[], '{0.9,0.9}'::numeric[], 'designer', '{watermark}'::text[], 'e2')::text,
   'perception: a designer focal is never overwritten; flags and version still land');
+SELECT is(
+  (SELECT row(min(status), min(attempts))::text
+   FROM public.client_plate_requests WHERE asset_id = '84500000-0000-4000-8000-000000000501'),
+  row('done', 1)::text,
+  'perception: designer framing is never re-queued by the model');
+
+SET LOCAL ROLE authenticated;
+SELECT lives_ok(
+  $$SELECT public.set_plate_focal('84500000-0000-4000-8000-000000000501', NULL, '{0.5,0.5}')$$,
+  'focal: a focal point with no subject box is accepted');
+RESET ROLE;
+SELECT is(
+  (SELECT row(subject_box IS NULL, focal, focal_origin)::text
+   FROM public.client_plate_assets WHERE id = '84500000-0000-4000-8000-000000000501'),
+  row(true, '{0.5,0.5}'::numeric[], 'designer')::text,
+  'focal: written without a box');
 
 -- ─── facts (read while the re-crop was queued) ─────────────────────────────
 
@@ -589,6 +718,20 @@ SELECT is(
    WHERE asset ->> 'id' = '84500000-0000-4000-8000-000000000501'),
   '["designer", true, "maker"]'::jsonb,
   'facts: the plate stays while its re-crop is queued, with focal origin and perception version');
+SELECT is(
+  (SELECT jsonb_build_array(asset -> 'perceivedAlt', asset -> 'perceivedFlags')
+   FROM (SELECT current_setting('us49.facts')::jsonb AS facts) AS read,
+        jsonb_array_elements(facts -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84500000-0000-4000-8000-000000000501'),
+  '["A lounge chair by a window", []]'::jsonb,
+  'facts: perceivedAlt carries the stored description; perceivedFlags is [] when none');
+SELECT is(
+  (SELECT jsonb_build_array(asset -> 'perceivedAlt', asset -> 'perceivedFlags')
+   FROM jsonb_array_elements(
+     public.get_project_editorial_facts('84500000-0000-4000-8000-000000000001') -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84500000-0000-4000-8000-000000000501'),
+  '[null, ["watermark"]]'::jsonb,
+  'facts: perceivedAlt is null when absent; perceivedFlags lists the stored flags');
 SELECT is(
   (SELECT (facts - 'project') - 'assets'
    FROM (SELECT current_setting('us49.facts')::jsonb AS facts) AS read),
