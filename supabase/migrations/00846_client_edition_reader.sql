@@ -43,8 +43,20 @@
 --                whose override still shows. While makers are off, an item
 --                picture's alt is rebuilt from that studio caption whatever
 --                the edition froze, since an alt perceived while makers
---                showed can name one (SQ-1660 N1); any other plate keeps
---                its stored alt.
+--                showed can name one (SQ-1660 N1).
+--   Makers off   a consent switch over every kind (story seq 53): no alt,
+--                caption what or caption whose names a maker of this job.
+--                The names are the vendor record's name and the line's own
+--                vendor_name on every project_ffe_items row of the project
+--                (00845's maker-name source, removed lines included) plus
+--                each makerName the frozen facts carry; trimmed, matched
+--                case-insensitively as substrings, names shorter than 3
+--                characters ignored. A what naming one is dropped; a whose
+--                override naming one is the studio's; a stored or fact alt
+--                naming one is rebuilt from the caption shown, as above.
+--                Any other alt is kept byte for byte. The studio's own name
+--                and the kind words are never masked, so a maker whose name
+--                sits inside them can still read there. Makers on: unchanged.
 --   Override hero  a heroAssetId the edition does not name is still a plate
 --                when it is this project's and no concept: its words are the
 --                builder's record-derived entry, else the studio's name and
@@ -76,6 +88,7 @@ DECLARE
   v_overrides jsonb;
   v_show_makers boolean;
   v_studio_name text;
+  v_maker_names text[] := '{}';
   v_extra_hero text;
   v_extra_fact jsonb;
   v_hero text;
@@ -108,6 +121,32 @@ BEGIN
   v_overrides := COALESCE(v_edition.overrides, '{}'::jsonb);
   v_show_makers := COALESCE(v_project.show_makers, false);
   v_studio_name := v_facts -> 'project' -> 'studio' ->> 'name';
+
+  -- Makers off: the names no plate's words may carry (header). Empty while
+  -- makers show, so nothing below masks anything then.
+  IF NOT v_show_makers THEN
+    SELECT COALESCE(array_agg(DISTINCT lower(maker.name)), '{}')
+    INTO v_maker_names
+    FROM (
+      SELECT btrim(vendor.name) AS name
+      FROM public.project_ffe_items AS item
+      JOIN public.vendors AS vendor ON vendor.id = item.vendor_id
+      WHERE item.project_id = p_project_id
+      UNION ALL
+      SELECT btrim(item.vendor_name)
+      FROM public.project_ffe_items AS item
+      WHERE item.project_id = p_project_id
+      UNION ALL
+      SELECT btrim(item.value ->> 'makerName')
+      FROM jsonb_array_elements(
+             CASE WHEN jsonb_typeof(v_facts -> 'rooms') = 'array' THEN v_facts -> 'rooms' ELSE '[]'::jsonb END
+           ) AS room
+      CROSS JOIN LATERAL jsonb_array_elements(
+             CASE WHEN jsonb_typeof(room.value -> 'items') = 'array' THEN room.value -> 'items' ELSE '[]'::jsonb END
+           ) AS item
+    ) AS maker
+    WHERE char_length(maker.name) >= 3;
+  END IF;
 
   -- An override hero the edition does not name (header).
   v_extra_hero := lower(NULLIF(btrim(v_overrides ->> 'heroAssetId'), ''));
@@ -169,8 +208,9 @@ BEGIN
            -- this expression over the same first facts entry.
            CASE WHEN plate.concept_seen OR plate.source_kind = 'concept' THEN 'concept'
                 ELSE COALESCE(plate.fact ->> 'sourceKind', plate.source_kind) END AS kind,
-           first_image.alt AS image_alt,
-           first_image.caption_what, first_image.caption_whose, first_image.caption_when,
+           COALESCE(first_image.caption_what, plate.fact -> 'caption' ->> 'what') AS stored_what,
+           COALESCE(first_image.alt, plate.fact ->> 'alt') AS stored_alt,
+           first_image.caption_whose, first_image.caption_when,
            v_overrides -> 'captions' -> plate.id::text AS caption_override
     FROM plate
     LEFT JOIN LATERAL (
@@ -181,23 +221,36 @@ BEGIN
       LIMIT 1
     ) AS first_image ON true
   ),
-  shown AS (
+  -- Which words name a maker of this job (never while makers show).
+  checked AS (
     SELECT worded.*,
-           COALESCE(worded.caption_what, worded.fact -> 'caption' ->> 'what') AS shown_what,
+           EXISTS (SELECT 1 FROM unnest(v_maker_names) AS maker(name)
+                   WHERE strpos(lower(worded.stored_what), maker.name) > 0) AS what_names_maker,
+           EXISTS (SELECT 1 FROM unnest(v_maker_names) AS maker(name)
+                   WHERE strpos(lower(worded.caption_override ->> 'whose'), maker.name) > 0) AS whose_names_maker,
+           EXISTS (SELECT 1 FROM unnest(v_maker_names) AS maker(name)
+                   WHERE strpos(lower(worded.stored_alt), maker.name) > 0) AS alt_names_maker
+    FROM worded
+  ),
+  shown AS (
+    SELECT checked.*,
+           CASE WHEN NOT checked.what_names_maker THEN checked.stored_what END AS shown_what,
            -- Makers off: an item picture is the studio's, an override
-           -- notwithstanding (seq 48); other plates keep their override.
-           CASE WHEN NOT v_show_makers AND worded.kind IN ('maker', 'upload')
+           -- notwithstanding (seq 48); other plates keep an override that
+           -- names no maker (seq 53).
+           CASE WHEN NOT v_show_makers
+                     AND (checked.kind IN ('maker', 'upload') OR checked.whose_names_maker)
                 THEN v_studio_name
                 ELSE COALESCE(
-                       worded.caption_override ->> 'whose',
+                       checked.caption_override ->> 'whose',
                        CASE WHEN v_show_makers
-                            THEN COALESCE(worded.caption_whose, worded.fact -> 'caption' ->> 'whose')
+                            THEN COALESCE(checked.caption_whose, checked.fact -> 'caption' ->> 'whose')
                             ELSE v_studio_name END) END AS shown_whose,
            COALESCE(
-             worded.caption_override ->> 'when',
-             worded.caption_when,
-             worded.fact -> 'caption' ->> 'when') AS shown_when
-    FROM worded
+             checked.caption_override ->> 'when',
+             checked.caption_when,
+             checked.fact -> 'caption' ->> 'when') AS shown_when
+    FROM checked
   )
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
            'id', shown.id,
@@ -214,10 +267,12 @@ BEGIN
            'caption', jsonb_build_object(
              'what', shown.shown_what, 'whose', shown.shown_whose, 'when', shown.shown_when),
            -- Makers off: an item picture's alt may name its maker, whatever
-           -- the edition froze; rebuild it from the studio caption.
-           'alt', CASE WHEN NOT v_show_makers AND shown.kind IN ('maker', 'upload')
+           -- the edition froze, and any alt naming one is rebuilt too; both
+           -- from the caption shown.
+           'alt', CASE WHEN NOT v_show_makers
+                            AND (shown.kind IN ('maker', 'upload') OR shown.alt_names_maker)
                        THEN public._client_plate_alt(shown.shown_what, shown.shown_whose, shown.kind)
-                       ELSE COALESCE(shown.image_alt, shown.fact ->> 'alt') END
+                       ELSE shown.stored_alt END
          ) ORDER BY shown.position NULLS LAST, shown.id), '[]'::jsonb)
   INTO v_assets
   FROM shown;
