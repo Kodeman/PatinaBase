@@ -711,6 +711,22 @@ Deno.test("F14: Call B keeps the designer's corrected words; the same words then
   assertEquals((composition(args).chapters as { headline: string }[])[0].headline, WORDS.chapters[0].headline);
 });
 
+Deno.test("closing: matching studio corrections stay in the full draft instead of reverting to raw prose", async () => {
+  const captured = { ...facts(), closing: true };
+  captured.project.phase = "final_walkthrough";
+  const overrides = { chapters: { cover: { headline: "The sofa is in the workshop" }, house: { headline: null } } };
+  const current = approved({ chapters: ANCHORED, doorstep: WORDS.doorstep, notice: WORDS.notice, hero: { assetId: "a-table" } }, "old-hash", captured, overrides);
+  const corrected = { ...WORDS, chapters: WORDS.chapters.map((c) => (c.key === "cover" ? { ...c, headline: "The sofa is in the workshop" } : c)) };
+  const { db, called } = fakeDb({ current });
+  const { claude, calls } = claudeOf(respond({ words: corrected }));
+  await composeRequest({ ...REQUEST, closing: true, closing_facts: captured }, deps(db, claude));
+
+  assertEquals(wordsBody(calls).current.chapters[0].headline, "The sofa is in the workshop");
+  const args = finishArgs(called);
+  assertEquals([args.p_status, args.p_kind], ["awaiting_review", "full"]);
+  assertEquals((composition(args).chapters as { headline: string }[])[0].headline, "The sofa is in the workshop");
+});
+
 Deno.test("F15: plates only compares chapters by key and the doorstep, never the notice", async () => {
   const fixture = facts();
   const shuffled = [...ANCHORED].reverse();

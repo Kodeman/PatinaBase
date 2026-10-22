@@ -250,7 +250,7 @@ BEGIN
   END IF;
 
   IF v_request.closing THEN
-    -- Reuse the one row after a swept lease; never make a second final issue.
+    -- Reuse the one row after any failed run; never make a second final issue.
     UPDATE public.client_editions
     SET status = 'drafting', facts = v_request.closing_facts,
         lease_token = p_lease_token, lease_expires_at = now() + interval '10 minutes'
@@ -549,13 +549,14 @@ BEGIN
   WHERE status = 'drafting'
     AND lease_expires_at <= now();
 
-  -- A lost closing run retries the same request and edition, at most three leases.
+  -- Reported failures and lost leases share the same three-attempt budget.
   UPDATE public.client_edition_requests AS request
-  SET status = 'queued', available_at = now(), close_reason = NULL
-  WHERE request.closing AND request.status = 'done' AND request.attempts < 3
+  SET status = CASE WHEN request.attempts >= 3 THEN 'failed' ELSE 'queued' END,
+      available_at = now(), close_reason = NULL
+  WHERE request.closing AND request.status = 'done'
     AND EXISTS (SELECT 1 FROM public.client_editions AS edition
       WHERE edition.project_id = request.project_id AND edition.closing
-        AND edition.status = 'failed' AND edition.facts ->> 'error' = 'lease expired');
+        AND edition.status = 'failed');
 
   -- A run that never reported back is closed so it does not pile up.
   UPDATE public.job_runs

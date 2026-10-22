@@ -374,6 +374,14 @@ export function useApproveClientEdition() {
       });
       if (error) throw error;
     },
+    onSuccess: (_data, { projectId, editionId }) => {
+      queryClient.setQueryData<ClientEditions>(clientEditionsKey(projectId), (data) => data && ({
+        ...data,
+        editions: data.editions.map((edition) => edition.id === editionId
+          ? { ...edition, status: "approved" }
+          : edition),
+      }));
+    },
     onSettled: (_data, _error, { projectId }) => invalidateClientEditions(queryClient, projectId),
   });
 }
@@ -386,6 +394,14 @@ export function useHoldClientEdition() {
         p_edition_id: editionId,
       });
       if (error) throw error;
+    },
+    onSuccess: (_data, { projectId, editionId }) => {
+      queryClient.setQueryData<ClientEditions>(clientEditionsKey(projectId), (data) => data && ({
+        ...data,
+        editions: data.editions.map((edition) => edition.id === editionId
+          ? { ...edition, held: true }
+          : edition),
+      }));
     },
     onSettled: (_data, _error, { projectId }) => invalidateClientEditions(queryClient, projectId),
   });

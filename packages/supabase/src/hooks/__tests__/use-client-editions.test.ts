@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { QueryClient, QueryObserver, MutationObserver, type UseMutationOptions } from '@tanstack/react-query';
 
 // The storage API at the `@supabase/ssr` boundary and React Query, so the
 // source-preview queryFn runs directly and the buckets it signs are visible.
@@ -9,19 +10,27 @@ const createSignedUrls = vi.fn(async (paths: string[], _expiresIn: number) => ({
 }));
 const getPublicUrl = vi.fn((path: string) => ({ data: { publicUrl: `public:${path}` } }));
 const storageFrom = vi.fn((_bucket: string) => ({ createSignedUrls, getPublicUrl }));
+const rpc = vi.fn();
+let queryClient: QueryClient;
 
 vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: () => ({ storage: { from: storageFrom } }),
+  createBrowserClient: () => ({ rpc, storage: { from: storageFrom } }),
 }));
 
-vi.mock('@tanstack/react-query', () => ({
+vi.mock('@tanstack/react-query', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@tanstack/react-query')>(),
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({}),
+  useQueryClient: () => queryClient,
 }));
 
 import {
   normalizeClientEditions,
+  clientEditionsKey,
+  clientEditionsQueryOptions,
+  useApproveClientEdition,
+  useHoldClientEdition,
+  type ClientEditions,
   useClientEditionSourceUrls,
   type ClientEditionImage,
 } from '../use-client-editions';
@@ -55,6 +64,8 @@ const previews = (images: ClientEditionImage[]) =>
   (useClientEditionSourceUrls(images) as unknown as SourceQuery).queryFn();
 
 beforeEach(() => {
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  rpc.mockReset();
   storageFrom.mockClear();
   createSignedUrls.mockClear();
   getPublicUrl.mockClear();
@@ -191,5 +202,53 @@ describe('normalizeClientEditions — projectClosed (00848)', () => {
   it('reads an older list, or nothing, as open', () => {
     expect(normalizeClientEditions({ showMakers: false, editions: [] } as never).projectClosed).toBe(false);
     expect(normalizeClientEditions(null).projectClosed).toBe(false);
+  });
+});
+
+
+describe('edition acts — confirmed success survives a failed list refetch', () => {
+  it.each(['approve', 'hold'] as const)('%s cannot resurrect its act from stale awaiting_review data', async (act) => {
+    const projectId = 'p-closed';
+    const editionId = 'e-closing';
+    const initial = normalizeClientEditions({ projectClosed: true, editions: [
+      { id: editionId, seq: 1, status: 'awaiting_review', closing: true, held: false, images: [] },
+    ] } as never);
+    queryClient.setQueryData(clientEditionsKey(projectId), initial);
+    const observer = new QueryObserver(queryClient, { ...clientEditionsQueryOptions(projectId), staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
+    rpc.mockImplementation(async (name: string) => name === 'list_client_editions'
+      ? { data: null, error: new Error('list unavailable') }
+      : { data: null, error: null });
+    const options = (act === 'approve' ? useApproveClientEdition() : useHoldClientEdition()) as unknown as UseMutationOptions<void, Error, { projectId: string; editionId: string; overrides: {} }>;
+    const mutation = new MutationObserver(queryClient, options);
+    try {
+      await mutation.mutate({ projectId, editionId, overrides: {} });
+      await vi.waitFor(() => expect(observer.getCurrentResult().isRefetchError).toBe(true));
+      expect(rpc).toHaveBeenCalledWith('list_client_editions', { p_project_id: projectId });
+      const cached = queryClient.getQueryData<ClientEditions>(clientEditionsKey(projectId))!;
+      expect(mutation.getCurrentResult().isPending).toBe(false);
+      // PressBand offers Approve only for awaiting_review; Hold only if not held.
+      if (act === 'approve') {
+        expect(cached.editions.some((edition) => edition.status === 'awaiting_review')).toBe(false);
+        expect(cached.editions[0].status).toBe('approved');
+      } else {
+        expect(cached.editions[0]).toMatchObject({ status: 'awaiting_review', held: true });
+      }
+      expect(cached.projectClosed).toBe(true);
+    } finally {
+      unsubscribe();
+      queryClient.clear();
+    }
+  });
+
+  it('a refused approval leaves the draft available for review', async () => {
+    const initial = normalizeClientEditions({ editions: [{ id: 'e-1', seq: 1, status: 'awaiting_review', images: [] }] } as never);
+    queryClient.setQueryData(clientEditionsKey('p-1'), initial);
+    rpc.mockResolvedValue({ data: null, error: new Error('approval refused') });
+    const options = useApproveClientEdition() as unknown as UseMutationOptions<void, Error, { projectId: string; editionId: string; overrides: {} }>;
+    const mutation = new MutationObserver(queryClient, options);
+    await expect(mutation.mutate({ projectId: 'p-1', editionId: 'e-1', overrides: {} })).rejects.toThrow('approval refused');
+    expect(queryClient.getQueryData(clientEditionsKey('p-1'))).toEqual(initial);
+    queryClient.clear();
   });
 });

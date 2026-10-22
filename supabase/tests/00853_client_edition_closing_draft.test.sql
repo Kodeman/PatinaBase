@@ -208,5 +208,18 @@ CREATE TEMP TABLE retried AS SELECT request.id AS request_id,request.lease_token
 SELECT is((SELECT edition_id FROM retried WHERE request_id=(SELECT id FROM claimed WHERE project_id='85300000-0000-4000-8000-000000000002')),(SELECT id FROM begun WHERE project_id='85300000-0000-4000-8000-000000000002'),'closing: retry reuses the one closing edition identity');
 SELECT is((SELECT count(*) FROM public.client_editions WHERE closing AND project_id='85300000-0000-4000-8000-000000000002'),1::bigint,'closing: retry never adds another final issue');
 SELECT throws_ok($$SELECT public.finish_client_edition((SELECT id FROM begun WHERE project_id='85300000-0000-4000-8000-000000000002'),(SELECT lease_token FROM begun WHERE project_id='85300000-0000-4000-8000-000000000002'),'awaiting_review','full','{}','{}','[]','test','test',0,NULL)$$,'55000',NULL,'closing: old lease cannot finish the retried closing edition');
+-- Reported failures use the same bounded retry as a lost lease.
+SELECT is(public.finish_client_edition((SELECT edition_id FROM retried), (SELECT lease_token FROM retried), 'failed','full','{}','{}','[]','test','test',0,'provenance read timed out'), 'failed', 'closing: a reported second-attempt failure is recorded');
+SELECT public.dispatch_client_edition_compose();
+SELECT ok((SELECT status='queued' AND attempts=2 FROM public.client_edition_requests WHERE id=(SELECT request_id FROM retried)), 'closing: reported failure requeues the same request below the retry budget');
+CREATE TEMP TABLE final_attempt AS SELECT request.id AS request_id,request.lease_token,public.begin_client_edition(request.id,request.lease_token) AS edition_id FROM public.claim_client_edition_requests(20) AS request WHERE request.closing;
+SELECT is((SELECT edition_id FROM final_attempt), (SELECT edition_id FROM retried), 'closing: reported failure retry reuses the same edition identity');
+SELECT lives_ok($$SELECT public.finish_client_edition((SELECT edition_id FROM final_attempt), (SELECT lease_token FROM final_attempt), 'failed','full','{}','{}','[]','test','test',0,'settlement unavailable')$$, 'closing: the third reported failure is recorded');
+SELECT public.dispatch_client_edition_compose();
+SELECT ok((SELECT status='failed' AND attempts=3 FROM public.client_edition_requests WHERE id=(SELECT request_id FROM retried)), 'closing: the third failure makes the request terminal');
+SELECT public.dispatch_client_edition_compose();
+SELECT is((SELECT count(*) FROM public.claim_client_edition_requests(20) WHERE closing), 0::bigint, 'closing: terminal reported failures never loop');
+SELECT is((SELECT count(*) FROM public.client_editions WHERE closing AND project_id='85300000-0000-4000-8000-000000000002'), 1::bigint, 'closing: reported retries never create another closing edition');
+SELECT is((SELECT count(*) FROM public.client_edition_requests WHERE closing AND project_id='85300000-0000-4000-8000-000000000002'), 1::bigint, 'closing: reported retries never create another closing request');
 SELECT * FROM finish(true);
 ROLLBACK;

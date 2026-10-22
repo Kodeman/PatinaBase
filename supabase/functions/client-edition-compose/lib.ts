@@ -1106,7 +1106,11 @@ export async function composeEdition(
     current: currentWords(ctx, current, plan),
     opening: opening(ctx, hero, current),
   });
-  const { composition, platesOnly } = settleWords(buildComposition(hash, plan, words, hero, facts), current);
+  const fresh = buildComposition(hash, plan, words, hero, facts);
+  // Closing drafts never auto-publish, so SQL will not carry the prior overrides.
+  const { composition, platesOnly } = facts.closing
+    ? { composition: fresh, platesOnly: false }
+    : settleWords(fresh, current);
   return {
     status: platesOnly && !facts.closing ? "approved" : "awaiting_review",
     kind: platesOnly && !facts.closing ? "plates_only" : "full",
