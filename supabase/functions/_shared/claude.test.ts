@@ -4,6 +4,7 @@ import {
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { FakeTime } from "https://deno.land/std@0.224.0/testing/time.ts";
+import { stub } from "https://deno.land/std@0.224.0/testing/mock.ts";
 import {
   APIConnectionTimeoutError,
   APIError,
@@ -232,7 +233,8 @@ Deno.test("callClaude hands the caller its abort signal; an aborted call settles
   await new Promise((resolve) => setTimeout(resolve, 0));
   controller.abort();
   const result = await pending;
-  assertEquals(seen, [controller.signal]);
+  assertEquals(seen.length, 1);
+  assert(seen[0]?.aborted, "the caller's signal did not abort with the call's");
   assert(!result.ok && "error" in result);
   assertStringIncludes(result.error, "aborted");
   assertEquals(settlements.map((entry) => [entry.fields.status, entry.fields.usd]), [["error", 0]]);
@@ -274,7 +276,8 @@ Deno.test("callClaude gives up a reservation the ledger has not answered once it
   assert(!result.ok && "error" in result, "the call went ahead");
   assertEquals([result.errorType, result.error], ["ledger_error", "no answer in time"]);
   assertEquals(invoked, false);
-  assertEquals(handed, [controller.signal]);
+  assertEquals(handed.length, 1);
+  assert(handed[0]?.aborted, "the reservation's signal did not abort with the call's");
 });
 
 Deno.test("callClaude bounds settling by its ledger signal: a paid answer returns, and the unsettled row is logged", async () => {
@@ -315,6 +318,50 @@ Deno.test("callClaude settles inside its own window: a settle that never answers
     assertEquals(unsettled.length, 1, "the unsettled row was not logged");
     assertEquals([unsettled[0].fields?.usage_id, unsettled[0].fields?.usd], [44, 0.003]);
   } finally {
+    time.restore();
+  }
+});
+
+/** What the Messages API sends back, as the SDK reads it off the wire. */
+function wire(status: number, body: unknown, headers: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
+}
+
+/** Never answers; rejects once `signal` aborts. */
+function hang<T>(signal?: AbortSignal | null): Promise<T> {
+  return new Promise<T>((_resolve, reject) => signal?.addEventListener("abort", () => reject(signal.reason), { once: true }));
+}
+
+Deno.test("callClaude: the reservation and the model share timeoutMs, so an SDK retry ends with the call's window", async () => {
+  const time = new FakeTime(0);
+  const attempts: number[] = [];
+  // The real SDK path: no caller is injected, only the network under it.
+  const api = stub(globalThis, "fetch", (_input: string | URL | Request, init?: RequestInit) => {
+    attempts.push(Date.now());
+    if (attempts.length > 1) return hang<Response>(init?.signal);
+    // Overloaded 50 s into the first attempt, well inside its timeout; the SDK retries 1 s later.
+    const overloaded = wire(529, { type: "error", error: { type: "overloaded_error", message: "Overloaded" } }, { "retry-after-ms": "1000" });
+    return late(50_000, overloaded, init?.signal ?? undefined);
+  });
+  try {
+    const settled: { at: number; status: string }[] = [];
+    const ledger: LlmLedgerPort = {
+      reserve: () => late(4_000, { granted: true, reason: null, usageId: 44 }),
+      settle: async (_usageId, fields) => {
+        settled.push({ at: Date.now(), status: fields.status });
+      },
+    };
+    const { clientOptions } = recorder();
+    let result: Awaited<ReturnType<typeof callClaude>> | undefined;
+    void callClaude(options({ ledger, timeoutMs: 60_000, clientOptions })).then((r) => (result = r));
+    while (result === undefined && Date.now() < 200_000) await time.tickAsync(1_000);
+    assertEquals(attempts, [4_000, 55_000], "the SDK did not retry inside the window");
+    assertEquals(settled.map((entry) => entry.status), ["error"]);
+    assert(settled[0].at <= 60_000, `the model call ran to ${settled[0].at} ms, past the window that ends 60000 ms after the call starts`);
+    assert(result && !result.ok && "error" in result, "the call did not fail");
+    assertEquals([result.errorType, result.transient], ["timeout", true]);
+  } finally {
+    api.restore();
     time.restore();
   }
 });

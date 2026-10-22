@@ -5,7 +5,7 @@
 // read route (MEDIA_WORKER_URL, PLATE_INGEST_SECRET).
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller } from "../_shared/caller.ts";
-import { callClaude, type CallClaudeOptions, createLlmLedger } from "../_shared/claude.ts";
+import { callClaude, createLlmLedger } from "../_shared/claude.ts";
 import { bounded, parseJobRunId, RunDeadline, shortenError, systemClock } from "../client-plate-copy/lib.ts";
 import { type BatchSummary, type Db, privacyPageLive, RUN_BUDGET_MS, runBatch, runStatus, sleepFor } from "./lib.ts";
 import { type Media, mediaWorker, noMedia } from "./renditions.ts";
@@ -94,12 +94,6 @@ function database(admin: Admin): Db {
   };
 }
 
-/** The caller's window and the call's own timeout: the whole call, SDK retries included, ends by the sooner. */
-function callSignal(opts: CallClaudeOptions & { timeoutMs: number }): AbortSignal {
-  const timeout = AbortSignal.timeout(opts.timeoutMs);
-  return opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
-}
-
 function media(): Media {
   const url = Deno.env.get("MEDIA_WORKER_URL") ?? "";
   const secret = Deno.env.get("PLATE_INGEST_SECRET") ?? "";
@@ -139,7 +133,7 @@ async function composeBatch(admin: Admin, run: RunDeadline, runId: number): Prom
   try {
     summary = await runBatch({
       db: database(admin),
-      claude: (opts) => callClaude({ ...opts, ledger, signal: callSignal(opts) }),
+      claude: (opts) => callClaude({ ...opts, ledger }),
       privacyLive: privacyPageLive(),
       media: media(),
       now: Date.now,

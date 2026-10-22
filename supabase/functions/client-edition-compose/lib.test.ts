@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { FakeTime } from "https://deno.land/std@0.224.0/testing/time.ts";
-import { callClaude, type CallClaudeOptions, type CallClaudeResult, type LlmLedgerPort } from "../_shared/claude.ts";
+import { stub } from "https://deno.land/std@0.224.0/testing/mock.ts";
+import { callClaude, type CallClaudeOptions, type CallClaudeResult, LEDGER_SETTLE_MS, type LlmLedgerPort } from "../_shared/claude.ts";
 import {
   composeRequest,
   type CurrentEdition,
@@ -962,6 +963,119 @@ Deno.test("R2: a ledger that never settles keeps every paid answer and its cost,
     assertEquals([args.p_cost_usd, outcome.usd], [total, total]);
   } finally {
     time.restore();
+  }
+});
+
+/** A job with nothing to look at: Call B's words are its only model call. */
+function wordsOnly(): EditorialFacts {
+  return { ...facts(), rooms: [], assets: [], palette: [] } as EditorialFacts;
+}
+
+/**
+ * The Messages API under the real SDK: each request is answered, and paid for,
+ * one second before the timeout the SDK declares for it (X-Stainless-Timeout),
+ * the slowest answer the SDK still takes; a request cancelled first gets none.
+ */
+function lastSecondApi(stopReason: string, text: string) {
+  const answered: number[] = [];
+  const message = (model: unknown) => ({
+    id: "msg_1",
+    type: "message",
+    role: "assistant",
+    model,
+    content: [{ type: "text", text }],
+    stop_reason: stopReason,
+    stop_sequence: null,
+    usage: { input_tokens: 100, output_tokens: 100 },
+  });
+  const api = stub(globalThis, "fetch", (_input: string | URL | Request, init?: RequestInit) => {
+    const seconds = Number(new Headers(init?.headers).get("x-stainless-timeout"));
+    const { model } = JSON.parse(String(init?.body));
+    return new Promise<Response>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        answered.push(Date.now());
+        resolve(new Response(JSON.stringify(message(model)), { status: 200, headers: { "content-type": "application/json" } }));
+      }, seconds * 1_000 - 1_000);
+      init?.signal?.addEventListener("abort", () => {
+        clearTimeout(timer);
+        reject(init.signal!.reason);
+      }, { once: true });
+    });
+  });
+  return { api, answered };
+}
+
+interface Made {
+  started: number;
+  ended: number;
+  timeoutMs: number;
+  result: CallClaudeResult;
+}
+
+/** callClaude over the real SDK, with a reservation that takes 4 s and a settle that never answers. */
+function slowLedgerClaude(made: Made[]) {
+  const ledger: LlmLedgerPort = {
+    reserve: () => new Promise((resolve) => setTimeout(() => resolve({ granted: true, reason: null, usageId: 7 }), 4_000)),
+    // Never answers and never looks at its signal.
+    settle: () => new Promise<void>(() => {}),
+  };
+  const clientOptions = { apiKey: "test-key", log: () => {}, capture: async () => {} };
+  return async (opts: CallClaudeOptions) => {
+    const started = Date.now();
+    const result = await callClaude({ ...opts, ledger, clientOptions });
+    made.push({ started, ended: Date.now(), timeoutMs: opts.timeoutMs, result });
+    return result;
+  };
+}
+
+/** One request composed on FakeTime over a 120 s run: its outcome, finish args, calls and when it settled. */
+async function composeOnFakeTime(time: FakeTime) {
+  const made: Made[] = [];
+  const { db, called } = fakeDb({ facts: wordsOnly() });
+  let settledAt: number | null = null;
+  const pending = composeRequest(REQUEST, deps(db, slowLedgerClaude(made), { now: () => Date.now(), sleep: sleepFor, deadline: 120_000 }))
+    .then((outcome) => {
+      settledAt = Date.now();
+      return outcome;
+    });
+  while (settledAt === null && Date.now() < 130_000) await time.tickAsync(1_000);
+  return { outcome: await pending, args: finishArgs(called), made, settledAt: settledAt as number | null };
+}
+
+Deno.test("R2: a reservation that takes 4 s, a paid answer in the model's last second and a settle that never answers keep the answer's cost", async () => {
+  const time = new FakeTime(0);
+  const { api, answered } = lastSecondApi("end_turn", "{}");
+  try {
+    const { outcome, args, made, settledAt } = await composeOnFakeTime(time);
+    assertEquals([outcome.usd, args.p_cost_usd], [0.0012, 0.0012], "Already-paid response usd must reach edition accounting");
+    assertEquals(made.length, 1);
+    const [call] = made;
+    assert(call.result.ok, "callClaude did not return the paid answer");
+    assertEquals(call.result.usd, 0.0012);
+    assert(answered[0] <= call.started + call.timeoutMs, `the model answered at ${answered[0]} ms, after the window that started with the reservation`);
+    assert(call.ended <= call.started + call.timeoutMs + LEDGER_SETTLE_MS, `callClaude returned at ${call.ended} ms`);
+    assertEquals(outcome.result, "composed");
+    assert(settledAt !== null && settledAt <= 120_000, `the edition settled at ${settledAt}`);
+  } finally {
+    api.restore();
+    time.restore();
+  }
+});
+
+Deno.test("R2: a billed failure after a 4 s reservation (a refusal or a truncation in the model's last second) still records its cost", async () => {
+  for (const stopReason of ["refusal", "max_tokens"]) {
+    const time = new FakeTime(0);
+    const { api } = lastSecondApi(stopReason, JSON.stringify(WORDS));
+    try {
+      const { outcome, args, made, settledAt } = await composeOnFakeTime(time);
+      assertEquals([outcome.usd, args.p_cost_usd], [0.0012, 0.0012], `${stopReason}: the charged usd must reach the edition`);
+      assertEquals(made.map(({ result }) => result.ok && result.response.stop_reason), [stopReason]);
+      assertEquals(composition(args).voice, "deterministic", `${stopReason}: the billed answer's words were used`);
+      assert(settledAt !== null && settledAt <= 120_000, `${stopReason}: the edition settled at ${settledAt}`);
+    } finally {
+      api.restore();
+      time.restore();
+    }
   }
 });
 

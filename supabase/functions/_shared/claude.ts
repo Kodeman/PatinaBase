@@ -174,6 +174,7 @@ export interface CallClaudeOptions {
   userId: string | null;
   promptVersion: string;
   params: Record<string, unknown>;
+  /** The reservation and the model call, SDK retries included, end within this long of the call's start. */
   timeoutMs: number;
   /** Cancels the whole call, the ledger reservation and SDK retries included; an aborted call settles as an error. */
   signal?: AbortSignal;
@@ -261,49 +262,13 @@ export async function callClaude(
   const ledger = opts.ledger;
   if (!ledger) return ledgerFailure("Claude ledger is required");
 
-  let reservation: Awaited<ReturnType<LlmLedgerPort["reserve"]>>;
-  try {
-    reservation = await untilAborted(opts.signal, (signal) =>
-      ledger.reserve(
-        opts.feature,
-        opts.studioId,
-        opts.userId,
-        estUsd,
-        opts.role,
-        opts.promptVersion,
-        signal,
-      ));
-  } catch (error) {
-    return ledgerFailure(errorMessage(error));
-  }
-  if (!reservation.granted) {
-    const denied = reservation.reason === "kill"
-      ? "kill"
-      : reservation.reason === "disabled"
-      ? "disabled"
-      : "budget";
-    return {
-      ok: false,
-      denied,
-      reason: reservation.reason,
-      resetsAt: reservation.resetsAt ?? null,
-    };
-  }
-  if (reservation.usageId === null) {
-    return ledgerFailure("Granted Claude reservation has no usage id");
-  }
-
-  const startedAt = Date.now();
-  let response: ModelResponse;
-  try {
-    // Built inside the try: every failure after a granted reservation settles.
-    const caller = opts.caller ?? opts.clientOptions?.caller ??
-      createClaudeCaller(apiKey, opts.timeoutMs);
-    response = await caller(request, opts.signal);
-  } catch (error) {
-    return await settleFailure(error, {
+  const reached = await reserveAndAsk(opts, { apiKey, ledger, request, estUsd });
+  if (!reached.reserved) return reached.result;
+  const { usageId, startedAt, answer } = reached;
+  if ("error" in answer) {
+    return await settleFailure(answer.error, {
       ledger,
-      usageId: reservation.usageId,
+      usageId,
       model,
       startedAt,
       log,
@@ -311,6 +276,7 @@ export async function callClaude(
       signal: opts.ledgerSignal,
     });
   }
+  const response = answer.response;
 
   // The response is paid for: a ledger failure from here on must not turn it
   // into a failure the caller would retry and pay for again.
@@ -318,7 +284,7 @@ export async function callClaude(
   const latencyMs = Date.now() - startedAt;
   await settleUsage(
     ledger,
-    reservation.usageId,
+    usageId,
     {
       model,
       usage: response.usage,
@@ -346,6 +312,61 @@ export async function callClaude(
     studio_id: opts.studioId,
   });
   return { ok: true, response, usd, model };
+}
+
+/** After a granted reservation: the model's answer, or the error the call failed with. Either one is settled. */
+type ModelAnswer = { response: ModelResponse } | { error: unknown };
+
+type Reached =
+  | { reserved: false; result: CallClaudeResult }
+  | { reserved: true; usageId: number; startedAt: number; answer: ModelAnswer };
+
+/**
+ * The ledger reservation, then the model call, inside one window that ends
+ * `timeoutMs` after the call starts. The SDK gets only the time the
+ * reservation left, and a model call still running when the window ends (an
+ * SDK retry, or a caller that ignores its signal) fails then as a timeout.
+ * Settling comes after, in its own LEDGER_SETTLE_MS, so a caller that waits
+ * `timeoutMs` plus that long always gets what the call knows.
+ */
+async function reserveAndAsk(
+  opts: CallClaudeOptions,
+  call: { apiKey: string; ledger: LlmLedgerPort; request: Record<string, unknown>; estUsd: number },
+): Promise<Reached> {
+  const ends = Date.now() + opts.timeoutMs;
+  const window = new AbortController();
+  const timer = setTimeout(() => window.abort(new APIConnectionTimeoutError()), opts.timeoutMs);
+  const signal = opts.signal ? AbortSignal.any([opts.signal, window.signal]) : window.signal;
+  try {
+    let reservation: Awaited<ReturnType<LlmLedgerPort["reserve"]>>;
+    try {
+      reservation = await untilAborted(signal, (bound) =>
+        call.ledger.reserve(opts.feature, opts.studioId, opts.userId, call.estUsd, opts.role, opts.promptVersion, bound));
+    } catch (error) {
+      return { reserved: false, result: ledgerFailure(errorMessage(error)) };
+    }
+    if (!reservation.granted) return { reserved: false, result: denial(reservation) };
+    const usageId = reservation.usageId;
+    if (usageId === null) return { reserved: false, result: ledgerFailure("Granted Claude reservation has no usage id") };
+    const startedAt = Date.now();
+    try {
+      // Built inside the try: every failure after a granted reservation settles.
+      const caller = opts.caller ?? opts.clientOptions?.caller ??
+        createClaudeCaller(call.apiKey, Math.max(1, ends - startedAt));
+      // The caller hears an outer abort as well; only the window's end is forced on it.
+      const response = await untilAborted(window.signal, () => caller(call.request, signal));
+      return { reserved: true, usageId, startedAt, answer: { response } };
+    } catch (error) {
+      return { reserved: true, usageId, startedAt, answer: { error } };
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function denial(reservation: { reason: ClaudeLedgerReason | null; resetsAt?: string | null }): ClaudeDenial {
+  const denied = reservation.reason === "kill" ? "kill" : reservation.reason === "disabled" ? "disabled" : "budget";
+  return { ok: false, denied, reason: reservation.reason, resetsAt: reservation.resetsAt ?? null };
 }
 
 /**
