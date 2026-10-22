@@ -1,15 +1,18 @@
 // client-edition-compose (US-49): composes a homeowner page edition from the
-// project's editorial facts. Pure given the facts, a callClaude-shaped function
-// and a database port; index.ts supplies the real ones.
+// project's editorial facts. Pure given the facts, a callClaude-shaped function,
+// a database port, the media worker and a clock; index.ts supplies the real ones.
 //
-// Per request: facts → skip when nothing changed → begin_client_edition →
-// A1 perception (unperceived pictures) → A2 hero pick (inside the top R142
-// tier) → B words → C voice lint (one regeneration) → finish_client_edition.
+// Per run: one time budget for the whole invocation, and a request is claimed
+// only while an edition still fits in it. Per request: facts → skip when
+// nothing the page freezes changed → begin_client_edition → A1 perception
+// (unperceived pictures) → A2 hero pick (inside the top R142 tier) → B words →
+// C judge (one regeneration) → finish_client_edition. Every path settles the
+// request with its spend, or reports it unsettled for the dispatcher's sweep.
 
 import type { CallClaudeOptions, CallClaudeResult, ModelResponse } from "../_shared/claude.ts";
 import type { ClaudeRole } from "../_shared/claude-models.ts";
-import { fetchAddress, type PlateRequest, shortenError, type SourceAuthority } from "../client-plate-copy/lib.ts";
-import { lintPieces } from "./lint.ts";
+import { shortenError } from "../client-plate-copy/lib.ts";
+import { lintText } from "./lint.ts";
 import {
   A1_BATCH,
   A2_CANDIDATES,
@@ -28,10 +31,37 @@ import {
   type WordsChapter,
   type WordsInput,
 } from "./prompts.ts";
-import { type Perception, readJudgement, validateHero, validatePerception, validateWords, type Words } from "./validate.ts";
+import { type Media, readRendition, RENDITION_TIMEOUT_MS, type RenditionUse } from "./renditions.ts";
+import {
+  type Box,
+  type HeroAnswer,
+  isPlainObject,
+  JUDGE_UNAVAILABLE,
+  type Judgement,
+  type Perception,
+  type Point,
+  readJudgement,
+  validateHero,
+  validatePerception,
+  validateWords,
+  type Words,
+} from "./validate.ts";
 
-export const CLAIM_LIMIT = 5;
+// ── Time budget ────────────────────────────────────────────────────────────
+
+/** The whole invocation: inside the edge host's 150 s limit; the SQL leases (ten minutes) outlast it. */
+export const RUN_BUDGET_MS = 120_000;
 export const CALL_TIMEOUT_MS = 60_000;
+/** A model call is made only when it can have at least this long. */
+export const MIN_CALL_MS = 15_000;
+/** Kept back for finish_client_edition (or the close) and its one retry. */
+export const FINISH_RESERVE_MS = 10_000;
+/** Kept back from perception and the hero pick for Call B and its judge. */
+export const WORDS_RESERVE_MS = 60_000;
+/** A request is claimed only while this much of the run is left. */
+export const EDITION_MIN_MS = 90_000;
+/** An edition stops this long before its claim lease ends. */
+export const LEASE_MARGIN_MS = 30_000;
 
 /** Photographs of her home reach a model only once the client privacy page is live (V2-5). */
 export function privacyPageLive(getEnv: (key: string) => string | undefined = (key) => Deno.env.get(key)): boolean {
@@ -56,6 +86,7 @@ export interface EditionRequest {
   id: string;
   project_id: string;
   lease_token: string;
+  lease_expires_at?: string | null;
 }
 
 export interface Composition {
@@ -68,28 +99,33 @@ export interface Composition {
   notice: string | null;
 }
 
+/** The designer's corrections to an approved edition; a null field restores the composed text. */
+export interface EditionOverrides {
+  heroAssetId?: string | null;
+  chapters?: Record<string, { headline?: string | null; standing?: string | null } | null> | null;
+  captions?: unknown;
+}
+
 export interface CurrentEdition {
   id: string;
   source_hash: string | null;
   composition: Partial<Composition> | null;
-  facts: { assets?: { sha256?: string }[] } | null;
+  facts: unknown;
+  overrides?: EditionOverrides | null;
 }
 
-/** A done client_plate_requests row: where an asset's bytes were copied from. */
-export interface PlateSourceRow {
-  project_id: string;
-  source_kind: string;
-  source_ref: { table?: string; id?: string } | null;
-  source_url: string;
+/** One client_plate_requests row, whatever its status: a kind the asset's bytes came from. */
+export interface ProvenanceRow {
   asset_id: string;
+  source_kind: string;
 }
 
 export interface Db {
   rpc(fn: string, args?: Record<string, unknown>): Promise<DbResult<unknown>>;
-  /** The project's approved edition, if any (client_editions, status 'approved'). */
+  /** The project's approved edition, if any (client_editions, status 'approved'), with its overrides. */
   approvedEdition(projectId: string): Promise<DbResult<CurrentEdition>>;
-  plateSources(projectId: string, assetIds: string[]): Promise<DbResult<PlateSourceRow[]>>;
-  sign(bucket: string, path: string): Promise<string>;
+  /** Every request row naming these assets, in any status. */
+  provenance(projectId: string, assetIds: string[]): Promise<DbResult<ProvenanceRow[]>>;
 }
 
 export type Claude = (opts: CallClaudeOptions) => Promise<CallClaudeResult>;
@@ -98,24 +134,11 @@ export interface ComposeDeps {
   db: Db;
   claude: Claude;
   privacyLive: boolean;
-  supabaseUrl: string;
-}
-
-/** The ownership check client-plate-copy uses before signing a private object. */
-export function sourceAuthority(db: Db): SourceAuthority {
-  return {
-    async owned(request) {
-      const { data, error } = await db.rpc("client_plate_source_owned", {
-        p_project_id: request.project_id,
-        p_table: request.source_ref?.table ?? null,
-        p_id: request.source_ref?.id ?? null,
-        p_source_url: request.source_url,
-      });
-      if (error) throw new Error(`ownership check failed: ${error.message}`);
-      return data === true;
-    },
-    sign: (bucket, path) => db.sign(bucket, path),
-  };
+  media: Media;
+  /** Milliseconds since the epoch. */
+  now: () => number;
+  /** When this invocation's budget ends, in the same clock. */
+  deadline: number;
 }
 
 // ── R142 rank and hero floors (ported from client-portal lib/editorial) ────
@@ -237,23 +260,68 @@ export function deterministicHeadlines(facts: EditorialFacts): { key: string; he
   ];
 }
 
-// ── Source hash ────────────────────────────────────────────────────────────
+/** The held crop: a tall plate (0.46) at least 780×1696 (client-portal lib/editorial/floors.ts). */
+function meetsHeld(asset: FactsAsset): boolean {
+  return meetsCrop(0.46, { w: 780, h: 1696 }, asset);
+}
 
-/** sha256 of the allowlisted facts: what the words are written from. */
-export async function sourceHash(facts: EditorialFacts): Promise<string> {
-  const bytes = new TextEncoder().encode(JSON.stringify(allowedFacts(facts)));
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+// ── Source hash and render fingerprint ─────────────────────────────────────
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
   return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function imageSet(assets: readonly { sha256?: string }[] | undefined): string {
-  return JSON.stringify((assets ?? []).map((asset) => asset.sha256 ?? "").sort());
+/** sha256 of the allowlisted facts: what the words are written from. */
+export function sourceHash(facts: EditorialFacts): Promise<string> {
+  return sha256Hex(JSON.stringify(allowedFacts(facts)));
 }
 
-/** The same facts and the same pictures as the approved edition: nothing to compose. */
-export function unchanged(current: CurrentEdition | null, hash: string, facts: EditorialFacts): boolean {
-  if (!current || current.source_hash !== hash || !current.facts?.assets) return false;
-  return imageSet(current.facts.assets) === imageSet(facts.assets);
+/** Object keys sorted at every depth; arrays keep their order. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!isPlainObject(value)) return value ?? null;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+}
+
+function without(value: unknown, keys: readonly string[]): Record<string, unknown> | null {
+  if (!isPlainObject(value)) return null;
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
+}
+
+// The approved reader reads these live, by asset or project, not from the
+// frozen facts; and these are the composer's own, never rendered.
+const LIVE_PROJECT = ["showMakers"];
+const LIVE_ASSET = ["sha256", "width", "height", "ground", "dominantHex", "lqip", "focal", "subjectBox", "crops"];
+const SERVICE_ASSET = ["perceivedPromptVersion", "focalOrigin", "perceivedAlt", "perceivedFlags"];
+
+function listOf(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+/** The facts an approved page renders from its frozen copy, in order: every envelope key the reader projects. */
+export function frozenFacts(facts: unknown): unknown {
+  const envelope = isPlainObject(facts) ? facts : {};
+  const project = without(envelope.project, LIVE_PROJECT);
+  return canonical({
+    project: project && { ...project, studio: without(project.studio, ["id"]) },
+    rooms: listOf(envelope.rooms),
+    assets: listOf(envelope.assets).map((asset) => without(asset, [...LIVE_ASSET, ...SERVICE_ASSET])),
+    palette: listOf(envelope.palette),
+    boards: listOf(envelope.boards),
+    sheets: listOf(envelope.sheets),
+  });
+}
+
+/** sha256 of the frozen facts: a palette colour, a caption or an item's pictures in a new order all change it. */
+export function renderFingerprint(facts: unknown): Promise<string> {
+  return sha256Hex(JSON.stringify(frozenFacts(facts)));
+}
+
+/** The same words' source and the same frozen facts as the approved edition: nothing to compose. */
+export async function unchanged(current: CurrentEdition | null, hash: string, facts: EditorialFacts): Promise<boolean> {
+  if (!current?.facts || current.source_hash !== hash) return false;
+  return (await renderFingerprint(current.facts)) === (await renderFingerprint(facts));
 }
 
 // ── One edition ────────────────────────────────────────────────────────────
@@ -261,118 +329,170 @@ export function unchanged(current: CurrentEdition | null, hash: string, facts: E
 /** A model call was denied (kill switch, disabled feature, budget): composition stops. */
 export class ComposeStopped extends Error {}
 
+/** What this run's A1 saw in one picture. `frame` is set only when the model's framing was recorded. */
+interface Seen {
+  flags: string[];
+  alt: string;
+  frame: { subjectBox: Box; focal: Point } | null;
+}
+
 interface Ctx {
   facts: EditorialFacts;
   deps: ComposeDeps;
+  /** This edition's end: the run's, or sooner when the claim lease ends first. */
+  deadline: number;
   spend: { usd: number };
   model: string | null;
-  sources: Map<string, PlateSourceRow[]>;
-  authority: SourceAuthority;
-  urls: Map<string, string | null>;
+  /** Asset id → every kind its bytes were requested under. */
+  sources: Map<string, string[]>;
+  /** The project's own names, which model attribution never matches. */
+  names: string[];
+  seen: Map<string, Seen>;
+  pictures: Map<string, string | null>;
 }
 
-type Answer = { ok: true; response: ModelResponse } | { ok: false; error: string };
+/** Time left before the finish reserve. */
+function timeLeft(ctx: Ctx): number {
+  return ctx.deadline - ctx.deps.now() - FINISH_RESERVE_MS;
+}
 
-async function ask(ctx: Ctx, role: ClaudeRole, params: Record<string, unknown>): Promise<Answer> {
-  const result = await ctx.deps.claude({
-    feature: FEATURE,
-    role,
-    studioId: ctx.facts.project.studio?.id ?? null,
-    userId: null,
-    promptVersion: PROMPT_VERSION,
-    params,
-    timeoutMs: CALL_TIMEOUT_MS,
-  });
-  if (result.ok) {
-    ctx.spend.usd += result.usd;
-    // The edition records the model that wrote it, not the judge's.
-    if (role !== "judge") ctx.model = result.model;
-    return { ok: true, response: result.response };
-  }
+type Answer = { ok: true; response: ModelResponse } | { ok: false; error: string; late: boolean };
+
+/** Counts what a call cost, failed calls included; the edition records the model that wrote it, not the judge's. */
+function count(ctx: Ctx, role: ClaudeRole, result: CallClaudeResult): void {
+  if (result.ok && role !== "judge") ctx.model = result.model;
+  ctx.spend.usd += "usd" in result ? result.usd ?? 0 : 0;
+}
+
+/** One model call, bounded by the budget less `keep`. A denied call stops the edition. */
+async function ask(ctx: Ctx, role: ClaudeRole, params: Record<string, unknown>, keep: number): Promise<Answer> {
+  const timeoutMs = Math.min(CALL_TIMEOUT_MS, timeLeft(ctx) - keep);
+  if (timeoutMs < MIN_CALL_MS) return { ok: false, error: "out of time", late: true };
+  const studioId = ctx.facts.project.studio?.id ?? null;
+  const result = await ctx.deps.claude({ feature: FEATURE, role, studioId, userId: null, promptVersion: PROMPT_VERSION, params, timeoutMs });
+  count(ctx, role, result);
+  if (result.ok) return { ok: true, response: result.response };
   if ("denied" in result) throw new ComposeStopped(`claude ${result.denied}`);
-  return { ok: false, error: result.error };
+  return { ok: false, error: result.error, late: false };
 }
 
 const NEVER_SENT = new Set(["sheet", "board"]);
 const HER_HOME = new Set(["scan", "installed"]);
+const NEVER_HERO = new Set(["sheet", "concept"]);
 
 function kindSendable(kind: string, privacyLive: boolean): boolean {
   if (NEVER_SENT.has(kind)) return false;
   return HER_HOME.has(kind) ? privacyLive : true;
 }
 
-/** Sheets and boards never; scans and installed photographs only once the privacy page is live. */
+/** The asset's kind and every request kind behind it; null when no request row resolves. */
+function provenance(ctx: Ctx, asset: FactsAsset): string[] | null {
+  const kinds = ctx.sources.get(asset.id);
+  return kinds?.length ? [asset.sourceKind, ...kinds] : null;
+}
+
+/** Sheets and boards never; scans and installed photographs only once the privacy page is live; unknown provenance never. */
 function sendable(ctx: Ctx, asset: FactsAsset): boolean {
-  const live = ctx.deps.privacyLive;
-  const rows = ctx.sources.get(asset.id) ?? [];
-  return kindSendable(asset.sourceKind, live) && rows.every((row) => kindSendable(row.source_kind, live));
+  const kinds = provenance(ctx, asset);
+  return !!kinds && kinds.every((kind) => kindSendable(kind, ctx.deps.privacyLive));
 }
 
-function conceptSeen(ctx: Ctx, asset: FactsAsset): boolean {
-  return asset.sourceKind === "concept" || (ctx.sources.get(asset.id) ?? []).some((row) => row.source_kind === "concept");
+/** Watermark, people or text over the picture, seen now or by an earlier perception. */
+function flagged(ctx: Ctx, asset: FactsAsset): boolean {
+  return (asset.perceivedFlags?.length ?? 0) > 0 || (ctx.seen.get(asset.id)?.flags.length ?? 0) > 0;
 }
 
-function plateRequest(row: PlateSourceRow): PlateRequest {
-  return { id: "", project_id: row.project_id, source_kind: row.source_kind, source_ref: row.source_ref, source_url: row.source_url, lease_token: "" };
+/** The asset with this run's recorded model framing; a designer's framing stands. */
+function framed(ctx: Ctx, asset: FactsAsset): FactsAsset {
+  const frame = ctx.seen.get(asset.id)?.frame;
+  return frame ? { ...asset, ...frame } : asset;
 }
 
-/** The address the asset was copied from, through client-plate-copy's resolver; null when none resolves. */
-async function imageUrl(ctx: Ctx, asset: FactsAsset): Promise<string | null> {
-  if (ctx.urls.has(asset.id)) return ctx.urls.get(asset.id)!;
-  let url: string | null = null;
-  for (const row of ctx.sources.get(asset.id) ?? []) {
-    url = await fetchAddress(plateRequest(row), ctx.deps.supabaseUrl, ctx.authority).catch(() => null);
-    if (url) break;
+async function picture(ctx: Ctx, asset: FactsAsset, use: RenditionUse, keep: number): Promise<string | null> {
+  const key = `${use}:${asset.id}`;
+  if (!ctx.pictures.has(key)) {
+    const timeoutMs = Math.min(RENDITION_TIMEOUT_MS, timeLeft(ctx) - keep);
+    ctx.pictures.set(key, await readRendition(ctx.deps.media, ctx.facts.project.id, asset, use, timeoutMs));
   }
-  ctx.urls.set(asset.id, url);
-  return url;
+  return ctx.pictures.get(key) ?? null;
 }
 
-interface Sendable {
+interface Shown {
   asset: FactsAsset;
-  url: string;
+  data: string;
 }
 
-async function firstWithUrls(ctx: Ctx, assets: readonly FactsAsset[], limit = Infinity): Promise<Sendable[]> {
-  const ready: Sendable[] = [];
-  for (const asset of assets) {
-    if (ready.length >= limit) break;
-    const url = sendable(ctx, asset) ? await imageUrl(ctx, asset) : null;
-    if (url) ready.push({ asset, url });
-  }
-  return ready;
+/** The assets whose renditions could be read, in order; one that cannot is dropped alone. */
+async function withPictures(ctx: Ctx, assets: readonly FactsAsset[], use: RenditionUse, keep: number): Promise<Shown[]> {
+  const data = await Promise.all(assets.map((asset) => picture(ctx, asset, use, keep)));
+  return assets.flatMap((asset, i) => (data[i] ? [{ asset, data: data[i]! }] : []));
 }
 
-function imageInput(ctx: Ctx, entry: Sendable): ImageInput {
-  return { url: entry.url, label: assetLabel(ctx.facts, entry.asset.id) };
+function imageInput(ctx: Ctx, shown: Shown): ImageInput {
+  return { data: shown.data, label: assetLabel(ctx.facts, shown.asset.id) };
 }
 
-async function applyPerception(ctx: Ctx, asset: FactsAsset, perception: Perception): Promise<void> {
+const FRAME_UNIT = 10_000;
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(high, Math.max(low, value));
+}
+
+/**
+ * The model's frame on a 1e-4 grid, exactly inside the picture (x+w ≤ 1,
+ * y+h ≤ 1) with the focal point inside the box: the values record_plate_perception
+ * stores and the recrop uses are the ones this run judges crops with.
+ */
+export function onGrid(box: Box, focal: Point): { subjectBox: Box; focal: Point } {
+  const [x, y] = [box[0], box[1]].map((v) => clamp(Math.round(v * FRAME_UNIT), 0, FRAME_UNIT - 1));
+  const w = clamp(Math.round(box[2] * FRAME_UNIT), 1, FRAME_UNIT - x);
+  const h = clamp(Math.round(box[3] * FRAME_UNIT), 1, FRAME_UNIT - y);
+  const fx = clamp(Math.round(focal[0] * FRAME_UNIT), x, x + w);
+  const fy = clamp(Math.round(focal[1] * FRAME_UNIT), y, y + h);
+  const unit = (v: number) => v / FRAME_UNIT;
+  return { subjectBox: [unit(x), unit(y), unit(w), unit(h)], focal: [unit(fx), unit(fy)] };
+}
+
+/** A null frame keeps the stored one (the designer's). */
+function frameArgs(frame: ReturnType<typeof onGrid> | null) {
+  return { p_subject_box: frame?.subjectBox ?? null, p_focal: frame?.focal ?? null };
+}
+
+/**
+ * record_plate_perception: flags, alt and version always; the frame only when
+ * it is the model's to set (a designer's frame is sent as null and stands). A
+ * changed model frame requeues the plate's crops server side.
+ */
+async function recordPerception(ctx: Ctx, asset: FactsAsset, perception: Perception): Promise<void> {
+  const frame = asset.focalOrigin === "designer" ? null : onGrid(perception.subjectBox, perception.focal);
   const { error } = await ctx.deps.db.rpc("record_plate_perception", {
     p_asset_id: asset.id,
-    p_subject_box: perception.subjectBox,
-    p_focal: perception.focal,
+    ...frameArgs(frame),
     p_flags: perception.flags,
     p_alt: perception.alt,
     p_prompt_version: PROMPT_VERSION,
   });
-  if (error) {
-    console.error(`client-edition-compose: perception ${asset.id}: ${shortenError(error.message)}`);
-    return;
-  }
-  Object.assign(asset, { subjectBox: perception.subjectBox, focal: perception.focal, alt: perception.alt, perceivedPromptVersion: PROMPT_VERSION });
+  if (error) console.error(`client-edition-compose: perception ${asset.id}: ${shortenError(error.message)}`);
+  // Flags count even when the write failed; a frame not stored is not the frame the crops will use.
+  ctx.seen.set(asset.id, { flags: perception.flags, alt: perception.alt, frame: error ? null : frame });
 }
 
-/** Call A1 over unperceived pictures, eight at a time. A rejected answer leaves its pictures to code crops. */
+/** One A1 call over the pictures of `assets` that can be read; an answer the validator rejects records nothing. */
+async function perceiveBatch(ctx: Ctx, assets: FactsAsset[]): Promise<void> {
+  const batch = await withPictures(ctx, assets, "perceive", WORDS_RESERVE_MS);
+  if (!batch.length) return;
+  const answer = await ask(ctx, "perceive", buildPerceptionRequest(batch.map((shown) => imageInput(ctx, shown))), WORDS_RESERVE_MS);
+  const checked = answer.ok ? validatePerception(answer.response, batch.length, ctx.names) : null;
+  if (!checked?.ok) return;
+  for (const perception of checked.value) await recordPerception(ctx, batch[perception.index].asset, perception);
+}
+
+/** Call A1 over unperceived sendable pictures, eight at a time, while words still fit after it. */
 async function perceive(ctx: Ctx): Promise<void> {
-  const targets = ctx.facts.assets.filter((asset) => !asset.perceivedPromptVersion && asset.focalOrigin !== "designer");
-  const ready = await firstWithUrls(ctx, targets);
-  for (let start = 0; start < ready.length; start += A1_BATCH) {
-    const batch = ready.slice(start, start + A1_BATCH);
-    const answer = await ask(ctx, "perceive", buildPerceptionRequest(batch.map((entry) => imageInput(ctx, entry))));
-    const checked = answer.ok ? validatePerception(answer.response, batch.length) : null;
-    if (!checked?.ok) continue;
-    for (const perception of checked.value) await applyPerception(ctx, batch[perception.index].asset, perception);
+  const targets = ctx.facts.assets.filter((asset) => !asset.perceivedPromptVersion && sendable(ctx, asset));
+  for (let start = 0; start < targets.length; start += A1_BATCH) {
+    if (timeLeft(ctx) - WORDS_RESERVE_MS < MIN_CALL_MS) return;
+    await perceiveBatch(ctx, targets.slice(start, start + A1_BATCH));
   }
 }
 
@@ -382,22 +502,37 @@ export interface HeroChoice {
   held: FactsAsset[];
 }
 
+/** Known provenance with no sheet or concept behind it, unflagged, ranked, and meeting the hero floors. */
 function heroEligible(ctx: Ctx, asset: FactsAsset): boolean {
-  return tierOf(asset) !== null && asset.sourceKind !== "sheet" && !conceptSeen(ctx, asset) && meetsHero(asset);
+  const kinds = provenance(ctx, asset);
+  if (!kinds || kinds.some((kind) => NEVER_HERO.has(kind)) || flagged(ctx, asset)) return false;
+  return tierOf(asset) !== null && meetsHero(framed(ctx, asset));
 }
 
-/** Call A2 inside the top tier; any answer the validator rejects falls back to the code pick (rank order). */
+/**
+ * Call A2 inside the top tier; any answer the validator rejects falls back to
+ * the code pick (rank order). A held choice that misses the held floor is dropped.
+ */
 async function pickHero(ctx: Ctx): Promise<HeroChoice | null> {
   const eligible = ctx.facts.assets.filter((asset) => heroEligible(ctx, asset)).sort(compareAssets);
   if (!eligible.length) return null;
   const code: HeroChoice = { asset: eligible[0], why: null, held: [] };
   const top = tierOf(eligible[0]);
-  const pool = await firstWithUrls(ctx, eligible.filter((asset) => tierOf(asset) === top), A2_CANDIDATES);
+  const candidates = eligible.filter((asset) => tierOf(asset) === top && sendable(ctx, asset)).slice(0, A2_CANDIDATES);
+  const pool = candidates.length < 2 ? [] : await withPictures(ctx, candidates, "hero", WORDS_RESERVE_MS);
   if (pool.length < 2) return code;
-  const answer = await ask(ctx, "draft", buildHeroRequest(pool.map((entry) => imageInput(ctx, entry)), allowedFacts(ctx.facts)));
-  const checked = answer.ok ? validateHero(answer.response, pool.length) : null;
-  if (!checked?.ok) return code;
-  return { asset: pool[checked.value.index].asset, why: checked.value.why, held: checked.value.held.map((i) => pool[i].asset) };
+  const chosen = await askHero(ctx, pool);
+  if (!chosen) return code;
+  const held = chosen.held.map((i) => pool[i].asset).filter((asset) => meetsHeld(framed(ctx, asset)));
+  return { asset: pool[chosen.index].asset, why: chosen.why, held };
+}
+
+/** Call A2 over the pool; null when it fails or the validator rejects the answer. */
+async function askHero(ctx: Ctx, pool: Shown[]): Promise<HeroAnswer | null> {
+  const request = buildHeroRequest(pool.map((shown) => imageInput(ctx, shown)), allowedFacts(ctx.facts));
+  const answer = await ask(ctx, "draft", request, WORDS_RESERVE_MS);
+  const checked = answer.ok ? validateHero(answer.response, pool.length, ctx.names) : null;
+  return checked?.ok ? checked.value : null;
 }
 
 interface ChapterPlan {
@@ -420,60 +555,124 @@ export function chapterPlan(facts: EditorialFacts): ChapterPlan {
   return { chapters, keys: chapters.map((chapter) => chapter.key), anchorOf };
 }
 
-/** The approved page's words, rekeyed by position, for Call B to keep what is still true. */
-function currentWords(current: CurrentEdition | null, plan: ChapterPlan): unknown | null {
+type Prose = Pick<Composition, "chapters" | "doorstep">;
+
+/** The approved words as the homeowner reads them: the designer's overrides applied by chapter key. */
+export function effectiveProse(composition: Partial<Composition>, overrides: EditionOverrides | null | undefined): Partial<Prose> {
+  const edits = overrides?.chapters ?? {};
+  return {
+    chapters: (composition.chapters ?? []).map((chapter) => {
+      const edit = edits[chapter.key];
+      return {
+        key: chapter.key,
+        headline: typeof edit?.headline === "string" ? edit.headline : chapter.headline,
+        standing: typeof edit?.standing === "string" ? edit.standing : chapter.standing ?? null,
+      };
+    }),
+    doorstep: composition.doorstep,
+  };
+}
+
+/**
+ * The words finish_client_edition compares to publish plates only
+ * (_client_edition_prose): the chapters in key order as key, headline and
+ * standing, and the doorstep. Never the notice, which says what changed.
+ */
+export function proseKey(prose: Partial<Prose>): string {
+  const chapters = (prose.chapters ?? [])
+    .map((chapter, position) => ({ chapter, position }))
+    .sort((a, b) => compareCodepoints(a.chapter.key, b.chapter.key) || a.position - b.position)
+    .map(({ chapter }) => ({ key: chapter.key, headline: chapter.headline ?? null, standing: chapter.standing ?? null }));
+  return JSON.stringify(canonical({ chapters, doorstep: prose.doorstep ?? null }));
+}
+
+/**
+ * The page's words as the homeowner reads them, rekeyed by position, for Call B
+ * to keep what is still true. None at all once the studio stops showing makers:
+ * older words may name one.
+ */
+function currentWords(ctx: Ctx, current: CurrentEdition | null, plan: ChapterPlan): unknown | null {
   const composition = current?.composition;
-  if (!composition?.chapters) return null;
+  if (!composition?.chapters || ctx.facts.project.showMakers !== true) return null;
+  const prose = effectiveProse(composition, current?.overrides);
+  return { chapters: byPosition(prose, plan), doorstep: prose.doorstep ?? null, notice: composition.notice ?? null };
+}
+
+/** The chapters Call B is asked for, keyed by position as it asks. */
+function byPosition(prose: Partial<Prose>, plan: ChapterPlan) {
   const keyOf = new Map([...plan.anchorOf].map(([key, anchor]) => [anchor, key]));
+  return (prose.chapters ?? []).filter((c) => keyOf.has(c.key)).map((c) => ({ ...c, key: keyOf.get(c.key) }));
+}
+
+/** The opening the page had: never a description of a picture now flagged. */
+function beforeLabel(ctx: Ctx, current: CurrentEdition | null): string | null {
+  if (!current?.composition) return null;
+  const before = ctx.facts.assets.find((asset) => asset.id === current.composition?.hero?.assetId);
+  if (!before) return "the drawn cover";
+  return flagged(ctx, before) ? "an earlier picture" : assetLabel(ctx.facts, before.id);
+}
+
+function opening(ctx: Ctx, hero: HeroChoice | null, current: CurrentEdition | null) {
   return {
-    chapters: composition.chapters.filter((c) => keyOf.has(c.key)).map((c) => ({ ...c, key: keyOf.get(c.key) })),
-    doorstep: composition.doorstep ?? null,
-    notice: composition.notice ?? null,
+    now: hero ? assetLabel(ctx.facts, hero.asset.id) : "the drawn cover",
+    before: beforeLabel(ctx, current),
   };
 }
 
-function opening(facts: EditorialFacts, hero: HeroChoice | null, current: CurrentEdition | null) {
-  const before = current?.composition?.hero?.assetId;
-  const known = before && facts.assets.some((asset) => asset.id === before);
-  return {
-    now: hero ? assetLabel(facts, hero.asset.id) : "the drawn cover",
-    before: known ? assetLabel(facts, before) : current?.composition ? "the drawn cover" : null,
-  };
+/** The judge's reading of one answer; null when there was no time to ask. */
+function judgementOf(answer: Answer): Judgement | null {
+  if (answer.ok) return readJudgement(answer.response);
+  return answer.late ? null : JUDGE_UNAVAILABLE;
 }
 
-function wordPieces(words: Words): string[] {
-  return [...words.chapters.flatMap((c) => [c.headline, c.standing]), words.doorstep.standing, words.notice];
-}
-
-/** Call C: the lexicon regex, then the judge. The term to name in a regeneration, or null. */
-async function voiceHit(ctx: Ctx, words: Words): Promise<string | null> {
-  const hit = lintPieces(wordPieces(words));
-  if (hit) return hit.term;
-  const answer = await ask(ctx, "judge", buildJudgeRequest(words));
-  return answer.ok ? readJudgement(answer.response) : null;
+/** Call C's judge, asked once more while it is unavailable and time remains. */
+async function judge(ctx: Ctx, words: Words): Promise<Judgement> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const verdict = judgementOf(await ask(ctx, "judge", buildJudgeRequest(words), 0));
+    if (verdict?.verdict !== "unavailable") return verdict ?? JUDGE_UNAVAILABLE;
+  }
+  return JUDGE_UNAVAILABLE;
 }
 
 type WordsBrief = Omit<WordsInput, "avoid">;
 
-/** One Call B draft: its words when valid, and the term to avoid when it must be written again. */
-async function draftWords(ctx: Ctx, plan: ChapterPlan, brief: WordsBrief, avoid?: string): Promise<{ words: Words | null; avoid: string | null }> {
-  const answer = await ask(ctx, "draft", buildWordsRequest({ ...brief, avoid }));
-  if (!answer.ok) throw new Error(`words: ${answer.error}`);
-  const checked = validateWords(answer.response, plan.keys);
-  if (!checked.ok) return { words: null, avoid: checked.term ?? null };
-  return { words: checked.value, avoid: await voiceHit(ctx, checked.value) };
+type Draft = { words: Words; avoid: null } | { words: null; avoid: string | null };
+
+/** One Call B draft: its words when valid, else the forbidden term the lint found (or none). */
+async function draftWords(ctx: Ctx, plan: ChapterPlan, brief: WordsBrief, avoid?: string): Promise<Draft> {
+  const answer = await ask(ctx, "draft", buildWordsRequest({ ...brief, avoid }), MIN_CALL_MS);
+  if (!answer.ok) return noDraft(answer);
+  const checked = validateWords(answer.response, plan.keys, ctx.names);
+  return checked.ok ? { words: checked.value, avoid: null } : { words: null, avoid: checked.term ?? null };
+}
+
+/** A Call B with no time left gives no words; one that failed fails the edition. */
+function noDraft(answer: Extract<Answer, { ok: false }>): Draft {
+  if (!answer.late) throw new Error(`words: ${answer.error}`);
+  return { words: null, avoid: null };
+}
+
+/** Valid words go to the judge; a lint hit is a finding; anything else leaves nothing usable. */
+function verdictOn(ctx: Ctx, draft: Draft): Promise<Judgement> | Judgement {
+  if (draft.words) return judge(ctx, draft.words);
+  return draft.avoid ? { verdict: "hit", term: draft.avoid } : JUDGE_UNAVAILABLE;
 }
 
 /**
- * Call B, linted. A banned word or a lint hit earns one regeneration naming the
- * term; a second hit, or any other rejected answer, leaves the deterministic
- * headlines. A failed call fails the edition.
+ * Call B, then C. A forbidden term (the shared lint's or the judge's) earns one
+ * regeneration naming it. A second hit, an answer the validator rejects, a judge
+ * that stays unavailable, or no time left leaves the deterministic headlines. A
+ * failed B call fails the edition.
  */
 async function writeWords(ctx: Ctx, plan: ChapterPlan, brief: WordsBrief): Promise<Words | null> {
-  const first = await draftWords(ctx, plan, brief);
-  if (!first.avoid) return first.words;
-  const second = await draftWords(ctx, plan, brief, first.avoid);
-  return second.avoid ? null : second.words;
+  let avoid: string | undefined;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const draft = await draftWords(ctx, plan, brief, avoid);
+    const verdict = await verdictOn(ctx, draft);
+    if (verdict.verdict !== "hit") return verdict.verdict === "clean" ? draft.words : null;
+    avoid = verdict.term;
+  }
+  return null;
 }
 
 function chaptersFor(plan: ChapterPlan, words: Words | null, facts: EditorialFacts): Composition["chapters"] {
@@ -501,15 +700,6 @@ function buildComposition(hash: string, plan: ChapterPlan, words: Words | null, 
   };
 }
 
-/** Headlines, standings, doorstep and notice, byte for byte. */
-function wordsKey(composition: Partial<Composition>): string {
-  return JSON.stringify({
-    chapters: (composition.chapters ?? []).map((c) => [c.key, c.headline, c.standing ?? null]),
-    doorstep: composition.doorstep?.standing ?? null,
-    notice: composition.notice ?? null,
-  });
-}
-
 export interface ImageRow {
   asset_id: string;
   plate_role: "hero" | "held";
@@ -529,25 +719,36 @@ function roomAnchorOf(facts: EditorialFacts, assetId: string): string | null {
   return room?.anchor ?? null;
 }
 
-function imageRow(facts: EditorialFacts, assetId: string, role: ImageRow["plate_role"], rank: number, chapter: string): ImageRow {
-  const asset = facts.assets.find((a) => a.id === assetId);
+/** This run's perceived alt, else the one an earlier perception stored, else the caption's. */
+function altOf(ctx: Ctx, asset: FactsAsset): string | null {
+  return ctx.seen.get(asset.id)?.alt ?? storedAlt(ctx, asset) ?? asset.alt ?? null;
+}
+
+/** The alt an earlier perception stored, while it still passes the lint. */
+function storedAlt(ctx: Ctx, asset: FactsAsset): string | null {
+  const alt = asset.perceivedAlt;
+  return alt && !lintText(alt, ctx.names) ? alt : null;
+}
+
+function imageRow(ctx: Ctx, asset: FactsAsset, role: ImageRow["plate_role"], rank: number, chapter: string): ImageRow {
   return {
-    asset_id: assetId,
+    asset_id: asset.id,
     plate_role: role,
     crop_key: "none",
     rank,
     chapter_key: chapter,
-    alt: asset?.alt ?? null,
-    caption_what: asset?.caption?.what ?? null,
-    caption_whose: asset?.caption?.whose ?? null,
-    caption_when: asset?.caption?.when ?? null,
+    alt: altOf(ctx, asset),
+    caption_what: asset.caption?.what ?? null,
+    caption_whose: asset.caption?.whose ?? null,
+    caption_when: asset.caption?.when ?? null,
   };
 }
 
-export function imageRows(facts: EditorialFacts, composition: Composition): ImageRow[] {
-  const hero = composition.hero ? [imageRow(facts, composition.hero.assetId, "hero", 0, "cover")] : [];
-  const held = composition.held.map((id, i) => imageRow(facts, id, "held", i + 1, roomAnchorOf(facts, id) ?? "house"));
-  return [...hero, ...held];
+/** The chosen pictures' rows: the hero on the cover, each held picture in its room. */
+function imageRows(ctx: Ctx, hero: HeroChoice | null): ImageRow[] {
+  if (!hero) return [];
+  const held = hero.held.map((asset, i) => imageRow(ctx, asset, "held", i + 1, roomAnchorOf(ctx.facts, asset.id) ?? "house"));
+  return [imageRow(ctx, hero.asset, "hero", 0, "cover"), ...held];
 }
 
 export interface EditionDraft {
@@ -559,47 +760,72 @@ export interface EditionDraft {
   error: string | null;
 }
 
-function bySourceAsset(rows: readonly PlateSourceRow[]): Map<string, PlateSourceRow[]> {
-  const sources = new Map<string, PlateSourceRow[]>();
-  for (const row of rows) sources.set(row.asset_id, [...(sources.get(row.asset_id) ?? []), row]);
+function kindsByAsset(rows: readonly ProvenanceRow[]): Map<string, string[]> {
+  const sources = new Map<string, string[]>();
+  for (const row of rows) sources.set(row.asset_id, [...(sources.get(row.asset_id) ?? []), row.source_kind]);
   return sources;
 }
 
-async function context(facts: EditorialFacts, deps: ComposeDeps, spend: { usd: number }): Promise<Ctx> {
-  const { data, error } = await deps.db.plateSources(facts.project.id, facts.assets.map((asset) => asset.id));
-  if (error) throw new Error(`plate sources: ${error.message}`);
-  const sources = bySourceAsset(data ?? []);
-  return { facts, deps, spend, model: null, sources, authority: sourceAuthority(deps.db), urls: new Map() };
+/** Every signed item name, and maker names when the studio shows makers. */
+function allowedNames(facts: EditorialFacts): string[] {
+  const makers = facts.project.showMakers === true;
+  return facts.rooms.flatMap((room) => room.items.flatMap((item) => [item.nameAsSigned, ...(makers && item.makerName ? [item.makerName] : [])]));
+}
+
+async function context(facts: EditorialFacts, deps: ComposeDeps, deadline: number, spend: { usd: number }): Promise<Ctx> {
+  const ids = facts.assets.map((asset) => asset.id);
+  const { data, error } = ids.length ? await deps.db.provenance(facts.project.id, ids) : { data: [], error: null };
+  if (error) throw new Error(`provenance: ${error.message}`);
+  return {
+    facts,
+    deps,
+    deadline,
+    spend,
+    model: null,
+    sources: kindsByAsset(data ?? []),
+    names: allowedNames(facts),
+    seen: new Map(),
+    pictures: new Map(),
+  };
 }
 
 /**
- * One edition's draft. Words identical to the approved edition's publish as
- * plates only; anything else waits for the designer.
+ * Words that read the same as the approved page publish as plates only, and
+ * carry the approved edition's own words, so finish_client_edition finds them
+ * unchanged and keeps the designer's overrides. Anything else waits for review.
  */
+function settleWords(fresh: Composition, current: CurrentEdition | null): { composition: Composition; platesOnly: boolean } {
+  const prior = current?.composition;
+  const same = !!prior?.chapters && proseKey(fresh) === proseKey(effectiveProse(prior, current?.overrides));
+  if (!same) return { composition: fresh, platesOnly: false };
+  return { composition: { ...fresh, chapters: prior!.chapters!, doorstep: prior!.doorstep! }, platesOnly: true };
+}
+
+/** One edition's draft. */
 export async function composeEdition(
   facts: EditorialFacts,
   current: CurrentEdition | null,
   hash: string,
   deps: ComposeDeps,
+  deadline: number,
   spend: { usd: number },
 ): Promise<EditionDraft> {
-  const ctx = await context(facts, deps, spend);
+  const ctx = await context(facts, deps, deadline, spend);
   await perceive(ctx);
   const hero = await pickHero(ctx);
   const plan = chapterPlan(facts);
   const words = await writeWords(ctx, plan, {
     facts: allowedFacts(facts),
     chapters: plan.chapters,
-    current: currentWords(current, plan),
-    opening: opening(facts, hero, current),
+    current: currentWords(ctx, current, plan),
+    opening: opening(ctx, hero, current),
   });
-  const composition = buildComposition(hash, plan, words, hero, facts);
-  const platesOnly = !!current?.composition && wordsKey(current.composition) === wordsKey(composition);
+  const { composition, platesOnly } = settleWords(buildComposition(hash, plan, words, hero, facts), current);
   return {
     status: platesOnly ? "approved" : "awaiting_review",
     kind: platesOnly ? "plates_only" : "full",
     composition,
-    images: imageRows(facts, composition),
+    images: imageRows(ctx, hero),
     model: ctx.model,
     error: null,
   };
@@ -609,10 +835,13 @@ export async function composeEdition(
 
 export interface RequestOutcome {
   requestId: string;
-  result: "composed" | "skipped" | "failed";
+  /** "unsettled": the request or edition is left leased for the dispatcher's sweep. */
+  result: "composed" | "skipped" | "failed" | "unsettled";
   reason: string | null;
   usd: number;
 }
+
+type Settled = [RequestOutcome["result"], string | null];
 
 const DAILY_LIMIT = /client_edition_daily_limit|two.?per.?day|daily.?limit/i;
 
@@ -632,14 +861,22 @@ async function readCurrent(db: Db, projectId: string): Promise<CurrentEdition | 
   return data;
 }
 
-async function closeRequest(db: Db, request: EditionRequest, reason: string): Promise<RequestOutcome> {
-  const { error } = await db.rpc("close_client_edition_request", {
+/** A settling RPC, retried once when it returns an error; the last error, or null. */
+async function settleRpc(db: Db, fn: string, args: Record<string, unknown>): Promise<DbError | null> {
+  const first = await db.rpc(fn, args);
+  if (!first.error) return null;
+  return (await db.rpc(fn, args)).error;
+}
+
+async function closeRequest(db: Db, request: EditionRequest, reason: string): Promise<Settled> {
+  const error = await settleRpc(db, "close_client_edition_request", {
     p_request_id: request.id,
     p_lease_token: request.lease_token,
     p_reason: reason,
   });
-  if (error) console.error(`client-edition-compose: close ${request.id}: ${shortenError(error.message)}`);
-  return { requestId: request.id, result: "skipped", reason, usd: 0 };
+  if (!error) return ["skipped", reason];
+  console.error(`client-edition-compose: close ${request.id}: ${shortenError(error.message)}`);
+  return ["unsettled", `${reason}; close failed: ${shortenError(error.message)}`];
 }
 
 /** The new edition's id, or null when the project already has two today. */
@@ -653,15 +890,8 @@ async function beginEdition(db: Db, request: EditionRequest): Promise<string | n
   return data;
 }
 
-async function finishEdition(
-  db: Db,
-  editionId: string,
-  request: EditionRequest,
-  facts: EditorialFacts,
-  draft: EditionDraft,
-  usd: number,
-): Promise<boolean> {
-  const { error } = await db.rpc("finish_client_edition", {
+function finishArgs(editionId: string, request: EditionRequest, facts: EditorialFacts, draft: EditionDraft, usd: number) {
+  return {
     p_edition_id: editionId,
     p_lease_token: request.lease_token,
     p_status: draft.status,
@@ -673,13 +903,26 @@ async function finishEdition(
     p_model: draft.model,
     p_cost_usd: Number(usd.toFixed(6)),
     p_error: draft.error,
-  });
-  if (error) console.error(`client-edition-compose: finish ${editionId}: ${shortenError(error.message)}`);
-  return !error;
+  };
 }
 
 function failedDraft(hash: string, cause: unknown): EditionDraft {
   return { status: "failed", kind: "full", composition: { sourceHash: hash }, images: [], model: null, error: shortenError(cause) };
+}
+
+/**
+ * finish_client_edition with the spend, retried once. A refused draft is then
+ * recorded as failed, spend and all, rather than left drafting until its lease
+ * lapses; only when that is refused too is the edition left unsettled.
+ */
+async function finishEdition(db: Db, editionId: string, request: EditionRequest, facts: EditorialFacts, hash: string, draft: EditionDraft, usd: number): Promise<Settled> {
+  const error = await settleRpc(db, "finish_client_edition", finishArgs(editionId, request, facts, draft, usd));
+  if (!error) return [draft.status === "failed" ? "failed" : "composed", draft.error];
+  const refused = `finish refused: ${shortenError(error.message)}`;
+  console.error(`client-edition-compose: ${editionId}: ${refused}`);
+  if (draft.status === "failed") return ["unsettled", refused];
+  const fallback = await settleRpc(db, "finish_client_edition", finishArgs(editionId, request, facts, failedDraft(hash, refused), usd));
+  return fallback ? ["unsettled", refused] : ["failed", refused];
 }
 
 async function draftOrFailure(
@@ -687,31 +930,44 @@ async function draftOrFailure(
   current: CurrentEdition | null,
   hash: string,
   deps: ComposeDeps,
+  deadline: number,
   spend: { usd: number },
 ): Promise<EditionDraft> {
   try {
-    return await composeEdition(facts, current, hash, deps, spend);
+    return await composeEdition(facts, current, hash, deps, deadline, spend);
   } catch (cause) {
     return failedDraft(hash, cause);
   }
 }
 
-function outcomeOf(request: EditionRequest, draft: EditionDraft, finished: boolean, usd: number): RequestOutcome {
-  if (!finished) return { requestId: request.id, result: "failed", reason: draft.error ?? "finish failed", usd };
-  return { requestId: request.id, result: draft.status === "failed" ? "failed" : "composed", reason: draft.error, usd };
+/** The run's deadline, or sooner when this request's claim lease ends first. */
+function editionDeadline(deps: ComposeDeps, request: EditionRequest): number {
+  const lease = Date.parse(request.lease_expires_at ?? "");
+  return Number.isFinite(lease) ? Math.min(deps.deadline, lease - LEASE_MARGIN_MS) : deps.deadline;
 }
 
-export async function composeRequest(request: EditionRequest, deps: ComposeDeps): Promise<RequestOutcome> {
+async function settleRequest(request: EditionRequest, deps: ComposeDeps, spend: { usd: number }): Promise<Settled> {
   const facts = await readFacts(deps.db, request.project_id);
   const current = await readCurrent(deps.db, request.project_id);
   const hash = await sourceHash(facts);
-  if (unchanged(current, hash, facts)) return await closeRequest(deps.db, request, "unchanged");
+  if (await unchanged(current, hash, facts)) return await closeRequest(deps.db, request, "unchanged");
   const editionId = await beginEdition(deps.db, request);
   if (editionId === null) return await closeRequest(deps.db, request, "daily_limit");
+  const draft = await draftOrFailure(facts, current, hash, deps, editionDeadline(deps, request), spend);
+  return await finishEdition(deps.db, editionId, request, facts, hash, draft, spend.usd);
+}
+
+/** One claimed request, settled or reported unsettled; it never throws, and its spend is always carried. */
+export async function composeRequest(request: EditionRequest, deps: ComposeDeps): Promise<RequestOutcome> {
   const spend = { usd: 0 };
-  const draft = await draftOrFailure(facts, current, hash, deps, spend);
-  const finished = await finishEdition(deps.db, editionId, request, facts, draft, spend.usd);
-  return outcomeOf(request, draft, finished, spend.usd);
+  let settled: Settled;
+  try {
+    settled = await settleRequest(request, deps, spend);
+  } catch (cause) {
+    // Whatever was not settled stays leased: the dispatcher's sweep requeues or fails it.
+    settled = ["unsettled", shortenError(cause)];
+  }
+  return { requestId: request.id, result: settled[0], reason: settled[1], usd: spend.usd };
 }
 
 // ── One run ────────────────────────────────────────────────────────────────
@@ -721,25 +977,34 @@ export interface BatchSummary {
   composed: number;
   skipped: number;
   failed: number;
+  unsettled: number;
   cost_usd: number;
   outcomes: { request_id: string; result: RequestOutcome["result"]; reason: string | null }[];
 }
 
+/** One request at a time; a claim error before any request is the run's failure. */
+async function claimOne(db: Db, first: boolean): Promise<EditionRequest | null> {
+  const { data, error } = await db.rpc("claim_client_edition_requests", { p_limit: 1 });
+  if (!error) return ((data ?? []) as EditionRequest[])[0] ?? null;
+  if (first) throw new Error(`claim failed: ${error.message}`);
+  console.error(`client-edition-compose: claim: ${shortenError(error.message)}`);
+  return null;
+}
+
+function tally(summary: BatchSummary, outcome: RequestOutcome): void {
+  summary.claimed += 1;
+  summary[outcome.result] += 1;
+  summary.cost_usd = Number((summary.cost_usd + outcome.usd).toFixed(6));
+  summary.outcomes.push({ request_id: outcome.requestId, result: outcome.result, reason: outcome.reason });
+}
+
+/** Claims and composes requests one by one while a whole edition still fits in the run's budget. */
 export async function runBatch(deps: ComposeDeps): Promise<BatchSummary> {
-  const { data, error } = await deps.db.rpc("claim_client_edition_requests", { p_limit: CLAIM_LIMIT });
-  if (error) throw new Error(`claim failed: ${error.message}`);
-  const requests = (data ?? []) as EditionRequest[];
-  const summary: BatchSummary = { claimed: requests.length, composed: 0, skipped: 0, failed: 0, cost_usd: 0, outcomes: [] };
-  for (const request of requests) {
-    const outcome = await composeRequest(request, deps).catch((cause): RequestOutcome => ({
-      requestId: request.id,
-      result: "failed",
-      reason: shortenError(cause),
-      usd: 0,
-    }));
-    summary[outcome.result] += 1;
-    summary.cost_usd = Number((summary.cost_usd + outcome.usd).toFixed(6));
-    summary.outcomes.push({ request_id: outcome.requestId, result: outcome.result, reason: outcome.reason });
+  const summary: BatchSummary = { claimed: 0, composed: 0, skipped: 0, failed: 0, unsettled: 0, cost_usd: 0, outcomes: [] };
+  while (deps.deadline - deps.now() >= EDITION_MIN_MS) {
+    const request = await claimOne(deps.db, summary.claimed === 0);
+    if (!request) break;
+    tally(summary, await composeRequest(request, deps));
   }
   return summary;
 }
@@ -747,6 +1012,8 @@ export async function runBatch(deps: ComposeDeps): Promise<BatchSummary> {
 /** finish_client_edition_compose_run's status and error for a run. */
 export function runStatus(summary: BatchSummary): { status: "succeeded" | "failed" | "skipped"; error: string | null } {
   if (summary.claimed === 0) return { status: "skipped", error: null };
-  if (summary.failed === summary.claimed) return { status: "failed", error: `all ${summary.failed} editions failed` };
+  if (summary.failed + summary.unsettled === summary.claimed) {
+    return { status: "failed", error: `all ${summary.claimed} editions failed or were left unsettled` };
+  }
   return { status: "succeeded", error: null };
 }

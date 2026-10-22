@@ -1,12 +1,14 @@
 // client-edition-compose (US-49): composes homeowner page editions from queued
 // edition requests. Invoked by pg_cron through dispatch_client_edition_compose()
 // → invoke_edge_function with {job_run_id}; service role only (verify_jwt =
-// true, then resolveCaller).
+// true, then resolveCaller). Model pictures come from the media worker's plate
+// read route (MEDIA_WORKER_URL, PLATE_INGEST_SECRET).
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller } from "../_shared/caller.ts";
 import { callClaude, createLlmLedger } from "../_shared/claude.ts";
-import { parseJobRunId, shortenError, SIGNED_URL_TTL_SECONDS } from "../client-plate-copy/lib.ts";
-import { type BatchSummary, type Db, privacyPageLive, runBatch, runStatus } from "./lib.ts";
+import { parseJobRunId, shortenError } from "../client-plate-copy/lib.ts";
+import { type BatchSummary, type Db, privacyPageLive, RUN_BUDGET_MS, runBatch, runStatus } from "./lib.ts";
+import { type Media, mediaWorker, noMedia } from "./renditions.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -22,37 +24,40 @@ function database(admin: Admin): Db {
     async approvedEdition(projectId) {
       const { data, error } = await admin
         .from("client_editions")
-        .select("id, source_hash, composition, facts")
+        .select("id, source_hash, composition, facts, overrides")
         .eq("project_id", projectId)
         .eq("status", "approved")
         .maybeSingle();
       return { data, error };
     },
-    async plateSources(projectId, assetIds) {
+    // Every request row in any status: a queued or leased recrop still names
+    // the kind its bytes came from.
+    async provenance(projectId, assetIds) {
       const { data, error } = await admin
         .from("client_plate_requests")
-        .select("project_id, source_kind, source_ref, source_url, asset_id")
+        .select("asset_id, source_kind")
         .eq("project_id", projectId)
-        .eq("status", "done")
         .in("asset_id", assetIds);
       return { data, error };
-    },
-    async sign(bucket, path) {
-      const { data, error } = await admin.storage.from(bucket).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
-      if (error) throw new Error(`signing ${bucket} failed: ${error.message}`);
-      return data.signedUrl;
     },
   };
 }
 
+function media(): Media {
+  const url = Deno.env.get("MEDIA_WORKER_URL") ?? "";
+  const secret = Deno.env.get("PLATE_INGEST_SECRET") ?? "";
+  if (url && secret) return mediaWorker(url, secret);
+  console.error("client-edition-compose: MEDIA_WORKER_URL or PLATE_INGEST_SECRET is not set; no pictures are sent");
+  return noMedia;
+}
+
 async function finishRun(admin: Admin, runId: number, status: string, detail: unknown, error: string | null) {
-  const { error: finishError } = await admin.rpc("finish_client_edition_compose_run", {
-    p_run_id: runId,
-    p_status: status,
-    p_detail: detail,
-    p_error: error,
-  });
-  if (finishError) console.error(`client-edition-compose: finish run ${runId}: ${shortenError(finishError.message)}`);
+  const args = { p_run_id: runId, p_status: status, p_detail: detail, p_error: error };
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const { error: finishError } = await admin.rpc("finish_client_edition_compose_run", args);
+    if (!finishError) return;
+    if (attempt === 2) console.error(`client-edition-compose: finish run ${runId}: ${shortenError(finishError.message)}`);
+  }
 }
 
 // The cron dispatcher's run, or a manual run opened here.
@@ -63,15 +68,18 @@ async function openRun(admin: Admin, body: unknown): Promise<number | null> {
   return !error && typeof data === "number" ? data : null;
 }
 
-async function composeBatch(admin: Admin, runId: number, supabaseUrl: string): Promise<Response> {
+async function composeBatch(admin: Admin, runId: number, deadline: number): Promise<Response> {
   const ledger = createLlmLedger(admin);
   let summary: BatchSummary;
   try {
     summary = await runBatch({
       db: database(admin),
-      claude: (opts) => callClaude({ ...opts, ledger }),
+      // The signal bounds the whole call, SDK retry included, to the budget lib gave it.
+      claude: (opts) => callClaude({ ...opts, ledger, signal: AbortSignal.timeout(opts.timeoutMs) }),
       privacyLive: privacyPageLive(),
-      supabaseUrl,
+      media: media(),
+      now: Date.now,
+      deadline,
     });
   } catch (cause) {
     await finishRun(admin, runId, "failed", { claimed: 0 }, shortenError(cause));
@@ -83,6 +91,8 @@ async function composeBatch(admin: Admin, runId: number, supabaseUrl: string): P
 }
 
 Deno.serve(async (req) => {
+  // One budget for the whole invocation, counted from its arrival.
+  const deadline = Date.now() + RUN_BUDGET_MS;
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -92,5 +102,5 @@ Deno.serve(async (req) => {
   if (!caller.service) return json({ error: "forbidden" }, 403);
   const runId = await openRun(admin, await req.json().catch(() => null));
   if (runId === null) return json({ error: "run_not_started" }, 500);
-  return await composeBatch(admin, runId, supabaseUrl);
+  return await composeBatch(admin, runId, deadline);
 });

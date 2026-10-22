@@ -1,7 +1,10 @@
 // What a model answer must hold before any of it reaches an edition. A refusal,
 // a truncated answer, a wrong shape, an over-long string, a box or focal point
-// that does not describe a picture, an unknown flag, or any string naming the
-// machinery behind the page is rejected.
+// that does not describe a picture, an unknown flag, or any string the shared
+// lint forbids (lint.ts: the lexicon, the machinery behind the page, model
+// attribution outside the project's own names) is rejected.
+
+import { lintText } from "./lint.ts";
 
 export interface ModelAnswer {
   stop_reason: string | null;
@@ -17,18 +20,6 @@ export const FLAGS: ReadonlySet<unknown> = new Set(["watermark", "people", "text
 /** A subject box covers at least 5% of the frame. */
 export const MIN_BOX_AREA = 0.05;
 const EDGE = 1 + 1e-9;
-
-// "AI" (also "A.I."), the words a homeowner must never read on her page, and
-// model or vendor names. Bare "Opus" or "Haiku" can name a piece of furniture,
-// so those count only with a version number.
-const BANNED: readonly RegExp[] = [
-  /(?<![A-Za-z])A(?:\.I\.|I)(?![A-Za-z])/,
-  /\bartificial\s+intelligence\b/i,
-  /\bgenerated\b/i,
-  /\bimage of\b/i,
-  /\b(?:claude|anthropic|chatgpt|openai|gpt-?\d[\w.]*|gemini)\b/i,
-  /\b(?:sonnet|haiku|opus|fable|mythos)[\s-]*\d/i,
-];
 
 type Fields = Record<string, unknown>;
 type Check<C> = (entry: Fields, context: C) => string | null;
@@ -59,25 +50,16 @@ function repeatFault(values: unknown[], message: string): string | null {
   return new Set(values).size === values.length ? null : message;
 }
 
-/** The first banned words in a string, or null. */
-export function bannedIn(text: string): string | null {
-  for (const pattern of BANNED) {
-    const match = pattern.exec(text);
-    if (match) return match[0];
-  }
-  return null;
-}
-
 function childrenOf(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   return isPlainObject(value) ? Object.values(value) : [];
 }
 
-/** The first banned words in any string inside `value`, or null. */
-export function findBanned(value: unknown): string | null {
-  if (typeof value === "string") return bannedIn(value);
+/** The first forbidden words in any string inside `value` (each string is one piece), or null. */
+export function findBanned(value: unknown, names: readonly string[] = []): string | null {
+  if (typeof value === "string") return lintText(value, names)?.term ?? null;
   for (const child of childrenOf(value)) {
-    const term = findBanned(child);
+    const term = findBanned(child, names);
     if (term) return term;
   }
   return null;
@@ -111,16 +93,17 @@ function parseObject(text: string): Fields | null {
 /**
  * The answer's JSON object: refusal and max_tokens truncation are rejected
  * first (as aesthete-dna-draft's parser does), then the text between the first
- * "{" and the last "}" must parse, with no banned words anywhere in it.
+ * "{" and the last "}" must parse, with no forbidden words anywhere in it.
+ * `names` are the project's own names the attribution rule lets through.
  */
-export function readAnswer(answer: ModelAnswer): Checked<Fields> {
+export function readAnswer(answer: ModelAnswer, names: readonly string[] = []): Checked<Fields> {
   const stop = stopFault(answer);
   if (stop) return fail(stop);
   const text = objectText(answerText(answer));
   if (text === null) return fail("no JSON object");
   const parsed = parseObject(text);
   if (!parsed) return fail("unparseable JSON");
-  const term = findBanned(parsed);
+  const term = findBanned(parsed, names);
   return term ? fail("banned words", term) : { ok: true, value: parsed };
 }
 
@@ -191,8 +174,8 @@ function toPerception(entry: Fields): Perception {
 }
 
 /** Call A1: {images:[{index, subject_box[4], focal[2], flags[], alt}]} for `count` pictures. */
-export function validatePerception(answer: ModelAnswer, count: number): Checked<Perception[]> {
-  const read = readAnswer(answer);
+export function validatePerception(answer: ModelAnswer, count: number, names: readonly string[] = []): Checked<Perception[]> {
+  const read = readAnswer(answer, names);
   if (!read.ok) return read;
   const images = read.value.images;
   if (!listOf(images, 1, count)) return fail("images is not a list");
@@ -226,8 +209,8 @@ function heroFault(value: Fields, count: number): string | null {
 }
 
 /** Call A2: {hero:{index, why≤140}, held:[≤2]}; every index must name one of `count` candidates. */
-export function validateHero(answer: ModelAnswer, count: number): Checked<HeroAnswer> {
-  const read = readAnswer(answer);
+export function validateHero(answer: ModelAnswer, count: number, names: readonly string[] = []): Checked<HeroAnswer> {
+  const read = readAnswer(answer, names);
   if (!read.ok) return read;
   const fault = heroFault(read.value, count);
   if (fault) return fail(fault);
@@ -286,8 +269,8 @@ function trimWords(value: Fields, keys: readonly string[]): Words {
 }
 
 /** Call B: {chapters:[{key, headline≤60, standing≤160}], doorstep:{standing≤160}, notice≤200}. */
-export function validateWords(answer: ModelAnswer, keys: readonly string[]): Checked<Words> {
-  const read = readAnswer(answer);
+export function validateWords(answer: ModelAnswer, keys: readonly string[], names: readonly string[] = []): Checked<Words> {
+  const read = readAnswer(answer, names);
   if (!read.ok) return read;
   const fault = firstFault(read.value, keys, WORDS_CHECKS);
   return fault ? fail(fault) : { ok: true, value: trimWords(read.value, keys) };
@@ -297,9 +280,25 @@ function judgedTerm(term: unknown): string {
   return typeof term === "string" && term.trim() ? term.trim().slice(0, 60) : "the flagged wording";
 }
 
-/** Call C's judge: {ok:boolean, term:string|null}; only ok:false is a finding. */
-export function readJudgement(answer: ModelAnswer): string | null {
+export type Judgement =
+  | { verdict: "clean" }
+  | { verdict: "hit"; term: string }
+  | { verdict: "unavailable" };
+
+export const JUDGE_UNAVAILABLE: Judgement = { verdict: "unavailable" };
+
+function judgementOf(parsed: Fields | null): Judgement {
+  if (parsed?.ok === false) return { verdict: "hit", term: judgedTerm(parsed.term) };
+  const clean = parsed?.ok === true && (parsed.term === null || parsed.term === undefined);
+  return clean ? { verdict: "clean" } : JUDGE_UNAVAILABLE;
+}
+
+/**
+ * Call C's judge: {ok:boolean, term:string|null}. Clean only on an explicit,
+ * schema-valid ok:true; ok:false is a finding; a refusal, a truncation, no
+ * JSON, or any other shape means the judge is unavailable, never clean.
+ */
+export function readJudgement(answer: ModelAnswer): Judgement {
   const text = stopFault(answer) ? null : objectText(answerText(answer));
-  const parsed = text === null ? null : parseObject(text);
-  return parsed?.ok === false ? judgedTerm(parsed.term) : null;
+  return judgementOf(text === null ? null : parseObject(text));
 }

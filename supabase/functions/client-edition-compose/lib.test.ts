@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import type { CallClaudeOptions, CallClaudeResult } from "../_shared/claude.ts";
 import {
   composeRequest,
@@ -7,8 +7,8 @@ import {
   type DbError,
   type DbResult,
   deterministicHeadlines,
+  type EditionOverrides,
   type EditionRequest,
-  type PlateSourceRow,
   privacyPageLive,
   runBatch,
   runStatus,
@@ -28,16 +28,26 @@ const asset = (id: string, sourceKind: string, width: number, height: number, ex
   ground: "scene",
   focal: null,
   subjectBox: null,
+  crops: { piece: { rect: [0, 0, width, height], widths: [256, 512, 768] } },
   alt: null,
   caption: { what: `${id} what`, whose: "Studio", when: "2026-10" },
   perceivedPromptVersion: null,
   focalOrigin: null,
+  perceivedAlt: null,
+  perceivedFlags: [],
   ...extra,
 });
 
 function facts(): EditorialFacts {
   return {
-    project: { id: PROJECT, name: "Hillside", phase: "procurement", targetDate: "2027-03-01", showMakers: true, studio: { id: "studio-1" } },
+    project: {
+      id: PROJECT,
+      name: "Hillside",
+      phase: "procurement",
+      targetDate: "2027-03-01",
+      showMakers: true,
+      studio: { id: "studio-1", name: "Larch Studio", town: "Wexford" },
+    },
     rooms: [
       {
         id: "r1",
@@ -46,7 +56,7 @@ function facts(): EditorialFacts {
         conceptAssetId: "a-concept",
         scanAssetIds: ["a-scan"],
         items: [
-          { id: "i1", nameAsSigned: "Walnut sofa", status: "in production", assetIds: ["a-sofa", "a-sofa-maker"] },
+          { id: "i1", nameAsSigned: "Walnut sofa", status: "in production", makerName: "Kettle Joinery", assetIds: ["a-sofa", "a-sofa-maker"] },
           { id: "i2", nameAsSigned: "Oak table", status: "ordered", assetIds: ["a-table"] },
         ],
       },
@@ -54,7 +64,8 @@ function facts(): EditorialFacts {
     ],
     assets: [
       asset("a-sofa", "upload", 3000, 2000),
-      asset("a-table", "upload", 2400, 1600, { focalOrigin: "designer" }),
+      // Portrait: meets the hero floors and the held floor (0.46, 780×1696).
+      asset("a-table", "upload", 1800, 2400, { focalOrigin: "designer" }),
       asset("a-sofa-maker", "maker", 2000, 1500, { ground: "white" }),
       asset("a-marble", "upload", 800, 600, { perceivedPromptVersion: "e1" }),
       asset("a-concept", "concept", 2400, 1600),
@@ -62,78 +73,146 @@ function facts(): EditorialFacts {
       asset("a-sheet", "sheet", 3000, 2000, { ground: "drawing" }),
       asset("a-board", "board", 2000, 1400),
     ],
-    palette: [{ name: "Moss" }],
-  } as EditorialFacts;
+    palette: [{ hex: "#556B2F", brand: "Farrow", name: "Moss" }],
+    boards: [],
+    sheets: [],
+  } as unknown as EditorialFacts;
 }
 
-const source = (assetId: string, kind: string, url: string, table = "project_ffe_item_images"): PlateSourceRow => ({
-  project_id: PROJECT,
-  source_kind: kind,
-  source_ref: { table, id: `${assetId}-src` },
-  source_url: url,
-  asset_id: assetId,
-});
+interface Row {
+  asset_id: string;
+  source_kind: string;
+  status: string;
+}
 
-const SOURCES: PlateSourceRow[] = [
-  source("a-sofa", "upload", "https://maker.example/sofa.jpg"),
-  source("a-table", "upload", "https://maker.example/table.jpg"),
-  source("a-sofa-maker", "maker", "https://maker.example/sofa-white.jpg"),
-  source("a-marble", "upload", "marble.jpg"),
-  source("a-concept", "concept", "https://renders.example/living.jpg", "project_rooms"),
-  source("a-scan", "scan", "scans/living/scan1.jpg", "room_scan_images"),
-  source("a-sheet", "sheet", "https://drawings.example/plan.pdf", "project_sheets"),
-  source("a-board", "board", "https://boards.example/board.jpg", "project_boards"),
+const row = (asset_id: string, source_kind: string, status = "done"): Row => ({ asset_id, source_kind, status });
+
+const ROWS: Row[] = [
+  row("a-sofa", "upload"),
+  row("a-table", "upload"),
+  row("a-sofa-maker", "maker"),
+  row("a-marble", "upload"),
+  row("a-concept", "concept"),
+  row("a-scan", "scan"),
+  row("a-sheet", "sheet"),
+  row("a-board", "board"),
 ];
-
-const SCAN_URL = "https://signed.example/room-scans/scans/living/scan1.jpg?token=t";
 
 interface DbOptions {
   facts?: EditorialFacts;
   current?: CurrentEdition | null;
+  rows?: Row[];
   beginError?: DbError;
-  finishError?: DbError;
+  closeError?: DbError;
+  /** How many finish_client_edition calls return this error before one succeeds. */
+  finishError?: { error: DbError; times: number };
+  finishThrows?: boolean;
+  /** Errors for successive claims (null: that claim succeeds). */
+  claimErrors?: (DbError | null)[];
   requests?: EditionRequest[];
 }
 
 function fakeDb(options: DbOptions = {}) {
   const calls: { fn: string; args?: Record<string, unknown> }[] = [];
-  // Facts are cloned per read: a composition writes perception onto them.
-  const replies: Record<string, () => DbResult<unknown>> = {
-    claim_client_edition_requests: () => ({ data: options.requests ?? [REQUEST], error: null }),
+  const queue = [...(options.requests ?? [REQUEST])];
+  let finishErrors = options.finishError?.times ?? 0;
+  const replies: Record<string, (args?: Record<string, unknown>) => DbResult<unknown>> = {
+    claim_client_edition_requests: (args) => {
+      const error = options.claimErrors?.shift() ?? null;
+      const claimed = error ? [] : queue.splice(0, Number(args?.p_limit ?? 1));
+      return { data: claimed.length ? claimed : null, error };
+    },
     get_project_editorial_facts: () => ({ data: structuredClone(options.facts ?? facts()), error: null }),
     begin_client_edition: () => (options.beginError ? { data: null, error: options.beginError } : { data: "edition-1", error: null }),
+    close_client_edition_request: () => ({ data: null, error: options.closeError ?? null }),
     client_plate_source_owned: () => ({ data: true, error: null }),
-    finish_client_edition: () => ({ data: null, error: options.finishError ?? null }),
+    finish_client_edition: () => {
+      if (options.finishThrows) throw new Error("connection reset");
+      return finishErrors-- > 0 ? { data: null, error: options.finishError!.error } : { data: null, error: null };
+    },
   };
-  const db: Db = {
-    rpc(fn, args) {
+  const rows = options.rows ?? ROWS;
+  const named = (ids: string[]) => rows.filter((r) => ids.includes(r.asset_id));
+  const db = {
+    rpc(fn: string, args?: Record<string, unknown>) {
       calls.push({ fn, args });
-      const reply = replies[fn];
-      return Promise.resolve(reply ? reply() : { data: null, error: null });
+      try {
+        const reply = replies[fn];
+        return Promise.resolve(reply ? reply(args) : { data: null, error: null });
+      } catch (cause) {
+        return Promise.reject(cause);
+      }
     },
     approvedEdition: () => Promise.resolve({ data: options.current ?? null, error: null }),
-    plateSources: (_project, ids) => Promise.resolve({ data: SOURCES.filter((row) => ids.includes(row.asset_id)), error: null }),
-    sign: (bucket, path) => Promise.resolve(`https://signed.example/${bucket}/${path}?token=t`),
+    provenance: (_project: string, ids: string[]) =>
+      Promise.resolve({ data: named(ids).map(({ asset_id, source_kind }) => ({ asset_id, source_kind })), error: null }),
+    // ad32ba43's port, kept so each negative control fails there by assertion:
+    // its adapter read only done rows, each with the address it was copied from.
+    plateSources: (_project: string, ids: string[]) =>
+      Promise.resolve({
+        data: named(ids).filter((r) => r.status === "done").map((r) => ({
+          project_id: PROJECT,
+          source_kind: r.source_kind,
+          source_ref: { table: "project_ffe_item_images", id: `${r.asset_id}-src` },
+          source_url: `https://cdn.example/${r.asset_id}-sha.jpg`,
+          asset_id: r.asset_id,
+        })),
+        error: null,
+      }),
+    sign: (bucket: string, path: string) => Promise.resolve(`https://signed.example/${bucket}/${path}`),
   };
   const called = (fn: string) => calls.filter((call) => call.fn === fn);
-  return { db, calls, called };
+  return { db: db as Db, calls, called };
+}
+
+const encoder = new TextEncoder();
+
+/** A WebP-tagged payload naming the path it was read from, so a test can tell which plate a model saw. */
+function webp(text: string): Uint8Array<ArrayBuffer> {
+  const body = encoder.encode(text);
+  const bytes = new Uint8Array(12 + body.length);
+  bytes.set(encoder.encode("RIFF"));
+  bytes.set(encoder.encode("WEBP"), 8);
+  bytes.set(body, 12);
+  return bytes;
+}
+
+function fakeMedia(missing: string[] = []) {
+  const paths: string[] = [];
+  const media = (path: string) => {
+    paths.push(path);
+    const served = !missing.some((id) => path.includes(`/${id}-sha/`));
+    return Promise.resolve(served ? new Response(webp(path), { headers: { "content-type": "image/webp" } }) : new Response(null, { status: 404 }));
+  };
+  return { media, paths };
+}
+
+type Block = { type: string; text?: string; source?: { type: string; media_type?: string; data?: string; url?: string } };
+
+function blocks(opts: CallClaudeOptions): Block[] {
+  return (opts.params.messages as { content: Block[] }[]).flatMap((message) => message.content);
+}
+
+/** The assets a request shows, in order (from the rendition's path; on ad32ba43, from the address). */
+function shown(opts: CallClaudeOptions): string[] {
+  return blocks(opts).filter((block) => block.type === "image").map((block) => {
+    const text = block.source?.data ? atob(block.source.data).slice(12) : block.source?.url ?? "";
+    return /\/(a-[a-z-]+)-sha[./]/.exec(text)?.[1] ?? text;
+  });
 }
 
 function ok(value: unknown, usd = 0.01, model = "claude-sonnet-5-5"): CallClaudeResult {
-  return {
-    ok: true,
-    response: { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(value) }], usage: { input_tokens: 10, output_tokens: 10 } },
-    usd,
-    model,
-  };
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return { ok: true, response: { stop_reason: "end_turn", content: [{ type: "text", text }], usage: { input_tokens: 10, output_tokens: 10 } }, usd, model };
 }
 
 type Step = CallClaudeResult | ((opts: CallClaudeOptions) => CallClaudeResult);
 
-function fakeClaude(script: Record<string, Step[]>) {
+function fakeClaude(script: Record<string, Step[]>, tick?: () => void) {
   const calls: CallClaudeOptions[] = [];
   const claude = (opts: CallClaudeOptions) => {
     calls.push(opts);
+    tick?.();
     const next = script[opts.role]?.shift();
     if (!next) throw new Error(`unscripted ${opts.role} call`);
     return Promise.resolve(typeof next === "function" ? next(opts) : next);
@@ -141,16 +220,11 @@ function fakeClaude(script: Record<string, Step[]>) {
   return { claude, calls };
 }
 
-/** The image addresses a request carries, in order. */
-function imageUrls(opts: CallClaudeOptions): string[] {
-  const messages = opts.params.messages as { content: { type: string; source?: { url: string } }[] }[];
-  return messages.flatMap((message) => message.content.filter((block) => block.type === "image").map((block) => block.source!.url));
-}
+const perceptionOf = (ids: string[]) => ({
+  images: ids.map((_, index) => ({ index, subject_box: [0.1, 0.1, 0.6, 0.6], focal: [0.4, 0.4], flags: [], alt: `A walnut piece, view ${index}` })),
+});
 
-const perceiveAll: Step = (opts) =>
-  ok({
-    images: imageUrls(opts).map((_, index) => ({ index, subject_box: [0.1, 0.1, 0.6, 0.6], focal: [0.4, 0.4], flags: [], alt: `A walnut piece, view ${index}` })),
-  });
+const perceiveAll: Step = (opts) => ok(perceptionOf(shown(opts)));
 
 const WORDS = {
   chapters: [
@@ -161,13 +235,55 @@ const WORDS = {
     { key: "progress", headline: "In the workshop, then here", standing: "Pieces are being made." },
   ],
   doorstep: { standing: "The living room is being made." },
-  notice: "The page now opens on the oak table; everything else is where it was.",
+  notice: "The page now opens on the walnut sofa; everything else is where it was.",
 };
+
+/** WORDS as a composition stores them: rooms keyed by anchor. */
+const ANCHORED = WORDS.chapters.map((c) => ({ ...c, key: ({ "room-1": "room-r1", "room-2": "room-r2" } as Record<string, string>)[c.key] ?? c.key }));
 
 const judgeOk = ok({ ok: true, term: null }, 0.001, "claude-haiku-5-5");
 
-function deps(db: Db, claude: (opts: CallClaudeOptions) => Promise<CallClaudeResult>, privacyLive = false) {
-  return { db, claude, privacyLive, supabaseUrl: "https://project.supabase.co" };
+/** Answers whatever is asked, so every call a composition makes is made. */
+function respond(answers: { hero?: unknown; words?: unknown; perceive?: (ids: string[]) => unknown } = {}) {
+  const hero = answers.hero ?? { hero: { index: 0, why: "Calm." }, held: [] };
+  const words = answers.words ?? WORDS;
+  const perceive = answers.perceive ?? perceptionOf;
+  return (opts: CallClaudeOptions): CallClaudeResult => {
+    const ids = shown(opts);
+    if (opts.role === "perceive") return ok(perceive(ids));
+    if (opts.role === "judge") return judgeOk;
+    return ok(ids.length ? hero : words);
+  };
+}
+
+function claudeOf(answer: (opts: CallClaudeOptions) => CallClaudeResult) {
+  const calls: CallClaudeOptions[] = [];
+  const claude = (opts: CallClaudeOptions) => {
+    calls.push(opts);
+    return Promise.resolve(answer(opts));
+  };
+  return { claude, calls };
+}
+
+interface DepsOptions {
+  privacyLive?: boolean;
+  media?: (path: string) => Promise<Response>;
+  now?: () => number;
+  deadline?: number;
+}
+
+function deps(db: Db, claude: (opts: CallClaudeOptions) => Promise<CallClaudeResult>, options: DepsOptions = {}) {
+  // supabaseUrl is ad32ba43's port, kept for the negative controls.
+  const legacy = { supabaseUrl: "https://project.supabase.co" };
+  return {
+    ...legacy,
+    db,
+    claude,
+    privacyLive: options.privacyLive ?? false,
+    media: options.media ?? fakeMedia().media,
+    now: options.now ?? (() => 0),
+    deadline: options.deadline ?? 120_000,
+  };
 }
 
 function finishArgs(called: (fn: string) => { args?: Record<string, unknown> }[]) {
@@ -176,11 +292,20 @@ function finishArgs(called: (fn: string) => { args?: Record<string, unknown> }[]
   return finish[0].args!;
 }
 
+const composition = (args: Record<string, unknown>) =>
+  args.p_composition as Record<string, unknown> & { hero: { assetId: string; why: string | null } | null };
+const wordsCall = (calls: CallClaudeOptions[]) => calls.find((call) => call.role === "draft" && shown(call).length === 0)!;
+const wordsBody = (calls: CallClaudeOptions[]) => JSON.parse(blocks(wordsCall(calls))[0].text!);
+
+function approved(composition: Record<string, unknown>, hash: string | null, frozen: unknown, overrides: EditionOverrides | null = null): CurrentEdition {
+  return { id: "edition-0", source_hash: hash, composition, facts: frozen, overrides };
+}
+
 Deno.test("full edition: A1 on sendable unperceived pictures, A2 inside the top tier, B words, judge, finish", async () => {
   const { db, called } = fakeDb();
   const { claude, calls } = fakeClaude({
     perceive: [perceiveAll],
-    draft: [ok({ hero: { index: 1, why: "The table reads the room." }, held: [0] }), ok(WORDS)],
+    draft: [ok({ hero: { index: 0, why: "The sofa reads the room." }, held: [1] }), ok(WORDS)],
     judge: [judgeOk],
   });
   const outcome = await composeRequest(REQUEST, deps(db, claude));
@@ -191,56 +316,66 @@ Deno.test("full edition: A1 on sendable unperceived pictures, A2 inside the top 
     assertEquals(call.feature, "client-edition-compose");
     assertEquals(call.promptVersion, "e1");
     assertEquals(call.studioId, "studio-1");
+    assert(call.timeoutMs <= 60_000);
     const system = call.params.system as { cache_control?: unknown }[];
     assertEquals(system[0].cache_control, { type: "ephemeral" });
   }
-  // A1: not the designer-placed table, not the perceived marble, not the scan (privacy page not live), never the sheet or board.
-  assertEquals(imageUrls(calls[0]), [
-    "https://maker.example/sofa.jpg",
-    "https://maker.example/sofa-white.jpg",
-    "https://renders.example/living.jpg",
-  ]);
-  assertEquals(called("record_plate_perception").map((c) => [c.args!.p_asset_id, c.args!.p_prompt_version]), [
-    ["a-sofa", "e1"],
-    ["a-sofa-maker", "e1"],
-    ["a-concept", "e1"],
-  ]);
+  // A1: every unperceived sendable picture, the designer-framed table included; never
+  // the perceived marble, the scan (privacy page not live), the sheet or the board.
+  assertEquals(shown(calls[0]), ["a-sofa", "a-table", "a-sofa-maker", "a-concept"]);
+  assertEquals(called("record_plate_perception").map((c) => c.args!.p_asset_id), ["a-sofa", "a-table", "a-sofa-maker", "a-concept"]);
   // A2: top tier (studio) candidates that can be sent, in rank order.
-  assertEquals(imageUrls(calls[1]), ["https://maker.example/sofa.jpg", "https://maker.example/table.jpg"]);
+  assertEquals(shown(calls[1]), ["a-sofa", "a-table"]);
 
   const args = finishArgs(called);
   assertEquals(args.p_lease_token, "lease-1");
   assertEquals([args.p_status, args.p_kind, args.p_prompt_version, args.p_model], ["awaiting_review", "full", "e1", "claude-sonnet-5-5"]);
   assertEquals(args.p_cost_usd, 0.031);
-  const composition = args.p_composition as Record<string, unknown>;
-  assertEquals(composition.sourceHash, await sourceHash(facts()));
-  assertEquals(composition.voice, "model");
-  assertEquals(composition.hero, { assetId: "a-table", why: "The table reads the room." });
-  assertEquals((composition.chapters as { key: string }[]).map((c) => c.key), ["cover", "house", "room-r1", "room-r2", "progress"]);
-  assertEquals(composition.notice, WORDS.notice);
+  assertEquals(args.p_facts, facts(), "the facts are frozen as read");
+  const written = composition(args);
+  assertEquals(written.sourceHash, await sourceHash(facts()));
+  assertEquals(written.voice, "model");
+  assertEquals(written.hero, { assetId: "a-sofa", why: "The sofa reads the room." });
+  assertEquals(written.held, ["a-table"]);
+  assertEquals((written.chapters as { key: string }[]).map((c) => c.key), ["cover", "house", "room-r1", "room-r2", "progress"]);
+  assertEquals(written.notice, WORDS.notice);
   assertEquals(args.p_images, [
-    { asset_id: "a-table", plate_role: "hero", crop_key: "none", rank: 0, chapter_key: "cover", alt: null, caption_what: "a-table what", caption_whose: "Studio", caption_when: "2026-10" },
-    { asset_id: "a-sofa", plate_role: "held", crop_key: "none", rank: 1, chapter_key: "room-r1", alt: "A walnut piece, view 0", caption_what: "a-sofa what", caption_whose: "Studio", caption_when: "2026-10" },
+    { asset_id: "a-sofa", plate_role: "hero", crop_key: "none", rank: 0, chapter_key: "cover", alt: "A walnut piece, view 0", caption_what: "a-sofa what", caption_whose: "Studio", caption_when: "2026-10" },
+    { asset_id: "a-table", plate_role: "held", crop_key: "none", rank: 1, chapter_key: "room-r1", alt: "A walnut piece, view 1", caption_what: "a-table what", caption_whose: "Studio", caption_when: "2026-10" },
   ]);
 });
 
-Deno.test("privacy page live: the scan reaches A1 and A2 through the ownership check and a signed address", async () => {
+Deno.test("F12: models see each plate's stored rendition as base64 WebP; one the media worker cannot serve is dropped alone", async () => {
+  const { db } = fakeDb();
+  const { media, paths } = fakeMedia(["a-sofa-maker"]);
+  const { claude, calls } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude, { media }));
+
+  assertEquals(shown(calls[0]), ["a-sofa", "a-table", "a-concept"]);
+  for (const call of calls) {
+    for (const block of blocks(call).filter((b) => b.type === "image")) {
+      assertEquals([block.source?.type, block.source?.media_type], ["base64", "image/webp"]);
+    }
+    const body = JSON.stringify(call.params);
+    for (const leak of ["http", ".jpg", "/plates/", "-sha"]) assert(!body.includes(leak), `"${leak}" reached a ${call.role} request`);
+  }
+  assert(paths.includes(`/plates/${PROJECT}/a-sofa-sha/piece-768.webp`), "perception reads the larger rendition");
+  assert(paths.includes(`/plates/${PROJECT}/a-sofa-sha/piece-512.webp`), "the hero pick reads the smaller one");
+});
+
+Deno.test("privacy page live: the scan reaches A1 and A2 as its rendition", async () => {
   const { db, called } = fakeDb();
   const { claude, calls } = fakeClaude({
     perceive: [perceiveAll],
     draft: [ok({ hero: { index: 1, why: "The measured room." }, held: [] }), ok(WORDS)],
     judge: [judgeOk],
   });
-  await composeRequest(REQUEST, deps(db, claude, true));
+  await composeRequest(REQUEST, deps(db, claude, { privacyLive: true }));
 
-  assert(imageUrls(calls[0]).includes(SCAN_URL));
-  assertEquals(imageUrls(calls[1]), ["https://maker.example/sofa.jpg", SCAN_URL, "https://maker.example/table.jpg"]);
-  assertEquals(called("client_plate_source_owned").length, 1);
-  assertEquals((finishArgs(called).p_composition as { hero: unknown }).hero, { assetId: "a-scan", why: "The measured room." });
-  for (const call of calls) {
-    const body = JSON.stringify(call.params);
-    assert(!body.includes("drawings.example") && !body.includes("boards.example"), "sheets and boards are never sent");
-  }
+  assert(shown(calls[0]).includes("a-scan"));
+  assertEquals(shown(calls[1]), ["a-sofa", "a-scan", "a-table"]);
+  assertEquals(composition(finishArgs(called)).hero, { assetId: "a-scan", why: "The measured room." });
+  for (const call of calls) assert(!shown(call).includes("a-sheet") && !shown(call).includes("a-board"), "sheets and boards are never sent");
 });
 
 Deno.test("privacyPageLive reads CLIENT_PRIVACY_PAGE_LIVE: only the string 'true' turns it on", () => {
@@ -258,41 +393,145 @@ Deno.test("privacyPageLive reads CLIENT_PRIVACY_PAGE_LIVE: only the string 'true
   }
 });
 
-function approved(composition: Record<string, unknown>, hash: string | null, assets: { sha256: string }[]): CurrentEdition {
-  return { id: "edition-0", source_hash: hash, composition, facts: { assets } };
-}
-
-Deno.test("plates only: words byte-identical to the approved edition publish without review", async () => {
-  const keyed = WORDS.chapters.map((c) => ({ ...c, key: c.key === "room-1" ? "room-r1" : c.key === "room-2" ? "room-r2" : c.key }));
-  const current = approved({ chapters: keyed, doorstep: WORDS.doorstep, notice: WORDS.notice, hero: { assetId: "a-sofa" } }, "old-hash", [{ sha256: "a-sofa-sha" }]);
-  const { db, called } = fakeDb({ current });
-  const { claude, calls } = fakeClaude({
-    perceive: [perceiveAll],
-    draft: [ok({ hero: { index: 1, why: "The table." }, held: [] }), ok(WORDS)],
-    judge: [judgeOk],
-  });
-  await composeRequest(REQUEST, deps(db, claude));
-
-  const args = finishArgs(called);
-  assertEquals([args.p_status, args.p_kind], ["approved", "plates_only"]);
-  // B was shown the approved words, rekeyed by position, never by room id.
-  const body = JSON.parse((calls[2].params.messages as { content: { text: string }[] }[])[0].content[0].text);
-  assertEquals(body.current.chapters.map((c: { key: string }) => c.key), ["cover", "house", "room-1", "room-2", "progress"]);
-  assertEquals(body.opening, { now: "Oak table, Living room", before: "Walnut sofa, Living room" });
-});
-
-Deno.test("a changed word makes a full edition that waits for review", async () => {
-  const current = approved({ chapters: [], doorstep: { standing: "Older." }, notice: "Older." }, "old-hash", []);
-  const { db, called } = fakeDb({ current });
-  const { claude } = fakeClaude({ perceive: [perceiveAll], draft: [ok({ hero: { index: 0, why: "Sofa." } }), ok(WORDS)], judge: [judgeOk] });
-  await composeRequest(REQUEST, deps(db, claude));
-  const args = finishArgs(called);
-  assertEquals([args.p_status, args.p_kind], ["awaiting_review", "full"]);
-});
-
-Deno.test("skip unchanged: same source hash and the same pictures close the request without an edition", async () => {
+Deno.test("F1: provenance in any status, or none at all, keeps a picture from every model and from the hero", async () => {
   const fixture = facts();
-  const current = approved({}, await sourceHash(fixture), fixture.assets.map((a) => ({ sha256: a.sha256 })).reverse());
+  fixture.assets.unshift(asset("a-orphan", "upload", 4000, 2600) as EditorialFacts["assets"][number]);
+  fixture.rooms[0].items[0].assetIds = ["a-orphan", "a-sofa", "a-sofa-maker"];
+  // The sofa's bytes also came from a drawing sheet, whose request is queued for a recrop.
+  const rows = [...ROWS, row("a-sofa", "sheet", "queued")];
+  for (const privacyLive of [false, true]) {
+    const { db, called } = fakeDb({ facts: fixture, rows });
+    const { claude, calls } = claudeOf(respond());
+    await composeRequest(REQUEST, deps(db, claude, { privacyLive }));
+    for (const call of calls) {
+      assert(!shown(call).includes("a-sofa"), "a picture with sheet provenance is never sent");
+      assert(!shown(call).includes("a-orphan"), "a picture with no provenance is never sent");
+    }
+    const hero = composition(finishArgs(called)).hero?.assetId;
+    assert(hero && !["a-sofa", "a-orphan"].includes(hero), `hero ${hero}`);
+  }
+});
+
+Deno.test("F2: once the studio stops showing makers, Call B gets no earlier words that could name one", async () => {
+  const fixture = facts();
+  fixture.project.showMakers = false;
+  const current = approved({
+    chapters: [{ key: "cover", headline: "Kettle Joinery is making the sofa", standing: "Kettle Joinery has it in hand." }],
+    doorstep: { standing: "Kettle Joinery is at work." },
+    notice: "Kettle Joinery started.",
+    hero: { assetId: "a-sofa" },
+  }, "old-hash", fixture);
+  const { db } = fakeDb({ facts: fixture, current });
+  const { claude, calls } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+
+  assertEquals(wordsBody(calls).current, null);
+  for (const call of calls) assert(!JSON.stringify(call.params).includes("Kettle"), `a maker reached a ${call.role} request`);
+});
+
+Deno.test("F4: a flagged picture, flagged before or now, is never the hero, held or offered to A2", async () => {
+  const before = facts();
+  Object.assign(before.assets[0], { perceivedPromptVersion: "e1", perceivedFlags: ["people"] });
+  const flaggedNow = (ids: string[]) => ({
+    images: ids.map((id, index) => ({ index, subject_box: [0.1, 0.1, 0.6, 0.6], focal: [0.4, 0.4], flags: id === "a-table" ? ["watermark"] : [], alt: "A piece." })),
+  });
+  for (const [fixture, flagged] of [[before, "a-sofa"], [facts(), "a-table"]] as const) {
+    const { db, called } = fakeDb({ facts: fixture });
+    const { claude, calls } = claudeOf(respond({ perceive: flaggedNow, hero: { hero: { index: 0, why: "Calm." }, held: [1] } }));
+    await composeRequest(REQUEST, deps(db, claude));
+    for (const call of calls.filter((c) => c.role === "draft")) assert(!shown(call).includes(flagged), `A2 was offered ${flagged}`);
+    const written = composition(finishArgs(called));
+    assert(written.hero?.assetId !== flagged, `${flagged} opened the page`);
+    assert(!(written.held as string[]).includes(flagged), `${flagged} was held`);
+  }
+});
+
+Deno.test("F5: a close the database refuses leaves the request unsettled, after one retry", async () => {
+  const fixture = facts();
+  const current = approved({ chapters: ANCHORED }, await sourceHash(fixture), fixture);
+  const { db, called } = fakeDb({ current, closeError: { message: "not leased under this token" } });
+  const { claude } = claudeOf(respond());
+  const outcome = await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(outcome.result, "unsettled");
+  assertEquals(called("close_client_edition_request").length, 2);
+});
+
+Deno.test("F5: a refused finish is retried, then recorded failed with the spend rather than left drafting", async () => {
+  const { db, called } = fakeDb({ finishError: { error: { message: "lease lost" }, times: 2 } });
+  const { claude } = claudeOf(respond());
+  const outcome = await composeRequest(REQUEST, deps(db, claude));
+  const finishes = called("finish_client_edition").map((c) => c.args!);
+  assertEquals(finishes.length, 3);
+  assertEquals([finishes[2].p_status, finishes[2].p_error, finishes[2].p_cost_usd], ["failed", "finish refused: lease lost", 0.031]);
+  assertEquals([outcome.result, outcome.reason, outcome.usd], ["failed", "finish refused: lease lost", 0.031]);
+});
+
+Deno.test("F5: a finish that throws keeps the request's spend in the run", async () => {
+  const { db } = fakeDb({ finishThrows: true });
+  const { claude } = claudeOf(respond());
+  const summary = await runBatch(deps(db, claude));
+  assertEquals([summary.claimed, summary.unsettled, summary.cost_usd], [1, 1, 0.031]);
+  assertEquals(summary.outcomes[0].result, "unsettled");
+});
+
+Deno.test("F6: one request at a time, only while a whole edition fits in the run's budget", async () => {
+  let now = 0;
+  const second = { ...REQUEST, id: "req-2", lease_token: "lease-2" };
+  const third = { ...REQUEST, id: "req-3", lease_token: "lease-3" };
+  const { db, called } = fakeDb({ requests: [REQUEST, second, third] });
+  // Every model call takes 20 seconds.
+  const { claude, calls } = claudeOf((opts) => {
+    now += 20_000;
+    return respond()(opts);
+  });
+  const summary = await runBatch(deps(db, claude, { now: () => now, deadline: 120_000 }));
+
+  assertEquals(called("claim_client_edition_requests")[0].args, { p_limit: 1 });
+  assertEquals(summary.claimed, 1, "the second request is left queued once less than an edition's time remains");
+  assert(calls.length > 0);
+});
+
+Deno.test("F6: a call that would not leave room for the words is not made; the claim lease bounds the edition", async () => {
+  const start = Date.parse("2026-10-21T12:00:00Z");
+  // The lease ends 105 s in: the edition stops 30 s before it, at 75 s, well inside the run's 120 s.
+  const request = { ...REQUEST, lease_expires_at: new Date(start + 105_000).toISOString() };
+  const { db, called } = fakeDb();
+  const { claude, calls } = claudeOf(respond());
+  const outcome = await composeRequest(request, deps(db, claude, { now: () => start, deadline: start + 120_000 }));
+
+  assertEquals(outcome.result, "composed");
+  assertEquals(calls.map((c) => c.role), ["draft", "judge"], "no time for perception or the hero pick");
+  assertEquals(calls[0].timeoutMs, 50_000, "B keeps 15 s for the judge and 10 s for the finish");
+  assertEquals(called("record_plate_perception").length, 0);
+});
+
+Deno.test("F7: unchanged is judged on every frozen fact; a palette colour or a new picture order composes", async () => {
+  const fixture = facts();
+  const hash = await sourceHash(fixture);
+  const skipped = async (read: EditorialFacts) => {
+    const { db, called } = fakeDb({ facts: read, current: approved({ chapters: ANCHORED }, hash, fixture) });
+    const { claude } = claudeOf(respond());
+    await composeRequest(REQUEST, deps(db, claude));
+    return called("begin_client_edition").length === 0;
+  };
+  assert(await skipped(facts()), "nothing changed");
+
+  const recoloured = facts() as EditorialFacts & { palette: { hex: string }[] };
+  recoloured.palette[0].hex = "#1B1B1B";
+  assert(!(await skipped(recoloured)), "a palette colour under the same name");
+
+  const reordered = facts();
+  reordered.rooms[0].items[0].assetIds = ["a-sofa-maker", "a-sofa"];
+  assert(!(await skipped(reordered)), "the same pictures in a new order");
+
+  const live = facts();
+  Object.assign(live.assets[0], { focal: [0.2, 0.2], subjectBox: [0, 0, 1, 1], perceivedFlags: ["people"] });
+  assert(await skipped(live), "the reader reads framing and flags live");
+});
+
+Deno.test("skip unchanged closes the request without an edition", async () => {
+  const fixture = facts();
+  const current = approved({ chapters: ANCHORED }, await sourceHash(fixture), fixture);
   const { db, called } = fakeDb({ current });
   const { claude, calls } = fakeClaude({});
   const outcome = await composeRequest(REQUEST, deps(db, claude));
@@ -303,25 +542,115 @@ Deno.test("skip unchanged: same source hash and the same pictures close the requ
   assertEquals(called("close_client_edition_request")[0].args, { p_request_id: "req-1", p_lease_token: "lease-1", p_reason: "unchanged" });
 });
 
-Deno.test("same hash but a new picture still composes", async () => {
+Deno.test("F8: a judge that is unavailable twice leaves the deterministic headlines", async () => {
+  const refused: CallClaudeResult = { ...ok({ ok: true, term: null }), response: { stop_reason: "refusal", content: [], usage: { input_tokens: 1, output_tokens: 1 } } } as CallClaudeResult;
+  const { db, called } = fakeDb();
+  const { claude, calls } = fakeClaude({ perceive: [perceiveAll], draft: [ok({ hero: { index: 0, why: "Sofa." } }), ok(WORDS)], judge: [refused, ok("no verdict here")] });
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(calls.filter((c) => c.role === "judge").length, 2);
+  assertEquals(composition(finishArgs(called)).voice, "deterministic");
+});
+
+Deno.test("F8: an unavailable judge is asked once more; a clean second answer keeps the model's words", async () => {
+  const { db, called } = fakeDb();
+  const { claude } = fakeClaude({ perceive: [perceiveAll], draft: [ok({ hero: { index: 0, why: "Sofa." } }), ok(WORDS)], judge: [ok({ verdict: "fine" }), judgeOk] });
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(composition(finishArgs(called)).voice, "model");
+});
+
+Deno.test("F10: the model's frame is sent on the grid the recrop uses; a designer's frame is never sent", async () => {
+  const { db, called } = fakeDb();
+  const frames = (ids: string[]) => ({
+    images: ids.map((_, index) => ({ index, subject_box: [0.5, 0.1, 0.5000000005, 0.5], focal: [0.75, 0.30004], flags: [], alt: "A piece." })),
+  });
+  const { claude } = claudeOf(respond({ perceive: frames }));
+  await composeRequest(REQUEST, deps(db, claude));
+  const recorded = new Map(called("record_plate_perception").map((c) => [c.args!.p_asset_id, c.args!]));
+  assertEquals([recorded.get("a-sofa")!.p_subject_box, recorded.get("a-sofa")!.p_focal], [[0.5, 0.1, 0.5, 0.5], [0.75, 0.3]]);
+  const table = recorded.get("a-table");
+  assert(table, "a designer-framed picture is still perceived for flags and alt");
+  assertEquals([table.p_subject_box, table.p_focal, table.p_flags, table.p_alt], [null, null, [], "A piece."]);
+});
+
+Deno.test("F11: an image row keeps the alt an earlier perception wrote, unless the lint now refuses it", async () => {
   const fixture = facts();
-  const current = approved({}, await sourceHash(fixture), [{ sha256: "a-sofa-sha" }]);
+  Object.assign(fixture.assets[0], { perceivedPromptVersion: "e1", perceivedAlt: "A walnut sofa under the bay window.", alt: "Walnut sofa, Studio" });
+  Object.assign(fixture.assets[1], { perceivedPromptVersion: "e1", perceivedAlt: "A curated oak table.", alt: "Oak table, Studio" });
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude } = claudeOf(respond({ hero: { hero: { index: 0, why: "Calm." }, held: [1] } }));
+  await composeRequest(REQUEST, deps(db, claude));
+  const rows = finishArgs(called).p_images as { asset_id: string; alt: string }[];
+  assertEquals(rows.map((r) => [r.asset_id, r.alt]), [["a-sofa", "A walnut sofa under the bay window."], ["a-table", "Oak table, Studio"]]);
+});
+
+Deno.test("F13: a held choice below the held floor is dropped", async () => {
+  const { db, called } = fakeDb();
+  // The 3000×2000 sofa meets the hero floors, but its 0.46 crop keeps under half the frame.
+  const { claude } = claudeOf(respond({ hero: { hero: { index: 1, why: "The table." }, held: [0] } }));
+  await composeRequest(REQUEST, deps(db, claude));
+  const args = finishArgs(called);
+  assertEquals([composition(args).hero?.assetId, composition(args).held], ["a-table", []]);
+  assertEquals((args.p_images as unknown[]).length, 1);
+});
+
+Deno.test("F14: Call B keeps the designer's corrected words; the same words then publish plates only with the overrides kept", async () => {
+  const fixture = facts();
+  const overrides = { chapters: { cover: { headline: "The sofa is in the workshop" }, house: { headline: null } } };
+  const current = approved({ chapters: ANCHORED, doorstep: WORDS.doorstep, notice: WORDS.notice, hero: { assetId: "a-table" } }, "old-hash", fixture, overrides);
+  const corrected = { ...WORDS, chapters: WORDS.chapters.map((c) => (c.key === "cover" ? { ...c, headline: "The sofa is in the workshop" } : c)) };
   const { db, called } = fakeDb({ current });
-  const { claude } = fakeClaude({ perceive: [perceiveAll], draft: [ok({ hero: { index: 0, why: "Sofa." } }), ok(WORDS)], judge: [judgeOk] });
-  assertEquals((await composeRequest(REQUEST, deps(db, claude))).result, "composed");
-  assertEquals(called("begin_client_edition").length, 1);
+  const { claude, calls } = claudeOf(respond({ words: corrected }));
+  await composeRequest(REQUEST, deps(db, claude));
+
+  const body = wordsBody(calls);
+  assertEquals(body.current.chapters.map((c: { headline: string }) => c.headline).slice(0, 2), ["The sofa is in the workshop", WORDS.chapters[1].headline]);
+  const args = finishArgs(called);
+  assertEquals([args.p_status, args.p_kind], ["approved", "plates_only"]);
+  // The approved edition's own words, so finish_client_edition finds them unchanged and carries the overrides.
+  assertEquals((composition(args).chapters as { headline: string }[])[0].headline, WORDS.chapters[0].headline);
+});
+
+Deno.test("F15: plates only compares chapters by key and the doorstep, never the notice", async () => {
+  const fixture = facts();
+  const shuffled = [...ANCHORED].reverse();
+  const current = approved({ chapters: shuffled, doorstep: WORDS.doorstep, notice: "An older notice.", hero: { assetId: "a-table" } }, "old-hash", fixture);
+  const { db, called } = fakeDb({ current });
+  const { claude, calls } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+
+  const args = finishArgs(called);
+  assertEquals([args.p_status, args.p_kind], ["approved", "plates_only"]);
+  assertEquals(composition(args).notice, WORDS.notice);
+  // B was shown the approved words, rekeyed by position, never by room id.
+  assertEquals(wordsBody(calls).current.chapters.map((c: { key: string }) => c.key), ["progress", "room-2", "room-1", "house", "cover"]);
+  assertEquals(wordsBody(calls).opening, { now: "Walnut sofa, Living room", before: "Oak table, Living room" });
+});
+
+Deno.test("a changed word makes a full edition that waits for review", async () => {
+  const current = approved({ chapters: ANCHORED, doorstep: { standing: "Older." }, notice: "Older." }, "old-hash", facts());
+  const { db, called } = fakeDb({ current });
+  const { claude } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  const args = finishArgs(called);
+  assertEquals([args.p_status, args.p_kind], ["awaiting_review", "full"]);
+});
+
+Deno.test("F18: a failed call's billed usage counts toward the edition's cost", async () => {
+  const billed: CallClaudeResult = { ok: false, error: "overloaded", status: 529, errorType: "overloaded_error", transient: true, usd: 0.02 };
+  const { db, called } = fakeDb();
+  const { claude } = fakeClaude({ perceive: [perceiveAll], draft: [ok({ hero: { index: 0, why: "Sofa." } }), billed] });
+  const outcome = await composeRequest(REQUEST, deps(db, claude));
+  const args = finishArgs(called);
+  assertEquals([args.p_status, args.p_cost_usd], ["failed", 0.04]);
+  assertEquals(outcome.usd, 0.04);
 });
 
 Deno.test("A2 naming a picture outside the candidates falls back to the code pick in rank order", async () => {
   const { db, called } = fakeDb();
-  const { claude } = fakeClaude({
-    perceive: [perceiveAll],
-    draft: [ok({ hero: { index: 5, why: "Out of range." }, held: [0] }), ok(WORDS)],
-    judge: [judgeOk],
-  });
+  const { claude } = claudeOf(respond({ hero: { hero: { index: 5, why: "Out of range." }, held: [0] } }));
   await composeRequest(REQUEST, deps(db, claude));
   const args = finishArgs(called);
-  assertEquals((args.p_composition as { hero: unknown }).hero, { assetId: "a-sofa", why: null });
+  assertEquals(composition(args).hero, { assetId: "a-sofa", why: null });
   assertEquals((args.p_images as unknown[]).length, 1);
 });
 
@@ -345,28 +674,27 @@ Deno.test("a denied call stops composition: the edition finishes failed with the
   assertEquals([args.p_status, args.p_error, args.p_cost_usd], ["failed", "claude budget", 0.02]);
 });
 
-Deno.test("a refused finish counts the request as failed, keeping the spend", async () => {
-  const { db } = fakeDb({ finishError: { message: "lease lost" } });
-  const { claude } = fakeClaude({ perceive: [perceiveAll], draft: [ok({ hero: { index: 0, why: "Sofa." } }), ok(WORDS)], judge: [judgeOk] });
-  const outcome = await composeRequest(REQUEST, deps(db, claude));
-  assertEquals([outcome.result, outcome.reason, outcome.usd], ["failed", "finish failed", 0.031]);
+Deno.test("a refused claim: the first fails the run; a later one ends the batch with what it has", async () => {
+  const refused = { message: "permission denied for claim" };
+  const first = fakeDb({ claimErrors: [refused] });
+  await assertRejects(() => runBatch(deps(first.db, claudeOf(respond()).claude)), Error, "claim failed: permission denied for claim");
+  const second = { ...REQUEST, id: "req-2", lease_token: "lease-2" };
+  const later = fakeDb({ requests: [REQUEST, second], claimErrors: [null, refused] });
+  const summary = await runBatch(deps(later.db, claudeOf(respond()).claude));
+  assertEquals([summary.claimed, summary.composed], [1, 1]);
+  assertEquals(later.called("claim_client_edition_requests").length, 2);
 });
 
-Deno.test("runBatch claims five, composes in turn, and sums the cost", async () => {
+Deno.test("runBatch composes requests in turn and sums the cost", async () => {
   const second = { ...REQUEST, id: "req-2", lease_token: "lease-2" };
-  const { db, called } = fakeDb({ requests: [REQUEST, second] });
-  const { claude } = fakeClaude({
-    perceive: [perceiveAll, perceiveAll],
-    draft: [ok({ hero: { index: 0, why: "Sofa." } }), ok(WORDS), ok({ hero: { index: 0, why: "Sofa." } }), ok(WORDS)],
-    judge: [judgeOk, judgeOk],
-  });
+  const { db } = fakeDb({ requests: [REQUEST, second] });
+  const { claude } = claudeOf(respond());
   const summary = await runBatch(deps(db, claude));
-  assertEquals(called("claim_client_edition_requests")[0].args, { p_limit: 5 });
-  assertEquals([summary.claimed, summary.composed, summary.skipped, summary.failed], [2, 2, 0, 0]);
+  assertEquals([summary.claimed, summary.composed, summary.skipped, summary.failed, summary.unsettled], [2, 2, 0, 0, 0]);
   assertEquals(summary.cost_usd, 0.062);
   assertEquals(runStatus(summary), { status: "succeeded", error: null });
   assertEquals(runStatus({ ...summary, claimed: 0 }).status, "skipped");
-  assertEquals(runStatus({ ...summary, failed: 2 }).status, "failed");
+  assertEquals(runStatus({ ...summary, composed: 0, failed: 1, unsettled: 1 }).status, "failed");
 });
 
 // The Phase 1 rule lives in apps/client-portal/src/lib/editorial/chapters.ts.

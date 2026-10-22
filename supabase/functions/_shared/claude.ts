@@ -21,6 +21,7 @@ export interface ModelResponse {
 }
 export type ClaudeCaller = (
   params: Record<string, unknown>,
+  signal?: AbortSignal,
 ) => Promise<ModelResponse>;
 export type ClaudeLedgerReason =
   | "kill"
@@ -68,8 +69,8 @@ export function createClaudeCaller(
   timeoutMs: number,
 ): ClaudeCaller {
   const client = new Anthropic({ apiKey, timeout: timeoutMs, maxRetries: 1 });
-  return async (params) => {
-    const response = await client.messages.create(params as never);
+  return async (params, signal) => {
+    const response = await client.messages.create(params as never, { signal });
     return {
       stop_reason: response.stop_reason,
       content: response.content,
@@ -159,6 +160,8 @@ export interface CallClaudeOptions {
   promptVersion: string;
   params: Record<string, unknown>;
   timeoutMs: number;
+  /** Cancels the whole call, SDK retries included; an aborted call settles as an error. */
+  signal?: AbortSignal;
   caller?: ClaudeCaller;
   ledger?: LlmLedgerPort;
   clientOptions?: ClaudeClientOptions;
@@ -179,6 +182,11 @@ export interface ClaudeCallError {
   status: number | null;
   errorType: string | null;
   transient: boolean;
+  /**
+   * What the failed call cost, as settled in the ledger, when the API error
+   * reported usage (the call was billed). Absent when no usage is known.
+   */
+  usd?: number;
 }
 
 export type CallClaudeResult =
@@ -266,29 +274,22 @@ export async function callClaude(
     return ledgerFailure("Granted Claude reservation has no usage id");
   }
 
-  const caller = opts.caller ?? opts.clientOptions?.caller ??
-    createClaudeCaller(apiKey, opts.timeoutMs);
   const startedAt = Date.now();
   let response: ModelResponse;
   try {
-    response = await caller(request);
+    // Built inside the try: every failure after a granted reservation settles.
+    const caller = opts.caller ?? opts.clientOptions?.caller ??
+      createClaudeCaller(apiKey, opts.timeoutMs);
+    response = await caller(request, opts.signal);
   } catch (error) {
-    const knownUsage = usageFromError(error);
-    await settleUsage(
+    return await settleFailure(error, {
       ledger,
-      reservation.usageId,
-      {
-        model,
-        usage: knownUsage ?? { input_tokens: 0, output_tokens: 0 },
-        usd: knownUsage ? computeCostUsd(model, knownUsage) : 0,
-        status: "error",
-        stopReason: stopReasonFromError(error),
-        latencyMs: Date.now() - startedAt,
-      },
+      usageId: reservation.usageId,
+      model,
+      startedAt,
       log,
-      opts.feature,
-    );
-    return modelFailure(error);
+      feature: opts.feature,
+    });
   }
 
   // The response is paid for: a ledger failure from here on must not turn it
@@ -328,6 +329,42 @@ export async function callClaude(
 
 /** Settles with one retry of the same fields; a lasting failure is logged and
  * left to the stale-reservation sweep, which counts the reserved estimate. */
+/**
+ * Settles a failed call with whatever usage its error reported (an error the
+ * API billed is never recorded as free) and returns the typed failure, with
+ * that cost when the usage is known.
+ */
+async function settleFailure(
+  error: unknown,
+  call: {
+    ledger: LlmLedgerPort;
+    usageId: number;
+    model: string;
+    startedAt: number;
+    log: NonNullable<ClaudeClientOptions["log"]>;
+    feature: string;
+  },
+): Promise<ClaudeCallError> {
+  const knownUsage = usageFromError(error);
+  const usd = knownUsage ? computeCostUsd(call.model, knownUsage) : 0;
+  await settleUsage(
+    call.ledger,
+    call.usageId,
+    {
+      model: call.model,
+      usage: knownUsage ?? { input_tokens: 0, output_tokens: 0 },
+      usd,
+      status: "error",
+      stopReason: stopReasonFromError(error),
+      latencyMs: Date.now() - call.startedAt,
+    },
+    call.log,
+    call.feature,
+  );
+  const failure = modelFailure(error);
+  return knownUsage ? { ...failure, usd } : failure;
+}
+
 async function settleUsage(
   ledger: LlmLedgerPort,
   usageId: number,

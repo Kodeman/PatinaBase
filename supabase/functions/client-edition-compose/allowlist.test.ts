@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import type { CallClaudeOptions, CallClaudeResult } from "../_shared/claude.ts";
-import { composeRequest, type Db, type PlateSourceRow } from "./lib.ts";
+import { composeRequest, type Db } from "./lib.ts";
 import { allowedFacts, type EditorialFacts } from "./prompts.ts";
 
 const PROJECT = "0b7d3c1e-0000-4000-8000-000000000003";
@@ -17,7 +17,10 @@ function facts(showMakers: boolean): EditorialFacts {
     height: 2000,
     ground: "scene",
     caption: { what: "Walnut sofa", whose: "Larch & Fern Studio", when: "2026-10" },
+    crops: { piece: { rect: [0, 0, 3000, 2000], widths: [256, 512, 768] } },
     perceivedPromptVersion: null,
+    perceivedAlt: null,
+    perceivedFlags: [],
   });
   return {
     project: {
@@ -64,7 +67,8 @@ function facts(showMakers: boolean): EditorialFacts {
   } as unknown as EditorialFacts;
 }
 
-const row = (assetId: string, kind: string, url: string, table: string): PlateSourceRow => ({
+// Every row carries the address it was copied from; only the kind may reach the composer.
+const row = (assetId: string, kind: string, url: string, table: string) => ({
   project_id: PROJECT,
   source_kind: kind,
   source_ref: { table, id: `${assetId}-src` },
@@ -87,8 +91,9 @@ const FORBIDDEN = [
 ];
 
 function fakeDb(source: EditorialFacts): Db {
-  return {
-    rpc(fn) {
+  const named = (ids: string[]) => SOURCES.filter((r) => ids.includes(r.asset_id));
+  const db = {
+    rpc(fn: string) {
       const data: Record<string, unknown> = {
         get_project_editorial_facts: structuredClone(source),
         begin_client_edition: "edition-1",
@@ -97,9 +102,25 @@ function fakeDb(source: EditorialFacts): Db {
       return Promise.resolve({ data: data[fn] ?? null, error: null });
     },
     approvedEdition: () => Promise.resolve({ data: null, error: null }),
-    plateSources: (_project, ids) => Promise.resolve({ data: SOURCES.filter((r) => ids.includes(r.asset_id)), error: null }),
-    sign: (bucket, path) => Promise.resolve(`https://signed.example/${bucket}/${path}?token=t`),
+    provenance: (_project: string, ids: string[]) =>
+      Promise.resolve({ data: named(ids).map(({ asset_id, source_kind }) => ({ asset_id, source_kind })), error: null }),
+    // ad32ba43's port, kept so the address check fails there by assertion.
+    plateSources: (_project: string, ids: string[]) => Promise.resolve({ data: named(ids), error: null }),
+    sign: (bucket: string, path: string) => Promise.resolve(`https://signed.example/${bucket}/${path}?token=t`),
   };
+  return db as Db;
+}
+
+const encoder = new TextEncoder();
+
+/** A WebP-tagged payload naming the path it was read from. */
+function media(path: string) {
+  const body = encoder.encode(path);
+  const bytes = new Uint8Array(12 + body.length);
+  bytes.set(encoder.encode("RIFF"));
+  bytes.set(encoder.encode("WEBP"), 8);
+  bytes.set(body, 12);
+  return Promise.resolve(new Response(bytes, { headers: { "content-type": "image/webp" } }));
 }
 
 const ok = (value: unknown): CallClaudeResult => ({
@@ -109,7 +130,7 @@ const ok = (value: unknown): CallClaudeResult => ({
   model: "claude-sonnet-5-5",
 });
 
-type Content = { type: string; text?: string; source?: { url: string } }[];
+type Content = { type: string; text?: string; source?: { type: string; data?: string; url?: string } }[];
 const content = (opts: CallClaudeOptions) => (opts.params.messages as { content: Content }[])[0].content;
 
 // Answers whatever is asked, so every call the composition makes is made.
@@ -129,6 +150,14 @@ function answer(opts: CallClaudeOptions): CallClaudeResult {
   });
 }
 
+/** The plate each image block carries: the rendition's path, or (on ad32ba43) the address. */
+const pictured = (opts: CallClaudeOptions) =>
+  content(opts).filter((b) => b.type === "image").map((b) => (b.source?.data ? atob(b.source.data).slice(12) : b.source?.url ?? ""));
+
+/** The request with each image's bytes set aside, so only words are searched. */
+const words = (opts: CallClaudeOptions) =>
+  JSON.stringify(opts.params, (key, value) => (key === "data" && typeof value === "string" ? "<bytes>" : value));
+
 async function requestBodies(showMakers: boolean, privacyLive: boolean) {
   const calls: CallClaudeOptions[] = [];
   const claude = (opts: CallClaudeOptions) => {
@@ -136,20 +165,33 @@ async function requestBodies(showMakers: boolean, privacyLive: boolean) {
     return Promise.resolve(answer(opts));
   };
   const request = { id: "req-1", project_id: PROJECT, lease_token: "lease-1" };
-  await composeRequest(request, { db: fakeDb(facts(showMakers)), claude, privacyLive, supabaseUrl: "https://project.supabase.co" });
-  return { roles: calls.map((c) => c.role), bodies: calls.map((c) => JSON.stringify(c.params)) };
+  const legacy = { supabaseUrl: "https://project.supabase.co" };
+  await composeRequest(request, { ...legacy, db: fakeDb(facts(showMakers)), claude, privacyLive, media, now: () => 0, deadline: 120_000 });
+  return { roles: calls.map((c) => c.role), bodies: calls.map(words), pictures: calls.flatMap(pictured), calls };
 }
 
 for (const privacyLive of [false, true]) {
   Deno.test(`no request body carries a fact outside the allowlist (CLIENT_PRIVACY_PAGE_LIVE ${privacyLive})`, async () => {
-    const { roles, bodies } = await requestBodies(false, privacyLive);
+    const { roles, bodies, pictures } = await requestBodies(false, privacyLive);
     assertEquals(roles, ["perceive", "draft", "draft", "judge"]);
     for (const body of bodies) {
       for (const term of FORBIDDEN) assert(!body.includes(term), `"${term}" reached a request`);
       assert(!body.includes("Kettle") && !body.includes("Vermont"), "maker and origin are hidden when makers are not shown");
     }
-    const scanSent = bodies.some((body) => body.includes("signed.example/room-scans"));
+    const scanSent = pictures.some((picture) => /a-scan-sha|room-scans/.test(picture));
     assertEquals(scanSent, privacyLive, "a scan of her home reaches a model only once the privacy page is live");
+  });
+
+  Deno.test(`F12: no request carries an address, a path or a file name (CLIENT_PRIVACY_PAGE_LIVE ${privacyLive})`, async () => {
+    const { bodies, calls } = await requestBodies(true, privacyLive);
+    for (const body of bodies) {
+      for (const leak of ["http", "/plates/", ".jpg", ".webp", ".pdf", "sofa.jpg", "scan1", "-sha", "room-scans", "signed.example"]) {
+        assert(!body.includes(leak), `"${leak}" reached a request`);
+      }
+    }
+    for (const call of calls) {
+      for (const block of content(call).filter((b) => b.type === "image")) assertEquals(block.source?.type, "base64");
+    }
   });
 }
 

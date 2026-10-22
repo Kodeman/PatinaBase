@@ -3,6 +3,8 @@ import type { CallClaudeOptions, CallClaudeResult } from "../_shared/claude.ts";
 import { composeRequest, type Db, deterministicHeadlines } from "./lib.ts";
 import { ERROR_RULES, lintText, NORMALIZE, WARNING_RULES } from "./lint.ts";
 import type { EditorialFacts } from "./prompts.ts";
+/** No media worker: the lint tests compose without pictures. */
+const noMedia = () => Promise.resolve(new Response(null, { status: 404 }));
 
 const RULE_KEYS = ["rule", "pattern", "flags", "homoglyphs", "maxPerPiece"];
 const pick = (rule: object) => Object.fromEntries(Object.entries(rule).filter(([key]) => RULE_KEYS.includes(key)));
@@ -23,11 +25,25 @@ Deno.test("lintText: canon hits, normalized and homoglyph-mapped; one exclamatio
     ["It is bespoke.", "bespoke", "bespoke"],
     ["Here! Now!", "exclamations", "!"],
     ["Two weeks to go.", "spelled-quantity", "Two weeks"],
+    ["Chosen by ai.", "ai", "ai"],
+    ["A generated view.", "generated", "generated"],
+    ["An image of the sofa.", "image-of", "image of"],
+    ["Claude chose it.", "attribution", "Claude"],
+    ["Picked with ChatGPT.", "attribution", "ChatGPT"],
+    ["Sonnet 5 wrote this.", "attribution", "Sonnet 5"],
   ];
   for (const [text, rule, term] of hits) assertEquals(lintText(text), { rule, term }, text);
   for (const clean of ["The walnut sofa is in the workshop.", "It arrives in March!", "Said and done."]) {
     assertEquals(lintText(clean), null, clean);
   }
+});
+
+Deno.test("lintText: the project's own names are blanked for attribution only", () => {
+  const names = ["Claude Rattan chair", "Opus 2 sofa"];
+  assertEquals(lintText("The claude rattan chair and the Opus 2 sofa.", names), null);
+  assertEquals(lintText("The Opus 2 sofa, as Claude chose.", names), { rule: "attribution", term: "Claude" });
+  assertEquals(lintText("A curated Claude Rattan chair.", names), { rule: "curated", term: "curated" });
+  assertEquals(lintText("The Opus 2 sofa."), { rule: "attribution", term: "Opus 2" }, "without the names a versioned model name is attribution");
 });
 
 // ── Call C inside a composition ────────────────────────────────────────────
@@ -42,17 +58,19 @@ const FACTS = {
 
 function fakeDb() {
   const finished: Record<string, unknown>[] = [];
-  const db: Db = {
-    rpc(fn, args) {
+  const db = {
+    rpc(fn: string, args?: Record<string, unknown>) {
       if (fn === "finish_client_edition") finished.push(args!);
       const data: Record<string, unknown> = { get_project_editorial_facts: structuredClone(FACTS), begin_client_edition: "edition-1" };
       return Promise.resolve({ data: data[fn] ?? null, error: null });
     },
     approvedEdition: () => Promise.resolve({ data: null, error: null }),
+    provenance: () => Promise.resolve({ data: [], error: null }),
+    // ad32ba43's port, kept so this file loads against it for the negative controls.
     plateSources: () => Promise.resolve({ data: [], error: null }),
     sign: () => Promise.reject(new Error("nothing to sign")),
   };
-  return { db, finished };
+  return { db: db as Db, finished };
 }
 
 const ok = (value: unknown, model = "claude-sonnet-5-5"): CallClaudeResult => ({
@@ -80,7 +98,8 @@ async function compose(script: Record<string, CallClaudeResult[]>) {
     if (!next) throw new Error(`unscripted ${opts.role} call`);
     return Promise.resolve(next);
   };
-  await composeRequest(REQUEST, { db, claude, privacyLive: false, supabaseUrl: "https://project.supabase.co" });
+  const legacy = { supabaseUrl: "https://project.supabase.co" };
+  await composeRequest(REQUEST, { ...legacy, db, claude, privacyLive: false, media: noMedia, now: () => 0, deadline: 120_000 });
   const draftTexts = calls.filter((c) => c.role === "draft").map((c) => JSON.stringify(c.params.messages));
   return { calls, draftTexts, composition: finished[0].p_composition as Record<string, unknown> };
 }

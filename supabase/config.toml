@@ -718,7 +718,9 @@ verify_jwt = true
 
 # US-49 (SQ-1587): pg_cron dispatch_client_edition_compose() →
 # invoke_edge_function with the Vault service key and {job_run_id}; the same
-# gateway check, then service role only (resolveCaller).
+# gateway check, then service role only (resolveCaller). Model pictures are read
+# from the media worker's GET /plates/… with the plate copier's MEDIA_WORKER_URL
+# and PLATE_INGEST_SECRET (SQ-1647).
 [functions.client-edition-compose]
 verify_jwt = true
 

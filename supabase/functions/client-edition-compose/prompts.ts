@@ -2,7 +2,9 @@
 // judge). Each copies buildDraftRequest's shape: one cached system block holding
 // the voice rules, the lexicon, the caption form and the answer's schema. The
 // only project facts any request carries are the allowlisted ones below; an
-// image travels as the address its plate was copied from.
+// image travels as the bytes of its plate's stored full-frame rendition
+// (renditions.ts), labelled from the allowlist: never an address, a file name
+// or a storage path.
 
 import { ERROR_RULES, WARNING_RULES } from "./lint.ts";
 import { LIMITS } from "./validate.ts";
@@ -47,8 +49,14 @@ export interface FactsAsset {
   subjectBox?: readonly number[] | null;
   alt?: string | null;
   caption?: { what?: string | null; whose?: string | null; when?: string | null } | null;
+  /** The stored renditions per crop (client_plate_assets.crops); `piece` is the whole frame. */
+  crops?: Record<string, { widths?: readonly number[] } | null> | null;
   perceivedPromptVersion?: string | null;
   focalOrigin?: string | null;
+  /** The alt text an earlier perception wrote (record_plate_perception), or null. */
+  perceivedAlt?: string | null;
+  /** Watermark, people or text_overlay, as an earlier perception saw them. */
+  perceivedFlags?: readonly string[] | null;
 }
 
 export interface EditorialFacts {
@@ -160,14 +168,15 @@ function systemBlock(task: string, schema: string): Record<string, unknown>[] {
 }
 
 export interface ImageInput {
-  url: string;
+  /** Base64 WebP bytes of the plate's full-frame rendition. */
+  data: string;
   label: string;
 }
 
 function imageBlocks(images: readonly ImageInput[]): Record<string, unknown>[] {
   return images.flatMap((image, index) => [
     { type: "text", text: `Picture ${index}: ${image.label}` },
-    { type: "image", source: { type: "url", url: image.url } },
+    { type: "image", source: { type: "base64", media_type: "image/webp", data: image.data } },
   ]);
 }
 
@@ -179,7 +188,7 @@ const PERCEIVE_TASK = `Task: look at each numbered picture and describe where it
 
 const PERCEIVE_SCHEMA = `{"images":[{"index":0,"subject_box":[0.1,0.2,0.6,0.7],"focal":[0.4,0.5],"flags":[],"alt":"…"}]}`;
 
-/** Call A1: up to eight pictures by address. */
+/** Call A1: up to eight pictures, each its whole frame. */
 export function buildPerceptionRequest(images: readonly ImageInput[]): Record<string, unknown> {
   return {
     max_tokens: 16_000,
@@ -221,7 +230,12 @@ export interface WordsChapter {
 export interface WordsInput {
   facts: AllowedFacts;
   chapters: readonly WordsChapter[];
-  /** The page as last approved: keep any line that is still true, word for word. */
+  /**
+   * The page as the homeowner reads it now (the approved words with the
+   * designer's corrections applied): keep any line that is still true, word for
+   * word. Null when the studio no longer shows makers, since older words may
+   * name one.
+   */
   current: unknown | null;
   opening: { now: string; before: string | null };
   /** The term a first draft used that the lexicon forbids. */

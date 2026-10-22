@@ -195,6 +195,48 @@ Deno.test("callClaude records failed API call as an error settlement", async () 
   assertEquals(settlements[0].fields.usd, 0);
 });
 
+Deno.test("callClaude returns a failed call's settled cost when the error reported usage", async () => {
+  const { ledger, settlements } = fakeLedger();
+  const billed = Object.assign(new Error("stream cut after the answer began"), {
+    usage: { input_tokens: 1000, output_tokens: 200 },
+  });
+  const result = await callClaude(options({
+    ledger,
+    caller: async () => {
+      throw billed;
+    },
+  }));
+  assert(!result.ok && "error" in result);
+  assertEquals(settlements.map((entry) => entry.fields.status), ["error"]);
+  assert(settlements[0].fields.usd > 0, "the billed usage is settled");
+  assertEquals(result.usd, settlements[0].fields.usd);
+});
+
+Deno.test("callClaude hands the caller its abort signal; an aborted call settles as an error", async () => {
+  const { ledger, settlements } = fakeLedger();
+  const controller = new AbortController();
+  const seen: (AbortSignal | undefined)[] = [];
+  const pending = callClaude(options({
+    ledger,
+    signal: controller.signal,
+    caller: (_params, signal) => {
+      seen.push(signal);
+      if (!signal) return Promise.reject(new Error("no signal to abort with"));
+      return new Promise<ModelResponse>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new Error("Request was aborted.")));
+      });
+    },
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  controller.abort();
+  const result = await pending;
+  assertEquals(seen, [controller.signal]);
+  assert(!result.ok && "error" in result);
+  assertStringIncludes(result.error, "aborted");
+  assertEquals(settlements.map((entry) => [entry.fields.status, entry.fields.usd]), [["error", 0]]);
+  assertEquals("usd" in result, false, "no usage known, no cost claimed");
+});
+
 Deno.test("callClaude request helper removes rejected forced-tool and disabled-thinking options", async () => {
   const { ledger } = fakeLedger();
   let request: Record<string, unknown> = {};

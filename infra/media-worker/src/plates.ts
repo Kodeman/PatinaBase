@@ -498,10 +498,37 @@ export async function handlePlateIngest(request: Request, env: PlatesEnv, deps: 
   }
 }
 
-/** The Worker's remaining routes: POST /plates/ingest, else 404. */
+// GET /plates/{projectId}/{sha256}/{file} — the client-edition-compose edge
+// function reads a plate's full-frame rendition (the `piece` crop: uncropped,
+// immutable per sha256) to show a model. Same bearer as ingest. Only the two
+// piece widths it reads are served, so no free path segment reaches R2; the
+// answer is 401, 404 or the bytes, and nothing else.
+export const READABLE_FILES = ['piece-512.webp', 'piece-768.webp'];
+const READ_SHAPE = /^\/plates\/[^/]+\/[^/]+\/[^/]+$/;
+const READ_PATH = /^\/plates\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([0-9a-f]{64})\/([^/]+)$/;
+
+/** The R2 key a read may touch, or null: a uuid, a sha256 and an allowlisted file. */
+function readKey(pathname: string): string | null {
+  const match = READ_PATH.exec(pathname);
+  return match && READABLE_FILES.includes(match[3]) ? `plates/${match[1]}/${match[2]}/${match[3]}` : null;
+}
+
+export async function handlePlateRead(request: Request, env: PlatesEnv): Promise<Response> {
+  if (!bearerMatches(request.headers.get('authorization'), env.PLATE_INGEST_SECRET)) {
+    return new Response(null, { status: 401 });
+  }
+  const key = readKey(new URL(request.url).pathname);
+  const object = key ? await env.PLATES.get(key) : null;
+  if (!object) return new Response(null, { status: 404 });
+  return new Response(object.body, { headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'private, no-store' } });
+}
+
+/** The Worker's remaining routes: POST /plates/ingest, GET /plates/…, else 404. */
 export async function routePlates(request: Request, env: PlatesEnv, deps: PlateIngestDeps): Promise<Response> {
-  if (request.method === 'POST' && new URL(request.url).pathname === '/plates/ingest') {
+  const { pathname } = new URL(request.url);
+  if (request.method === 'POST' && pathname === '/plates/ingest') {
     return handlePlateIngest(request, env, deps);
   }
+  if (request.method === 'GET' && READ_SHAPE.test(pathname)) return handlePlateRead(request, env);
   return new Response('not found', { status: 404 });
 }

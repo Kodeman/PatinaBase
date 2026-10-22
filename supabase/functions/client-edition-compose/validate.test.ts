@@ -31,7 +31,10 @@ Deno.test("readAnswer rejects a refusal, a max_tokens truncation, no JSON and ba
 Deno.test("any banned string anywhere in an answer rejects it, naming the words", () => {
   const banned = [
     ["Shaped by AI.", "AI"],
-    ["Picked by A.I. for you.", "A.I."],
+    ["Picked by A.I. for you.", "A.I"],
+    ["A sofa chosen by ai.", "ai"],
+    ["Cl\u200Baude picked it.", "Claude"],
+    ["A carefully curated room.", "curated"],
     ["Artificial  intelligence chose this.", "Artificial  intelligence"],
     ["A generated view.", "generated"],
     ["Image of a sofa.", "Image of"],
@@ -126,10 +129,36 @@ Deno.test("B words: keys, lengths, doorstep and notice", () => {
   assertEquals(ok.value.chapters.map((c) => c.key), KEYS);
 });
 
-Deno.test("the judge's answer: only ok:false names a term", () => {
-  assertEquals(readJudgement(answer({ ok: true, term: null })), null);
-  assertEquals(readJudgement(answer({ ok: false, term: "state of the art" })), "state of the art");
-  assertEquals(readJudgement(answer({ ok: false })), "the flagged wording");
-  assertEquals(readJudgement(answer("nonsense")), null);
-  assertEquals(readJudgement(answer({ ok: false, term: "AI" }, "refusal")), null);
+Deno.test("F9: alt text and the hero's why pass the same normalized lint as the words", () => {
+  for (const [alt, term] of [["A sofa chosen by ai.", "ai"], ["A carefully curated room.", "curated"], ["Cl\u200Baude framed this sofa.", "Claude"]]) {
+    const read = validatePerception(answer({ images: [image({ alt })] }), 1);
+    assertEquals(read.ok, false, alt);
+    if (!read.ok) assertEquals([read.reason, read.term], ["banned words", term]);
+  }
+  const why = validateHero(answer({ hero: { index: 0, why: "A seamless pick by ai." } }), 1);
+  assertEquals(why.ok, false);
+  if (!why.ok) assertEquals(why.reason, "banned words");
+});
+
+Deno.test("F17: a maker or item called Claude is a name; the word alone is still attribution", () => {
+  const names = ["Claude Rattan chair", "Anthropic Mill"];
+  const named = validatePerception(answer({ images: [image({ alt: "The Claude Rattan chair by the window.", flags: [] })] }), 1, names);
+  assert(named.ok, "an allowlisted item name passes");
+  assertEquals(named.value[0].alt, "The Claude Rattan chair by the window.");
+  const words = { chapters: [{ key: "cover", headline: "The Anthropic Mill sofa", standing: "It is in the workshop." }], doorstep: { standing: "Under way." }, notice: "New." };
+  assert(validateWords(answer(words), ["cover"], names).ok, "an allowlisted maker name passes");
+  const bare = validatePerception(answer({ images: [image({ alt: "The Claude Rattan chair; Claude chose it." })] }), 1, names);
+  assertEquals(bare.ok, false);
+  if (!bare.ok) assertEquals(bare.term, "Claude");
+  assertEquals(findBanned("The Claude Rattan chair."), "Claude", "without the names it is attribution");
+});
+
+Deno.test("F8: the judge's answer is clean, a hit, or unavailable; only ok:true with no term is clean", () => {
+  assertEquals(readJudgement(answer({ ok: true, term: null })), { verdict: "clean" });
+  assertEquals(readJudgement(answer({ ok: true })), { verdict: "clean" });
+  assertEquals(readJudgement(answer({ ok: false, term: "state of the art" })), { verdict: "hit", term: "state of the art" });
+  assertEquals(readJudgement(answer({ ok: false })), { verdict: "hit", term: "the flagged wording" });
+  for (const unread of [answer("nonsense"), answer({ verdict: "fine" }), answer({ ok: "yes" }), answer({ ok: true, term: "curated" }), answer({ ok: true, term: null }, "max_tokens"), answer({ ok: false, term: "AI" }, "refusal")]) {
+    assertEquals(readJudgement(unread), { verdict: "unavailable" }, JSON.stringify(unread));
+  }
 });

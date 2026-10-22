@@ -1,5 +1,7 @@
-// Call C's regex half: the error and warning rules of
-// marketing/canon/lexicon.json. An edge function bundles only what sits under
+// The one lint every model string passes before it can reach a homeowner (alt
+// text, the hero's why, headlines, standings, doorstep, notice): the error and
+// warning rules of marketing/canon/lexicon.json, the machinery words and model
+// attribution. An edge function bundles only what sits under
 // supabase/functions, so the rules are copied here; lint.test.ts reads the
 // canon file and fails when the copy drifts. The canon's places, numbers and
 // claims sections police marketing claims (citations, coastal place names) and
@@ -84,6 +86,22 @@ export const WARNING_RULES: LexiconRule[] = [
   { rule: "exclamations", pattern: "!(?!\\[)", flags: "", maxPerPiece: 1 },
 ];
 
+// Words that describe how the page is made, never shown to a homeowner, on top
+// of the canon's own "AI" rules.
+export const MACHINERY_RULES: LexiconRule[] = [
+  { rule: "generated", pattern: "\\bgenerated\\b", flags: "i" },
+  { rule: "image-of", pattern: "\\bimage of\\b", flags: "i" },
+];
+
+// Model or vendor attribution. These alone are read with the project's own
+// signed item names (and maker names, when the studio shows makers) blanked out,
+// so a maker called Claude, or an Opus 2 sofa, is a name and not attribution.
+// Bare "Opus" or "Haiku" can name a piece, so those count only with a version.
+export const ATTRIBUTION_RULES: LexiconRule[] = [
+  { rule: "attribution", pattern: "\\b(?:claude|anthropic|chatgpt|openai|gpt-?\\d[\\w.]*|gemini)\\b", flags: "i", homoglyphs: true },
+  { rule: "attribution", pattern: "\\b(?:sonnet|haiku|opus|fable|mythos)[\\s-]*\\d", flags: "i", homoglyphs: true },
+];
+
 export interface LintHit {
   rule: string;
   /** The words as they appear in the draft, for the regeneration request. */
@@ -100,10 +118,12 @@ function mapHomoglyphs(text: string): string {
   return [...text].map((char) => NORMALIZE.homoglyphs[char] ?? char).join("");
 }
 
-const COMPILED = [...ERROR_RULES, ...WARNING_RULES].map((rule) => ({
-  rule,
-  regex: new RegExp(rule.pattern, `${rule.flags}g`),
-}));
+function compile(rules: readonly LexiconRule[]) {
+  return rules.map((rule) => ({ rule, regex: new RegExp(rule.pattern, `${rule.flags}g`) }));
+}
+
+const COMPILED = compile([...ERROR_RULES, ...WARNING_RULES, ...MACHINERY_RULES]);
+const ATTRIBUTION = compile(ATTRIBUTION_RULES);
 
 function matches(regex: RegExp, text: string): string[] {
   return [...text.matchAll(regex)].map((match) => match[0]);
@@ -115,22 +135,35 @@ function ruleMatches(rule: LexiconRule, regex: RegExp, plain: string, mapped: st
   return found.length || !rule.homoglyphs ? found : matches(regex, mapped);
 }
 
-/** The first canon rule this piece breaks, or null. */
-export function lintText(text: string): LintHit | null {
-  const plain = normalize(text);
-  const mapped = mapHomoglyphs(plain);
-  for (const { rule, regex } of COMPILED) {
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Every occurrence of an allowed name, blanked, in both readings of the text. */
+function maskNames(text: string, names: readonly string[]): string {
+  const plain = names.map((name) => mapHomoglyphs(normalize(name)).trim()).filter(Boolean);
+  if (!plain.length) return text;
+  const longestFirst = [...new Set(plain)].sort((a, b) => b.length - a.length).map(escapeRegExp);
+  return text.replace(new RegExp(longestFirst.join("|"), "gi"), (name) => " ".repeat(name.length));
+}
+
+function firstHit(rules: ReturnType<typeof compile>, plain: string, mapped: string): LintHit | null {
+  for (const { rule, regex } of rules) {
     const found = ruleMatches(rule, regex, plain, mapped);
     if (found.length > (rule.maxPerPiece ?? 0)) return { rule: rule.rule, term: found[0] };
   }
   return null;
 }
 
-/** The first hit across several pieces (each string is one piece). */
-export function lintPieces(pieces: readonly string[]): LintHit | null {
-  for (const piece of pieces) {
-    const hit = lintText(piece);
-    if (hit) return hit;
-  }
-  return null;
+/**
+ * The first forbidden term in one homeowner-facing string, or null: the canon
+ * rules and the machinery words over the NFKC-normalized text (zero-width
+ * characters stripped, look-alikes mapped where a rule asks), then model and
+ * vendor attribution with the allowed names blanked out.
+ */
+export function lintText(text: string, names: readonly string[] = []): LintHit | null {
+  const plain = normalize(text);
+  const mapped = mapHomoglyphs(plain);
+  return firstHit(COMPILED, plain, mapped) ??
+    firstHit(ATTRIBUTION, maskNames(plain, names), maskNames(mapped, names));
 }
