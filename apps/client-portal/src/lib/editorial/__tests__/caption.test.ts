@@ -23,9 +23,20 @@ describe('caption', () => {
     expect(captionText(caption!).split(' · ')).toHaveLength(3);
   });
 
-  it('refuses a caption with a missing field', () => {
-    expect(captionTriplet({ ...fields, when: null })).toBeNull();
+  it('refuses a caption with a missing what or whose', () => {
     expect(captionTriplet({ ...fields, what: '   ' })).toBeNull();
+    expect(captionTriplet({ ...fields, whose: null })).toBeNull();
+  });
+
+  it('keeps what · whose when the when is withheld, with no dangling separator', () => {
+    const caption = captionTriplet({ ...fields, when: null });
+    expect(caption).toEqual({ what: fields.what, whose: fields.whose, when: null });
+    expect(captionText(caption!)).toBe('Walnut top, planed · Harmon Bench Works');
+    expect(captionTriplet({ ...fields, when: '  ' })).toEqual({ what: fields.what, whose: fields.whose, when: null });
+  });
+
+  it('still refuses banned wording in the when', () => {
+    expect(captionTriplet({ ...fields, when: 'AI render, 2026' })).toBeNull();
   });
 
   it.each([

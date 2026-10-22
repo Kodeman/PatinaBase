@@ -34,6 +34,29 @@
 --               maker (SQ-1660 N1): makers off → both alts are rebuilt from
 --               the studio caption, the scan keeps its own; makers on →
 --               every stored alt
+--   consent switch  (story seq 53) facts frozen by the real builder with
+--               makers on, the chair's item bytes concept-seen, so its fact
+--               alt names Atelier Nord; a maker plate approved with an alt
+--               naming Atelier Nord, then concept-seen; a concept plate with
+--               a neutral alt; a board whose what names Atelier Nord and
+--               whose override names Hollis Workshop (an unshown line's
+--               vendor_name, other case), a concept when override naming
+--               Atelier Nord. Makers off → both concept alts rebuilt from
+--               the studio caption, neutral alts byte for byte, the board's
+--               what stripped of the maker and whose the studio's, no alt or
+--               caption field names a maker; makers on → every stored word
+--   trusted words  (story seq 59 R1) vendor Nord under studio Nord Studio,
+--               vendor Studio beside the kind words "studio photograph":
+--               makers off → whose is the studio and the alt the rebuilt
+--               _client_plate_alt text, neither re-masked nor nulled
+--   when        (seq 59 R2) makers off → an override when naming a maker is
+--               the facts' date; an image's when naming one with no facts
+--               entry is NULL; a clean when is byte for byte
+--   what        (seq 59) makers off → "Harmon Bench Works walnut sideboard"
+--               reads "walnut sideboard"; a what that is only the maker is
+--               the line's category, else the kind words; outside the
+--               studio's name and the kind words no alt or caption field
+--               names a maker; makers on → every stored word
 --   plate scope an approved edition id scopes its project for its client and
 --               studio; a superseded edition id, a stranger who is the
 --               client of another project holding the same bytes, and
@@ -45,7 +68,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(44);
+SELECT plan(61);
 
 -- ─── grants ────────────────────────────────────────────────────────────────
 
@@ -571,6 +594,348 @@ SELECT is(
     "84600000-0000-4000-8000-000000000512": "Atelier Nord oak dining table with six chairs",
     "84600000-0000-4000-8000-000000000513": "The kitchen from the doorway, in morning light"}'::jsonb,
   'makers frozen off: makers on → each image''s stored alt shows');
+RESET ROLE;
+
+-- ─── makers off is a consent switch over every kind (story seq 53) ────────
+-- S's edition froze what the real builder read while makers showed. The
+-- chair's item bytes are also a concept render's (concept_seen), so its fact
+-- reads concept with an alt naming Atelier Nord (SQ-1669 residual). The side
+-- view was approved as a maker plate whose alt names Atelier Nord and turned
+-- concept-seen afterwards. Hollis Workshop is the vendor_name of a line she
+-- never saw; the studio typed it in capitals as a board's whose.
+
+INSERT INTO public.vendors (id, name, made_in)
+VALUES ('84600000-0000-4000-8000-000000000031', 'Atelier Nord', 'Portugal');
+INSERT INTO public.projects (id, name, designer_id, client_id, created_by, studio_id, status, show_makers)
+VALUES ('84600000-0000-4000-8000-000000000004', 'US49 846 Barn',
+        '84600000-0000-4000-8000-0000000000a1', '84600000-0000-4000-8000-0000000000a2',
+        '84600000-0000-4000-8000-0000000000a1', '84600000-0000-4000-8000-0000000000f1', 'active', true);
+INSERT INTO public.project_rooms (id, project_id, name, sort_order)
+VALUES ('84600000-0000-4000-8000-000000000041', '84600000-0000-4000-8000-000000000004', 'Living room', 0);
+INSERT INTO public.products (id, name, captured_at, layer, owner_user_id, status, images) VALUES
+  ('84600000-0000-4000-8000-000000000021', 'US49 846 Lounge chair', now(), 'personal',
+   '84600000-0000-4000-8000-0000000000a1', 'draft', ARRAY['https://img.test/us49-846-chair.jpg']);
+
+SELECT set_config('app.ffe_mutation_rpc', 'on', true);
+INSERT INTO public.project_ffe_items (
+  id, project_id, project_room_id, name, status, item_type, product_id, vendor_id, ffe_category,
+  quantity, unit_price_cents, line_total_cents, design_disposition, assignment_scope, sort_order
+) VALUES ('84600000-0000-4000-8000-000000000141', '84600000-0000-4000-8000-000000000004',
+          '84600000-0000-4000-8000-000000000041', 'Lounge chair', 'specified', 'fixed',
+          '84600000-0000-4000-8000-000000000021', '84600000-0000-4000-8000-000000000031', 'seating',
+          1, 120000, 120000, 'selected', 'room', 0);
+INSERT INTO public.project_ffe_items (
+  id, project_id, name, status, item_type, product_id, vendor_name, quantity,
+  unit_price_cents, line_total_cents, design_disposition, assignment_scope, sort_order
+) VALUES ('84600000-0000-4000-8000-000000000142', '84600000-0000-4000-8000-000000000004', 'Side table',
+          'specified', 'fixed', '84600000-0000-4000-8000-000000000021', 'Hollis Workshop', 1,
+          30000, 30000, 'selected', 'unassigned', 1);
+INSERT INTO public.proposals (id, project_id, designer_id, title, status, document_kind, commercial_state, total_amount, subtotal)
+VALUES ('84600000-0000-4000-8000-000000000441', '84600000-0000-4000-8000-000000000004', '84600000-0000-4000-8000-0000000000a1',
+        'US49 846 Authorization', 'accepted', 'furnishings_authorization', 'executed', 120000, 120000);
+INSERT INTO public.project_commercial_documents (id, project_id, proposal_id, document_kind, wave_name, is_origin, bound_at, executed_at, created_by)
+VALUES ('84600000-0000-4000-8000-000000000442', '84600000-0000-4000-8000-000000000004', '84600000-0000-4000-8000-000000000441',
+        'furnishings_authorization', 'Authorization No. 1', false, now(), now(), '84600000-0000-4000-8000-0000000000a1');
+INSERT INTO public.furnishing_authorization_items (
+  id, commercial_document_id, source_ffe_item_id, product_id, name, room_name, category, item_type,
+  quantity, client_unit_price_cents, client_line_total_cents, trade_unit_cost_cents, markup_percent, sort_order, snapshot
+) VALUES ('84600000-0000-4000-8000-000000000443', '84600000-0000-4000-8000-000000000442', '84600000-0000-4000-8000-000000000141',
+          '84600000-0000-4000-8000-000000000021', 'Lounge chair', 'Living room', 'seating', 'fixed', 1, 120000, 120000, 70000, 71.43, 0,
+          '{"clientName": "Lounge chair"}'::jsonb);
+UPDATE public.project_ffe_items
+   SET source_commercial_document_id = '84600000-0000-4000-8000-000000000442',
+       source_authorization_item_id = '84600000-0000-4000-8000-000000000443'
+ WHERE id = '84600000-0000-4000-8000-000000000141';
+SELECT set_config('app.ffe_mutation_rpc', '', true);
+
+-- S1 the chair's picture (maker), whose bytes a concept render also produced;
+-- S2 a maker plate the edition names; S3 a concept plate; S4 a board.
+INSERT INTO public.client_plate_assets (id, project_id, sha256, source_kind, source_ref, original_key, width, height)
+SELECT '84600000-0000-4000-8000-000000000521', picture.project_id, repeat('7', 64), 'maker',
+       jsonb_build_object('table', 'project_ffe_item_images', 'id', picture.id),
+       'plates/846s/7/original.jpg', 2400, 1600
+FROM public.project_ffe_item_images AS picture
+WHERE picture.item_id = '84600000-0000-4000-8000-000000000141';
+UPDATE public.client_plate_requests AS request
+   SET status = 'done', asset_id = '84600000-0000-4000-8000-000000000521'
+  FROM public.project_ffe_item_images AS picture
+ WHERE picture.item_id = '84600000-0000-4000-8000-000000000141'
+   AND request.source_ref = jsonb_build_object('table', 'project_ffe_item_images', 'id', picture.id);
+UPDATE public.client_plate_assets SET concept_seen = true WHERE id = '84600000-0000-4000-8000-000000000521';
+INSERT INTO public.client_plate_assets (id, project_id, sha256, source_kind, source_ref, original_key, width, height)
+VALUES
+  ('84600000-0000-4000-8000-000000000522', '84600000-0000-4000-8000-000000000004', repeat('8', 64), 'maker',
+   '{"table": "project_ffe_item_images", "id": "84600000-0000-4000-8000-000000000491"}'::jsonb,
+   'plates/846s/8/original.jpg', 2400, 1600),
+  ('84600000-0000-4000-8000-000000000523', '84600000-0000-4000-8000-000000000004', repeat('9', 64), 'concept',
+   '{"table": "project_rooms", "id": "84600000-0000-4000-8000-000000000041"}'::jsonb,
+   'plates/846s/9/original.jpg', 2400, 1600),
+  ('84600000-0000-4000-8000-000000000524', '84600000-0000-4000-8000-000000000004', repeat('b', 64), 'board',
+   '{"table": "project_boards", "id": "84600000-0000-4000-8000-000000000641"}'::jsonb,
+   'plates/846s/b/original.jpg', 1600, 1000);
+
+-- Facts frozen by the builder while makers showed (as postgres).
+INSERT INTO public.client_editions (id, project_id, seq, status, kind, composition, facts, overrides,
+                                    auto_published, approved_at, source_hash)
+VALUES ('84600000-0000-4000-8000-000000000906', '84600000-0000-4000-8000-000000000004', 1, 'approved', 'full',
+        '{"sourceHash": "h6", "voice": "model", "hero": null, "held": [], "chapters": [],
+          "doorstep": null, "notice": null}'::jsonb,
+        public._build_project_editorial('84600000-0000-4000-8000-000000000004'),
+        '{"captions": {"84600000-0000-4000-8000-000000000524": {"whose": "HOLLIS WORKSHOP"},
+                       "84600000-0000-4000-8000-000000000523": {"when": "The Atelier Nord week"}}}'::jsonb,
+        false, now(), 'h6');
+INSERT INTO public.client_edition_images (edition_id, asset_id, plate_role, crop_key, rank, chapter_key, alt,
+                                          caption_what, caption_whose, caption_when)
+VALUES
+  ('84600000-0000-4000-8000-000000000906', '84600000-0000-4000-8000-000000000522', 'held', 'none', 1, 'cover',
+   'Atelier Nord lounge chair, side view', 'Lounge chair', 'Atelier Nord', '3 October 2026'),
+  ('84600000-0000-4000-8000-000000000906', '84600000-0000-4000-8000-000000000523', 'held', 'none', 2, 'cover',
+   'Living room concept, oak floor and plaster walls', 'Living room', 'US49 846 Studio', '3 October 2026'),
+  ('84600000-0000-4000-8000-000000000906', '84600000-0000-4000-8000-000000000524', 'board', 'none', 3, 'cover',
+   'Fabric samples pinned to a board', 'Atelier Nord samples', 'US49 846 Studio', '3 October 2026');
+-- S2's bytes turn up from a concept render after approval (00843 sets
+-- concept_seen); its stored alt is unchanged.
+UPDATE public.client_plate_assets SET concept_seen = true WHERE id = '84600000-0000-4000-8000-000000000522';
+
+SELECT is(
+  (SELECT jsonb_build_array(fact ->> 'sourceKind', fact ->> 'alt')
+   FROM public.client_editions AS edition,
+        jsonb_array_elements(edition.facts -> 'assets') AS fact
+   WHERE edition.id = '84600000-0000-4000-8000-000000000906'
+     AND fact ->> 'id' = '84600000-0000-4000-8000-000000000521'),
+  '["concept", "Lounge chair · Atelier Nord · concept render, not installed"]'::jsonb,
+  'consent switch: the builder, makers on, freezes the concept-seen chair bytes as concept with an alt naming the maker');
+
+UPDATE public.projects SET show_makers = false WHERE id = '84600000-0000-4000-8000-000000000004';
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT 'read' AS us49 FROM (SELECT set_config('us49.consent_off',
+  public.get_client_project_edition('84600000-0000-4000-8000-000000000004')::text, true)) AS stash;
+RESET ROLE;
+SELECT is(
+  (SELECT jsonb_build_array(asset ->> 'sourceKind', asset -> 'caption' ->> 'whose', asset ->> 'alt')
+   FROM jsonb_array_elements(current_setting('us49.consent_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000521'),
+  '["concept", "US49 846 Studio", "Lounge chair · US49 846 Studio · concept render, not installed"]'::jsonb,
+  'consent switch: makers off → a concept-seen item picture''s fact alt naming the maker is rebuilt from the studio caption');
+SELECT is(
+  (SELECT jsonb_build_array(asset ->> 'sourceKind', asset ->> 'alt')
+   FROM jsonb_array_elements(current_setting('us49.consent_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000522'),
+  '["concept", "Lounge chair · US49 846 Studio · concept render, not installed"]'::jsonb,
+  'consent switch: makers off → an approved maker plate now concept-seen, its stored alt naming the maker, is rebuilt');
+SELECT is(
+  (SELECT jsonb_object_agg(asset ->> 'id', asset -> 'alt')
+   FROM jsonb_array_elements(current_setting('us49.consent_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' IN ('84600000-0000-4000-8000-000000000523', '84600000-0000-4000-8000-000000000524')),
+  '{"84600000-0000-4000-8000-000000000523": "Living room concept, oak floor and plaster walls",
+    "84600000-0000-4000-8000-000000000524": "Fabric samples pinned to a board"}'::jsonb,
+  'consent switch: makers off → an alt naming no maker is kept byte for byte, a concept plate''s included');
+SELECT is(
+  (SELECT asset -> 'caption'
+   FROM jsonb_array_elements(current_setting('us49.consent_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000524'),
+  '{"what": "samples", "whose": "US49 846 Studio", "when": "3 October 2026"}'::jsonb,
+  'consent switch: makers off → a what naming a maker loses the name (seq 59); a whose override naming one, in any case, is the studio''s');
+SELECT is(
+  (SELECT count(*)
+   FROM jsonb_array_elements(current_setting('us49.consent_off')::jsonb -> 'assets') AS asset
+   WHERE concat_ws(' ', asset ->> 'alt', asset -> 'caption' ->> 'what', asset -> 'caption' ->> 'whose',
+                   asset -> 'caption' ->> 'when')
+         ~* '(atelier nord|hollis workshop)'),
+  0::bigint,
+  'consent switch: makers off → no alt, caption what, whose or when names a maker of the job');
+
+UPDATE public.projects SET show_makers = true WHERE id = '84600000-0000-4000-8000-000000000004';
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT is(
+  (SELECT jsonb_object_agg(asset ->> 'id', jsonb_build_array(
+            asset ->> 'alt', asset -> 'caption' ->> 'what', asset -> 'caption' ->> 'whose'))
+   FROM jsonb_array_elements(
+     public.get_client_project_edition('84600000-0000-4000-8000-000000000004') -> 'assets') AS asset
+   WHERE asset ->> 'id' IN ('84600000-0000-4000-8000-000000000521', '84600000-0000-4000-8000-000000000522',
+                            '84600000-0000-4000-8000-000000000524')),
+  '{"84600000-0000-4000-8000-000000000521": ["Lounge chair · Atelier Nord · concept render, not installed", "Lounge chair", "Atelier Nord"],
+    "84600000-0000-4000-8000-000000000522": ["Atelier Nord lounge chair, side view", "Lounge chair", "Atelier Nord"],
+    "84600000-0000-4000-8000-000000000524": ["Fabric samples pinned to a board", "Atelier Nord samples", "HOLLIS WORKSHOP"]}'::jsonb,
+  'consent switch: makers on → a concept alt naming the maker, and every stored what and whose, show as before');
+RESET ROLE;
+
+-- ─── trusted words, when, what (story seq 59) ─────────────────────────────
+-- T's studio is Nord Studio and one of its makers is Nord. T1 the chair
+-- (maker) with a when override naming Atelier Nord; T2 the sideboard (maker)
+-- whose what carries Harmon Bench Works, with a clean when override; T3 an
+-- item picture (upload) only an edition image names, whose what and when
+-- are the maker; T4 a board named Nord. U's maker is called Studio.
+
+INSERT INTO public.projects (id, name, designer_id, client_id, created_by, studio_id, status, show_makers)
+VALUES
+  ('84600000-0000-4000-8000-000000000005', 'US49 846 Lodge',
+   '84600000-0000-4000-8000-0000000000a1', '84600000-0000-4000-8000-0000000000a2',
+   '84600000-0000-4000-8000-0000000000a1', '84600000-0000-4000-8000-0000000000f1', 'active', false),
+  ('84600000-0000-4000-8000-000000000006', 'US49 846 Mill',
+   '84600000-0000-4000-8000-0000000000a1', '84600000-0000-4000-8000-0000000000a2',
+   '84600000-0000-4000-8000-0000000000a1', '84600000-0000-4000-8000-0000000000f1', 'active', false);
+INSERT INTO public.client_plate_assets (id, project_id, sha256, source_kind, source_ref, original_key, width, height)
+VALUES
+  ('84600000-0000-4000-8000-000000000531', '84600000-0000-4000-8000-000000000005', repeat('c', 64), 'maker',
+   '{"table": "project_ffe_item_images", "id": "84600000-0000-4000-8000-000000000591"}'::jsonb,
+   'plates/846t/c/original.jpg', 2400, 1600),
+  ('84600000-0000-4000-8000-000000000532', '84600000-0000-4000-8000-000000000005', repeat('d', 64), 'maker',
+   '{"table": "project_ffe_item_images", "id": "84600000-0000-4000-8000-000000000592"}'::jsonb,
+   'plates/846t/d/original.jpg', 2400, 1600),
+  ('84600000-0000-4000-8000-000000000533', '84600000-0000-4000-8000-000000000005', repeat('cd', 32), 'upload',
+   '{"table": "project_ffe_item_images", "id": "84600000-0000-4000-8000-000000000593"}'::jsonb,
+   'plates/846t/cd/original.jpg', 1600, 1200),
+  ('84600000-0000-4000-8000-000000000534', '84600000-0000-4000-8000-000000000005', repeat('dc', 32), 'board',
+   '{"table": "project_boards", "id": "84600000-0000-4000-8000-000000000594"}'::jsonb,
+   'plates/846t/dc/original.jpg', 1600, 1000),
+  ('84600000-0000-4000-8000-000000000541', '84600000-0000-4000-8000-000000000006', repeat('ce', 32), 'upload',
+   '{"table": "project_ffe_item_images", "id": "84600000-0000-4000-8000-000000000691"}'::jsonb,
+   'plates/846u/ce/original.jpg', 1600, 1200);
+INSERT INTO public.client_editions (id, project_id, seq, status, kind, composition, facts, overrides,
+                                    auto_published, approved_at, source_hash)
+VALUES
+  ('84600000-0000-4000-8000-000000000907', '84600000-0000-4000-8000-000000000005', 1, 'approved', 'full',
+   '{"sourceHash": "h7", "voice": "model", "hero": {"assetId": "84600000-0000-4000-8000-000000000531"},
+     "held": ["84600000-0000-4000-8000-000000000533"], "chapters": [], "doorstep": null, "notice": null}'::jsonb,
+   $j${"project": {"id": "84600000-0000-4000-8000-000000000005", "name": "US49 846 Lodge", "phase": "install",
+                   "targetDate": null, "showMakers": true,
+                   "studio": {"id": "84600000-0000-4000-8000-0000000000f1", "name": "Nord Studio", "town": "Hudson"}},
+       "rooms": [{"id": "84600000-0000-4000-8000-000000000051", "name": "Hall",
+                  "anchor": "room-84600000-0000-4000-8000-000000000051", "conceptAssetId": null, "scanAssetIds": [],
+                  "items": [{"id": "84600000-0000-4000-8000-000000000151", "nameAsSigned": "Lounge chair",
+                             "category": "Seating", "status": "ordered", "makerName": "Nord",
+                             "assetIds": ["84600000-0000-4000-8000-000000000531"], "silhouetteKind": "seating"},
+                            {"id": "84600000-0000-4000-8000-000000000152",
+                             "nameAsSigned": "Harmon Bench Works walnut sideboard",
+                             "category": "Storage", "status": "ordered", "makerName": "Harmon Bench Works",
+                             "assetIds": ["84600000-0000-4000-8000-000000000532"], "silhouetteKind": "case"},
+                            {"id": "84600000-0000-4000-8000-000000000153", "nameAsSigned": "Hall cabinet",
+                             "category": "Storage", "status": "ordered", "makerName": "Harmon Bench Works",
+                             "assetIds": ["84600000-0000-4000-8000-000000000533"], "silhouetteKind": "case"}]}],
+       "assets": [{"id": "84600000-0000-4000-8000-000000000531", "sourceKind": "maker",
+                   "caption": {"what": "Lounge chair", "whose": "Nord", "when": "4 October 2026"},
+                   "alt": "Lounge chair · Nord · product photograph"},
+                  {"id": "84600000-0000-4000-8000-000000000532", "sourceKind": "maker",
+                   "caption": {"what": "Harmon Bench Works walnut sideboard", "whose": "Harmon Bench Works",
+                               "when": "4 October 2026"},
+                   "alt": "Harmon Bench Works walnut sideboard · Harmon Bench Works · product photograph"},
+                  {"id": "84600000-0000-4000-8000-000000000534", "sourceKind": "board",
+                   "caption": {"what": "Nord", "whose": "Nord Studio", "when": "4 October 2026"},
+                   "alt": "Nord · Nord Studio · studio board"}],
+       "palette": [], "boards": [], "sheets": []}$j$::jsonb,
+   '{"captions": {"84600000-0000-4000-8000-000000000531": {"when": "October — Atelier Nord"},
+                  "84600000-0000-4000-8000-000000000532": {"when": "Late autumn — 2026"}}}'::jsonb,
+   false, now(), 'h7'),
+  ('84600000-0000-4000-8000-000000000908', '84600000-0000-4000-8000-000000000006', 1, 'approved', 'full',
+   '{"sourceHash": "h8", "voice": "model", "hero": null, "held": [], "chapters": [], "doorstep": null,
+     "notice": null}'::jsonb,
+   $j${"project": {"id": "84600000-0000-4000-8000-000000000006", "name": "US49 846 Mill", "phase": "install",
+                   "targetDate": null, "showMakers": false,
+                   "studio": {"id": "84600000-0000-4000-8000-0000000000f1", "name": "Hollow Oak", "town": "Hudson"}},
+       "rooms": [{"id": "84600000-0000-4000-8000-000000000061", "name": "Porch",
+                  "anchor": "room-84600000-0000-4000-8000-000000000061", "conceptAssetId": null, "scanAssetIds": [],
+                  "items": [{"id": "84600000-0000-4000-8000-000000000161", "nameAsSigned": "Oak bench",
+                             "category": "Seating", "status": "ordered", "makerName": "Studio",
+                             "assetIds": ["84600000-0000-4000-8000-000000000541"], "silhouetteKind": "seating"}]}],
+       "assets": [{"id": "84600000-0000-4000-8000-000000000541", "sourceKind": "upload",
+                   "caption": {"what": "Oak bench", "whose": "Hollow Oak", "when": "5 October 2026"},
+                   "alt": "Oak bench · Hollow Oak · studio photograph"}],
+       "palette": [], "boards": [], "sheets": []}$j$::jsonb,
+   '{}'::jsonb, false, now(), 'h8');
+INSERT INTO public.client_edition_images (edition_id, asset_id, plate_role, crop_key, rank, chapter_key, alt,
+                                          caption_what, caption_whose, caption_when)
+VALUES
+  ('84600000-0000-4000-8000-000000000907', '84600000-0000-4000-8000-000000000531', 'hero', 'none', 1, 'cover',
+   'Nord lounge chair by the fire', 'Lounge chair', 'Nord', '4 October 2026'),
+  ('84600000-0000-4000-8000-000000000907', '84600000-0000-4000-8000-000000000533', 'held', 'none', 2, 'cover',
+   'Harmon Bench Works cabinet, detail of the hinge', 'HARMON BENCH WORKS', 'Harmon Bench Works',
+   'Harmon Bench Works, 2025');
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT 'read' AS us49 FROM (SELECT set_config('us49.trusted_off',
+  public.get_client_project_edition('84600000-0000-4000-8000-000000000005')::text, true)) AS stash;
+SELECT 'read' AS us49 FROM (SELECT set_config('us49.studio_vendor_off',
+  public.get_client_project_edition('84600000-0000-4000-8000-000000000006')::text, true)) AS stash;
+RESET ROLE;
+
+SELECT is(
+  (SELECT jsonb_build_array(asset -> 'caption' ->> 'whose', asset ->> 'alt')
+   FROM jsonb_array_elements(current_setting('us49.trusted_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000531'),
+  jsonb_build_array('Nord Studio', public._client_plate_alt('Lounge chair', 'Nord Studio', 'maker')),
+  'trusted words: vendor Nord, studio Nord Studio → whose is the studio and the alt the rebuilt _client_plate_alt text, not re-masked');
+SELECT is(
+  (SELECT jsonb_build_array(asset -> 'caption' ->> 'whose', asset ->> 'alt')
+   FROM jsonb_array_elements(current_setting('us49.studio_vendor_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000541'),
+  '["Hollow Oak", "Oak bench · Hollow Oak · studio photograph"]'::jsonb,
+  'trusted words: vendor Studio → the kind words "studio photograph" stay in the rebuilt alt; whose is the studio');
+SELECT is(
+  (SELECT asset -> 'caption' ->> 'when'
+   FROM jsonb_array_elements(current_setting('us49.trusted_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000531'),
+  '4 October 2026',
+  'when: makers off → an override when naming a maker ("October — Atelier Nord") is the facts'' date');
+SELECT is(
+  (SELECT asset -> 'caption' ->> 'when'
+   FROM jsonb_array_elements(current_setting('us49.trusted_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000532'),
+  'Late autumn — 2026',
+  'when: makers off → a clean when override is kept byte for byte');
+SELECT is(
+  (SELECT asset -> 'caption' -> 'when'
+   FROM jsonb_array_elements(current_setting('us49.trusted_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000533'),
+  'null'::jsonb,
+  'when: makers off → an image''s when naming a maker, with no facts date to fall back on, is null');
+SELECT is(
+  (SELECT jsonb_build_array(asset -> 'caption' ->> 'what', asset ->> 'alt')
+   FROM jsonb_array_elements(current_setting('us49.trusted_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000532'),
+  '["walnut sideboard", "walnut sideboard · Nord Studio · product photograph"]'::jsonb,
+  'what: makers off → "Harmon Bench Works walnut sideboard" reads "walnut sideboard", and the alt is rebuilt from it');
+SELECT is(
+  (SELECT jsonb_build_array(asset -> 'caption' ->> 'what', asset ->> 'alt')
+   FROM jsonb_array_elements(current_setting('us49.trusted_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000533'),
+  '["Storage", "Storage · Nord Studio · studio photograph"]'::jsonb,
+  'what: makers off → a what that is only the maker, in capitals, is the category of the line it pictures');
+SELECT is(
+  (SELECT jsonb_build_array(asset -> 'caption' ->> 'what', asset -> 'caption' ->> 'whose', asset ->> 'alt')
+   FROM jsonb_array_elements(current_setting('us49.trusted_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000534'),
+  '["studio board", "Nord Studio", "Nord Studio · studio board"]'::jsonb,
+  'what: makers off → a board named only for the maker reads the kind words; its alt is rebuilt, the kind said once');
+SELECT is(
+  (SELECT count(*)
+   FROM jsonb_array_elements(current_setting('us49.trusted_off')::jsonb -> 'assets') AS asset
+   WHERE regexp_replace(
+           concat_ws(' ', asset ->> 'alt', asset -> 'caption' ->> 'what', asset -> 'caption' ->> 'whose',
+                     asset -> 'caption' ->> 'when'),
+           '(nord studio|product photograph|studio photograph|studio board)', '', 'gi')
+         ~* '(nord|harmon bench works)'),
+  0::bigint,
+  'what: makers off → outside the studio''s name and the kind words, no alt or caption field names a maker of the job');
+
+UPDATE public.projects SET show_makers = true WHERE id = '84600000-0000-4000-8000-000000000005';
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT is(
+  (SELECT jsonb_object_agg(asset ->> 'id', asset -> 'caption')
+   FROM jsonb_array_elements(
+     public.get_client_project_edition('84600000-0000-4000-8000-000000000005') -> 'assets') AS asset
+   WHERE asset ->> 'id' IN ('84600000-0000-4000-8000-000000000531', '84600000-0000-4000-8000-000000000532',
+                            '84600000-0000-4000-8000-000000000533')),
+  '{"84600000-0000-4000-8000-000000000531": {"what": "Lounge chair", "whose": "Nord", "when": "October — Atelier Nord"},
+    "84600000-0000-4000-8000-000000000532": {"what": "Harmon Bench Works walnut sideboard", "whose": "Harmon Bench Works",
+                                             "when": "Late autumn — 2026"},
+    "84600000-0000-4000-8000-000000000533": {"what": "HARMON BENCH WORKS", "whose": "Harmon Bench Works",
+                                             "when": "Harmon Bench Works, 2025"}}'::jsonb,
+  'what: makers on → every stored what, whose and when shows as before');
 RESET ROLE;
 
 SELECT * FROM finish();

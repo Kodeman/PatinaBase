@@ -154,9 +154,12 @@ export interface EditionReaderFunctions {
   get_client_project_editorial: { Args: { p_project_id: string }; Returns: unknown };
 }
 
-/** What · whose · when: exactly three stored fields, never a fourth. */
+/**
+ * What · whose · when: at most three stored fields, never a fourth. `when` is
+ * null when the record withholds it (makers off, story seq 59).
+ */
 export interface CaptionTriplet {
   what: string;
   whose: string;
-  when: string;
+  when: string | null;
 }

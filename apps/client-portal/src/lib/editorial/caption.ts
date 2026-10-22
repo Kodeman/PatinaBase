@@ -20,16 +20,20 @@ function field(value: string | null | undefined): string | null {
   return text && !hasBannedWords(text) ? text : null;
 }
 
-/** Null when any field is missing or carries refused wording. */
+/**
+ * Null when what or whose is missing, or any field carries refused wording. A
+ * missing when only drops that segment: the reader withholds a when that names
+ * a maker while makers are off (story seq 59).
+ */
 export function captionTriplet(fields: CaptionFields): CaptionTriplet | null {
   const what = field(fields.what);
   const whose = field(fields.whose);
-  const when = field(fields.when);
-  return what && whose && when ? { what, whose, when } : null;
+  if (!what || !whose || hasBannedWords(fields.when ?? '')) return null;
+  return { what, whose, when: field(fields.when) };
 }
 
 export function captionText(caption: CaptionTriplet): string {
-  return [caption.what, caption.whose, caption.when].join(CAPTION_SEPARATOR);
+  return [caption.what, caption.whose, caption.when].filter(Boolean).join(CAPTION_SEPARATOR);
 }
 
 const SOURCE_WORD: Readonly<Record<SourceKind, string>> = {
