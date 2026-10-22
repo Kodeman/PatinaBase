@@ -116,6 +116,32 @@ function NestedSheetHarness() {
 }
 
 describe('DocSheet', () => {
+  it('does not steal focus from a field focused before the deferred open frame', () => {
+    let flushFocusFrame: FrameRequestCallback | undefined;
+    const requestFrame = jest
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        flushFocusFrame = callback;
+        return 1;
+      });
+
+    try {
+      render(
+        <DocSheet open onClose={jest.fn()} title="Order review">
+          <input aria-label="Order amount" />
+        </DocSheet>,
+      );
+
+      const amount = screen.getByRole('textbox', { name: 'Order amount' });
+      amount.focus();
+      flushFocusFrame?.(0);
+
+      expect(amount).toHaveFocus();
+    } finally {
+      requestFrame.mockRestore();
+    }
+  });
+
   it('labels the dialog, isolates scroll, and restores its opener after visible close', async () => {
     render(<SheetHarness />);
     const opener = screen.getByRole('button', { name: 'Open orders' });

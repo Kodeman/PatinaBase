@@ -289,7 +289,17 @@ export function DocSheet({
     }
     const unlockBodyScroll = lockBodyScroll();
     const focusFrame = window.requestAnimationFrame(() => {
-      (initialFocusRef?.current ?? panelRef.current)?.focus({ preventScroll: true });
+      const panel = panelRef.current;
+      const activeElement = document.activeElement;
+      if (
+        panel &&
+        activeElement instanceof HTMLElement &&
+        activeElement !== panel &&
+        panel.contains(activeElement)
+      ) {
+        return;
+      }
+      (initialFocusRef?.current ?? panel)?.focus({ preventScroll: true });
     });
 
     return () => {
