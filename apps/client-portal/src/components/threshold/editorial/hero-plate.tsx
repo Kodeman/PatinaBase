@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, type CSSProperties } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 
-import { SIZES, heroPicture, heroPreloadSources, objectPositionFromRect } from '@/lib/editorial/crop';
+import { SIZES, heroPicture, heroPreloadSources, objectPositionFromRect, shortFramePosition } from '@/lib/editorial/crop';
 import type { CaptionTriplet, EditorialAsset } from '@/lib/editorial/types';
 
 import { PaperTab, usePaperTabMode, type PaperTabMode } from './paper-tab';
@@ -53,6 +53,27 @@ export function HeroPlate(props: HeroPlateProps) {
   const computed = usePaperTabMode(props.asset, ref);
   const { layout, main, phone, sizes, width, height } = heroPicture(props.asset);
   const rect = props.asset.crops[main]?.rect;
+  const [phonePosition, setPhonePosition] = useState<string | null>(null);
+
+  useLayoutEffect(() => {
+    if (!props.phoneObjectPosition) return;
+    const image = ref.current?.querySelector('img');
+    if (!image) return;
+    const measure = () => {
+      const { width, height } = image.getBoundingClientRect();
+      if (width > 0 && height > 0) {
+        setPhonePosition(shortFramePosition(props.asset, width / height));
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(image);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [props.asset, props.phoneObjectPosition]);
 
   return (
     <div
@@ -60,7 +81,11 @@ export function HeroPlate(props: HeroPlateProps) {
       className="ed-hero-slot"
       style={
         props.phoneObjectPosition
-          ? ({ '--ed-hero-phone-position': props.phoneObjectPosition } as CSSProperties)
+          ? ({
+              '--ed-hero-phone-position': phonePosition ?? props.phoneObjectPosition,
+              // Until measured, or when cover cannot fit the subject, show the whole rendition.
+              '--ed-hero-phone-fit': phonePosition === null ? 'contain' : 'cover',
+            } as CSSProperties)
           : undefined
       }
     >

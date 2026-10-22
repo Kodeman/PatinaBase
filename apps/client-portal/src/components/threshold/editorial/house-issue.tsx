@@ -106,6 +106,8 @@ export interface HouseIssue {
   rooms: ReadonlyMap<string, RoomPlateChoice>;
   /** The one room whose chapter plate stands held (≤1 per page). */
   heldRoomId: string | null;
+  /** An approved job-level held plate, before the house/key chapter. */
+  heldHouseAsset: EditorialAsset | null;
   /** Where the paint chips stand: a living room chapter, else the drawn cover. */
   swatchRoomId: string | null;
 }
@@ -118,13 +120,14 @@ function heldRoom(choices: readonly RoomPlateChoice[]): string | null {
 }
 
 interface HeldPlacement {
-  roomId: string;
+  /** Null names the job-level house/key opening, not a room. */
+  roomId: string | null;
   asset: EditorialAsset;
 }
 
 /**
  * An approved edition's held plate: the lowest-ranked `held` image the
- * composition approved, in the room its chapter key names. None when the
+ * composition approved, at the house or room its chapter key names. None when the
  * edition approved none; the code never picks one in its place.
  */
 function approvedHeld(editorial: ClientProjectEditorial): HeldPlacement | null {
@@ -133,9 +136,9 @@ function approvedHeld(editorial: ClientProjectEditorial): HeldPlacement | null {
   const ranked = [...(editorial.images ?? [])].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
   for (const image of ranked) {
     if (image.plateRole !== "held" || !approved.has(image.assetId)) continue;
-    const roomId = image.chapterKey ? rooms.get(image.chapterKey) : undefined;
+    const roomId = image.chapterKey === "house" ? null : rooms.get(image.chapterKey ?? "");
     const asset = editorial.assets.find((a) => a.id === image.assetId);
-    if (roomId && asset?.crops.tall) return { roomId, asset };
+    if (roomId !== undefined && asset?.crops.tall) return { roomId, asset };
   }
   return null;
 }
@@ -181,6 +184,7 @@ export function houseIssue(editorial: ClientProjectEditorial): HouseIssue {
     heroItem: itemFor(editorial, hero?.id),
     rooms: new Map(choices.map((c) => [c.roomId, c])),
     heldRoomId: editorial.edition ? (held?.roomId ?? null) : heldRoom(choices),
+    heldHouseAsset: held?.roomId === null ? held.asset : null,
     swatchRoomId: hero && living ? living.id : null,
   };
 }
@@ -208,7 +212,10 @@ export function useEditionIssue(
 }
 
 /** A chapter as the page prints it: the edition may give it a standing sentence. */
-export type EditionChapter = Chapter & { standing?: string | null };
+export type EditionChapter = Chapter & {
+  standing?: string | null;
+  heldPlate?: { scopeId: string; asset: EditorialAsset };
+};
 
 /** The composition's chapter keys that are not a room's own anchor. */
 const COMPOSED_ANCHOR: Readonly<Record<string, string>> = {
@@ -273,7 +280,12 @@ export function editionChapters(
       const chapter = plan.get(anchor)!;
       return [
         anchor,
-        { ...chapter, number, eyebrow: `${number} · ${chapter.label}` },
+        {
+          ...chapter, number, eyebrow: `${number} · ${chapter.label}`,
+          ...(anchor === "key" && issue.heldHouseAsset
+            ? { heldPlate: { scopeId: issue.scopeId, asset: issue.heldHouseAsset } }
+            : {}),
+        },
       ];
     }),
   );
@@ -813,6 +825,17 @@ export function withChapter(
       <Reveal className="mt-12">
         <ChapterOpening chapter={chapter} />
       </Reveal>
+      {chapter.heldPlate ? (
+        <Reveal>
+          <HeldPlate
+            scopeId={chapter.heldPlate.scopeId}
+            asset={chapter.heldPlate.asset}
+            alt={plateAlt(chapter.heldPlate.asset)}
+            paletteHex={chapter.heldPlate.asset.dominantHex}
+            fallback={{ name: chapter.headline }}
+          />
+        </Reveal>
+      ) : null}
       {node}
     </>
   );

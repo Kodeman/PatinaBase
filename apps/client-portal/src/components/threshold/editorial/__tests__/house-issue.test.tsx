@@ -1,4 +1,4 @@
-import { render, renderHook, screen } from "@testing-library/react";
+import { act, render, renderHook, screen } from "@testing-library/react";
 
 import { heroPreloads } from "@/lib/data/client-editorial";
 import type {
@@ -749,14 +749,31 @@ describe("the approved edition", () => {
     for (const house of [
       placed([], []),
       placed([], [{ assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "room-b" }]),
-      // Approved, but placed in no room the page draws.
-      placed(["scanb"], [{ assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "house" }]),
+      // Unknown keys retain the Phase 1 room ranking, without inventing a held placement.
+      placed(["scanb"], [{ assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "unknown" }]),
     ]) {
       const issue = houseIssue(house);
       expect(issue.heldRoomId).toBeNull();
       expect(heldIn(issue, "a").held).toBe(false);
       expect(heldIn(issue, "b").held).toBe(false);
     }
+  });
+
+  it("renders the exact approved house held image at the key opening, never a ranked substitute", () => {
+    const issue = houseIssue(
+      placed(["scanb"], [{ assetId: "scanb", plateRole: "held", rank: 1, chapterKey: "house" }]),
+    );
+    const chapters = editionChapters(issue, ["key", "room-a", "room-b"])!;
+    const view = render(<>{withChapter(chapters, "key", <section id="key" />)}</>);
+    const held = view.container.querySelector(".ed-held")!;
+    expect(held).not.toBeNull();
+    expect(held.querySelector("img")?.getAttribute("src")).toContain(
+      "/plates/" + EDITION_ID + "/" + "scanb".padStart(64, "a") + "/",
+    );
+    expect(held.compareDocumentPosition(view.container.querySelector("#key")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(issue.rooms.get("b")?.chapter).toBeNull();
+    expect(heldIn(issue, "a").held).toBe(false);
+    expect(heldIn(issue, "b").held).toBe(false);
   });
 
   it("follows the edition's rank among held rows, and keeps a held picture out of every other room", () => {
@@ -823,6 +840,27 @@ describe("the approved edition", () => {
   });
 
   // ── SQ-1593 R5: a long headline never crops the subject box ─────────────────
+
+  it("contains a short-frame scan when the 72svh box cannot cover its subject, and remeasures on resize", () => {
+    let height = 288; // 72svh at a 390 × 400 viewport; nominal 39:30 would be 300.
+    jest.spyOn(HTMLImageElement.prototype, "getBoundingClientRect").mockImplementation(() =>
+      ({ width: 390, height } as DOMRect),
+    );
+    const scan = asset("clamped", {
+      sourceKind: "scan", width: 1200, height: 1600,
+      subjectBox: [0.05, 0, 0.9, 0.57],
+      crops: { cover_phone: { rect: [0, 0, 1200, 1046], widths: [640, 828, 1080] } },
+    });
+    cover(houseIssue(edition([scan], { chapters: [{ key: "cover", headline: "Your scan, from the room upstairs", standing: null }] })));
+    const hero = screen.getByTestId("house-issue-hero");
+    expect(hero).toHaveAttribute("data-hero-frame", "short");
+    const slot = hero.querySelector<HTMLElement>(".ed-hero-slot")!;
+    expect(slot.style.getPropertyValue("--ed-hero-phone-fit")).toBe("contain");
+    height = 300;
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(slot.style.getPropertyValue("--ed-hero-phone-fit")).toBe("cover");
+    expect(slot.style.getPropertyValue("--ed-hero-phone-position")).toBe("50% 0%");
+  });
 
   it("shortens the phone frame for a long headline only where the subject fits, at the position that keeps it whole", () => {
     const sixty = "Your walnut sideboard is planed and waiting on the workbench";

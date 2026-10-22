@@ -196,7 +196,8 @@
 
 /* The shorter frame stands only when the phone rendition's subject box fits
    it whole, at the position crop.ts `shortFramePosition` computed for that
-   rendition (house-issue.tsx sets both); otherwise the hero keeps 39:34. The
+   rendition. HeroPlate remeasures the 72svh-clamped box and uses contain if
+   cover cannot fit the subject; otherwise the hero keeps 39:34. The
    inline object-position is the desktop crop's, so the phone one must win. */
 @media (max-width: 600px) {
   [data-hero-frame='short'] .ed-hero .ed-plate__img,
@@ -205,6 +206,7 @@
   }
   [data-hero-frame='short'] .ed-hero .ed-plate__img {
     object-position: var(--ed-hero-phone-position, 50% 50%) !important;
+    object-fit: var(--ed-hero-phone-fit, contain);
   }
 }
 

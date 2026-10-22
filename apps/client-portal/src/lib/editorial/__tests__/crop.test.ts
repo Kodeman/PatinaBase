@@ -116,6 +116,22 @@ describe('the shorter phone frame', () => {
     expect(shortFramePosition({ ...nearEdge, subjectBox: null })).toBe('50% 50%');
   });
 
+  it('refuses cover for the 1200×1600 scan in a 390×400 viewport clamped to 72svh', () => {
+    const scan: EditorialAsset = {
+      ...nearEdge, sourceKind: 'scan', width: 1200, height: 1600,
+      subjectBox: [0.05, 0, 0.9, 0.57],
+      crops: { cover_phone: { rect: [0, 0, 1200, 1046], widths: [640, 828, 1080] } },
+    };
+    const width = 390;
+    const height = Math.min(width / SHORT_PHONE_FRAME, 400 * 0.72);
+    const subjectHeight = scan.subjectBox![3] * scan.height;
+    expect(subjectHeight - height / width * scan.width).toBeCloseTo(25.846, 2);
+    expect(shortFramePosition(scan)).toBe('50% 0%'); // nominal box fits
+    expect(shortFramePosition(scan, width / height)).toBeNull(); // actual box needs contain
+    // A slightly smaller near-top subject fits only when the actual aspect is used.
+    expect(shortFramePosition({ ...scan, subjectBox: [0.05, 0, 0.9, 0.55] }, width / height)).toBe('50% 0%');
+  });
+
   it('refuses the shorter frame when the subject is taller than it: the hero keeps 39:34', () => {
     expect(shortFramePosition({ ...nearEdge, subjectBox: [0.05, 0, 0.9, 0.95] })).toBeNull();
     // A hero with no phone rendition to measure keeps the taller frame too.

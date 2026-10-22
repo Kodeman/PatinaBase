@@ -149,15 +149,17 @@ function coverAxis(visible: number, subject: readonly [number, number], centre: 
 /**
  * The object-position for the phone hero in its shorter frame, computed on the
  * rendition the phone actually draws so the subject box stays whole. Null when
- * the subject cannot fit the shorter frame: the hero keeps its taller 39:34.
+ * the subject cannot fit: use contain in a viewport-clamped short frame, or
+ * keep the taller 39:34 when even the nominal short frame cannot fit it.
+ * `frameAspect` is the measured image box width / height, including 72svh.
  */
-export function shortFramePosition(asset: EditorialAsset): string | null {
+export function shortFramePosition(asset: EditorialAsset, frameAspect = SHORT_PHONE_FRAME): string | null {
   const hero = heroPicture(asset);
   const rect = asset.crops[hero.phone ?? hero.main]?.rect;
   if (!rect || !(asset.width > 0 && asset.height > 0)) return null;
   const [rx, ry, rw, rh] = normalised(rect, asset.width, asset.height);
   const aspect = (rw * asset.width) / (rh * asset.height);
-  const visible = aspect < SHORT_PHONE_FRAME ? [1, aspect / SHORT_PHONE_FRAME] : [SHORT_PHONE_FRAME / aspect, 1];
+  const visible = aspect < frameAspect ? [1, aspect / frameAspect] : [frameAspect / aspect, 1];
   const box = asset.subjectBox ? normalised(asset.subjectBox, asset.width, asset.height) : null;
   const span = (start: number, length: number, origin: number, size: number): [number, number] =>
     [(start - origin) / size, (start + length - origin) / size];
