@@ -14,8 +14,9 @@
 --               origin), no price or SKU; a plate of another project named in
 --               the facts is left out; descriptionAsSigned cut to 280
 --   live        showMakers is today's: off → no maker, caption whose = the
---               studio, every alt rebuilt from the caption shown (an edition
---               image's and a frozen-facts-only alt alike); on → the maker
+--               studio, an item picture's alt (maker or upload) rebuilt from
+--               the caption shown (an edition image's and a frozen-facts-only
+--               alt alike), any other plate's stored alt kept; on → the maker
 --               and the stored alts; plate bytes facts are the asset row
 --               now; a concept plate reads concept and is never the hero
 --   hero        a flagged plate is never the hero, by override neither; a
@@ -28,6 +29,11 @@
 --               chair: Atelier Nord; the board: a joiner): off → the chair's
 --               caption and alt name the studio, the board's override
 --               stays; back on → Atelier Nord (story seq 48)
+--   makers frozen off  an edition composed with makers off whose chair
+--               (maker) and table (upload) images reuse an alt naming the
+--               maker (SQ-1660 N1): makers off → both alts are rebuilt from
+--               the studio caption, the scan keeps its own; makers on →
+--               every stored alt
 --   plate scope an approved edition id scopes its project for its client and
 --               studio; a superseded edition id, a stranger who is the
 --               client of another project holding the same bytes, and
@@ -39,7 +45,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(39);
+SELECT plan(44);
 
 -- ─── grants ────────────────────────────────────────────────────────────────
 
@@ -237,6 +243,13 @@ SELECT is(
    WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000502'),
   'concept',
   'live: a plate a concept render produced reads concept');
+SELECT is(
+  (SELECT asset ->> 'alt'
+   FROM (SELECT current_setting('us49.edition_off')::jsonb AS envelope) AS read,
+        jsonb_array_elements(envelope -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000502'),
+  'Living room, concept render',
+  'live: makers off → a plate that is no item picture keeps its stored alt (story seq 49)');
 
 -- ─── makers on; studio reads; concept hero dropped ─────────────────────────
 
@@ -468,6 +481,96 @@ SELECT is(
    WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000501'),
   'Atelier Nord',
   'makers switch: makers back on → the chair''s override is Atelier Nord again');
+RESET ROLE;
+
+-- ─── an edition composed with makers off (SQ-1660 N1) ─────────────────────
+-- R's edition froze showMakers false, yet its chair (maker) and table
+-- (upload) images reuse an alt perceived while makers showed. The live
+-- switch decides, not the frozen flag.
+
+INSERT INTO public.projects (id, name, designer_id, client_id, created_by, studio_id, status, show_makers)
+VALUES ('84600000-0000-4000-8000-000000000003', 'US49 846 Cottage',
+        '84600000-0000-4000-8000-0000000000a1', '84600000-0000-4000-8000-0000000000a2',
+        '84600000-0000-4000-8000-0000000000a1', '84600000-0000-4000-8000-0000000000f1', 'active', false);
+INSERT INTO public.client_plate_assets (id, project_id, sha256, source_kind, source_ref, original_key, width, height)
+VALUES
+  ('84600000-0000-4000-8000-000000000511', '84600000-0000-4000-8000-000000000003', repeat('4', 64), 'maker',
+   '{"table": "project_ffe_item_images", "id": "84600000-0000-4000-8000-000000000391"}'::jsonb,
+   'plates/846r/4/original.jpg', 2400, 1600),
+  ('84600000-0000-4000-8000-000000000512', '84600000-0000-4000-8000-000000000003', repeat('5', 64), 'upload',
+   '{"table": "project_ffe_item_images", "id": "84600000-0000-4000-8000-000000000392"}'::jsonb,
+   'plates/846r/5/original.jpg', 1600, 1200),
+  ('84600000-0000-4000-8000-000000000513', '84600000-0000-4000-8000-000000000003', repeat('6', 64), 'scan',
+   '{"table": "room_scan_images", "id": "84600000-0000-4000-8000-000000000393"}'::jsonb,
+   'plates/846r/6/original.jpg', 1600, 1200);
+INSERT INTO public.client_editions (id, project_id, seq, status, kind, composition, facts,
+                                    auto_published, approved_at, source_hash)
+VALUES
+  ('84600000-0000-4000-8000-000000000905', '84600000-0000-4000-8000-000000000003', 1, 'approved', 'full',
+   $j${"sourceHash": "h5", "voice": "model",
+       "hero": {"assetId": "84600000-0000-4000-8000-000000000511", "why": "the chair"},
+       "held": ["84600000-0000-4000-8000-000000000512", "84600000-0000-4000-8000-000000000513"],
+       "chapters": [{"key": "cover", "headline": "The cottage", "standing": "One room is set."}],
+       "doorstep": null, "notice": null}$j$::jsonb,
+   $j${"project": {"id": "84600000-0000-4000-8000-000000000003", "name": "US49 846 Cottage", "phase": "install",
+                   "targetDate": null, "showMakers": false,
+                   "studio": {"id": "84600000-0000-4000-8000-0000000000f1", "name": "US49 846 Studio", "town": "Hudson"}},
+       "rooms": [],
+       "assets": [{"id": "84600000-0000-4000-8000-000000000511", "sourceKind": "maker",
+                   "caption": {"what": "Lounge chair", "whose": "US49 846 Studio", "when": "2 October 2026"},
+                   "alt": "Lounge chair · US49 846 Studio · product photograph"},
+                  {"id": "84600000-0000-4000-8000-000000000512", "sourceKind": "upload",
+                   "caption": {"what": "Dining table", "whose": "US49 846 Studio", "when": "2 October 2026"},
+                   "alt": "Dining table · US49 846 Studio · studio photograph"},
+                  {"id": "84600000-0000-4000-8000-000000000513", "sourceKind": "scan",
+                   "caption": {"what": "Kitchen", "whose": "US49 846 Studio", "when": "2 October 2026"},
+                   "alt": "Kitchen · US49 846 Studio · room scan"}],
+       "palette": [], "boards": [], "sheets": []}$j$::jsonb,
+   false, now(), 'h5');
+INSERT INTO public.client_edition_images (edition_id, asset_id, plate_role, crop_key, rank, chapter_key, alt,
+                                          caption_what, caption_whose, caption_when)
+VALUES
+  ('84600000-0000-4000-8000-000000000905', '84600000-0000-4000-8000-000000000511', 'hero', 'none', 1, 'cover',
+   'Atelier Nord lounge chair by the window', 'Lounge chair', 'US49 846 Studio', '2 October 2026'),
+  ('84600000-0000-4000-8000-000000000905', '84600000-0000-4000-8000-000000000512', 'held', 'none', 2, 'cover',
+   'Atelier Nord oak dining table with six chairs', 'Dining table', 'US49 846 Studio', '2 October 2026'),
+  ('84600000-0000-4000-8000-000000000905', '84600000-0000-4000-8000-000000000513', 'held', 'none', 3, 'cover',
+   'The kitchen from the doorway, in morning light', 'Kitchen', 'US49 846 Studio', '2 October 2026');
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"84600000-0000-4000-8000-0000000000a2","role":"authenticated"}';
+SELECT 'read' AS us49 FROM (SELECT set_config('us49.frozen_off',
+  public.get_client_project_edition('84600000-0000-4000-8000-000000000003')::text, true)) AS stash;
+RESET ROLE;
+SELECT is(
+  (SELECT count(*) FROM jsonb_array_elements(current_setting('us49.frozen_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'alt' ~* '(atelier|nord)'),
+  0::bigint,
+  'makers frozen off: makers off → no alt names the maker, though the images reuse one written while makers showed');
+SELECT is(
+  (SELECT jsonb_object_agg(asset ->> 'id', jsonb_build_array(asset -> 'caption' ->> 'whose', asset ->> 'alt'))
+   FROM jsonb_array_elements(current_setting('us49.frozen_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' IN ('84600000-0000-4000-8000-000000000511', '84600000-0000-4000-8000-000000000512')),
+  '{"84600000-0000-4000-8000-000000000511": ["US49 846 Studio", "Lounge chair · US49 846 Studio · product photograph"],
+    "84600000-0000-4000-8000-000000000512": ["US49 846 Studio", "Dining table · US49 846 Studio · studio photograph"]}'::jsonb,
+  'makers frozen off: makers off → the maker and upload alts are rebuilt from the studio caption, whatever the edition froze');
+SELECT is(
+  (SELECT asset ->> 'alt'
+   FROM jsonb_array_elements(current_setting('us49.frozen_off')::jsonb -> 'assets') AS asset
+   WHERE asset ->> 'id' = '84600000-0000-4000-8000-000000000513'),
+  'The kitchen from the doorway, in morning light',
+  'makers frozen off: makers off → the scan keeps its stored alt');
+
+UPDATE public.projects SET show_makers = true WHERE id = '84600000-0000-4000-8000-000000000003';
+SET LOCAL ROLE authenticated;
+SELECT is(
+  (SELECT jsonb_object_agg(asset ->> 'id', asset -> 'alt')
+   FROM jsonb_array_elements(
+     public.get_client_project_edition('84600000-0000-4000-8000-000000000003') -> 'assets') AS asset),
+  '{"84600000-0000-4000-8000-000000000511": "Atelier Nord lounge chair by the window",
+    "84600000-0000-4000-8000-000000000512": "Atelier Nord oak dining table with six chairs",
+    "84600000-0000-4000-8000-000000000513": "The kitchen from the doorway, in morning light"}'::jsonb,
+  'makers frozen off: makers on → each image''s stored alt shows');
 RESET ROLE;
 
 SELECT * FROM finish();

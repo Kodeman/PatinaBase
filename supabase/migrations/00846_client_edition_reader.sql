@@ -40,9 +40,11 @@
 --                attributionKind 00845's list_client_editions returns, so
 --                the designer mirror masks the same plates) is the
 --                studio's whatever its override says; any other plate's
---                whose override still shows. While makers are off and the
---                edition was composed with them on, every alt is rebuilt
---                from the caption shown, so none names a maker.
+--                whose override still shows. While makers are off, an item
+--                picture's alt is rebuilt from that studio caption whatever
+--                the edition froze, since an alt perceived while makers
+--                showed can name one (SQ-1660 N1); any other plate keeps
+--                its stored alt.
 --   Override hero  a heroAssetId the edition does not name is still a plate
 --                when it is this project's and no concept: its words are the
 --                builder's record-derived entry, else the studio's name and
@@ -74,7 +76,6 @@ DECLARE
   v_overrides jsonb;
   v_show_makers boolean;
   v_studio_name text;
-  v_rebuild_alt boolean;
   v_extra_hero text;
   v_extra_fact jsonb;
   v_hero text;
@@ -107,9 +108,6 @@ BEGIN
   v_overrides := COALESCE(v_edition.overrides, '{}'::jsonb);
   v_show_makers := COALESCE(v_project.show_makers, false);
   v_studio_name := v_facts -> 'project' -> 'studio' ->> 'name';
-  -- Alt written while makers showed may name one: rebuild it once they are off.
-  v_rebuild_alt := NOT v_show_makers
-    AND (v_facts -> 'project' -> 'showMakers') IS DISTINCT FROM 'false'::jsonb;
 
   -- An override hero the edition does not name (header).
   v_extra_hero := lower(NULLIF(btrim(v_overrides ->> 'heroAssetId'), ''));
@@ -215,7 +213,9 @@ BEGIN
            'crops', shown.crops,
            'caption', jsonb_build_object(
              'what', shown.shown_what, 'whose', shown.shown_whose, 'when', shown.shown_when),
-           'alt', CASE WHEN v_rebuild_alt
+           -- Makers off: an item picture's alt may name its maker, whatever
+           -- the edition froze; rebuild it from the studio caption.
+           'alt', CASE WHEN NOT v_show_makers AND shown.kind IN ('maker', 'upload')
                        THEN public._client_plate_alt(shown.shown_what, shown.shown_whose, shown.kind)
                        ELSE COALESCE(shown.image_alt, shown.fact ->> 'alt') END
          ) ORDER BY shown.position NULLS LAST, shown.id), '[]'::jsonb)
