@@ -41004,6 +41004,15 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_receiving_inspection: {
+        Args: {
+          p_inspection_id: string
+          p_lines: Json
+          p_notes?: string
+          p_outcome: string
+        }
+        Returns: Json
+      }
       compliance_document_state: {
         Args: { p_document_id: string }
         Returns: string

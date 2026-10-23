@@ -150,6 +150,7 @@ import {
   useDeliveryCalendar,
   useTodayProcurementCounts,
   useCreateReceivingInspection,
+  useCompleteReceivingInspection,
   useFfePlacementReceipts,
   useDamageClaims,
   useUpdateDamageClaim,
@@ -1093,6 +1094,9 @@ describe('useCreateReceivingInspection — C-19 per-line check-in (00700)', () =
       p_outcome: 'clean',
       p_notes: null,
       p_photo_asset_ids: ['asset-1'],
+      p_po_shipment_id: null, p_studio_purchase_id: null, p_arrival_method: null,
+      p_reported_by: null, p_report_source: null, p_received_on: null, p_location_id: null,
+      p_inspection_pending: null, p_inspection_owner_user_id: null, p_receipt_key: null,
     });
   });
 
@@ -1111,6 +1115,9 @@ describe('useCreateReceivingInspection — C-19 per-line check-in (00700)', () =
       p_outcome: 'clean',
       p_notes: null,
       p_photo_asset_ids: [],
+      p_po_shipment_id: null, p_studio_purchase_id: null, p_arrival_method: null,
+      p_reported_by: null, p_report_source: null, p_received_on: null, p_location_id: null,
+      p_inspection_pending: null, p_inspection_owner_user_id: null, p_receipt_key: null,
     });
   });
 
@@ -1157,6 +1164,9 @@ describe('useCreateReceivingInspection — C-19 per-line check-in (00700)', () =
       p_outcome: 'partial',
       p_notes: null,
       p_photo_asset_ids: [],
+      p_po_shipment_id: null, p_studio_purchase_id: null, p_arrival_method: null,
+      p_reported_by: null, p_report_source: null, p_received_on: null, p_location_id: null,
+      p_inspection_pending: null, p_inspection_owner_user_id: null, p_receipt_key: null,
     });
   });
 
@@ -1714,6 +1724,9 @@ describe('useCreateReceivingInspection batch command', () => {
       p_outcome: 'clean',
       p_notes: 'All clear',
       p_photo_asset_ids: ['asset-1'],
+      p_po_shipment_id: null, p_studio_purchase_id: null, p_arrival_method: null,
+      p_reported_by: null, p_report_source: null, p_received_on: null, p_location_id: null,
+      p_inspection_pending: null, p_inspection_owner_user_id: null, p_receipt_key: null,
     });
     expect(result.inspection).toMatchObject({ id: 'inspection-1', purchase_order_id: 'po-1' });
     expect(supabaseClient.from).not.toHaveBeenCalledWith('receiving_inspections');
@@ -3220,5 +3233,49 @@ describe('useDamageClaims — the embedded inspection', () => {
     const builder = builders.damage_claims;
     const select = builder.__chain.find((call) => call.method === 'select');
     expect(select?.args[0]).toContain('photo_asset_ids');
+  });
+});
+
+
+describe('useCompleteReceivingInspection — the original receipt remains the subject', () => {
+  const run = (input: unknown) => (useCompleteReceivingInspection() as unknown as {
+    mutationFn: (input: unknown) => Promise<any>;
+  }).mutationFn(input);
+  const input = {
+    inspectionId: 'inspection-pending', outcome: 'damaged', projectId: 'project-1',
+    items: [{ ffeItemId: 'ffe-1', receivedQuantity: 4, condition: 'damaged', notedOnBol: true }],
+  };
+  it('completes a PO check and calls the shared claim path once without receiving again', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: {
+      id: 'inspection-pending', purchase_order_id: 'po-1', outcome: 'damaged', notes: 'Broken leg',
+    }, error: null });
+    setTableDefault('purchase_orders', { data: { id: 'po-1', vendor_po_number: 'PO-4', vendor: { name: 'Hewn' } }, error: null });
+    const result = await run(input);
+    expect(result.damageClaimCreated).toBe(true);
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('complete_receiving_inspection', {
+      p_inspection_id: 'inspection-pending', p_outcome: 'damaged', p_notes: null,
+      p_lines: [{ selectionId: 'ffe-1', receivedQuantity: 4, condition: 'damaged', notedOnBol: true }],
+    });
+    expect(getBuilder('damage_claims').insert).toHaveBeenCalledTimes(1);
+    expect(getBuilder('damage_claims').insert).toHaveBeenCalledWith([expect.objectContaining({
+      receiving_inspection_id: 'inspection-pending', state: 'drafted', ffe_item_id: 'ffe-1',
+    })]);
+    expect(supabaseClient.from).not.toHaveBeenCalledWith('project_ffe_items');
+    expect(supabaseClient.from).not.toHaveBeenCalledWith('receiving_inspections');
+  });
+  it('completes a studio-purchase check while explicitly skipping PO-only claims', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: {
+      id: 'inspection-pending', purchase_order_id: null, studio_purchase_id: 'purchase-1', outcome: 'damaged',
+    }, error: null });
+    const result = await run(input);
+    expect(result.claimDraftSkipped).toBe('no_purchase_order');
+    expect(result.damageClaimCreated).toBe(false);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+  it('does not draft claims when completion is refused', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: new Error('inspection is already complete') });
+    await expect(run(input)).rejects.toThrow('inspection is already complete');
+    expect(supabaseClient.from).not.toHaveBeenCalled();
   });
 });
