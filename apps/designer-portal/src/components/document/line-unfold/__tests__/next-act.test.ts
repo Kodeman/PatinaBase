@@ -139,3 +139,19 @@ describe('deriveNextAct — the one act lifted above the cells (C-14)', () => {
     ).toBeNull();
   });
 });
+
+
+describe('recorded purchases bypass the maker lifecycle', () => {
+  it.each(['recorded', 'billed'])('offers pickup/arrival, never another order, for %s purchases', (status) => {
+    expect(deriveNextAct({ ...base, ready: true, purchase: { status } })).toEqual({ kind: 'purchase-arrival' });
+  });
+  it('keeps pending delivered purchases in receiving, not installation', () => {
+    expect(deriveNextAct({ ...base, itemStatus: 'delivered', inspected: true, purchase: { status: 'recorded' } })).toEqual({ kind: 'purchase-arrival' });
+  });
+  it('does not arrange a returned purchase', () => {
+    expect(deriveNextAct({ ...base, ready: true, purchase: { status: 'returned' } })).toBeNull();
+  });
+  it('has no forward purchase act after installation', () => {
+    expect(deriveNextAct({ ...base, itemStatus: 'installed', purchase: { status: 'recorded' } })).toBeNull();
+  });
+});

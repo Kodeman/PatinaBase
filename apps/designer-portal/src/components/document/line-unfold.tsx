@@ -46,9 +46,11 @@ import {
   type DocumentActionVariant,
 } from './document-action';
 import { PieceArtifactPlate } from './piece-artifact-plate';
-import { FIELD_CLS, LABEL_CLS } from './line-unfold/cell';
+import { CellSub, UnfoldCell, FIELD_CLS, LABEL_CLS } from './line-unfold/cell';
 import { TheBuyCell } from './line-unfold/the-buy-cell';
 import { QuoteCell } from './line-unfold/quote-cell';
+import { PurchaseArrival } from './purchases/purchase-arrival';
+import { buyableLines } from './purchases/purchase-record';
 import { OrderCell } from './line-unfold/order-cell';
 import { MovementCell, PoStatusAct } from './line-unfold/movement-cell';
 import { MoneyOutCell } from './line-unfold/money-out-cell';
@@ -213,7 +215,7 @@ export function LineUnfold({
   const isTradeLine =
     Boolean(item.trade_scope_document_id) || stamp.kind.startsWith('trade_');
   const showTrail =
-    !isTradeLine &&
+    !isTradeLine && !purchase &&
     (Boolean(po) || lifecycle.steps.some((s) => s.state !== 'future'));
   const vendorId: string = item.vendor_id ?? po?.vendor_id ?? '';
   const { data: vendor } = useVendor(vendorId) as { data: FFERow | undefined };
@@ -276,6 +278,7 @@ export function LineUnfold({
   const next = deriveNextAct({
     itemStatus: item.status,
     po: po ? { ...po, status: poStatus } : null,
+    purchase,
     ready: readiness.ready,
     inspected: item.received_quantity != null,
     hasOpenClaim: openClaims.length > 0,
@@ -321,7 +324,10 @@ export function LineUnfold({
       />
       {showArtifactPlate && !isTradeLine && <PieceArtifactPlate item={item} />}
 
-      {next && (
+      {next?.kind === 'purchase-arrival' && purchase && (
+        <PurchaseArrival item={item} purchase={purchase} projectId={projectId} projectName={projectName} canEdit={canEditSelection} />
+      )}
+      {next && next.kind !== 'purchase-arrival' && (
         <div data-testid="line-next-act" className="mb-3">
           {/* R-PB1: a consequence sentence above the act, never a block. */}
           {next.kind === 'order' &&
@@ -397,6 +403,9 @@ export function LineUnfold({
           projectId={projectId}
           auth={auth}
           canChange={canEditSelection}
+          canPrepare={readiness.ready && !purchase}
+          canRecordPurchase={buyableLines([item], purchase ? [purchase] : []).length > 0}
+          onPrepare={() => setPaperOpen(true)}
         />
         {/* PRC-12: the Movement cell carries the confirmed-ETA quick-edit. */}
         <MovementCell
@@ -407,12 +416,12 @@ export function LineUnfold({
           showAdvance={next?.kind !== 'advance'}
           onAdvanced={setAdvancedTo}
         />
-        <MoneyOutCell po={po} projectId={projectId} itemId={item.id} />
-        <ReceivingCell
-          item={item}
-          stampKind={stamp.kind}
-          openClaims={openClaims}
-        />
+        {purchase && !po ? (
+          <UnfoldCell head="Money out" testId="line-money-out-cell"><CellSub>Payment recorded with the purchase. This does not create a PO payment.</CellSub></UnfoldCell>
+        ) : <MoneyOutCell po={po} projectId={projectId} itemId={item.id} />}
+        {purchase && !po ? (
+          <UnfoldCell head="Receiving" testId="line-receiving-cell"><CellSub>Arrival and inspection are recorded separately. A physical receipt is not an inspection.</CellSub></UnfoldCell>
+        ) : <ReceivingCell item={item} stampKind={stamp.kind} openClaims={openClaims} />}
       </div>
 
       {/* R7 (M7): the fifteen-step trail — the position, where the cells above
@@ -420,7 +429,7 @@ export function LineUnfold({
       {showTrail && <ProcurementTrail reading={lifecycle} />}
 
       {/* C-04: the only door to installed — and only from delivered. */}
-      {item.status === 'delivered' && next?.kind !== 'install' && (
+      {!purchase && item.status === 'delivered' && next?.kind !== 'install' && (
         <InstallAct itemId={item.id} projectId={projectId} />
       )}
 
@@ -508,7 +517,7 @@ export function LineUnfold({
 
       <DocumentActionGroup surfaceKey="project" regionKey="ffe-line-actions">
         {/* Acts that apply but are not the lifted one stay reachable here. */}
-        {readiness.ready && next?.kind !== 'order' && orderAct('secondary')}
+        {!purchase && readiness.ready && next?.kind !== 'order' && orderAct('secondary')}
         {sendable && next?.kind !== 'send' && sendAct('secondary')}
         {inspectable && next?.kind !== 'inspect' && inspectAct('secondary')}
         {/* R76 — bill this line: the composer opens FF&E-prefilled and

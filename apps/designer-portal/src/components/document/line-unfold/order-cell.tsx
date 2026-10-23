@@ -4,6 +4,7 @@ import { AckRecord, usePoAckSummary } from '../buying/ack-check';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { fmtDay } from '@/lib/document/format';
 import { NAMED_ACTS } from '@/lib/document/act-names';
+import { PurchaseChoices } from '../purchases/purchase-choices';
 import { PurchaseFact } from '../purchases/purchase-fact';
 import type { LineAuthorization } from '@/lib/document/authorization-derivation';
 import { CellSub, CellValue, UnfoldCell } from './cell';
@@ -30,6 +31,9 @@ export function OrderCell({
   projectId,
   auth = { track: 'none' },
   canChange = false,
+  canPrepare = false,
+  canRecordPurchase = false,
+  onPrepare,
 }: {
   item: FFERow;
   po: FFERow | null;
@@ -42,6 +46,9 @@ export function OrderCell({
   auth?: LineAuthorization;
   /** The viewer may edit this line (C-21 change orders). */
   canChange?: boolean;
+  canPrepare?: boolean;
+  canRecordPurchase?: boolean;
+  onPrepare?: () => void;
 }) {
   const [changeOpen, setChangeOpen] = useState(false);
   // C-27: the acknowledgment's own stamp once a v2 ack is on file.
@@ -130,6 +137,9 @@ export function OrderCell({
             <li key={reason}>{reason}</li>
           ))}
         </ul>
+      )}
+      {canChange && projectId && onPrepare && !item.trade_scope_document_id && !purchase && (
+        <PurchaseChoices projectId={projectId} item={item} canPrepare={canPrepare} canRecord={canRecordPurchase} purchaseOrderId={po?.id ?? null} isPatinaCatalog={Boolean(po?.is_patina_catalog)} onPrepare={onPrepare} />
       )}
       {/* C-26: the PO's riders, estimate then actual. Patina carries a maker-lane PO's freight. */}
       {po && projectId && !po.is_patina_catalog && po.status !== 'cancelled' && (

@@ -50,9 +50,11 @@ const errText = (e: unknown) =>
 
 export function PurchaseRecordForm({
   projectId,
+  initialLine,
   onDone,
 }: {
   projectId: string;
+  initialLine?: { id: string; name: string };
   onDone: (result: string) => void;
 }) {
   const record = useRecordStudioPurchase({ errorSurface: 'inline' });
@@ -66,7 +68,7 @@ export function PurchaseRecordForm({
 
   const [draft, setDraft] = useState<PurchaseDraft>(() => ({
     kind: 'card_retail',
-    description: '',
+    description: initialLine?.name ?? '',
     payeeName: '',
     vendorId: null,
     purchasedOn: todayYmd(),
@@ -78,7 +80,7 @@ export function PurchaseRecordForm({
     returnable: true,
     returnBy: null,
     forProject: true,
-    ffeItemId: '',
+    ffeItemId: initialLine?.id ?? '',
     billableToClient: true,
   }));
   const [maker, setMaker] = useState<{ id: string; name: string } | null>(null);
@@ -150,6 +152,8 @@ export function PurchaseRecordForm({
 
   return (
     <div data-testid="purchase-record-form" className="space-y-4">
+      <p className={META}>This records an existing purchase. Nothing will be sent or ordered.</p>
+      <p className={META}>This is purchase history, not approval or a release to buy.</p>
       <fieldset>
         <legend className={LABEL}>What kind of buy</legend>
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
@@ -293,10 +297,10 @@ export function PurchaseRecordForm({
       <fieldset>
         <legend className={LABEL}>For</legend>
         <div className="grid grid-cols-2 gap-1.5">
-          <button type="button" aria-pressed={draft.forProject} onClick={() => set('forProject', true)} className={`min-h-11 rounded-[3px] border px-2 text-[12px] ${draft.forProject ? 'border-[var(--color-clay)] text-[var(--color-charcoal)]' : 'border-[var(--color-pearl)] text-[var(--text-muted)]'}`}>
+          <button disabled={Boolean(initialLine)} type="button" aria-pressed={draft.forProject} onClick={() => set('forProject', true)} className={`min-h-11 rounded-[3px] border px-2 text-[12px] ${draft.forProject ? 'border-[var(--color-clay)] text-[var(--color-charcoal)]' : 'border-[var(--color-pearl)] text-[var(--text-muted)]'}`}>
             This project
           </button>
-          <button type="button" aria-pressed={!draft.forProject} onClick={() => setDraft((d) => ({ ...d, forProject: false, ffeItemId: '' }))} className={`min-h-11 rounded-[3px] border px-2 text-[12px] ${!draft.forProject ? 'border-[var(--color-clay)] text-[var(--color-charcoal)]' : 'border-[var(--color-pearl)] text-[var(--text-muted)]'}`}>
+          <button disabled={Boolean(initialLine)} type="button" aria-pressed={!draft.forProject} onClick={() => setDraft((d) => ({ ...d, forProject: false, ffeItemId: '' }))} className={`min-h-11 rounded-[3px] border px-2 text-[12px] ${!draft.forProject ? 'border-[var(--color-clay)] text-[var(--color-charcoal)]' : 'border-[var(--color-pearl)] text-[var(--text-muted)]'}`}>
             The studio, no project
           </button>
         </div>
@@ -304,9 +308,9 @@ export function PurchaseRecordForm({
           <>
             <label className="mt-3 block">
               <span className={LABEL}>Line (optional)</span>
-              <select aria-label="Line" value={draft.ffeItemId} onChange={(e) => set('ffeItemId', e.target.value)} className={FIELD}>
+              <select disabled={Boolean(initialLine)} aria-label="Line" value={draft.ffeItemId} onChange={(e) => set('ffeItemId', e.target.value)} className={FIELD}>
                 <option value="">No line</option>
-                {lines.map((line) => (
+                {(initialLine ? [initialLine] : lines).map((line) => (
                   <option key={line.id} value={line.id}>{line.name}</option>
                 ))}
               </select>

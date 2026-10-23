@@ -20,6 +20,7 @@ export const NEXT_PO_STATUS: Record<
 
 export type NextAct =
   | { kind: 'order' }
+  | { kind: 'purchase-arrival' }
   | { kind: 'send' }
   | { kind: 'log-ack' }
   | { kind: 'advance'; to: 'in_production' | 'shipped'; label: string }
@@ -57,6 +58,7 @@ export function canInspect(po: NextActPo | null, itemStatus: string): boolean {
 export function deriveNextAct({
   itemStatus,
   po,
+  purchase,
   ready,
   inspected,
   hasOpenClaim,
@@ -65,6 +67,7 @@ export function deriveNextAct({
   itemStatus: string;
   /** The line's PO, with any just-recorded status move already applied. */
   po: NextActPo | null;
+  purchase?: { status: string } | null;
   /** `deriveOrderReadiness(...).ready`. */
   ready: boolean;
   /** The receipt has been inspected (`received_quantity` recorded). */
@@ -73,6 +76,10 @@ export function deriveNextAct({
   hasOpenClaim: boolean;
 }): NextAct | null {
   if (!po) {
+    if (purchase?.status === 'recorded' || purchase?.status === 'billed') {
+      return itemStatus === 'installed' ? null : { kind: 'purchase-arrival' };
+    }
+    if (purchase) return null;
     if (ready) return { kind: 'order' };
     return itemStatus === 'delivered' && !hasOpenClaim
       ? { kind: 'install' }
