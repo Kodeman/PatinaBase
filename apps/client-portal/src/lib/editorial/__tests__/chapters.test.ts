@@ -59,6 +59,12 @@ describe('chapters', () => {
     expect(chapters[4]).toMatchObject({ eyebrow: '05 · Living room', label: 'Living room', roomId: 'living' });
   });
 
+  it.each([null, '', 'NULL', 'unknown_phase'])('omits an absent or unknown phase %s from the cover eyebrow', (phase) => {
+    const cover = chapterOrder({ ...project, phase }, rooms)[0];
+    expect(cover.label).toBe('Elm Street House');
+    expect(cover.eyebrow).toBe('01 · Elm Street House');
+  });
+
   it('heads the cover with the room that is on its way', () => {
     expect(chapterOrder(project, rooms)[0].headline).toBe('The living room is on its way');
     expect(chapterOrder({ ...project, phase: 'concept_development' }, rooms)[0].headline).toBe('The rooms, as drawn');

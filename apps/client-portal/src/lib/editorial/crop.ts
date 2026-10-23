@@ -107,6 +107,7 @@ const HERO_BOX: Readonly<Record<HeroDesktopLayout, { sizes: string; width: numbe
 
 export interface HeroPicture {
   layout: HeroDesktopLayout;
+  contained: boolean;
   /** The crop at 601 and up, and at every width when there is no phone crop. */
   main: PlateCropKey;
   phone: PlateCropKey | null;
@@ -119,11 +120,41 @@ function holds(asset: EditorialAsset, cropKey: PlateCropKey): boolean {
   return (asset.crops[cropKey]?.widths.length ?? 0) > 0;
 }
 
+const RENDITION_KEYS: readonly PlateCropKey[] = ['pair', 'piece', 'wide', 'wide32', 'tall', 'cover_phone', 'sheet', 'board'];
+
+function bestRendition(asset: EditorialAsset): PlateCropKey | undefined {
+  return RENDITION_KEYS.filter((key) => holds(asset, key))
+    .sort((a, b) => Math.max(...asset.crops[b]!.widths) - Math.max(...asset.crops[a]!.widths))[0];
+}
+
+function containedHero(asset: EditorialAsset, main: PlateCropKey): HeroPicture {
+  const crop = asset.crops[main]!;
+  const width = Math.max(...crop.widths);
+  const [, , w, h] = normalised(crop.rect, asset.width, asset.height);
+  const height = Math.round(width * (h * asset.height) / (w * asset.width));
+  return {
+    layout: 'measure', contained: true, main, phone: null, width, height,
+    sizes: `(min-width: ${width + 32}px) ${width}px, calc(100vw - 32px)`,
+  };
+}
+
+function containedCrop(asset: EditorialAsset, main: PlateCropKey | undefined): PlateCropKey | undefined {
+  if (asset.ground === 'white' && asset.sourceKind !== 'concept') {
+    return (['pair', 'piece'] as const).find((key) => holds(asset, key)) ?? bestRendition(asset);
+  }
+  return main ? undefined : bestRendition(asset);
+}
+
+function croppedHero(asset: EditorialAsset, layout: HeroDesktopLayout, main = 'cover_phone' as PlateCropKey): HeroPicture {
+  const phone = main !== 'cover_phone' && holds(asset, 'cover_phone') ? 'cover_phone' : null;
+  return { layout, contained: false, main, phone, ...HERO_BOX[layout] };
+}
+
 export function heroPicture(asset: EditorialAsset): HeroPicture {
   const layout = heroDesktopLayout(asset.width, asset.height, asset.subjectBox) ?? 'bleed';
-  const main = HERO_CROPS[layout].find((key) => holds(asset, key)) ?? 'cover_phone';
-  const phone = main !== 'cover_phone' && holds(asset, 'cover_phone') ? 'cover_phone' : null;
-  return { layout, main, phone, ...HERO_BOX[layout] };
+  const main = HERO_CROPS[layout].find((key) => holds(asset, key));
+  const contained = containedCrop(asset, main);
+  return contained ? containedHero(asset, contained) : croppedHero(asset, layout, main);
 }
 
 /** The phone hero's shorter frame under a long headline (editorial.css `[data-hero-frame='short']`). */

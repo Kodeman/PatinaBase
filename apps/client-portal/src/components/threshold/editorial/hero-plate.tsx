@@ -48,10 +48,26 @@ export interface HeroPlateProps {
   phoneObjectPosition?: string | null;
 }
 
+function heroSlotStyle(
+  hero: ReturnType<typeof heroPicture>,
+  nominal: HeroPlateProps['phoneObjectPosition'],
+  measured: string | null | undefined,
+): CSSProperties | undefined {
+  if (hero.contained) {
+    return { '--ed-hero-max-width': `${hero.width}px`, '--ed-hero-max-height': `${hero.height}px` } as CSSProperties;
+  }
+  if (!nominal) return undefined;
+  return {
+    '--ed-hero-phone-position': measured ?? nominal,
+    '--ed-hero-phone-fit': measured === null ? 'contain' : 'cover',
+  } as CSSProperties;
+}
+
 export function HeroPlate(props: HeroPlateProps) {
   const ref = useRef<HTMLDivElement>(null);
   const computed = usePaperTabMode(props.asset, ref);
-  const { layout, main, phone, sizes, width, height } = heroPicture(props.asset);
+  const hero = heroPicture(props.asset);
+  const { layout, contained, main, phone, sizes, width, height } = hero;
   const rect = props.asset.crops[main]?.rect;
   const [phonePosition, setPhonePosition] = useState<string | null>();
 
@@ -79,19 +95,13 @@ export function HeroPlate(props: HeroPlateProps) {
     <div
       ref={ref}
       className="ed-hero-slot"
-      style={
-        props.phoneObjectPosition
-          ? ({
-              '--ed-hero-phone-position': phonePosition ?? props.phoneObjectPosition,
-              // Start at the nominal cover; only a measured non-fit needs contain.
-              '--ed-hero-phone-fit': phonePosition === null ? 'contain' : 'cover',
-            } as CSSProperties)
-          : undefined
-      }
+      style={heroSlotStyle(hero, props.phoneObjectPosition, phonePosition)}
     >
       <Plate
         role="hero"
-        className={`ed-hero ed-hero--${layout}`}
+        className={`ed-hero ed-hero--${layout}${contained ? ' ed-hero--contained' : ''}`}
+        stock={contained}
+        dataAttributes={{ 'data-ground': props.asset.ground ?? undefined }}
         scopeId={props.scopeId}
         asset={props.asset}
         cropKey={main}
@@ -107,7 +117,7 @@ export function HeroPlate(props: HeroPlateProps) {
         fallback={props.fallback}
       >
         <PaperTab
-          mode={props.tabMode ?? computed}
+          mode={contained ? 'below' : props.tabMode ?? computed}
           eyebrow={props.eyebrow}
           headline={props.headline}
           headingId={props.headingId}

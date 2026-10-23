@@ -2,7 +2,7 @@
    an external contract, and Phase 1 headlines are written here, in code, from
    the record alone. */
 
-import { getPhaseLabel } from '@patina/types';
+import { getPhaseConfig, getPhaseLabel } from '@patina/types';
 
 import type { EditorialProject, EditorialRoom } from './types';
 
@@ -98,10 +98,11 @@ function pad(n: number): string {
 }
 
 export function chapterOrder(project: EditorialProject, rooms: readonly EditorialRoom[]): Chapter[] {
-  const phase = getPhaseLabel(project.phase, 'client');
+  const slug = project.phase?.trim();
+  const phase = slug && getPhaseConfig(slug) ? getPhaseLabel(slug, 'client') : null;
   type Row = [head: string, chapter: Omit<Chapter, 'number' | 'eyebrow' | 'label'>];
   const rows: Row[] = [
-    [`${project.name} · ${phase}`, { key: 'cover', anchor: null, headline: coverHeadline(project, rooms) }],
+    [[project.name, phase].filter(Boolean).join(' · '), { key: 'cover', anchor: null, headline: coverHeadline(project, rooms) }],
     ['Invoices', { key: 'invoices', anchor: 'doorstep', headline: 'Your invoices' }],
     ['Approvals', { key: 'approvals', anchor: 'approvals', headline: 'Waiting for your approval' }],
     ['The house', { key: 'house', anchor: 'key', headline: houseHeadline(rooms.length) }],

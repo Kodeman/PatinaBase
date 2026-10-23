@@ -333,6 +333,7 @@
   aspect-ratio: 1 / 1;
 }
 
+.ed-hero--contained > .ed-plate__frame,
 .ed-piece[data-ground='white'] .ed-plate__frame {
   padding: 10%;
 }
@@ -530,4 +531,31 @@
     transform: none;
     transition: none;
   }
+}
+
+/* Catalogue covers use the piece plate's stock, hairline and tenth inset.
+   The image box is capped at the stored rendition, even for a piece-only cover. */
+.ed-hero.ed-hero--contained {
+  margin-inline: 0;
+}
+.ed-hero--contained > .ed-plate__frame {
+  height: min(72svh, 648px);
+}
+.ed-hero--contained .ed-plate__frame > picture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ed-hero.ed-hero--contained .ed-plate__img {
+  width: 100%;
+  height: 100%;
+  max-width: var(--ed-hero-max-width);
+  max-height: var(--ed-hero-max-height);
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center !important;
+}
+.ed-hero--contained > .ed-caption,
+.ed-hero--contained > .ed-tab {
+  padding-inline: 0;
 }

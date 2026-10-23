@@ -990,3 +990,19 @@ describe("the approved edition", () => {
     expect(kept.querySelector<HTMLElement>(".ed-hero-slot")!.style.getPropertyValue("--ed-hero-phone-position")).toBe("");
   });
 });
+
+
+describe('approved catalogue cover', () => {
+  it('keeps the approved white-ground hero and renumbers its phase-free label', () => {
+    const photo = asset('bed', { width: 1600, height: 1600, ground: 'white', subjectBox: [0.12, 0.27, 0.7, 0.4], crops: { pair: { rect: [0, 197, 1600, 1143], widths: [768, 1024, 1600] }, piece: CROPS.piece } });
+    const data = editorial([photo]);
+    data.project.phase = null;
+    data.edition = { id: 'approved', seq: 1, approvedAt: '2026-10-23', approvedBy: 'studio', notice: null };
+    data.composition = { hero: { assetId: photo.id }, held: [], chapters: [] };
+    const issue = houseIssue(data)!;
+    expect(issue.hero?.id).toBe('bed');
+    const chapters = editionChapters(issue, ['doorstep'])!;
+    expect(chapters.get('cover')!.eyebrow).toBe('01 · Elm Street House');
+    expect(heroPreloads(data)[0].imageSrcSet).toContain('/pair-1600.avif');
+  });
+});

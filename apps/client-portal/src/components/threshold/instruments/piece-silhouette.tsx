@@ -1,7 +1,7 @@
 /* ── PIECE SILHOUETTE — what stands in the plate when no photograph does ─────
    R142: the source hierarchy ends in a DRAWING, never a hash block, never a
-   blank fill, never the browser's broken-image glyph. Five generic outlines —
-   chair, table, case, light, textile — each one line work at 1px in
+   blank fill, never the browser's broken-image glyph. Six generic outlines —
+   bed, chair, table, case, light, textile — each one line work at 1px in
    `--ink-faint`, with a single detail line and one secondary hatch at half
    stroke opacity (house sheet §F-A: `--rail` is for fills, never a stroke).
 
@@ -11,10 +11,11 @@
    neutral of the five: a box standing on a floor line, which claims nothing
    about the piece beyond that it is a thing in a room. ───────────────────── */
 
-export type SilhouetteCategory = 'chair' | 'table' | 'case' | 'light' | 'textile';
+export type SilhouetteCategory = 'bed' | 'chair' | 'table' | 'case' | 'light' | 'textile';
 
 /** First match wins, so the narrower vocabularies are read first. */
 const CATEGORY_WORDS: ReadonlyArray<readonly [SilhouetteCategory, RegExp]> = [
+  ['bed', /\bbed\b|\bbeds\b|headboard|bedframe/i],
   ['light', /light|lamp|sconce|chandelier|pendant|luminaire|fixture/i],
   ['textile', /rug|runner|carpet|curtain|drape|textile|upholst|pillow|cushion|throw/i],
   ['chair', /chair|stool|settee|sofa|bench|seating|ottoman/i],
@@ -38,6 +39,11 @@ const FLOOR_Y = 82;
 
 /** The outline, the one detail line, and the one hatch, per category. */
 const OUTLINES: Record<SilhouetteCategory, { paths: string[]; detail: string; hatch: string }> = {
+  bed: {
+    paths: ['M18 72 L18 30 L74 30 L74 72', 'M18 54 L74 54 L82 72 L18 72', 'M22 72 L22 80', 'M78 72 L78 80'],
+    detail: 'M24 42 L42 42 L42 52 L24 52 Z M48 42 L66 42 L66 52 L48 52 Z',
+    hatch: 'M26 34 L26 38 M32 34 L32 38 M38 34 L38 38',
+  },
   chair: {
     paths: ['M30 14 C24 30 24 46 30 58', 'M30 58 L70 60', 'M70 60 L76 50', 'M34 60 L30 80', 'M69 62 L74 80'],
     detail: 'M36 46 L69 48',

@@ -440,3 +440,35 @@ describe('Reveal', () => {
     expect(container.firstChild).toHaveAttribute('data-reveal', 'idle');
   });
 });
+
+ describe('catalogue cover and bed fallback', () => {
+  const pair = { rect: [0, 197, 1600, 1143] as const, widths: [768, 1024, 1600] };
+  const piece = { rect: [0, 0, 1600, 1600] as const, widths: [256, 512, 768] };
+  it.each(['pair', 'piece'] as const)('shows a white-ground %s photograph, not a drawing, with stock and its caption', (crop) => {
+    const a = asset({ ground: 'white', width: 1600, height: 1600, crops: crop === 'pair' ? { pair, piece } : { piece } });
+    const { container } = render(<HeroPlate scopeId={SCOPE} asset={a} eyebrow="01 · Man Den" headline="The rooms" fallback={{ name: 'Sierra Queen Bed', category: '.', silhouetteKind: 'case' }} />);
+    const img = container.querySelector('img')!;
+    expect(img).not.toBeNull();
+    expect(img.getAttribute('src')).toContain('/' + crop + '-');
+    expect(container.querySelector('figure')).toHaveClass('ed-hero--contained');
+    expect(container.querySelector('.ed-plate__frame')).toHaveClass('ed-stock');
+    expect(container.querySelectorAll('[data-caption-field]')).toHaveLength(3);
+    expect(container).not.toHaveTextContent('drawn from the specification');
+    expect(container.querySelector('.ed-tab')).toHaveAttribute('data-tab-mode', 'below');
+    const link = preloadLink(SCOPE, a)[0];
+    expect(link.imageSrcSet).toBe(container.querySelector('source')!.getAttribute('srcset'));
+    fireEvent.error(img);
+    expect(screen.getByTestId('piece-silhouette')).toHaveAttribute('data-silhouette', 'bed');
+    expect(screen.getByText('Picture did not load.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'The rooms' })).toBeInTheDocument();
+  });
+  it('still draws a scene hero on the bleed path', () => {
+    const { container } = render(<HeroPlate scopeId={SCOPE} asset={asset()} eyebrow="01 · House" headline="The rooms" fallback={fallback} />);
+    expect(container.querySelector('figure')).toHaveClass('ed-hero--bleed');
+    expect(container.querySelector('figure')).not.toHaveClass('ed-hero--contained');
+  });
+  it('infers a bed when no rendition exists and the reader supplies generic case', () => {
+    render(<SilhouettePlate name="Sierra Queen Bed" category="." silhouetteKind="case" />);
+    expect(screen.getByTestId('piece-silhouette')).toHaveAttribute('data-silhouette', 'bed');
+  });
+ });
