@@ -328,8 +328,6 @@ export interface DeskClaimWindowSignal {
   deadline: string;
   /** The states of the damage claims on the PO's inspections. */
   claimStates: readonly string[];
-  /** The PO's latest inspection outcome; `clean` once the line is marked good. */
-  latestOutcome: string | null;
 }
 
 /** C-22 payment input, structural (the desk-conflicts precedent). One

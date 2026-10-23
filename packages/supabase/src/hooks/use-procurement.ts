@@ -2197,6 +2197,7 @@ export function useCompleteReceivingInspection() {
  * transitions client-side per dossier Section 3:
  *   drafted → vendor_notified  (sets vendor_notified_at = now() if absent)
  *   vendor_notified → resolved (sets resolved_at = now() if absent)
+ *   drafted → resolved with non-empty resolution_notes (not filed)
  * No backwards transitions in v1. Same-state edits (description-only,
  * resolution_notes-only) are allowed.
  *
@@ -2238,12 +2239,15 @@ export function useUpdateDamageClaim(options?: { errorSurface?: 'inline' }) {
         const validForward =
           currentState === nextState ||
           (currentState === 'drafted' && nextState === 'vendor_notified') ||
+          (currentState === 'drafted' && nextState === 'resolved' &&
+            typeof input.resolution_notes === 'string' &&
+            input.resolution_notes.trim().length > 0) ||
           (currentState === 'vendor_notified' && nextState === 'resolved');
 
         if (!validForward) {
           throw new Error(
             `Invalid damage_claim state transition: ${currentState} → ${nextState}. ` +
-              `Forward transitions only: drafted → vendor_notified → resolved.`,
+              `Forward transitions only: drafted → vendor_notified → resolved, or drafted → resolved with a reason.`,
           );
         }
 
@@ -2252,7 +2256,7 @@ export function useUpdateDamageClaim(options?: { errorSurface?: 'inline' }) {
         if (currentState === 'drafted' && nextState === 'vendor_notified') {
           updates.vendor_notified_at = input.vendor_notified_at ?? nowIso();
         }
-        if (currentState === 'vendor_notified' && nextState === 'resolved') {
+        if (currentState !== nextState && nextState === 'resolved') {
           updates.resolved_at = input.resolved_at ?? nowIso();
         }
       }

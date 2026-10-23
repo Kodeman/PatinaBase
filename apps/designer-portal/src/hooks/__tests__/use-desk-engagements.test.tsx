@@ -821,7 +821,6 @@ describe('buildDeskClaimWindows (E2-4: deadlines answered as one set)', () => {
         poLabel: 'PO-7',
         vendorName: 'Hollis Upholstery',
         claimStates: ['drafted'],
-        latestOutcome: 'damaged',
         deadline: '2026-10-15',
       },
     ]);
@@ -932,7 +931,7 @@ describe('per-receipt claim windows', () => {
     ] };
     expect(buildDeskClaimWindows([{ purchase_order: po }], [
       { purchase_order_id: 'po-claim', vendor_deadline: '2026-10-15' },
-    ])?.get('p-quiet')).toEqual([expect.objectContaining({ latestOutcome: 'clean', deadline: '2026-10-15' })]);
+    ])?.get('p-quiet')).toEqual([expect.objectContaining({ claimStates: ['drafted'], deadline: '2026-10-15' })]);
     expect(buildDeskClaimWindows([{ purchase_order: po }], null)).toBeUndefined();
   });
 });

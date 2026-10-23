@@ -1908,7 +1908,7 @@ export type ReleasedPurchaseOrder = Pick<Database['public']['Tables']['purchase_
 export async function fetchReleasedPurchaseOrders(supabase: any): Promise<ReleasedPurchaseOrder[]> {
   const { data, error } = await supabase.from('purchase_orders')
     .select('id, project_id, created_by, released_at, sent_at, status, released_by_profile:profiles!purchase_orders_released_by_fkey(full_name)')
-    .not('released_at', 'is', null).is('sent_at', null).neq('status', 'cancelled')
+    .not('released_at', 'is', null).is('sent_at', null).in('status', ['draft', 'held_for_release'])
     .order('released_at');
   if (error) throw error;
   return data ?? [];

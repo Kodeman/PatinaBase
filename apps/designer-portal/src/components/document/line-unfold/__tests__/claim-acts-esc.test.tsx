@@ -12,13 +12,15 @@ jest.mock('@/lib/analytics/document-events', () => ({
 }));
 
 let mockPending = false;
+const mockUpdateClaim = jest.fn();
+const mockInvalidate = jest.fn();
 jest.mock('@patina/supabase', () => ({
   useProcurementDrafts: () => ({ data: [] }),
-  useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: mockPending }),
+  useUpdateDamageClaim: () => ({ mutateAsync: mockUpdateClaim, isPending: mockPending }),
 }));
 jest.mock('@tanstack/react-query', () => ({
   ...jest.requireActual('@tanstack/react-query'),
-  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+  useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
 }));
 jest.mock('../inspection-photo-strip', () => ({ InspectionPhotoStrip: () => null }));
 
@@ -41,6 +43,7 @@ function openForm() {
 beforeEach(() => {
   mockOneVoice = true;
   mockPending = false;
+  mockUpdateClaim.mockReset().mockResolvedValue({});
 });
 
 describe('ClaimActs resolve form — Esc is Cancel (FR4 Fix 11)', () => {
@@ -99,5 +102,49 @@ describe('ClaimActs — the drafted claim’s act names the maker', () => {
     mockOneVoice = false;
     render(<ClaimActs claims={DRAFTED} />);
     expect(screen.getByRole('button', { name: 'Notify vendor' })).toBeInTheDocument();
+  });
+});
+
+
+describe('ClaimActs — close without filing', () => {
+  function openClose() {
+    render(<ClaimActs claims={[{ id: 'claim-draft', state: 'drafted' }]} />);
+    const opener = screen.getByRole('button', { name: 'Close without filing' });
+    expect(opener).toHaveClass('da-tertiary');
+    fireEvent.click(opener);
+    return opener;
+  }
+
+  it('requires a short reason and resolves with a Not filed note', async () => {
+    openClose();
+    const save = screen.getAllByRole('button', { name: 'Close without filing' })[1];
+    expect(save).toBeDisabled();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reason for not filing' }), { target: { value: '   ' } });
+    fireEvent.click(save);
+    expect(mockUpdateClaim).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reason for not filing' }), { target: { value: '  Studio accepted the mark  ' } });
+    fireEvent.click(save);
+    await waitFor(() => expect(mockUpdateClaim).toHaveBeenCalledWith({ id: 'claim-draft', state: 'resolved', resolution_notes: 'Not filed: Studio accepted the mark' }));
+    await waitFor(() => expect(screen.getByText('Closed without filing — folded into the record.')).toBeInTheDocument());
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['document-state'] });
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['project-ffe-items'] });
+  });
+
+  it('keeps the reason and shows an inline failure when closing fails', async () => {
+    mockUpdateClaim.mockRejectedValueOnce(new Error('Could not save'));
+    openClose();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reason for not filing' }), { target: { value: 'Accepted' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close without filing' })[1]);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save');
+    expect(screen.getByRole('textbox', { name: 'Reason for not filing' })).toHaveValue('Accepted');
+  });
+
+  it('returns focus to Close without filing on Escape', async () => {
+    const opener = openClose();
+    const reason = screen.getByRole('textbox', { name: 'Reason for not filing' });
+    reason.focus();
+    fireEvent.keyDown(reason, { key: 'Escape' });
+    await waitFor(() => expect(opener).toHaveFocus());
+    expect(screen.queryByRole('textbox', { name: 'Reason for not filing' })).not.toBeInTheDocument();
   });
 });
