@@ -1217,6 +1217,9 @@ export interface FfePairLine {
   vendor_id: string | null;
   vendor_name: string | null;
   purchase_order_id: string | null;
+  quantity?: number;
+  unit?: string;
+  spec?: Pick<ProjectFfeSpecRow, 'color_fabric' | 'com_spec'> | null;
   parent_ffe_item_id: string | null;
   /**
    * Why the line points at its piece: 'com', 'labor' or 'accessory' (00729);
@@ -1244,7 +1247,7 @@ export function useFfePairLines(projectId: string | null | undefined) {
       const { data, error } = await getSupabase()
         .from('project_ffe_items')
         .select(
-          'id, name, project_room_id, assignment_scope, vendor_id, vendor_name, purchase_order_id, parent_ffe_item_id, link_kind, purchase_order:purchase_orders!purchase_order_id(id, po_number, status, vendor_id, supplies_purchase_order_id)',
+          'id, name, project_room_id, assignment_scope, vendor_id, vendor_name, purchase_order_id, quantity, unit, spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(color_fabric, com_spec), parent_ffe_item_id, link_kind, purchase_order:purchase_orders!purchase_order_id(id, po_number, status, vendor_id, supplies_purchase_order_id)',
         )
         .eq('project_id', projectId as string)
         .is('removed_at', null)

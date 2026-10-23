@@ -14,7 +14,7 @@ const mockRecord = jest.fn();
 const mockDecide = jest.fn();
 const mockLines: { data: FfePairLine[] | undefined } = { data: [] };
 const mockComRow: { data: unknown } = { data: null };
-const mockSubmittals: { data: Record<string, unknown>[] } = { data: [] };
+const mockSubmittals: { data: Record<string, unknown>[] | undefined; isLoading?: boolean; isError?: boolean } = { data: [] };
 
 jest.mock('@patina/supabase', () => ({
   useFfePairLines: () => ({ data: mockLines.data }),
@@ -22,7 +22,7 @@ jest.mock('@patina/supabase', () => ({
   useCreateNamedProjectNeed: () => ({ mutateAsync: mockCreate, isPending: false }),
   useFfeComSpec: () => ({ data: mockComRow.data, isLoading: false }),
   useUpdateFfeComSpec: () => ({ mutateAsync: mockUpdateCom, isPending: false }),
-  useProjectSubmittals: () => ({ data: mockSubmittals.data }),
+  useProjectSubmittals: () => mockSubmittals,
   useRecordSubmittal: () => ({ mutateAsync: mockRecord, isPending: false }),
   useDecideSubmittal: () => ({ mutateAsync: mockDecide, isPending: false }),
 }));
@@ -80,6 +80,8 @@ beforeEach(() => {
   mockLines.data = [SOFA, RUG];
   mockComRow.data = null;
   mockSubmittals.data = [];
+  mockSubmittals.isLoading = false;
+  mockSubmittals.isError = false;
   mockCreate.mockResolvedValue({ outcome: 'created', selectionId: 'line-new' });
   mockLink.mockResolvedValue({ id: 'line-new', project_id: 'project-1' });
   mockUpdateCom.mockResolvedValue({});
@@ -211,6 +213,103 @@ describe('the COM facts', () => {
     expect(screen.getByTestId('com-yardage')).toHaveTextContent(
       "Hale asked for 17 yd. With 10% for cutting that is 18.7 yd, ordered as 19 yd. Hale's number wins.",
     );
+  });
+});
+
+describe('COM dependency reading', () => {
+  const workroom = line({
+    ...SOFA,
+    quantity: 2,
+    unit: 'each',
+    spec: { color_fabric: null, com_spec: { fabricName: 'Brae linen', pattern: 'Herringbone', mill: 'Kessler', yardage: '19' } },
+    purchase_order_id: 'po-chair',
+    purchase_order: { id: 'po-chair', po_number: 'PO-42', status: 'held', vendor_id: 'hale', supplies_purchase_order_id: null },
+  });
+  const fabric = line({
+    ...FABRIC,
+    quantity: 19,
+    unit: 'yard',
+    spec: { color_fabric: 'Moss', com_spec: null },
+    purchase_order_id: 'po-fabric',
+    purchase_order: { id: 'po-fabric', po_number: 'PO-41', status: 'delivered', vendor_id: 'kessler', supplies_purchase_order_id: 'po-chair' },
+  });
+
+  beforeEach(() => { mockLines.data = [workroom, fabric]; });
+
+  it('separates material identity and quantity from the finished-piece purchase on both lines', () => {
+    const { unmount } = renderPiece(SOFA_ITEM, false);
+    const reading = screen.getByTestId('com-dependency');
+    expect(reading).toHaveTextContent('Brae linen');
+    expect(reading).toHaveTextContent('Pattern · Herringbone');
+    expect(reading).toHaveTextContent('Colour · Moss');
+    expect(reading).toHaveTextContent('Vendor · Kessler');
+    expect(reading).toHaveTextContent('Material quantity · 19 yard');
+    expect(reading).toHaveTextContent('Material purchase · PO-41 · delivered');
+    expect(reading).toHaveTextContent('Finished-piece purchase · PO-42 · held');
+    expect(reading).toHaveTextContent('Finished-piece quantity · 2 each');
+    unmount();
+    renderPiece(FABRIC, false);
+    expect(screen.getByTestId('com-dependency').textContent).toBe(reading.textContent);
+  });
+
+  it('does not treat delivered fabric or an approved received CFA as workroom confirmation', () => {
+    mockSubmittals.data = [{ source: 'submittal', id: 'cfa-ok', ffe_item_id: FABRIC.id, kind: 'cfa', received_on: '2026-10-02', decision: 'approved' }];
+    renderPiece(SOFA_ITEM, false);
+    const reading = screen.getByTestId('com-dependency');
+    expect(reading).toHaveTextContent('Workroom confirmation · Not confirmed');
+    expect(reading).toHaveTextContent('Awaiting Hale’s confirmation of material quantity and identity.');
+    expect(reading).toHaveTextContent('No outstanding submittals recorded');
+    expect(reading).toHaveTextContent('Material arrival alone does not release fabrication.');
+  });
+
+  it('lists unresolved prerequisites from both linked lines without unrelated or approved submittals', () => {
+    mockSubmittals.data = [
+      { source: 'submittal', id: 'cfa-wait', ffe_item_id: FABRIC.id, kind: 'cfa', decision: 'pending' },
+      { source: 'submittal', id: 'drawing-revise', ffe_item_id: SOFA.id, kind: 'shop_drawing', decision: 'revise' },
+      { source: 'submittal', id: 'finish-reject', ffe_item_id: SOFA.id, kind: 'finish_sample', decision: 'rejected' },
+      { source: 'submittal', id: 'seat-ok', ffe_item_id: SOFA.id, kind: 'seat_sample', decision: 'approved' },
+      { source: 'submittal', id: 'other', ffe_item_id: RUG.id, kind: 'strike_off', decision: 'pending' },
+    ];
+    renderPiece(SOFA_ITEM, false);
+    const reading = within(screen.getByTestId('com-dependency'));
+    expect(reading.getAllByRole('listitem')).toHaveLength(3);
+    expect(reading.getByText('CFA · Sofa — COM fabric · not yet decided')).toBeInTheDocument();
+    expect(reading.getByText('Shop drawing · Sofa · revise and resubmit')).toBeInTheDocument();
+    expect(reading.getByText('Finish sample · Sofa · rejected')).toBeInTheDocument();
+    expect(reading.queryByText(/Seat sample|Strike-off/)).not.toBeInTheDocument();
+  });
+
+  it('reads rolls as rolls and never substitutes the furniture count or yardage estimate', () => {
+    mockLines.data = [workroom, line({ ...fabric, quantity: 3, unit: 'roll' })];
+    renderPiece(SOFA_ITEM, false);
+    const reading = screen.getByTestId('com-dependency');
+    expect(reading).toHaveTextContent('Material quantity · 3 rolls');
+    expect(reading).not.toHaveTextContent('Material quantity · 19');
+    expect(reading).toHaveTextContent('Finished-piece quantity · 2 each');
+  });
+
+  it('keeps missing identity, material measure and purchase facts explicit', () => {
+    mockLines.data = [SOFA, line({ ...FABRIC, quantity: 1, unit: 'each' })];
+    renderPiece(SOFA_ITEM, false);
+    const reading = screen.getByTestId('com-dependency');
+    expect(reading).toHaveTextContent('Pattern · Not recorded');
+    expect(reading).toHaveTextContent('Colour · Not recorded');
+    expect(reading).toHaveTextContent('Material measure not recorded');
+    expect(reading).toHaveTextContent('Material purchase · No purchase order linked');
+    expect(reading).toHaveTextContent('Finished-piece purchase · No purchase order linked');
+  });
+
+  it('does not call unreadable prerequisites complete', () => {
+    mockSubmittals.data = undefined;
+    mockSubmittals.isLoading = true;
+    const { unmount } = renderPiece(SOFA_ITEM, false);
+    expect(screen.getByTestId('com-dependency')).toHaveTextContent('Reading prerequisites…');
+    unmount();
+    mockSubmittals.isLoading = false;
+    mockSubmittals.isError = true;
+    renderPiece(SOFA_ITEM, false);
+    expect(screen.getByTestId('com-dependency')).toHaveTextContent('Prerequisites could not be read');
+    expect(screen.getByTestId('com-dependency')).not.toHaveTextContent('No outstanding submittals');
   });
 });
 
