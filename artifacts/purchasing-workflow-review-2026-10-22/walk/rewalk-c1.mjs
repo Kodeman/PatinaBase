@@ -1,0 +1,27 @@
+// SQ-1801 C step 1: record a fresh dealer purchase on the rug line. Usage: node rewalk-c1.mjs
+import { open, shot, txt, body, dump, gotoPieces, openLine } from "./rewalk-lib.mjs";
+const w = 1440;
+const { browser, page } = await open("us50-member@patina.dev", w);
+await gotoPieces(page, w);
+await page.getByRole("button", { name: "Add items", exact: true }).first().click();
+await page.getByRole("button", { name: /Bought it already/ }).click();
+const pf = page.getByTestId("purchase-record-form"); await pf.waitFor({ timeout: 20000 });
+await page.waitForTimeout(1000);
+await pf.getByRole("button", { name: "Find", exact: true }).click();
+await pf.getByPlaceholder("Pair of table lamps").fill("Hand-knotted rug dealer find");
+await pf.getByPlaceholder("CB2 · Chicago").fill("US-51 Walk Rug Dealer, Galena IL");
+await pf.getByLabel("Amount paid").fill("2100.00");
+const sel = pf.getByLabel("Line", { exact: true });
+console.log("line opts:", await sel.locator("option").allInnerTexts());
+const v = await sel.locator("option", { hasText: "Hand-knotted rug" }).first().getAttribute("value");
+await sel.selectOption(v);
+await shot(page, "C-purchase-filled-1440");
+await pf.getByRole("button", { name: /^Record the buy/ }).click();
+await page.waitForTimeout(4000);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(1500);
+await openLine(page, "Hand-knotted rug", w);
+for (const id of ["line-next-act", "line-movement-cell", "line-receiving-cell"]) console.log("==", id, await txt(page.getByTestId(id)));
+await page.getByTestId("line-next-act").scrollIntoViewIfNeeded();
+await shot(page, "C-rug-after-buy-1440");
+await browser.close();
