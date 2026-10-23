@@ -4,7 +4,7 @@ const require = createRequire("/Users/kody/Code/patina-merged/apps/designer-port
 const { chromium } = require("@playwright/test");
 export const BASE = "http://localhost:3400";
 export const PROJECT = "50500000-0000-4000-8000-000000000002";
-export const SCREENS = "/Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-1805";
+export const SCREENS = process.env.SCREENS || "/Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-1807";
 export const VP = { 1440: { width: 1440, height: 900 }, 390: { width: 390, height: 844 } };
 export async function open(email = "us50-member@patina.dev", w = 1440) {
   const browser = await chromium.launch({ channel: "chromium" });
