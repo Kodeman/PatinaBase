@@ -24252,6 +24252,66 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00856_job_destinations.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_destination_locations FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00856_job_destinations.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_destination_locations TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00856_job_destinations.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.project_destination_locations TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00856_job_destinations.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.validate_project_destination_location() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00856_job_destinations.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.add_project_destination_location(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00856_job_destinations.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.add_project_destination_location(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00856_job_destinations.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.remove_project_destination_location(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00856_job_destinations.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.remove_project_destination_location(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00856_job_destinations.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_ffe_planned_destination(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00856_job_destinations.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_project_ffe_planned_destination(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

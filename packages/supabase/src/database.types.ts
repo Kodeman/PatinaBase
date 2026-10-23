@@ -18560,6 +18560,49 @@ export type Database = {
           },
         ]
       }
+      project_destination_locations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          location_id: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          location_id: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          location_id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_destination_locations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "studio_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_destination_locations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_destination_locations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_documents: {
         Row: {
           anchor_id: string | null
@@ -19149,6 +19192,7 @@ export type Database = {
           pending_cost_changed_at: string | null
           pending_cost_prev_cents: number | null
           pending_markup_held_percent: number | null
+          planned_destination_location_id: string | null
           po_number: string | null
           price_basis: string | null
           product_id: string | null
@@ -19211,6 +19255,7 @@ export type Database = {
           pending_cost_changed_at?: string | null
           pending_cost_prev_cents?: number | null
           pending_markup_held_percent?: number | null
+          planned_destination_location_id?: string | null
           po_number?: string | null
           price_basis?: string | null
           product_id?: string | null
@@ -19273,6 +19318,7 @@ export type Database = {
           pending_cost_changed_at?: string | null
           pending_cost_prev_cents?: number | null
           pending_markup_held_percent?: number | null
+          planned_destination_location_id?: string | null
           po_number?: string | null
           price_basis?: string | null
           product_id?: string | null
@@ -19339,6 +19385,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "project_ffe_items"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_planned_destination_location_id_fkey"
+            columns: ["planned_destination_location_id"]
+            isOneToOne: false
+            referencedRelation: "studio_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_planned_job_destination_fk"
+            columns: ["project_id", "planned_destination_location_id"]
+            isOneToOne: false
+            referencedRelation: "project_destination_locations"
+            referencedColumns: ["project_id", "location_id"]
           },
           {
             foreignKeyName: "project_ffe_items_product_id_fkey"
@@ -30375,6 +30435,7 @@ export type Database = {
           id: string
           instructions: string | null
           is_default_receiver: boolean
+          is_private_home: boolean
           kind: string
           label: string
           needs_liftgate: boolean | null
@@ -30396,6 +30457,7 @@ export type Database = {
           id?: string
           instructions?: string | null
           is_default_receiver?: boolean
+          is_private_home?: boolean
           kind: string
           label: string
           needs_liftgate?: boolean | null
@@ -30417,6 +30479,7 @@ export type Database = {
           id?: string
           instructions?: string | null
           is_default_receiver?: boolean
+          is_private_home?: boolean
           kind?: string
           label?: string
           needs_liftgate?: boolean | null
@@ -37858,6 +37921,7 @@ export type Database = {
           pending_cost_changed_at: string | null
           pending_cost_prev_cents: number | null
           pending_markup_held_percent: number | null
+          planned_destination_location_id: string | null
           po_number: string | null
           price_basis: string | null
           product_id: string | null
@@ -39276,6 +39340,21 @@ export type Database = {
         }
         Returns: Json
       }
+      add_project_destination_location: {
+        Args: { p_location_id: string; p_project_id: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          location_id: string
+          project_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_destination_locations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_add_studio_member: {
         Args: {
           p_actor: string
@@ -39902,6 +39981,7 @@ export type Database = {
           id: string
           instructions: string | null
           is_default_receiver: boolean
+          is_private_home: boolean
           kind: string
           label: string
           needs_liftgate: boolean | null
@@ -43571,6 +43651,7 @@ export type Database = {
           pending_cost_changed_at: string | null
           pending_cost_prev_cents: number | null
           pending_markup_held_percent: number | null
+          planned_destination_location_id: string | null
           po_number: string | null
           price_basis: string | null
           product_id: string | null
@@ -43896,6 +43977,7 @@ export type Database = {
           pending_cost_changed_at: string | null
           pending_cost_prev_cents: number | null
           pending_markup_held_percent: number | null
+          planned_destination_location_id: string | null
           po_number: string | null
           price_basis: string | null
           product_id: string | null
@@ -45331,6 +45413,7 @@ export type Database = {
           pending_cost_changed_at: string | null
           pending_cost_prev_cents: number | null
           pending_markup_held_percent: number | null
+          planned_destination_location_id: string | null
           po_number: string | null
           price_basis: string | null
           product_id: string | null
@@ -45856,6 +45939,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      remove_project_destination_location: {
+        Args: { p_location_id: string; p_project_id: string }
+        Returns: undefined
       }
       remove_proposal_phase: {
         Args: {
@@ -47224,6 +47311,7 @@ export type Database = {
           pending_cost_changed_at: string | null
           pending_cost_prev_cents: number | null
           pending_markup_held_percent: number | null
+          planned_destination_location_id: string | null
           po_number: string | null
           price_basis: string | null
           product_id: string | null
@@ -47295,6 +47383,7 @@ export type Database = {
           pending_cost_changed_at: string | null
           pending_cost_prev_cents: number | null
           pending_markup_held_percent: number | null
+          planned_destination_location_id: string | null
           po_number: string | null
           price_basis: string | null
           product_id: string | null
@@ -47366,6 +47455,79 @@ export type Database = {
           pending_cost_changed_at: string | null
           pending_cost_prev_cents: number | null
           pending_markup_held_percent: number | null
+          planned_destination_location_id: string | null
+          po_number: string | null
+          price_basis: string | null
+          product_id: string | null
+          project_id: string
+          project_room_id: string | null
+          purchase_order_id: string | null
+          quantity: number
+          received_quantity: number | null
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by: string | null
+          removed_disposition: string | null
+          retail_unit_cents: number | null
+          role_identity: string
+          rough_cents: number | null
+          selection_thread_id: string
+          sort_order: number
+          source_authorization_item_id: string | null
+          source_commercial_document_id: string | null
+          source_decision_id: string | null
+          source_proposal_item_id: string | null
+          status: string
+          supersedes_ffe_item_id: string | null
+          trade_price_cents: number | null
+          trade_scope_document_id: string | null
+          unit: string
+          unit_price_cents: number | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_project_ffe_planned_destination: {
+        Args: { p_ffe_item_id: string; p_location_id: string }
+        Returns: {
+          added_via: string | null
+          assignment_scope: string
+          blocked: boolean | null
+          blocked_by_decision_id: string | null
+          blocked_reason: string | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          created_at: string
+          currency: string
+          custom_fields: Json
+          design_disposition: string
+          doc_code: string | null
+          eta: string | null
+          ffe_category: string | null
+          id: string
+          installed_on: string | null
+          item_type: string
+          last_status_change_at: string | null
+          lead_time_weeks: number | null
+          line_group_id: string | null
+          line_kind: string
+          line_total_cents: number | null
+          link_kind: string | null
+          markup_percent: number | null
+          name: string
+          notes: string | null
+          parent_ffe_item_id: string | null
+          pending_cost_changed_at: string | null
+          pending_cost_prev_cents: number | null
+          pending_markup_held_percent: number | null
+          planned_destination_location_id: string | null
           po_number: string | null
           price_basis: string | null
           product_id: string | null
@@ -49208,6 +49370,7 @@ export type Database = {
           id: string
           instructions: string | null
           is_default_receiver: boolean
+          is_private_home: boolean
           kind: string
           label: string
           needs_liftgate: boolean | null
