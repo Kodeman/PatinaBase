@@ -112,10 +112,6 @@ const liveAccount = (account: StudioVendorAccountRow | null | undefined) =>
 const FIELD =
   'doc-type-control min-h-11 w-full min-w-0 rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-2 text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]';
 
-/** R-PB9: what a blank claim window means. */
-export const CLAIMS_WINDOW_DEFAULT_DAYS = 3;
-export const CONCEALED_CARRIER_DEFAULT_DAYS = 5;
-
 const TRANSMISSION_OPTIONS: { value: StudioVendorTransmission; label: string }[] = [
   { value: 'email', label: 'Email' },
   { value: 'portal', label: 'Trade portal' },
@@ -342,9 +338,19 @@ export function VendorAccountTerms({
       ['Lead time', account?.lead_time_days != null ? `${account.lead_time_days} days` : null],
       [
         'Claims',
-        `vendor ${account?.claims_window_days ?? CLAIMS_WINDOW_DEFAULT_DAYS} days · concealed damage ${
-          inspection?.concealed_carrier ?? CONCEALED_CARRIER_DEFAULT_DAYS
-        } days`,
+        `${
+          account?.claims_window_days != null
+            ? `vendor ${account.claims_window_days} days`
+            : 'vendor window unknown'
+        } · ${
+          inspection?.concealed_carrier != null
+            ? `concealed damage ${inspection.concealed_carrier} days`
+            : 'concealed damage window unknown'
+        }${
+          account?.claims_window_days == null || inspection?.concealed_carrier == null
+            ? ' — add vendor terms'
+            : ''
+        }`,
       ],
       ['Resale cert', account?.resale_cert_on_file_on ? `on file ${fmtDay(account.resale_cert_on_file_on)}` : null],
       ...(showDiscount
@@ -478,11 +484,11 @@ export function VendorAccountTerms({
         {input('leadTimeDays', 'Lead time (days)', { inputMode: 'numeric' })}
         {input('claimsWindowDays', 'Vendor claims (days)', {
           inputMode: 'numeric',
-          placeholder: `${CLAIMS_WINDOW_DEFAULT_DAYS} (72 h default)`,
+          placeholder: 'Add vendor terms',
         })}
         {input('concealedCarrierDays', 'Concealed damage (days)', {
           inputMode: 'numeric',
-          placeholder: `${CONCEALED_CARRIER_DEFAULT_DAYS} (5 d default)`,
+          placeholder: 'Add vendor terms',
         })}
         {input('resaleCertOnFileOn', 'Resale cert on file', { type: 'date' })}
         {showDiscount && input('tradeDiscountPct', 'Trade discount %', { inputMode: 'decimal' })}

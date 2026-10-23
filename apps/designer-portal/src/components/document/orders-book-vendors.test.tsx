@@ -91,14 +91,13 @@ beforeEach(() => {
 });
 
 describe('VendorAccountTerms — the studio account on Terms (C-12)', () => {
-  it('reads the account: terms, rep, override inbox, and the R-PB9 claim defaults', () => {
+  it('shows stored claim windows and marks missing terms as unknown', () => {
     mockAccount = account();
     render(<VendorAccountTerms vendor={vendor} />);
     expect(screen.getByText('HW-204')).toBeTruthy();
     expect(screen.getByText('Ada Rep')).toBeTruthy();
     expect(screen.getByText('thirty seventy · 30% deposit')).toBeTruthy();
     expect(screen.getByText('Email · studio-orders@hewn.example')).toBeTruthy();
-    expect(screen.getByText('vendor 3 days · concealed damage 5 days')).toBeTruthy();
   });
 
   it('falls back to the shared vendor default when the studio has no account', () => {
@@ -150,15 +149,13 @@ describe('VendorAccountTerms — the studio account on Terms (C-12)', () => {
     expect(request.ordersEmailOverride).toBe('studio-orders@hewn.example');
   });
 
-  it('shows the claim-window defaults as placeholders while editing', () => {
+  it('shows unknown claim windows without inventing values and uses neutral placeholders', () => {
+    mockAccount = account();
     render(<VendorAccountTerms vendor={vendor} />);
-    fireEvent.click(screen.getByRole('button', { name: /set up the account/i }));
-    expect((screen.getByLabelText(/vendor claims/i) as HTMLInputElement).placeholder).toBe(
-      '3 (72 h default)',
-    );
-    expect((screen.getByLabelText(/concealed damage/i) as HTMLInputElement).placeholder).toBe(
-      '5 (5 d default)',
-    );
+    expect(screen.getByText('vendor window unknown · concealed damage window unknown — add vendor terms')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /edit the account/i }));
+    expect((screen.getByLabelText(/vendor claims/i) as HTMLInputElement).placeholder).toBe('Add vendor terms');
+    expect((screen.getByLabelText(/concealed damage/i) as HTMLInputElement).placeholder).toBe('Add vendor terms');
   });
 
   it('refuses a malformed orders email inline, without saving', () => {
