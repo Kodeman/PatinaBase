@@ -30,7 +30,9 @@ if [[ "$GIT_DIR" == "$GIT_COMMON_DIR" ]]; then
   exit 1
 fi
 
-if ! git -C "$REPO_ROOT" worktree list --porcelain | grep -Fxq "worktree $REPO_ROOT"; then
+# Capture first: under pipefail, grep -q exiting early SIGPIPEs git once the worktree list is long.
+WORKTREE_LIST="$(git -C "$REPO_ROOT" worktree list --porcelain)"
+if ! grep -Fxq "worktree $REPO_ROOT" <<<"$WORKTREE_LIST"; then
   printf '%s\n' 'bootstrap-worktree: checkout is not registered with Git' >&2
   exit 1
 fi
