@@ -53,7 +53,13 @@ INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES ('f0180000-0000-4000-8000-000000000001', 'design_studio', 'F01 Fictional Studio', 'f01-fictional-studio', 'active')
 ON CONFLICT (id) DO UPDATE SET status = 'active';
 INSERT INTO public.organization_members (organization_id, user_id, role, status, joined_at)
-VALUES ('f0180000-0000-4000-8000-000000000001', 'f0180000-0000-4000-8000-000000000002', 'owner', 'active', now())
+SELECT 'f0180000-0000-4000-8000-000000000001', 'f0180000-0000-4000-8000-000000000002', 'owner', 'active', now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.organization_members
+  WHERE organization_id = 'f0180000-0000-4000-8000-000000000001'
+    AND user_id = 'f0180000-0000-4000-8000-000000000002'
+    AND role = 'owner' AND status = 'active'
+)
 ON CONFLICT (user_id, organization_id) DO UPDATE SET role = 'owner', status = 'active';
 
 -- Only this fixture's owned job and scan are rebuilt. No shared-stack reset.
