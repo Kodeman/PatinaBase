@@ -1,0 +1,117 @@
+/* Round 8 paper renderer (P02) — house sheet SPEC §H, WP-01.3 (SQ-1821).
+   The value mapping is docs/design/designer-portal-round8/evidence/token-mapping.md.
+
+   Imported only by the next/dynamic Round8PaperFrame and the round-8 studio
+   body, so the legacy renderer never downloads or reads a byte of it. Every
+   selector starts with [data-paper-renderer="round8"]; the two survey-blue
+   tokens are the only round-8 additions to globals.css, where contrast.test.ts
+   measures them.
+
+   Gates that read this file:
+   - shadow-gate.test.ts allows exactly the five (selector, depth token) pairs
+     below and pins both depth tokens, declared once on the scope rule.
+   - document-action-hierarchy-contract.test.ts ("P02 round-8 plate") holds the
+     scope, the plate override's two declarations, and the plate sites.
+   No colour aliases here: round-8 components spend the production tokens
+   directly (token-mapping §2). No Tailwind text-sm / text-xs for a round-8
+   size: at the 18px root they are 15.75 / 13.5px (token-mapping §3.3). */
+
+/* ── scope tokens · depth (§H-3.3) and measures (token-mapping §4) ───────── */
+[data-paper-renderer="round8"] {
+  --r8-shadow-float: 0 4px 20px rgba(44, 41, 38, 0.13);
+  --r8-stack-edge: 0 3px 0 var(--doc-sheet-2), 0 4px 0 var(--hairline-strong);
+  --r8-studio-measure: 1540px;
+  --r8-paper-measure: 1640px;
+  --r8-contents: 176px;
+  --r8-paper-gap: 24px;
+  --r8-head: 64px;
+}
+
+@media (min-width: 1440px) {
+  [data-paper-renderer="round8"] {
+    --r8-contents: 200px;
+    --r8-paper-gap: 48px;
+  }
+}
+
+@media (max-width: 599px) {
+  [data-paper-renderer="round8"] {
+    --r8-head: 56px;
+  }
+}
+
+/* ── type (§H-2) · computed px at the 18px root, never a reference rem ───── */
+[data-paper-renderer="round8"] .r8-d0 {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 4.8vw, 68px);
+  line-height: 1.15;
+  font-weight: 400;
+  letter-spacing: -0.035em;
+}
+
+[data-paper-renderer="round8"] .r8-d1 {
+  font-family: var(--font-display);
+  font-size: clamp(38px, 4vw, 58px);
+  line-height: 1.15;
+  font-weight: 400;
+  letter-spacing: -0.024em;
+}
+
+[data-paper-renderer="round8"] .r8-small {
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* §H-2: the §A3 display steps keep their sizes and take Playfair at the
+   reference weight, 400. Tracking stays 0 on them. */
+[data-paper-renderer="round8"] :is(.t-d1, .t-d2, .t-d3) {
+  font-weight: 400;
+}
+
+@media (max-width: 599px) {
+  [data-paper-renderer="round8"] .r8-d0 {
+    font-size: 40px;
+    line-height: 1.12;
+  }
+}
+
+/* ── the plate (§H-3.1) · the US-46 R203 plate, painted over its whole 44px
+   target. Geometry only: the paint, its hover and its forced-colours edge
+   stay the legacy rules, and no other DocumentAction tier is restyled. With
+   the paint at the target's edge, the shared ring stands 2px off it, on paper
+   (focus-ring 5.61:1). ─────────────────────────────────────────────────── */
+[data-paper-renderer="round8"] .da-plate::after {
+  inset: 0;
+}
+
+[data-paper-renderer="round8"] .da-plate:focus-visible::after,
+[data-paper-renderer="round8"] .da-plate[data-held-focus-cue]::after {
+  outline-offset: 2px;
+}
+
+/* ── depth (§H-3.3) · the five enumerated sites, and only these ─────────── */
+[data-paper-renderer="round8"] .r8-return-bar {
+  box-shadow: var(--r8-shadow-float);
+}
+
+[data-paper-renderer="round8"] .r8-toast {
+  box-shadow: var(--r8-shadow-float);
+}
+
+[data-paper-renderer="round8"] .r8-client-review-paper {
+  box-shadow: var(--r8-stack-edge);
+}
+
+[data-paper-renderer="round8"] .r8-set-preview {
+  box-shadow: var(--r8-stack-edge);
+}
+
+[data-paper-renderer="round8"] .r8-field-copy {
+  box-shadow: var(--r8-stack-edge);
+}
+
+/* end Round 8 paper renderer */

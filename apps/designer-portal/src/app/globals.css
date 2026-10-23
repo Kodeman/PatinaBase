@@ -2201,6 +2201,17 @@ html:has(.document-route-shell) {
      4.89:1 note band. Like every other -ink, it is a PAPER ink: on the
      charcoal grounds the base pigment stays. */
   --color-dusty-blue-ink: #556B82;
+  /* SPEC §H-1 (Room Proof 08, 2026-10-23) — survey blue, the F56 split again.
+     The pigment marks survey and drawing provenance only (a scan edge, the
+     draft-issue tick): 4.84:1 paper · 4.38:1 green-record · 4.05:1 rail, so a
+     mark, never a word. The -ink carries the "survey, not installed" caption
+     and measured figures: 5.76:1 doc-paper · 5.62:1 off-white · 6.00:1 white ·
+     5.46:1 red-letter band · 5.33:1 note band · 5.09:1 green-record · 4.70:1
+     rail. Neither is state, focus or a charcoal-ground ink. Every other
+     round-8 rule lives in components/document/paper/round8.css, which only
+     the round-8 renderer imports. */
+  --color-survey-blue: #58717B;
+  --color-survey-blue-ink: #4E6770;
 
   /* — rhythm — */
   --module: 24px;

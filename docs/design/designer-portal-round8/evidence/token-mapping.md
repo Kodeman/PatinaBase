@@ -433,3 +433,36 @@ Each departure lists its reason and the test that checks it.
 | Radius 0 → 2 / 3px | §A4, imperceptible at review distance | visual |
 | Spacing snapped to 12 / 24 / 48 / 72 | §A4 module | visual at listed widths |
 | Survey plate `#eaf0ee` → `--color-green-record` | no fourth light stock | contrast table |
+
+## 10. As implemented (WP-01.3, SQ-1821, 2026-10-23)
+
+Story decision #5 moved the scoped block out of `globals.css`. This section records where each piece landed.
+SPEC §H-4 records the same correction.
+
+- **`apps/designer-portal/src/components/document/paper/round8.css`.** Every rule here starts with
+  `[data-paper-renderer="round8"]`. Only the round-8 frame and the studio body import this file, and it has
+  no importer until WP-01.4a/01.5. It holds:
+  - the depth tokens `--r8-shadow-float` and `--r8-stack-edge` (§7.1), declared once on the scope rule;
+  - the measures: `--r8-studio-measure: 1540px` and `--r8-paper-measure: 1640px`;
+  - `--r8-contents` (176px, or 200px from 1440px), `--r8-paper-gap` (24px, or 48px from 1440px) and
+    `--r8-head` (64px, or 56px below 600px);
+  - the type steps `.r8-d0`, `.r8-d1` and `.r8-small`;
+  - Playfair 400 on `.t-d1`, `.t-d2` and `.t-d3`;
+  - the two plate geometry declarations (§6);
+  - the five shadow sites (§7.1).
+- **`globals.css`** gains only `--color-survey-blue` and `--color-survey-blue-ink` at `:root`, beside
+  `--color-dusty-blue-ink`.
+- **Gates.**
+  - **`shadow-gate.test.ts`.** The exact five-pair inventory, restricted to `round8.css`. It pins both token
+    values, checks for zero blur and no `inset`, and checks that neither token is declared anywhere else.
+    Every other stylesheet, `globals.css` included, stays at zero.
+  - **`document-action-hierarchy-contract.test.ts`.** `ROUND8_PLATE_SITES` (file → actionKeys) is frozen
+    **empty**. WP-02, WP-03 and WP-04 add each key against §6.1 as they build it.
+  - **The consequential-verb check.** It is anchored to the start of a kebab segment, so `design` does not
+    read as `sign`.
+  - **Variants are spelled literally.** Round-8 files write `variant="plate"` and `variant="terminal"`
+    literally. No computed variant and no ledger entry, so the gate can read them.
+  - **Terminals.** A round-8 terminal carries `aria-describedby` pointing at its §A6 sentence, and that
+    element is rendered in the same file.
+  - **`contrast.test.ts`.** Every §2.3 text and mark pair is measured. A sweep also checks that the survey
+    pigment is never spent as text.
