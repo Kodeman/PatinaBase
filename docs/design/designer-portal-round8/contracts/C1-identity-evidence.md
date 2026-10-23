@@ -23,6 +23,9 @@
 
 ---
 
+**Revision 2026-10-23 (SQ-1861, answering the SQ-1857 re-review at `55569724f9b3`).** Marked inline with `SQ-1857 T#`:
+- **T7** (§4): an empty manifest is refused for `fabrication_instruction` and `package_issue`, and members are declared necessary, not sufficient. Unit coverage and the route minimum are judged by C3's gate against C5's evidence bindings, never by manifest metadata.
+
 ## 1. Canonical identities that already exist (reuse, do not re-key)
 
 | Identity | Source of truth | Key and stability | Notes |
@@ -252,6 +255,9 @@ The rules now are:
   | `coordination_item_revision` | `coordination_item_revisions.id` (00214) | status must be `approved` |
 
   A member must be an immutable row. `plan_sheets.current_print_id` is mutable, so it is **never** a member. Cite the print or the issue print instead.
+- **Members are necessary, not sufficient (Revision 2026-10-23, SQ-1857 T7).** The per-member checks below prove each member is real, frozen and on the job. They do not prove that the set covers what an act needs, and package or purpose metadata never does. So:
+  - `create_evidence_manifest` refuses an empty `p_members` for `fabrication_instruction` and `package_issue` (`manifest_members_empty`), backed by a table CHECK `purpose = 'service_acceptance' OR jsonb_array_length(members) > 0`. `service_acceptance` keeps its own rule in C4.
+  - For `fabrication_instruction`, *coverage* (the route minimum, and an approved, current, pre-bound submittal revision for every instructed unit) is judged only by C3's shared gate at the act, against the C5 fulfilment and its evidence bindings (C3 §3.2 Evidence, C5 §3.1). A manifest is never treated as covering anything because it exists for the package.
 - **Hash.** `manifest_hash` is the sha256 of `_plan_room_canonical_json(members sorted by kind, id)`. That reuses the existing canonicaliser (00429:625). The member hashes are copied in. Two manifests with the same hash are the same evidence, which is the same rule as `plan_issues.set_checksum` (00429:229).
 - **RPC.** `create_evidence_manifest(p_project_id uuid, p_package_id uuid, p_purpose text, p_members jsonb, p_idempotency_key text) RETURNS jsonb {manifestId, manifestHash, replayed}`, `SECURITY DEFINER SET search_path = public, pg_temp`. The server re-reads every member under a project check. A member from another project fails with `manifest_member_off_project`, and a member that is not in a frozen state fails with `manifest_member_not_frozen`. The server recomputes each member hash and never trusts a client-supplied one.
   - **Package binding (SQ-1817 F14).** When `p_package_id` is not NULL, the server reads the package row and refuses `manifest_package_off_project` unless `project_packages.project_id = p_project_id` and `archived_at IS NULL`. A NULL package for `fabrication_instruction` or `package_issue` raises `manifest_package_required`.
@@ -305,6 +311,7 @@ The rules now are:
     - **Actor retention (SQ-1851 R18).** Deleting a profile that created a manifest or receipt fails on the FK (`RESTRICT`); the manifest is unchanged.
     - A package from another project raises `manifest_package_off_project`.
     - A NULL package for `fabrication_instruction` raises `manifest_package_required`.
+    - **Empty set (SQ-1857 T7).** An empty `p_members` for `fabrication_instruction` or `package_issue` raises `manifest_members_empty` and mints nothing. Coverage of instructed units is tested at the C3 gate (C3 §3.2 tests), not here.
 - **Jest (WP-01.4b).** URL parse/emit round-trip for `unfold`, `lens`, `room` and `line`. `land` is consumed once. The `ffeItemId` alias still lands.
 - **Playwright (WP-01.9).** Back and Forward walk unfold and close. A reload on `?unfold` reopens with no write replayed (first vertical slice, step 10).
 
