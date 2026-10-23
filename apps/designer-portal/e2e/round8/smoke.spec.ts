@@ -23,8 +23,13 @@ test('F01 live studio opens its full-service job with 36 living-room lines and 8
   await page.goto('/desk', { waitUntil: 'domcontentloaded' });
   const jobDoor = page.getByRole('link', { name: new RegExp(name) }).first();
   await expect(jobDoor, 'live F01 job is on the studio desk').toBeVisible({ timeout: 30_000 });
-  await jobDoor.click();
-  await expect(page).toHaveURL(new RegExp(`/doc/${job}`));
+  await expect(jobDoor).toHaveAttribute('href', `/doc/${job}`);
+  await Promise.all([
+    page.waitForRequest((request) => request.url().includes(`/doc/${job}`), { timeout: 60_000 }),
+    jobDoor.click(),
+  ]);
+  // The first next dev compile of /doc/[id] is slow.
+  await expect(page).toHaveURL(new RegExp(`/doc/${job}`), { timeout: 60_000 });
   await expect(page.locator('[data-document-shell]')).toBeVisible({ timeout: 30_000 });
   const room = page.locator(`[data-pieces-room="${living}"]`);
   await expect(room.getByRole('button', { name: livingName, exact: true })).toBeVisible({ timeout: 30_000 });
