@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  useProcurementClaimDeadline,
-  useStudioVendorAccounts,
-} from '@patina/supabase';
-import { useInternalTimeStudio } from '@/hooks/use-viewer-studio';
+import { useProcurementClaimDeadline } from '@patina/supabase';
 import { WEEKDAY_SHORT_FORMAT, dayMonth, parseSourceDate } from '@/lib/document/dates';
 import { todayYmd } from '@/lib/document/format';
-
-/** Where the claims window came from (R-PB9): the studio's account with the
- *  vendor, or the default every studio starts with (72 h). */
-export type ClaimWindowBasis = 'account' | 'default';
 
 export interface ClaimClock {
   sentence: string;
@@ -24,31 +16,26 @@ function windowWords(days: number): string {
   return `${days} days`;
 }
 
-/**
- * C-20 / D1-08: the claim clock as one dated sentence, never a countdown.
- * `deadline` is `procurement_claim_deadline.vendor_deadline` (00700), a bare
- * date. Null when there is no deadline yet (not delivered) or it is unreadable.
- */
+/** NULL window days mean unknown, independently of whether delivery is recorded. */
 export function claimClockSentence({
   vendorName,
   deadline,
   windowDays,
-  basis,
   today = todayYmd(),
 }: {
   vendorName: string;
   deadline: string | null | undefined;
-  windowDays: number;
-  basis: ClaimWindowBasis;
+  windowDays: number | null;
   /** Local `YYYY-MM-DD`; injectable for tests. */
   today?: string;
 }): ClaimClock | null {
+  if (windowDays == null) {
+    return { sentence: 'Notice window unknown — add vendor terms', passed: false };
+  }
   const date = parseSourceDate(deadline ?? null);
   if (!deadline || !date) return null;
   const day = `${WEEKDAY_SHORT_FORMAT.format(date)} ${dayMonth(date)}`;
-  const source =
-    basis === 'account' ? `per the ${vendorName} account` : 'the studio default';
-  const why = `(${windowWords(windowDays)} from delivery, ${source})`;
+  const why = `(${windowWords(windowDays)} from delivery, per the ${vendorName} account)`;
   const passed = deadline.slice(0, 10) < today;
   return passed
     ? {
@@ -58,14 +45,9 @@ export function claimClockSentence({
     : { sentence: `${vendorName} wants written notice by ${day} ${why}.`, passed };
 }
 
-/**
- * The receiving row's claim clock: reads the PO's deadline and the studio's
- * account with the vendor (to name the basis), then prints the sentence.
- * Silent until both answer, and for a PO with no delivered date.
- */
+/** The RPC's nullable term is authoritative; no second account read or inferred default. */
 export function ClaimClockLine({
   purchaseOrderId,
-  vendorId,
   vendorName,
   className = '',
 }: {
@@ -75,23 +57,11 @@ export function ClaimClockLine({
   className?: string;
 }) {
   const { data: clock } = useProcurementClaimDeadline(purchaseOrderId);
-  const { studio, isSettled } = useInternalTimeStudio();
-  const accounts = useStudioVendorAccounts(studio?.id ?? null);
-  if (!clock || !isSettled || (studio && accounts.isPending)) return null;
-  // The account names the basis. Without one to read (no studio door, or the
-  // read failed) the window itself is the evidence: 3 days is R-PB9's default.
-  const basis: ClaimWindowBasis = accounts.isSuccess
-    ? accounts.data.find((a) => a.vendor_id === vendorId)?.claims_window_days != null
-      ? 'account'
-      : 'default'
-    : clock.claims_window_days === 3
-      ? 'default'
-      : 'account';
+  if (!clock) return null;
   const line = claimClockSentence({
     vendorName,
     deadline: clock.vendor_deadline,
     windowDays: clock.claims_window_days,
-    basis,
   });
   if (!line) return null;
   return (
