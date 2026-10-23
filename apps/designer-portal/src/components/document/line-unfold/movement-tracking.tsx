@@ -21,24 +21,91 @@ export interface TrackingFields {
   eta_history?: PurchaseOrderEtaHistoryEntry[] | null;
 }
 
-const TRACKING_URLS: Array<[RegExp, (n: string) => string]> = [
-  [/\bups\b/i, (n) => `https://www.ups.com/track?tracknum=${n}`],
-  [/fed\s*ex/i, (n) => `https://www.fedex.com/fedextrack/?trknbr=${n}`],
-  [
-    /\busps\b|postal service/i,
-    (n) => `https://tools.usps.com/go/TrackConfirmAction?tLabels=${n}`,
-  ],
+export const TRACKING_CARRIERS = [
+  // Public tracking page: https://www.ups.com/track
+  { id: 'ups', label: 'UPS', aliases: ['ups'], template: 'https://www.ups.com/track?tracknum={pro}' },
+  // Public tracking page: https://www.fedex.com/fedextrack/
+  { id: 'fedex', label: 'FedEx', aliases: ['fedex', 'fedex ground', 'fed ex'], template: 'https://www.fedex.com/fedextrack/?trknbr={pro}' },
+  // Public tracking page: https://tools.usps.com/go/TrackConfirmAction
+  { id: 'usps', label: 'USPS', aliases: ['usps', 'united states postal service', 'postal service'], template: 'https://tools.usps.com/go/TrackConfirmAction?tLabels={pro}' },
+  // Public tracking page; prefill pending walk: https://www.estes-express.com/myestes/shipment-tracking/
+  { id: 'estes', label: 'Estes', aliases: ['estes', 'estes express', 'estes express lines'], template: 'https://www.estes-express.com/myestes/shipment-tracking/?type=PRO&query={pro}' },
+  // No confirmed public deep link: https://www.odfl.com/us/en/tools/trace-track-ltl-freight.html
+  { id: 'odfl', label: 'Old Dominion', aliases: ['old dominion', 'odfl', 'old dominion freight line'], template: 'https://www.odfl.com/us/en/tools/trace-track-ltl-freight.html' },
+  // No confirmed public deep link: https://www.xpo.com/help-center/shipment-tracking-and-reporting/how-track-ltl-shipment/
+  { id: 'xpo', label: 'XPO', aliases: ['xpo', 'xpo logistics'], template: 'https://www.xpo.com/help-center/shipment-tracking-and-reporting/how-track-ltl-shipment/' },
+  // No confirmed public deep link: https://www.rlcarriers.com/freight/shipping/shipment-tracing
+  { id: 'rl', label: 'R+L', aliases: ['r+l', 'r+l carriers'], template: 'https://www.rlcarriers.com/freight/shipping/shipment-tracing' },
+  // No confirmed public deep link: https://www.saia.com/track
+  { id: 'saia', label: 'Saia', aliases: ['saia', 'saia ltl freight'], template: 'https://www.saia.com/track' },
+  // No confirmed public deep link: https://arcb.com/tools/tracking.html
+  { id: 'abf', label: 'ABF / ArcBest', aliases: ['abf / arcbest', 'abf', 'abf freight', 'arcbest'], template: 'https://arcb.com/tools/tracking.html' },
+  // Carrier-owned format strips a three-letter terminal prefix, dashes and leading zeros: https://www.sefl.com/webconnect/tracing
+  { id: 'sefl', label: 'SEFL', aliases: ['sefl', 'southeastern freight lines'], template: 'https://www.sefl.com/webconnect/tracing?Type=PN&RefNum1={pro}' },
+  { id: 'other', label: 'Other', aliases: ['other'], template: null },
 ];
 
-/** A carrier's tracking page for UPS, FedEx and USPS; null for any other carrier. */
+function selectedCarrier(carrier: string | null | undefined) {
+  const name = carrier?.trim().toLowerCase() ?? '';
+  return TRACKING_CARRIERS.find((c) => c.aliases.includes(name));
+}
+
+/** Uses only an explicitly named carrier, never the shape of a PRO number. */
 export function trackingUrl(
   carrier: string | null | undefined,
   trackingNumber: string | null | undefined,
 ): string | null {
-  const number = trackingNumber?.trim();
-  if (!carrier || !number) return null;
-  const match = TRACKING_URLS.find(([re]) => re.test(carrier));
-  return match ? match[1](encodeURIComponent(number)) : null;
+  const selected = selectedCarrier(carrier);
+  let number = trackingNumber?.trim() ?? '';
+  if (selected?.id === 'sefl') number = number.replace(/^[a-z]{3}[-\s]*/i, '').replace(/-/g, '').replace(/^0+/, '');
+  if (!number || !selected?.template) return null;
+  return selected.template.replace('{pro}', encodeURIComponent(number));
+}
+
+export function CarrierPicker({ value, disabled, onChange, ariaLabel }: {
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  ariaLabel: string;
+}) {
+  const legacy = value && !TRACKING_CARRIERS.some((c) => c.label === value);
+  return (
+    <select aria-label={ariaLabel} value={value} disabled={disabled}
+      onChange={(e) => onChange(e.target.value)} className={FIELD_CLS}>
+      <option value="">Not set</option>
+      {legacy && <option value={value}>{value}</option>}
+      {TRACKING_CARRIERS.map((c) => <option key={c.id} value={c.label}>{c.label}</option>)}
+    </select>
+  );
+}
+
+export function CarrierTrackingNumber({ carrier, number }: { carrier: string | null; number: string }) {
+  const [copyStatus, setCopyStatus] = useState('');
+  const href = trackingUrl(carrier, number);
+  const selected = selectedCarrier(carrier);
+  if (!href) return <span>{number}</span>;
+  const landing = !selected?.template?.includes('{pro}');
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(number);
+      setCopyStatus('PRO copied.');
+    } catch {
+      setCopyStatus('Could not copy. Select the PRO to copy it.');
+    }
+  };
+  return (
+    <>
+      {landing && <><span>{number}</span>{' · '}</>}
+      <a href={href} target="_blank" rel="noopener noreferrer"
+        className="underline decoration-[var(--color-pearl)] underline-offset-2 hover:text-[var(--color-charcoal)]">
+        {landing ? `Open ${selected?.label} tracking` : number}
+      </a>
+      {landing && <>
+        {' · '}<button type="button" onClick={() => void copy()} className="underline underline-offset-2">Copy PRO</button>
+        <span role="status">{copyStatus}</span>
+      </>}
+    </>
+  );
 }
 
 export interface EtaMove {
@@ -95,9 +162,6 @@ export function trackingPatch(
   return patch;
 }
 
-/** The maker lane's shipment words (00350), plus the parcel carriers that link. */
-const CARRIER_SUGGESTIONS = ['UPS', 'FedEx', 'USPS', 'LTL', 'White glove', 'Their truck'];
-
 /**
  * C-18 (D1-07): how the PO ships, in the Movement cell. The dated record
  * ("Shipped 22 Oct · UPS 1Z…"), the bill of lading, and an inline edit that
@@ -126,8 +190,6 @@ export function ShipmentTracking({
   const bolPath = norm(record.bol_document_path);
   if (!open && !carrier && !number && !shippedOn && !bolPath) return null;
 
-  const href = trackingUrl(carrier, number);
-
   const openBol = async () => {
     if (!bolPath) return;
     setOpenError(false);
@@ -153,19 +215,7 @@ export function ShipmentTracking({
         <CellSub>
           {recordLine}
           {recordLine && number ? ' ' : null}
-          {number &&
-            (href ? (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline decoration-[var(--color-pearl)] underline-offset-2 hover:text-[var(--color-charcoal)]"
-              >
-                {number}
-              </a>
-            ) : (
-              <span>{number}</span>
-            ))}
+          {number && <CarrierTrackingNumber carrier={carrier} number={number} />}
         </CellSub>
       )}
       {bolPath && (
@@ -273,19 +323,8 @@ function TrackingEditor({
       <div className="mt-1 flex flex-col gap-1">
         <label className="flex items-baseline gap-1.5">
           <span className={LABEL_CLS}>carrier</span>
-          <input
-            list={`carriers-${poId}`}
-            value={draft.carrier}
-            maxLength={120}
-            disabled={busy}
-            onChange={(e) => setDraft({ ...draft, carrier: e.target.value })}
-            className={FIELD_CLS}
-          />
-          <datalist id={`carriers-${poId}`}>
-            {CARRIER_SUGGESTIONS.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
+          <CarrierPicker value={draft.carrier} disabled={busy} ariaLabel="Tracking carrier"
+            onChange={(carrier) => setDraft({ ...draft, carrier })} />
         </label>
         <label className="flex items-baseline gap-1.5">
           <span className={LABEL_CLS}>tracking</span>
