@@ -78,6 +78,7 @@ CREATE TABLE public.project_packages (
   project_id      uuid NOT NULL REFERENCES public.projects(id) ON DELETE RESTRICT,
   package_kind    text NOT NULL CHECK (package_kind IN ('cabinetry', 'build')),
   code            text NOT NULL CHECK (length(btrim(code)) BETWEEN 1 AND 32),   -- e.g. 'K'
+  package_key     text NOT NULL CHECK (package_key ~ '^[a-z0-9][a-z0-9_-]{0,63}$'), -- immutable; see below
   title           text NOT NULL CHECK (length(btrim(title)) BETWEEN 1 AND 200),
   project_room_id uuid REFERENCES public.project_rooms(id) ON DELETE SET NULL,  -- optional home room
   created_by      uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -86,6 +87,9 @@ CREATE TABLE public.project_packages (
 );
 CREATE UNIQUE INDEX uniq_project_packages_code
   ON public.project_packages (project_id, upper(btrim(code))) WHERE archived_at IS NULL;
+-- Never reused within a job, archived rows included: an edition that names a key must never resolve to a later package.
+CREATE UNIQUE INDEX uniq_project_packages_key
+  ON public.project_packages (project_id, package_key);
 
 -- Sheet ↔ room. Many-to-many.
 CREATE TABLE public.plan_sheet_rooms (
@@ -111,6 +115,16 @@ CREATE TABLE public.plan_sheet_packages (
   - `set_plan_sheet_rooms(p_sheet_id uuid, p_project_room_ids uuid[]) RETURNS jsonb` replaces the set and returns `{sheetId, roomIds[]}`. It is naturally idempotent because the same set gives the same result.
   - `set_plan_sheet_packages(p_sheet_id uuid, p_package_ids uuid[]) RETURNS jsonb` works the same way.
   - `create_project_package(p_project_id uuid, p_kind text, p_code text, p_title text, p_project_room_id uuid DEFAULT NULL, p_idempotency_key text) RETURNS public.project_packages` replays on `(project_id, idempotency_key)` the way `plan_print_batches` does (00429:139-165). That needs an `idempotency_key text` and `request_hash text` column pair on `project_packages`, with `UNIQUE(project_id, idempotency_key)`.
+- **`package_key` (Revision 2026-10-23, orchestrator, closing the C1↔C2 seam left open by SQ-1850).**
+  - C2 §2.4a fixes the package identity shared by C1, C3, C5 and C6 as `(project_id, package_key)`. C5 §3.4 reaches `public.assert_fabrication_instruction_authority` (C3 §3.2) by resolving that key to this row's `id`.
+  - `create_project_package` derives `package_key` on the server, once, from `lower(btrim(p_code))`. Any character outside `[a-z0-9_-]` becomes `-`. On a collision with any row in the job, archived rows included, it appends `-2`, `-3`, and so on.
+  - The key is never a caller argument, and no RPC updates it. A `BEFORE UPDATE` trigger raises `package_key_immutable` when `package_key` or `project_id` changes.
+  - `code` stays the editable display label. Renaming or re-using a code never moves a key.
+  - Because the key index includes archived rows, an edition that froze key `k` can never resolve to a package created later. A C2/C5/C6 read whose key resolves to an archived package treats it as present-but-archived. It never treats it as absent, and it never re-binds.
+  - Tests the WP-05 slice adds:
+    - the key is server-derived and immutable on update;
+    - archive then re-create with the same code yields a distinct key;
+    - the C5 route refuses `fabrication_instruction_binding` for an unknown key.
 - **Authority: tenant first (Revision 2026-10-23, SQ-1817 F2).** The original text reused `is_design_studio_comember(projects.designer_id)` (00429:2047-2054) and made the tenant leg conditional on a future `plan_sheets` repair. That is withdrawn. `is_design_studio_comember` (00399:1164-1193) is true for a member of *any* active design studio the designer also belongs to. So with designer D in studios A and B, a B-only member could link sheets and create packages on A's job. Every new C1 RPC and every studio read policy on the three new tables uses one predicate that reads the studio from the job's **record**:
   ```sql
   CREATE FUNCTION public.can_compose_project_plan(p_project_id uuid) RETURNS boolean
