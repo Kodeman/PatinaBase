@@ -283,14 +283,14 @@ for (const vp of VIEWPORTS) {
         await groupName.press('Enter');
         await expect.poll(() => psqlScalar(`SELECT count(*) FROM public.project_line_groups WHERE project_id = '${JOB}' AND name = 'Shower'`)).toBe('1');
         // The next Tab uses the rendered group above it, not just the RPC's saved row.
-        await expect(lineRow(page, lineId(shower[0])).first()).toHaveAttribute('data-group-member', '');
+        await expect(lineRow(page, lineId(shower[0])).first().locator('[data-group-member]')).toBeVisible();
         for (const name of shower.slice(1)) {
           const before = psqlScalar(`SELECT count(*) FROM public.project_ffe_items WHERE project_id = '${JOB}' AND line_group_id IS NOT NULL`);
           await indent(name);
           await expect
             .poll(() => psqlScalar(`SELECT count(*) FROM public.project_ffe_items WHERE project_id = '${JOB}' AND line_group_id IS NOT NULL`))
             .toBe(String(Number(before) + 1));
-          await expect(lineRow(page, lineId(name)).first()).toHaveAttribute('data-group-member', '');
+          await expect(lineRow(page, lineId(name)).first().locator('[data-group-member]')).toBeVisible();
         }
         expect(
           psqlScalar(`SELECT string_agg(f.name, ',' ORDER BY f.sort_order, f.created_at) FROM public.project_ffe_items f
@@ -319,12 +319,15 @@ for (const vp of VIEWPORTS) {
         const wallpaperRow = lineRow(page, wallpaper).first();
         await expect(wallpaperRow.getByRole('textbox', { name: 'Markup, Phillip Jeffries Manila Hemp, Chalk', exact: true })).toBeEditable();
         await expect(wallpaperRow.getByRole('textbox', { name: 'Unit client price, Phillip Jeffries Manila Hemp, Chalk', exact: true })).toBeEditable();
-        // R1a sits under R1, labor, by the roll; the room's subtotal counts both.
+        // R1a sits under R1, labor, by the roll; the room's subtotal counts both:
+        // 9 × ($184 + 35% markup) + 9 × $85 = $3,000.60, displayed as $3,001.
         const laborRow = lineRow(page, labor).first();
         await expect(laborRow).toContainText('Install, wallpaper hanger');
         await expect(laborRow).toContainText(/labor/i);
         await expect(laborRow).toContainText(/roll/i);
-        await expect(page.getByText('Bedroom · $2,835 priced · ~$6,100 roughed')).toBeVisible();
+        expect(psqlScalar(`SELECT unit_price_cents || ':' || line_total_cents FROM public.project_ffe_items WHERE id = '${wallpaper}'`)).toBe('24840:223560');
+        expect(psqlScalar(`SELECT line_total_cents FROM public.project_ffe_items WHERE id = '${labor}'`)).toBe('76500');
+        await expect(page.getByText('Bedroom · $3,001 priced · ~$6,100 roughed')).toBeVisible();
 
         // An allowance prints Up to (Q12, T-55b).
         const menu = await openRowMenu(page, bed, 'Bed, king, upholstered');
