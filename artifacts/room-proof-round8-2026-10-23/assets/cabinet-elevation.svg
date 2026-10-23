@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 780" role="img" aria-labelledby="title desc">
+<title id="title">Kitchen pantry wall, illustrative design elevation</title><desc id="desc">An oak cabinet wall with tall storage, a central work surface and drawers. Sheet references, material annotations and an unresolved field measurement surround the illustration. Not a construction or fabrication document.</desc>
+<defs><pattern id="grain" width="31" height="150" patternUnits="userSpaceOnUse"><rect width="31" height="150" fill="#c0a080"/><path d="M7 0Q1 35 9 75T7 150M20 0Q28 40 18 80T20 150M13 0V150" fill="none" stroke="#977756" stroke-width=".7" opacity=".35"/></pattern><pattern id="trace" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#58717b" stroke-width=".4" opacity=".18"/></pattern></defs>
+<rect width="1200" height="780" fill="#f4f1e8"/><rect x="40" y="92" width="1120" height="595" fill="url(#trace)"/>
+<g fill="#302e2a" font-family="Georgia,serif"><text x="60" y="54" font-size="27">Lake Mendota House</text><text x="1140" y="54" text-anchor="end" font-family="Arial,sans-serif" font-size="17">CP-01 / Kitchen joinery</text></g>
+<g stroke="#5c554a" stroke-width="2" fill="none"><path d="M125 200H1045V602H125Z"/><path d="M110 602H1065M125 602V630M1045 602V630"/></g>
+<rect x="145" y="215" width="880" height="365" fill="#b29677"/>
+<g stroke="#6e5d49" stroke-width="2"><rect x="150" y="220" width="155" height="347" fill="url(#grain)"/><rect x="310" y="220" width="155" height="347" fill="url(#grain)"/><rect x="475" y="220" width="365" height="177" fill="#e1d9c8"/><rect x="850" y="220" width="170" height="347" fill="url(#grain)"/>
+<rect x="475" y="425" width="118" height="142" fill="url(#grain)"/><rect x="598" y="425" width="118" height="142" fill="url(#grain)"/><rect x="721" y="425" width="119" height="142" fill="url(#grain)"/>
+<path d="M150 390H305M310 390H465M850 390H1020M475 460H840M475 514H840"/>
+<rect x="469" y="405" width="378" height="12" fill="#bcb9ad"/><path d="M485 290H830M485 352H830" stroke-width="6"/>
+<path d="M151 574H1020" stroke="#4e453a" stroke-width="12"/>
+</g>
+<g stroke="#534b3f" stroke-width="5" stroke-linecap="round"><path d="M286 330v48M329 330v48M869 330v48M514 443h40M637 443h40M760 443h40"/></g>
+<g fill="#7e8b74"><rect x="513" y="317" width="25" height="30" rx="3"/><path d="M525 318q-28-26-4-37q20 15 4 37M525 318q25-32 37-9q-8 20-37 9"/></g>
+<g fill="#b49d85"><rect x="700" y="261" width="24" height="25" rx="4"/><rect x="736" y="254" width="22" height="32" rx="4"/><rect x="773" y="263" width="24" height="23" rx="4"/></g>
+<g stroke="#58717b" fill="none" stroke-width="1.5"><path d="M150 180V140M1020 180V140M150 153H1020M145 148l10 10M1015 148l10 10"/><path d="M91 220H65M91 567H65M78 220V567M73 215l10 10M73 562l10 10"/><path d="M185 320L215 110H415M932 312L1090 280M791 443L1100 473M650 602V650H900"/></g>
+<g font-family="Arial,sans-serif" fill="#58717b" font-size="18"><text x="585" y="140" text-anchor="middle">Overall width / field verification required</text><text x="223" y="105">F-07 / oak sample</text><text x="1097" y="278" text-anchor="end">K-06</text><text x="1102" y="498" text-anchor="end">H-12 / hardware</text><text x="901" y="650">Site interface</text></g>
+<g fill="#302e2a" font-family="Arial,sans-serif" font-size="16"><text x="185" y="606">K-01</text><text x="355" y="606">K-02</text><text x="615" y="606">K-03–05</text><text x="910" y="606">K-06</text></g>
+<path d="M60 704H1140" stroke="#8c897e"/><g fill="#68645c" font-family="Arial,sans-serif" font-size="16"><text x="60" y="735">Design intent / K-201 revision C</text><text x="1140" y="735" text-anchor="end">Illustrative only · no fabrication dimensions</text></g>
+</svg>
