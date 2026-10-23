@@ -104,3 +104,33 @@ describe('P-03 release custody', () => {
     expect(query.in).toHaveBeenCalledWith('status', ['draft', 'held_for_release']);
   });
 });
+
+describe('open damage claim custody', () => {
+  function claimNeeds(buyers: (string | null)[], count = buyers.length) {
+    const orders = buyers.map((buyer, i) => ({ ...release, id: 'po-' + i, created_by: buyer,
+      sent_at: '2026-10-21', inspections: [{ outcome: 'damaged', claims: [{ state: 'drafted' }] }] }));
+    const result = composeDeskRead({}, [{ ...row, draft_unsent_po_count: 0, open_claim_count: count }], '2026-10-22', now, undefined, orders);
+    return result.folders.flatMap(folder => folder.needs.map(need => ({ key: need.key, projectId: 'project-1', projectName: 'The house', need })));
+  }
+  it('assigns every open claim to the sole PO buyer, on Mine and Studio', () => {
+    const entries = claimNeeds(['buyer', 'buyer']);
+    expect(sheet(entries, 'buyer').lines[0]?.need).toEqual(expect.objectContaining({ kind: 'damage_claim', assignedToUserId: 'buyer' }));
+    expect(sheet(entries, 'owner').lines).toEqual([]);
+    expect(sheet(entries, 'owner', 'studio').lines[0]?.need.assignedToUserId).toBe('buyer');
+  });
+  it.each([['buyer', 'other'], ['buyer', null], ['buyer']])('keeps mixed, missing or incomplete buyer evidence with the lead (%s, %s)', (...buyers) => {
+    const entries = claimNeeds(buyers as (string | null)[], 2);
+    expect(sheet(entries, 'owner').lines[0]?.need.kind).toBe('damage_claim');
+    expect(sheet(entries, 'buyer').lines).toEqual([]);
+  });
+});
+
+it('includes claim-project POs and their native receipt claims in the single supplemental batch', async () => {
+  const query = { select: jest.fn().mockReturnThis(), or: jest.fn().mockReturnThis(), order: jest.fn().mockResolvedValue({ data: [], error: null }) };
+  const from = jest.fn().mockReturnValue(query);
+  await fetchReleasedPurchaseOrders({ from }, ['draft-po'], ['claim-project']);
+  expect(from).toHaveBeenCalledTimes(1);
+  expect(query.or).toHaveBeenCalledWith(expect.stringContaining('project_id.in.(claim-project)'));
+  expect(query.or).toHaveBeenCalledWith(expect.stringContaining('id.in.(draft-po)'));
+  expect(query.select).toHaveBeenCalledWith(expect.stringContaining('inspections:receiving_inspections!receiving_inspections_purchase_order_id_fkey(outcome, claims:damage_claims(state))'));
+});

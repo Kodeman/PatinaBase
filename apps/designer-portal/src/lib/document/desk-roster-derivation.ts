@@ -696,6 +696,7 @@ export const ANSWERED_NOTE_WINDOW_MS = 86_400_000;
 export type DeskLedgerGroupKey = 'yours' | 'others' | 'back' | 'rest';
 
 export interface DeskLedgerLine {
+  holder?: DeskHolder | null;
   /** The job's line, read on the need the one ranked list gives it. */
   line: RosterLine;
   standing: DeskStanding;
@@ -739,7 +740,7 @@ export interface DeskLedgerInput {
    *  by person. */
   people?: readonly RosterPerson[];
   /** Who carries each job (`deskHolderOf`); absent, its designer. */
-  holderOf?: (jobId: string) => DeskHolder;
+  holderOf?: (jobId: string, assignee?: string) => DeskHolder;
   now: Date;
 }
 
@@ -809,12 +810,13 @@ export function deriveDeskLedger(input: DeskLedgerInput): DeskLedger {
       row ? rosterEntryOn(row, need, chip, ctx, awaiting).line : line;
     const standing: DeskStanding =
       sheet.standing.get(jobId) ?? (line.motionText ? 'others' : 'rest');
-    const personId = input.holderOf?.(jobId).userId ?? line.designerId;
-    const base: DeskLedgerLine = { line, standing, settled: null, waiting: null, back: null };
-
     const onList = listed.get(jobId);
     const held = waiting.get(jobId);
     const comes = back.get(jobId);
+    const need = onList?.entry.need ?? held?.item.need.need ?? comes?.need.need;
+    const holder = input.holderOf?.(jobId, need?.assignedToUserId) ?? null;
+    const personId = holder?.userId ?? line.designerId;
+    const base: DeskLedgerLine = { line, holder, standing, settled: null, waiting: null, back: null };
     if ((standing === 'yours' || standing === 'settled') && onList) {
       rows.push({
         personId,

@@ -383,11 +383,13 @@ export interface SheetCard {
 export function groupSheetByJob(
   lines: readonly SheetEntry[],
   rosterJobs: ReadonlyMap<string, Pick<RosterLine, 'name' | 'stage' | 'projectId'>>,
-  holderOf?: (jobId: string) => DeskHolder,
+  holderOf?: (jobId: string, assignee?: string) => DeskHolder,
 ): SheetCard[] {
   const cards = new Map<string, SheetCard>();
   for (const line of lines) {
-    let card = cards.get(line.projectId);
+    const holder = holderOf?.(line.projectId, line.need.assignedToUserId) ?? null;
+    const cardKey = `${line.projectId}:${holder?.userId ?? ''}`;
+    let card = cards.get(cardKey);
     if (!card) {
       const job = rosterJobs.get(line.projectId);
       card = {
@@ -395,10 +397,10 @@ export function groupSheetByJob(
         projectId: job?.projectId ?? null,
         name: job?.name ?? line.projectName,
         stage: job?.stage ?? null,
-        holder: holderOf ? holderOf(line.projectId) : null,
+        holder,
         lines: [],
       };
-      cards.set(line.projectId, card);
+      cards.set(cardKey, card);
     }
     card.lines.push(line);
   }

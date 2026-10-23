@@ -624,6 +624,7 @@ export function buildDeskReleasedOrders(rows: readonly ReleasedPurchaseOrder[]):
       purchaseOrderId: row.id,
       buyerId: row.created_by!,
       releasedAt: row.released_at!,
+      buyerName: row.buyer_profile?.full_name?.trim() || row.buyer_profile?.display_name?.trim() || null,
       releasedByName: row.released_by_profile?.full_name?.trim() || row.released_by_profile?.display_name?.trim() || null,
     }]);
   }
@@ -699,6 +700,26 @@ export function deskFeed(
   if (Array.isArray(value)) return { data: value, error: null };
   const message = typeof value?.error === 'string' ? value.error : `desk_read did not answer ${key}`;
   return { data: null, error: Object.assign(new Error(message), { code: value?.code ?? null }) };
+}
+
+/** Claim ownership is known only when the supplemental batch accounts for every open claim. */
+function withClaimCustody(rows: DocumentStateRow[], orders: readonly ReleasedPurchaseOrder[]): DocumentStateRow[] {
+  const claims = new Map<string, { count: number; buyers: Set<string | null> }>();
+  for (const order of orders) {
+    if (!order.project_id) continue;
+    const count = (order.inspections ?? []).filter(inspection => inspection.outcome && inspection.outcome !== 'clean')
+      .flatMap(inspection => inspection.claims).filter(claim => ['drafted', 'vendor_notified'].includes(claim.state)).length;
+    if (!count) continue;
+    const project = claims.get(order.project_id) ?? { count: 0, buyers: new Set<string | null>() };
+    project.count += count;
+    project.buyers.add(order.created_by);
+    claims.set(order.project_id, project);
+  }
+  return rows.map(row => {
+    const claim = row.project_id ? claims.get(row.project_id) : undefined;
+    const buyer = claim?.buyers.size === 1 ? [...claim.buyers][0] : null;
+    return { ...row, openClaimBuyerId: buyer && claim?.count === row.open_claim_count ? buyer : undefined };
+  });
 }
 
 /**
@@ -865,7 +886,7 @@ export function composeDeskRead(
   ];
 
   const result = partitionDesk(
-    rows,
+    withClaimCustody(rows, releasedRows),
     now,
     conflicts,
     receivables,
@@ -963,7 +984,9 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
       const draftPoIds = Array.isArray(draftFeed.data)
         ? [...new Set(draftFeed.data.map((draft: { purchase_order_id?: string }) => draft.purchase_order_id).filter((id): id is string => !!id))]
         : [];
-      const released = await fetchReleasedPurchaseOrders(supabase, draftPoIds).then(
+      const claimProjectIds = rows.filter(row => row.open_claim_count > 0 && row.project_id)
+        .map(row => row.project_id!);
+      const released = await fetchReleasedPurchaseOrders(supabase, draftPoIds, claimProjectIds).then(
         (data) => ({ data, unread: false }),
         () => ({ data: [], unread: true }),
       );

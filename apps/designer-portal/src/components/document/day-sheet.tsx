@@ -69,7 +69,7 @@ const DONE_WORD: Record<string, string> = {
   proposal_declined: 'Follow-up sent',
   hesitating_proposal: 'Follow-up sent',
   proposal_expired: 'Follow-up sent',
-  po_unsent: 'Orders released',
+  po_unsent: 'Released',
   new_lead: 'Replied',
 };
 
@@ -94,6 +94,11 @@ export function settledWords(
       return `Set aside${back ? ` until ${back}` : ''}${settled.reason ? ` · waiting on ${settled.reason}` : ''}`;
     }
     default: {
+      if (entry.need.releasedOrder || entry.need.releaseHeld) {
+        const buyer = entry.need.assignedToUserId ? names?.get(entry.need.assignedToUserId) : null;
+        const who = (buyer || entry.need.releaseBuyerName)?.trim().split(/\s+/)[0] || 'the buyer';
+        return `Released · waiting on ${who} to send`;
+      }
       const done = `${DONE_WORD[entry.need.kind] ?? 'Done'}${by ? ` by ${by}` : ''}`;
       return settled.who
         ? `${done} · waiting on ${settled.who} since ${clockTime(settled.at)}`
@@ -593,7 +598,7 @@ export function DaySheet({
             <div className="cards cards-lead">
               {cards.map((card, position) => (
                 <DeskJobCard
-                  key={card.jobId}
+                  key={`${card.jobId}:${card.holder?.userId ?? ''}`}
                   card={card}
                   scope={scope}
                   now={now}

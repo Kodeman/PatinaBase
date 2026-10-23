@@ -1901,16 +1901,22 @@ export function useProjectPoCostLines(projectId: string | null | undefined) {
 export type ReleasedPurchaseOrder = Pick<Database['public']['Tables']['purchase_orders']['Row'],
   'id' | 'project_id' | 'created_by' | 'released_at' | 'sent_at' | 'status'> & {
   released_by_profile: { full_name: string | null; display_name?: string | null } | null;
+  buyer_profile?: { full_name: string | null; display_name: string | null } | null;
+  inspections?: { outcome: string | null; claims: { state: string }[] }[];
 };
 
 /** P-03: release custody is the original buyer's, not the project's lead's. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function fetchReleasedPurchaseOrders(supabase: any, draftPoIds: readonly string[] = []): Promise<ReleasedPurchaseOrder[]> {
+export async function fetchReleasedPurchaseOrders(supabase: any, draftPoIds: readonly string[] = [], claimProjectIds: readonly string[] = []): Promise<ReleasedPurchaseOrder[]> {
   let query = supabase.from('purchase_orders')
-    .select('id, project_id, created_by, released_at, sent_at, status, released_by_profile:profiles!purchase_orders_released_by_fkey(full_name, display_name)');
+    .select('id, project_id, created_by, released_at, sent_at, status, released_by_profile:profiles!purchase_orders_released_by_fkey(full_name, display_name), buyer_profile:profiles!purchase_orders_created_by_fkey(full_name, display_name), inspections:receiving_inspections!receiving_inspections_purchase_order_id_fkey(outcome, claims:damage_claims(state))');
   // Reuse the Desk's one supplemental read for custody of already-projected drafts.
-  query = draftPoIds.length
-    ? query.or(`and(released_at.not.is.null,sent_at.is.null,status.in.(draft,held_for_release)),id.in.(${draftPoIds.join(',')})`)
+  const extra = [
+    ...(draftPoIds.length ? [`id.in.(${draftPoIds.join(',')})`] : []),
+    ...(claimProjectIds.length ? [`project_id.in.(${claimProjectIds.join(',')})`] : []),
+  ];
+  query = extra.length
+    ? query.or(`and(released_at.not.is.null,sent_at.is.null,status.in.(draft,held_for_release)),${extra.join(',')}`)
     : query.not('released_at', 'is', null).is('sent_at', null).in('status', ['draft', 'held_for_release']);
   const { data, error } = await query.order('released_at');
   if (error) throw error;
@@ -1950,7 +1956,7 @@ export async function fetchHeldPurchaseOrders(supabase: any): Promise<HeldPurcha
   const { data, error } = await supabase
     .from('purchase_orders')
     .select(
-      'id, project_id, total_cents, held_at, hold_note, vendor:vendors!purchase_orders_vendor_id_fkey(name), project:projects!purchase_orders_project_id_fkey(name, studio_id), held_by_profile:profiles!purchase_orders_held_by_fkey(full_name)',
+      'id, project_id, total_cents, held_at, hold_note, vendor:vendors!purchase_orders_vendor_id_fkey(name), project:projects!purchase_orders_project_id_fkey(name, studio_id), held_by_profile:profiles!purchase_orders_held_by_fkey(full_name, display_name)',
     )
     .eq('status', 'held_for_release')
     .order('held_at')
@@ -1984,7 +1990,7 @@ export async function fetchHeldPurchaseOrders(supabase: any): Promise<HeldPurcha
       vendorName: one(row.vendor)?.name ?? null,
       totalCents: row.total_cents ?? 0,
       heldAt: row.held_at ?? null,
-      heldByName: one(row.held_by_profile)?.full_name ?? null,
+      heldByName: one(row.held_by_profile)?.full_name?.trim() || one(row.held_by_profile)?.display_name?.trim() || null,
       holdNote: row.hold_note ?? null,
       viewerCanRelease: studioId ? seats.get(studioId) === true : false,
     };

@@ -86,6 +86,7 @@ const LEAH: DeskHolder = { userId: 'me', name: 'Leah', mine: true };
 const JORDAN: DeskHolder = { userId: 'u-jordan', name: 'Jordan', mine: false };
 
 interface SheetOptions {
+  oneVoice?: boolean;
   jobs?: ReadonlyMap<string, { name: string; stage: 'proposal' | 'project' }>;
   holderOf?: (jobId: string) => DeskHolder;
   scope?: 'mine' | 'studio';
@@ -120,6 +121,7 @@ function sheetElement(
       dateLabel="Friday 9 October"
       teammateActed={options.teammateActed}
       names={options.names}
+      oneVoice={options.oneVoice}
     />
   );
 }
@@ -778,4 +780,47 @@ describe('DaySheet — quiet', () => {
     expect(screen.queryByText(NOTHING_NEEDS_YOU_TONIGHT)).toBeNull();
     expect(screen.getByText('Not checked: purchase orders.')).toBeInTheDocument();
   });
+});
+
+describe('buyer-owned Today framing', () => {
+  const { deskHolderOf } = require('@/lib/document/desk-scope');
+  const jobLeads = new Map([['p1', { leadUserId: 'lead', leadName: 'Leah Strand' }]]);
+  const names = new Map([['me', 'Jordan Reyes'], ['lead', 'Leah Strand']]);
+  it.each([
+    ['released order', { kind: 'po_unsent', releasedOrder: true, actionLabel: 'Review and send' }],
+    ['letter draft', { kind: 'po_unsent', draft: { id: 'draft', kind: 'vendor_claim_notice' }, actionLabel: 'Review and send' }],
+    ['damage claim', { kind: 'damage_claim', actionLabel: 'Review the claim' }],
+  ])('shows the buyer their own %s with its action, and names them on the lead Studio tab', (_kind, changes) => {
+    const need = entry(1, { ...changes, assignedToUserId: 'me', namedAct: true } as Partial<NeedLine>);
+    const { container, unmount } = renderSheet([need], { leads: jobLeads as never, scope: 'mine' }, {
+      scope: 'mine', holderOf: deskHolderOf(jobLeads, 'me', new Map(), names), names, oneVoice: true,
+    });
+    expect(container).toHaveTextContent('Yours today.');
+    expect(container).not.toHaveTextContent('The move is');
+    expect(within(lineOf(container, need.key)).getByText(changes.actionLabel)).toBeVisible();
+    unmount();
+    const lead = renderSheet([need], { leads: jobLeads as never, meUserId: 'lead' }, {
+      scope: 'studio', holderOf: deskHolderOf(jobLeads, 'lead', new Map(), names), names,
+    });
+    expect(lead.container).toHaveTextContent('With Jordan today.');
+    expect(lead.container).toHaveTextContent('The move is Jordan’s.');
+    expect(lineOf(lead.container, need.key).querySelector('[data-register="act"]')).toBeNull();
+  });
+  it('reads a released unsent order as waiting on its buyer to send, never the vendor', () => {
+    const { settledWords } = require('./day-sheet');
+    const need = entry(1, { kind: 'po_unsent', releasedOrder: true, assignedToUserId: 'me' });
+    const words = settledWords(need, { kind: 'acted', at: at(9), who: 'Vendor' }, names);
+    expect(words).toContain('Released · waiting on Jordan to send');
+    expect(words).not.toMatch(/Vendor|Orders released/);
+  });
+});
+
+it('separates different holders on one job so neither inherits the other’s framing', () => {
+  const { deskHolderOf } = require('@/lib/document/desk-scope');
+  const leads = new Map([['p1', { leadUserId: 'lead', leadName: 'Leah' }]]);
+  const buyer = entry(1, { assignedToUserId: 'me', namedAct: true });
+  const lead = { ...entry(2), projectId: 'p1' };
+  const cards = groupSheetByJob([buyer, lead], new Map(), deskHolderOf(leads, 'me', new Map(), new Map([['me', 'Jordan']])));
+  expect(cards.map(card => card.holder?.mine)).toEqual([true, false]);
+  expect(cards.map(card => card.lines.length)).toEqual([1, 1]);
 });
