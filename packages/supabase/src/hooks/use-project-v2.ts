@@ -154,7 +154,7 @@ export interface FFEItemFilters {
 
 /** The shared lifecycle-rich PO embed used by every FF&E consumer. */
 const PURCHASE_ORDER_EMBED =
-  'purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at, delivered_date, carrier, tracking_number, bol_document_path, shipped_on, eta_history, vendor:vendors!purchase_orders_vendor_id_fkey(name), payments:po_payments(kind, state, due_date, paid_date))';
+  'purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at, released_at, released_by, created_by, released_by_profile:profiles!purchase_orders_released_by_fkey(full_name), delivered_date, carrier, tracking_number, bol_document_path, shipped_on, eta_history, vendor:vendors!purchase_orders_vendor_id_fkey(name), payments:po_payments(kind, state, due_date, paid_date))';
 
 export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) {
   return useQuery({

@@ -22,6 +22,9 @@ const mockPreviewState: { data: Record<string, unknown> | undefined } = { data: 
 const mockPreviewArgs: Array<[string | null, string, number]> = [];
 const mockCanRelease: { data: boolean } = { data: false };
 
+let mockBuyerUserId = 'user-leah';
+jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: mockBuyerUserId } }) }));
+
 jest.mock('@patina/supabase', () => ({
   useVendorQuotes: () => ({ data: [] }),
   useProjectRoomPlacements: () => ({ data: [] }),
@@ -114,6 +117,7 @@ const SOFA = { id: 'line-sofa', name: 'Sofa', line_total_cents: 1_500_000, trade
 
 const HELD_PO: OrderPaperPurchaseOrder = {
   id: 'po-9',
+  created_by: 'user-maya',
   project_id: 'project-1',
   vendor_id: 'vendor-hewn',
   total_cents: 1_248_000,
@@ -139,6 +143,7 @@ const chooseSite = () =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockBuyerUserId = 'user-leah';
   mockGate.data = { release_threshold_cents: 1_000_000, require_release_per_order: false };
   mockServerState.data = undefined;
   mockPreviewState.data = undefined;
@@ -350,20 +355,27 @@ describe('an owner or admin seat', () => {
   it('releases a new paper on record, then sends it', async () => {
     renderPaper();
     chooseSite();
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Hewn · $12,480' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Release and send · $12,480' }));
     await waitFor(() => expect(mockSend).toHaveBeenCalled());
     expect(mockRelease).toHaveBeenCalledWith('po-1');
     expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(mockSend.mock.invocationCallOrder[0]);
     expect(mockHold).not.toHaveBeenCalled();
   });
 
-  it('gets "Release to Hewn · $X" on a held paper: release, then po-send', async () => {
+  it('releases another buyer’s held paper without calling send', async () => {
     mockRelease.mockResolvedValue({ id: 'po-9' });
     renderPaper({ purchaseOrder: HELD_PO });
-    fireEvent.click(screen.getByRole('button', { name: 'Release to Hewn · $12,480' }));
-    await waitFor(() =>
-      expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ purchaseOrderId: 'po-9', mode: 'send' })),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve release · $12,480' }));
+    await screen.findByText('Released · not sent. The buyer reviews and sends to Hewn.');
+    expect(mockRelease).toHaveBeenCalledWith('po-9');
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('lets the buyer explicitly Release and send their own held paper', async () => {
+    mockBuyerUserId = 'user-maya';
+    renderPaper({ purchaseOrder: HELD_PO });
+    fireEvent.click(screen.getByRole('button', { name: 'Release and send · $12,480' }));
+    await waitFor(() => expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ purchaseOrderId: 'po-9', mode: 'send' })));
     expect(mockRelease).toHaveBeenCalledWith('po-9');
     expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(mockSend.mock.invocationCallOrder[0]);
   });
@@ -372,7 +384,7 @@ describe('an owner or admin seat', () => {
     mockSend.mockRejectedValue(new Error('sent_not_recorded'));
     renderPaper();
     chooseSite();
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Hewn · $12,480' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Release and send · $12,480' }));
     expect(await screen.findByText(SENT_NOT_RECORDED_MESSAGE)).toBeInTheDocument();
     expect(procurementEvents.poSent).not.toHaveBeenCalled();
     expect(screen.queryByText(/^Sent ·/)).not.toBeInTheDocument();

@@ -301,6 +301,15 @@ describe('LineUnfold · one next act above the cells (C-14)', () => {
     ).toBeInTheDocument();
   });
 
+  it('reads the owner release above Review and send without sending on open', () => {
+    renderUnfold({ status: 'approved', purchase_order_id: 'po-1', purchase_order: {
+      id: 'po-1', status: 'draft', sent_at: null, released_at: '2026-10-22',
+      released_by_profile: { full_name: 'Leah Strand' },
+    } });
+    expect(within(nextAct()).getByText('Released by Leah · not sent')).toBeInTheDocument();
+    expect(within(nextAct()).getByRole('button', { name: 'Review and send' })).toBeInTheDocument();
+  });
+
   it('lifts the ack on a sent, unacknowledged PO', () => {
     renderUnfold({
       status: 'ordered',
