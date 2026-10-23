@@ -83,7 +83,7 @@ describe("pieceLineStage", () => {
     });
     const read = pieceLineStage(ordered);
     expect(read.kind).toBe("ordered");
-    expect(lineStampLabel(read.kind)).toBe("Released to maker");
+    expect(lineStampLabel(read.kind)).toBe("Ordered");
     expect(read.stage).toBe("released");
     expect(read.lock).toBe("ordered");
     // No product and no maker: still its order word, never Placeholder or Ready.

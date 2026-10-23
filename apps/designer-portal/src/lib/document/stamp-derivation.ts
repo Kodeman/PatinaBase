@@ -39,6 +39,9 @@ export type LineStampKind =
   | 'specified'
   | 'quoted'
   | 'approved'
+  | 'order_drafted'
+  | 'order_released'
+  | 'order_sent'
   | 'ordered'
   | 'production'
   | 'shipped'
@@ -75,6 +78,7 @@ export interface LineStampInput {
   trade_scope_document_id?: string | null;
   /** US-21 D1: the pre-order stage's inputs, always built from the row with
    *  `lineStageInputFromRow`. Read only when nothing above it decides. */
+  purchase_order?: PurchaseOrderFacts | null;
   stage: LineStageInput;
 }
 
@@ -103,7 +107,22 @@ export interface LineStageInput {
 
 /** The `project_ffe_items` columns (and the 00736 computed field) D1 reads, as
  *  `useProjectFFEItems` returns them. */
+export interface PurchaseOrderFacts {
+  status?: string | null;
+  released_at?: string | null;
+  sent_at?: string | null;
+}
+
+/** Release is internal; only sent_at proves a vendor send (00855). */
+export function purchaseOrderState(po: PurchaseOrderFacts): 'order_drafted' | 'order_released' | 'order_sent' | null {
+  if (po.status === 'cancelled') return null;
+  if (po.sent_at) return 'order_sent';
+  if (po.released_at) return 'order_released';
+  return po.status === 'draft' || po.status === 'held_for_release' ? 'order_drafted' : null;
+}
+
 export interface LineStageRow {
+  purchase_order?: PurchaseOrderFacts | null;
   status?: string | null;
   product_id?: string | null;
   vendor_id?: string | null;
@@ -268,6 +287,11 @@ export function deriveLineStamp(
     return { kind: short ? 'partial' : 'received', dueDate: null };
   }
 
+  const order = item.purchase_order && purchaseOrderState(item.purchase_order);
+  if (order && !['production', 'shipped', 'installed'].includes(item.status)) {
+    return { kind: order, dueDate: null };
+  }
+
   // D1 rows 6–9 replace the `specified` fallthrough (and an unknown status):
   // SPECIFIED never prints. Every other machine word stands.
   if (item.status !== 'specified' && MACHINE.has(item.status)) {
@@ -319,7 +343,10 @@ const LINE_STAMP_LABEL: Record<LineStampKind, string> = {
   specified: 'Specified',
   quoted: 'Quoted',
   approved: 'Approved',
-  ordered: 'Released to maker',
+  order_drafted: 'Order drafted',
+  order_released: 'Released, not sent',
+  order_sent: 'Sent to vendor',
+  ordered: 'Ordered',
   production: 'In production',
   shipped: 'In transit',
   delivered: 'Delivered',

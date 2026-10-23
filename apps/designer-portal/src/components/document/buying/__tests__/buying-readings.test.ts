@@ -1,4 +1,5 @@
 import {
+  isCommittedBuyingLine,
   formatMarkup,
   nextActOf,
   purchaseOrderFoot,
@@ -154,25 +155,25 @@ describe('readByMaker — the margin gate (C-36)', () => {
 });
 
 describe('purchaseOrderFoot', () => {
-  it('reads label · sent · acknowledged · movement · arrival', () => {
+  it('reads label · Sent to vendor · acknowledged · movement · arrival', () => {
     expect(purchaseOrderFoot(po1042)).toBe(
-      'PO-1042 · sent 3 October · acknowledged · in production · arrives ~14 November',
+      'PO-1042 · Sent to vendor 3 October · acknowledged · in production · arrives ~14 November',
     );
   });
 
   it('says awaiting acknowledgment once sent, and not yet sent before', () => {
     expect(purchaseOrderFoot(po1046)).toBe(
-      'PO-1046 · sent 1 October · awaiting acknowledgment · arrives ~20 October',
+      'PO-1046 · Sent to vendor 1 October · awaiting acknowledgment · arrives ~20 October',
     );
     expect(purchaseOrderFoot({ po_number: 'PO-7', status: 'draft' })).toBe(
-      'PO-7 · not yet sent',
+      'PO-7 · Order drafted',
     );
   });
 
   it('closes on delivered or cancelled', () => {
     expect(
       purchaseOrderFoot({ ...po1042, status: 'delivered', delivered_date: '2026-10-26' }),
-    ).toBe('PO-1042 · sent 3 October · acknowledged · delivered 26 October');
+    ).toBe('PO-1042 · Sent to vendor 3 October · acknowledged · delivered 26 October');
     expect(purchaseOrderFoot({ ...po1042, status: 'cancelled' })).toBe(
       'PO-1042 · cancelled',
     );
@@ -223,7 +224,7 @@ describe('readByNextAct (C-33)', () => {
       'Needs a maker: maker,maker-2',
       'Needs a client price: price',
       'Ready to order: ready',
-      'To send: draft',
+      'Order drafted: draft',
       'Waiting on the ack: ack',
       'Ordered: acked',
       'In production: making',
@@ -308,5 +309,26 @@ describe('readByNextAct (C-33)', () => {
       key: 'reason:Needs a maker',
       label: 'Needs a maker',
     });
+  });
+});
+
+describe('F-02 PO facts', () => {
+  it.each([
+    [{ status: 'draft' }, 'Order drafted'],
+    [{ status: 'draft', released_at: '2026-10-01' }, 'Released, not sent'],
+    [{ status: 'draft', sent_at: '2026-10-02' }, 'Sent to vendor 2 October · awaiting acknowledgment'],
+  ])('reads the order from its release and send facts: %s', (po, word) => {
+    expect(purchaseOrderFoot({ po_number: 'PO-1', ...po })).toBe('PO-1 · ' + word);
+  });
+  it('counts only sent POs and live recorded purchases as committed', () => {
+    expect(isCommittedBuyingLine({ purchase_order: { status: 'draft' } })).toBe(false);
+    expect(isCommittedBuyingLine({ purchase_order: { status: 'draft', sent_at: '2026-10-02' } })).toBe(true);
+    expect(isCommittedBuyingLine({ studio_purchases: [{ status: 'recorded' }] })).toBe(true);
+    expect(isCommittedBuyingLine({ studio_purchases: [{ status: 'billed' }] })).toBe(true);
+    expect(isCommittedBuyingLine({ studio_purchases: [{ status: 'voided' }, { status: 'returned' }] })).toBe(false);
+    expect(isCommittedBuyingLine({ purchase_order: { status: 'cancelled', sent_at: '2026-10-02' } })).toBe(false);
+  });
+  it('does not group a released-unsent order as ordered', () => {
+    expect(nextActOf({ id: 'line', status: 'approved', purchase_order: { id: 'po', status: 'draft', released_at: '2026-10-01' } }, []).label).toBe('Released, not sent');
   });
 });

@@ -524,7 +524,7 @@ export function buildDeskProposalOutcomes(rows: any): Map<string, DeskProposalOu
         reason: row.decline_reason ?? row.client_feedback ?? null,
         lineCount: live.length,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        orderedCount: live.filter((ffe: any) => !!ffe.purchase_order_id).length,
+        orderedCount: live.filter((ffe: any) => ffe.po_sent === true).length,
       },
     ]);
   }

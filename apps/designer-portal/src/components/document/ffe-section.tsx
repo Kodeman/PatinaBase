@@ -258,6 +258,8 @@ function stampProps(stamp: LineStamp): {
     case 'specced':
     case 'ready':
     case 'released':
+    case 'order_drafted':
+    case 'order_released':
       return { label, color: STAGE_CONFIG.specified.color };
     case 'decision_due':
       return {
@@ -265,6 +267,8 @@ function stampProps(stamp: LineStamp): {
         color: 'var(--color-terracotta)',
         ink: 'var(--color-terracotta-ink)',
       };
+    case 'order_sent':
+      return { label, color: STAGE_CONFIG.ordered.color, ink: STAGE_INK.ordered };
     // Arrived, awaiting inspection — its own word, not STAGE_CONFIG's
     // dropdown word, which would print RECEIVED over an unopened pallet.
     case 'delivered':
@@ -301,6 +305,7 @@ function stampProps(stamp: LineStamp): {
  *  whose journey is judged work rather than logistics. */
 function ffeStampTone(kind: LineStamp['kind']): StampTone | null {
   switch (kind) {
+    case 'order_sent':
     case 'ordered':
     case 'production':
     case 'shipped':
@@ -337,6 +342,7 @@ function ffeThumbSrc(item: FFERow): string | null {
 }
 
 const UNDERWAY = new Set([
+  'order_sent',
   'ordered',
   'production',
   'shipped',
@@ -383,7 +389,7 @@ function vendorLine(
   if (stamp.kind === 'delivered') parts.push('awaiting inspection');
   else if (
     item.eta &&
-    (stamp.kind === 'ordered' ||
+    (stamp.kind === 'order_sent' || stamp.kind === 'ordered' ||
       stamp.kind === 'production' ||
       stamp.kind === 'shipped')
   )
