@@ -24,6 +24,12 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+
+  usePoReleaseState: () => ({ data: { cleared: true, group_total_cents: 1248000, threshold_cents: 2000000 } }),
+  usePoReleasePreview: () => ({ data: { cleared: true, group_total_cents: 1248000, threshold_cents: 2000000 } }),
+
+  useFfeInvoiceCoverage: () => ({ data: { 'line-sofa': { coverage: 'paid' } } }),
+  useProcurementItems: ({ purchaseOrderId }: { purchaseOrderId: string }) => ({ data: [{ id: 'line-sofa', purchase_order_id: purchaseOrderId }] }),
   useSendPurchaseOrder: () => ({ mutateAsync: sendMutateAsync, isPending: false }),
   useLogPOAcknowledgment: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetPurchaseOrderShipTo: () => ({ mutateAsync: setShipToMutateAsync, isPending: false }),
@@ -74,6 +80,14 @@ jest.mock('./buying/ack-check', () => ({
   usePoAckSummary: () => ({ copy: null }),
 }));
 
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'patina_signed' } }),
+}));
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  useProjectInstruments: () => ({ data: [{ state: 'executed', number: 1, items: [{ sourceFfeItemId: 'line-sofa' }] }] }),
+}));
+
 import { PoPreview } from './po-preview';
 
 beforeEach(() => {
@@ -85,7 +99,7 @@ beforeEach(() => {
   mockLocations.list = [];
   // A ready PO by default: a ship-to on file.
   mockOrders.list = [
-    { id: 'po-1', project_id: 'project-1', sent_at: null, ship_to: '1 Main St, Madison, WI 53703' },
+    { id: 'po-1', project_id: 'project-1', total_cents: 1248000, released_total_cents: 1500000, vendor_id: 'vendor-1', sent_at: null, ship_to: '1 Main St, Madison, WI 53703' },
   ];
   poSent.mockReset();
   mockChanges.list = [];
@@ -195,7 +209,8 @@ describe('PoPreview · note to the vendor', () => {
   });
 
   it('never carries the note on a manual mark-sent', async () => {
-    const { onSent } = renderPreview();
+    const onMarked = jest.fn();
+    const { onSent } = renderPreview({ onMarked });
     await waitForPdf();
 
     fireEvent.change(screen.getByLabelText('Note to the vendor'), {
@@ -207,7 +222,8 @@ describe('PoPreview · note to the vendor', () => {
       );
     });
 
-    await waitFor(() => expect(onSent).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onMarked).toHaveBeenCalledTimes(1));
+    expect(onSent).not.toHaveBeenCalled();
     expect(sendMutateAsync).toHaveBeenLastCalledWith(
       expect.objectContaining({ mode: 'mark_sent', message: undefined }),
     );
@@ -498,5 +514,23 @@ describe('PoPreview · who the PO goes to (C-12, F7)', () => {
     await waitForPdf();
     expect(screen.getByText('No email on file for this vendor')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send to vendor' })).toBeDisabled();
+  });
+});
+
+describe('shared purchase order review', () => {
+  it('renders four separate standings and sends only after an explicit click', async () => {
+    const beforeSend = jest.fn().mockResolvedValue(undefined);
+    renderPreview({ initialNote: 'Keep the walnut finish.', beforeSend });
+    await waitForPdf();
+    expect(screen.getByLabelText('Purchasing standings')).toHaveTextContent('AgreementSigned in Patina');
+    expect(screen.getByLabelText('Purchasing standings')).toHaveTextContent('Client authorization1 of 1 pieces authorized by the client');
+    expect(screen.getByLabelText('Purchasing standings')).toHaveTextContent('Funds received1 of 1 pieces paid in full');
+    expect(screen.getByLabelText('Purchasing standings')).toHaveTextContent('Released up to $15,000; this paper is $12,480; aggregate to this maker on this job $12,480; studio release line $20,000');
+    expect(screen.getByLabelText('Note to the vendor')).toHaveValue('Keep the walnut finish.');
+    expect(sendMutateAsync.mock.calls.map(([input]) => input.mode)).toEqual(['preview']);
+    expect(beforeSend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Send to vendor' }));
+    await waitFor(() => expect(sendMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ mode: 'send' })));
+    expect(beforeSend).toHaveBeenCalledTimes(1);
   });
 });

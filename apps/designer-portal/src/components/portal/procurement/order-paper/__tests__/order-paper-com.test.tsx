@@ -19,6 +19,15 @@ const mockPairLines: { data: FfePairLine[] } = { data: [] };
 const mockSubmittals: { data: Record<string, unknown>[] } = { data: [] };
 
 jest.mock('@patina/supabase', () => ({
+  usePurchaseOrders: () => ({ data: ['po-1', 'po-9', 'po-1043'].map(id => ({
+    id, project_id: 'project-1', vendor_id: 'vendor-hewn', total_cents: 1248000,
+    ship_to: 'Dock 4, Racine', status: 'draft', sent_at: null,
+  })) }),
+  usePurchaseOrderChanges: () => ({ data: [] }),
+
+  usePoReleaseState: () => ({ data: { cleared: true, group_total_cents: 1248000, threshold_cents: 2000000 } }),
+  usePoReleasePreview: () => ({ data: { cleared: true, group_total_cents: 1248000, threshold_cents: 2000000 } }),
+
   useVendorQuotes: () => ({ data: [] }),
   useProjectRoomPlacements: () => ({ data: [] }),
   useCreatePurchaseOrder: () => ({ mutateAsync: mockCreate, isPending: false }),
@@ -82,7 +91,17 @@ jest.mock('@/components/document/overlays/doc-sheet', () => ({
     </div>
   ),
 }));
-jest.mock('@/components/document/po-preview', () => ({ PoPreview: () => null }));
+jest.mock('@/components/document/buying/ack-check', () => ({
+  AckCheckForm: () => null, AckRecord: () => null, usePoAckSummary: () => ({ copy: null }),
+}));
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'patina_signed' } }),
+}));
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  useProjectInstruments: () => ({ data: [{ state: 'executed', number: 1, items: [{ sourceFfeItemId: 'line-sofa' }] }] }),
+}));
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
@@ -162,7 +181,9 @@ beforeEach(() => {
   mockCreate.mockResolvedValue({ id: 'po-1043', total_cents: 121_600 });
   mockSetHeader.mockResolvedValue({ id: 'po-1043', project_id: 'project-1' });
   mockSetShipToLocation.mockResolvedValue({ id: 'po-1043' });
-  mockSend.mockResolvedValue({ ok: true, recipient: 'o@k.example' });
+  mockSend.mockImplementation(async ({ mode }) => mode === 'preview'
+    ? { ok: true, signedUrl: 'https://files.test/po.pdf' }
+    : { ok: true, recipient: 'o@k.example' });
   mockSetSupplies.mockResolvedValue({ id: 'po-1043', project_id: 'project-1' });
 });
 
@@ -198,10 +219,12 @@ describe('the CFA warning', () => {
     expect(screen.getByText('COM for Sofa, shipped to Hale Upholstery Works')).toBeInTheDocument();
 
     fireEvent.click(within(shipToGroup()).getByRole('radio', { name: /Hale Upholstery Works/ }));
-    const act = screen.getByRole('button', { name: /Send to Kessler/ });
+    const act = screen.getByRole('button', { name: /Review for Kessler/ });
     expect(act).not.toBeDisabled();
     fireEvent.click(act);
-    await waitFor(() => expect(mockSend).toHaveBeenCalled());
+    await screen.findByTitle('Purchase order PDF');
+    fireEvent.click(screen.getByRole('button', { name: 'Send to vendor' }));
+    await waitFor(() => expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ mode: 'send' })));
     expect(mockSetShipToLocation).toHaveBeenCalledWith({
       purchaseOrderId: 'po-1043',
       locationId: 'loc-hale',

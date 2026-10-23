@@ -23,6 +23,12 @@ const mockPreviewArgs: Array<[string | null, string, number]> = [];
 const mockCanRelease: { data: boolean } = { data: false };
 
 jest.mock('@patina/supabase', () => ({
+  usePurchaseOrders: () => ({ data: ['po-1', 'po-9', 'po-1043'].map(id => ({
+    id, project_id: 'project-1', vendor_id: 'vendor-hewn', total_cents: 1248000,
+    ship_to: 'Dock 4, Racine', status: 'draft', sent_at: null,
+  })) }),
+  usePurchaseOrderChanges: () => ({ data: [] }),
+
   useVendorQuotes: () => ({ data: [] }),
   useProjectRoomPlacements: () => ({ data: [] }),
   useCreatePurchaseOrder: () => ({ mutateAsync: mockCreate, isPending: false }),
@@ -90,7 +96,17 @@ jest.mock('@/components/document/overlays/doc-sheet', () => ({
     </div>
   ),
 }));
-jest.mock('@/components/document/po-preview', () => ({ PoPreview: () => null }));
+jest.mock('@/components/document/buying/ack-check', () => ({
+  AckCheckForm: () => null, AckRecord: () => null, usePoAckSummary: () => ({ copy: null }),
+}));
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'patina_signed' } }),
+}));
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  useProjectInstruments: () => ({ data: [{ state: 'executed', number: 1, items: [{ sourceFfeItemId: 'line-sofa' }] }] }),
+}));
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
@@ -147,7 +163,9 @@ beforeEach(() => {
   mockCreate.mockResolvedValue({ id: 'po-1', total_cents: 1_248_000 });
   mockSetHeader.mockResolvedValue({ id: 'po-1', project_id: 'project-1' });
   mockSetShipTo.mockResolvedValue({ id: 'po-1' });
-  mockSend.mockResolvedValue({ ok: true, recipient: 'orders@hewn.example' });
+  mockSend.mockImplementation(async ({ mode }) => mode === 'preview'
+    ? { ok: true, signedUrl: 'https://files.test/po.pdf' }
+    : { ok: true, recipient: 'orders@hewn.example' });
   mockHold.mockResolvedValue({ id: 'po-1' });
   mockRelease.mockResolvedValue({ id: 'po-1' });
   mockSendBack.mockResolvedValue({ id: 'po-9' });
@@ -225,7 +243,7 @@ describe('a seat the gate applies to', () => {
   it('keeps the ordinary send under the threshold', () => {
     mockGate.data = { release_threshold_cents: 2_000_000, require_release_per_order: false };
     renderPaper();
-    expect(screen.getByRole('button', { name: 'Send to Hewn · $12,480' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review for Hewn · $12,480' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Hold for release/ })).not.toBeInTheDocument();
   });
 
@@ -294,8 +312,8 @@ describe("the server's reason on an existing paper (00719)", () => {
   it('says nothing while the release still covers the paper', () => {
     mockServerState.data = state({ cleared: true });
     renderPaper({ purchaseOrder: DRAFT_PO });
-    expect(screen.queryByText(/needs release again|release line/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Send to Hewn · $12,480' })).toBeInTheDocument();
+    expect(screen.queryByText(/needs release again/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review for Hewn · $12,480' })).toBeInTheDocument();
   });
 });
 
@@ -333,8 +351,8 @@ describe('the group on a new paper (00726)', () => {
       threshold_cents: 2_000_000,
     };
     renderPaper();
-    expect(screen.getByRole('button', { name: 'Send to Hewn · $12,480' })).toBeInTheDocument();
-    expect(screen.queryByText(/release line/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review for Hewn · $12,480' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Purchasing standings')).toHaveTextContent('aggregate to this maker on this job $12,480; studio release line $20,000');
 
     mockPreviewArgs.length = 0;
     renderPaper({ purchaseOrder: { ...HELD_PO, id: 'po-7', status: 'draft', held_at: null, held_by: null, hold_note: null } });
@@ -350,29 +368,39 @@ describe('an owner or admin seat', () => {
   it('releases a new paper on record, then sends it', async () => {
     renderPaper();
     chooseSite();
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Hewn · $12,480' }));
-    await waitFor(() => expect(mockSend).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Review for Hewn · $12,480' }));
+    await screen.findByTitle('Purchase order PDF');
+    fireEvent.click(screen.getByRole('button', { name: 'Send to vendor' }));
+    await waitFor(() => expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ mode: 'send' })));
     expect(mockRelease).toHaveBeenCalledWith('po-1');
-    expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(mockSend.mock.invocationCallOrder[0]);
+    expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(mockSend.mock.invocationCallOrder[mockSend.mock.calls.findIndex(([input]) => input.mode === 'send')]);
     expect(mockHold).not.toHaveBeenCalled();
   });
 
-  it('gets "Release to Hewn · $X" on a held paper: release, then po-send', async () => {
+  it('gets "Review release to Hewn · $X" on a held paper: release, then po-send', async () => {
     mockRelease.mockResolvedValue({ id: 'po-9' });
     renderPaper({ purchaseOrder: HELD_PO });
-    fireEvent.click(screen.getByRole('button', { name: 'Release to Hewn · $12,480' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review release to Hewn · $12,480' }));
+    expect(mockRelease).not.toHaveBeenCalled();
+    await screen.findByTitle('Purchase order PDF');
+    fireEvent.click(screen.getByRole('button', { name: 'Send to vendor' }));
     await waitFor(() =>
       expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ purchaseOrderId: 'po-9', mode: 'send' })),
     );
     expect(mockRelease).toHaveBeenCalledWith('po-9');
-    expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(mockSend.mock.invocationCallOrder[0]);
+    expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(mockSend.mock.invocationCallOrder[mockSend.mock.calls.findIndex(([input]) => input.mode === 'send')]);
   });
 
   it('SQ-448: says the email went but the order is not marked sent when po-send refuses the stamp', async () => {
-    mockSend.mockRejectedValue(new Error('sent_not_recorded'));
+    mockSend.mockImplementation(async ({ mode }) => {
+      if (mode === 'preview') return { signedUrl: 'https://files.test/po.pdf' };
+      throw new Error('sent_not_recorded');
+    });
     renderPaper();
     chooseSite();
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Hewn · $12,480' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review for Hewn · $12,480' }));
+    await screen.findByTitle('Purchase order PDF');
+    fireEvent.click(screen.getByRole('button', { name: 'Send to vendor' }));
     expect(await screen.findByText(SENT_NOT_RECORDED_MESSAGE)).toBeInTheDocument();
     expect(procurementEvents.poSent).not.toHaveBeenCalled();
     expect(screen.queryByText(/^Sent ·/)).not.toBeInTheDocument();
