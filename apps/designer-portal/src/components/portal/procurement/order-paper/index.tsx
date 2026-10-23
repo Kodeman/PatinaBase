@@ -22,7 +22,6 @@
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileText } from 'lucide-react';
@@ -1272,19 +1271,16 @@ function PaperSheet({
         </footer>
       </div>
 
-      {poId &&
-        typeof document !== 'undefined' &&
-        createPortal(
-          <PoPreview
-            open={previewOpen}
-            onOpenChange={setPreviewOpen}
-            purchaseOrderId={poId}
-            vendorName={vendor.name}
-            vendorEmailHint={recipient}
-            onSent={(at) => setRecord({ kind: 'sent', at, recipient })}
-          />,
-          document.body,
-        )}
+      {poId && (
+        <PoPreview
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          purchaseOrderId={poId}
+          vendorName={vendor.name}
+          vendorEmailHint={recipient}
+          onSent={(at) => setRecord({ kind: 'sent', at, recipient })}
+        />
+      )}
     </DocSheet>
   );
 }

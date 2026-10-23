@@ -118,6 +118,50 @@ async function waitForPdf() {
   await screen.findByTitle('Purchase order PDF');
 }
 
+describe('PoPreview · lifted paper', () => {
+  it('portals the dialog to document.body outside an isolated row and removes it when closed', async () => {
+    const props = {
+      open: true,
+      onOpenChange: jest.fn(),
+      purchaseOrderId: 'po-1',
+      vendorName: 'Acme',
+      vendorEmailHint: 'orders@acme.test',
+    };
+    const { rerender, container } = render(
+      <div style={{ isolation: 'isolate' }}>
+        <PoPreview {...props} />
+      </div>,
+    );
+    await waitForPdf();
+
+    const dialog = screen.getByRole('dialog', { name: 'Purchase order preview' });
+    expect(dialog.parentElement).toBe(document.body);
+    expect(container).not.toContainElement(dialog);
+    expect(within(dialog).getByRole('button', { name: 'Send to vendor' })).toBeEnabled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(props.onOpenChange).toHaveBeenCalledWith(false);
+    rerender(
+      <div style={{ isolation: 'isolate' }}>
+        <PoPreview {...props} open={false} />
+      </div>,
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('reserves the published drawer or mobile bar height and lets long paper scroll', async () => {
+    renderPreview();
+    await waitForPdf();
+
+    const paper = screen.getByRole('dialog').querySelector('[data-spotlight-frame]') as HTMLElement;
+    expect(paper).toHaveClass(
+      'bottom-[calc(4vh_+_max(var(--doc-drawer-height,0px),var(--doc-mobile-bar-height,0px),env(safe-area-inset-bottom,0px)))]',
+    );
+    expect(paper).toHaveClass('overflow-y-auto');
+    expect(paper).not.toHaveClass('h-[92vh]');
+  });
+});
+
 describe('PoPreview · note to the vendor', () => {
   it('passes the note to the send mutation as the email message', async () => {
     const { onSent } = renderPreview();

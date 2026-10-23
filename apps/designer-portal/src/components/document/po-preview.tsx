@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   usePurchaseOrderChanges,
@@ -366,7 +367,7 @@ export function PoPreview({
   };
   const send = () => stamp('send');
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-label="Purchase order preview"
@@ -384,7 +385,9 @@ export function PoPreview({
           recedes behind it, so the spotlight darkens the paper alone. */}
       <div
         data-spotlight-frame
-        className="absolute inset-x-0 top-[4vh] mx-auto flex h-[92vh] w-[min(720px,94vw)] flex-col rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]"
+        // The portal cannot inherit the route shell's inset; both chrome
+        // owners publish their measured height on html instead.
+        className="absolute inset-x-0 top-[4vh] bottom-[calc(4vh_+_max(var(--doc-drawer-height,0px),var(--doc-mobile-bar-height,0px),env(safe-area-inset-bottom,0px)))] mx-auto flex w-[min(720px,94vw)] flex-col overflow-y-auto rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]"
       >
         <div className="flex items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] px-5 py-3">
           <div>
@@ -523,6 +526,7 @@ export function PoPreview({
           </DocumentAction>
         </DocumentActionGroup>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
