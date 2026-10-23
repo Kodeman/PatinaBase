@@ -1398,7 +1398,16 @@ export interface ReceivingInspection {
   purchase_order_id: string;
   inspected_at: string;
   inspected_by: string;
-  outcome: ReceivingInspectionOutcome;
+  outcome: ReceivingInspectionOutcome | null;
+  po_shipment_id?: string | null;
+  studio_purchase_id?: string | null;
+  arrival_method?: 'delivered' | 'picked_up' | null;
+  reported_by?: 'studio_member' | 'receiver_report';
+  report_source?: string | null;
+  received_on?: string | null;
+  location_id?: string | null;
+  inspection_pending?: boolean;
+  inspection_owner_user_id?: string | null;
   notes: string | null;
   photo_asset_ids: string[];
   created_at: string;
@@ -1504,8 +1513,19 @@ export interface ReceivingInspectionItemInput {
 export type ReceivingInspectionLineCondition = 'good' | 'damaged' | 'short' | 'wrong';
 
 export interface CreateReceivingInspectionInput {
-  purchaseOrderId: string;
-  outcome: ReceivingInspectionOutcome;
+  purchaseOrderId: string | null;
+  outcome: ReceivingInspectionOutcome | null;
+  poShipmentId?: string;
+  studioPurchaseId?: string;
+  arrivalMethod?: 'delivered' | 'picked_up';
+  reportedBy?: 'studio_member' | 'receiver_report';
+  reportSource?: string;
+  receivedOn?: string;
+  locationId?: string;
+  inspectionPending?: boolean;
+  inspectionOwnerUserId?: string;
+  /** Stable per-item key: retain it across receipt/photo/claim retries. */
+  receiptKey?: string;
   notes?: string;
   photoAssetIds?: string[];
   /**
@@ -1625,6 +1645,7 @@ export function useReceivingInspections(filters?: ReceivingInspectionFilters) {
           damage_claims(*)
         `,
         )
+        .not('purchase_order_id', 'is', null)
         .order('inspected_at', { ascending: false });
 
       if (filters?.outcome) query = query.eq('outcome', filters.outcome);
@@ -1868,7 +1889,8 @@ export function useTodayProcurementCounts() {
  * (W3.5.5 HIGH-1.)
  */
 export interface CreateReceivingInspectionResult {
-  inspection: ReceivingInspection;
+  inspection: Omit<ReceivingInspection, 'purchase_order_id'> & { purchase_order_id: string | null };
+  claimDraftSkipped?: 'no_purchase_order';
   damageClaimCreated: boolean;
   /** Retained as an always-empty N-1 result field; the batch RPC is atomic. */
   itemUpdateFailures: string[];
@@ -1898,7 +1920,7 @@ export function useCreateReceivingInspection() {
       }
       // C-19: lines that all carry a condition are checked in through the
       // 00700 inspection RPC (same receipt, plus receiving_inspection_lines).
-      const perLine = input.items.every((item) => item.condition !== undefined);
+      const perLine = !input.inspectionPending && input.items.every((item) => item.condition !== undefined);
       const { data: receipt, error: receiptError } = await supabase.rpc(
         perLine ? 'record_project_ffe_inspection' : 'record_project_ffe_receipt_batch',
         {
@@ -1914,6 +1936,16 @@ export function useCreateReceivingInspection() {
           p_outcome: input.outcome,
           p_notes: input.notes ?? null,
           p_photo_asset_ids: input.photoAssetIds ?? [],
+          p_po_shipment_id: input.poShipmentId ?? null,
+          p_studio_purchase_id: input.studioPurchaseId ?? null,
+          p_arrival_method: input.arrivalMethod ?? null,
+          p_reported_by: input.reportedBy ?? null,
+          p_report_source: input.reportSource ?? null,
+          p_received_on: input.receivedOn ?? null,
+          p_location_id: input.locationId ?? null,
+          p_inspection_pending: input.inspectionPending ?? null,
+          p_inspection_owner_user_id: input.inspectionOwnerUserId ?? null,
+          p_receipt_key: input.receiptKey ?? null,
         },
       );
       if (receiptError) throw receiptError;
@@ -1921,13 +1953,24 @@ export function useCreateReceivingInspection() {
       if (typeof receiptRow.inspectionId !== 'string') {
         throw new Error('The receiving command returned no inspection identity.');
       }
+      // A keyed retry returns the original receipt, not the caller's revised outcome.
+      const recordedOutcome = receiptRow.outcome as ReceivingInspectionOutcome | null;
       const now = new Date().toISOString();
-      const inspectionRow: ReceivingInspection = {
+      const inspectionRow: CreateReceivingInspectionResult['inspection'] = {
         id: receiptRow.inspectionId,
         purchase_order_id: input.purchaseOrderId,
         inspected_at: now,
         inspected_by: '',
-        outcome: input.outcome,
+        outcome: recordedOutcome,
+        po_shipment_id: (receiptRow.poShipmentId as string | null) ?? null,
+        studio_purchase_id: (receiptRow.studioPurchaseId as string | null) ?? null,
+        arrival_method: (receiptRow.arrivalMethod as ReceivingInspection['arrival_method']) ?? null,
+        reported_by: (receiptRow.reportedBy as ReceivingInspection['reported_by']) ?? 'studio_member',
+        report_source: (receiptRow.reportSource as string | null) ?? null,
+        received_on: (receiptRow.receivedOn as string | null) ?? null,
+        location_id: (receiptRow.locationId as string | null) ?? null,
+        inspection_pending: receiptRow.inspectionPending === true,
+        inspection_owner_user_id: (receiptRow.inspectionOwnerUserId as string | null) ?? null,
         notes: input.notes ?? null,
         photo_asset_ids: input.photoAssetIds ?? [],
         created_at: now,
@@ -1942,7 +1985,7 @@ export function useCreateReceivingInspection() {
       // exposes ground truth to callers — analytics events keyed on
       // damageClaimCreated stay accurate even if step 2 throws (W3.5.5 HIGH-1).
       let damageClaimCreated = false;
-      if (input.outcome !== 'clean') {
+      if (input.purchaseOrderId && (recordedOutcome === 'damaged' || recordedOutcome === 'partial')) {
         type ResolvedPoRow = {
           id: string;
           vendor_po_number: string | null;
@@ -1979,7 +2022,7 @@ export function useCreateReceivingInspection() {
         const vendorName = poRow?.vendor?.name ?? 'vendor';
         const poNumber = poRow?.vendor_po_number ?? null;
         const description = autoDraftDamageClaimDescription(
-          input.outcome,
+          recordedOutcome,
           input.notes,
           vendorName,
           poNumber,
@@ -2009,7 +2052,14 @@ export function useCreateReceivingInspection() {
         damageClaimCreated = true;
       }
 
-      return { inspection: inspectionRow, damageClaimCreated, itemUpdateFailures: [] };
+      return {
+        inspection: inspectionRow,
+        ...(receiptRow.claim_draft_skipped === 'no_purchase_order'
+          ? { claimDraftSkipped: 'no_purchase_order' as const }
+          : {}),
+        damageClaimCreated,
+        itemUpdateFailures: [],
+      };
     },
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
