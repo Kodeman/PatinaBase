@@ -38,6 +38,7 @@ BEGIN
     trade_price_cents,line_total_cents,vendor_id,design_disposition,blocked,source_proposal_item_id)
   VALUES (item,project,'Desk PO piece','approved',1,10000,10000,10000,vendor,'selected',false,proposal_item);
   po := public.create_purchase_order(project,vendor,'net_30',ARRAY[item]);
+  PERFORM public.set_studio_release_gate(org,NULL,true);
   INSERT INTO desk_po_cases VALUES ('order',proposal,po.id);
 END;
 $fixtures$;
@@ -59,6 +60,8 @@ $$;
 GRANT EXECUTE ON FUNCTION pg_temp.assert_po_sent(boolean,text) TO authenticated;
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assert_po_sent(false,'draft PO is not sent in the Desk feed');
+SELECT public.hold_purchase_order_for_release(po_id) FROM desk_po_cases;
+SELECT pg_temp.assert_po_sent(false,'held PO is not sent in the Desk feed');
 SELECT public.release_purchase_order(po_id) FROM desk_po_cases;
 SELECT pg_temp.assert_po_sent(false,'released unsent PO is not sent in the Desk feed');
 RESET ROLE;
