@@ -2,6 +2,8 @@
 BEGIN;
 SET LOCAL statement_timeout = '45s';
 SET LOCAL lock_timeout = '5s';
+CREATE TEMP TABLE desk_po_results(label text, passed boolean);
+GRANT SELECT, INSERT ON desk_po_results TO authenticated;
 CREATE TEMP TABLE desk_po_cases (name text PRIMARY KEY, proposal_id uuid, po_id uuid);
 GRANT SELECT ON desk_po_cases TO authenticated, service_role;
 DO $fixtures$
@@ -51,10 +53,8 @@ BEGIN
   FROM jsonb_array_elements(rows) AS pr,
        jsonb_array_elements(pr->'items') AS pi
   WHERE pr->>'id' = (SELECT proposal_id::text FROM desk_po_cases WHERE name='order');
-  IF actual IS DISTINCT FROM to_jsonb(expected) THEN
-    RAISE EXCEPTION '%: expected %, got %',label,expected,actual;
-  END IF;
-  RAISE NOTICE 'PASS: %', label;
+  INSERT INTO desk_po_results VALUES(label,actual IS NOT DISTINCT FROM to_jsonb(expected));
+  RAISE NOTICE '%: %', CASE WHEN actual IS NOT DISTINCT FROM to_jsonb(expected) THEN 'PASS' ELSE 'FAIL' END,label;
 END;
 $$;
 GRANT EXECUTE ON FUNCTION pg_temp.assert_po_sent(boolean,text) TO authenticated;
@@ -71,4 +71,26 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assert_po_sent(true,'sent PO is sent in the Desk feed');
 RESET ROLE;
+-- A vendor-confirmed phoned-in order has reached the vendor without po-send.
+UPDATE public.purchase_orders SET sent_at=NULL, status='confirmed' WHERE id=(SELECT po_id FROM desk_po_cases);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert_po_sent(true,'confirmed unsent PO reached the vendor in the Desk feed');
+RESET ROLE;
+UPDATE public.purchase_orders SET status='in_production' WHERE id=(SELECT po_id FROM desk_po_cases);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert_po_sent(true,'production unsent PO reached the vendor in the Desk feed');
+RESET ROLE;
+UPDATE public.purchase_orders SET status='shipped' WHERE id=(SELECT po_id FROM desk_po_cases);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert_po_sent(true,'shipped unsent PO reached the vendor in the Desk feed');
+RESET ROLE;
+UPDATE public.purchase_orders SET status='delivered' WHERE id=(SELECT po_id FROM desk_po_cases);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert_po_sent(true,'delivered unsent PO reached the vendor in the Desk feed');
+RESET ROLE;
+DO $$ BEGIN
+  IF EXISTS(SELECT 1 FROM desk_po_results WHERE NOT passed) THEN
+    RAISE EXCEPTION 'assertion failed: % Desk order facts',(SELECT count(*) FROM desk_po_results WHERE NOT passed);
+  END IF;
+END $$;
 ROLLBACK;
