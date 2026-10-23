@@ -495,8 +495,19 @@ test.describe("Quiet Work responsive document shell", () => {
     ).not.toBeNull();
 
     // The needle lives once, in the approvals region's full body
-    // (`project-approval-document.tsx`), on every project-kind document.
-    const NEEDLE = "published budget checkpoint";
+    // (`project-approval-document.tsx`). The old "Bind each request…
+    // published budget checkpoint" paragraph was removed as machinery copy
+    // (aced0f222, SQ-492); this seeded project has a client and no decision
+    // lead, so the body prints its no-lead line instead. Pin that the needle
+    // is in the passed region first, so fixture or copy drift reads as drift
+    // rather than as an OD-4 find-in-page failure.
+    const NEEDLE = "No lead approver is designated for this project.";
+    await expect(
+      page.locator(
+        '[data-document-paper] [data-index-region="approvals"] #project-approvals-body',
+      ),
+      "the approvals body no longer prints the find-in-page needle",
+    ).toContainText(NEEDLE);
     const found = await page.evaluate((needle) => window.find(needle), NEEDLE);
     expect(
       found,
