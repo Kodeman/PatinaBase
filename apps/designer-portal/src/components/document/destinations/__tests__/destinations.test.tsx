@@ -98,6 +98,13 @@ it("offers only job places and writes planned intent or null without changing sh
   // The query refresh represents the completed mutation, not an optimistic ship-to rewrite.
 });
 
+it("marks a private planned destination even when the line is read-only", () => {
+  render(<PlannedDestination projectId="job" itemId="line" locationId="home" canEdit={false} />);
+  expect(screen.getByText("Hartwell home · Private home")).toBeInTheDocument();
+  expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  expect(mockSet).not.toHaveBeenCalled();
+});
+
 it("clears planned intent with null and shows a mutation refusal", async () => {
   render(
     <PlannedDestination
@@ -145,6 +152,27 @@ it("adds and removes job associations without archiving studio places", async ()
       locationId: "home",
     }),
   );
+});
+
+it("keeps a saved place and shows association failure so retry cannot create a duplicate", async () => {
+  mockAdd.mockRejectedValueOnce(new Error("Job association refused"));
+  const view = render(<JobDestinationsSheet projectId="job" onClose={jest.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Add destination" }));
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "New receiving dock" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add destination" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Job association refused");
+  expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+  mockPlaces.locations.push({ ...mockPlaces.locations[0], id: "new-place", label: "New receiving dock" });
+  try {
+    view.rerender(<JobDestinationsSheet projectId="job" onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add New receiving dock to this job" }));
+    await waitFor(() => expect(mockAdd).toHaveBeenCalledTimes(2));
+    expect(mockAdd).toHaveBeenLastCalledWith({ projectId: "job", locationId: "new-place" });
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  } finally {
+    mockPlaces.locations.pop();
+  }
 });
 
 it("adds a new job place through the existing location form", async () => {

@@ -80,9 +80,9 @@ export function JobDestinationsSheet({
       request: editing === "new" ? request : { ...request, id: editing! },
     });
     if (editing === "new") {
-      // Keep the saved place available for retry if associating it with this job fails.
-      setEditing(location.id);
-      await add.mutateAsync({ projectId, locationId: location.id });
+      // Saving and adding to this job are separate writes; retry only the association.
+      setEditing(null);
+      await run(() => add.mutateAsync({ projectId, locationId: location.id }));
     }
     setEditing(null);
   };

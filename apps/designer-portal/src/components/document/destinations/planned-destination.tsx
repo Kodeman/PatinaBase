@@ -19,6 +19,7 @@ export function PlannedDestination({
   const mutation = useSetProjectFfePlannedDestination();
   const [error, setError] = useState<string | null>(null);
   const id = useId();
+  const planned = places.jobPlaces.find((place) => place.id === locationId);
   const change = async (value: string) => {
     setError(null);
     try {
@@ -56,8 +57,8 @@ export function PlannedDestination({
         </select>
       ) : (
         <p className="t-body-sm">
-          {places.jobPlaces.find((place) => place.id === locationId)?.label ||
-            "Not planned"}
+          {planned?.label || "Not planned"}
+          {planned?.is_private_home && " · Private home"}
         </p>
       )}
       <p className="t-body-sm">
