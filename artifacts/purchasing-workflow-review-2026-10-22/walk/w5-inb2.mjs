@@ -1,0 +1,24 @@
+// SQ-1805 inbound qty step 2: member records a shipment of N of 6 stools. Usage: node w5-inb2.mjs <qty> <tracking>
+import { open, shot, txt, dump, openLine } from "./rewalk-lib.mjs";
+const qty = process.argv[2] || "4";
+const trk = process.argv[3] || "W5TRK1";
+const { browser, page } = await open("us50-member@patina.dev", 1440);
+await openLine(page, "Bar stool W5", 1440);
+const mv = page.getByTestId("line-movement-cell");
+console.log("movement before:", await txt(mv));
+const b = mv.getByRole("button", { name: /Record a shipment|Record another shipment/ }).first();
+await b.click();
+await page.waitForTimeout(1200);
+const f = page.getByTestId("record-shipment-form");
+await f.getByLabel("Shipment mode").selectOption({ label: "LTL" }).catch((e) => console.log("mode fail", String(e).slice(0, 60)));
+await f.getByLabel("Shipment carrier").fill("XPO").catch(() => {});
+await f.getByLabel("Shipment tracking").fill(trk).catch(() => {});
+await f.getByLabel(/pieces shipped/).fill(qty).catch((e) => console.log("qty fail", String(e).slice(0, 60)));
+await shot(page, `W5-inb-shipment-form-${qty}of6-1440`);
+await dump(page, "[data-testid=record-shipment-form] button");
+const save = f.getByRole("button", { name: /Save as shipped|Record dispatch/ }).first();
+await save.click();
+await page.waitForTimeout(4000);
+console.log("movement after:", await txt(page.getByTestId("line-movement-cell")));
+await shot(page, `W5-inb-shipment-saved-${qty}of6-1440`);
+await browser.close();
