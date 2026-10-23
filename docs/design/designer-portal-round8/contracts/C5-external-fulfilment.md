@@ -5,6 +5,16 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 
 **Revision 2026-10-23 (SQ-1850).** Answers the SQ-1817 frontier review at `4952624a16d1` for findings F16 (§3.2 conversion: reuse the protected-commitment check, including draft and sent authorizations), F17 (§3.1, §3.4: validate the whole responsibility combination, not only the buyer) and F20 (§3.1, §3.4: `fabrication_instruction` calls the shared C3 gate `public.assert_fabrication_instruction_authority`, C3 §3.2 at `33d2d5666`; §3.6: all-role revokes). It also applies the C2 F8 suspension rule (§3.6).
 
+**Revision 2026-10-23 (SQ-1856).** Answers the SQ-1851 re-review at `6ac0c5acc47c`, marked inline with `SQ-1851 R#`:
+- **R1** (§3.1, §3.4): `package_key` is the C2 §2.2a canonical key, and it resolves to C1 by that key only.
+- **R3 / F4** (§3.4, §3.5): every C5 mutation takes one lock order, and the fabrication gate locks the fulfilment before it reads the amount or holds.
+- **R4 / F17** (§3.4): the external-only rule is one helper, `_external_rail_refusal`, which C5's mutations and the C3 gate both call.
+- **R5** (§3.1, §3.4, §3.5): fulfilments declare their units; holds and instructions name validated unit sets, and the instructed set is frozen.
+- **R8** (§3.2, §3.3, §3.4): studio installation on client-bought goods is a C6 blocker, independent of the buyer.
+- **R9 / F17** (§3.4): the promised "move to commerce" after a liability amendment is withdrawn; C2 §2.5a holds such an amendment instead.
+- **R14** (§3.1): `reported → verified` is one permitted, atomic, one-way transition.
+- **R18** (§3.1): actor columns on the immutable event ledger use `ON DELETE RESTRICT`.
+
 ## 1. Inventory: what is studio commerce and what is external
 
 | Model | Who pays, who owns it | Evidence | Is it external fulfilment? |
@@ -41,7 +51,8 @@ No inspected table records "the client or the GC buys this". C5 is new. It is no
 | Column | Meaning |
 |---|---|
 | `id`, `project_id` | |
-| `scope_edition_id`, `package_key` | The C2 join. Inclusion and responsibility come from the agreed edition and are never typed here |
+| `scope_edition_id`, `package_key` | The C2 join. Inclusion and responsibility come from the agreed edition and are never typed here. `package_key` carries the C2 §2.2a format CHECK and resolves to C1 `project_packages` only by `(project_id, package_key)` (SQ-1851 R1) |
+| `units` | `text[] NOT NULL`, the units of this external package, for example cabinet runs `k-1`, `k-2` (SQ-1851 R5). Non-empty, no duplicates, each matching `^[a-z0-9][a-z0-9-]{0,31}$`. Fixed at creation. A package whose units change gets a successor fulfilment (`cancelled` on this one, then create); this contract adds no unit-editing act |
 | `kind` | `gc_cabinetry`, `client_furnishing` or `other_external` |
 | `buyer_party_kind`, `payer_party_kind`, `contracting_party_kind` | Copied from the edition's package responsibilities (`purchasing`, `payer`, `fabrication_contract`, C2 §2.2) when the row is created. A mismatch with the edition is refused. The full combination must pass the external-only rule (§3.4, F17) |
 | `party_engagement_id` | Optional `project_parties` row (the GC or supplier). It is a reference only and confers no access (C3) |
@@ -56,19 +67,25 @@ No inspected table records "the client or the GC buys this". C5 is new. It is no
   - `event_kind`: `quote_reported`, `contract_reported`, `package_issued`, `fabrication_instruction`, `hold`, `release_hold`, `received`, `installed`, `cancelled`;
   - `evidence_level`: `reported` or `verified`;
   - the evidence: a storage object, a `plan_issues` id or a site request id;
-  - `affected_units` (jsonb, for a partial hold);
+  - `affected_units text[]` (SQ-1851 R5): for `hold`, the held units; for `fabrication_instruction`, the instructed units the C3 gate returned. Every entry must be one of the fulfilment's `units`. NULL for other kinds;
+  - `releases_event_id`: for `release_hold` only, the `hold` event it releases (same fulfilment). A hold is open until a `release_hold` names it;
+  - for `fabrication_instruction` only: `authority_id`, `manifest_id`, `manifest_hash`, `amount_cents` and `actor_id`, copied from the gate's result (C3 §3.2);
   - `recorded_by`, `recorded_at`, `verified_by`, `verified_at`;
-  - `client_request_id`.
-- `UNIQUE (fulfilment_id, client_request_id)`.
-- An UPDATE trigger allows only setting `verified_by` and `verified_at` once. Everything else is immutable, following `00835:20-30`.
+  - `client_request_id` and `request_hash`.
+- `UNIQUE (fulfilment_id, client_request_id)`. This one key covers both fabrication routes (C3 §3.2).
+- **Evidence level (SQ-1851 R14).** The first revision let an UPDATE set only `verified_by` and `verified_at`, so a `reported` event could never become `verified`, although installation and the committed amount both require verified events. Now:
+  - CHECK `(evidence_level = 'verified') = (verified_by IS NOT NULL AND verified_at IS NOT NULL)`;
+  - the UPDATE trigger permits exactly one transition, under the GUC that only `verify_external_fulfilment_event` sets: `(evidence_level, verified_by, verified_at)` from `('reported', NULL, NULL)` to `('verified', <verifier>, now())` in one statement, with every other column unchanged. It is one-way and happens at most once. Everything else is immutable, following `00835:20-30`;
+  - an event that is verified at insert (a `fabrication_instruction` on the gate's `verified` branch) is inserted with `verified_by = actor_id` and `verified_at = recorded_at`, and is never updated.
+- **Actor retention (SQ-1851 R18).** `recorded_by`, `verified_by` and `actor_id` are `REFERENCES public.profiles(id) ON DELETE RESTRICT` (00835:12 pattern). The ledger is immutable, so a `SET NULL` action could never run.
 
 **Who may record each fact:**
 
 | Fact | May record | Notes |
 |---|---|---|
-| Quote, contract, receipt, install | A studio member, as `reported` | `verified` requires a different studio owner or admin, or C3's `field verifier` role with attached evidence |
+| Quote, contract, receipt, install | A studio member, as `reported` | `verified` requires a different studio owner or admin, or C3's `field verifier` role with attached evidence, through the one `reported → verified` transition above. `verify_external_fulfilment_event` refuses a `fabrication_instruction` event (`fabrication_instruction_not_verifiable`): an instruction is `verified` only when the authorizing party acts authenticated (C3 §3.2), never by a studio stamp |
 | `package_issued` | Only the existing plan-issue owner path | It must reference an immutable issue (C1). This preserves A09 and A18 exact-issue invariance |
-| `fabrication_instruction` | **Only** a caller that passes the shared C3 gate `public.assert_fabrication_instruction_authority(p_package_id, p_manifest_id, p_authorizing_party_id)` (C3 §3.2, revision at `33d2d5666`). Two routes call it: C3's `record_fabrication_instruction` and this contract's `record_external_fulfilment_event` (§3.4, F20) | The gate enforces authority, the server-derived amount, the one-job/one-tenant binding, the open seat, approved evidence and the C5 hold. It writes nothing; the caller writes the event in the same transaction from its result. No route writes this event without the gate. Today the scope check allows `money`, `change_order`, `selections`, `schedule`, `site_access`, `key` and `draw_certify` (`supabase/migrations/00624_project_party_window_and_authority.sql:860-864`). Fabrication is absent, and `selections` must not be read as sufficient. Until C3 lands the gate, no `fabrication_instruction` event can exist |
+| `fabrication_instruction` | **Only** a caller that passes the shared C3 gate `public.assert_fabrication_instruction_authority(p_fulfilment_id, p_manifest_id, p_authorizing_party_id, p_units)` (C3 §3.2, signature revised for SQ-1851 R3/R5). Two routes call it: C3's `record_fabrication_instruction` and this contract's `record_external_fulfilment_event` (§3.4, F20) | The gate enforces authority, the server-derived amount, the one-job/one-tenant binding, the open seat, approved evidence and the C5 hold. It writes nothing; the caller writes the event in the same transaction from its result. No route writes this event without the gate. Today the scope check allows `money`, `change_order`, `selections`, `schedule`, `site_access`, `key` and `draw_certify` (`supabase/migrations/00624_project_party_window_and_authority.sql:860-864`). Fabrication is absent, and `selections` must not be read as sufficient. Until C3 lands the gate, no `fabrication_instruction` event can exist |
 
 - Readiness is never the same as instruction, and receipt is never the same as acceptance (A18).
 
@@ -100,7 +117,8 @@ No inspected table records "the client or the GC buys this". C5 is new. It is no
   - Sending changes only the proposal's state, and a line on a draft is already refused, so send needs no item lock.
   - In the other direction, the authorization draft, send and execute paths each re-check `external_fulfilment_id IS NULL` on their locked lines and refuse an external line. The schedule filter (§3.3) alone is not relied on.
 - These are exactly the states in which studio money has attached or is about to.
-- The reverse conversion is allowed only before any `contract_reported` event. It re-enters pricing through the existing pricing writer (`app.ffe_pricing_writer`, `00809:877`).
+- **Package membership (SQ-1851 R8).** Conversion sets the line's `scope_package_key` to the fulfilment's `package_key` in the same statement, and the line keeps it while external. C2's assignment RPC refuses external lines (C2 §2.4a), so an external line's package is always its fulfilment's. C6 uses that membership for the studio installation blocker.
+- The reverse conversion is allowed only before any `contract_reported` event. It re-enters pricing through the existing pricing writer (`app.ffe_pricing_writer`, `00809:877`). After a `contract_reported` event there is no route back into studio commerce; C2 §2.5a holds any amendment that would need one (SQ-1851 R9).
 
 **Why this rule and not a label.**
 - "Do not rely on a label or a hidden subtotal" (DOMAIN-CONTRACTS C5). An unpriced line drops out of every money reader *by construction*, because the existing predicates already ignore zero-value lines (`00399:7486-7497`; `closure-derivation.ts:219-226`).
@@ -129,7 +147,7 @@ No inspected table records "the client or the GC buys this". C5 is new. It is no
 | Custom milestones | `00403:3316-3325` | PO-gated | Not used. External package progress comes from fulfilment events | Separate record |
 | Installed check (closure) | `00399:7473-7481`; `closure-derivation.ts:205-214` | Must be `installed` | Must be `installed`, set only from a verified external install | Status writer restricted |
 | Paid check (closure) | `00399:7484-7518`; `closure-derivation.ts:216-235` | Positive value must be paid | Zero value, so not counted | Unpriced by CHECK |
-| Studio service completion | C6 derivation | n/a | Visible and **non-blocking** when the package is `excluded` or externally fulfilled | Edition package inclusion |
+| Studio service completion | C6 derivation | n/a | Purchase, receipt and contract progress are visible and **non-blocking**. **Exception (SQ-1851 R8):** in an included package whose `installation` is `studio`, an external line or fulfilment not yet verified `installed` blocks studio service completion, whoever bought the goods | Edition package inclusion and `installation` responsibility |
 | Client edition / client page | The 26 migrations that already special-case `trade_scope_document_id` (listed below) | Presence-aware | Each must add `external_fulfilment_id` parity. Each is audited, not assumed | Grep audit is part of the slice gate |
 
 **Readers to audit for presence-line parity.** These are the migrations referencing `trade_scope_document_id`. The latest definition of each function they touch must be rechecked:
@@ -137,14 +155,15 @@ No inspected table records "the client or the GC buys this". C5 is new. It is no
 
 ### 3.4 RPCs
 
-**`create_external_fulfilment(p_project_id, p_scope_edition_id, p_package_key, p_kind, p_party_engagement_id, p_configuration_id, p_client_request_id) → jsonb`**
+**`create_external_fulfilment(p_project_id, p_scope_edition_id, p_package_key, p_kind, p_units text[], p_party_engagement_id, p_configuration_id, p_client_request_id) → jsonb`**
 - Response:
   ```
-  {"fulfilmentId", "status", "replayed"}
+  {"fulfilmentId", "status", "units", "replayed"}
   ```
 - It is refused when:
   - the package is not in the **active** edition, or `scope_editions` is inactive (C2 §2.8);
   - the package's responsibilities fail the **external-only rule** below;
+  - `p_units` is empty, has a duplicate or an invalid key (`fulfilment_units_invalid`, SQ-1851 R5);
   - the caller fails the studio predicate.
 
 **External-only rule (SQ-1817 F17).** The earlier check was only `purchasing <> 'studio'`. A package with buyer = client and payer = studio passed it, yet the studio owes real money, and the reader matrix (§3.3) would still have asserted "no invoice, no payable". Who clicks Buy is not who owes. The rule now validates the whole combination from the edition (C2 §2.2):
@@ -156,21 +175,24 @@ No inspected table records "the client or the GC buys this". C5 is new. It is no
 | `fabrication_contract` | `client`, `gc`, `other`, `none` | `studio` → `external_rail_studio_liability` |
 
 - A refused combination is not an error to work around. It means the obligation is studio commerce and must go through the existing rails: a PO (`purchase_orders`), a studio purchase (`studio_purchases`, `00703`) or a trade scope (`00423`). The refusal message names the rail.
-- `installation` and `design` are not checked. Installing or designing is a service, not a purchase liability. A studio install on client-bought goods stays an ordinary studio obligation in C6.
-- The rule is re-checked against the **active** edition on every later mutation (`record_external_fulfilment_event`, `verify_external_fulfilment_event`, `set_ffe_item_external_fulfilment`). An amendment that makes the studio the payer or contracting party therefore freezes the fulfilment (`external_rail_studio_liability`) until the studio moves the obligation to an existing commerce rail. Nothing is reclassified silently.
+- **One body (SQ-1851 R4).** The rule is the internal helper `public._external_rail_refusal(p_edition_id uuid, p_package_key text) RETURNS text`: SECURITY DEFINER, revoked from every role, returning the refusal code from the table above or NULL. Every C5 mutation and the C3 fabrication gate call it against the **active** edition. Nothing re-implements the table.
+- `installation` and `design` are not checked here. Installing or designing is a service, not a purchase liability. **SQ-1851 R8:** a studio install on client-bought goods is a studio obligation that C6 counts as a blocker until the external line or fulfilment is verified `installed` (C6 §2.3), and design work is bound by the edition's agreed phases, which block whoever buys. Neither is inferred from the buyer.
+- The rule is re-checked against the **active** edition on every later mutation (`record_external_fulfilment_event`, `verify_external_fulfilment_event`, `set_ffe_item_external_fulfilment`) and by the C3 gate.
+- **Revision 2026-10-23 (SQ-1851 R9): no promised transfer.** The earlier text said an amendment making the studio payer or contracting party would freeze the fulfilment "until the studio moves the obligation to an existing commerce rail". No such move exists after `contract_reported` (§3.2), so that promise is withdrawn. Instead, C2 §2.5a refuses such an amendment at send and at countersign, and refuses it again at reconciliation, while a fulfilment on the package has a `contract_reported` event. A fulfilment can therefore only meet a studio-liable active edition through a fixture. If it does, every mutation refuses `external_rail_studio_liability`, which is a fail-closed hold, not a transfer. The audited transfer is OPEN for a later contract.
 
-**`record_external_fulfilment_event(p_fulfilment_id, p_event_kind, p_evidence jsonb, p_affected_units jsonb, p_client_request_id) → jsonb`**
+**`record_external_fulfilment_event(p_fulfilment_id, p_event_kind, p_evidence jsonb, p_affected_units text[], p_client_request_id) → jsonb`**
 - Response:
   ```
   {"eventId", "status", "evidenceLevel", "replayed"}
   ```
-- **`fabrication_instruction` calls the shared C3 gate (SQ-1817 F20).** The earlier text gave this generic route no gate of its own. Now, for this event kind only:
+- **Units (SQ-1851 R5).** For `hold`, `p_affected_units` is required, non-empty, without duplicates and a subset of the fulfilment's `units` (`fulfilment_units_invalid`). For `release_hold`, `p_evidence.releasesEventId` must name an open `hold` on the same fulfilment. For `fabrication_instruction`, `p_affected_units` is the requested instruction set and goes to the gate (below). Other kinds take NULL.
+- **Idempotency first.** The `(fulfilment_id, client_request_id)` receipt is checked before any lifecycle or gate check. A replay with the same request hash returns the first event with `replayed: true`; a different payload raises `serialization_failure`.
+- **`fabrication_instruction` calls the shared C3 gate (SQ-1817 F20; revised for SQ-1851 R3, R5).** For this event kind only:
   1. `p_evidence` must carry `manifestId` and `authorizingPartyId`. Any other figure in it, including `amountCents`, is stored as reported evidence and never compared with a threshold.
-  2. The RPC resolves the fulfilment to its C1 `project_packages.id` through `(project_id, package_key)` (C2 §2.4a). If no C1 package carries that key, it refuses (`fabrication_instruction_binding`).
-  3. It calls `public.assert_fabrication_instruction_authority(package_id, manifestId, authorizingPartyId)` **before taking any C5 row lock**, because the gate takes its own locks in C3 §3.2's order.
-  4. Then it locks the fulfilment row and inserts the event. `evidence_level` comes from the gate's `evidenceStatus`, never from the caller. The event row also stores the gate's `authorityId`, `manifestHash`, `amountCents` and `actorId`.
-  - Any gate refusal propagates unchanged, so this route and `record_fabrication_instruction` refuse the same cases with the same codes. The gate is the single shared root: authority, amount, package/manifest/seat/job binding and the hold check are not duplicated here.
-- **`_fabrication_instructed_amount_cents(p_package_id)` body (C5 owns it; C3 §3.2 calls it).** It returns the `contractAmountCents` on the package's latest **verified** `contract_reported` event, as a non-negative integer. It returns NULL when there is none. A reported-only contract figure is not a committed amount, so it fails closed through C3's `fabrication_amount_unknown`. The function is SECURITY DEFINER, revoked from every role, and reads no caller input except the package id.
+  2. It calls `public.assert_fabrication_instruction_authority(p_fulfilment_id, manifestId, authorizingPartyId, p_affected_units)` **before taking any C5 row lock**. The gate takes the C5 locks itself, in C3 §3.2's order, including this fulfilment FOR UPDATE, and resolves the C1 package through `(project_id, package_key)` (C2 §2.4a). If no C1 package carries the key, the gate refuses (`fabrication_instruction_binding`).
+  3. It inserts the event while the gate's locks are held. `evidence_level` comes from the gate's `evidenceStatus`, never from the caller. `affected_units` is the gate's returned `units`, never the raw argument. The row also stores the gate's `authorityId`, `manifestId`, `manifestHash`, `amountCents` and `actorId`.
+  - Any gate refusal propagates unchanged, so this route and `record_fabrication_instruction` refuse the same cases with the same codes. The gate is the single shared root: capability, active edition, responsibilities, authority, amount, units, package/manifest/seat/job binding and the hold check are not duplicated here.
+- **`_fabrication_instructed_amount_cents(p_fulfilment_id)` body (C5 owns it; C3 §3.2 calls it after locking the fulfilment, SQ-1851 R3).** It returns the `contractAmountCents` on the fulfilment's latest **verified** `contract_reported` event, ordered by `verified_at` then event id, as a non-negative integer. It returns NULL when there is none. A reported-only contract figure is not a committed amount, so it fails closed through C3's `fabrication_amount_unknown`. The function is SECURITY DEFINER, revoked from every role, and reads no caller input except the fulfilment id. Because every verifier and event writer takes the same fulfilment lock, the value cannot change between this read and the instruction insert.
 - Refuses `package_issued` unless it comes from the plan-issue owner path (§3.1).
 
 **`verify_external_fulfilment_event(p_event_id, p_client_request_id)`**
@@ -181,17 +203,20 @@ No inspected table records "the client or the GC buys this". C5 is new. It is no
 
 ### 3.5 Lock order, idempotency and concurrency
 
-- Lock order:
-  1. `projects` (FOR UPDATE, for creation and conversion), which keeps closure's "parent first" rule (`00399:7339-7346`);
-  2. `project_external_fulfilments`;
-  3. `project_ffe_items` (FOR UPDATE, on conversion);
-  4. events.
-- The job label lock (`_ffe_lock_job_labels`, `00808:1376-1379`) comes before the FF&E row lock whenever an FF&E line is touched, matching placement.
+- **One lock order for every C5 mutation (SQ-1851 R3).** The first revision locked only the fulfilment and events, while the C3 gate locked the job labels and the package, so a contract verification or a hold could commit between the gate's read and the instruction insert. Every C5 mutation (create, conversion, every event kind, verification) and the C3 gate now take the same prefix:
+  1. `projects` FOR UPDATE, for creation and conversion only, which keeps closure's "parent first" rule (`00399:7339-7346`);
+  2. `_ffe_lock_job_labels(project_id)` (`00808:85-100`): `projects` FOR KEY SHARE and the job label advisory lock, taken by **every** C5 mutation, whether or not it touches an FF&E line;
+  3. the active `project_scope_editions` row FOR SHARE, for the external-only re-check;
+  4. `project_external_fulfilments` FOR UPDATE. This row is the source-state lock for its amount and holds;
+  5. `project_ffe_items` FOR UPDATE in id order, on conversion and on a verified `installed` that advances line status;
+  6. events: the target event FOR UPDATE for verification, then the insert.
+  The C3 gate takes steps 2–4, then the C1 package, seat, grant and manifest, which no C5 writer locks (C3 §3.2). No C5 path locks a fulfilment before the job label lock, so the gate and the event writers cannot invert.
 - Every mutation takes `p_client_request_id`. A replay returns the first effect. A different payload under the same key raises `serialization_failure`.
-- **Partial hold (A18):**
-  - A `hold` event carries `affected_units`.
-  - `public.assert_fabrication_instruction_authority` refuses `fabrication_instruction` for an affected unit while the hold is open (`fabrication_hold_open`). It reads this record; C5 owns the hold, and C3 owns the check.
-  - Unaffected units can still be instructed.
+- **Partial hold (A18; units per SQ-1851 R5):**
+  - A `hold` event carries `affected_units`, a validated subset of the fulfilment's `units`.
+  - A hold is open until a `release_hold` event names it in `releases_event_id`. A unit is held while any open hold lists it.
+  - `public.assert_fabrication_instruction_authority` receives the instruction's unit set, refuses it if any unit is held (`fabrication_hold_open`), and returns the validated set, which the instruction event stores. It reads this record under the fulfilment lock; C5 owns the hold, and C3 owns the check.
+  - Unaffected units can still be instructed, by an instruction that names only them.
   - `release_hold` requires the decision or approval evidence the hold names. C4 and C3 supply those authorities.
 
 ### 3.6 RLS, grants and activation
@@ -225,11 +250,16 @@ No inspected table records "the client or the GC buys this". C5 is new. It is no
   - payables;
   - invoices.
 - **Conversion denial (F16)** after a PO, a studio purchase, an invoice line or executed authorization provenance, **and** while the line is on a `draft` or `sent` furnishings authorization (forward `source_ffe_item_id` link, no reverse stamp yet). Race: conversion against authorization draft creation on the same line, in both orders; the second committer refuses. An authorization draft naming an already-external line is refused.
-- **Responsibility combination (F17):** buyer = client with payer = studio is refused (`external_rail_studio_liability`), as are fabrication contract = studio and payer = none. Buyer = client, payer = client, fabrication contract = none is accepted. An amendment that changes the payer to studio freezes later events on the fulfilment.
-- **Fabrication route (F20):** `record_external_fulfilment_event(…, 'fabrication_instruction', …)` returns the same refusal codes as `record_fabrication_instruction` for every C3 §3.2 case (binding, closed seat, unknown or negative amount, insufficient authority, unapproved evidence, open hold). A caller-supplied `evidence_level` or `amountCents` changes nothing. A fulfilment whose package key has no C1 package is refused. A grep shows that every writer of a `fabrication_instruction` event calls `public.assert_fabrication_instruction_authority`. `has_function_privilege` is false for `PUBLIC`, `anon` and `authenticated` on every mutation and on `_fabrication_instructed_amount_cents` before activation.
+- **Responsibility combination (F17):** buyer = client with payer = studio is refused (`external_rail_studio_liability`), as are fabrication contract = studio and payer = none. Buyer = client, payer = client, fabrication contract = none is accepted. An amendment that changes the payer to studio on a contracted fulfilment is refused at send and countersign (C2 §2.5a, SQ-1851 R9); a fixture that forces a studio-liable active edition sees every later mutation refused.
+- **Fabrication route (F20):** `record_external_fulfilment_event(…, 'fabrication_instruction', …)` returns the same refusal codes as `record_fabrication_instruction` for every C3 §3.2 case (binding, closed seat, unknown or negative amount, insufficient authority, unapproved evidence, open hold). A caller-supplied `evidence_level` or `amountCents` changes nothing. A fulfilment whose package key has no C1 package is refused. A grep shows that every writer of a `fabrication_instruction` event calls `public.assert_fabrication_instruction_authority`. `has_function_privilege` is false for `PUBLIC`, `anon` and `authenticated` on every mutation, and on `_fabrication_instructed_amount_cents` and `_external_rail_refusal` always.
 - **Priced external line refused** by CHECK.
 - **Closure:** the presence line blocks `close_project` until a verified install. Once it is installed, the paid gate ignores it.
-- **Partial hold:** affected units are refused, and unaffected units proceed.
+- **Partial hold (SQ-1851 R5):** fulfilment units `{k-1, k-2}`, hold on `{k-2}`. Instructing `{k-1}` succeeds and the event stores `{k-1}`; `{k-2}` and `{k-1, k-2}` are refused; after `release_hold` naming the hold, `{k-2}` succeeds. A hold or instruction naming an undeclared unit is refused. Both fabrication routes give identical answers.
+- **Locked source state (SQ-1851 R3):** the C3 §3.2 race tests (contract verification and hold against instruction, both orders, no `40P01`).
+- **Evidence level (SQ-1851 R14):** a reported `installed` event becomes `verified` through `verify_external_fulfilment_event`, and only then does the line become `installed`. A second verification, a `verified → reported` update, or changing any other column is refused. Verifying a `fabrication_instruction` event is refused.
+- **Responsibilities in one helper (SQ-1851 R4):** each refusal code of the external-only table comes from `_external_rail_refusal`, through both C5 mutations and the C3 gate.
+- **Studio install on client goods (SQ-1851 R8):** see C6 §2.11.
+- **Actor retention (SQ-1851 R18):** deleting a profile that recorded or verified an event fails on the FK.
 - **Actor matrix:** member, owner/admin verifier, GC party (no access), client (curated read only) and a second studio.
 - **Reader parity:** every audited presence reader returns the same answer for a trade presence line and an external presence line.
 
