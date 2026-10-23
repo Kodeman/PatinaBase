@@ -15,6 +15,8 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectDestinationLocations: () => ({ data: [] }),
+  useStudioContacts: () => ({ data: [] }),
   useSendPurchaseOrder: () => ({ mutateAsync: sendMutateAsync, isPending: false }),
   useSetPurchaseOrderShipTo: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetPurchaseOrderShipToLocation: () => ({ mutateAsync: jest.fn(), isPending: false }),

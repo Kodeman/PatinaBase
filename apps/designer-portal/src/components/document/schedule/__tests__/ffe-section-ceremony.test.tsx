@@ -36,6 +36,20 @@ afterEach(() => {
 
 // US-21 Q14 — the overview never branches on `one-voice` or `ask-the-paper`;
 // both are pinned ON, as they stand in production.
+// Job places have their own suite (destinations/__tests__).
+jest.mock('@/components/document/destinations/use-job-places', () => ({
+  useJobPlaces: () => ({
+    organizationId: null,
+    locations: [],
+    jobLocationIds: new Set(),
+    jobPlaces: [],
+    studioAddress: undefined,
+    siteAddress: null,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (flag: string) => ({
     value: flag === 'one-voice' || flag === 'ask-the-paper',

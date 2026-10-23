@@ -16,6 +16,20 @@ const mockPlacements: OverviewPlacement[] = [
   { ffeItemId: "F1", projectRoomId: "living", quantity: 320 },
 ];
 
+// Job places have their own suite (destinations/__tests__).
+jest.mock('@/components/document/destinations/use-job-places', () => ({
+  useJobPlaces: () => ({
+    organizationId: null,
+    locations: [],
+    jobLocationIds: new Set(),
+    jobPlaces: [],
+    studioAddress: undefined,
+    siteAddress: null,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock("@patina/supabase", () => ({
   useProjectRoomPlacements: () => ({ data: mockPlacements }),
   useProjectPalettes: () => ({ data: [] }),
