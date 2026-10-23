@@ -282,12 +282,15 @@ for (const vp of VIEWPORTS) {
         await groupName.fill('Shower');
         await groupName.press('Enter');
         await expect.poll(() => psqlScalar(`SELECT count(*) FROM public.project_line_groups WHERE project_id = '${JOB}' AND name = 'Shower'`)).toBe('1');
+        // The next Tab uses the rendered group above it, not just the RPC's saved row.
+        await expect(lineRow(page, lineId(shower[0])).first()).toHaveAttribute('data-group-member', '');
         for (const name of shower.slice(1)) {
           const before = psqlScalar(`SELECT count(*) FROM public.project_ffe_items WHERE project_id = '${JOB}' AND line_group_id IS NOT NULL`);
           await indent(name);
           await expect
             .poll(() => psqlScalar(`SELECT count(*) FROM public.project_ffe_items WHERE project_id = '${JOB}' AND line_group_id IS NOT NULL`))
             .toBe(String(Number(before) + 1));
+          await expect(lineRow(page, lineId(name)).first()).toHaveAttribute('data-group-member', '');
         }
         expect(
           psqlScalar(`SELECT string_agg(f.name, ',' ORDER BY f.sort_order, f.created_at) FROM public.project_ffe_items f
@@ -310,8 +313,12 @@ for (const vp of VIEWPORTS) {
       await timed(info, `S4 @${vp.name}`, async () => {
         await openSheet(page, 'price', ROOM.bedroom);
         await expect(
-          page.getByText('This job is active. Markup and client price are read-only here; they change through Record a change. Trade cost can still be typed.'),
+          page.getByText('This job is active. Released lines change through Record a change; their trade cost can still be typed until they are ordered.'),
         ).toBeVisible();
+        // These fixture lines are unreleased: an active job alone does not lock pricing.
+        const wallpaperRow = lineRow(page, wallpaper).first();
+        await expect(wallpaperRow.getByRole('textbox', { name: 'Markup, Phillip Jeffries Manila Hemp, Chalk', exact: true })).toBeEditable();
+        await expect(wallpaperRow.getByRole('textbox', { name: 'Unit client price, Phillip Jeffries Manila Hemp, Chalk', exact: true })).toBeEditable();
         // R1a sits under R1, labor, by the roll; the room's subtotal counts both.
         const laborRow = lineRow(page, labor).first();
         await expect(laborRow).toContainText('Install, wallpaper hanger');
@@ -421,6 +428,11 @@ for (const vp of VIEWPORTS) {
         await page.goto(`/doc/${JOB}#pieces-room-${ROOM.living}`, { waitUntil: 'domcontentloaded' });
         const row = page.locator(`[data-pieces-room="${ROOM.living}"]`);
         await expect(row).toBeVisible({ timeout: 30_000 });
+        const roomToggle = row.getByRole('button', { name: 'Living Room', exact: true });
+        await expect(roomToggle).toHaveAttribute('aria-expanded', 'false');
+        await expect(row.getByRole('link', { name: /edit room selections/i })).toHaveCount(0);
+        await roomToggle.click();
+        await expect(roomToggle).toHaveAttribute('aria-expanded', 'true');
         await row.getByRole('link', { name: /edit room selections/i }).click();
         await expect(page).toHaveURL(new RegExp(`/doc/${JOB}/pieces\\?lens=rough&room=${ROOM.living}`));
 
