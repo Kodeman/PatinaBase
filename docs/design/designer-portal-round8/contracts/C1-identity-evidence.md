@@ -1,7 +1,13 @@
 # C1 — Identity and evidence manifest
 
-**Status:** proposed contract. Cross-provider review pending (`review-audit-frontier`).
-**Ticket:** SQ-1812 (WP-00.5a). **Source inspected at:** `0fabcadf2` (branch `redesign/designer-portal-round8`; app/DB source identical to `ee9c450a5` main).
+**Status:** proposed contract, revised 2026-10-23 after the SQ-1817 frontier review (CHANGES REQUIRED). Re-review pending (`review-audit-frontier`).
+**Ticket:** SQ-1812 (WP-00.5a); revision SQ-1849. **Source inspected at:** `0fabcadf2` (branch `redesign/designer-portal-round8`; app/DB source identical to `ee9c450a5` main). Revision anchors re-checked at `4952624a16d1`.
+
+**Revision 2026-10-23 (SQ-1817).** This file answers findings F2, F14, F18 and the C1 part of F20. Each change is marked inline with its finding id:
+- **F2** (§3 Authority, §3 RLS, §6): new writes and reads are bound to the job's recorded studio, never to a studio derived from the caller.
+- **F14** (§4 table, §4 RPC, §6): manifest dedupe and replay include the package, the purpose and the full request.
+- **F18** (§3 Read model, §5): the all-sheets read is the `usePlanRoom` bundle, not `get_plan_room_holdings`.
+- **F20** (§3 Activation, §4 Activation, §6): every function states its revokes for all three roles, with effective-privilege tests.
 **Serves:** A01, A02, A05, A08, A09, A15, A16, A17, X01, X09, X10. It also feeds C3 (fabrication instruction evidence), C4 (acceptance evidence) and C5 (package contents).
 
 **Citation rule.** `NNNNN:L` means `supabase/migrations/NNNNN_*.sql` line `L`. `DP` means `apps/designer-portal/src`, and `SB` means `packages/supabase/src`. "Today" means the inspected source. Nothing here claims what is deployed on Strata.
@@ -105,16 +111,47 @@ CREATE TABLE public.plan_sheet_packages (
   - `set_plan_sheet_rooms(p_sheet_id uuid, p_project_room_ids uuid[]) RETURNS jsonb` replaces the set and returns `{sheetId, roomIds[]}`. It is naturally idempotent because the same set gives the same result.
   - `set_plan_sheet_packages(p_sheet_id uuid, p_package_ids uuid[]) RETURNS jsonb` works the same way.
   - `create_project_package(p_project_id uuid, p_kind text, p_code text, p_title text, p_project_room_id uuid DEFAULT NULL, p_idempotency_key text) RETURNS public.project_packages` replays on `(project_id, idempotency_key)` the way `plan_print_batches` does (00429:139-165). That needs an `idempotency_key text` and `request_hash text` column pair on `project_packages`, with `UNIQUE(project_id, idempotency_key)`.
-  - Authority = the plan-room studio rule: `is_design_studio_comember(projects.designer_id)` (00429:2047-2054). Copy the latest head of that predicate at implementation time, and add the tenant-first leg if the `plan_sheets` policy has gained one by then.
+- **Authority: tenant first (Revision 2026-10-23, SQ-1817 F2).** The original text reused `is_design_studio_comember(projects.designer_id)` (00429:2047-2054) and made the tenant leg conditional on a future `plan_sheets` repair. That is withdrawn. `is_design_studio_comember` (00399:1164-1193) is true for a member of *any* active design studio the designer also belongs to. So with designer D in studios A and B, a B-only member could link sheets and create packages on A's job. Every new C1 RPC and every studio read policy on the three new tables uses one predicate that reads the studio from the job's **record**:
+  ```sql
+  CREATE FUNCTION public.can_compose_project_plan(p_project_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.projects p
+       WHERE p.id = p_project_id
+         AND CASE
+               WHEN public.project_recorded_studio(p.id) IS NOT NULL THEN
+                 public.is_active_studio_member(public.project_recorded_studio(p.id))
+                 AND public.is_design_studio_comember(p.designer_id)
+               ELSE p.designer_id = (SELECT auth.uid())
+             END);
+  $$;
+  REVOKE ALL ON FUNCTION public.can_compose_project_plan(uuid) FROM PUBLIC, anon, authenticated;
+  GRANT EXECUTE ON FUNCTION public.can_compose_project_plan(uuid) TO authenticated, service_role;
+  ```
+  - `project_recorded_studio` is `projects.studio_id` alone, with no caller-relative fallback (00624:335-365). `is_active_studio_member` is NULL-safe and excludes guests (00417:40-55). The designer leg is kept as an extra narrowing, as in the 00624 policies (00624:989-997). It never widens access.
+  - **Studio-less job** (`studio_id IS NULL`): only the designer of record passes. A co-member from any of the designer's studios is refused. This follows the 00624 ruling that a caller-relative tenant is self-satisfying (00624:349-365, w1b r8 BLOCKING-1). It never uses `project_tenant_org()`.
+  - `authenticated` keeps EXECUTE because RLS policies evaluate the predicate as the querying role. It returns only a boolean about the caller's own access.
+  - The link RPCs read the sheet, room and package rows as SECURITY DEFINER. They therefore call the predicate on the sheet's `project_id` themselves, and never rely on `plan_sheets` RLS as the gate.
+  - **Inherited gap, not repaired here (OPEN for the orchestrator).** `plan_sheets_studio_rw` and the other plan-room studio policies (00429:2047-2054 onward), and the `get_plan_room_holdings` access check (00429:1939-1945), still use `is_design_studio_comember` without a tenant leg. That exposure exists today and is outside C1's declared change. C1's new rows do not inherit it. A separate ticket should decide the plan-room repair, the way SQ-1847 repairs `margin_notes`.
 - **Lock order.** Lock the `projects` row `FOR KEY SHARE` first, then the `plan_sheets` row `FOR UPDATE`, then the join rows in id order. This matches the job-first rule of `_ffe_lock_job_labels` (00808:85-100).
 - **RLS (read).**
-  - Studio: the plan-room studio predicate above.
+  - Studio: `can_compose_project_plan(project_id)` (SQ-1817 F2). For `plan_sheet_rooms` and `plan_sheet_packages` the project is the sheet's `project_id`.
   - Client: a row is visible only when the sheet is `state='shared'` and `projects.client_id = auth.uid()`, which is the existing client gate (00429:2057-2063). Package rows are studio-only until C5 rules on client visibility.
   - Field: there is no direct table access. Field reads these joins through an RPC only when a later slice needs them.
-- **Read model.** Extend `get_plan_room_holdings(p_project_id)` (00429:1926), which is the existing read that `SB/hooks/use-plan-room.ts:366` calls. Add `roomIds[]` and `packageIds[]` per sheet as **additive keys**. Old callers ignore unknown keys. Do not add a second plan read hook.
+- **Read model (Revision 2026-10-23, SQ-1817 F18).** The original text extended `get_plan_room_holdings`. That is withdrawn: the RPC returns the latest transmittal per recipient and the issue prints that recipient holds (00429:1947-2005). A job that has drawings but no transmittal returns `parties: []`, so newly linked, unissued or unsent sheets would carry no room or package mapping.
+  - The all-sheets read is `usePlanRoom` (`SB/hooks/use-plan-room.ts:268-357`). It selects every `plan_sheets` row for the job (`:276-281`), then fans out to prints, batches, issue prints, transmittals and tokens in one `Promise.all` (`:294-330`).
+  - Add `plan_sheet_rooms` and `plan_sheet_packages` to that fan-out, scoped with `.in('sheet_id', sheetIds)` and the zero-uuid sentinel already used for `plan_prints` (`:303-311`). Add `project_packages` with `.eq('project_id', projectId)`.
+  - Expose the result as additive `sheetRooms`, `sheetPackages` and `packages` arrays on `PlanRoomBundle` (`:108`). Old callers ignore the new keys.
+  - `get_plan_room_holdings` and `usePlanRoomHoldings` (`:359-370`) stay unchanged and remain recipient history.
+  - Do not add a second plan read hook. The bundle grows by three requests per job; P11 counts them.
 - **Audit.** Rows carry `added_by` and `added_at`. A removed link is a deleted row in the RPC transaction. If a later slice needs a link history, add an append-only `plan_sheet_link_events` table. That is not required for A08 or A09.
 - **Backfill.** None. Existing sheets start with no room and no package. Unknown stays unknown: the Design chapter shows unlinked sheets under "Drawings for the whole job" and never guesses a room from a title or sheet number.
 - **Activation.** Not consequential: these RPCs record composition, not authority. They ship active behind the renderer flag in the UI. They are listed here so reviewers see that no deny-by-default gate was skipped on purpose.
+- **Explicit privileges (Revision 2026-10-23, SQ-1817 F20).** Shipping active is not the same as relying on defaults. The stack's `ALTER DEFAULT PRIVILEGES` gives `anon` and `authenticated` EXECUTE on every function created in `public` (00654:209-214). 00483:258-262 removes only the PUBLIC default. So every C1 function states all three roles:
+  - The three composition RPCs: `REVOKE ALL … FROM PUBLIC, anon, authenticated; GRANT EXECUTE … TO authenticated, service_role`.
+  - `can_compose_project_plan`: as shown above.
+  - The same-project trigger function: `REVOKE ALL … FROM PUBLIC, anon, authenticated`, with no grant.
+  - Tables: `REVOKE ALL … FROM PUBLIC, anon, authenticated; GRANT SELECT … TO authenticated; GRANT ALL … TO service_role`.
 
 ## 4. Immutable evidence manifest (WP-08 with C5, wave 3; not needed before)
 
@@ -128,14 +165,29 @@ CREATE TABLE public.evidence_manifests (
   purpose         text NOT NULL CHECK (purpose IN ('fabrication_instruction', 'service_acceptance', 'package_issue')),
   members         jsonb NOT NULL CHECK (jsonb_typeof(members) = 'array'),
   manifest_hash   text NOT NULL CHECK (manifest_hash ~ '^[0-9a-f]{64}$'),
+  -- SQ-1817 F14: the hash of the whole request binding, not only the members.
+  request_hash    text NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
   idempotency_key text NOT NULL,
   created_by      uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at      timestamptz NOT NULL DEFAULT now(),
   UNIQUE (project_id, idempotency_key),
-  UNIQUE (project_id, purpose, manifest_hash)
+  -- SQ-1817 F14: the package is part of the identity (PG 17, supabase/config.toml:31).
+  UNIQUE NULLS NOT DISTINCT (project_id, package_id, purpose, manifest_hash),
+  -- A fabrication instruction or a package issue always names its package.
+  CONSTRAINT evidence_manifests_package_required
+    CHECK (purpose = 'service_acceptance' OR package_id IS NOT NULL)
 );
 -- Immutable: reuse the plan-room blanket rejector pattern (00429:383-423).
 ```
+
+**Revision 2026-10-23 (SQ-1817 F14).** The original uniqueness `(project_id, purpose, manifest_hash)` and the hash-only replay are withdrawn:
+- `manifest_hash` covers only the members. Two packages in one job that cite the same issue set would collide, and C3 requires the manifest to belong to *its* package.
+- A replay that compared only `manifest_hash` could return a row bound to a different package or purpose.
+
+The rules now are:
+- `request_hash` = sha256 of `_plan_room_canonical_json({projectId, packageId, purpose, manifestHash})`, computed by the server.
+- Uniqueness is per `(project, package, purpose, members)`. The same members cited by two packages give two manifests, one per package.
+- Replay is judged on `request_hash`, not on `manifest_hash`.
 
 - **Member shape.** Each member is `{kind, id, version|rev, sha256}`. The allowed kinds are a closed list:
 
@@ -153,8 +205,15 @@ CREATE TABLE public.evidence_manifests (
 
   A member must be an immutable row. `plan_sheets.current_print_id` is mutable, so it is **never** a member. Cite the print or the issue print instead.
 - **Hash.** `manifest_hash` is the sha256 of `_plan_room_canonical_json(members sorted by kind, id)`. That reuses the existing canonicaliser (00429:625). The member hashes are copied in. Two manifests with the same hash are the same evidence, which is the same rule as `plan_issues.set_checksum` (00429:229).
-- **RPC.** `create_evidence_manifest(p_project_id uuid, p_package_id uuid, p_purpose text, p_members jsonb, p_idempotency_key text) RETURNS jsonb {manifestId, manifestHash, replayed}`, `SECURITY DEFINER SET search_path = public, pg_temp`. The server re-reads every member under a project check. A member from another project fails with `manifest_member_off_project`, and a member that is not in a frozen state fails with `manifest_member_not_frozen`. The server recomputes each member hash and never trusts a client-supplied one. On replay with the same key and the same hash it returns the original row. The same key with a different hash raises, as in 00429:164-165.
+- **RPC.** `create_evidence_manifest(p_project_id uuid, p_package_id uuid, p_purpose text, p_members jsonb, p_idempotency_key text) RETURNS jsonb {manifestId, manifestHash, replayed}`, `SECURITY DEFINER SET search_path = public, pg_temp`. The server re-reads every member under a project check. A member from another project fails with `manifest_member_off_project`, and a member that is not in a frozen state fails with `manifest_member_not_frozen`. The server recomputes each member hash and never trusts a client-supplied one.
+  - **Package binding (SQ-1817 F14).** When `p_package_id` is not NULL, the server reads the package row and refuses `manifest_package_off_project` unless `project_packages.project_id = p_project_id` and `archived_at IS NULL`. A NULL package for `fabrication_instruction` or `package_issue` raises `manifest_package_required`.
+  - **Replay (SQ-1817 F14).**
+    - The same key with the same `request_hash` returns the original row with `replayed: true`.
+    - The same key with a different `request_hash` raises `idempotency_key_reused`, as in 00429:164-165. That covers a different package, a different purpose or different members.
+    - A new key whose binding already exists returns the existing manifest with `replayed: true`. It is the same evidence for the same package and purpose.
+  - **Authority (SQ-1817 F2).** The caller must pass `can_compose_project_plan(p_project_id)` (§3). The consuming act may narrow it further.
 - **Activation.** `create_evidence_manifest` is created with `REVOKE ALL ... FROM PUBLIC, anon, authenticated` and is granted to `service_role` only. It is **inactive** until the consuming act (C3/C5 fabrication instruction, or C4 acceptance) is activated by its own reviewed migration, which grants EXECUTE. Until then nothing can mint evidence.
+  - **Revision 2026-10-23 (SQ-1817 F20).** The activation grants EXECUTE to `authenticated` only, never to `anon` or PUBLIC. It ships in the same reviewed migration that activates the consuming act. Rollback is the matching `REVOKE … FROM authenticated`. The SQL suite asserts effective privilege, not just the absence of a GRANT line: `has_function_privilege('anon', 'public.create_evidence_manifest(uuid,uuid,text,jsonb,text)', 'EXECUTE')` is false before and after activation, and the same check for `authenticated` is false before activation.
 - **Lock order.** Lock the `projects` row `FOR KEY SHARE`, then the package row `FOR SHARE`, then each member row `FOR SHARE` in (kind, id) order, then insert.
 - **Backfill.** None. Historical acts keep the evidence they already have (approval artifacts, PO snapshots). No manifest is fabricated for a past act.
 
@@ -163,7 +222,7 @@ CREATE TABLE public.evidence_manifests (
 | Consumer | Effect |
 |---|---|
 | Designer, legacy renderer | None. The join tables are additive and the holdings keys are additive. The `/pieces` route is unchanged |
-| Designer, round 8 | Reads `roomIds`/`packageIds` from holdings, and URL identities per §2 |
+| Designer, round 8 | Reads `sheetRooms`/`sheetPackages`/`packages` from the `usePlanRoom` bundle, not from holdings (SQ-1817 F18), and URL identities per §2 |
 | Client portal | Plan reads already go through the shared-sheet gate. New join rows are visible only for shared sheets. The client portal reads no package rows. Token links (`resolve_plan_transmittal`, 00429:1787) are unchanged |
 | iOS Patina | No change. It reads `room_scans`, `project_documents` and `get_client_project_selections`, never `plan_*` directly |
 | Field (Capture) | No change. `field_captures.project_room_id` is already the room identity |
@@ -172,15 +231,29 @@ CREATE TABLE public.evidence_manifests (
 
 - **SQL (WP-05).**
   - A link across projects is rejected.
-  - A client sees a link only for a shared sheet. A second studio that shares the designer sees nothing once the tenant leg exists.
+  - A client sees a link only for a shared sheet.
   - Repeating `set_plan_sheet_rooms` with the same set gives the same result.
   - `create_project_package` replay and conflicting replay.
+  - **Tenant matrix (SQ-1817 F2).** These cases hold from the first migration, not "once a tenant leg exists". Designer D is an active member of studios A and B. Job J records `studio_id = A`.
+    - An A member links sheets, creates a package and reads the join rows on J.
+    - A B-only member is refused by all three RPCs and reads zero join and package rows on J.
+    - A guest of A is refused.
+    - The job client is refused by every RPC and reads only links on shared sheets.
+    - On a studio-less job, D is allowed and an A or B co-member is refused.
+  - **All-sheets read (SQ-1817 F18).** A job with sheets linked to rooms and **zero** transmittals returns those links in the `usePlanRoom` bundle. `get_plan_room_holdings` output is byte-identical before and after the migration.
+  - **Privileges (SQ-1817 F20).** `has_function_privilege('anon', …, 'EXECUTE')` is false for every C1 function. It is also false for `authenticated` on the trigger function.
 - **SQL (WP-08).**
   - The manifest is immutable: UPDATE and DELETE are rejected.
   - A member from another project is rejected.
   - A mutable member is rejected.
   - Hash recomputation ignores a client-supplied hash.
-  - Direct EXECUTE by `authenticated` is denied while inactive (`42501`).
+  - Direct EXECUTE by `authenticated` is denied while inactive (`42501`). `has_function_privilege` shows the same for `anon` and `authenticated` (SQ-1817 F20).
+  - **Binding (SQ-1817 F14).**
+    - Packages P1 and P2 in one job cite the same members. That gives two manifests, each bound to its own package.
+    - Replaying P1's key with P2, with another purpose, or with other members raises `idempotency_key_reused`.
+    - A new key with P1's exact binding returns P1's manifest.
+    - A package from another project raises `manifest_package_off_project`.
+    - A NULL package for `fabrication_instruction` raises `manifest_package_required`.
 - **Jest (WP-01.4b).** URL parse/emit round-trip for `unfold`, `lens`, `room` and `line`. `land` is consumed once. The `ffeItemId` alias still lands.
 - **Playwright (WP-01.9).** Back and Forward walk unfold and close. A reload on `?unfold` reopens with no write replayed (first vertical slice, step 10).
 
