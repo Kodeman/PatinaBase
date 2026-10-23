@@ -185,6 +185,8 @@ describe('useProjectFFEItems configuration handoff', () => {
     expect(lifecycleSelection).toContain('delivered_date');
     expect(lifecycleSelection).toContain('payments:po_payments(');
     expect(lifecycleSelection).toContain('tracking_number');
+    expect(lifecycleSelection).toContain('created_by, ship_to');
+    expect(lifecycleSelection).toContain('creator:profiles!purchase_orders_created_by_fkey(display_name, full_name)');
   });
 
 

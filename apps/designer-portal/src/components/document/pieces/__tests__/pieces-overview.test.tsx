@@ -16,12 +16,17 @@ import {
   type OverviewPlacement,
 } from '@/lib/document/pieces/overview-derivation';
 
+let mockMembers: unknown[] = [];
+let mockProjectState = { data: { studio_id: 'job-studio' } as { studio_id: string } | null, isPending: false, isError: false };
+let mockMemberState = { isPending: false, isError: false };
 let mockPlacements: OverviewPlacement[] = [];
 let mockPalettes: Array<{ scope_room_id: string | null; swatches: unknown }> = [];
 
 jest.mock('@patina/supabase', () => ({
   useProjectRoomPlacements: () => ({ data: mockPlacements }),
   useProjectPalettes: () => ({ data: mockPalettes }),
+  useProjectV2: () => mockProjectState,
+  useOrganizationMembers: () => ({ data: mockMembers, ...mockMemberState }),
 }));
 // The overview never reads a flag: `one-voice` and `ask-the-paper` are not
 // branched on here. A read would throw.
@@ -412,5 +417,68 @@ describe('<PiecesOverview>', () => {
     );
     expect(keys[0]).toBe('bedroom');
     expect(row('bedroom')).toHaveClass('doc-room-lifted');
+  });
+});
+
+
+describe('P-01 truthful purchasing overview', () => {
+  const pieces = [
+    { ...placeholder('chairs', 'living', 6, 100), name: 'Dining chairs', unit: 'each',
+      purchase_order: { status: 'draft', created_by: 'buyer', ship_to: 'Receiving warehouse\n12 Main St',
+        creator: { display_name: 'Morgan', full_name: 'Morgan Buyer' } } },
+    { ...placeholder('rug', 'living', 1, 100), name: 'Rug' },
+  ];
+  function show(lines = pieces) {
+    return render(<PiecesOverview projectId="project-1" docId="doc-1" lines={lines}
+      rooms={ROOMS} job={deriveOverviewJob(lines)} onAddLine={jest.fn()} renderLines={() => null} />);
+  }
+  beforeEach(() => { window.localStorage.clear(); mockPlacements = []; mockPalettes = []; mockMembers = []; });
+
+  it('shows quantity, the PO destination snapshot and creator while the room is collapsed', () => {
+    show();
+    const room = document.querySelector('[data-pieces-room="living"]') as HTMLElement;
+    expect(within(room).getByRole('button', { name: 'Living Room' })).toHaveAttribute('aria-expanded', 'false');
+    expect(within(room).getByText('Dining chairs · Quantity 6')).toBeInTheDocument();
+    expect(within(room).getByText(/Receiving warehouse/)).toHaveTextContent('12 Main St');
+    expect(within(room).getByText('Next: Morgan')).toBeInTheDocument();
+  });
+
+  it('names missing destination and owner without inventing a job-site default', () => {
+    show();
+    expect(screen.getByText('No destination yet')).toBeInTheDocument();
+    expect(screen.getByText('Next: Owner not named')).toBeInTheDocument();
+  });
+
+  it('hands a held order to the active studio owner, not its creator or invited owner', () => {
+    mockMembers = [
+      { role: 'owner', status: 'active', profiles: { display_name: 'Leah', full_name: 'Leah Owner' } },
+      { role: 'owner', status: 'invited', profiles: { display_name: 'Invited' } },
+    ];
+    const held = [{ ...pieces[0], purchase_order: { ...pieces[0].purchase_order!, status: 'held_for_release' } }];
+    const view = show(held);
+    const refresh = () => view.rerender(<PiecesOverview projectId="project-1" docId="doc-1" lines={held} rooms={ROOMS} job={deriveOverviewJob(held)} onAddLine={jest.fn()} renderLines={() => null} />);
+    expect(screen.getByText('Next: Leah')).toBeInTheDocument();
+    expect(screen.queryByText('Next: Morgan')).not.toBeInTheDocument();
+    expect(screen.queryByText('Invited')).not.toBeInTheDocument();
+    mockMembers = [];
+    refresh();
+    expect(screen.getByText('Next: Studio owner not named')).toBeInTheDocument();
+    mockMemberState.isPending = true;
+    refresh();
+    expect(screen.getByText('Next: Reading studio owner…')).toBeInTheDocument();
+    mockMemberState.isError = true;
+    refresh();
+    expect(screen.getByText('Next: Studio owner unavailable')).toBeInTheDocument();
+    mockProjectState.isPending = true;
+    refresh();
+    expect(screen.getByText('Next: Reading studio owner…')).toBeInTheDocument();
+    mockProjectState.isError = true;
+    refresh();
+    expect(screen.getByText('Next: Studio owner unavailable')).toBeInTheDocument();
+    mockProjectState = { data: null, isPending: false, isError: false };
+    refresh();
+    expect(screen.getByText('Next: Studio owner not named')).toBeInTheDocument();
+    mockProjectState = { data: { studio_id: 'job-studio' }, isPending: false, isError: false };
+    mockMemberState = { isPending: false, isError: false };
   });
 });

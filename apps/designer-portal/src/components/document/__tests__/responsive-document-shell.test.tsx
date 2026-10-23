@@ -622,7 +622,7 @@ const SPREAD_STAGE: Record<
  *  its room rungs (Override 2) and line 1 can be proved never to name it. */
 const READING_STOP = {
   key: 'ffe' as const,
-  label: 'Pieces',
+  label: 'Pieces & purchasing',
   countLine: '3 lines · 2 rooms',
 };
 
@@ -655,7 +655,7 @@ function bandModelFor(section: 'project' | 'install' | 'care'): LensBandModel {
 function piecesSegment(heldRoomId: string | null): LadderSegment {
   return {
     key: 'ffe',
-    name: 'Pieces',
+    name: 'Pieces & purchasing',
     value: '3 LINES · 2 ROOMS',
     narrowValue: '3 LINES · 2 ROOMS',
     countLine: READING_STOP.countLine,

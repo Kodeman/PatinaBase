@@ -32,6 +32,7 @@ export function PiecesOverviewRow({
   returned = false,
   lifted = false,
   wallSwatch = null,
+  purchasingFacts,
   onToggle,
   onAddLine,
   children,
@@ -46,6 +47,7 @@ export function PiecesOverviewRow({
   lifted?: boolean;
   /** S8 — the room's wall finish, from the Finishes lens. */
   wallSwatch?: RoomFinish | null;
+  purchasingFacts?: ReactNode;
   onToggle: () => void;
   onAddLine: () => void;
   /** The room's lines, rendered while it is open. */
@@ -117,6 +119,7 @@ export function PiecesOverviewRow({
           )}
         </div>
       </div>
+      {purchasingFacts}
       {open && (
         <RoomBody id={bodyId} onCloseWithFocus={() => (focusLeftWithBody.current = true)}>
           {children}

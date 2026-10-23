@@ -160,7 +160,7 @@ afterEach(() => {
 describe('US-43 R4 — the FF&E head elects its lead from the work’s state', () => {
   it('priced: leads with the release ceremony, saying nothing is released', () => {
     renderProject();
-    expect(head()).toHaveTextContent('The selections are priced. Nothing is released.');
+    expect(head()).toHaveTextContent('Purchasing authorization is ready to prepare.');
     expect(leads()).toHaveLength(1);
     const lead = leads()[0];
     expect(lead).toHaveAttribute('data-action-key', 'release-for-authorization');
@@ -212,7 +212,7 @@ describe('US-43 R4 — the FF&E head elects its lead from the work’s state', (
   it('held: a release held by its prerequisite elects no lead and keeps its reason', () => {
     mockAuthority = { data: null };
     renderProject();
-    expect(head()).toHaveTextContent('Selections are ready, but purchasing authorization is held.');
+    expect(head()).toHaveTextContent('Purchasing authorization is held.');
     expect(leads()).toHaveLength(0);
     const release = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
     expect(release).toHaveAttribute('data-action-variant', 'secondary');
@@ -233,7 +233,7 @@ describe('US-43 R4 — the FF&E head elects its lead from the work’s state', (
       'open-add-to-project',
       'ffe-more',
     ]);
-    expect(screen.getByRole('link', { name: /Edit selections/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Edit pieces & purchasing/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add items' })).toBeInTheDocument();
   });
 });

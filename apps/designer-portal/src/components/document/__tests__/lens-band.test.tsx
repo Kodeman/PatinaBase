@@ -570,7 +570,7 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
   it('never announces a stop the sentence has since turned past (C-11)', async () => {
     const readingStop = {
       key: 'ffe' as const,
-      label: 'Pieces',
+      label: 'Pieces & purchasing',
       countLine: '36 lines · 4 rooms · 1 damaged',
     };
     const announce = () => line('2').querySelector('[data-lens-announce]');
@@ -786,7 +786,7 @@ describe('LensBand · the one live region (OD-7)', () => {
     key === 'ffe'
       ? {
           key,
-          label: 'Pieces',
+          label: 'Pieces & purchasing',
           countLine: '36 lines · 4 rooms · 1 damaged',
         }
       : { key, label: 'Money', countLine: '$17,500 out · $12,300 not drawn' };

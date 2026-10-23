@@ -156,7 +156,7 @@ describe('deriveTicket — eight rows, always', () => {
     const rows = deriveTicket(emptyInput());
     expect(rows.map((row) => row.label)).toEqual([
       'Rooms',
-      'Pieces',
+      'Pieces & purchasing',
       'Drawings',
       'Spec',
       'Boards',
@@ -792,7 +792,7 @@ describe('deriveTicketSeam', () => {
         },
         {
           key: 'pieces',
-          label: 'Pieces',
+          label: 'Pieces & purchasing',
           value: '',
           emphasis: null,
           door: { kind: 'unfold-region', region: 'ffe' },

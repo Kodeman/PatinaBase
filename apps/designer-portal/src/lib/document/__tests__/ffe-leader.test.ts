@@ -196,7 +196,7 @@ describe('ffeStateSentence — one plain sentence per state', () => {
     ffeStateSentence(electFfeLeader(input(over)), released);
 
   it('says the selections are priced and nothing is released (the pilot’s priced state)', () => {
-    expect(sentence({ releaseLift: true })).toBe('The selections are priced. Nothing is released.');
+    expect(sentence({ releaseLift: true })).toBe('Purchasing authorization is ready to prepare.');
   });
 
   it('names a missing price, the client’s turn and a held release', () => {
@@ -207,7 +207,7 @@ describe('ffeStateSentence — one plain sentence per state', () => {
       '2\u00a0selections are with the client for purchasing approval.',
     );
     expect(sentence({ releaseHeld: true })).toBe(
-      'Selections are ready, but purchasing authorization is held.',
+      'Purchasing authorization is held.',
     );
   });
 
