@@ -8,6 +8,13 @@
 - **F14** (§4 table, §4 RPC, §6): manifest dedupe and replay include the package, the purpose and the full request.
 - **F18** (§3 Read model, §5): the all-sheets read is the `usePlanRoom` bundle, not `get_plan_room_holdings`.
 - **F20** (§3 Activation, §4 Activation, §6): every function states its revokes for all three roles, with effective-privilege tests.
+
+**Revision 2026-10-23 (SQ-1856, answering the SQ-1851 re-review at `6ac0c5acc47c`).** Marked inline with `SQ-1851 R#`:
+- **R1 / R16** (§3 `package_key`): C1 no longer derives a key from the display code. The one canonical key is the signed draft's `pkg.<slug>`, allocated and normalized by C2 §2.2a. C1 copies it from the edition, once, and never invents one.
+- **R17** (§3 Writes): required parameters come before every DEFAULT parameter.
+- **R13** (§4): every accepted manifest idempotency key, original or alias, is a persisted receipt.
+- **R18** (§4): the immutable manifest's actor column uses `ON DELETE RESTRICT`, which is compatible with its immutability.
+
 **Serves:** A01, A02, A05, A08, A09, A15, A16, A17, X01, X09, X10. It also feeds C3 (fabrication instruction evidence), C4 (acceptance evidence) and C5 (package contents).
 
 **Citation rule.** `NNNNN:L` means `supabase/migrations/NNNNN_*.sql` line `L`. `DP` means `apps/designer-portal/src`, and `SB` means `packages/supabase/src`. "Today" means the inspected source. Nothing here claims what is deployed on Strata.
@@ -77,8 +84,10 @@ CREATE TABLE public.project_packages (
   id              uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
   project_id      uuid NOT NULL REFERENCES public.projects(id) ON DELETE RESTRICT,
   package_kind    text NOT NULL CHECK (package_kind IN ('cabinetry', 'build')),
-  code            text NOT NULL CHECK (length(btrim(code)) BETWEEN 1 AND 32),   -- e.g. 'K'
-  package_key     text NOT NULL CHECK (package_key ~ '^[a-z0-9][a-z0-9_-]{0,63}$'), -- immutable; see below
+  code            text NOT NULL CHECK (length(btrim(code)) BETWEEN 1 AND 32),   -- e.g. 'K'; display label only
+  -- SQ-1851 R1: the C2 canonical key (C2 §2.2a), copied from an edition, set at most once. NULL = not in agreed scope.
+  package_key     text CHECK (package_key IS NULL
+                              OR package_key ~ '^pkg\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'),
   title           text NOT NULL CHECK (length(btrim(title)) BETWEEN 1 AND 200),
   project_room_id uuid REFERENCES public.project_rooms(id) ON DELETE SET NULL,  -- optional home room
   created_by      uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -89,7 +98,7 @@ CREATE UNIQUE INDEX uniq_project_packages_code
   ON public.project_packages (project_id, upper(btrim(code))) WHERE archived_at IS NULL;
 -- Never reused within a job, archived rows included: an edition that names a key must never resolve to a later package.
 CREATE UNIQUE INDEX uniq_project_packages_key
-  ON public.project_packages (project_id, package_key);
+  ON public.project_packages (project_id, package_key) WHERE package_key IS NOT NULL;
 
 -- Sheet ↔ room. Many-to-many.
 CREATE TABLE public.plan_sheet_rooms (
@@ -114,17 +123,27 @@ CREATE TABLE public.plan_sheet_packages (
 - **Writes.** Only through `SECURITY DEFINER SET search_path = public, pg_temp` RPCs. `authenticated` gets SELECT only on these tables, and INSERT/UPDATE/DELETE are revoked:
   - `set_plan_sheet_rooms(p_sheet_id uuid, p_project_room_ids uuid[]) RETURNS jsonb` replaces the set and returns `{sheetId, roomIds[]}`. It is naturally idempotent because the same set gives the same result.
   - `set_plan_sheet_packages(p_sheet_id uuid, p_package_ids uuid[]) RETURNS jsonb` works the same way.
-  - `create_project_package(p_project_id uuid, p_kind text, p_code text, p_title text, p_project_room_id uuid DEFAULT NULL, p_idempotency_key text) RETURNS public.project_packages` replays on `(project_id, idempotency_key)` the way `plan_print_batches` does (00429:139-165). That needs an `idempotency_key text` and `request_hash text` column pair on `project_packages`, with `UNIQUE(project_id, idempotency_key)`.
-- **`package_key` (Revision 2026-10-23, orchestrator, closing the C1↔C2 seam left open by SQ-1850).**
-  - C2 §2.4a fixes the package identity shared by C1, C3, C5 and C6 as `(project_id, package_key)`. C5 §3.4 reaches `public.assert_fabrication_instruction_authority` (C3 §3.2) by resolving that key to this row's `id`.
-  - `create_project_package` derives `package_key` on the server, once, from `lower(btrim(p_code))`. Any character outside `[a-z0-9_-]` becomes `-`. On a collision with any row in the job, archived rows included, it appends `-2`, `-3`, and so on.
-  - The key is never a caller argument, and no RPC updates it. A `BEFORE UPDATE` trigger raises `package_key_immutable` when `package_key` or `project_id` changes.
+  - `create_project_package(p_project_id uuid, p_kind text, p_code text, p_title text, p_idempotency_key text, p_project_room_id uuid DEFAULT NULL, p_package_key text DEFAULT NULL) RETURNS public.project_packages` replays on `(project_id, idempotency_key)` the way `plan_print_batches` does (00429:139-165). That needs an `idempotency_key text` and `request_hash text` column pair on `project_packages`, with `UNIQUE(project_id, idempotency_key)`. The request hash covers every argument, `p_package_key` included. **SQ-1851 R17:** the required `p_idempotency_key` precedes every DEFAULT parameter; PostgreSQL rejects a required input after a defaulted one.
+  - `bind_project_package_key(p_package_id uuid, p_package_key text) RETURNS public.project_packages` sets the key on a package created without one (§ `package_key` below). It is naturally idempotent: the same key on the same row returns the row.
+- **`package_key` (Revision 2026-10-23, SQ-1856 answering SQ-1851 R1 and R16; replaces the orchestrator's code-derived key of `6ac0c5acc`).**
+  - **Why the code-derived key is withdrawn.** It derived `k` from code `K` and forbade dots, while the signed draft and the edition carry `pkg.kitchen-cabinetry` (C2 §2.2). The two could never be equal, so no signed package could reach a C1 row, C5 or the fabrication gate (R1). Its normalization could also produce an invalid key from a leading separator, such as `#K` → `-k` (R16).
+  - **One canonical key.** The key format, the allocation and the normalization are defined once, in C2 §2.2a: `pkg.<slug>`, allocated on the server when the package first appears in a draft, signed with the agreement parts, frozen into `project_scope_edition_packages.package_key`, and carried unchanged by every later edition. C1 never derives, normalizes or allocates a key. It only copies one that an edition already holds.
+  - **How a C1 row gets its key.** Either `create_project_package` with `p_package_key`, or `bind_project_package_key` on a row whose key is NULL. Both, under the §3 lock order:
+    - refuse a key that is not a package of the job's `active` scope edition (`package_key_not_in_edition`). A `stale` edition counts as none (C2 §2.8);
+    - refuse a key already held by another row of the job, archived rows included (`package_key_taken`);
+    - refuse a different key on a row that already has one (`package_key_immutable`).
+    A `BEFORE UPDATE` trigger also raises `package_key_immutable` when `project_id` changes, or when `package_key` changes from any non-NULL value. NULL → key is the one permitted transition, and only `bind_project_package_key` performs it.
+  - **NULL key.** A package created only to group drawings, with no `p_package_key`, has `package_key IS NULL`. It is composition, not agreed scope: no C2, C3, C5 or C6 rule treats it as included, and the fabrication gate refuses it (C3 §3.2).
+  - **Resolution.** A frozen edition key resolves to **at most one** C1 row, by `(project_id, package_key)`. Zero rows means the package has not been composed yet, and the C5 fabrication route refuses (`fabrication_instruction_binding`). There is never more than one.
+  - **Archived rows (SQ-1851 seam ruling, retained).** The key index includes archived rows, so an archived package keeps its key forever and no later row can take it. A C2/C5/C6 read whose key resolves to an archived package treats it as present-but-archived: identity and history only. It is never an implicit exclusion, it never removes an agreed obligation (C6 derives from edition keys, not from `archived_at`), and it never re-binds. Restoring a package means clearing `archived_at` on the same row, so the UUID and key survive. The fabrication gate refuses an archived package (C3 §3.2).
   - `code` stays the editable display label. Renaming or re-using a code never moves a key.
-  - Because the key index includes archived rows, an edition that froze key `k` can never resolve to a package created later. A C2/C5/C6 read whose key resolves to an archived package treats it as present-but-archived. It never treats it as absent, and it never re-binds.
+  - **Before C2 lands.** If WP-05 ships before the C2 tables exist, `p_package_key` must be NULL and `bind_project_package_key` is not created. Whichever of the two migrations lands second creates the bind RPC and the edition check.
   - Tests the WP-05 slice adds:
-    - the key is server-derived and immutable on update;
-    - archive then re-create with the same code yields a distinct key;
-    - the C5 route refuses `fabrication_instruction_binding` for an unknown key.
+    - a key not in the active edition is refused, as is a key on a job whose latest edition is `stale`;
+    - a bound key cannot be changed, and NULL → key happens once;
+    - archive a package bound to `pkg.k`, then create a new package with the same code: it succeeds, but binding `pkg.k` to it is refused (`package_key_taken`);
+    - a C2 signed key such as `pkg.kitchen-cabinetry` binds unchanged, and the C5 route resolves it to that row;
+    - the C5 route refuses `fabrication_instruction_binding` for a key with no C1 row.
 - **Authority: tenant first (Revision 2026-10-23, SQ-1817 F2).** The original text reused `is_design_studio_comember(projects.designer_id)` (00429:2047-2054) and made the tenant leg conditional on a future `plan_sheets` repair. That is withdrawn. `is_design_studio_comember` (00399:1164-1193) is true for a member of *any* active design studio the designer also belongs to. So with designer D in studios A and B, a B-only member could link sheets and create packages on A's job. Every new C1 RPC and every studio read policy on the three new tables uses one predicate that reads the studio from the job's **record**:
   ```sql
   CREATE FUNCTION public.can_compose_project_plan(p_project_id uuid) RETURNS boolean
@@ -162,7 +181,7 @@ CREATE TABLE public.plan_sheet_packages (
 - **Backfill.** None. Existing sheets start with no room and no package. Unknown stays unknown: the Design chapter shows unlinked sheets under "Drawings for the whole job" and never guesses a room from a title or sheet number.
 - **Activation.** Not consequential: these RPCs record composition, not authority. They ship active behind the renderer flag in the UI. They are listed here so reviewers see that no deny-by-default gate was skipped on purpose.
 - **Explicit privileges (Revision 2026-10-23, SQ-1817 F20).** Shipping active is not the same as relying on defaults. The stack's `ALTER DEFAULT PRIVILEGES` gives `anon` and `authenticated` EXECUTE on every function created in `public` (00654:209-214). 00483:258-262 removes only the PUBLIC default. So every C1 function states all three roles:
-  - The three composition RPCs: `REVOKE ALL … FROM PUBLIC, anon, authenticated; GRANT EXECUTE … TO authenticated, service_role`.
+  - The four composition RPCs (the three above plus `bind_project_package_key`, SQ-1851 R1): `REVOKE ALL … FROM PUBLIC, anon, authenticated; GRANT EXECUTE … TO authenticated, service_role`. All four call `can_compose_project_plan` on the target job first.
   - `can_compose_project_plan`: as shown above.
   - The same-project trigger function: `REVOKE ALL … FROM PUBLIC, anon, authenticated`, with no grant.
   - Tables: `REVOKE ALL … FROM PUBLIC, anon, authenticated; GRANT SELECT … TO authenticated; GRANT ALL … TO service_role`.
@@ -181,8 +200,9 @@ CREATE TABLE public.evidence_manifests (
   manifest_hash   text NOT NULL CHECK (manifest_hash ~ '^[0-9a-f]{64}$'),
   -- SQ-1817 F14: the hash of the whole request binding, not only the members.
   request_hash    text NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
-  idempotency_key text NOT NULL,
-  created_by      uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  idempotency_key text NOT NULL,                      -- the minting key; every accepted key is in the receipts below
+  -- SQ-1851 R18: an immutable row cannot take ON DELETE SET NULL (the FK action is an UPDATE the rejector refuses).
+  created_by      uuid NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
   created_at      timestamptz NOT NULL DEFAULT now(),
   UNIQUE (project_id, idempotency_key),
   -- SQ-1817 F14: the package is part of the identity (PG 17, supabase/config.toml:31).
@@ -192,7 +212,21 @@ CREATE TABLE public.evidence_manifests (
     CHECK (purpose = 'service_acceptance' OR package_id IS NOT NULL)
 );
 -- Immutable: reuse the plan-room blanket rejector pattern (00429:383-423).
+
+-- SQ-1851 R13: one receipt per accepted idempotency key, original or alias (the 00474:172-178 pattern).
+CREATE TABLE public.evidence_manifest_requests (
+  project_id      uuid NOT NULL REFERENCES public.projects(id) ON DELETE RESTRICT,
+  idempotency_key text NOT NULL,
+  request_hash    text NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
+  manifest_id     uuid NOT NULL REFERENCES public.evidence_manifests(id) ON DELETE RESTRICT,
+  created_by      uuid NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (project_id, idempotency_key)
+);
+-- Immutable and append-only, with the same rejector. Same RLS and grants as evidence_manifests.
 ```
+
+**Actor retention (SQ-1851 R18).** The plan-room rejector refuses every UPDATE, and a referential `ON DELETE SET NULL` is executed as an UPDATE. So an immutable row's actor column is `NOT NULL … ON DELETE RESTRICT`, the pattern 00835 uses for `attested_by` (00835:12) and 00412 for `signer_user_id` (00412:102). A profile that minted evidence cannot be hard-deleted while the evidence exists; account removal deactivates the profile instead. The mutable C1 tables in §3 keep `ON DELETE SET NULL`, because they have no immutability trigger.
 
 **Revision 2026-10-23 (SQ-1817 F14).** The original uniqueness `(project_id, purpose, manifest_hash)` and the hash-only replay are withdrawn:
 - `manifest_hash` covers only the members. Two packages in one job that cite the same issue set would collide, and C3 requires the manifest to belong to *its* package.
@@ -221,10 +255,11 @@ The rules now are:
 - **Hash.** `manifest_hash` is the sha256 of `_plan_room_canonical_json(members sorted by kind, id)`. That reuses the existing canonicaliser (00429:625). The member hashes are copied in. Two manifests with the same hash are the same evidence, which is the same rule as `plan_issues.set_checksum` (00429:229).
 - **RPC.** `create_evidence_manifest(p_project_id uuid, p_package_id uuid, p_purpose text, p_members jsonb, p_idempotency_key text) RETURNS jsonb {manifestId, manifestHash, replayed}`, `SECURITY DEFINER SET search_path = public, pg_temp`. The server re-reads every member under a project check. A member from another project fails with `manifest_member_off_project`, and a member that is not in a frozen state fails with `manifest_member_not_frozen`. The server recomputes each member hash and never trusts a client-supplied one.
   - **Package binding (SQ-1817 F14).** When `p_package_id` is not NULL, the server reads the package row and refuses `manifest_package_off_project` unless `project_packages.project_id = p_project_id` and `archived_at IS NULL`. A NULL package for `fabrication_instruction` or `package_issue` raises `manifest_package_required`.
-  - **Replay (SQ-1817 F14).**
-    - The same key with the same `request_hash` returns the original row with `replayed: true`.
-    - The same key with a different `request_hash` raises `idempotency_key_reused`, as in 00429:164-165. That covers a different package, a different purpose or different members.
-    - A new key whose binding already exists returns the existing manifest with `replayed: true`. It is the same evidence for the same package and purpose.
+  - **Replay (SQ-1817 F14; receipts per SQ-1851 R13).** Every decision reads `evidence_manifest_requests` first, under the §4 lock order, and every accepted call leaves exactly one receipt for its key.
+    - A key with a receipt and the same `request_hash` returns that receipt's manifest with `replayed: true`.
+    - A key with a receipt and a different `request_hash` raises `idempotency_key_reused`, as in 00429:164-165. That covers a different package, a different purpose or different members.
+    - A new key whose binding already exists returns the existing manifest with `replayed: true`, **and inserts a receipt for the new key** pointing at that manifest. It is the same evidence for the same package and purpose. Without that receipt, key B could later be reused for different evidence and mint instead of refusing (R13).
+    - A new key with a new binding mints the manifest and its receipt in the same statement sequence.
   - **Authority (SQ-1817 F2).** The caller must pass `can_compose_project_plan(p_project_id)` (§3). The consuming act may narrow it further.
 - **Activation.** `create_evidence_manifest` is created with `REVOKE ALL ... FROM PUBLIC, anon, authenticated` and is granted to `service_role` only. It is **inactive** until the consuming act (C3/C5 fabrication instruction, or C4 acceptance) is activated by its own reviewed migration, which grants EXECUTE. Until then nothing can mint evidence.
   - **Revision 2026-10-23 (SQ-1817 F20).** The activation grants EXECUTE to `authenticated` only, never to `anon` or PUBLIC. It ships in the same reviewed migration that activates the consuming act. Rollback is the matching `REVOKE … FROM authenticated`. The SQL suite asserts effective privilege, not just the absence of a GRANT line: `has_function_privilege('anon', 'public.create_evidence_manifest(uuid,uuid,text,jsonb,text)', 'EXECUTE')` is false before and after activation, and the same check for `authenticated` is false before activation.
@@ -266,6 +301,8 @@ The rules now are:
     - Packages P1 and P2 in one job cite the same members. That gives two manifests, each bound to its own package.
     - Replaying P1's key with P2, with another purpose, or with other members raises `idempotency_key_reused`.
     - A new key with P1's exact binding returns P1's manifest.
+    - **Alias receipt (SQ-1851 R13).** Key A mints M. Key B with M's binding returns M and leaves a receipt for B. B then sent with different members raises `idempotency_key_reused` and mints nothing. Replaying A or B with the original binding returns M.
+    - **Actor retention (SQ-1851 R18).** Deleting a profile that created a manifest or receipt fails on the FK (`RESTRICT`); the manifest is unchanged.
     - A package from another project raises `manifest_package_off_project`.
     - A NULL package for `fabrication_instruction` raises `manifest_package_required`.
 - **Jest (WP-01.4b).** URL parse/emit round-trip for `unfold`, `lens`, `room` and `line`. `land` is consumed once. The `ffeItemId` alias still lands.

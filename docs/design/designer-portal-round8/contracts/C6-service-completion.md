@@ -5,6 +5,11 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 
 **Revision 2026-10-23 (SQ-1850).** Answers the SQ-1817 frontier review at `4952624a16d1` for findings F3 (§2.2, §2.3, §2.4, §2.11, §3: one coherent transition per K3 option; K3 stays **OPEN**), F7 (§2.5: a shared exclusion protocol across contributing writers, replacing the FOR SHARE snapshot), the F10 blocker bindings (§2.3), and the F8 suspension and F20 revoke rules (§2.7). The review's adjudication stands: C6 writes no `projects` column and fires no freeze.
 
+**Revision 2026-10-23 (SQ-1856).** Answers the SQ-1851 re-review at `6ac0c5acc`:
+- **R8** (§2.3): studio installation and studio design bind whoever buys. An included package with `installation = 'studio'` blocks until every member line, external lines included, is `installed` and every live fulfilment on it has a verified `installed` event. A `design = 'studio'` package is discharged only by the edition's agreed phases.
+- **R10** (§2.3): a line or fulfilment whose package key is not in the active edition blocks (`package_key_not_in_edition`), next to the NULL-key blocker. C2 §2.2a also stops an amendment from dropping a key.
+- **R20** (§2.2, §2.3, §2.5): the financial hold is informational and read as of the derivation. It is outside the obligation hash and outside the §2.5 exclusion promise.
+
 ## 1. Existing contract that must not change
 
 | Fact | Evidence |
@@ -56,7 +61,7 @@ None of the first three may write `projects.status`, `closure_checklist` or `por
 - `state`: `completed`, or `completed_with_conditions` under K3 option A only (§2.4);
 - `obligation_snapshot`, a jsonb of the derived blockers and informational items at completion time, plus its hash;
 - `open_condition_ids` (uuid[]), the acceptance conditions still unresolved at completion. Always empty under K3 option B;
-- `financial_hold` (jsonb, informational, §2.3);
+- `financial_hold` (jsonb, informational, §2.3). It is an as-of-read display copy. It is **not** part of `obligation_snapshot` or its hash (SQ-1851 R20);
 - `completed_by`, `completed_at`;
 - `revoked_at`, `revoked_by`, `revoke_reason`, for an authorized correction only.
 
@@ -85,7 +90,12 @@ Constraints:
 **Blockers.** Included studio obligations only, per the active edition. Every join is the canonical one in C2 §2.4a (F10); nothing is inferred:
 - Agreed phases (`project_scope_edition_phases` of the active edition) whose bound `project_phases` row is not `completed`. An agreed phase with no bound project phase, or a binding to a deleted row, is the blocker `agreed_phase_unbound` (fails closed).
 - Live studio FF&E lines that are not `installed`, in packages with `inclusion='included'` and `purchasing='studio'`. Membership is `project_ffe_items.scope_package_key`. "Live studio line" means no `external_fulfilment_id` and no `trade_scope_document_id`, excluding removed, `not_selected` and `superseded` lines (the live-line rule of `supabase/migrations/00835_external_signed_agreements.sql:1408-1413`).
+- **Studio installation, whoever buys (SQ-1851 R8).** In a package with `inclusion='included'` and `installation='studio'`, whatever its `purchasing` and `payer`:
+  - every live member line that is not `installed` blocks (`studio_installation_open`). This includes external lines, whose membership is their fulfilment's package (C5 §3.2). Lines with a `trade_scope_document_id` are excluded, because trade acceptance is its own act (§2.1);
+  - every `project_external_fulfilments` row on that package that is not `cancelled` and has no **verified** `installed` event blocks (`studio_installation_open`). A reported-only install does not discharge it.
+- **Studio design, whoever buys (SQ-1851 R8).** A package with `inclusion='included'` and `design='studio'` is discharged by the agreed-phase blocker above and by acceptance. If the active edition has no agreed phase at all, it blocks (`studio_design_unphased`). Nothing infers a design obligation from purchasing.
 - A live studio FF&E line with a NULL `scope_package_key`: blocker `ffe_unassigned_to_package`. Membership is never inferred from room, label or category.
+- **Unknown key (SQ-1851 R10).** A live FF&E line (studio or external) or a non-cancelled fulfilment whose non-NULL package key is not a package of the active edition: blocker `package_key_not_in_edition`, with the key. C2 §2.2a makes this unreachable through amendments, which can only set a package to `excluded`. The blocker covers fixtures, legacy rows and any writer that bypasses C2, so a key that misses the included join never passes silently.
 - Open acceptance conditions: a blocker under K3 option B only (`acceptance_condition_open`). Under option A they are reported as `conditions` and do not block (§2.4, F3).
 - Unresolved studio-owned `client_decisions` and scope-change requests. These use the same terminal-state definitions as `close_project` (`00399:7380-7424`).
 - Acceptance not `accepted` or `accepted_with_conditions`. Acceptance is mandatory (R8-04).
@@ -93,7 +103,7 @@ Constraints:
 
 **Informational (never blockers):**
 - Excluded or `conditional`-excluded packages.
-- External fulfilment status (C5).
+- External fulfilment purchase, receipt and contract status (C5). The installation status of a fulfilment in a studio-installed package is a blocker above, not informational.
 - Trade-scope progress.
 - Open install punch items (consistent with `closure-derivation.ts:120`, C-34).
 
@@ -101,6 +111,7 @@ Constraints:
 - Computed with the same invoice-truth arithmetic as `close_project` (`00399:7534-7591`).
 - It is displayed separately and does **not** block service completion (K3 recommendation).
 - It continues to block `close_project`, unchanged.
+- **As of read (SQ-1851 R20).** `financialHold` is excluded from the obligation hash that `complete_studio_service` compares, and from the §2.5 exclusion. Invoice and payment writers take no service-obligation lock. The stored `financial_hold` is a copy read in the completion transaction; a payment that commits a moment later does not make it wrong, and does not make the completion stale.
 
 ### 2.4 RPCs
 
@@ -158,6 +169,7 @@ So a new live studio line could be placed into an included package after the com
   - `project_scope_editions` and its child tables (C2);
   - the four C4 tables, and `service_acceptance_condition_resolutions`;
   - `project_external_fulfilments` and their events (C5).
+  Invoice, payment and milestone tables are **not** on this list (SQ-1851 R20). The financial hold is outside the promise below (§2.3).
   A trigger, not a list of RPCs, covers every writer, including direct table writes through RLS (`project_ffe_items_studio_rw`), the placement core and future writers. Shared holders never block each other, so ordinary editing gains no new contention.
 - **Completion takes it exclusive, last.** `complete_studio_service` locks in this order:
   1. `projects` FOR SHARE. This serializes with `close_project`'s FOR UPDATE (`00399:7339-7346`) and with the C2, C4 and C5 paths that take `projects` FOR UPDATE.
@@ -168,7 +180,7 @@ So a new live studio line could be placed into an included package after the com
   6. **Then**, in a later statement, the derivation, the hash comparison and the insert. The RPC is VOLATILE and runs under READ COMMITTED, so step 6 reads a snapshot taken after step 5 was granted. If the transaction runs at REPEATABLE READ or above, the RPC refuses (`serialization_failure`), because its snapshot would predate the lock.
 - `resolve_service_acceptance_condition` uses the same order, through step 5, under option A after completion. Under option B it is a plain contributing writer.
 
-**Result.** Completion and any contributing write are totally ordered. Either the write commits first, and completion sees it (a new blocker refuses, or the hash goes stale), or completion commits first and the write lands afterwards against a completed service. A later write never revokes a completion silently; revocation stays an explicit owner/admin act (§2.4).
+**Result.** Completion and any contributing write are totally ordered. This covers every blocker and the obligation hash, not the financial hold (§2.3). Either the write commits first, and completion sees it (a new blocker refuses, or the hash goes stale), or completion commits first and the write lands afterwards against a completed service. A later write never revokes a completion silently; revocation stays an explicit owner/admin act (§2.4).
 
 **Deadlock freedom.** Completion takes no child-row locks, so a writer that holds a child row and waits for the shared key can always be granted once completion commits. Completion takes the exclusive key last, after its row locks, so a writer that already holds the shared key never waits on a completion-held row. Any path that writes a contributing row *and later* locks a C2, C4 or C6 row must either:
 - hold `projects` FOR UPDATE first (the C2 amendment, C4 create/withdraw/replace and C5 create/convert already do, which excludes completion at step 1); or
@@ -228,7 +240,7 @@ The implementing slice greps every writer of the listed tables and records which
   - `client_editions.frozen_at` is unchanged.
 - **Blocker and informational behaviour:**
   - An included phase still open blocks completion.
-  - An excluded or external package that is still open does not block it.
+  - An excluded package, or an external package whose installation is not `studio`, that is still open does not block it.
   - An open punch item does not block it.
   - An invoice balance appears as a financial hold, does not block completion, and `close_project` still refuses on that balance.
 - **Conditional acceptance (F3), per K3 option:**
@@ -236,12 +248,15 @@ The implementing slice greps every writer of the listed tables and records which
   - Option A (after the K3 activation migration): with an open condition, completion succeeds as `completed_with_conditions` with that id in `open_condition_ids`. Resolving it moves the row to `completed` in the same transaction. Resolving an unknown or already-resolved id is refused.
   - Both: a resolution keyed by request works before any completion exists.
 - **Bindings (F10):** an addendum phase with no bound project phase blocks (`agreed_phase_unbound`). A live studio line with a NULL `scope_package_key` blocks (`ffe_unassigned_to_package`). A line assigned to an excluded package does not block.
+- **Studio installation on client-bought goods (SQ-1851 R8):** an included package with `purchasing='client'`, `payer='client'`, `installation='studio'` and one converted external line. Completion is refused (`studio_installation_open`) while the line is not `installed`, and while the fulfilment has only a reported `installed` event. After the event is verified, the blocker clears. The same package with `installation='client'` does not block. A `design='studio'` package in an edition with no agreed phase blocks (`studio_design_unphased`).
+- **Unknown key (SQ-1851 R10):** a fixture line and a fixture fulfilment whose key is in no package of the active edition each block (`package_key_not_in_edition`). A key set to `excluded` does not block.
+- **Financial hold outside the hash (SQ-1851 R20):** a payment committed between the designer's read and `complete_studio_service` changes `financialHold` but not the obligation hash; completion succeeds and stores the hold as read in its own transaction. An invoice insert does not wait on the service-obligation key.
 - **Concurrency (F7).** Each race runs in two sessions, in both orders. The pass condition is one serial outcome: either the write commits first and completion refuses (a blocker or `stale_obligations`), or completion commits first and the write commits after it. No pair may raise `40P01`.
   - `place_product_in_project_v2` placing a new live line into an included studio package (the governing case);
   - a direct-table `project_ffe_items` status regression from `installed`;
   - a phase reopened from `completed`;
   - a `client_decisions` insert and a `scope_change_requests` insert;
-  - C5 `set_ffe_item_external_fulfilment` reversal;
+  - C5 `set_ffe_item_external_fulfilment` reversal, and a C5 `installed` verification in a studio-installed package (R8);
   - a C4 response, and `resolve_service_acceptance_condition`;
   - `close_project`.
   - Also: a stale obligation hash is refused, and the RPC refuses under REPEATABLE READ.

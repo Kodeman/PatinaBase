@@ -5,6 +5,15 @@ Source inspected at `0fabcadf2` (integration branch; base `ee9c450a5`). All tabl
 
 **Revision 2026-10-23 (SQ-1850).** Answers the SQ-1817 frontier review (CHANGES REQUIRED at `4952624a16d1`) for findings F8 (§2.8), F10 (§2.2, §2.4, §2.6, new §2.4a), F13 (§2.3), F17 input (§2.2 responsibilities) and F20 (§2.7, §2.8). Anchors re-checked at `4952624a16d1`.
 
+**Revision 2026-10-23 (SQ-1856).** Answers the SQ-1851 re-review at `6ac0c5acc47c`, marked inline with `SQ-1851 R#`:
+- **R1 / R16** (new §2.2a): one canonical package key, `pkg.<slug>`, allocated and normalized on the server at draft time and copied unchanged into C1.
+- **R10** (§2.2a retention, §2.4a): an amendment can never omit a predecessor package key. Leaving a package out of scope is an explicit `excluded` record that is kept.
+- **R4 / F8** (§2.8): the C3 direct fabrication route is suspended with C4/C5/C6, and the shared gate itself re-checks the capability and the active edition.
+- **R6 / F8** (§2.8): reconciliation replays every intervening executed amendment in order, so no phase is lost.
+- **R7** (§2.4a, §2.7, §2.8): every new SECURITY DEFINER assignment or reconciliation mutation is bound to the recorded tenant and the target project.
+- **R9 / F17** (new §2.5a): an amendment that would put an already contracted external package on the studio is held at send and at countersign until a transfer path is owned.
+- **R8** (§2.2): service responsibilities are buyer-independent obligations in C6.
+
 ## 1. What already exists (source of truth)
 
 | Fact | Evidence |
@@ -49,7 +58,7 @@ Source inspected at `0fabcadf2` (integration branch; base `ee9c450a5`). All tabl
 
 - A package is an agreement part with `kind = 'scope_package'`. Its payload is validated by `upsert_agreement_parts` (a new branch alongside the existing money-shape validation at `00618:560-764`):
   ```
-  { "packageKey": "pkg.<slug>",            // stable identity, unique per proposal, preserved across editions
+  { "packageKey": "pkg.<slug>",            // canonical key (§2.2a); server-allocated when absent; unique per proposal; preserved across editions
     "label": "Kitchen cabinetry",
     "roomIds": ["<project_room uuid>"],    // optional; C1 owns the manifest join
     "inclusion": "included" | "excluded" | "conditional",
@@ -62,8 +71,27 @@ Source inspected at `0fabcadf2` (integration branch; base `ee9c450a5`). All tabl
   // partyKind = "studio" | "client" | "gc" | "other" | "none"
   ```
 - **Responsibility vocabulary (SQ-1817 F17 input).** All five slots are required on every package, each with one `partyKind`. `none` means the slot does not arise (for example, no fabrication on a design-only package). A missing slot or a value outside the vocabulary is refused by `upsert_agreement_parts`. C5 validates the *whole* combination, not `purchasing` alone, because whoever buys is not necessarily whoever owes the money (C5 §3.4). The former `acceptance_signer` slot is removed: who must accept is the signed signer policy (§2.6), not a party kind.
+- **Service responsibilities do not follow the buyer (SQ-1851 R8).** `design` and `installation` name who performs a service, and they bind independently of `purchasing` and `payer`. A package bought and paid by the client with `installation = 'studio'` still carries a studio installation obligation, which C6 counts as a blocker (C6 §2.3). No reader infers a service obligation, or its absence, from who buys.
 - `packageKey` lives in the payload. `part_key` and `id` do not identify a package because they rekey on every save (`00618:781`). The RPC refuses a duplicate `packageKey` within one proposal.
-- An addendum draft copies its predecessor's packages and keeps their `packageKey`s. A changed package keeps its key, and its new content is the amendment.
+- An addendum draft copies its predecessor's packages and keeps their `packageKey`s. A changed package keeps its key, and its new content is the amendment. An addendum may never drop a key (§2.2a, R10).
+
+### 2.2a Canonical package key (SQ-1851 R1, R16, R10)
+
+This is the **only** definition of a package key. C1 `project_packages.package_key`, `project_scope_edition_packages.package_key`, `project_ffe_items.scope_package_key`, C5 `project_external_fulfilments.package_key` and the P04–P07 examples all use it unchanged.
+
+- **Format.** `pkg.<slug>`, matching `^pkg\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`: lowercase ASCII letters, digits and inner hyphens, 1–63 characters after `pkg.`, never starting or ending with a hyphen. Every table above carries this CHECK. C1's former code-derived form (`k`, no dot) is withdrawn (C1 §3).
+- **Allocation (draft only).** The `scope_package` branch of `upsert_agreement_parts` allocates a key on the server for a package part that arrives **without** `packageKey`. A part that arrives **with** one must already match the format exactly; the RPC never repairs a caller's key (`check_violation`, `scope_package_key_invalid`). The composer sends back the key the server allocated on every later save, which is how a draft package keeps its key while `part_key` rekeys.
+- **Normalization (R16).** The allocator derives the slug from the part's `label`:
+  1. `s := lower(btrim(label))`;
+  2. `s := regexp_replace(s, '[^a-z0-9]+', '-', 'g')`: every run of other characters, including accented letters, `#` and spaces, becomes one hyphen;
+  3. `s := btrim(s, '-')`: a leading or trailing separator is dropped, so `#K` gives `k` and `Étage` gives `tage`;
+  4. `s := rtrim(left(s, 56), '-')`, which leaves room for a suffix;
+  5. if `s` is empty (a label of only punctuation or non-Latin characters), `s := 'package'`;
+  6. `key := 'pkg.' || s`. If the key is already used by another `scope_package` part of the same proposal, the allocator appends `-2`, `-3`, and so on, until it is unused.
+  The result always matches the format. The suite covers `#K`, `Étage`, `---`, `漢字`, a 200-character label and a collision.
+- **Freezing.** At mint the key is copied into `project_scope_edition_packages.package_key` (§2.4). The client signed it, because it sits inside the hashed part payload (`00575:48-49`).
+- **Into C1.** A C1 `project_packages` row receives the key only by copying it from the job's `active` edition (`create_project_package` with `p_package_key`, or `bind_project_package_key`, C1 §3). C1 never allocates or normalizes. One edition key resolves to at most one C1 row, including archived rows.
+- **Retention across amendments (R10).** An addendum draft's `scope_package` set must contain every `packageKey` of the edition it was drafted against (`proposals.drafted_against_scope_edition_id`, §2.5). Taking a package out of scope is an edit to `inclusion = 'excluded'`, which keeps the key and is itself the preserved exclusion record. `upsert_agreement_parts` refuses an addendum draft that omits a predecessor key (`check_violation`, `scope_package_key_dropped`), and the mint (§2.4) and reconciliation (§2.8) refuse the same omission (`scope_edition_package_dropped`). So no agreed key ever disappears from a later edition, and C6 still fails closed on any key it cannot find (C6 §2.3).
 - Responsibility values name **party kinds**, not people. A person's appointment, authority and access belong to C3. A role chosen in a draft never appoints anyone, grants access or rewrites an agreed appointment (A04).
 - Because all parts are hashed (`00575:48-49`), the client signs the exact package set. No second hash is invented.
 
@@ -118,6 +146,7 @@ Source inspected at `0fabcadf2` (integration branch; base `ee9c450a5`). All tabl
 - **Where it is minted:** inside `_countersign_design_services_agreement_impl` (current head `00619:33`), on both branches:
   - the origin branch, after the commercial document insert;
   - the addendum branch, immediately after the authority supersession at `00619:515`.
+- **Refusals at mint (SQ-1851 R10, R9).** Before inserting, the mint refuses an amendment whose signed packages omit a key of the predecessor edition (`scope_edition_package_dropped`, §2.2a) and a stranding amendment (`scope_amendment_external_transfer_unowned`, §2.5a). Both refuse the countersign transaction, so no half-executed state is left.
 - The studio wrapper `countersign_design_services_agreement` (`00475:931`) calls the impl at `00475:950`. A paper client signature (`record_paper_client_signature`, 00462/00477) still reaches execution through that countersign.
 - Before relying on a single graft, the implementer must grep for every writer that sets `commercial_state = 'executed'` on `design_services`, `service_addendum` and `design_build` and confirm that none bypasses the impl. This was not proven exhaustively here.
 - `design_build` follows the same branch as `design_services`.
@@ -132,13 +161,19 @@ C4 and C6 must derive exact-scope acceptance and completion from joins, not from
 - **Amendment mint (carry-forward).** The successor copies every predecessor phase row unchanged, then adds one row per addendum proposal phase. The addendum branch of countersign does not materialize project phases today (no `project_phases` write in `00619`). An added row therefore has `project_phase_id = NULL` until a phase writer binds it. C6 counts an agreed phase with no bound project phase as a blocker (`agreed_phase_unbound`). It fails closed and is never skipped.
 - Carry-forward is cumulative. This contract defines no way to drop an agreed phase from the obligation set; that is a WP-03 question (§3). Deleting a `project_phases` row does not remove the obligation: the binding then points at a missing row, which C6 also counts as `agreed_phase_unbound`.
 
-**Packages.** The package identity shared by C1, C3, C5 and C6 is `(project_id, package_key)`.
+**Packages.** The package identity shared by C1, C3, C5 and C6 is `(project_id, package_key)`, with the key format of §2.2a (SQ-1851 R1).
 - Editions hold per-edition package *content* keyed by `package_key` (the table above).
-- C1's `project_packages` row (UUID) must carry the same `package_key` for any package an edition names. C1 owns that column: it is server-derived, immutable, and unique per project *including archived rows*, so a frozen key never re-binds to a later package (C1 §3, `package_key`). Until the WP-05 migration lands it, the C5 fabrication route has no package to pass and stays refused (C3 §3.2). C3's shared gate `public.assert_fabrication_instruction_authority` takes the C1 UUID; C5's event route resolves its fulfilment to that UUID through this key (C5 §3.4). A C1 package without a `package_key` is not in agreed scope, so no C5 or C6 rule treats it as included.
+- C1's `project_packages` row (UUID) carries the same `package_key`, copied from the active edition, never derived (C1 §3). The key is set at most once, immutable, and unique per project *including archived rows*, so a frozen key never re-binds to a later package. Until the WP-05 migration lands, the C5 fabrication route has no package to resolve and stays refused (C3 §3.2).
+- C3's shared gate `public.assert_fabrication_instruction_authority` takes the C5 fulfilment id and resolves `(project_id, package_key)` to the C1 UUID itself, under its own lock order (C3 §3.2, SQ-1851 R3). A C1 package with a NULL `package_key` is not in agreed scope, so no C3, C5 or C6 rule treats it as included.
 
-**FF&E membership.** A new nullable `project_ffe_items.scope_package_key text`, written only by a definer RPC `assign_ffe_items_to_scope_package(p_project_id, p_item_ids uuid[], p_package_key, p_client_request_id)`. The RPC refuses a key absent from the active edition. It takes `_ffe_lock_job_labels` (`00808:85-97`) and then the item rows FOR UPDATE in id order.
+**FF&E membership.** A new nullable `project_ffe_items.scope_package_key text` with the §2.2a CHECK, written only by a definer RPC `assign_ffe_items_to_scope_package(p_project_id, p_item_ids uuid[], p_package_key, p_client_request_id)`.
+- **Authority (SQ-1851 R7).** The RPC is SECURITY DEFINER, so table RLS does not protect it. Before any read of item rows it requires `can_compose_project_plan(p_project_id)`, C1's recorded-tenant predicate (C1 §3): an active non-guest member of `projects.studio_id`, narrowed by the designer leg, or on a studio-less job the designer of record only. It never uses person co-membership alone (SQ-1852). Otherwise `insufficient_privilege` (42501). If the C1 migration has not landed, the C2 migration creates that predicate with C1's exact body, and C1 later reuses it.
+- **Lock order.** `_ffe_lock_job_labels(p_project_id)` (`00808:85-97`), then the active edition row FOR SHARE, then the item rows FOR UPDATE in id order.
+- **Same project (SQ-1851 R7).** After the item locks, every id in `p_item_ids` must be a row with `project_id = p_project_id`. One foreign, missing or duplicate id refuses the whole call (`scope_assignment_item_off_project`), and nothing is written.
+- The RPC refuses a key absent from the active edition (`package_key_not_in_edition`).
+- **External lines (SQ-1851 R8).** The RPC refuses a line with an `external_fulfilment_id` (`scope_assignment_external_line`). C5's conversion sets such a line's `scope_package_key` to its fulfilment's `package_key` in the same transaction (C5 §3.2), so an external line's membership is the fulfilment's package, never a second choice.
 - C6 counts a live studio line (no `external_fulfilment_id`, no `trade_scope_document_id`) with a NULL key as a blocker (`ffe_unassigned_to_package`). Membership is never inferred from room, label or category.
-- Package keys survive amendments, so membership carries forward without a rewrite.
+- Package keys survive amendments (§2.2a retention), so membership carries forward without a rewrite.
 
 ### 2.5 Lock order and concurrency with acceptance
 
@@ -157,6 +192,17 @@ C4 and C6 must derive exact-scope acceptance and completion from joins, not from
   - A service-acceptance request freezes `scope_edition_id` and `content_hash`.
   - When an amendment executes, it marks every open request against the predecessor edition `superseded`. This happens in the same transaction, after the edition lock (step 4), and C4 states the matching lock order.
   - A response that arrives after the supersession commits is refused, because the response RPC locks the request and re-checks the edition's status.
+
+### 2.5a Amendments that would move external work onto the studio (SQ-1851 R9, F17)
+
+**The gap.** C5 freezes a fulfilment when a later edition makes the studio its buyer, payer or contracting party (C5 §3.4). The revision promised that the studio would then "move the obligation to an existing commerce rail". No such move exists: C5 forbids reverse conversion after any `contract_reported` event (C5 §3.2), and existing commerce refuses an external line (C5 §3.3). The fulfilment would stay frozen with no permitted exit.
+
+**The rule: hold the amendment.** This contract defines no transfer. An amendment that needs one is refused until a separately owned transfer contract exists.
+- **Stranding test.** For each package of the amendment's signed parts, look up the project's non-`cancelled` C5 fulfilments with that `package_key`. The amendment *strands* a fulfilment when the package's new responsibilities fail C5's external-only rule (C5 §3.4: `purchasing`, `payer` or `fabrication_contract` becomes `studio`, or `payer` becomes `none`) **and** the fulfilment has a `contract_reported` event.
+- **Where it is refused.** With `scope_editions` active, the addendum's send path and the countersign graft (§2.4, after the step-4 lock) both refuse a stranding amendment with `check_violation`, `scope_amendment_external_transfer_unowned`. Send is checked so the client is never asked to sign an amendment the studio cannot execute; countersign is checked again because fulfilment events can land between send and countersign.
+- **Before a contract is reported.** A fulfilment with no `contract_reported` event is not stranded. The studio first reverse-converts its lines into ordinary pricing and records `cancelled` on the fulfilment (C5 §3.2), then executes the amendment. Nothing is reclassified silently.
+- **While editions are inactive.** The money rail is unchanged (§2.8), so a stranding addendum can execute. Its edition goes `stale` as usual, and reconciliation (§2.8 step 3) applies the same stranding test and refuses. The project then stays without an active edition, so C4, C5 and C6 stay refused, until a transfer contract is owned. That is the intended fail-closed hold.
+- **OPEN, not designed here.** The audited transfer of a contracted external package into studio commerce belongs to a later WP-06/WP-08 contract under its own frontier review.
 
 ### 2.6 Signer policy carried by the edition (input to C4 / P07)
 
@@ -181,6 +227,15 @@ C4 and C6 must derive exact-scope acceptance and completion from joins, not from
 - New tables: `ENABLE ROW LEVEL SECURITY`; `REVOKE ALL FROM PUBLIC, anon, authenticated`. Studio reads only through `get_project_scope_editions(p_project_id)` (SECURITY DEFINER), gated by the same studio predicate the parts table uses (`is_studio_comember(designer_id)` plus the tenant leg; see `00632` header).
 - Clients see a curated projection inside the existing client bundle: package labels, inclusion and responsibility party kinds. They never see bids, costs or internal notes (C7).
 - No direct write grant. Editions are written only by the countersign graft and the reconciliation RPC (§2.8). Once activated (§2.8), `apply_service_arrangement` checks `_can_author_proposal`, exactly as `00474:103`.
+- **Every new definer mutation names its authority (SQ-1851 R7).** Table RLS and the read RPC's predicate do not protect a SECURITY DEFINER write. So:
+
+  | Mutation | Authority checked in its own body, before any read of target rows | Target binding |
+  |---|---|---|
+  | `apply_service_arrangement` | `_can_author_proposal(p_proposal_id)` (`00474:103`) | the proposal row it locked |
+  | `assign_ffe_items_to_scope_package` | `can_compose_project_plan(p_project_id)` (recorded tenant, C1 §3) | every item's `project_id = p_project_id` (§2.4a) |
+  | `reconcile_scope_edition` | `can_compose_project_plan(p_project_id)` **and** `_can_author_proposal` on the source proposal of every document it replays | every replayed document's `project_commercial_documents.project_id = p_project_id`, and its source proposal's project is the same job (§2.8) |
+
+  The recorded tenant is `projects.studio_id` (00624:335-365, the 00813:157-182 stamped-project pattern). No mutation derives a studio from the caller or relies on person co-membership alone (00556:51-75; SQ-1852). A failure raises 42501 and writes nothing.
 
 ### 2.8 Activation and deactivation
 
@@ -190,12 +245,18 @@ C4 and C6 must derive exact-scope acceptance and completion from joins, not from
 **Deactivation (SQ-1817 F8).** The earlier text cleared the setting and left C4, C5 and C6 running against editions that could no longer be superseded. Example: E1 is active, then addendum E2's terms execute while the setting is off. E1 stays `active`, its pending acceptance stays answerable, and C6 can complete against obsolete E1. The corrected rule has three parts.
 
 1. **Dependents are suspended atomically.** One deactivation migration clears the setting *and* revokes every C4, C5 and C6 mutation grant in the same transaction. Each of those mutation RPCs also re-checks `scope_editions` at entry and refuses with `object_not_in_prerequisite_state` / `scope_editions_inactive`. A grant restored on its own therefore still cannot consume an edition.
+   - **The C3 direct route is a dependent too (SQ-1851 R4).** `record_fabrication_instruction` (C3 §3.2) writes a C5 instruction event, so the deactivation migration revokes it with the C5 mutations. More importantly, the shared gate `public.assert_fabrication_instruction_authority` itself refuses `scope_editions_inactive` and refuses a job without an `active` edition. Every instruction route goes through that gate, so neither a restored grant nor a route added later can instruct fabrication against a paused or stale edition.
 2. **Invalidation never switches off.** Only *minting* and the stale-addendum *refusal* stop. When the countersign impl executes a `service_addendum` (or any document on the addendum branch) for a project that has an `active` edition, the graft still runs in the same transaction, after the step-4 lock (§2.5). It mints nothing. It moves the active edition to `stale` (`stale_reason = 'amended_while_inactive'`, `stale_commercial_document_id` = the executed document). It also marks every open C4 request against that edition `superseded` (`superseded_reason = 'scope_edition_stale'`). The money rail is unchanged.
-3. **Reactivation requires explicit reconciliation.** Re-enabling the setting does not revive anything. A project whose latest edition is `stale` has no `active` edition, so C4, C5 and C6 refuse on it, and readers show "Scope changed while editions were paused — reconcile". The studio runs `reconcile_scope_edition(p_project_id, p_commercial_document_id, p_client_request_id)`:
-   - it requires the setting to be on and the named document to be the latest executed one for the project;
-   - it locks in the §2.5 order;
-   - it mints an `amendment` edition from that document's signed parts, with `content.reconciled = true` and `predecessor_edition_id` = the stale edition;
-   - it moves the stale edition to `superseded`.
+3. **Reactivation requires explicit reconciliation.** Re-enabling the setting does not revive anything. A project whose latest edition is `stale` has no `active` edition, so C4, C5 and C6 refuse on it, and readers show "Scope changed while editions were paused — reconcile". The studio runs `reconcile_scope_edition(p_project_id, p_commercial_document_id, p_client_request_id)`.
+
+   **Revision 2026-10-23 (SQ-1851 R6): replay every intervening amendment.** The earlier text minted one edition from the latest executed document alone. Phases come only from each addendum's own proposal phases, carried forward edition by edition (§2.4a), and `create_service_addendum` copies terms and rates, not phases (latest body `00816:358-449`). So with A2 adding P2 and A3 adding P3 while paused, a mint from A3 alone had no edition holding P2, and P2 was lost. Now:
+   - **Preconditions.** The setting is on. The caller passes the §2.7 authority checks (R7). The named document is the latest executed addendum-branch document for `p_project_id`, and its `project_id` is that job.
+   - **The replay set.** Every executed addendum-branch document of the project, from `stale_commercial_document_id` through `p_commercial_document_id` inclusive, ordered by execution: the studio signature's `signed_at`, then document id. Each document must belong to `p_project_id`, and the caller must pass `_can_author_proposal` on each source proposal. A document that fails either check refuses the whole call.
+   - **Lock order.** The §2.5 order: every source proposal FOR UPDATE in id order, then `projects` FOR UPDATE, then the documents, then the stale edition FOR UPDATE.
+   - **Minting.** One `amendment` edition per document, in order, in the one transaction. Each edition's predecessor is the previous one (the first one's is the stale edition), and each applies the ordinary amendment mint: carry forward every predecessor phase row, add the document's own proposal phases, freeze its signed packages and signer policy. Each edition gets `content.reconciled = true`. Every edition except the last is moved `active → superseded` by its successor in the same transaction, so the partial unique index sees one `active` row at a time. The stale edition moves `stale → superseded` once the first replayed edition exists.
+   - **Checks per document.** The R10 retention check (§2.2a) and the R9 stranding check (§2.5a) run for every replayed document. One failure refuses the whole reconciliation, and nothing is minted.
+   - **Idempotency.** `p_client_request_id` replays the first effect. The response lists every minted edition id in order.
+   - **Result.** The last edition carries the cumulative phase bindings of every intervening amendment: P2 and P3 in the example above.
    The activation migration's review lists every project with a `stale` edition. It never reconciles them automatically.
 
 - Revoking `apply_service_arrangement` stops new compositions.
@@ -239,9 +300,16 @@ C4 and C6 must derive exact-scope acceptance and completion from joins, not from
 - Immutability: a direct UPDATE or DELETE of an edition or its packages, phases or signers fails.
 - Populated legacy rows: there is no edition, and the readers return the absent state.
 - Actor matrix: a comember, a second studio sharing the designer (tenant leg), the client and anon.
+- **SQ-1851 R1/R16 (keys):** the allocator turns `#K` into `pkg.k`, `Étage` into `pkg.tage`, `---` and `漢字` into `pkg.package`, a 200-character label into a valid ≤67-character key, and a second "Kitchen" into `pkg.kitchen-2`. A caller key that fails the format is refused, not repaired. The signed key reaches C1 unchanged (C1 §3 tests).
+- **SQ-1851 R10 (retention):** an addendum draft that omits a predecessor key is refused at upsert, at mint and at reconciliation. Setting the package to `excluded` is accepted, and the key stays in the successor edition.
+- **SQ-1851 R6 (replay):** with editions off, execute A2 (adds P2), then A3 (adds P3). Turn editions on and reconcile with A3. Two editions are minted in order; the active one binds P1, P2 and P3, and the intermediate one is `superseded`. Reconciling with A2 while A3 exists is refused (not the latest). A replayed document from another project is refused, and nothing is minted.
+- **SQ-1851 R7 (definer authority):** a B-only co-member of the designer, a guest and the job client are refused by `assign_ffe_items_to_scope_package` and `reconcile_scope_edition`. An A member assigning one item of another job among several valid ids is refused (`scope_assignment_item_off_project`), and no item changes. An external line is refused (`scope_assignment_external_line`).
+- **SQ-1851 R9 (hold):** a fulfilment with `contract_reported` on `pkg.kitchen-cabinetry`; an addendum that makes the studio its payer is refused at send and at countersign (`scope_amendment_external_transfer_unowned`). With no contract reported, reverse-convert and cancel first, then the addendum executes. With editions off, the addendum executes and goes `stale`, and reconciliation refuses.
+- **SQ-1851 R4:** with editions off, `record_fabrication_instruction` and the C5 instruction route both refuse `scope_editions_inactive`, including with a grant restored alone.
 
 ## 3. Out of scope / open
 
 - `scope_change_requests` (00395) remain operational change records and are counted by `close_project` (`00399:7381-7400`). They do not mint editions. Whether an applied scope change must also yield an addendum is a WP-03 product question; it was not decided here.
-- Dropping an agreed phase from the obligation set (§2.4a) and materializing addendum phases as project phases are WP-03 questions. Until they are answered, both fail closed in C6.
+- Dropping an agreed phase from the obligation set (§2.4a) and materializing addendum phases as project phases are WP-03 questions. Until they are answered, both fail closed in C6. (Still OPEN after SQ-1851. The R6 replay keeps every agreed phase binding; it does not decide materialization.)
+- The audited transfer of a contracted external package into studio commerce (§2.5a). OPEN; until it is owned, the amendment is held.
 - Appointments, authority limits and access for the role slots belong to C3. The package manifest that joins rooms, prints and configurations belongs to C1. C2 supplies `(scope_edition_id, package_key)` as the join key both can reference.

@@ -8,6 +8,15 @@
 - **F5** (§2.2 steps 2, 2a, 4, 5 and 6, §2.3, §2.5): revocation is a timestamp, separate from the validity end, and takes effect immediately. Finite grants may not overlap, can be revoked early, and end at seat close.
 - **F6** (§3.2): every instruction binds the package, manifest, seat, grant, actor, job and recorded studio together.
 - **F20** (§2.4, §3.2): revokes are complete for all three roles, with effective-privilege tests. The one shared gate is **`public.assert_fabrication_instruction_authority`** (§3.2). C5's `fabrication_instruction` route calls it, and the C2/C4/C5/C6 revision cites that name.
+
+**Revision 2026-10-23 (SQ-1856, answering the SQ-1851 re-review at `6ac0c5acc47c`).** Marked inline with `SQ-1851 R#`:
+- **R2 / F5** (§2.2 step 4, §2.3 revoke): revoking a pending grant clamps `effective_to` so the 00624 window CHECK always holds; `revoked_at` alone denies.
+- **R3 / F4** (§3.2 lock order): the gate locks the C5 fulfilment, the source of the amount and the holds, before it derives anything, under one order that every C5 writer also takes.
+- **R4 / F8 / F17** (§3.2): the gate itself checks the `scope_editions` capability, the active edition and the package's current responsibilities. Both instruction routes are suspended by C2 deactivation.
+- **R5** (§3.2, §3.3): the instructed unit set is passed, validated against the fulfilment's declared units, checked against open holds and frozen on the instruction, in both routes.
+- **R17** (§2.3): required parameters precede DEFAULT parameters.
+- **R18** (§2.2 step 2): actor retention is compatible with the FK action and with immutability.
+
 **Serves:** A13, A15, A16, A17, A18, X02, X03, X09. Inputs to C4 (signers), C5 (external fulfilment) and P08.
 
 **Citations.**
@@ -65,7 +74,7 @@ Three more facts compound this:
 ```sql
 ALTER TABLE public.project_party_authority
   ADD COLUMN IF NOT EXISTS revoked_at      timestamptz,
-  ADD COLUMN IF NOT EXISTS ended_by        uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS ended_by        uuid REFERENCES public.profiles(id) ON DELETE RESTRICT,  -- SQ-1851 R18
   ADD COLUMN IF NOT EXISTS end_reason      text CHECK (end_reason IS NULL OR end_reason IN
                                              ('revoked', 'seat_closed', 'superseded')),
   ADD COLUMN IF NOT EXISTS idempotency_key text;
@@ -78,6 +87,11 @@ ALTER TABLE public.project_party_authority ADD CONSTRAINT project_party_authorit
   NOT VALID;
 ALTER TABLE public.project_party_authority VALIDATE CONSTRAINT project_party_authority_fabrication_end_check;
 ```
+
+**Actor retention (SQ-1851 R18).** The first revision declared `ended_by … ON DELETE SET NULL`. That action can never run: on a revoked fabrication row the end check above requires `ended_by` to be non-NULL, and the immutability trigger (step 4) refuses the cascaded UPDATE. Deleting the revoker's profile would fail on an error the schema had promised would not occur. The rule is now explicit:
+- `ended_by` is `ON DELETE RESTRICT`, the pattern of 00835's `attested_by` (00835:12) and 00412's `signer_user_id` (00412:102). A profile that ended a grant cannot be hard-deleted.
+- `granted_by` is the existing column, `ON DELETE SET NULL` (00624:845), and it is shared with every other scope, so this contract does not change its FK. On a `scope='fabrication'` row the immutability trigger refuses the cascaded UPDATE (`fabrication_authority_immutable`), so the profile deletion fails. That is the intended retention for fabrication rows, with the same effect as RESTRICT. Rows of other scopes keep today's SET NULL behaviour.
+- So a fabrication grant's actors are never erased. An account that leaves is deactivated, not deleted. The suite asserts both refusals and that rows of other scopes still null out.
 
 **Revision 2026-10-23 (SQ-1817 F5).** The original design ended a grant by setting `effective_to = today` and tested `effective_to >= p_on`. That left a revoked grant usable for the rest of the day. It also gave `effective_to` two meanings, the grant's planned last day and its revocation. The old check `effective_to IS NULL OR end_reason IS NOT NULL` even refused a finite grant at creation. The old `expired_by_grant` reason is dropped, because a planned last day is not an act. Fabrication rows now keep two facts apart:
 - **Validity window.** `effective_from` to `effective_to`, inclusive. `effective_to` is the last valid day, as `party_holds_field_authority` reads it (00641:254-255). It is set at grant and is never raised or cleared.
@@ -101,9 +115,15 @@ A fabrication row is **live** on date `d` when `revoked_at IS NULL AND effective
 
 **4. Add an immutability trigger for fabrication rows.** A `BEFORE UPDATE OR DELETE` trigger refuses any change to a `scope='fabrication'` row unless both of these hold:
 - the GUC `app.fabrication_authority_write` equals `OLD.id::text`, which only the RPCs set (the `app.plan_room_sheet_maintenance` pattern, 00429:441); and
-- the change is a revocation (Revision 2026-10-23, SQ-1817 F5). It sets `revoked_at` from NULL to `now()`, sets `ended_by` and `end_reason`, may lower `effective_to` to `LEAST(OLD.effective_to, revocation date)` for display, and touches nothing else except `updated_at`. `effective_to` is never raised, never cleared and never set on an unrevoked row. A row can be revoked once. A finite grant can therefore be revoked before its planned last day, which the original "sets only `effective_to` … once" rule did not allow.
+- the change is a revocation (Revision 2026-10-23, SQ-1817 F5). It sets `revoked_at` from NULL to `now()`, sets `ended_by` and `end_reason`, sets `effective_to` to exactly `LEAST(COALESCE(OLD.effective_to, 'infinity'::date), GREATEST(OLD.effective_from, <end date>))` (SQ-1851 R2, below), and touches nothing else except `updated_at`. The end date is `current_date` for `revoke_fabrication_authority` and `NEW.off_job_at` for a seat close. `effective_to` is never raised, never cleared and never set on an unrevoked row. A row can be revoked once. A finite grant can therefore be revoked before its planned last day, which the original "sets only `effective_to` … once" rule did not allow.
 
 So amending a fabrication grant means revoking it and inserting a new row. History is never edited.
+
+**Revision 2026-10-23 (SQ-1851 R2): the window CHECK on a pending revocation.** The existing constraint `project_party_authority_effective_check` requires `effective_to IS NULL OR effective_to >= effective_from` (00624:852-853). The first revision set `effective_to = LEAST(…, current_date)` on revocation. For a pending grant starting tomorrow that is today, below `effective_from`, so the CHECK failed, the revocation rolled back, and the grant still went live tomorrow. The clamp is now `GREATEST(effective_from, end date)`:
+- a live grant revoked today ends today, as before;
+- a pending grant (starts tomorrow) revoked today gets `effective_to = effective_from`. The window is one day that never opens, because `revoked_at` is set and the holder predicate checks `revoked_at IS NULL` first;
+- an open grant gets `effective_to = GREATEST(effective_from, end date)`.
+`effective_to` is display only on a revoked row. Denial comes from `revoked_at`, never from the window, so the clamp can never extend authority. The seat-close UPDATE (step 5) already uses this form.
 
 **5. Rewrite the seat-close trigger.** Copy the head `end_party_authority_at_seat_close()` (00634:159-245) verbatim. Then graft:
 - `'fabrication'` into the principal count at 00634:171, so closing a seat that holds fabrication authority needs an owner or admin;
@@ -147,7 +167,9 @@ REVOKE ALL ON FUNCTION public.party_holds_fabrication_authority(uuid, bigint, da
 
 All of these are `LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp` and require `auth.uid() IS NOT NULL`.
 
-**`grant_fabrication_authority(p_engagement_id uuid, p_effective_from date, p_effective_to date DEFAULT NULL, p_threshold_cents integer DEFAULT NULL, p_copy_to uuid[] DEFAULT '{}', p_source_clause text DEFAULT NULL, p_idempotency_key text) RETURNS public.project_party_authority`**
+**`grant_fabrication_authority(p_engagement_id uuid, p_effective_from date, p_idempotency_key text, p_effective_to date DEFAULT NULL, p_threshold_cents integer DEFAULT NULL, p_copy_to uuid[] DEFAULT '{}', p_source_clause text DEFAULT NULL) RETURNS public.project_party_authority`**
+
+- **Parameter order (SQ-1851 R17).** The required `p_idempotency_key` comes before every DEFAULT parameter. PostgreSQL refuses a function whose input parameter follows a defaulted one without its own default, so the first revision's signature could not be created.
 
 - **Lock order:**
   1. Lock `project_parties` row `p_engagement_id` FOR UPDATE. This is the row the 00634 trigger fires from, so a concurrent seat close serialises against the grant.
@@ -174,8 +196,8 @@ All of these are `LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg
 - **Authorization:** the same tenant-first principal check as the grant.
 - **Rules:**
   - `p_reason` must be `revoked` or `superseded`.
-  - The RPC takes no date. Revocation is always "now". It sets `revoked_at = now()`, `ended_by = auth.uid()`, `end_reason = p_reason` and `effective_to = LEAST(COALESCE(effective_to, 'infinity'), current_date)`. Authority is refused from the commit onward, not from tomorrow.
-  - It works on open, finite and pending grants. A pending grant, revoked before it starts, never becomes live.
+  - The RPC takes no date. Revocation is always "now". It sets `revoked_at = now()`, `ended_by = auth.uid()`, `end_reason = p_reason` and `effective_to = LEAST(COALESCE(effective_to, 'infinity'::date), GREATEST(effective_from, current_date))` (SQ-1851 R2). Authority is refused from the commit onward, not from tomorrow, and the 00624:852-853 CHECK holds for every grant state.
+  - It works on open, finite and pending grants. A pending grant, revoked before it starts, never becomes live: its window clamps to `[effective_from, effective_from]` and `revoked_at` denies it.
   - Calling it on a row already revoked with the same reason returns that row, so it is idempotent. A different reason raises `fabrication_authority_already_ended`.
   - A row on a seat in another studio's book raises `fabrication_authority_forbidden`, the same as for the grant.
 - A seat close revokes through the trigger (step 5), not through this RPC.
@@ -205,7 +227,8 @@ All of these are `LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg
 | `record_fabrication_instruction` (§3.2) | the same | `authenticated`, in its own later migration with C1's `create_evidence_manifest` |
 | `assert_fabrication_instruction_authority` (§3.2, the shared gate) | `REVOKE ALL … FROM PUBLIC, anon, authenticated`, with no grant | never. Only SECURITY DEFINER bodies call it |
 | `party_holds_fabrication_authority` | the same | never |
-| `_fabrication_instructed_amount_cents` (§3.2, C5-owned body) | the same | never |
+| `_fabrication_instructed_amount_cents(p_fulfilment_id uuid)` (§3.2, C5-owned body; SQ-1851 R3 keys it by fulfilment) | the same | never |
+| `_external_rail_refusal(p_edition_id uuid, p_package_key text)` (§3.2, C5-owned body; SQ-1851 R4) | the same | never |
 | `guard_fabrication_grant_overlap`, the fabrication immutability trigger function | the same | never |
 | `end_party_authority_at_seat_close` (rewritten) | the head's own `REVOKE ALL … FROM PUBLIC, anon, authenticated` (00634:209-210), kept | never |
 
@@ -279,38 +302,55 @@ Additional cases:
 
 ```text
 public.assert_fabrication_instruction_authority(
-  p_package_id           uuid,   -- C1 project_packages.id
+  p_fulfilment_id        uuid,   -- C5 project_external_fulfilments.id (SQ-1851 R3: the source of amount and holds)
   p_manifest_id          uuid,   -- C1 evidence_manifests.id
-  p_authorizing_party_id uuid    -- project_parties.id of the seat that gave the instruction
+  p_authorizing_party_id uuid,   -- project_parties.id of the seat that gave the instruction
+  p_units                text[]  -- SQ-1851 R5: the units this instruction covers
 ) RETURNS jsonb
--- {projectId, studioId, packageId, manifestId, manifestHash, partyId, authorityId,
---  amountCents, actorId, evidenceStatus: 'reported' | 'verified'}
+-- {projectId, studioId, scopeEditionId, fulfilmentId, packageKey, packageId, manifestId, manifestHash,
+--  partyId, authorityId, amountCents, units, actorId, evidenceStatus: 'reported' | 'verified'}
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
 -- REVOKE ALL FROM PUBLIC, anon, authenticated; no grant (§2.4).
 ```
+
+**Revision 2026-10-23 (SQ-1851 R3, R4, R5).** The `6ac0c5acc` gate took a C1 package id and nothing else. Three things followed:
+- **R3.** It read the C5 contract amount and holds without locking them, and C5's ordinary event writers never took the package lock. A verified contract increase or a new hold could commit between the gate's read and the instruction insert.
+- **R4.** It checked neither the `scope_editions` capability, nor the active edition, nor the package's current responsibilities. The C3 direct route therefore escaped both the C2 rollback suspension and C5's external-only rule.
+- **R5.** It took no unit set, so it could not tell held units from unaffected ones, and C5's route dropped the units it was given.
+The gate is now keyed by the C5 fulfilment. That row is the source of the amount and the holds, and it is the row both routes write the instruction against. The gate resolves the C1 package from it through the canonical key (C2 §2.2a).
 
 - **Name and use.** This is the ONE fabrication gate.
   - `record_fabrication_instruction` (C3) calls it.
   - C5's `record_external_fulfilment_event` calls it for `event_kind='fabrication_instruction'`. No other code path may write a fabrication instruction.
   - It raises on any failure and never returns a partial answer.
-  - It writes nothing. Its caller writes the record in the same transaction, stamped with the returned `authorityId`, `manifestHash`, `amountCents`, `actorId` and `evidenceStatus` (§4).
-- **C5 route mapping.** C5 resolves its fulfilment row to a C1 `project_packages.id` before calling the gate. That bridge is the C2/C5 package join named in SQ-1817 F10, which the sibling revision owns. Until the bridge exists, the C5 route has no `p_package_id` to pass and stays refused.
-- **Lock order.** The gate takes these locks itself, so a caller must not lock any of these rows first in a different order:
-  1. `_ffe_lock_job_labels(package.project_id)` (00808:85-100).
-  2. The package row FOR UPDATE.
-  3. The authorizing seat (`project_parties`) row FOR SHARE. This conflicts with the seat-close UPDATE, so a concurrent close serialises.
-  4. That seat's live fabrication grant FOR SHARE. This conflicts with `revoke_fabrication_authority`'s FOR UPDATE, so a concurrent revoke serialises.
-  5. The manifest row FOR SHARE.
+  - It writes nothing. Its caller writes the record in the same transaction, stamped with the returned `authorityId`, `manifestHash`, `amountCents`, `units`, `actorId` and `evidenceStatus` (§4).
+- **Package resolution (C2 §2.2a, §2.4a).** The gate reads the fulfilment's `(project_id, package_key)` and resolves it to the one C1 `project_packages` row with that key. No row, or a C1 row with a NULL key, raises `fabrication_instruction_binding`. Until WP-05 lands C1, every call refuses here.
+- **Lock order (SQ-1851 R3).** The gate takes these locks itself, in this order, **before it reads any amount, hold, edition package or grant**. A caller must not lock any of these rows first in a different order.
+  1. `_ffe_lock_job_labels(J)` (00808:85-100): `projects` FOR KEY SHARE, then the job label advisory lock. It conflicts with the `projects` FOR UPDATE that the C2 amendment and C5 create/convert paths take first, so an amendment or stale transition serialises with the gate.
+  2. The project's `active` `project_scope_editions` row FOR SHARE (none → refuse, below).
+  3. **The fulfilment row `p_fulfilment_id` FOR UPDATE.** This is the C5 source-state lock: every C5 mutation that can change the amount or a hold on this fulfilment (`record_external_fulfilment_event` for every kind, `verify_external_fulfilment_event`, `set_ffe_item_external_fulfilment`) takes the same row FOR UPDATE, after the same steps 1–2 (C5 §3.5). A contract increase, a verification or a new hold therefore commits entirely before the gate reads, or waits until the instruction commits.
+  4. The C1 package row FOR UPDATE.
+  5. The authorizing seat (`project_parties`) row FOR SHARE. This conflicts with the seat-close UPDATE, so a concurrent close serialises.
+  6. That seat's live fabrication grant FOR SHARE. This conflicts with `revoke_fabrication_authority`'s FOR UPDATE, so a concurrent revoke serialises.
+  7. The manifest row FOR SHARE.
+  - **Why this order cannot deadlock.** Every C5 writer takes steps 1, 2 and 3 in that order and never locks a package, seat, grant or manifest. `revoke_fabrication_authority` and seat close take only seat then grant, matching steps 5–6. C1 manifest creation takes `projects` FOR KEY SHARE, the package and members, and never a fulfilment. The instruction insert that follows is a C6 contributing write, so it takes the shared service-obligation lock after all of these row locks (C6 §2.5).
+- **Capability and edition (SQ-1851 R4).** After the locks, in this order:
+  - `scope_editions` must be enabled (`object_not_in_prerequisite_state`, `scope_editions_inactive`), so C2 deactivation stops both instruction routes even if a grant is restored (C2 §2.8);
+  - J must have an `active` edition; a `stale` edition counts as none (`scope_edition_not_active`);
+  - the fulfilment's `package_key` must be a package of that active edition (`fabrication_package_not_in_edition`);
+  - `public._external_rail_refusal(active_edition_id, package_key)` must return NULL. That helper is C5's external-only rule (C5 §3.4), the one body both C5's mutations and this gate call. It returns the refusal code (`external_rail_studio_buyer`, `external_rail_studio_liability`, `external_rail_payer_unknown`) when the active edition's responsibilities make the studio buyer, payer or contracting party, and the gate raises that code. So an amendment that makes the studio liable stops instruction by either route.
+  - the fulfilment's status must not be `cancelled` (`fabrication_fulfilment_cancelled`).
 - **Binding: one job, one tenant (SQ-1817 F6).** All of these must hold, or it raises `fabrication_instruction_binding` (42501):
-  - `package.project_id = manifest.project_id = seat.project_id = J`.
-  - `manifest.package_id = p_package_id`, and `manifest.purpose = 'fabrication_instruction'` (C1 §4, now unique per package, SQ-1817 F14).
+  - `fulfilment.project_id = package.project_id = manifest.project_id = seat.project_id = J`.
+  - `manifest.package_id` = the resolved package id, and `manifest.purpose = 'fabrication_instruction'` (C1 §4, now unique per package, SQ-1817 F14).
   - The grant row's `engagement_id = p_authorizing_party_id`.
   - `package.archived_at IS NULL`.
   - `project_recorded_studio(J)` is not NULL. A studio-less job cannot instruct fabrication until its studio is recorded (00624:349-365).
+- **Units (SQ-1851 R5).** `p_units` must be non-empty, without duplicates, and a subset of the fulfilment's declared `units` (C5 §3.1). Otherwise raise `fabrication_units_invalid`. The returned `units` is `p_units` sorted, and the caller stores exactly that set on the instruction event, where it is immutable.
 - **Seat open on every call (SQ-1817 F5, F6).** The seat must have `stage='active' AND off_job_at IS NULL`. Otherwise raise `fabrication_authority_seat_closed`. Reading the seat row under the lock means a closed seat fails even if its grant row were somehow unrevoked.
 - **Server-derived amount (SQ-1817 F4).**
-  - `amountCents := public._fabrication_instructed_amount_cents(p_package_id)`. This is an internal function whose body C5 owns: the committed contract amount for the package's external fulfilment, in integer cents, read from C5's own record.
-  - Its contract: it is SECURITY DEFINER, revoked from every role, takes no caller input except the package id, and returns NULL when no committed amount is recorded.
+  - `amountCents := public._fabrication_instructed_amount_cents(p_fulfilment_id)`, read after the step-3 fulfilment lock (SQ-1851 R3). This is an internal function whose body C5 owns: the committed contract amount of that fulfilment, in integer cents, read from C5's own record.
+  - Its contract: it is SECURITY DEFINER, revoked from every role, takes no caller input except the fulfilment id, and returns NULL when no committed amount is recorded.
   - It never reads `p_evidence`, the URL or any client-supplied figure.
   - Until C5 defines the body, it returns NULL.
   - A NULL amount raises `fabrication_amount_unknown`, and a negative amount raises `fabrication_amount_invalid`. Both fail before the grant is consulted, and both apply to every grant, including one with no threshold.
@@ -321,12 +361,12 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   - **`reported`.** The actor is an active non-guest member of the recorded studio: `is_active_studio_member(project_recorded_studio(J))`, with `is_studio_comember(projects.designer_id)` as the 00624 narrowing. The caller never supplies the studio, and it is never derived from the caller.
   - **`verified`.** The actor is the authorizing seat's own user (`project_parties.profile_id = auth.uid()`). This branch stays refused (`fabrication_instruction_verified_inactive`) until the C4/K5 consumer work activates it by its own reviewed migration.
   - Anyone else gets `fabrication_authority_forbidden`.
-- **Holds.** An open C5 hold on an affected unit raises `fabrication_hold_open` (C5 §hold rule).
+- **Holds (SQ-1851 R5).** Read after the step-3 lock. A unit `u` is held when some `hold` event on the fulfilment lists `u` in its `affected_units` and no `release_hold` event names that hold (C5 §3.5). If any unit in `p_units` is held, raise `fabrication_hold_open`. Units outside every open hold proceed, which is the A18 partial-hold promise.
 
-**`record_fabrication_instruction(p_package_id uuid, p_manifest_id uuid, p_authorizing_party_id uuid, p_evidence jsonb, p_idempotency_key text) RETURNS jsonb`**
-- Calls the gate first and writes the C5 instruction record from its result.
-- Idempotency is on `(package_id, idempotency_key)`, with a request hash over `{packageId, manifestId, authorizingPartyId, evidence}`. Replay returns the original record. A changed request raises `idempotency_key_reused`.
-- It ships inactive, with the same REVOKE/GRANT pattern as §2.4.
+**`record_fabrication_instruction(p_fulfilment_id uuid, p_manifest_id uuid, p_authorizing_party_id uuid, p_units text[], p_evidence jsonb, p_client_request_id uuid) RETURNS jsonb`** (SQ-1851 R3/R5: keyed by fulfilment, with units)
+- Calls the gate first and then inserts the C5 `fabrication_instruction` event on `p_fulfilment_id` from its result, through the same insert C5's route uses, with `affected_units` = the gate's `units`.
+- Idempotency is the C5 event key `(fulfilment_id, client_request_id)` (C5 §3.1), with a request hash over `{fulfilmentId, manifestId, authorizingPartyId, units (sorted), evidence}`. The receipt is checked first, before the gate: a replay returns the original event with `replayed: true`, and a changed request raises `idempotency_key_reused`. Both routes share this key, so the same act through the other route replays rather than duplicating.
+- It ships inactive, with the same REVOKE/GRANT pattern as §2.4. C2 deactivation revokes it with the C5 mutations, and the gate's capability check refuses it regardless of grants (C2 §2.8, SQ-1851 R4).
 
 **Tests (SQ-1817 F4, F6, F20), all in `fabrication_authority_test.sql`:**
 - **Amount.**
@@ -343,12 +383,21 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   - A closed seat is refused even with an unrevoked grant row planted by a service-role fixture.
 - **Shared gate.** C5's `record_external_fulfilment_event(…, 'fabrication_instruction', …)` produces the same refusal codes as `record_fabrication_instruction` for each case above. A grep proves no other function writes a fabrication instruction.
 - **Concurrency.** A revoke or a seat close committed while an instruction waits on the seat lock causes the instruction to fail.
+- **Locked source state (SQ-1851 R3).** Two sessions, both orders:
+  - session 1 verifies a `contract_reported` increase from 200000 to 300000 cents on the fulfilment; session 2 instructs under a 250000 grant. Either the verification commits first and the instruction is refused (`fabrication_authority_insufficient`), or the instruction commits first at 200000 and the verification follows. Never an instruction at 200000 after the 300000 verification committed;
+  - the same with a `hold` on the instructed unit: the instruction either sees the hold and is refused, or commits before it;
+  - no pair raises `40P01`.
+- **Capability and responsibilities (SQ-1851 R4).** With `scope_editions` off, or the edition `stale`, both routes refuse, including with `record_fabrication_instruction` re-granted alone. After an amendment makes the package's payer `studio` (only reachable through a reconciliation fixture, C2 §2.5a), both routes refuse `external_rail_studio_liability`. A fulfilment whose key is not in the active edition is refused.
+- **Units (SQ-1851 R5).** A hold on unit `k-2`: instructing `{k-1}` succeeds and stores `{k-1}`; `{k-1, k-2}` and `{k-2}` raise `fabrication_hold_open`; after `release_hold`, `{k-2}` succeeds. An empty set, a duplicate, or a unit not declared on the fulfilment raises `fabrication_units_invalid`. The two routes give the same answers.
+- **Revocation window (SQ-1851 R2).** Revoking a grant whose `effective_from` is tomorrow succeeds, leaves `effective_to = effective_from`, and the predicate is false on that day. Revoking an open grant and a finite grant also satisfy the 00624 CHECK.
+- **Actor retention (SQ-1851 R18).** Deleting the profile in `ended_by` fails on the FK. Deleting the profile in `granted_by` of a fabrication row fails with `fabrication_authority_immutable`. Deleting the granter of a `money` row still nulls `granted_by`.
+- **Signature (SQ-1851 R17).** The migration creates `grant_fabrication_authority` and C1's `create_project_package` as written, and the suite calls each with named and with positional required arguments.
 
 ### 3.3 Holds (contract items 3 and 4, unchanged)
 
 3. **Holds must not ride the resolver's hold column.** The resolver clears every `blocked_by_decision_id` hold for every kind (00808:2284-2291), so the new path must **not** express a fabrication hold through `project_ffe_items.blocked_by_decision_id`. The fabrication hold lives on the C5 package or instruction record, and only `record_fabrication_instruction`, or an explicit release, moves it. Test: resolving the package's shop-drawing submittal leaves the package un-instructed and its hold in place.
 
-4. **Partial holds (A18).** The hold is per package member (unit). Unaffected units with their own approved evidence and their own instruction proceed. Readiness never equals instruction, and receipt never equals acceptance.
+4. **Partial holds (A18).** The hold is per unit. A unit is a key the fulfilment declares in its `units` (C5 §3.1). Every instruction names its unit set, the gate validates it and refuses any held unit, and the set is frozen on the instruction (§3.2, SQ-1851 R5). Unaffected units with their own approved evidence and their own instruction proceed. Readiness never equals instruction, and receipt never equals acceptance.
 
 ## 4. Audit
 
@@ -357,7 +406,7 @@ There is no separate audit table. The `agent_task_audit` table is reserved for t
 - A grant row is its own record: `granted_by`, `created_at`, `effective_from`, `source_clause`.
 - A revoked fabrication row adds `revoked_at`, `ended_by` and `end_reason` (SQ-1817 F5). Rows of other scopes keep the head's `effective_to` ending.
 - Fabrication rows are append-only (§2.2 step 4).
-- An instruction stores the actor, the authority row id it relied on, the manifest id and hash, the server-derived amount the gate compared (SQ-1817 F4), and the evidence status.
+- An instruction stores the actor, the authority row id it relied on, the manifest id and hash, the server-derived amount the gate compared (SQ-1817 F4), the instructed unit set (SQ-1851 R5), the fulfilment it was written against, and the evidence status.
 
 ## 5. Backfill: unknown stays unknown
 

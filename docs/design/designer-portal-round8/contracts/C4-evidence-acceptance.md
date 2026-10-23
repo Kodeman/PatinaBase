@@ -5,6 +5,12 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 
 **Revision 2026-10-23 (SQ-1850).** Answers the SQ-1817 frontier review at `4952624a16d1` for findings F9 (§2.2, §2.4), F10 (§2.1, §2.2: signers come from the signed edition policy, C2 §2.6), F11 (§2.1 paper intakes, §2.2), F12 (§2.1 lifecycle, new §2.2a guard matrix, §2.5), plus the F8 suspension and F20 revoke rules that C2 §2.8 sets for every dependent. K4 and K5 stay **OPEN**.
 
+**Revision 2026-10-23 (SQ-1856).** Answers the SQ-1851 re-review at `6ac0c5acc`:
+- **R11** (§2.2, §2.5): a replacement validates the whole post-replacement active signer set atomically, with the create-time rules. One profile holds at most one active slot, so a response always resolves to exactly one slot.
+- **R12** (§2.1, §2.2, §2.5): `signer_policy_revision` starts at 1 and every replacement increments it. `respond_service_acceptance` takes the revision the responder saw and refuses a stale one.
+- **R15** (§2.2a): every C4 mutation checks its `client_request_id` receipt before any lifecycle check. An exact replay returns the first effect, even on a terminal request, and never reopens it.
+- **R19** (§2.1, §2.2): the request binds one validated C1 evidence manifest by id, with purpose `service_acceptance`, instead of a hash with no source.
+
 ## 1. Why this cannot be a new approval kind
 
 | Fact | Evidence |
@@ -45,12 +51,12 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 **`service_acceptance_requests`.** Each row stores:
 - `id`, `project_id`;
 - `scope_edition_id` (C2) and `scope_content_hash`, frozen from the edition;
-- `evidence_manifest_hash`, the C1 manifest of what the client reviews, such as the spec book or care pack;
+- `evidence_manifest_id` (FK to C1 `evidence_manifests`, `ON DELETE RESTRICT`) and `evidence_manifest_hash`, copied from that row at create. This is the C1 manifest of what the client reviews, such as the spec book or care pack. **SQ-1851 R19:** the earlier text froze a hash without naming the manifest it came from; with several manifests on a project, which evidence was accepted was undefined. Now the manifest is an explicit, validated create argument (§2.2), and the hash is never caller input;
 - `request_number` (per project), with `predecessor_request_id`;
 - `lifecycle`: `draft`, `sent`, `withdrawn`, `superseded` or `closed`. `withdrawn`, `superseded` and `closed` are **terminal**: no RPC moves a request out of them (F12);
 - `aggregate_outcome`: `pending`, `accepted`, `accepted_with_conditions` or `returned`. Only the server derivation in §2.4 writes it. The moment it becomes non-`pending`, the same statement sets `lifecycle = 'closed'` and `closed_reason` to the outcome. An outcome is therefore never re-derived after it is reached;
 - `closed_reason`, `closed_at`;
-- `signer_policy_revision`;
+- `signer_policy_revision` (integer, `>= 1`). It is 1 at create and is incremented by exactly 1, in the same statement, by every `replace_service_acceptance_signer` (SQ-1851 R12). No other writer changes it;
 - `outbound_draft_id` (`outbound_drafts`);
 - `sent_at`, set by the after-send hook only;
 - `superseded_reason`, `created_by`, `created_at`.
@@ -63,6 +69,7 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 - `source`: `edition_policy` (copied from `project_scope_edition_signers`, C2 §2.6, never from jsonb) or `designer_declared`, the latter for legacy projects only and subject to K4;
 - `policy_slot`, the edition signer slot it fills (NULL only for `designer_declared`);
 - `status`: `active` or `replaced`;
+- partial unique indexes `(request_id, profile_id) WHERE status = 'active' AND profile_id IS NOT NULL` and `(request_id, household_person_id) WHERE status = 'active' AND household_person_id IS NOT NULL`. One person holds at most one active slot on a request (SQ-1851 R11);
 - `replaced_by_signer_id`, `replacement_reason`, `replaced_by`, `replaced_at`.
 
 **`service_acceptance_responses`.** Append-only. Each row stores:
@@ -73,8 +80,8 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 - `responder_profile_id`, which is `auth.uid()` and is null only for `paper_intake`;
 - `paper_intake_id`;
 - `scope_content_hash` and `evidence_manifest_hash` as presented to the responder, which must equal the request's values;
-- `signer_policy_revision`;
-- `client_request_id`;
+- `signer_policy_revision`, the revision the responder was shown, which must equal the request's current value (SQ-1851 R12);
+- `client_request_id` and `request_hash`, the server's sha256 of the canonical payload (signer, response, conditions text, return reason, both presented hashes, presented revision);
 - `responded_at`.
 
 It also has these keys:
@@ -102,12 +109,12 @@ Whether paper intake counts at all is K5 (**OPEN**). The fields above are the sa
 
 | RPC | Caller | Request | Response / effect |
 |---|---|---|---|
-| `create_service_acceptance_request` | Studio author | `p_project_id, p_scope_edition_id, p_client_request_id` | `{requestId, lifecycle:'draft', outboundDraftId, signers:[…], signerPolicyRevision}`. Creates the request, copies signers from `project_scope_edition_signers` (C2 §2.6), and creates an `outbound_drafts` row with kind `service_acceptance_request` and status `awaiting_review` (V22). Nothing is sent. Refusals are listed below (F9) |
+| `create_service_acceptance_request` | Studio author | `p_project_id, p_scope_edition_id, p_evidence_manifest_id, p_client_request_id` | `{requestId, lifecycle:'draft', outboundDraftId, signers:[…], signerPolicyRevision}`. Creates the request, copies signers from `project_scope_edition_signers` (C2 §2.6), and creates an `outbound_drafts` row with kind `service_acceptance_request` and status `awaiting_review` (V22). Nothing is sent. Refusals are listed below (F9) |
 | Designer Send | Studio | Existing outbound send path | Delivery is recorded by the existing delivery truth (`00785`). The after-send hook for this kind sets `requests.sent_at` and `lifecycle='sent'` once (`after_send_done_at` semantics, `00785:14-17`). An attempt or an unknown outcome never marks the request sent |
-| `respond_service_acceptance` | An authenticated signer | `p_request_id, p_response, p_conditions, p_return_reason, p_scope_content_hash, p_evidence_manifest_hash, p_client_request_id` | `{responseId, aggregateOutcome, pendingRequiredSigners:n, replayed}` |
+| `respond_service_acceptance` | An authenticated signer | `p_request_id, p_response, p_conditions, p_return_reason, p_scope_content_hash, p_evidence_manifest_hash, p_signer_policy_revision, p_client_request_id` | `{responseId, aggregateOutcome, pendingRequiredSigners:n, signerPolicyRevision, replayed}`. The signer is the caller's single active slot (R11) |
 | `record_service_acceptance_paper_intake` | Studio member | `p_request_id, p_signer_id, p_storage_object_id, p_paper_signed_on, p_signed_name, p_disposition, p_conditions, p_return_reason, p_presented_request_number, p_presented_scope_content_hash, p_presented_evidence_manifest_hash, p_presented_signer_policy_revision, p_client_request_id` | `{intakeId, reviewState:'pending_review', documentSha256}`. The server hashes the stored object. It has no effect on the outcome (F11) |
 | `review_service_acceptance_paper_intake` | Studio owner or admin, **not** the recorder | `p_intake_id, p_decision ('confirmed'/'rejected'), p_expected_document_sha256, p_note, p_client_request_id` | Refused if the stored bytes no longer hash to the intake's `document_sha256` or to the expected value. On `confirmed`, inserts the response from the intake's recorded disposition and re-derives the outcome |
-| `replace_service_acceptance_signer` | Studio owner or admin | `p_request_id, p_signer_id, p_new_profile_id/person_id, p_reason, p_client_request_id` | Marks the old signer replaced and adds the new one. Allowed only before any outcome is reached (§2.2a, F12). If the policy came from the edition, see §2.5 |
+| `replace_service_acceptance_signer` | Studio owner or admin | `p_request_id, p_signer_id, p_new_profile_id/person_id, p_expected_signer_policy_revision, p_reason, p_client_request_id` | `{signerId, signerPolicyRevision, replayed}`. Marks the old signer replaced, adds the new one and increments the revision. Allowed only before any outcome is reached (§2.2a, F12). Validation is below (R11). If the policy came from the edition, see §2.5 |
 | `withdraw_service_acceptance_request` | Studio | `p_request_id, p_reason` | `lifecycle='withdrawn'`, only from `draft` or `sent`. Responses stay readable as history |
 | `get_project_service_acceptance` | Studio read | `p_project_id` | Requests, signers, responses, intakes and the derived outcome |
 | `get_my_service_acceptance_requests` | Client read | none | Only requests where the caller is an **active** signer or the project's client. Each row carries a `viewerRole` of `signer_required`, `signer_optional` or `observer`. This is a new vocabulary on a new projection, so no old parser sees it |
@@ -119,13 +126,23 @@ Whether paper intake counts at all is K5 (**OPEN**). The fields above are the sa
 - two slots name the same profile or the same household person (`signer_policy_duplicate`);
 - a signer has neither `profile_id` nor `household_person_id`, or names a person who is not the project's client or a member of that client's household (`signer_policy_unbound`);
 - a required signer has no `profile_id` and paper intake is not permitted (K5 OPEN). Such a signer could never respond (`signer_policy_unreachable`).
+- **evidence manifest (SQ-1851 R19):** `p_evidence_manifest_id` is required. The RPC reads the C1 row FOR SHARE and refuses unless `project_id = p_project_id` and `purpose = 'service_acceptance'` (`evidence_manifest_invalid`). It copies the row's `manifest_hash`; a manifest row is immutable (C1 §4), so the frozen hash and the id cannot diverge. A replay with the same `client_request_id` and a different manifest raises `idempotency_key_reused`.
+
+**`replace_service_acceptance_signer` validates the whole result (SQ-1851 R11).** The earlier text applied the create rules only at create, so replacing B with A, who already held another slot, gave A two active slots, and `respond_service_acceptance` had no slot selector. Now, under the request lock and the signer locks (§2.3), the RPC computes the post-replacement active set (every active signer except `p_signer_id`, plus the new one) and refuses unless every create rule above holds for that set:
+- the new person is not already an active signer on the request, by profile or by household person (`signer_policy_duplicate`). The partial unique indexes (§2.1) back this;
+- the new signer is bound to the project's client household (`signer_policy_unbound`);
+- if the slot is required, the new signer is reachable (`signer_policy_unreachable`);
+- the set still has at least one required signer (`signer_policy_no_required_signer`). The slot keeps its `required` flag, so this holds by construction, and is still checked;
+- `p_expected_signer_policy_revision` equals the current revision (`serialization_failure`, `stale_signer_policy`), so two concurrent replacements cannot both apply.
+A refusal leaves the request, its signers and its revision unchanged.
 
 **`respond_service_acceptance` refuses when:**
 - the caller is not the `profile_id` of an `active` signer on the request (`insufficient_privilege`);
 - the request is not `sent` (this includes every terminal lifecycle, §2.2a);
 - the edition is no longer `active`, or `scope_editions` is inactive;
 - the presented hashes differ (`serialization_failure`, `stale_scope`);
-- the signer has already responded with a different payload.
+- `p_signer_policy_revision` differs from the request's current revision (`serialization_failure`, `stale_signer_policy`, SQ-1851 R12). A page loaded before a replacement cannot be stamped as having seen the new policy;
+- the signer has already responded on this request under a different `client_request_id` (`unique_violation`, `already_responded`).
 
 ### 2.2a Lifecycle guards (SQ-1817 F12)
 
@@ -141,6 +158,10 @@ The earlier text called `returned` terminal only in the aggregate prose, while r
 | `withdraw_service_acceptance_request` | `draft` or `sent` | same |
 | C2 supersession | `draft` or `sent` | `closed` requests are left as they are |
 
+- **Receipt replay comes first (SQ-1851 R15).** Every C4 mutation, after taking the request lock and before the lifecycle check above, looks up its `client_request_id` on that request (responses, intakes, reviews, replacements, withdrawals, and create by `(project_id, client_request_id)`):
+  - Same caller and same server-computed `request_hash`: it returns the recorded effect with `replayed: true` and writes nothing. This holds on a terminal request, so the signer whose acceptance closed the request gets their answer back on a retry instead of `request_not_open`. A replay never reopens, re-derives or re-closes anything.
+  - Different caller or different hash: `idempotency_key_reused`.
+  - No receipt: the lifecycle check and the rest of the RPC run as written.
 - `closed` is reached only through §2.4, when the outcome leaves `pending`.
 - A replacement can therefore never act on a `returned`, accepted, withdrawn or superseded request.
 - A replacement on an open request re-derives the outcome from the active signers. Because the replacement inherits the slot's `required` flag (§2.4) and has not yet responded, the outcome stays `pending`.
@@ -182,6 +203,7 @@ The four C4 tables are C6 *contributing* tables (C6 §2.5, F7): a write to any o
 - Replacement is an audited policy change. It never deletes or edits a response.
 - It is allowed only on a `draft` or `sent` request (§2.2a). A signer whose response already closed the request (a return, or the last acceptance) cannot be replaced on that request: the request is terminal, and the remedy is a successor request (F12).
 - If the replaced signer had already responded on a still-open request (an `accept` while others are pending), the outcome is re-derived without that response.
+- It validates the full post-replacement signer set and increments `signer_policy_revision` (§2.2, SQ-1851 R11, R12). Every response recorded after it must present the new revision.
 - If the request's policy came from the agreed edition, the replacement also records the C3 delegation or revocation evidence. Whether a replacement needs an amendment edition is part of the K4 ruling.
 
 **Return:**
@@ -224,7 +246,8 @@ The four C4 tables are C6 *contributing* tables (C6 §2.5, F7): a write to any o
 ### 2.9 Audit
 
 - Every row carries its actor and time.
-- Responses carry the presented hashes and the policy revision.
+- Responses carry the presented hashes, the presented policy revision and the request hash.
+- Requests carry the evidence manifest id and its hash.
 - Intakes carry the recorder and the reviewer.
 - Replacements carry their reason and actor.
 - Nothing is updated in place except lifecycle and the derived outcome, under the capability.
@@ -254,6 +277,10 @@ The four C4 tables are C6 *contributing* tables (C6 §2.5, F7): a write to any o
 - Replacement after one response.
 - A superseded edition mid-request. A concurrent response and supersession: one wins, and the loser gets `stale_scope`.
 - Duplicate submit with the same and with a different `client_request_id`.
+- **Replacement revalidation (SQ-1851 R11):** signers A (slot 1, accepted) and B (slot 2, pending). Replacing B with A is refused (`signer_policy_duplicate`), and A still holds one active slot. Replacing B with a person outside the household is refused (`signer_policy_unbound`). Replacing a required profile signer with a profile-less person is refused (`signer_policy_unreachable`) while K5 forbids paper. After each refusal the revision is unchanged.
+- **Policy revision (SQ-1851 R12):** the request starts at revision 1. A replacement makes it 2. A response presenting 1 is refused (`stale_signer_policy`); presenting 2 succeeds and stores 2. Two concurrent replacements presenting revision 1: one wins, the other gets `stale_signer_policy`.
+- **Terminal replay (SQ-1851 R15):** the last required acceptance closes the request. Re-sending the same response with the same `client_request_id` returns the first `responseId` with `replayed: true` and the request stays `closed`. The same key with a different payload raises `idempotency_key_reused`. A new key from the same signer gets `request_not_open`. The same pattern holds for withdraw and paper review.
+- **Manifest binding (SQ-1851 R19):** create refuses a manifest from another project and a manifest with purpose `fabrication_instruction` (`evidence_manifest_invalid`). With two `service_acceptance` manifests on the project, the request stores exactly the one named, and its hash equals that row's.
 - An observer, a foreign household, a GC and a second studio are denied.
 - Paper intake by the recorder cannot be self-reviewed.
 - **F9 empty sets:** create is refused for a null-policy legacy baseline edition, an optional-only policy, a zero-signer policy, a duplicate person and an unbound reference. No request row exists after each refusal. The derivation over a request with zero active required signers returns `pending`.
