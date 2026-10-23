@@ -333,7 +333,7 @@ function QueueRow({
           variant="primary"
           onClick={onInspect}
         >
-          Inspect delivery
+          Receive a delivery
         </DocumentAction>
         <button
           type="button"
@@ -373,9 +373,7 @@ export function ReceivingBookPage({
     isLoading: boolean;
   };
   const { data: inspections, isLoading: inspLoading } = useReceivingInspections(
-    {
-      sinceDate: since30,
-    },
+    undefined,
   ) as { data: AnyRecord[] | undefined; isLoading: boolean };
   const { data: draftedClaims, isLoading: draftedLoading } = useDamageClaims({
     state: 'drafted',
@@ -437,12 +435,10 @@ export function ReceivingBookPage({
   // too (the receipt RPC accepts shipped → received when the box beats the
   // carrier's delivered scan); they list apart so the counts stay honest.
   const [queue, inTransit] = useMemo(() => {
-    const inspectedPoIds = new Set(
-      filteredInspections.map((i) => i.purchase_order_id),
-    );
+
     const byArrival = (status: string) =>
       filteredOrders
-        .filter((po) => po.status === status && !inspectedPoIds.has(po.id))
+        .filter((po) => po.status === status && (!po.receiving_items?.length || po.receiving_items.some((item: AnyRecord) => item.status !== 'cancelled' && (item.received_quantity ?? 0) < item.quantity)))
         .sort((a, b) => {
           const ax = a.confirmed_eta ?? a.delivered_date ?? '';
           const bx = b.confirmed_eta ?? b.delivered_date ?? '';
@@ -537,9 +533,13 @@ export function ReceivingBookPage({
         </p>
       ) : (
         <>
+          {filteredInspections.filter(i => i.inspection_pending).map(i => <div key={i.id} className="mb-3">
+            <p>Inspection pending · {i.purchase_order?.vendor?.name ?? 'Delivery'} · received {fmtDay(i.received_on ?? i.created_at)}</p>
+            <button className="min-h-11 underline" onClick={() => setTarget({ ...i.purchase_order, inspectionId: i.id })}>Complete inspection</button>
+          </div>)}
           {/* The warehouse-day queue — delivered, awaiting the log. */}
           <p className="doc-type-meta mb-1 font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
-            Awaiting inspection · {queue.length}
+            Receive a delivery · {queue.length}
           </p>
           <ul className="mb-5">
             {queue.map((po) => (
@@ -655,6 +655,8 @@ export function ReceivingBookPage({
             if (!o) setTarget(null);
           }}
           purchaseOrderId={target.id}
+          inspectionId={target.inspectionId}
+          buyerUserId={target.created_by}
           projectId={target.project_id ?? target.project?.id ?? undefined}
           poLabel={
             target.vendor_po_number ??

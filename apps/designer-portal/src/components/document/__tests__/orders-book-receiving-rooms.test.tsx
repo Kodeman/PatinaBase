@@ -68,6 +68,13 @@ jest.mock('@patina/supabase', () => ({
   useReceivingInspections: () => ({ data: [], isLoading: false }),
   useDamageClaims: () => ({ data: [], isLoading: false }),
   useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useCompleteReceivingInspection: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRetryReceivingFollowUp: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  usePoShipments: () => ({ data: [], isLoading: false }),
+  useProjectRecordedStudio: () => ({ data: 'studio-1' }),
+  useOrganizationMembers: () => ({ data: [{ user_id: 'member-1', status: 'active', profiles: { full_name: 'Morgan' } }] }),
+  useStudioLocations: () => ({ data: [{ id: 'location-1', label: 'Warehouse' }] }),
+  useUser: () => ({ user: { id: 'member-1' } }),
   useCreateReceivingInspection: () => ({ mutateAsync, isPending: false }),
   useProcurementItems: () => ({ data: items, isLoading: false }),
   useProjectRoomPlacements: () => ({ data: placements, isLoading: false }),
@@ -122,7 +129,9 @@ function openReceiving() {
       <ReceivingBookPage projectId={PROJECT} onOpenDocument={jest.fn()} />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Inspect delivery' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Receive a delivery' }));
+  fireEvent.change(screen.getByLabelText('Opened and checked?'), { target: { value: 'yes' } });
+  fireEvent.change(screen.getByLabelText('Arrival location'), { target: { value: 'location-1' } });
 }
 
 const receive = (name: string, count: number) =>
@@ -132,12 +141,13 @@ const receive = (name: string, count: number) =>
 const share = (room: string) =>
   screen.getByLabelText(`${room} share of White oak floor`) as HTMLInputElement;
 const prompt = () => screen.getByRole('group', { name: 'Which rooms does it cover?' });
-const submit = () => fireEvent.click(screen.getByRole('button', { name: 'Log inspection' }));
+const submit = () => fireEvent.click(screen.getByRole('button', { name: 'Save receipt' }));
 
 beforeEach(() => {
   mutateAsync.mockReset();
   mutateAsync.mockResolvedValue({ inspection: { id: 'insp-1' }, damageClaimCreated: false });
   earlierReceipts = {};
+  Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => 'receipt-rooms-key' });
 });
 
 describe('T-54 — Receiving asks which rooms a delivery covers', () => {
@@ -206,7 +216,7 @@ describe('T-54 — Receiving asks which rooms a delivery covers', () => {
     earlierReceipts = { 'pl-hall': 120, 'pl-living': 320, 'pl-dining': 60 };
     try {
       openReceiving();
-      receive('White oak floor', 800);
+      receive('White oak floor', 300);
       expect((within(prompt()).getAllByRole('spinbutton') as HTMLInputElement[]).map((f) => f.value)).toEqual([
         '0',
         '0',

@@ -1808,6 +1808,7 @@ export {
   useTodayProcurementCounts,
   useCreateReceivingInspection,
   useCompleteReceivingInspection,
+  useRetryReceivingFollowUp,
   useUpdateDamageClaim,
   autoDraftDamageClaimDescription,
   // Sprint 3 / Wave 3.2 — QBO Bookkeeper Export

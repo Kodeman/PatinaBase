@@ -151,6 +151,7 @@ import {
   useTodayProcurementCounts,
   useCreateReceivingInspection,
   useCompleteReceivingInspection,
+  useRetryReceivingFollowUp,
   useFfePlacementReceipts,
   useDamageClaims,
   useUpdateDamageClaim,
@@ -3277,5 +3278,24 @@ describe('useCompleteReceivingInspection — the original receipt remains the su
     supabaseClient.rpc.mockResolvedValue({ data: null, error: new Error('inspection is already complete') });
     await expect(run(input)).rejects.toThrow('inspection is already complete');
     expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('receiving follow-up result boundary', () => {
+  it('a failed claim preserves the saved receipt identity instead of rejecting the arrival', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { inspectionId: 'saved-receipt', outcome: 'damaged' }, error: null });
+    setTableDefault('damage_claims', { data: null, error: new Error('claims unavailable') });
+    const run = useCreateReceivingInspection() as unknown as { mutationFn: (input: any) => Promise<any> };
+    const result = await run.mutationFn({ purchaseOrderId: 'po-1', outcome: 'damaged', receiptKey: 'key-1', items: [{ ffeItemId: 'ffe-1', receivedQuantity: 1, condition: 'damaged' }] });
+    expect(result.inspection.id).toBe('saved-receipt');
+    expect(result.claimDraftError).toContain('claims unavailable');
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+  });
+  it('retrying a claim never invokes a receiving RPC', async () => {
+    const run = useRetryReceivingFollowUp() as unknown as { mutationFn: (input: any) => Promise<any> };
+    await run.mutationFn({ inspection: { id: 'saved-receipt', purchase_order_id: 'po-1', outcome: 'damaged' }, retryClaim: true, damagedFfeItemIds: ['ffe-1'] });
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+    expect(getBuilder('damage_claims').insert).toHaveBeenCalledWith([expect.objectContaining({ receiving_inspection_id: 'saved-receipt', ffe_item_id: 'ffe-1' })]);
   });
 });

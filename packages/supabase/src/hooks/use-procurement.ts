@@ -332,6 +332,7 @@ export function usePurchaseOrders(filters?: POFilters) {
           *,
           vendor:vendors!purchase_orders_vendor_id_fkey(id, name, default_payment_terms, is_patina_catalog, orders_email, contact_info),
           project:projects!purchase_orders_project_id_fkey(id, name, studio_id),
+          receiving_items:project_ffe_items!purchase_order_id(id, quantity, received_quantity, status),
           payments:po_payments(*)
         `
         )
@@ -1419,6 +1420,7 @@ export interface ReceivingInspection {
     vendor?: { id: string; name: string };
     project?: { id: string; name: string };
   };
+  receiving_inspection_lines?: Array<{ ffe_item_id: string; received_quantity: number; quantity_received: number }>;
   damage_claims?: DamageClaim[];
 }
 
@@ -1643,6 +1645,7 @@ export function useReceivingInspections(filters?: ReceivingInspectionFilters) {
             vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
             project:projects!purchase_orders_project_id_fkey(id, name)
           ),
+          receiving_inspection_lines(*),
           damage_claims(*)
         `,
         )
@@ -1895,6 +1898,7 @@ export interface CreateReceivingInspectionResult {
   inspection: Omit<ReceivingInspection, 'purchase_order_id'> & { purchase_order_id: string | null };
   claimDraftSkipped?: 'no_purchase_order';
   damageClaimCreated: boolean;
+  claimDraftError?: string;
   /** Retained as an always-empty N-1 result field; the batch RPC is atomic. */
   itemUpdateFailures: string[];
 }
@@ -2056,10 +2060,14 @@ export function useCreateReceivingInspection() {
         created_at: now,
         updated_at: now,
       };
-      const damageClaimCreated = await draftReceivingClaims(input, inspectionRow);
+      let damageClaimCreated = false;
+      let claimDraftError: string | undefined;
+      try { damageClaimCreated = await draftReceivingClaims(input, inspectionRow); }
+      catch (error) { claimDraftError = error instanceof Error ? error.message : String(error); }
 
       return {
         inspection: inspectionRow,
+        claimDraftError,
         ...(receiptRow.claim_draft_skipped === 'no_purchase_order'
           ? { claimDraftSkipped: 'no_purchase_order' as const }
           : {}),
@@ -2096,6 +2104,38 @@ export function useCreateReceivingInspection() {
   });
 }
 
+/** Follow-ups use the saved inspection identity; they never invoke a receipt RPC. */
+export function useRetryReceivingFollowUp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      inspection: CreateReceivingInspectionResult['inspection'];
+      damagedFfeItemIds?: string[];
+      photoAssetIds?: string[];
+      retryClaim?: boolean;
+    }) => {
+      const supabase = getSupabase() as any;
+      if (input.photoAssetIds) {
+        const { data, error } = await supabase.from('receiving_inspections')
+          .select('photo_asset_ids').eq('id', input.inspection.id).single();
+        if (error) throw error;
+        const ids = [...new Set([...(data?.photo_asset_ids ?? []), ...input.photoAssetIds])];
+        const { error: updateError } = await supabase.from('receiving_inspections')
+          .update({ photo_asset_ids: ids }).eq('id', input.inspection.id).select('id').single();
+        if (updateError) throw updateError;
+      }
+      if (input.retryClaim) await draftReceivingClaims({
+        notes: input.inspection.notes ?? undefined,
+        damagedFfeItemIds: input.damagedFfeItemIds,
+      }, input.inspection);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
+      queryClient.invalidateQueries({ queryKey: ['damage-claims'] });
+    },
+  });
+}
+
 export interface CompleteReceivingInspectionInput {
   inspectionId: string;
   outcome: ReceivingInspectionOutcome;
@@ -2124,11 +2164,14 @@ export function useCompleteReceivingInspection() {
       if (error) throw error;
       if (!data?.id) throw new Error('The inspection completion returned no identity.');
       const inspection = data as CreateReceivingInspectionResult['inspection'];
-      const damageClaimCreated = await draftReceivingClaims({
+      let damageClaimCreated = false;
+      let claimDraftError: string | undefined;
+      try { damageClaimCreated = await draftReceivingClaims({
         notes: inspection.notes ?? undefined,
         damagedFfeItemIds: input.items.filter((item) => item.condition !== 'good').map((item) => item.ffeItemId),
-      }, inspection);
+      }, inspection); } catch (error) { claimDraftError = error instanceof Error ? error.message : String(error); }
       return {
+        claimDraftError,
         inspection,
         damageClaimCreated,
         ...(inspection.studio_purchase_id && inspection.outcome !== 'clean'

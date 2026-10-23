@@ -171,10 +171,10 @@ describe('the receiving photo line, rendered', () => {
       },
     ];
     renderPage();
-    expect(screen.getByText(/Awaiting inspection · 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Receive a delivery · 1/)).toBeInTheDocument();
     expect(screen.getByText(/Shipped · receive on arrival · 1/)).toBeInTheDocument();
     expect(screen.getByText(/PO-S/)).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Inspect delivery' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Receive a delivery' })).toHaveLength(2);
     // C-20: the claim clock rides the delivered row only.
     expect(screen.getAllByTestId('claim-clock').map((n) => n.textContent)).toEqual(['po-d']);
   });

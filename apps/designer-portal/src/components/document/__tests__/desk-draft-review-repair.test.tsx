@@ -137,3 +137,13 @@ describe('Desk DraftReview held Send repair (517-5)', () => {
     expect(screen.queryByRole('button', { name: 'Add recipient email' })).toBeNull();
   });
 });
+
+
+describe('US-51 receiving notice recipient boundary', () => {
+  it('missing recipient offers Add receiver contact and no Send', () => {
+    const { DraftReview } = require('../buying/draft-review');
+    render(<DraftReview draft={{ id: 'claim-1', kind: 'vendor_claim_notice', status: 'awaiting_review', to_email: null, subject: 'Damage', body: 'One damaged chair' }} onAddAddress={jest.fn()} />);
+    expect(screen.getByRole('button', { name: 'Add receiver contact' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send correspondence' })).toBeNull();
+  });
+});
