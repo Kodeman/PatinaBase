@@ -2,6 +2,8 @@
 
 import { useOrganizationMembers, useProjectV2 } from '@patina/supabase';
 import type { Database } from '@patina/supabase';
+import { pieceLineStage } from '@/lib/document/pieces/line-stage';
+import { deriveNextAct } from '../line-unfold/next-act';
 import type { OverviewLine } from '@/lib/document/pieces/overview-derivation';
 import { useJobPlaces } from '../destinations/use-job-places';
 
@@ -9,9 +11,11 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 type PurchaseOrder = Database['public']['Tables']['purchase_orders']['Row'];
 type FfeItem = Database['public']['Tables']['project_ffe_items']['Row'];
 
-export type PurchasingOverviewLine = OverviewLine & Partial<Pick<FfeItem, 'name' | 'unit' | 'planned_destination_location_id'>> & {
+export type PurchasingOverviewLine = OverviewLine & { studio_purchases?: { status: string }[] | null } & Partial<Pick<FfeItem, 'name' | 'unit' | 'planned_destination_location_id'>> & {
   purchase_order?: (Pick<PurchaseOrder, 'status' | 'created_by' | 'ship_to'> & {
     creator?: Pick<Profile, 'display_name' | 'full_name'> | null;
+    sent_at?: string | null;
+    acknowledged_at?: string | null;
   }) | null;
 };
 
@@ -39,12 +43,31 @@ function ReleaseOwner({ projectId }: { projectId: string }) {
   return <ReleaseOwnerNames studioId={project.data.studio_id} />;
 }
 
-function NextOwner({ projectId, po }: {
-  projectId: string;
-  po: PurchasingOverviewLine['purchase_order'];
-}) {
-  if (po?.status === 'held_for_release') return <ReleaseOwner projectId={projectId} />;
-  return <>{profileName(po?.creator) || 'Owner not named'}</>;
+function NextReading({ projectId, line }: { projectId: string; line: PurchasingOverviewLine }) {
+  const po = line.purchase_order;
+  if (po?.status === 'held_for_release') return <>Next: <ReleaseOwner projectId={projectId} /></>;
+  const owner = profileName(po?.creator);
+  if (owner) return <>Next: {owner}</>;
+  const stage = pieceLineStage(line);
+  const next = deriveNextAct({
+    itemStatus: line.status ?? '',
+    po: po ?? null,
+    purchase: line.studio_purchases?.find((purchase) => purchase.status === 'recorded' || purchase.status === 'billed'),
+    ready: stage.lock === null && (stage.stage === 'ready' || stage.stage === 'released'),
+    inspected: line.received_quantity != null,
+    hasOpenClaim: (line.item_claims ?? []).some((claim) => claim.state === 'drafted' || claim.state === 'vendor_notified'),
+  });
+  if (!next) return null;
+  const label = next.kind === 'advance' ? next.label : {
+    order: 'Prepare a PO',
+    send: 'Send to vendor',
+    'log-ack': 'Log the ack',
+    inspect: 'Log inspection',
+    'complete-inspection': 'Complete inspection',
+    install: 'Mark installed',
+    'purchase-arrival': 'Record arrival',
+  }[next.kind];
+  return <>Next: {label}</>;
 }
 
 function Quantity({ line }: { line: PurchasingOverviewLine }) {
@@ -77,7 +100,7 @@ function PurchasingFactLine({ projectId, line, jobPlaces }: {
         {purchasingDestination(line, jobPlaces)}
       </span>
       <span className="min-w-0 break-words">
-        Next: <NextOwner projectId={projectId} po={line.purchase_order} />
+        <NextReading projectId={projectId} line={line} />
       </span>
     </li>
   );
