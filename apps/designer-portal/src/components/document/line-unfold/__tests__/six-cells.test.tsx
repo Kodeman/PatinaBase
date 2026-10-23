@@ -47,6 +47,8 @@ jest.mock('@patina/supabase', () => ({
   usePoAcknowledgments: () => ({ data: [] }),
   useUnresolvedProcurementExceptions: () => ({ data: [] }),
   useOpenProcurementException: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useOrganizationMembers: () => ({ data: [] }),
+  useReceivingInspections: () => ({ data: [], isLoading: false }),
   useProcurementItems: () => ({ data: [], isLoading: false }),
   useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
   // C-29: the Quote cell; its own suite is quote.test.tsx.
@@ -385,4 +387,14 @@ describe('LineUnfold · one next act above the cells (C-14)', () => {
     });
     expect(screen.queryByTestId('line-next-act')).not.toBeInTheDocument();
   });
+});
+
+
+it('lifts pickup and arrival for a recorded purchase without a maker trail', () => {
+  render(<LineUnfold item={{ ...item, status: 'ordered' }} purchase={{ id: 'purchase-1', status: 'recorded', payee_name: 'Madison dealer', purchased_on: '2026-10-03' } as any} projectId="project-1" projectName="Cedar house" onAddNote={jest.fn()} onFold={jest.fn()} />);
+  expect(within(screen.getByTestId('line-next-act')).getByRole('button', { name: 'Arrange pickup or delivery' })).toBeInTheDocument();
+  expect(screen.queryByTestId('log-ack-inline')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Mark in production' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Order' })).not.toBeInTheDocument();
+  expect(screen.getByTestId('line-money-out-cell')).toHaveTextContent('Payment recorded with the purchase');
 });
