@@ -141,6 +141,9 @@ export function RecordQuoteSheet({
           </p>
         ) : (
           <>
+            <p className="text-[12px] text-[var(--color-charcoal)]">
+              Record a quote the maker already sent. Nothing is sent from Patina.
+            </p>
             {projects.length > 1 && (
               <label className="block">
                 <span className={LABEL_CLS}>Job</span>
@@ -382,7 +385,7 @@ export function RecordQuoteAct({
         className="mt-1"
         onClick={() => setOpen(true)}
       >
-        {supersedesQuoteId ? 'Record a new quote…' : 'Record a quote…'}
+        Record quote
       </DocumentAction>
       {open && (
         <LineQuoteSheet
