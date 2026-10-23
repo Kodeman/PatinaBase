@@ -21,6 +21,8 @@ const mockPairLines: { data: FfePairLine[] } = { data: [] };
 const mockSubmittals: { data: Record<string, unknown>[] } = { data: [] };
 
 jest.mock('@patina/supabase', () => ({
+  useProjectDestinationLocations: () => ({ data: [] }),
+  useStudioContacts: () => ({ data: [] }),
   usePurchaseOrders: () => ({ data: ['po-1', 'po-9', 'po-1043'].map(id => ({
     id, project_id: 'project-1', vendor_id: 'vendor-hewn', total_cents: 1248000,
     ship_to: 'Dock 4, Racine', status: 'draft', sent_at: null,
