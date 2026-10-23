@@ -63,6 +63,7 @@ function NextReading({ projectId, line }: { projectId: string; line: PurchasingO
     send: 'Send to vendor',
     'log-ack': 'Log the ack',
     inspect: 'Log inspection',
+    'complete-inspection': 'Complete inspection',
     install: 'Mark installed',
     'purchase-arrival': 'Record arrival',
   }[next.kind];
