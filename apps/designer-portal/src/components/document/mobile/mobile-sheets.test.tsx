@@ -368,7 +368,7 @@ describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
     const panel = marginPanel();
 
     expect(within(panel).getByText('THE WHOLE JOB · 4')).toBeInTheDocument();
-    expect(within(panel).getByText('BESIDE PIECES · 3')).toBeInTheDocument();
+    expect(within(panel).getByText('BESIDE PIECES & PURCHASING · 3')).toBeInTheDocument();
     expect(panel.querySelectorAll('[data-margin-row]')).toHaveLength(7);
     // "2 overdue" — the rug/nightstands decision (whole job) and the COM
     // decision (beside Pieces); the invoice is money and never counts.

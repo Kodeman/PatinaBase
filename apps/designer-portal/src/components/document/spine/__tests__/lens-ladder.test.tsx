@@ -280,7 +280,7 @@ describe('the ladder’s stops', () => {
       (row) => row.getAttribute('data-index-region') === 'ffe',
     ) as HTMLElement;
     expect(pieces).toHaveAttribute('data-region-head-in-frame', 'true');
-    expect(within(pieces).getByText('Pieces')).toBeInTheDocument();
+    expect(within(pieces).getByText('Pieces & purchasing')).toBeInTheDocument();
 
     // D-B37 — was `expect(pieces).not.toHaveTextContent('36 LINES')`. The yield
     // is a PAINT state now, so the line is still THERE: what changed is that it
@@ -989,7 +989,7 @@ describe('the rail around the ladder', () => {
       'Procurement & Orders',
       'Client approvals',
       'Project schedule',
-      'Pieces',
+      'Pieces & purchasing',
       'Project financials',
       'Project closeout',
       'The record',

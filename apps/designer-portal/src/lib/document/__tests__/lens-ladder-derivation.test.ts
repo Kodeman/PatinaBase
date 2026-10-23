@@ -118,7 +118,7 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
     expect(deriveLadderSegments(input()).map((s) => s.name)).toEqual([
       'Client approvals',
       'Project schedule',
-      'Pieces',
+      'Pieces & purchasing',
       'Project financials',
       'Project closeout',
       'The record',
