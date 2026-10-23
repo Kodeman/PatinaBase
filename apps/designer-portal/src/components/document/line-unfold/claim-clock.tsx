@@ -48,16 +48,18 @@ export function claimClockSentence({
 /** The RPC's nullable term is authoritative; no second account read or inferred default. */
 export function ClaimClockLine({
   purchaseOrderId,
+  receivingInspectionId,
   vendorName,
   vendorId,
   className = '',
 }: {
   purchaseOrderId: string | null | undefined;
+  receivingInspectionId?: string | null;
   vendorId: string | null | undefined;
   vendorName: string;
   className?: string;
 }) {
-  const { data: clock } = useProcurementClaimDeadline(purchaseOrderId);
+  const { data: clock } = useProcurementClaimDeadline(purchaseOrderId, receivingInspectionId);
   if (!clock) return null;
   const line = claimClockSentence({
     vendorName,

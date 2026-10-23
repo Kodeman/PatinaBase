@@ -177,7 +177,7 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
           room:project_rooms!project_room_id(id, name),
           product:products!product_id(id, name, images, brand),
           blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
-          item_claims:damage_claims!ffe_item_id(id, state, created_at, inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey(photo_asset_ids)),
+          item_claims:damage_claims!ffe_item_id(id, state, receiving_inspection_id, created_at, inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey(photo_asset_ids)),
           spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
             readiness_status,
             configuration_id, configuration_snapshot,

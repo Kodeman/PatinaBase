@@ -654,7 +654,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                       setPhotoError(null);
                     } catch (e) { setPhotoError((e as Error).message); }
                   }}>Retry photos</Button></>}
-                {purchaseOrderId && <ClaimClockLine purchaseOrderId={purchaseOrderId} vendorId={null} vendorName={vendorName} />}
+                {purchaseOrderId && <ClaimClockLine purchaseOrderId={purchaseOrderId} receivingInspectionId={props.inspectionId} vendorId={null} vendorName={vendorName} />}
                 {saved.damageClaimCreated && <p>Claim draft ready · not sent. Reviewer: {members.data?.find(m => m.user_id === owner)?.profiles?.full_name ?? 'the assigned buyer'}.</p>}
               </section> : <>
               {!props.inspectionId && <div className="mb-5 space-y-3">

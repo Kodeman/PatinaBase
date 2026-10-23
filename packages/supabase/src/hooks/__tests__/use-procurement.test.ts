@@ -130,6 +130,7 @@ vi.mock('@tanstack/react-query', () => ({
 // Import AFTER mocks.
 import {
   usePurchaseOrders,
+  useProcurementClaimDeadline,
   // W1-T5 — cross-project FF&E items (rows-per-item By Status view)
   useProcurementItems,
   usePOPayments,
@@ -3297,5 +3298,23 @@ describe('receiving follow-up result boundary', () => {
     await run.mutationFn({ inspection: { id: 'saved-receipt', purchase_order_id: 'po-1', outcome: 'damaged' }, retryClaim: true, damagedFfeItemIds: ['ffe-1'] });
     expect(supabaseClient.rpc).not.toHaveBeenCalled();
     expect(getBuilder('damage_claims').insert).toHaveBeenCalledWith([expect.objectContaining({ receiving_inspection_id: 'saved-receipt', ffe_item_id: 'ffe-1' })]);
+  });
+});
+
+
+describe('useProcurementClaimDeadline receipt basis', () => {
+  it('reads a receipt clock instead of the PO first arrival for a receipt claim', async () => {
+    const clock = { delivered_on: '2026-10-20', vendor_deadline: '2026-10-23', claims_window_days: 3 };
+    supabaseClient.rpc.mockResolvedValue({ data: [clock], error: null });
+    const config = useProcurementClaimDeadline('po-1', 'receipt-2') as unknown as { queryKey: unknown[]; queryFn: () => Promise<unknown> };
+    expect(await config.queryFn()).toEqual(clock);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('procurement_receipt_claim_deadline', { p_inspection_id: 'receipt-2' });
+    expect(config.queryKey).toContain('receipt-2');
+  });
+  it('keeps PO-level callers on the existing deadline authority', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: [], error: null });
+    const config = useProcurementClaimDeadline('po-1') as unknown as { queryFn: () => Promise<unknown> };
+    expect(await config.queryFn()).toBeNull();
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('procurement_claim_deadline', { p_po_id: 'po-1' });
   });
 });

@@ -18,7 +18,7 @@ export function ReceivingCell({
 }: {
   item: FFERow;
   stampKind: string;
-  openClaims: readonly { state: string }[];
+  openClaims: readonly { id?: string; state: string; receiving_inspection_id?: string | null }[];
 }) {
   const [receiving, setReceiving] = useState(false);
   // Physical counts are not proof that cartons were opened and inspected.
@@ -42,13 +42,18 @@ export function ReceivingCell({
         {receiving && <LogInspectionDrawer open onOpenChange={setReceiving} purchaseOrderId={po.id} projectId={item.project_id}
           poLabel={po.po_number ?? 'Purchase order'} vendorName={item.vendor_name ?? 'Vendor'} projectName={item.project?.name ?? 'Project'} buyerUserId={po.created_by} />}
       </>}
-      {clockRuns && (
-        <ClaimClockLine
-          purchaseOrderId={po.id}
-          vendorId={po.vendor_id ?? item.vendor_id}
-          vendorName={item.vendor_name ?? 'The vendor'}
-          className="mt-0.5 text-[11px]"
-        />
+      {clockRuns && (openClaims.some(c => c.state === 'drafted')
+        ? openClaims.filter(c => c.state === 'drafted').map((claim, index) => (
+          <ClaimClockLine key={claim.id ?? index}
+            purchaseOrderId={po.id}
+            receivingInspectionId={claim.receiving_inspection_id}
+            vendorId={po.vendor_id ?? item.vendor_id}
+            vendorName={item.vendor_name ?? 'The vendor'}
+            className="mt-0.5 text-[11px]"
+          />
+        ))
+        : <ClaimClockLine purchaseOrderId={po.id} vendorId={po.vendor_id ?? item.vendor_id}
+            vendorName={item.vendor_name ?? 'The vendor'} className="mt-0.5 text-[11px]" />
       )}
       {/* C-28: the claim notice an exception drafted, awaiting review. */}
       {po?.id && item.project_id && (

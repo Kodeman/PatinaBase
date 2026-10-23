@@ -3,10 +3,11 @@ import { render, screen } from '@testing-library/react';
 import { ClaimClockLine, claimClockSentence } from '../line-unfold/claim-clock';
 
 let clock: Record<string, unknown> | null = null;
+const mockDeadlineRead = jest.fn(() => ({ data: clock }));
 const mockAccountsRead = jest.fn(() => ({ data: [], isPending: false, isSuccess: true }));
 
 jest.mock('@patina/supabase', () => ({
-  useProcurementClaimDeadline: () => ({ data: clock }),
+  useProcurementClaimDeadline: (...args: unknown[]) => mockDeadlineRead(...args),
   useStudioVendorAccounts: () => mockAccountsRead(),
 }));
 jest.mock('@/hooks/use-viewer-studio', () => ({
@@ -106,4 +107,11 @@ describe('ClaimClockLine', () => {
     const { container } = render(<ClaimClockLine purchaseOrderId="po-1" vendorId="v-1" vendorName="Hewn" />);
     expect(container).toBeEmptyDOMElement();
   });
+});
+
+
+it('passes the claim receipt to the deadline hook', () => {
+  clock = { vendor_deadline: '2999-01-03', claims_window_days: 3 };
+  render(<ClaimClockLine purchaseOrderId="po-1" receivingInspectionId="receipt-2" vendorId="v-1" vendorName="Hewn" />);
+  expect(mockDeadlineRead).toHaveBeenCalledWith('po-1', 'receipt-2');
 });
