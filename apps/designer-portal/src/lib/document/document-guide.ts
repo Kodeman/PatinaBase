@@ -1138,11 +1138,11 @@ function deriveGuide(
       headline:
         stage === 'install'
           ? installHeadline!
-          : beforeAnyOrder ? ''
           : ((stage === 'project' ? projectRestHeadline(ticketRows) : null) ??
+            (beforeAnyOrder ? 'Nothing ordered yet.' : null) ??
             leader?.headline ??
             rest.headline),
-      action: beforeAnyOrder ? null : restAction,
+      action: restAction,
     }, inputFacts, row.client_name);
   }
 

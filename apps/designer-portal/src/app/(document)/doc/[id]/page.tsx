@@ -1878,7 +1878,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         gate: nearestGate,
         closureReady,
         ticketRows,
-        buyingLines: ownActFfe.data?.filter((item) => item.removed_at == null) ?? [],
+        buyingLines: ownActFfe.data?.filter((item) => item.removed_at == null),
         alreadySeeded: Boolean(discoveryQuery.data?.row?.seeded_proposal_id),
         oneVoice,
       })

@@ -1288,17 +1288,24 @@ describe('the sixth rung derives from the ticket (B2-L3)', () => {
     }
   });
 
-  it('leaves the authorization line alone before any order reaches the vendor', () => {
-    for (const value of ['2 not ordered yet', 'No pieces yet', 'Reading…']) {
+  it('reads "Nothing ordered yet." before any order reaches the vendor', () => {
+    for (const value of ['2 not ordered yet', 'No pieces yet']) {
       const guide = deriveDocumentGuide({
         row: row('project'),
         now: NOW,
         ticketRows: withPieces(value),
         buyingLines: [],
       });
-      expect(guide.headline).toBe('');
-      expect(guide.action).toBeNull();
+      expect(guide.headline).toBe('Nothing ordered yet.');
+      expect(guide.action?.label).toBe('Release the next room');
     }
+    const reading = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      ticketRows: withPieces('Reading…'),
+      buyingLines: [],
+    });
+    expect(reading.headline).toBe('');
   });
 
   it.each([
@@ -1319,8 +1326,7 @@ describe('the sixth rung derives from the ticket (B2-L3)', () => {
     { studio_purchases: [{ status: 'voided' }] },
   ])('does not call an uncommitted line moving: %j', (line) => {
     const guide = deriveDocumentGuide({ row: row('project'), now: NOW, buyingLines: [line] });
-    expect(guide.headline).toBe('');
-    expect(guide.action).toBeNull();
+    expect(guide.headline).toBe('Nothing ordered yet.');
   });
 
   it('keeps the rest sentence once the job has lines', () => {
