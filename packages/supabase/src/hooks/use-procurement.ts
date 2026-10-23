@@ -1136,20 +1136,19 @@ export function useSetPurchaseOrderTracking(options?: { errorSurface?: 'inline' 
   });
 }
 
-/** procurement_claim_deadline row (00700). Deadlines are null until delivery. */
+/** NULL window days mean unknown terms; deadlines also require delivery (00858). */
 export interface ProcurementClaimDeadline {
   delivered_on: string | null;
-  claims_window_days: number;
+  claims_window_days: number | null;
   vendor_deadline: string | null;
-  concealed_carrier_days: number;
+  concealed_carrier_days: number | null;
   carrier_deadline: string | null;
 }
 
 /**
- * Query: the claim clock for a PO through `procurement_claim_deadline`
- * (00700): delivered day plus the studio vendor account's claims and
- * concealed-carrier windows (R-PB9 defaults 3 and 5 days). Null when the
- * caller cannot read the PO.
+ * Query: the claim clock for a PO through `procurement_claim_deadline`:
+ * delivered day plus entered vendor terms, never defaults (00858).
+ * Null when the caller cannot read the PO.
  */
 export function useProcurementClaimDeadline(purchaseOrderId: string | null | undefined) {
   return useQuery({
