@@ -9,6 +9,7 @@ jest.mock('@patina/supabase', () => ({
   useReceivingInspections: () => ({ data: mockReceipts, isLoading: mockLoading }),
 }));
 jest.mock('../purchase-record-form', () => ({ PurchaseRecordForm: ({ initialLine }: any) => <p>Record for {initialLine.id}</p> }));
+jest.mock('../../line-unfold/record-payment', () => ({ RecordPaymentForm: ({ purchaseOrderId }: any) => <p>Payment for {purchaseOrderId}</p> }));
 jest.mock('@/components/portal/procurement/log-inspection-drawer', () => ({
   LogInspectionDrawer: (props: any) => { mockDrawer(props); return props.open ? <p>Shared receiving</p> : null; },
 }));
@@ -49,11 +50,28 @@ describe('external-purchase lane', () => {
   });
 
   it('does not treat a pending physical receipt as inspected or offer a duplicate arrival', () => {
-    mockReceipts = [{ inspection_pending: true, outcome: null }];
+    mockReceipts = [{ id: 'receipt-pending', inspection_pending: true, outcome: null }];
     arrival({ received_quantity: 2, status: 'delivered' });
     expect(screen.getByRole('status')).toHaveTextContent('inspection pending');
     expect(screen.queryByRole('button', { name: 'Mark installed' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Arrange pickup or delivery' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Complete inspection' }));
+    expect(mockDrawer).toHaveBeenLastCalledWith(expect.objectContaining({ open: true, inspectionId: 'receipt-pending', studioPurchaseId: 'purchase-1' }));
+  });
+
+  it('records a payment against the existing PO rather than creating another purchase', () => {
+    render(<PurchaseChoices projectId="project-1" item={item} canPrepare={false} canRecord={false} purchaseOrderId="po-existing" isPatinaCatalog={false} onPrepare={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record a payment' }));
+    expect(screen.getByText('Payment for po-existing')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prepare a PO' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Record a purchase already made' })).toBeDisabled();
+  });
+
+  it('keeps read-only and damaged arrivals from offering installation or editing', () => {
+    mockReceipts = [{ id: 'receipt-damaged', inspection_pending: false, outcome: 'damaged' }];
+    render(<PurchaseArrival item={{ ...item, received_quantity: 2, status: 'delivered' }} purchase={purchase} projectId="project-1" projectName="Cedar house" canEdit={false} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Review its condition');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('offers installation only after a complete clean inspected arrival', () => {

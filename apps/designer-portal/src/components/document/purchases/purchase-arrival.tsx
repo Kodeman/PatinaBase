@@ -26,7 +26,12 @@ export function PurchaseArrival({ item, purchase, projectId, projectName, canEdi
       <p className="text-[11px] text-[var(--text-muted)]">Bought from {purchase.payee_name}. No acknowledgment or production step is needed.</p>
       {isLoading ? <p role="status">Loading arrival records…</p> : error ? <p role="alert">Arrival records could not be loaded. Try again before recording another arrival.</p> : (
         <>
-          {pending && <p role="status" className="text-[11px] text-[var(--text-muted)]">Arrived · inspection pending. Continue in receiving.</p>}
+          {pending && (
+            <>
+              <p role="status" className="text-[11px] text-[var(--text-muted)]">Arrived · inspection pending.</p>
+              {canEdit && <DocumentAction actionKey="complete-purchase-inspection" surfaceKey="project" regionKey="purchase-arrival" variant="primary" onClick={() => setOpen(true)}>Complete inspection</DocumentAction>}
+            </>
+          )}
           {complete && !pending && !checked && <p role="status" className="text-[11px] text-[var(--text-muted)]">Arrival recorded. Review its condition in receiving before installation.</p>}
           {canEdit && !complete && !pending && (
             <>
@@ -51,7 +56,7 @@ export function PurchaseArrival({ item, purchase, projectId, projectName, canEdi
           {canEdit && checked && item.status === 'delivered' && <InstallAct itemId={item.id} projectId={projectId} lifted />}
         </>
       )}
-      <LogInspectionDrawer open={open} onOpenChange={setOpen} purchaseOrderId={null} studioPurchaseId={purchase.id} arrivalMethod={method}
+      <LogInspectionDrawer open={open} onOpenChange={setOpen} purchaseOrderId={null} studioPurchaseId={purchase.id} arrivalMethod={method} inspectionId={pending?.id}
         receiptItems={[{ ffeItemId: item.id, name: item.name, quantity: item.quantity, receivedQuantity: received, received_quantity: received, unit: item.unit, project_id: projectId }]}
         projectId={projectId} projectName={projectName} poLabel={purchase.description ?? item.name} vendorName={purchase.payee_name} />
     </div>
