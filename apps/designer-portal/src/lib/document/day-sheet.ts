@@ -216,7 +216,7 @@ function nextUnacted(entry: DeskNeed, states: ReadonlyMap<string, NeedState>, to
  *  holder — leaves the line open: the holder still owes it. */
 function holderActOf(entry: DeskNeed, input: DaySheetInput): TeammateAct | null {
   const holder =
-    input.leads.get(entry.projectId)?.leadUserId ?? input.designers?.get(entry.projectId) ?? null;
+    entry.need.assignedToUserId ?? input.leads.get(entry.projectId)?.leadUserId ?? input.designers?.get(entry.projectId) ?? null;
   if (!holder || holder === input.meUserId) return null;
   let latest: TeammateAct | null = null;
   for (const act of input.teammateActs?.get(entry.key) ?? []) {
