@@ -1,6 +1,6 @@
 -- 00857 — Link physical receipts to shipments or studio purchases and track inspection standing.
 -- Lineage: batch 00446 → 00525 (private impl) → 00754 → 00758 → 00762;
--- inspection 00700 → 00756; receiving side effects 00184 → 00665.
+-- inspection 00700 → 00756; receiving side effects 00184 → 00665; exceptions 00708.
 -- Preserve photo validation, authorization-before-lock, cumulative quantities, room allocation,
 -- legacy content-hash retries and PO/payment side effects. New keys are unique per item.
 BEGIN;
@@ -220,6 +220,8 @@ BEGIN
      OR EXISTS (
        SELECT 1 FROM jsonb_array_elements(p_lines) entry
        WHERE jsonb_typeof(entry) IS DISTINCT FROM 'object'
+          OR jsonb_typeof(entry->'selectionId') IS DISTINCT FROM 'string'
+          OR jsonb_typeof(entry->'receivedQuantity') IS DISTINCT FROM 'number'
           OR entry->>'selectionId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
           OR entry->>'receivedQuantity' !~ '^[0-9]+$'
           OR EXISTS (
@@ -961,4 +963,203 @@ REVOKE ALL ON FUNCTION public.record_project_ffe_receipt_batch(uuid, jsonb, publ
 GRANT EXECUTE ON FUNCTION public.record_project_ffe_receipt_batch(uuid, jsonb, public.receiving_inspection_outcome, text, uuid[], uuid, uuid, text, text, text, date, uuid, boolean, uuid, uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.record_project_ffe_inspection(uuid, jsonb, public.receiving_inspection_outcome, text, uuid[], uuid, uuid, text, text, text, date, uuid, boolean, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.record_project_ffe_inspection(uuid, jsonb, public.receiving_inspection_outcome, text, uuid[], uuid, uuid, text, text, text, date, uuid, boolean, uuid, uuid) TO authenticated;
+-- Purchase-only receipts must never be attached to the existing PO-only exception model.
+CREATE OR REPLACE FUNCTION public.open_procurement_exception(p_request jsonb)
+RETURNS public.procurement_exceptions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+DECLARE
+  v_uid        uuid := auth.uid();
+  v_req        jsonb := COALESCE(p_request, '{}'::jsonb);
+  v_keys       constant text[] := ARRAY['type', 'ffeItemId', 'purchaseOrderId', 'shipmentId', 'inspectionId',
+                                        'damageClaimId', 'note', 'evidenceMediaIds', 'clockDueOn', 'clockBasis'];
+  v_key        text;
+  v_type       text := NULLIF(btrim(COALESCE(v_req->>'type', '')), '');
+  v_note       text := NULLIF(btrim(COALESCE(v_req->>'note', '')), '');
+  v_basis      text := NULLIF(btrim(COALESCE(v_req->>'clockBasis', '')), '');
+  v_due        date;
+  v_item_id    uuid;
+  v_po_id      uuid;
+  v_shipment_id uuid;
+  v_inspection_id uuid;
+  v_claim_id   uuid;
+  v_media      uuid[] := '{}'::uuid[];
+  v_found      uuid;
+  v_item       public.project_ffe_items%ROWTYPE;
+  v_po         public.purchase_orders%ROWTYPE;
+  v_claim      public.damage_claims%ROWTYPE;
+  v_project_id uuid;
+  v_project    public.projects%ROWTYPE;
+  v_clock      record;
+  v_vendor     text;
+  v_row        public.procurement_exceptions%ROWTYPE;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'open_procurement_exception: not authenticated' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF jsonb_typeof(v_req) <> 'object' THEN
+    RAISE EXCEPTION 'open_procurement_exception: request must be an object' USING ERRCODE = 'check_violation';
+  END IF;
+  IF (v_req - v_keys) <> '{}'::jsonb THEN
+    RAISE EXCEPTION 'open_procurement_exception: unknown keys %',
+      (SELECT string_agg(key, ', ') FROM jsonb_object_keys(v_req - v_keys) AS key)
+      USING ERRCODE = 'check_violation';
+  END IF;
+  FOR v_key IN SELECT key FROM jsonb_object_keys(v_req) AS key LOOP
+    IF jsonb_typeof(v_req->v_key) <> 'null' AND jsonb_typeof(v_req->v_key) <> (CASE
+         WHEN v_key = 'evidenceMediaIds' THEN 'array' ELSE 'string' END) THEN
+      RAISE EXCEPTION 'open_procurement_exception: % has the wrong type', v_key USING ERRCODE = 'check_violation';
+    END IF;
+  END LOOP;
+  IF v_type = 'ack_discrepancy' THEN
+    RAISE EXCEPTION 'open_procurement_exception: an acknowledgment discrepancy opens from log_po_acknowledgment_v2'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_type IS NULL OR v_type NOT IN ('concealed_damage', 'damage', 'short_ship', 'wrong_item', 'delay',
+                                      'backorder', 'discontinued', 'price_change') THEN
+    RAISE EXCEPTION 'open_procurement_exception: type must be concealed_damage, damage, short_ship, wrong_item, delay, backorder, discontinued or price_change'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF char_length(v_note) > 2000 OR char_length(v_basis) > 500 THEN
+    RAISE EXCEPTION 'open_procurement_exception: note is at most 2000 characters, clockBasis 500'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  BEGIN
+    v_item_id := NULLIF(btrim(COALESCE(v_req->>'ffeItemId', '')), '')::uuid;
+    v_po_id := NULLIF(btrim(COALESCE(v_req->>'purchaseOrderId', '')), '')::uuid;
+    v_shipment_id := NULLIF(btrim(COALESCE(v_req->>'shipmentId', '')), '')::uuid;
+    v_inspection_id := NULLIF(btrim(COALESCE(v_req->>'inspectionId', '')), '')::uuid;
+    v_claim_id := NULLIF(btrim(COALESCE(v_req->>'damageClaimId', '')), '')::uuid;
+    IF jsonb_typeof(v_req->'evidenceMediaIds') = 'array' THEN
+      SELECT COALESCE(array_agg(DISTINCT value::uuid), '{}'::uuid[]) INTO v_media
+      FROM jsonb_array_elements_text(v_req->'evidenceMediaIds') AS value;
+    END IF;
+  EXCEPTION WHEN invalid_text_representation THEN
+    RAISE EXCEPTION 'open_procurement_exception: subject ids and evidenceMediaIds must be ids'
+      USING ERRCODE = 'check_violation';
+  END;
+  BEGIN
+    v_due := NULLIF(btrim(COALESCE(v_req->>'clockDueOn', '')), '')::date;
+  EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow THEN
+    RAISE EXCEPTION 'open_procurement_exception: clockDueOn must be a date (YYYY-MM-DD)'
+      USING ERRCODE = 'check_violation';
+  END;
+  IF cardinality(v_media) > 50 THEN
+    RAISE EXCEPTION 'open_procurement_exception: at most 50 evidence media ids' USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Walk the subjects down to one PO and project; every given id must agree.
+  IF v_claim_id IS NOT NULL THEN
+    SELECT * INTO v_claim FROM public.damage_claims WHERE id = v_claim_id FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'open_procurement_exception: subject not found or access denied' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_inspection_id IS NOT NULL AND v_inspection_id <> v_claim.receiving_inspection_id
+       OR v_item_id IS NOT NULL AND v_claim.ffe_item_id IS NOT NULL AND v_item_id <> v_claim.ffe_item_id THEN
+      RAISE EXCEPTION 'open_procurement_exception: the subjects do not belong together' USING ERRCODE = 'check_violation';
+    END IF;
+    v_inspection_id := v_claim.receiving_inspection_id;
+    v_item_id := COALESCE(v_item_id, v_claim.ffe_item_id);
+  END IF;
+  IF v_inspection_id IS NOT NULL THEN
+    SELECT purchase_order_id INTO v_found FROM public.receiving_inspections WHERE id = v_inspection_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'open_procurement_exception: subject not found or access denied' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_found IS NULL THEN
+      RAISE EXCEPTION 'exception_requires_purchase_order: inspection has no purchase order'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_po_id IS NOT NULL AND v_po_id <> v_found THEN
+      RAISE EXCEPTION 'open_procurement_exception: the subjects do not belong together' USING ERRCODE = 'check_violation';
+    END IF;
+    v_po_id := v_found;
+  END IF;
+  IF v_shipment_id IS NOT NULL THEN
+    SELECT purchase_order_id INTO v_found FROM public.po_shipments WHERE id = v_shipment_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'open_procurement_exception: subject not found or access denied' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_po_id IS NOT NULL AND v_po_id <> v_found THEN
+      RAISE EXCEPTION 'open_procurement_exception: the subjects do not belong together' USING ERRCODE = 'check_violation';
+    END IF;
+    v_po_id := v_found;
+  END IF;
+  IF v_item_id IS NOT NULL THEN
+    SELECT * INTO v_item FROM public.project_ffe_items WHERE id = v_item_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'open_procurement_exception: subject not found or access denied' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_po_id IS NOT NULL AND v_item.purchase_order_id IS DISTINCT FROM v_po_id THEN
+      RAISE EXCEPTION 'open_procurement_exception: the subjects do not belong together' USING ERRCODE = 'check_violation';
+    END IF;
+    v_po_id := v_item.purchase_order_id;
+    v_project_id := v_item.project_id;
+  END IF;
+  IF v_po_id IS NOT NULL THEN
+    SELECT * INTO v_po FROM public.purchase_orders WHERE id = v_po_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'open_procurement_exception: subject not found or access denied' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    v_project_id := v_po.project_id;
+  END IF;
+  IF v_project_id IS NULL THEN
+    RAISE EXCEPTION 'open_procurement_exception: name a subject (a line, purchase order, shipment, inspection or damage claim)'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT * INTO v_project FROM public.projects WHERE id = v_project_id;
+  IF NOT public.can_buy_for_project(v_project_id) THEN
+    RAISE EXCEPTION 'open_procurement_exception: subject not found or access denied' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_claim.id IS NOT NULL AND v_claim.exception_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.procurement_exceptions WHERE id = v_claim.exception_id AND status <> 'resolved'
+  ) THEN
+    RAISE EXCEPTION 'open_procurement_exception: damage claim % already has an open exception', v_claim.id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- The claim clock (00700 / R-PB9): the vendor's window, or the carrier's.
+  IF v_type IN ('concealed_damage', 'damage', 'short_ship', 'wrong_item') THEN
+    v_due := NULL;
+    v_basis := NULL;
+    IF v_po.id IS NOT NULL THEN
+      SELECT * INTO v_clock FROM public.procurement_claim_deadline(v_po.id);
+      SELECT name INTO v_vendor FROM public.vendors WHERE id = v_po.vendor_id;
+      IF v_clock.delivered_on IS NOT NULL THEN
+        IF v_type = 'concealed_damage' THEN
+          v_due := v_clock.carrier_deadline;
+          v_basis := format('The carrier wants concealed damage reported within %s days of delivery.',
+                            v_clock.concealed_carrier_days);
+        ELSE
+          v_due := v_clock.vendor_deadline;
+          v_basis := format('%s wants written notice within %s days of delivery.',
+                            COALESCE(v_vendor, 'The vendor'), v_clock.claims_window_days);
+        END IF;
+      END IF;
+    END IF;
+  ELSIF v_due IS NOT NULL AND v_basis IS NULL THEN
+    RAISE EXCEPTION 'open_procurement_exception: a clockDueOn needs its clockBasis in plain words'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  INSERT INTO public.procurement_exceptions (
+    organization_id, project_id, type, ffe_item_id, purchase_order_id, shipment_id, inspection_id,
+    damage_claim_id, status, opened_by, clock_due_on, clock_basis, evidence_media_ids, note
+  ) VALUES (
+    COALESCE(v_project.studio_id, public._primary_studio_for(v_project.designer_id)), v_project_id, v_type,
+    v_item_id, v_po_id, v_shipment_id, v_inspection_id, v_claim_id, 'open', v_uid,
+    v_due, CASE WHEN v_due IS NOT NULL THEN v_basis END, v_media, v_note
+  )
+  RETURNING * INTO v_row;
+
+  IF v_claim.id IS NOT NULL THEN
+    UPDATE public.damage_claims SET exception_id = v_row.id WHERE id = v_claim.id;
+  END IF;
+  RETURN v_row;
+END;
+$$;
+
 COMMIT;

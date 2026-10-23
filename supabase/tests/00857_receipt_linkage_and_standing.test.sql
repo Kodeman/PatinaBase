@@ -114,6 +114,25 @@ BEGIN
   PERFORM pg_temp.receipt_rejected(format('INSERT INTO public.receiving_inspections(inspected_by,outcome) VALUES (%L,''damaged'')',actor),
     'missing receipt subject CHECK');
 
+  BEGIN
+    PERFORM public.open_procurement_exception(jsonb_build_object('type','damage',
+      'inspectionId',purchase_receipt,'shipmentId',shipment,'ffeItemId',item));
+    RAISE EXCEPTION 'assertion failed: purchase-only inspection attached to PO exception';
+  EXCEPTION WHEN check_violation THEN
+    PERFORM pg_temp.receipt_assert(SQLERRM LIKE 'exception_requires_purchase_order:%',
+      'purchase inspection explicitly requires a purchase order');
+  END;
+  PERFORM pg_temp.receipt_assert(NOT EXISTS(SELECT 1 FROM public.procurement_exceptions WHERE inspection_id=purchase_receipt),
+    'purchase inspection leaves no PO exception');
+  PERFORM public.open_procurement_exception(jsonb_build_object('type','damage',
+    'inspectionId',receipt,'shipmentId',shipment,'ffeItemId',item));
+  PERFORM pg_temp.receipt_assert(EXISTS(SELECT 1 FROM public.procurement_exceptions WHERE inspection_id=receipt AND purchase_order_id=po),
+    'PO inspection exception remains supported');
+  PERFORM pg_temp.receipt_rejected(format('SELECT public.record_project_ffe_receipt_batch(%L,%L,''clean'')',
+    po,jsonb_build_array(jsonb_build_object('selectionId',item,'receivedQuantity',NULL))), 'null received quantity');
+  PERFORM pg_temp.receipt_rejected(format('SELECT public.record_project_ffe_receipt_batch(%L,%L,''clean'')',
+    po,jsonb_build_array(jsonb_build_object('receivedQuantity',1))), 'missing item identity');
+
   -- Exercise real RLS, not the postgres fixture owner's bypass.
   EXECUTE 'SET LOCAL ROLE authenticated';
   PERFORM pg_temp.receipt_assert((SELECT count(*)=2 FROM public.receiving_inspections WHERE id IN (receipt,purchase_receipt)),
