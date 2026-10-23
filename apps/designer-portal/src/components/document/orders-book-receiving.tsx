@@ -165,6 +165,7 @@ function OpenClaimRow({
           {drafted && (
             <ClaimClockLine
               purchaseOrderId={po?.id}
+              receivingInspectionId={claim.receiving_inspection_id ?? claim.inspection?.id}
               vendorId={po?.vendor?.id}
               vendorName={vendorName}
               className="doc-type-meta mt-0.5"

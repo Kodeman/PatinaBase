@@ -44708,6 +44708,16 @@ export type Database = {
         Args: { p_po_id: string }
         Returns: string[]
       }
+      procurement_receipt_claim_deadline: {
+        Args: { p_inspection_id: string }
+        Returns: {
+          carrier_deadline: string
+          claims_window_days: number
+          concealed_carrier_days: number
+          delivered_on: string
+          vendor_deadline: string
+        }[]
+      }
       project_approval_attachment_objects: {
         Args: { p_decision_id: string }
         Returns: Json

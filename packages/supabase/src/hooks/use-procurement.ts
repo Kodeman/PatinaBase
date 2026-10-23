@@ -1147,20 +1147,22 @@ export interface ProcurementClaimDeadline {
 }
 
 /**
- * Query: the claim clock for a PO through `procurement_claim_deadline`:
- * delivered day plus entered vendor terms, never defaults (00858).
- * Null when the caller cannot read the PO.
+ * Claim clocks use their receipt's arrival when provided (00862); PO-only
+ * callers retain the first-arrival clock. Entered vendor terms, never defaults.
  */
-export function useProcurementClaimDeadline(purchaseOrderId: string | null | undefined) {
+export function useProcurementClaimDeadline(
+  purchaseOrderId: string | null | undefined,
+  receivingInspectionId?: string | null,
+) {
   return useQuery({
-    queryKey: ['procurement-claim-deadline', purchaseOrderId],
-    enabled: Boolean(purchaseOrderId),
+    queryKey: ['procurement-claim-deadline', purchaseOrderId, receivingInspectionId],
+    enabled: Boolean(receivingInspectionId || purchaseOrderId),
     queryFn: async (): Promise<ProcurementClaimDeadline | null> => {
       const supabase = getSupabase() as any;
 
-      const { data, error } = await supabase.rpc('procurement_claim_deadline', {
-        p_po_id: purchaseOrderId,
-      });
+      const { data, error } = receivingInspectionId
+        ? await supabase.rpc('procurement_receipt_claim_deadline', { p_inspection_id: receivingInspectionId })
+        : await supabase.rpc('procurement_claim_deadline', { p_po_id: purchaseOrderId });
 
       if (error) {
         throw new Error(
