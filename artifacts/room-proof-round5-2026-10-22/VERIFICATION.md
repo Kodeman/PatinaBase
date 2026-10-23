@@ -11,6 +11,7 @@
 
 ## Observed in Chrome
 
+- Presentation cover remains at the top after the embedded job finishes loading; the room scene initializes inside its own frame.
 - Room spread renders; survey note opens; concept/material/drawing views stay inside the job.
 - A-201 current and superseded revisions, comparison and enlargement render. Sheet-specific sharing changes the correct label and preserves the open disclosure.
 - A design link opens the actual LR-36 FF&E editor visibly (not the earlier design button). Closing returns to room design. Browser Back followed by an ordinary sheet open does not retain the old origin.

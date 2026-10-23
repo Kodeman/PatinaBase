@@ -70,9 +70,9 @@
     capture();change();ui.work=work;ui.scale=1;if(sheet){ui.drawing=sheet;ui.revision=null;if(sheet==='A-101')ui.compare=false;}Commerce.clearOrigins();J.ui.open=false;J.renderShell();renderWork();setRoute(work==='issue'?'issue':work==='drawings'?'drawings':work);if(scroll)moveTo('#design-work',true);
   }
   function showSite(kind='studio',scroll=true){$('#site-body').hidden=false;$('[data-fold="site-body"]').setAttribute('aria-expanded','true');$('[data-fold="site-body"]').textContent='Fold up −';capture();change();ui.site=kind;Commerce.clearOrigins();J.ui.open=false;J.renderShell();renderSite();setRoute(kind==='field'?'field':'site');if(scroll)moveTo('#site',true);}
-  function route(scene){
+  function route(scene,initial=false){
     if(!['design','scan','concept','drawings','issue','site','field'].includes(scene))return false;
-    if(scene==='site'||scene==='field'){$('#site-body').hidden=false;$('[data-fold="site-body"]').setAttribute('aria-expanded','true');$('[data-fold="site-body"]').textContent='Fold up −';}J.ui.open=false;J.renderShell();ui.work=['scan','concept','drawings','issue'].includes(scene)?scene:null;ui.site=scene==='field'?'field':'studio';renderWork();renderSite();moveTo(scene==='site'||scene==='field'?'#site':ui.work?'#design-work':'#design',true);return true;
+    if(scene==='site'||scene==='field'){$('#site-body').hidden=false;$('[data-fold="site-body"]').setAttribute('aria-expanded','true');$('[data-fold="site-body"]').textContent='Fold up −';}J.ui.open=false;J.renderShell();ui.work=['scan','concept','drawings','issue'].includes(scene)?scene:null;ui.site=scene==='field'?'field':'studio';renderWork();renderSite();moveTo(scene==='site'||scene==='field'?'#site':ui.work?'#design-work':'#design',!initial);return true;
   }
   document.addEventListener('click',e=>{
     const b=e.target.closest('[data-design]');if(!b)return;e.preventDefault();const a=b.dataset.design;
@@ -119,7 +119,7 @@
     renderWork();renderSite();
     const oldRoute=Commerce.route;Commerce.route=scene=>{visits.length=0;const result=oldRoute(scene);return route(scene)||result;};
     const oldReset=Commerce.reset;Commerce.reset=()=>{oldReset();reset();};
-    route(new URLSearchParams(location.search).get('scene'));
+    route(new URLSearchParams(location.search).get('scene'),true);
   }
   window.Design={init,route,reset};
 })();
