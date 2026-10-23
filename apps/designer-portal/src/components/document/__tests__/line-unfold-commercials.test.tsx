@@ -1,3 +1,4 @@
+jest.mock('@/components/document/destinations/planned-destination', () => ({ PlannedDestination: () => null }));
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 jest.mock('@/lib/analytics/document-events', () => ({

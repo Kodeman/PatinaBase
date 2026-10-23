@@ -1,3 +1,4 @@
+jest.mock('@/components/document/destinations/planned-destination', () => ({ PlannedDestination: () => null }));
 /**
  * C-27 (D1-06): the acknowledgment check — the prefill, the agrees / differs
  * word and its signed money delta, the log_po_acknowledgment_v2 payload, the

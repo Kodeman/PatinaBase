@@ -16,15 +16,14 @@
 
 import { useId } from 'react';
 import {
-  useOrganizations,
-  useProject,
   useSetPurchaseOrderShipTo,
   useSetPurchaseOrderShipToLocation,
-  useStudioIdentity,
-  useStudioLocations,
   type PurchaseOrder,
   type StudioLocationRow,
 } from '@patina/supabase';
+
+import { useJobPlaces } from '../../../document/destinations/use-job-places';
+import { JobDestinationsDoor } from '../../../document/destinations/job-destinations-sheet';
 
 export type ShipToKind = 'location' | 'studio' | 'site' | 'other';
 
@@ -39,13 +38,15 @@ export interface ShipToSelection {
 export type ShipToLocation = Pick<
   StudioLocationRow,
   'id' | 'kind' | 'label' | 'address' | 'is_default_receiver'
->;
+> & Partial<Pick<StudioLocationRow, 'is_private_home' | 'instructions' | 'receiving_hours'>> & { receivingParty?: string | null };
 
 export const EMPTY_SHIP_TO: ShipToSelection = { kind: null, otherText: '' };
 
 export const SHIP_TO_REQUIRED_MESSAGE = 'Choose where this ships.';
 
 export interface ShipToAddresses {
+  projectId?: string;
+  jobLocationIds?: ReadonlySet<string>;
   /** The studio's live locations, receivers first. */
   locations: ShipToLocation[];
   /** organizations.address formatted on one line; null hides "The studio". */
@@ -54,39 +55,25 @@ export interface ShipToAddresses {
   siteAddress: string | null;
 }
 
-const clean = (v: unknown): string =>
-  typeof v === 'string' ? v.trim() : '';
-
-/**
- * organizations.address (00021 JSONB, OrganizationAddress
- * street/city/state/zip/country) on one line:
- * "1 Main St, Madison, WI 53703, US". Null when nothing usable is on file.
- */
-export function formatStudioAddress(address: unknown): string | null {
-  if (typeof address === 'string') return address.trim() || null;
-  if (!address || typeof address !== 'object') return null;
-  const a = address as Record<string, unknown>;
-  const stateZip = [clean(a.state), clean(a.zip)].filter(Boolean).join(' ');
-  const line = [clean(a.street), clean(a.city), stateZip, clean(a.country)]
-    .filter(Boolean)
-    .join(', ');
-  return line || null;
-}
+import { formatStudioAddress } from '../../../document/destinations/location-format';
+export { formatStudioAddress } from '../../../document/destinations/location-format';
 
 /** A location on one line: its label, then its address. */
 export function formatLocation(location: ShipToLocation): string {
   const address = formatStudioAddress(location.address);
-  return address ? `${location.label}, ${address}` : location.label;
+  return [address ? `${location.label}, ${address}` : location.label, location.receivingParty, location.receiving_hours, location.instructions].filter(Boolean).join('\n');
 }
 
 /** Receivers first; the hook's order (default receiver, then label) within. */
-export function orderShipToLocations<T extends Pick<ShipToLocation, 'kind'>>(
+export function orderShipToLocations<T extends Pick<ShipToLocation, 'kind'> & { id?: string }>(
   locations: readonly T[],
+  jobLocationIds: ReadonlySet<string> = new Set(),
 ): T[] {
-  return [
+  const ordered = [
     ...locations.filter((l) => l.kind === 'receiver'),
     ...locations.filter((l) => l.kind !== 'receiver'),
   ];
+  return [...ordered.filter((l) => l.id && jobLocationIds.has(l.id)), ...ordered.filter((l) => !l.id || !jobLocationIds.has(l.id))];
 }
 
 /**
@@ -124,23 +111,13 @@ export function resolveShipTo(
  * or when not on file.
  */
 export function useShipToAddresses(projectId: string | null | undefined): ShipToAddresses {
-  const { data: orgs } = useOrganizations();
-  const { data: project } = useProject(projectId ?? '');
-  const p = project as
-    | { studio_id?: string | null; designer_id?: string | null; site_address?: string | null }
-    | undefined;
-  const { data: ownerStudio } = useStudioIdentity({
-    designerId: p && !p.studio_id ? p.designer_id : null,
-  });
-  const studioId = p?.studio_id || ownerStudio?.studioId || null;
-  const { data: locations } = useStudioLocations(studioId);
-  const org = studioId
-    ? (orgs?.find((o) => o.id === studioId) as { address?: unknown } | undefined)
-    : undefined;
+  const places = useJobPlaces(projectId);
   return {
-    locations: orderShipToLocations(locations ?? []),
-    studioAddress: formatStudioAddress(org?.address),
-    siteAddress: p?.site_address?.trim() || null,
+    projectId: projectId || undefined,
+    jobLocationIds: places.jobLocationIds,
+    locations: orderShipToLocations(places.locations, places.jobLocationIds),
+    studioAddress: formatStudioAddress(places.studioAddress),
+    siteAddress: places.siteAddress,
   };
 }
 
@@ -184,6 +161,8 @@ interface ShipToOption {
 
 export function ShipToChoice({
   locations,
+  projectId,
+  jobLocationIds,
   studioAddress,
   siteAddress,
   value,
@@ -192,13 +171,13 @@ export function ShipToChoice({
   invalid,
 }: ShipToChoiceProps) {
   const name = useId();
-  const options: ShipToOption[] = locations.map((l) => ({
+  const options: ShipToOption[] = orderShipToLocations(locations, jobLocationIds).map((l) => ({
     key: `location:${l.id}`,
     kind: 'location',
     locationId: l.id,
     label: l.label,
-    mark: l.is_default_receiver ? 'Default receiver' : undefined,
-    detail: formatStudioAddress(l.address),
+    mark: [l.kind, l.is_private_home ? 'Private home' : null, jobLocationIds?.has(l.id) ? 'On this job' : null, l.is_default_receiver ? 'Default receiver' : null].filter(Boolean).join(' · '),
+    detail: [formatStudioAddress(l.address), l.receivingParty ? `Receiving party: ${l.receivingParty}` : null, l.receiving_hours, l.instructions].filter(Boolean).join('\n') || null,
   }));
   if (studioAddress)
     options.push({ key: 'studio', kind: 'studio', label: 'The studio', detail: studioAddress });
@@ -233,7 +212,7 @@ export function ShipToChoice({
               {opt.label}
               {opt.mark && <span className="text-[var(--text-muted)]"> · {opt.mark}</span>}
               {opt.detail && (
-                <span className="block text-[var(--text-muted)]">{opt.detail}</span>
+                <span className="block whitespace-pre-wrap text-[var(--text-muted)]">{opt.detail}</span>
               )}
             </span>
           </label>
@@ -249,6 +228,7 @@ export function ShipToChoice({
           />
         )}
       </div>
+      {projectId && <JobDestinationsDoor projectId={projectId} aboveFolio />}
     </fieldset>
   );
 }

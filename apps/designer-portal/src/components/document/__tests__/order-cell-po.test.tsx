@@ -1,3 +1,4 @@
+jest.mock('@/components/document/destinations/planned-destination', () => ({ PlannedDestination: () => null }));
 /**
  * US-19 F1 / R28 — the Order cell's PO reference is a real control that does
  * what `Open the order` does, so ⌘K's landing has a control to put focus on.

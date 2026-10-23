@@ -171,6 +171,7 @@ import {
 } from '@/lib/document/room-state';
 import { useRoomLens } from './room-lens-context';
 import { InstallManifest } from './buying/install-manifest';
+import { JobDestinationsDoor } from './destinations/job-destinations-sheet';
 import { PiecesOverview } from './pieces/pieces-overview';
 import {
   buildRoomHref,
@@ -2485,6 +2486,7 @@ function FFESectionBody({
               </DocumentAction>
             ) : (
               <>
+                <JobDestinationsDoor projectId={projectId} />
                 <DocumentAction
                   actionKey="open-spec-book"
                   surfaceKey="project"

@@ -11,6 +11,7 @@ const mockRows: { list: Array<Record<string, unknown>> } = { list: [] };
 const mockLocationsCalls: Array<[unknown, unknown]> = [];
 
 jest.mock("@patina/supabase", () => ({
+  useStudioContacts: () => ({ data: [{ id: "firm-1", entity_kind: "company", company_name: "Badger Freight" }] }),
   useStudioLocations: (orgId: unknown, options: unknown) => {
     mockLocationsCalls.push([orgId, options]);
     return { data: mockRows.list, isLoading: false };
@@ -46,6 +47,7 @@ function row(over: Record<string, unknown> = {}) {
     receiving_fee_cents_piece: 2500,
     instructions: "Call ahead.",
     is_default_receiver: false,
+    is_private_home: false,
     archived_at: null,
     ...over,
   };
@@ -147,6 +149,7 @@ describe("StudioLocationsEditor · create", () => {
         receivingFeeCentsPiece: 1250,
         instructions: "Rear door.",
         isDefaultReceiver: true,
+        isPrivateHome: false,
         studioContactId: "firm-1",
       },
     });
@@ -169,6 +172,7 @@ describe("StudioLocationsEditor · create", () => {
         address: null,
         studioContactId: null,
         isDefaultReceiver: false,
+        isPrivateHome: false,
       }),
     });
   });
@@ -237,6 +241,8 @@ describe("StudioLocationsEditor · edit", () => {
         receivingFeeCentsPiece: 2500,
         instructions: "Call ahead.",
         isDefaultReceiver: false,
+        isPrivateHome: false,
+        studioContactId: "firm-1",
       },
     });
     expect(announce).toHaveBeenCalledWith("Location saved.");
@@ -300,3 +306,16 @@ describe("locationRequestFromForm", () => {
     ).toThrow("Free storage days is not a number.");
   });
 });
+
+ it('records the private-home marker and named receiving party', async () => {
+   mockRows.list = [row({ is_private_home: true })];
+   renderEditor();
+   expect(screen.getByText(/Private home/)).toBeInTheDocument();
+   expect(screen.getByText('Receiving party: Badger Freight')).toBeInTheDocument();
+   expect(screen.getByText('Call ahead.')).toBeInTheDocument();
+   fireEvent.click(screen.getByRole('button', { name: 'Edit Badger Receiving' }));
+   expect(screen.getByLabelText('Private home')).toBeChecked();
+   fireEvent.click(screen.getByLabelText('Private home'));
+   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save the location' })));
+   expect(upsertMutateAsync).toHaveBeenCalledWith({ organizationId: 'org-1', request: expect.objectContaining({ isPrivateHome: false, studioContactId: 'firm-1' }) });
+ });

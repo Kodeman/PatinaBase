@@ -16,13 +16,14 @@ import { useState } from "react";
 import {
   useArchiveStudioLocation,
   useStudioLocations,
+  useStudioContacts,
   useUpsertStudioLocation,
   type StudioLocationAddress,
   type StudioLocationKind,
   type StudioLocationRequest,
   type StudioLocationRow,
 } from "@patina/supabase";
-import { formatStudioAddress } from "@/components/portal/procurement/order-assistant/ship-to-choice";
+import { formatStudioAddress } from "../destinations/location-format";
 import { DocumentAction } from "../document-action";
 
 export const LOCATION_KINDS: ReadonlyArray<{ value: StudioLocationKind; label: string }> = [
@@ -59,6 +60,8 @@ export interface LocationForm {
   receivingFee: string;
   instructions: string;
   isDefaultReceiver: boolean;
+  isPrivateHome: boolean;
+  studioContactId: string;
 }
 
 export const EMPTY_LOCATION_FORM: LocationForm = {
@@ -77,6 +80,8 @@ export const EMPTY_LOCATION_FORM: LocationForm = {
   receivingFee: "",
   instructions: "",
   isDefaultReceiver: false,
+  isPrivateHome: false,
+  studioContactId: "",
 };
 
 const tri = (v: boolean | null): TriState => (v == null ? "" : v ? "yes" : "no");
@@ -101,6 +106,8 @@ export function locationFormFromRow(row: StudioLocationRow): LocationForm {
     receivingFee: cents(row.receiving_fee_cents_piece),
     instructions: row.instructions ?? "",
     isDefaultReceiver: row.is_default_receiver,
+    isPrivateHome: row.is_private_home,
+    studioContactId: row.studio_contact_id ?? "",
   };
 }
 
@@ -140,6 +147,8 @@ export function locationRequestFromForm(form: LocationForm): StudioLocationReque
     receivingFeeCentsPiece: parseDollars(form.receivingFee, "Receiving fee"),
     instructions: form.instructions.trim() || null,
     isDefaultReceiver: form.isDefaultReceiver,
+    isPrivateHome: form.isPrivateHome,
+    studioContactId: form.studioContactId || null,
   };
 }
 
@@ -162,14 +171,16 @@ const FIELD_LABEL = "t-head mb-1 block text-[var(--ink-subtle)]";
 const FIELD_INPUT =
   "w-full rounded-[2px] border border-[var(--hairline-strong)] border-b-[var(--ink-faint)] bg-[var(--paper-doc)] p-2 text-[16px] leading-[1.45] text-[var(--ink)]";
 
-function LocationFormFields({
+export function LocationFormFields({
   idBase,
   initial,
   saving,
   submitLabel,
   onSubmit,
   onCancel,
+  organizationId,
 }: {
+  organizationId: string;
   idBase: string;
   initial: LocationForm;
   saving: boolean;
@@ -177,6 +188,8 @@ function LocationFormFields({
   onSubmit: (request: StudioLocationRequest) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { data: contacts = [] } = useStudioContacts(organizationId);
+  const companies = contacts.filter((contact) => contact.entity_kind === "company");
   const [form, setForm] = useState<LocationForm>(initial);
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof LocationForm>(key: K, value: LocationForm[K]) =>
@@ -252,6 +265,17 @@ function LocationFormFields({
         </select>
       </div>
       {text("label", "Name")}
+      <label className="t-body-sm mb-3 flex items-center gap-2">
+        <input type="checkbox" checked={form.isPrivateHome} onChange={(e) => set("isPrivateHome", e.target.checked)} />
+        Private home
+      </label>
+      <div className="mb-3">
+        <label className={FIELD_LABEL} htmlFor={`${idBase}-recipient`}>Receiving party</label>
+        <select id={`${idBase}-recipient`} value={form.studioContactId} onChange={(e) => set("studioContactId", e.target.value)} className={FIELD_INPUT}>
+          <option value="">Not recorded</option>
+          {companies.map((contact) => <option key={contact.id} value={contact.id}>{contact.company_name || contact.full_name}</option>)}
+        </select>
+      </div>
       {text("street", "Street")}
       {text("city", "City")}
       {text("state", "State")}
@@ -326,6 +350,7 @@ export function StudioLocationsEditor({
   const { data: rows, isLoading } = useStudioLocations(organizationId, {
     includeArchived: true,
   });
+  const { data: contacts = [] } = useStudioContacts(organizationId);
   const upsert = useUpsertStudioLocation();
   const archive = useArchiveStudioLocation();
   const [editing, setEditing] = useState<string | "new" | null>(null);
@@ -343,7 +368,7 @@ export function StudioLocationsEditor({
   const save = async (request: StudioLocationRequest, id?: string) => {
     await upsert.mutateAsync({
       organizationId,
-      request: id ? { ...request, id } : { ...request, studioContactId },
+      request: id ? { ...request, id } : { ...request, ...(studioContactId ? { studioContactId } : {}) },
     });
     setEditing(null);
     onAnnounce?.(id ? "Location saved." : "Location added.");
@@ -376,17 +401,20 @@ export function StudioLocationsEditor({
                     {" · "}
                     {KIND_WORD[row.kind] ?? row.kind}
                     {row.is_default_receiver && " · Default receiver"}
+                    {row.is_private_home && " · Private home"}
                   </span>
                 </p>
                 {address && <p className="t-body-sm text-[var(--ink-subtle)]">{address}</p>}
                 {facts.length > 0 && (
                   <p className="t-body-sm text-[var(--ink-subtle)]">{facts.join(" · ")}</p>
                 )}
+                <p className="t-body-sm text-[var(--ink-subtle)]">Receiving party: {contacts.find((c) => c.id === row.studio_contact_id)?.company_name || contacts.find((c) => c.id === row.studio_contact_id)?.full_name || "Not recorded"}</p>
                 {row.instructions && (
                   <p className="t-body-sm text-[var(--ink-subtle)]">{row.instructions}</p>
                 )}
                 {editing === row.id ? (
                   <LocationFormFields
+                    organizationId={organizationId}
                     idBase={`${idBase}-${row.id}`}
                     initial={locationFormFromRow(row)}
                     saving={upsert.isPending}
@@ -460,8 +488,9 @@ export function StudioLocationsEditor({
 
       {editing === "new" ? (
         <LocationFormFields
+          organizationId={organizationId}
           idBase={`${idBase}-new`}
-          initial={EMPTY_LOCATION_FORM}
+          initial={{ ...EMPTY_LOCATION_FORM, studioContactId: studioContactId ?? "" }}
           saving={upsert.isPending}
           submitLabel="Add the location"
           onSubmit={(request) => save(request)}
@@ -485,7 +514,7 @@ export function StudioLocationsEditor({
           <ul className="m-0 list-none p-0">
             {archived.map((row) => (
               <li key={row.id} className="t-body-sm flex flex-wrap items-baseline gap-2 text-[var(--ink-subtle)]">
-                {row.label}
+                {row.label}{row.is_private_home && " · Private home"}
                 <DocumentAction
                   actionKey="restore-studio-location"
                   surfaceKey="people"

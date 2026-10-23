@@ -1,3 +1,4 @@
+jest.mock('@/components/document/destinations/planned-destination', () => ({ PlannedDestination: () => null }));
 /**
  * T-60j F19: ORDER on a line in a room. The line's row carries its room as the
  * PostgREST join `{id, name}`; the order paper takes a room name, so the unfold
