@@ -515,7 +515,7 @@ function piecesRow(input: TicketInput): TicketRow {
 
   return {
     key: 'pieces',
-    label: 'Pieces',
+    label: 'Pieces & purchasing',
     value,
     // M2 keeps the census in ledger order and gives the wrong clause the
     // weight (`.b-tk-value .b-x`); reordering the census would print a

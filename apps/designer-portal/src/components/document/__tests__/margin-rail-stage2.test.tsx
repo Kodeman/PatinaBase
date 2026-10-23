@@ -154,7 +154,7 @@ describe('the margin, grouped by anchor (RF-03)', () => {
 
     const pieces = document.querySelector('[data-margin-group="ffe"]')!;
     const wholeJob = document.querySelector('[data-margin-group="whole-job"]')!;
-    expect(pieces).toHaveTextContent('BESIDE PIECES · 3');
+    expect(pieces).toHaveTextContent('BESIDE PIECES & PURCHASING · 3');
     expect(wholeJob).toHaveTextContent('THE WHOLE JOB · 4');
 
     // No group is printed for a region with nothing in it.
@@ -168,7 +168,7 @@ describe('the margin, grouped by anchor (RF-03)', () => {
   });
 
   it('W5-R5 §3 (N3) — a heading counts EVERY item in its group, settled included', () => {
-    // The rail counted `raised` only and printed `BESIDE PIECES · 1` where the
+    // The rail counted `raised` only and printed `BESIDE PIECES & PURCHASING · 1` where the
     // 390 Margin sheet, counting the whole group, printed `· 3`: one margin,
     // two numbers, and the desktop one under-reporting what was there.
     mockMarginRows = [
@@ -195,7 +195,7 @@ describe('the margin, grouped by anchor (RF-03)', () => {
     renderRail();
 
     const pieces = document.querySelector('[data-margin-group="ffe"]') as HTMLElement;
-    expect(pieces).toHaveTextContent('BESIDE PIECES · 3');
+    expect(pieces).toHaveTextContent('BESIDE PIECES & PURCHASING · 3');
 
     // R12 still holds: the settled two are folded, INSIDE the group, and the
     // fold names its own number — folding never moves the heading's count.
@@ -206,7 +206,7 @@ describe('the margin, grouped by anchor (RF-03)', () => {
 
     fireEvent.click(fold);
     expect(within(pieces).getByText('COM note settled')).toBeVisible();
-    expect(pieces).toHaveTextContent('BESIDE PIECES · 3');
+    expect(pieces).toHaveTextContent('BESIDE PIECES & PURCHASING · 3');
 
     // And the fold is the GROUP's, not the rail's: the whole-job group is
     // untouched by it.

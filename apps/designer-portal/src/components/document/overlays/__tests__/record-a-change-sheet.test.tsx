@@ -365,7 +365,7 @@ describe('Record a change — the router (D5)', () => {
 });
 
 describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
-  it('stands in the head’s More, after Edit selections and Add items (US-43 R4)', () => {
+  it('stands in the head’s More, after Edit pieces & purchasing and Add items (US-43 R4)', () => {
     renderPaper();
     // The head's ledger, links and buttons alike: index 0 is the leader.
     const head = document.querySelector('[data-region-head="ffe"]') as HTMLElement;

@@ -63,7 +63,7 @@ export const PROJECT_PAPER_ORDER: readonly ProjectPaperRegion[] = [
   },
   {
     key: 'ffe',
-    label: 'Pieces',
+    label: 'Pieces & purchasing',
     headingId: (projectId) => `ffe-region-heading-${projectId}`,
   },
   {

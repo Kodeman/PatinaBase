@@ -214,7 +214,7 @@ describe('The project spread’s Pieces head (US-21 Q14)', () => {
     expect(lead).toHaveAttribute('data-action-variant', 'primary');
   });
 
-  it('US-43 R4 — prints the lead, Edit selections, Add items, the release and More in the full ledger', () => {
+  it('US-43 R4 — prints the lead, Edit pieces & purchasing, Add items, the release and More in the full ledger', () => {
     act(() => {
       __setDensityForTest('full');
     });
@@ -240,7 +240,7 @@ describe('The project spread’s Pieces head (US-21 Q14)', () => {
     render(
       <FFESection projectId="project-1" projectName="Harrow" mode="project" projectStatus="on_hold" />,
     );
-    // US-43 R4: a job on hold elects no lead; Edit selections stands first, quiet.
+    // US-43 R4: a job on hold elects no lead; Edit pieces & purchasing stands first, quiet.
     expect(headActs()[0]).toBe('work-the-pieces');
     expect(
       document.querySelectorAll('[data-region-head="ffe"] [data-action-variant="primary"]'),

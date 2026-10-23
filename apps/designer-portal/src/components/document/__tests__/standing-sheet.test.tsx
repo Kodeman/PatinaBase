@@ -326,7 +326,7 @@ describe('StandingSheet · one voice (US-19 FR2)', () => {
       ticket: [
         {
           key: 'pieces',
-          label: 'Pieces',
+          label: 'Pieces & purchasing',
           value: '1 line',
           emphasis: null,
           door: { kind: 'none' },
@@ -394,7 +394,7 @@ describe('StandingSheet · one voice (US-19 FR2)', () => {
         },
         {
           key: 'pieces',
-          label: 'Pieces',
+          label: 'Pieces & purchasing',
           value: '4 ordered · PO-HD-0412 unanswered, 9 days',
           emphasis: null,
           door: { kind: 'none' },

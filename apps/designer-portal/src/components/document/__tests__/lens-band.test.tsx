@@ -570,7 +570,7 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
   it('never announces a stop the sentence has since turned past (C-11)', async () => {
     const readingStop = {
       key: 'ffe' as const,
-      label: 'Pieces',
+      label: 'Pieces & purchasing',
       countLine: '36 lines · 4 rooms · 1 damaged',
     };
     const announce = () => line('2').querySelector('[data-lens-announce]');
@@ -582,7 +582,7 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
       />,
     );
     expect(announce()).toHaveTextContent(
-      'Now at Pieces · 36 lines · 4 rooms · 1 damaged',
+      'Now at Pieces & purchasing · 36 lines · 4 rooms · 1 damaged',
     );
 
     // Line 2 turns while the stop is unchanged. Line 2 is `aria-atomic`, so
@@ -786,7 +786,7 @@ describe('LensBand · the one live region (OD-7)', () => {
     key === 'ffe'
       ? {
           key,
-          label: 'Pieces',
+          label: 'Pieces & purchasing',
           countLine: '36 lines · 4 rooms · 1 damaged',
         }
       : { key, label: 'Money', countLine: '$17,500 out · $12,300 not drawn' };
@@ -809,7 +809,7 @@ describe('LensBand · the one live region (OD-7)', () => {
     );
     const announce = line('2').querySelector('[data-lens-announce]');
     expect(announce).toHaveTextContent(
-      'Now at Pieces · 36 lines · 4 rooms · 1 damaged',
+      'Now at Pieces & purchasing · 36 lines · 4 rooms · 1 damaged',
     );
     expect(announce).toHaveClass('sr-only');
   });
@@ -825,7 +825,7 @@ describe('LensBand · the one live region (OD-7)', () => {
         <LensBand model={model({ readingStop: ffe })} readingStop={ffe} docId="doc-1" />,
       );
       expect(announce()).toHaveTextContent(
-        'Now at Pieces · 36 lines · 4 rooms · 1 damaged',
+        'Now at Pieces & purchasing · 36 lines · 4 rooms · 1 damaged',
       );
 
       // A distinct stop is a distinct announcement.

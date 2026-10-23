@@ -455,7 +455,7 @@ describe('the schedule ceremony', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByText('Choose what to release')).not.toBeInTheDocument();
     expect(screen.queryByTestId('composition-bar')).not.toBeInTheDocument();
-    expect(screen.getByText('FF&E selections')).toBeInTheDocument();
+    expect(screen.getByText('Pieces & purchasing')).toBeInTheDocument();
   });
 
   it('opens the review sheet from the bar', () => {

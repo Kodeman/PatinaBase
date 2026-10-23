@@ -18,19 +18,19 @@ import { useProjectPalettes, useProjectRoomPlacements } from '@patina/supabase';
 import {
   deriveOverviewRows,
   overviewFrontMatter,
-  type OverviewLine,
   type OverviewRoom,
   type OverviewRow,
   type OverviewTally,
 } from '@/lib/document/pieces/overview-derivation';
 import { roomFinishesByRoom, roomWallFinish } from './finishes-lens';
 import { PiecesOverviewRow } from './pieces-overview-row';
+import { PurchasingOverviewFacts, type PurchasingOverviewLine } from './purchasing-overview-facts';
 
 export interface PiecesOverviewProps {
   projectId: string;
   /** The id the Document was opened with (`/doc/<id>`), for the room doors. */
   docId: string;
-  lines: readonly OverviewLine[];
+  lines: readonly PurchasingOverviewLine[];
   rooms: readonly OverviewRoom[];
   job: OverviewTally;
   /** The line the paper holds open; its room unfolds to show it. */
@@ -158,6 +158,7 @@ export function PiecesOverview({
               returned={row.roomId != null && row.roomId === returnedRoomId}
               lifted={row.roomId != null && row.roomId === heldRoomId}
               wallSwatch={row.roomId ? roomWallFinish(finishes.get(row.roomId)) : null}
+              purchasingFacts={<PurchasingOverviewFacts projectId={projectId} lines={lines.filter((line) => row.primaryLineIds.includes(line.id))} />}
               onToggle={() => toggle(row.key)}
               onAddLine={() => onAddLine(row)}
             >

@@ -178,10 +178,7 @@ const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} $
 
 /** Each state's sentence, given its exception count and the lines released. */
 const STATE_SENTENCES: Record<FfeStateKind, (n: number, released: number) => string> = {
-  release: (_n, released) =>
-    released > 0
-      ? 'Priced selections are ready for purchasing authorization.'
-      : 'The selections are priced. Nothing is released.',
+  release: () => 'Purchasing authorization is ready to prepare.',
   claim: (n) => `${count(n, 'A damage claim is', 'damage claims are')} open.`,
   po: (n) => `${count(n, 'A purchase order is', 'purchase orders are')} unanswered.`,
   spec: (n) => `${count(n, 'One selection has', 'selections have')} no piece specified yet.`,
@@ -190,7 +187,7 @@ const STATE_SENTENCES: Record<FfeStateKind, (n: number, released: number) => str
     `${count(n, 'One selection is', 'selections are')} with the client for purchasing approval.`,
   bill: (n) => `${count(n, 'One priced selection is', 'priced selections are')} not yet invoiced.`,
   'add-line': () => 'No selections yet.',
-  held: () => 'Selections are ready, but purchasing authorization is held.',
+  held: () => 'Purchasing authorization is held.',
   'on-hold': () => 'The job is on hold.',
   closed: () => 'The job is closed.',
   settled: (_n, released) =>

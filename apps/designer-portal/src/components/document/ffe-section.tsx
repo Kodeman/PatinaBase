@@ -491,7 +491,7 @@ function ffeLeadEntryFor(choice: FfeLeaderChoice, acts: FfeLeadActs): RegionLedg
 
 /**
  * US-43 R4 — the head's ledger: the elected lead first; then the quiet tools,
- * Edit selections and Add items; the release where it stands here unelected
+ * Edit pieces & purchasing and Add items; the release where it stands here unelected
  * (held with its reason); the purchases and riders doors while something is
  * owed a client line; and More, holding Record a selection change and the
  * specification book.
@@ -2354,7 +2354,7 @@ function FFESectionBody({
     kind: ffeLeader.kind,
     editSelections: {
       key: 'work-the-pieces',
-      label: 'Edit selections',
+      label: 'Edit pieces & purchasing',
       href: buildRoomHref(docId, { lens: 'rough', room: null }),
       trailing: '→',
       variant: 'secondary',
@@ -2462,7 +2462,7 @@ function FFESectionBody({
                 ? sectionKey === 'care'
                   ? 'Care'
                   : 'Install'
-                : 'Pieces'}
+                : 'Pieces & purchasing'}
           </h2>
           <span className="flex items-baseline gap-3">
             {isLoading && (
@@ -2559,7 +2559,7 @@ function FFESectionBody({
             <FoldSeam
               headingId={ffeHeadingId}
               bodyId={ffeBodyId}
-              name="Pieces"
+              name="Pieces & purchasing"
               summary={ffeSeamSummary}
               cause={ffeFold.cause}
               onUnfold={() => ffeFold.setFolded(false)}
@@ -2583,7 +2583,7 @@ function FFESectionBody({
             >
               <RegionHead
                 headingId={ffeHeadingId}
-                name="FF&E selections"
+                name="Pieces & purchasing"
                 // W4-R1 governs WHICH line prints (the quiet form is the
                 // head's own status line); D-B39/W5-R3 governs HOW the
                 // readiness pulse rides it — inline, inside the same <p>, so
@@ -2603,7 +2603,7 @@ function FFESectionBody({
                 surfaceKey="project"
                 regionKey="ffe"
                 // At quiet the head prints its first act alone: the lead, or
-                // Edit selections where nothing leads.
+                // Edit pieces & purchasing where nothing leads.
                 actions={ffeQuiet ? ffeLedger.slice(0, 1) : ffeLedger}
                 leader={ffeLeadEntry !== null}
                 actsAtQuiet="all"
@@ -2686,7 +2686,7 @@ function FFESectionBody({
       {!ffeFolded && ffeQuiet && (
         <div id={ffeBodyId}>
           <p className="sr-only">
-            {quietStateSentence(ffeQuietStatus, 'Pieces')}
+            {quietStateSentence(ffeQuietStatus, 'Pieces & purchasing')}
           </p>
         </div>
       )}
