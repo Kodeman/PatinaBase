@@ -8,11 +8,11 @@
 --     -v ON_ERROR_STOP=1 -f supabase/tests/rls/00867_margin_notes_tenant_guard.test.sql
 --
 -- HOW IT PROVES BOTH DIRECTIONS IN ONE RUN
---   1. The guard and the household-pointer trigger are DROPPED inside this
+--   1. The guard and the pointer trigger are DROPPED inside this
 --      transaction, so the tables are back on their pre-00867 rules (00196
 --      designer_all, 00316 studio_read, 00584 insert/update/delete; a
---      designer_clients.household_id any co-member may move), whether or not
---      the DB already carries 00867.
+--      designer_clients.household_id and designer_id any co-member may move),
+--      whether or not the DB already carries 00867.
 --   2. Fixture rows, legacy studio-less rows included, are seeded as postgres
 --      and snapshotted.
 --   3. Every case runs as an authenticated actor (never an RLS-exempt role)
@@ -40,7 +40,13 @@
 --
 -- THE DISCOVERY POINTER (SQ-1858 F4): designer_clients.household_id moves
 --   only for a caller seated in the old household's studio and the new one's
---   (H-01 … H-09, the legitimate writers included).
+--   (H-01 … H-08, the legitimate writers included).
+--
+-- THE DISCOVERY OWNER (SQ-1858 F3, round 3): designer_clients.designer_id is
+--   the owner a studio-less Discovery note answers to, so no signed-in caller
+--   moves it, the designer herself included (O-01, O-03 … O-06), and D keeps
+--   her own note after B1's attempt (O-02); every signed-in writer the trace
+--   found still writes the row (O-07 … O-11).
 --
 -- ACTORS: D designer seated in studios A and B · A1 only A · B1 only B ·
 --   U outsider (own studio C) · CL the client (with a client team seat) ·
@@ -354,6 +360,17 @@ CREATE FUNCTION pg_temp.row_md5(p_note text) RETURNS text LANGUAGE sql AS $$
 CREATE FUNCTION pg_temp.repoint(p_relationship text, p_household text) RETURNS text LANGUAGE sql AS $$
   SELECT 'UPDATE public.designer_clients SET household_id = '
       || COALESCE('{' || p_household || '}', 'NULL') || ' WHERE id = {' || p_relationship || '}' $$;
+-- SQ-1858 F3 (round 3): the Discovery owner, moved by the actor, and read back.
+CREATE FUNCTION pg_temp.reassign(p_relationship text, p_designer text) RETURNS text LANGUAGE sql AS $$
+  SELECT 'UPDATE public.designer_clients SET designer_id = {' || p_designer
+      || '} WHERE id = {' || p_relationship || '}' $$;
+CREATE FUNCTION pg_temp.owner_of(p_relationship text) RETURNS text LANGUAGE sql AS $$
+  SELECT 'SELECT designer_id::text FROM public.designer_clients WHERE id = {' || p_relationship || '}' $$;
+-- A setup that runs p_template as another signed-in actor (pg_temp.act), so a
+-- case can read what that actor's attempt left behind for its own actor.
+CREATE FUNCTION pg_temp.as_actor(p_actor text, p_template text) RETURNS text LANGUAGE sql AS $$
+  SELECT 'SELECT pg_temp.act({' || p_actor || '}, '
+      || quote_literal(pg_temp.sql_of(p_template)) || ')' $$;
 -- SQ-1858 F3: B1 drafts a proposal of D's, parented on D's B proposal QB and
 -- linked (p_column) to one of D's studio-less records, then reads its stamp.
 CREATE FUNCTION pg_temp.draft(p_id text, p_column text, p_target text) RETURNS text LANGUAGE sql AS $$
@@ -494,6 +511,38 @@ INSERT INTO m867_case (name, actor, setup, probe, expect, kind) VALUES
   -- (the band's own shape); the owner's legacy Discovery note stays hers
   ('H-08 B1 adopts D legacy relationship into B; reads D legacy note', 'B1', NULL,
      pg_temp.repoint('R0', 'HB') || ' ;; ' || pg_temp.sel('N8'), 'rows=1 | 0', 'keeps'),
+  -- O · the Discovery owner (SQ-1858 F3, round 3): the owner a studio-less
+  -- relationship answers to does not move under a signed-in caller
+  ('O-01 B1 takes D legacy relationship, reads its owner, then notes it', 'B1', NULL,
+     pg_temp.reassign('R0', 'B1') || ' ;; ' || pg_temp.owner_of('R0') || ' ;; '
+     || pg_temp.ins(NULL, NULL, 'R0', 'B1'),
+     'denied | {D} | denied', 'closes'),
+  -- after B1's attempt, D still reads and edits her own Discovery note
+  ('O-02 D reads and edits her legacy Discovery note after B1 tries to take it', 'D',
+     pg_temp.as_actor('B1', pg_temp.reassign('R0', 'B1')),
+     pg_temp.sel('N8') || ' ;; ' || pg_temp.upd_author('N8', 'body = body || '' (owner edit)'''),
+     '1 | rows=1 author={D}', 'keeps'),
+  ('O-03 B1 takes D A relationship (stamped), reads its owner', 'B1', NULL,
+     pg_temp.reassign('RA', 'B1') || ' ;; ' || pg_temp.owner_of('RA'), 'denied | {D}', 'closes'),
+  ('O-04 A1 (A only) takes D A relationship, reads its owner', 'A1', NULL,
+     pg_temp.reassign('RA', 'A1') || ' ;; ' || pg_temp.owner_of('RA'), 'denied | {D}', 'closes'),
+  ('O-05 D hands her legacy relationship to B1', 'D', NULL, pg_temp.reassign('R0', 'B1'), 'denied', 'closes'),
+  ('O-06 D hands her A relationship to A1', 'D', NULL, pg_temp.reassign('RA', 'A1'), 'denied', 'closes'),
+  -- every signed-in writer of the row still writes it: the client status,
+  -- contact and lead-acceptance hooks; a save that names the unchanged owner;
+  -- a new relationship, whose designer_id is set on INSERT
+  ('O-07 D sets her legacy relationship status (useUpdateClientStatus)', 'D', NULL,
+     'UPDATE public.designer_clients SET status = ''active'' WHERE id = {R0}', 'rows=1', 'keeps'),
+  ('O-08 A1 edits D A relationship contact (useUpdateClientContact)', 'A1', NULL,
+     'UPDATE public.designer_clients SET client_name = ''867 edited'', client_phone = NULL, notes = ''867'' WHERE id = {RA}',
+     'rows=1', 'keeps'),
+  ('O-09 B1 accepts a lead onto D legacy relationship (useAcceptLead)', 'B1', NULL,
+     'UPDATE public.designer_clients SET source = ''lead'', status = ''active'' WHERE id = {R0}', 'rows=1', 'keeps'),
+  ('O-10 D saves her relationship naming its own designer', 'D', NULL,
+     'UPDATE public.designer_clients SET designer_id = {D}, notes = ''867 resaved'' WHERE id = {R0}', 'rows=1', 'keeps'),
+  ('O-11 B1 opens a relationship of her own', 'B1', NULL,
+     'INSERT INTO public.designer_clients (designer_id, client_name, client_email, status) '
+     || 'VALUES ({B1}, ''867 B1 client'', ''b1-client-867@test.invalid'', ''lead'')', 'rows=1', 'keeps'),
   -- L · legacy studio-less rows, seeded before 00867
   ('L-01 D reads legacy job note identically',       'D',  NULL, pg_temp.row_md5('N6'),  'snapshot:N6',  'keeps'),
   ('L-02 D reads legacy proposal note identically',  'D',  NULL, pg_temp.row_md5('N7'),  'snapshot:N7',  'keeps'),
@@ -665,12 +714,16 @@ BEGIN
   ASSERT has_table_privilege('authenticated', 'public.margin_notes', 'SELECT, INSERT, UPDATE, DELETE'),
     'CATALOG: authenticated keeps the four verbs the policies govern';
 
-  -- The Discovery tenant pointer (SQ-1858 F4)
+  -- The Discovery tenant and owner pointers (SQ-1858 F4, F3)
   ASSERT (SELECT pg_get_triggerdef(oid) FROM pg_trigger
            WHERE tgrelid = 'public.designer_clients'::regclass
              AND tgname = 'guard_designer_client_household_trg' AND tgenabled = 'O')
-       = 'CREATE TRIGGER guard_designer_client_household_trg BEFORE UPDATE OF household_id ON public.designer_clients FOR EACH ROW EXECUTE FUNCTION guard_designer_client_household()',
-    'CATALOG: designer_clients must carry the enabled BEFORE UPDATE OF household_id pointer guard';
+       = 'CREATE TRIGGER guard_designer_client_household_trg BEFORE UPDATE OF household_id, designer_id ON public.designer_clients FOR EACH ROW EXECUTE FUNCTION guard_designer_client_household()',
+    'CATALOG: designer_clients must carry the enabled BEFORE UPDATE OF household_id, designer_id pointer guard';
+  ASSERT (SELECT count(*) FROM pg_trigger
+           WHERE tgrelid = 'public.designer_clients'::regclass
+             AND tgfoid = 'public.guard_designer_client_household()'::regprocedure) = 1,
+    'CATALOG: exactly one trigger runs the pointer guard';
   ASSERT (SELECT NOT prosecdef AND proconfig @> ARRAY['search_path=public, pg_temp']
             FROM pg_proc WHERE oid = 'public.guard_designer_client_household()'::regprocedure),
     'CATALOG: the pointer guard must be SECURITY INVOKER (current_user tells database code apart) with a pinned search_path';
@@ -679,7 +732,7 @@ BEGIN
      AND NOT has_function_privilege('service_role', 'public.guard_designer_client_household()', 'EXECUTE'),
     'CATALOG: nobody holds EXECUTE on the pointer guard';
 
-  RAISE NOTICE '00867 catalog passed: one RESTRICTIVE ALL guard, one tenant gate for both images, five permissive policies unchanged, one helper overload, SECURITY DEFINER + pinned search_path, EXECUTE to authenticated/service_role only; household pointer guard BEFORE UPDATE OF household_id, SECURITY INVOKER, held by nobody';
+  RAISE NOTICE '00867 catalog passed: one RESTRICTIVE ALL guard, one tenant gate for both images, five permissive policies unchanged, one helper overload, SECURITY DEFINER + pinned search_path, EXECUTE to authenticated/service_role only; pointer guard BEFORE UPDATE OF household_id, designer_id, SECURITY INVOKER, held by nobody';
 END $$;
 
 -- ─── 10 · privileged readback: forbidden writes, run for real ─────────────
@@ -724,6 +777,21 @@ BEGIN
   ASSERT v_outcome = 'denied', 'READBACK: B1 move of RA to a B household was ' || v_outcome;
   ASSERT (SELECT household_id FROM public.designer_clients WHERE id = pg_temp.id('RA')) = pg_temp.id('HA'),
     'READBACK: RA no longer points at its A household';
+  -- SQ-1858 F3 (round 3) for real: the owner does not move, and the note
+  -- B1 would have written as R0's "owner" is refused.
+  v_outcome := pg_temp.act(pg_temp.id('B1'), pg_temp.sql_of(pg_temp.reassign('R0', 'B1')));
+  ASSERT v_outcome = 'denied', 'READBACK: B1 taking D legacy relationship R0 was ' || v_outcome;
+  v_outcome := pg_temp.act(pg_temp.id('B1'), pg_temp.sql_of(pg_temp.ins(NULL, NULL, 'R0', 'B1')));
+  ASSERT v_outcome = 'denied', 'READBACK: B1 note on R0 was ' || v_outcome;
+  v_outcome := pg_temp.act(pg_temp.id('B1'), pg_temp.sql_of(pg_temp.reassign('RA', 'B1')));
+  ASSERT v_outcome = 'denied', 'READBACK: B1 taking D A relationship RA was ' || v_outcome;
+  v_outcome := pg_temp.act(pg_temp.id('D'), pg_temp.sql_of(pg_temp.reassign('R0', 'B1')));
+  ASSERT v_outcome = 'denied', 'READBACK: D handing R0 to B1 was ' || v_outcome;
+  ASSERT (SELECT designer_id FROM public.designer_clients WHERE id = pg_temp.id('R0')) = pg_temp.id('D')
+     AND (SELECT designer_id FROM public.designer_clients WHERE id = pg_temp.id('RA')) = pg_temp.id('D'),
+    'READBACK: R0 or RA no longer belongs to D';
+  v_outcome := pg_temp.act(pg_temp.id('D'), pg_temp.sql_of('SELECT id FROM public.margin_notes WHERE id = {N8}'));
+  ASSERT v_outcome = 'rows=1', 'READBACK: D no longer reads her legacy Discovery note N8: ' || v_outcome;
 
   ASSERT current_user = 'postgres', 'READBACK: must read back as postgres, not ' || current_user;
   SELECT count(*) INTO v_drift FROM (
@@ -741,27 +809,36 @@ BEGIN
      AND NOT EXISTS (SELECT 1 FROM public.margin_notes WHERE proposal_id = pg_temp.id('QS')),
     'READBACK: a forbidden write left a row behind';
 
-  RAISE NOTICE '00867 readback passed: 14 forbidden writes ran for real (B1''s Q* draft itself stands), RA still points at HA, all 14 fixture notes byte-identical to the pre-00867 snapshot';
+  RAISE NOTICE '00867 readback passed: 18 forbidden writes ran for real (B1''s Q* draft itself stands), RA still points at HA, R0 and RA still belong to D and D still reads N8, all 14 fixture notes byte-identical to the pre-00867 snapshot';
 END $$;
 
--- ─── 10b · the trusted pointer writers (SQ-1858 F4 trace) ──────────────────
+-- ─── 10b · the trusted pointer writers (SQ-1858 F4/F3 trace) ───────────────
 -- postgres (SECURITY DEFINER code, seeds, ON DELETE SET NULL) and
--- service_role move the pointer unasked; the signed-in band path is H-05.
+-- service_role move both pointers unasked; the signed-in band path is H-05.
 DO $$
 DECLARE
   v_ra uuid := pg_temp.id('RA');
   v_ha uuid := pg_temp.id('HA');
   v_hb uuid := pg_temp.id('HB');
+  v_r0 uuid := pg_temp.id('R0');
+  v_d  uuid := pg_temp.id('D');
+  v_a1 uuid := pg_temp.id('A1');
 BEGIN
   UPDATE public.designer_clients SET household_id = v_hb WHERE id = v_ra;
   ASSERT (SELECT household_id FROM public.designer_clients WHERE id = v_ra) = v_hb,
     'TRUSTED: postgres must move the pointer';
+  UPDATE public.designer_clients SET designer_id = v_a1 WHERE id = v_r0;
+  ASSERT (SELECT designer_id FROM public.designer_clients WHERE id = v_r0) = v_a1,
+    'TRUSTED: postgres must move the owner';
   EXECUTE 'SET LOCAL ROLE service_role';
   UPDATE public.designer_clients SET household_id = v_ha WHERE id = v_ra;
+  UPDATE public.designer_clients SET designer_id = v_d WHERE id = v_r0;
   EXECUTE 'RESET ROLE';
   ASSERT (SELECT household_id FROM public.designer_clients WHERE id = v_ra) = v_ha,
     'TRUSTED: service_role must move the pointer';
-  RAISE NOTICE '00867 trusted pointer writers passed: postgres and service_role move designer_clients.household_id';
+  ASSERT (SELECT designer_id FROM public.designer_clients WHERE id = v_r0) = v_d,
+    'TRUSTED: service_role must move the owner';
+  RAISE NOTICE '00867 trusted pointer writers passed: postgres and service_role move designer_clients.household_id and designer_id';
 END $$;
 
 -- ─── 11 · ACLs as a reset leaves them (SQ-1854 F2) ────────────────────────

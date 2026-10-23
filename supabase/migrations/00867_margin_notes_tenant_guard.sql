@@ -38,7 +38,8 @@
 --     proposals.designer_client_id are written by a co-member's direct draft
 --     INSERT (00401:515-517, 00387:633-674), so they prove nothing about who
 --     owns the engagement. Owner pointers do not move under a co-member:
---     proposals (guard_proposal_authority), projects (00563 reassignment only).
+--     proposals (guard_proposal_authority), projects (00563 reassignment only),
+--     designer_clients (guard_designer_client_household below, SQ-1858 F3).
 -- The guard decides only WHICH STUDIO (or, studio-less, WHOSE); USING and
 -- WITH CHECK are the same test, so an owner keeps every verb on a coauthored
 -- legacy note without rewriting its author. Who may write inside the studio
@@ -53,7 +54,7 @@
 -- already holds ITS organization to both images (00632:287-299,
 -- is_active_studio_member on USING and WITH CHECK); the pointer now gets the
 -- same rule from guard_designer_client_household (BEFORE UPDATE OF
--- household_id): a signed-in caller must hold an active, non-guest seat in the
+-- household_id, designer_id): a signed-in caller must hold an active, non-guest seat in the
 -- old household's organization (if any) and in the new one's (if any).
 -- Writer trace for designer_clients.household_id (main ee9c450a5):
 --   · useCreateClientHousehold (packages/supabase/src/hooks/use-households.ts
@@ -70,6 +71,37 @@
 --     migrations) and service_role (the server-side boundary, which bypasses
 --     RLS on this table anyway) are not asked; no service_role writer exists
 --     today.
+--
+-- THE DISCOVERY OWNER POINTER IS FROZEN FOR SIGNED-IN CALLERS (SQ-1858 F3).
+-- A relationship whose household records no studio is its designer's alone,
+-- and designer_clients.designer_id was writable by any co-member of that
+-- designer: designer_clients_studio_rw (00316:39-42) opens the old row, and
+-- "Designers can manage their clients" (00014) or studio_rw passes the new one
+-- for any designer (00555 designer_clients_updater_is_designer). So a member
+-- of B alone could take D's studio-less relationship, write a note on it as
+-- its "owner", read D's own notes there and lock D out of them. No signed-in
+-- writer legitimately moves the column, so guard_designer_client_household
+-- (now BEFORE UPDATE OF household_id, designer_id) refuses ANY change to it
+-- from a signed-in caller, the relationship's own designer included.
+-- Writer trace for designer_clients.designer_id (main ee9c450a5):
+--   · Portal and package hooks write status (use-clients.ts:345), notes
+--     (:382), contact fields (:444), lead acceptance's source/lead_id/status
+--     and contact fields (use-leads.ts:451, :516), household_id
+--     (use-households.ts:548); the invite routes write client_id
+--     (api/clients/invite/route.ts:261, send-the-letter.ts:228). None names
+--     designer_id, so none fires this guard on it. Keeps working.
+--   · designer_id is written only on INSERT, which this trigger does not see:
+--     use-leads.ts:462, :535, the invite routes (route.ts:291,
+--     send-the-letter.ts:169), and the SECURITY DEFINER RPCs that open a
+--     roster row (open_project_direct 00796:449 and its ON CONFLICT, which
+--     sets status only; begin_discovery 00583:270; reassign_project_lead
+--     00399:412, which opens a NEW row for the new designer and never moves
+--     the old one). Keeps working.
+--   · No UPDATE in any migration, seed, edge function, service, iOS app or
+--     the extension sets designer_id; the FK to profiles is ON DELETE CASCADE
+--     (00014:74) with no ON UPDATE action. postgres and service_role are not
+--     asked here either (supabase/tests/billing/invoice_links_test.sql moves
+--     the column as service_role).
 --
 -- NOTHING IS BACKFILLED OR DELETED. Rows the guard narrows are counted below
 -- (a NOTICE) for evidence-based studio stamping. Typed subjects and escalation
@@ -180,7 +212,7 @@ COMMENT ON POLICY margin_notes_tenant_guard ON public.margin_notes IS
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.margin_notes TO authenticated;
 GRANT ALL ON TABLE public.margin_notes TO service_role;
 
--- ── The Discovery tenant pointer (SQ-1858 F4) ───────────────────────────────
+-- ── The Discovery tenant and owner pointers (SQ-1858 F4, F3) ────────────────
 -- SECURITY INVOKER, because current_user is how it tells a signed-in caller
 -- from database code (00813 guard_proposal_studio_stamp). The household reads
 -- run under the caller's own client_households RLS, which shows a household
@@ -193,8 +225,14 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-  IF current_user IN ('postgres', 'service_role')
-     OR NEW.household_id IS NOT DISTINCT FROM OLD.household_id THEN
+  IF current_user IN ('postgres', 'service_role') THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.designer_id IS DISTINCT FROM OLD.designer_id THEN
+    RAISE EXCEPTION 'A client record stays with the designer it was opened under.'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF NEW.household_id IS NOT DISTINCT FROM OLD.household_id THEN
     RETURN NEW;
   END IF;
   IF (OLD.household_id IS NOT NULL AND NOT EXISTS (
@@ -220,7 +258,9 @@ REVOKE ALL ON FUNCTION public.guard_designer_client_household()
   FROM PUBLIC, anon, authenticated, service_role;
 
 COMMENT ON FUNCTION public.guard_designer_client_household() IS
-  'SQ-1858 F4 (00867): a signed-in caller re-points designer_clients.household_id '
+  'SQ-1858 F3/F4 (00867): a signed-in caller never changes '
+  'designer_clients.designer_id (no signed-in writer moves it, and it is the '
+  'owner a studio-less Discovery note answers to), and re-points household_id '
   'only with an active non-guest seat in the old household''s studio (if any) '
   'and the new one''s (if any), the rule client_households already holds its '
   'organization_id to (00632). postgres (SECURITY DEFINER code, seeds, ON '
@@ -228,7 +268,7 @@ COMMENT ON FUNCTION public.guard_designer_client_household() IS
 
 DROP TRIGGER IF EXISTS guard_designer_client_household_trg ON public.designer_clients;
 CREATE TRIGGER guard_designer_client_household_trg
-  BEFORE UPDATE OF household_id ON public.designer_clients
+  BEFORE UPDATE OF household_id, designer_id ON public.designer_clients
   FOR EACH ROW EXECUTE FUNCTION public.guard_designer_client_household();
 
 -- ── Inventory of the rows the guard narrows (no data is changed) ───────────
