@@ -3395,6 +3395,48 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       }
     : null;
 
+  const supportingSlots =
+    row.engagement_kind === 'project' && row.project_id
+      ? {
+          accountBand: (
+            <>
+              {/* Supporting project records follow the active work so a newly
+                  opened document reaches the schedule before its reference material.
+                  W2 — the accounts moved into the money region on the Project
+                  spread; every other section keeps the band here, where it has
+                  always been (Install and Care mount the region without them). */}
+              {/* F1 — the band and the money region's accounts are one
+                  either-or, so both sides read the SAME section. The money region
+                  mounts inside the pinned spread; a band gated on the live row
+                  would print the accounts twice (or nowhere) for as long as an
+                  armed turn goes unpressed. Off the flag `spreadSection` IS
+                  `row.active_section`. */}
+              {spreadSection !== 'project' && (
+                <AccountBand
+                  projectId={row.project_id}
+                  clientName={row.client_name}
+                  activeSection={spreadSection}
+                />
+              )}
+            </>
+          ),
+          kickoff: (
+            <>
+              {/* The four supporting rooms moved to the shelves, so the
+                  not-started band that collapsed them has nothing left to
+                  collapse. The first-staffing nudge has no other home and stays
+                  here, ungated: it self-silences on the flag, a staffed sheet, or
+                  its own dismissal. */}
+              <KickoffBand
+                projectId={row.project_id}
+                rows={rosterRows ?? []}
+                isLead={Boolean(user?.id) && handoffLead?.leadUserId === user?.id}
+              />
+            </>
+          ),
+        }
+      : { accountBand: null, kickoff: null };
+
   const slots: DocumentFrameSlots = {
     arrival: (<>
     {/* N10 arrival C — held under the loading register, the DocumentSkeleton
@@ -4148,41 +4190,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       )}
 
     </>),
-    accountBand: (<>
-{/* Supporting project records follow the active work so a newly
-                opened document reaches the schedule before its reference material.
-                W2 — the accounts moved into the money region on the Project
-                spread; every other section keeps the band here, where it has
-                always been (Install and Care mount the region without them). */}
-            {/* F1 — the band and the money region's accounts are one
-                either-or, so both sides read the SAME section. The money region
-                mounts inside the pinned spread; a band gated on the live row
-                would print the accounts twice (or nowhere) for as long as an
-                armed turn goes unpressed. Off the flag `spreadSection` IS
-                `row.active_section`. */}
-            {spreadSection !== 'project' && (
-              <AccountBand
-                projectId={row.project_id}
-                clientName={row.client_name}
-                activeSection={spreadSection}
-              />
-            )}
-
-    </>),
-    kickoff: (<>
-            {/* The four supporting rooms moved to the shelves, so the
-                not-started band that collapsed them has nothing left to
-                collapse. The first-staffing nudge has no other home and stays
-                here, ungated: it self-silences on the flag, a staffed sheet, or
-                its own dismissal. */}
-            <KickoffBand
-              projectId={row.project_id}
-              rows={rosterRows ?? []}
-              isLead={Boolean(user?.id) && handoffLead?.leadUserId === user?.id}
-            />
-
-    </>),
-    projectSupportScope: (children) => row.engagement_kind === 'project' && row.project_id ? <>{children}</> : null,
+    ...supportingSlots,
     // Both schedule surfaces retain the same provider scope and mount order.
     scheduleScope: (children) => (
       <ScheduleNavProvider>

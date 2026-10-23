@@ -62,12 +62,8 @@ export function LegacyDocumentFrame({
               {slots.activeSpread}
             </>,
           )}
-          {slots.projectSupportScope(
-            <>
-              {slots.accountBand}
-              {slots.kickoff}
-            </>,
-          )}
+          {slots.accountBand}
+          {slots.kickoff}
           {slots.record}
           {slots.colophon}
         </main>

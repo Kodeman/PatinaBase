@@ -80,7 +80,6 @@ function documentSlots(): DocumentFrameSlots {
     scheduleScope: (children) => (
       <ScheduleContext.Provider value>{children}</ScheduleContext.Provider>
     ),
-    projectSupportScope: (children) => <>{children}</>,
     chapters: { design: <div data-slot="reserved" /> },
   } as DocumentFrameSlots;
 }

@@ -28,7 +28,6 @@ export interface DocumentFrameSlots {
   frontMatter: ReactNode;
   /** Preserves the shared schedule/ripple provider ancestry of both surfaces. */
   scheduleScope: (children: ReactNode) => ReactNode;
-  projectSupportScope: (children: ReactNode) => ReactNode;
   chapters?: Partial<
     Record<
       | 'brief'
