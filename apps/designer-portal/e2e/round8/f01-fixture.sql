@@ -59,10 +59,10 @@ ON CONFLICT (user_id, organization_id) DO UPDATE SET role = 'owner', status = 'a
 -- Only this fixture's owned job and scan are rebuilt. No shared-stack reset.
 DELETE FROM public.room_scans WHERE id = 'f0180000-0000-4000-8000-000000000020';
 DELETE FROM public.projects WHERE id = 'f0180000-0000-4000-8000-000000000010';
-INSERT INTO public.projects (id, name, status, created_by, designer_id, lead_designer_id, studio_id, notes)
+INSERT INTO public.projects (id, name, status, created_by, designer_id, studio_id, notes)
 VALUES ('f0180000-0000-4000-8000-000000000010', 'F01 Fictional Full-Service House', 'active',
   'f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000002',
-  'f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000001',
+  'f0180000-0000-4000-8000-000000000001',
   'Fictional full-service whole-home commission. Local test data only. No signed agreement or purchase authority is asserted.');
 
 -- Native whole-home phases describe full-service scope without fabricating an
