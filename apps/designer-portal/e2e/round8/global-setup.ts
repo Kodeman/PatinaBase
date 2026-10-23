@@ -1,15 +1,15 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { psqlRun, psqlScalar } from '../helpers/psql';
 
 export default async function globalSetup(): Promise<void> {
   // Parse the hostname, never substring-match a URL that could name a remote
-  // host or put localhost in its password/query. Validate before importing psql.
+  // host or put localhost in its password/query. Validate before any psql write.
   const api = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '');
   const db = new URL(process.env.SUPABASE_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres');
   if (api.hostname !== '127.0.0.1' || db.hostname !== '127.0.0.1') {
     throw new Error('F01 fixtures require Supabase and Postgres on 127.0.0.1; refusing fixture load.');
   }
-  const { psqlRun, psqlScalar } = await import('../helpers/psql');
   psqlRun(readFileSync(path.join(__dirname, 'f01-fixture.sql'), 'utf8'));
   // The auth fixture reads these in its worker, after globalSetup has finished.
   process.env.DESIGNER_E2E_EMAIL = psqlScalar(
