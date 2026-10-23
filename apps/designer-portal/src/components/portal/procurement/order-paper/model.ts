@@ -92,6 +92,7 @@ export interface OrderPaperPurchaseOrder {
   freight_terms?: string | null;
   vendor_note?: string | null;
   /** C-32 (00710): the hold record on a held_for_release PO. */
+  released_total_cents?: number | null;
   held_at?: string | null;
   held_by?: string | null;
   hold_note?: string | null;
