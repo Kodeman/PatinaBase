@@ -2,6 +2,15 @@
 
 Append dated decisions during implementation; do not rewrite the historical Document/vision rulings. This file records the redesign program, and canonical cross-product rulings must also be appended to their existing log.
 
+## Decisions recorded 23 October 2026
+
+| Date / ID | Owner | Request / evidence | Chosen behavior | Alternatives rejected | Affected data, permissions, consumers, compatibility | Acceptance / review |
+|---|---|---|---|---|---|---|
+| 2026-10-23 / K1 | Kody | Commission WP-00.8; Agent OS separates runtime work from engineering delivery, and migration 00484 leaves `agent_writer` without table access while granting the enqueue RPC | Sidequest is the engineering control plane for repository dispatch, claims, candidates, verification, review and integration. `agent_tasks` remains the Agent OS runtime business queue; no mirrored engineering lifecycle. WP/acceptance IDs travel as Sidequest ticket metadata. | Routing repository executors through `agent_tasks` or mirroring Sidequest lifecycle there | No business-table writes or permission changes; affects all program work-package execution and audit/ownership records | US-52 WP-00; review through program integration |
+| 2026-10-23 / P02 | Kody | Approved Room Proof 08; resolve filled nav/save emphasis and mockup shadows against existing visual gates | Allow filled navigation/save controls and the mockup's few shadows only within `[data-paper-renderer="round8"]`; narrowly allowlist that scope in shadow-gate and action-hierarchy tests. Legacy renderer remains zero-shadow; terminal commercial/signature actions retain explicit consequence language. | Broad test relaxation, legacy shadows, or weakening terminal-action language | Scoped renderer styles and two named gate tests; no data/permission change; legacy renderer and commercial/signature consumers remain unchanged | WP-01.3; acceptance IDs for visual/action hierarchy; integration review |
+| 2026-10-23 / R8-02 applied | Kody | Approved round-eight continuous job paper supersedes current page's one-active-section behavior for this renderer | Round-8 project jobs mount all chapters with content as one continuous paper. Lead and proposal documents retain current pre-work regions; this does not alter their renderer behavior. | Applying the project-job composition to lead/proposal pre-work | Round-8 project-paper composition and index consumers only; no data/permission or migration change | WP-01.5; continuous-paper acceptance; integration review |
+| 2026-10-23 / Scope | Kody | Commissioned program boundary | Deliver the whole program through release candidate; pause dependent work for K3–K5 and stop before production deploy. | Treating preparation or implementation as deploy/migration authorization | All program work; production remains separately authorized | WP-11; K3–K5 gates and ship authorization |
+
 ## Settled by the approved direction / preparation
 
 | ID | Decision | Basis |

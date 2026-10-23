@@ -17,6 +17,7 @@ Abbreviations below: `D` = `apps/designer-portal/src/components/document`; `H` =
 | `L/registry.tsx`: STUDIO_ROOMS, STUDIO_LEDGERS, STUDIO_VERBS; `D/desk-contents.tsx`, `D/studio-drawer.tsx` | Global versus document-scoped resources, command aliases, shortcuts, help metadata | One registry drives studio/mobile/command access; no second menu inventory. Integration lead |
 | `H/use-desk-engagements.ts`: useDeskEngagements, composeDeskRead, selectOperationalNeedsForDocument; `D/desk-roster.tsx` | Claims, unpaid/released-unsent orders, events, samples, drafts, returns, whose-move and ownership | Image-led studio with truthful next acts from existing derivations. Studio team |
 | `app/(document)/doc/[id]/page.tsx`; `H/use-document-running-index.ts`; `L/document-index.ts` | One job orchestrator, identity, existing mounted regions and focus-aware index | Chapter composition and in-place instruments. Only integration lead edits the page during parallel work |
+
 | `D/ffe-section.tsx`: FFESection / FFESectionBody; `D/pieces/build-room-shell.tsx`: BuildRoomShell | Preliminary/specification/pricing/authorization/finish lenses, stable lines and notes | Dense native room work; wrap existing bodies, do not replace with a generic table. Selections team |
 | `H/use-place-in-document.ts`; `S/hooks/use-project-ffe-ga.ts`; `H/use-document-rooms.ts` | V2 placement, configuration IDs, candidate disposition, idempotency, room/board and duplicate rules | Library-to-room handoff and usage reading. Selections team |
 | `D/rooms/library/library-room.tsx`; `D/people/people-room.tsx` | Personal capture/studio/catalog distinctions; richer relationship work | New resource composition with existing discovery and actions. Studio team |
@@ -70,3 +71,21 @@ The following are release obligations even where round eight shows only a brief 
 | Current client page and Field/iOS consumers | Existing contracts and links remain valid; necessary new evidence surfaces are coordinated work, not silent downstream breaks |
 
 Source coverage is a starting inventory. WP-00 must prove actual runtime behavior in a local live-data profile and record any inherited failure separately from redesign regressions.
+
+## Corrections after WP-00 audit (2026-10-23)
+
+These correct the program's initial assumptions against the current source; implementation ownership and boundary constraints remain in the US-52 contract.
+
+1. The job page mounts exactly one active section (§4); `PROJECT_PAPER_ORDER` has six stops. Round 8 project jobs become continuous paper (R8-02); lead/proposal pre-work regions stay unchanged.
+2. `/doc/[id]/pieces` is a separate route whose inner `BuildRoom` unmounts the paper. Inline unfold uses embedded `BuildRoom` plus `history.pushState`; existing `/pieces` URLs continue resolving.
+3. `DocSpine` retires under round 8, but its section ladder moves to contents margin, money-ladder doors to chapter sub-labels, and room-in-hand release to job head.
+4. `apply_phase_template` is already idempotent (00474); C2 adds scope-edition provenance and amendment semantics, not new idempotency.
+5. `studio_purchases` (00703/00862) is studio commerce, not external fulfilment. C5 is a separate build-domain contract; do not fake POs. GC cabinetry stays outside priced studio FF&E by default.
+6. The submittal resolver (00399:4800, 00808:2240) already approves, clears holds and unblocks tasks; define fabrication authority's relationship to it.
+7. Fabrication scope is a text CHECK (00624); current co-member write policies would permit it unless deliberately rewritten.
+8. Web approval parsing throws on unknown kinds (`use-project-approvals.ts:14,329`); native defaults unknown roles to answering. Service acceptance needs a separate record, RPC and projection.
+9. Keep `close_project` unchanged: service acceptance must not write `projects.status`, `closure_checklist` or `portfolio_snapshot`.
+10. FF&E readiness issues one RPC per selection (`use-project-ffe-ga.ts:88`, eight at a time); P11 measures request count as well as DOM cost.
+11. Some named invalidators are private. Reuse mutation hooks; do not export invalidators or create a whole-job refresh fan-out.
+12. Green gates have gaps: `verify:affected` omits SQL suites, designer build ignores type errors, Jest thresholds are zero, and AI-quality bundle measurement runs only on PRs. Each slice names assertions and allowed skips.
+13. The shell DOM contract is relied on by about 40 source files and 40 e2e specs. Preserve `data-document-shell`, `data-document-paper`, `data-index-region`, `data-reading-index`, `data-arrival*`, `data-spotlight-frame`, `#doc-ticket-sentinel`, `data-shell-regime`, and `data-drafting-stock`; see [evidence/dom-contract.md](evidence/dom-contract.md).
