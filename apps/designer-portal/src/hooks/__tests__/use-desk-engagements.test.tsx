@@ -577,7 +577,7 @@ describe('buildDeskQuotes (C-29)', () => {
         vendor: { name: 'Hewn' },
         lines: [
           { ffe_item: { purchase_order_id: null, removed_at: null } },
-          { ffe_item: { purchase_order_id: 'po-1', removed_at: null } },
+          { ffe_item: { purchase_order_id: 'po-1', po_sent: true, removed_at: null } },
           { ffe_item: { purchase_order_id: null, removed_at: '2026-10-01T00:00:00Z' } },
         ],
       },
@@ -865,7 +865,7 @@ describe('the US-25 W2 live-job builders', () => {
         title: 'Sofa',
         accepted_at: '2026-06-03T00:00:00Z',
         items: [
-          { ffe: [{ purchase_order_id: 'po-1', removed_at: null }] },
+          { ffe: [{ purchase_order_id: 'po-1', po_sent: true, removed_at: null }] },
           { ffe: [{ purchase_order_id: null, removed_at: null }, { purchase_order_id: null, removed_at: '2026-06-04' }] },
         ],
       },
@@ -909,5 +909,16 @@ describe('the US-25 W2 live-job builders', () => {
       createdAt: '2026-06-01T00:00:00Z',
       contactName: 'Nora Hale',
     });
+  });
+});
+
+describe('F-02 Desk sent-only proposal count', () => {
+  it('excludes draft and released-unsent PO links from orderedCount', () => {
+    const reading = buildDeskProposalOutcomes([{ id: 'p', project_id: 'job', status: 'accepted', items: [{ ffe: [
+      { purchase_order_id: 'draft', po_sent: false },
+      { purchase_order_id: 'released', po_sent: false },
+      { purchase_order_id: 'sent', po_sent: true },
+    ] }] }]);
+    expect(reading!.get('job')![0]).toMatchObject({ lineCount: 3, orderedCount: 1 });
   });
 });

@@ -42,7 +42,7 @@ export const STAGE_CONFIG: Record<FFEStageKey, StageConfig> = {
   },
   ordered: {
     key: 'ordered',
-    label: 'Released to maker',
+    label: 'Ordered',
     color: 'var(--color-dusty-blue, #8B9CAD)',
     surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Ordered,
   },

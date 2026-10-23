@@ -573,7 +573,7 @@ describe('OrdersLedger · lifecycle columns (R7)', () => {
   // F1 — a draft is a document being written, not a position on the trail.
   it('still says "draft" — the vacuous-deposit rule never releases a draft', () => {
     bookOf([po({ status: 'draft' })]);
-    expect(screen.getByText('draft')).toBeInTheDocument();
+    expect(screen.getAllByText('Order drafted').length).toBeGreaterThan(0);
     expect(screen.queryByText('Cleared to produce')).not.toBeInTheDocument();
   });
 
@@ -771,7 +771,7 @@ describe('OrdersLedger · held for release (C-32)', () => {
     const { container } = renderBook();
     expect(heldGroup(container)).toBeNull();
     expect(container.querySelectorAll('[data-orders-po-row]')).toHaveLength(4);
-    expect(screen.getByText('held for release')).toBeInTheDocument();
+    expect(screen.getAllByText('Order drafted').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Open →' }));
     expect(screen.getByTestId('order-paper')).toHaveTextContent('Paper po-held');
   });

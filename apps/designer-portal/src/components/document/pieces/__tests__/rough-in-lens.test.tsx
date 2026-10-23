@@ -424,7 +424,7 @@ describe("RoughInLens — remove with undo (D8)", () => {
       "a line ordered without an authorization",
       "Sconce, aged brass",
       { status: "ordered", product_id: "p-1", item_type: "fixed" },
-      "Released to maker",
+      "Ordered",
       "Released lines change through Record a change.",
     ],
   ])(

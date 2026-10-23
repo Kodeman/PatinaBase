@@ -1,3 +1,4 @@
+import { isCommittedBuyingLine } from '@/lib/document/buying-readings';
 import { getSessionUserId } from '@patina/supabase';
 /**
  * Hooks for Project Tracking — Opus System
@@ -368,7 +369,7 @@ export function useProjectFFEItems(projectId: string | null) {
             configuration_id, configuration_snapshot,
             configuration_snapshot_hash, configuration_locked_at
           ),
-          purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at, delivered_date, carrier, tracking_number, bol_document_path, shipped_on, eta_history, vendor:vendors!purchase_orders_vendor_id_fkey(name), payments:po_payments(kind, state, due_date, paid_date))
+          purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, released_at, sent_at, delivered_date, carrier, tracking_number, bol_document_path, shipped_on, eta_history, vendor:vendors!purchase_orders_vendor_id_fkey(name), payments:po_payments(kind, state, due_date, paid_date))
         `)
         .eq('project_id', projectId)
         .is('removed_at', null)
@@ -419,7 +420,7 @@ export function useProjectKeyMetrics(projectId: string | null) {
           .single(),
         supabase
           .from('project_ffe_items')
-          .select('id, status')
+          .select('id, status, purchase_order:purchase_orders!purchase_order_id(status, sent_at), studio_purchases(status)')
           .eq('project_id', projectId)
           .is('removed_at', null),
         supabase.from('project_phases').select('id, status, progress, duration_weeks').eq('project_id', projectId),
@@ -440,9 +441,7 @@ export function useProjectKeyMetrics(projectId: string | null) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const milestones = (milestonesRes.data ?? []) as any[];
 
-      const orderedCount = items.filter((i) =>
-        ['ordered', 'production', 'shipped', 'delivered', 'installed'].includes(i.status)
-      ).length;
+      const orderedCount = items.filter(isCommittedBuyingLine).length;
       const totalItems = items.length;
 
       const totalWeeks = phases.reduce((sum, p) => sum + (p.duration_weeks || 0), 0) || 12;
