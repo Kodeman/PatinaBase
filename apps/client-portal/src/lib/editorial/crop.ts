@@ -127,6 +127,16 @@ function bestRendition(asset: EditorialAsset): PlateCropKey | undefined {
     .sort((a, b) => Math.max(...asset.crops[b]!.widths) - Math.max(...asset.crops[a]!.widths))[0];
 }
 
+/** The contained photo's box: 10% inset + hairline, phone 39:34 cap, desktop measure. */
+function containedSizes(width: number, height: number): string {
+  const aspect = width / height;
+  const desk = 'min(1104px, calc(100vw - 48px))';
+  const photo = (frame: string, cap: string) =>
+    `min(${width}px, calc(${frame} * 0.8 - 2px), calc((${cap} - ${frame} * 0.2 - 2px) * ${aspect}))`;
+  const phone = photo('calc(100vw - 32px)', 'min(calc((100vw - 32px) * 34 / 39), 72svh)');
+  return `(max-width: 600px) ${phone}, ${photo(desk, '72svh')}`;
+}
+
 function containedHero(asset: EditorialAsset, main: PlateCropKey): HeroPicture {
   const crop = asset.crops[main]!;
   const width = Math.max(...crop.widths);
@@ -134,7 +144,7 @@ function containedHero(asset: EditorialAsset, main: PlateCropKey): HeroPicture {
   const height = Math.round(width * (h * asset.height) / (w * asset.width));
   return {
     layout: 'measure', contained: true, main, phone: null, width, height,
-    sizes: `(min-width: ${width + 32}px) ${width}px, calc(100vw - 32px)`,
+    sizes: containedSizes(width, height),
   };
 }
 

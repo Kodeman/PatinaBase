@@ -15,8 +15,7 @@ const CATEGORIES: readonly SilhouetteCategory[] = ['bed', 'chair', 'table', 'cas
 
 export function silhouetteFor(name: string, kind?: string | null, category?: string | null): SilhouetteCategory {
   const explicit = CATEGORIES.find((c) => c === kind);
-  // The reader's generic 'case' for an unknown category must not hide a named bed.
-  if (explicit && explicit !== 'case') return explicit;
+  if (explicit) return explicit;
   return silhouetteCategory(name, category);
 }
 

@@ -1,0 +1,262 @@
+{
+  "checks": "stock-only letterbox; crop-aspect image box; actual sizes; phone bottom <= scene; scene unchanged from ee9c450a582b; no overflow; no upscale",
+  "boundary": "Actual HeroPlate DOM rendered by Jest, unchanged candidate CSS in isolated Chromium; fixture bytes, not authenticated app/prod",
+  "rows": [
+    {
+      "kind": "scene",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "geometry": {
+        "frame": {
+          "x": 0,
+          "y": 16,
+          "width": 390,
+          "height": 340,
+          "bottom": 356,
+          "right": 390
+        },
+        "image": {
+          "x": 0,
+          "y": 16,
+          "width": 390,
+          "height": 340,
+          "bottom": 356,
+          "right": 390
+        },
+        "naturalWidth": 390,
+        "currentSrc": "https://hero.test/plates/project-1/0000000000000000000000000000000000000000000000000000000000000036/cover_phone-640.avif",
+        "sizes": "100vw",
+        "background": "none",
+        "documentWidth": 390
+      },
+      "stockSamples": 0,
+      "nonStock": 0
+    },
+    {
+      "kind": "baseline-scene",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "geometry": {
+        "frame": {
+          "x": 0,
+          "y": 16,
+          "width": 390,
+          "height": 340,
+          "bottom": 356,
+          "right": 390
+        },
+        "image": {
+          "x": 0,
+          "y": 16,
+          "width": 390,
+          "height": 340,
+          "bottom": 356,
+          "right": 390
+        },
+        "naturalWidth": 390,
+        "currentSrc": "https://hero.test/plates/project-1/0000000000000000000000000000000000000000000000000000000000000036/cover_phone-640.avif",
+        "sizes": "100vw",
+        "background": "none",
+        "documentWidth": 390
+      },
+      "stockSamples": 0,
+      "nonStock": 0
+    },
+    {
+      "kind": "pair",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "geometry": {
+        "frame": {
+          "x": 16,
+          "y": 16,
+          "width": 358,
+          "height": 276.765625,
+          "bottom": 292.765625,
+          "right": 374
+        },
+        "image": {
+          "x": 52.796875,
+          "y": 52.796875,
+          "width": 284.390625,
+          "height": 203.15625,
+          "bottom": 255.953125,
+          "right": 337.1875
+        },
+        "naturalWidth": 284,
+        "currentSrc": "https://hero.test/plates/project-1/0000000000000000000000000000000000000000000000000000000000000034/pair-768.avif",
+        "sizes": "(max-width: 600px) min(1600px, calc(calc(100vw - 32px) * 0.8 - 2px), calc((min(calc((100vw - 32px) * 34 / 39), 72svh) - calc(100vw - 32px) * 0.2 - 2px) * 1.3998250218722659)), min(1600px, calc(min(1104px, calc(100vw - 48px)) * 0.8 - 2px), calc((72svh - min(1104px, calc(100vw - 48px)) * 0.2 - 2px) * 1.3998250218722659))",
+        "background": "none",
+        "documentWidth": 390
+      },
+      "stockSamples": 36465,
+      "nonStock": 0
+    },
+    {
+      "kind": "piece",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "geometry": {
+        "frame": {
+          "x": 16,
+          "y": 16,
+          "width": 358,
+          "height": 312.09375,
+          "bottom": 328.09375,
+          "right": 374
+        },
+        "image": {
+          "x": 75.75,
+          "y": 52.796875,
+          "width": 238.5,
+          "height": 238.5,
+          "bottom": 291.296875,
+          "right": 314.25
+        },
+        "naturalWidth": 238,
+        "currentSrc": "https://hero.test/plates/project-1/0000000000000000000000000000000000000000000000000000000000000035/piece-256.avif",
+        "sizes": "(max-width: 600px) min(768px, calc(calc(100vw - 32px) * 0.8 - 2px), calc((min(calc((100vw - 32px) * 34 / 39), 72svh) - calc(100vw - 32px) * 0.2 - 2px) * 1)), min(768px, calc(min(1104px, calc(100vw - 48px)) * 0.8 - 2px), calc((72svh - min(1104px, calc(100vw - 48px)) * 0.2 - 2px) * 1))",
+        "background": "none",
+        "documentWidth": 390
+      },
+      "stockSamples": 49983,
+      "nonStock": 0
+    },
+    {
+      "kind": "scene",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "geometry": {
+        "frame": {
+          "x": 168,
+          "y": 16,
+          "width": 1104,
+          "height": 648,
+          "bottom": 664,
+          "right": 1272
+        },
+        "image": {
+          "x": 168,
+          "y": 16,
+          "width": 1104,
+          "height": 648,
+          "bottom": 664,
+          "right": 1272
+        },
+        "naturalWidth": 1440,
+        "currentSrc": "https://hero.test/plates/project-1/0000000000000000000000000000000000000000000000000000000000000036/wide-1600.avif",
+        "sizes": "100vw",
+        "background": "none",
+        "documentWidth": 1440
+      },
+      "stockSamples": 0,
+      "nonStock": 0
+    },
+    {
+      "kind": "baseline-scene",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "geometry": {
+        "frame": {
+          "x": 168,
+          "y": 16,
+          "width": 1104,
+          "height": 648,
+          "bottom": 664,
+          "right": 1272
+        },
+        "image": {
+          "x": 168,
+          "y": 16,
+          "width": 1104,
+          "height": 648,
+          "bottom": 664,
+          "right": 1272
+        },
+        "naturalWidth": 1440,
+        "currentSrc": "https://hero.test/plates/project-1/0000000000000000000000000000000000000000000000000000000000000036/wide-1600.avif",
+        "sizes": "100vw",
+        "background": "none",
+        "documentWidth": 1440
+      },
+      "stockSamples": 0,
+      "nonStock": 0
+    },
+    {
+      "kind": "pair",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "geometry": {
+        "frame": {
+          "x": 168,
+          "y": 16,
+          "width": 1104,
+          "height": 648,
+          "bottom": 664,
+          "right": 1272
+        },
+        "image": {
+          "x": 422.390625,
+          "y": 127.40625,
+          "width": 595.203125,
+          "height": 425.1875,
+          "bottom": 552.59375,
+          "right": 1017.59375
+        },
+        "naturalWidth": 595,
+        "currentSrc": "https://hero.test/plates/project-1/0000000000000000000000000000000000000000000000000000000000000034/pair-768.avif",
+        "sizes": "(max-width: 600px) min(1600px, calc(calc(100vw - 32px) * 0.8 - 2px), calc((min(calc((100vw - 32px) * 34 / 39), 72svh) - calc(100vw - 32px) * 0.2 - 2px) * 1.3998250218722659)), min(1600px, calc(min(1104px, calc(100vw - 48px)) * 0.8 - 2px), calc((72svh - min(1104px, calc(100vw - 48px)) * 0.2 - 2px) * 1.3998250218722659))",
+        "background": "none",
+        "documentWidth": 1440
+      },
+      "stockSamples": 451429,
+      "nonStock": 0
+    },
+    {
+      "kind": "piece",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "geometry": {
+        "frame": {
+          "x": 168,
+          "y": 16,
+          "width": 1104,
+          "height": 648,
+          "bottom": 664,
+          "right": 1272
+        },
+        "image": {
+          "x": 507.40625,
+          "y": 127.40625,
+          "width": 425.1875,
+          "height": 425.1875,
+          "bottom": 552.59375,
+          "right": 932.59375
+        },
+        "naturalWidth": 425,
+        "currentSrc": "https://hero.test/plates/project-1/0000000000000000000000000000000000000000000000000000000000000035/piece-512.avif",
+        "sizes": "(max-width: 600px) min(768px, calc(calc(100vw - 32px) * 0.8 - 2px), calc((min(calc((100vw - 32px) * 34 / 39), 72svh) - calc(100vw - 32px) * 0.2 - 2px) * 1)), min(768px, calc(min(1104px, calc(100vw - 48px)) * 0.8 - 2px), calc((72svh - min(1104px, calc(100vw - 48px)) * 0.2 - 2px) * 1))",
+        "background": "none",
+        "documentWidth": 1440
+      },
+      "stockSamples": 524359,
+      "nonStock": 0
+    }
+  ]
+}

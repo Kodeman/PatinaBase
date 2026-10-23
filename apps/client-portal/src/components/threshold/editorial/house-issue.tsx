@@ -593,11 +593,12 @@ function HeroCover({
   const item = issue.heroItem;
   // A long headline shortens the phone frame only where the subject box still
   // fits it whole; otherwise the hero keeps its taller frame.
+  const picture = heroPicture(hero);
   const phonePosition =
-    chapter.headline.length > LONG_HEADLINE ? shortFramePosition(hero) : null;
+    !picture.contained && chapter.headline.length > LONG_HEADLINE ? shortFramePosition(hero) : null;
   return (
     <Bleed
-      layout={heroPicture(hero).layout}
+      layout={picture.layout}
       headline={chapter.headline}
       shortFrame={phonePosition !== null}
     >

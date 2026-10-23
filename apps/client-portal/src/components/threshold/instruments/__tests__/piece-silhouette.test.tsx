@@ -12,6 +12,16 @@ import {
 describe('silhouetteCategory', () => {
   it.each([
     ['Sierra Queen Bed', '.', 'bed'],
+    ['Bed bench', '.', 'chair'],
+    ['End of bed bench', '.', 'chair'],
+    ['Bed throw', '.', 'textile'],
+    ['Bed linens', '.', 'textile'],
+    ['Bed pillows', '.', 'textile'],
+    ['Bed bedding blanket duvet quilt', '.', 'textile'],
+    ['Bed lamp', '.', 'light'],
+    ['Bed-side table', '.', 'table'],
+    ['Nightstand', '.', 'table'],
+    ['Daybed', '.', 'bed'],
     ['Brass library sconces', null, 'light'],
     ['Reading lamp', null, 'light'],
     ['Kilim runner', null, 'textile'],

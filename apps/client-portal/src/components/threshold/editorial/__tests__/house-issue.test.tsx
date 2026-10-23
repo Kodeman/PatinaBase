@@ -998,9 +998,23 @@ describe('approved catalogue cover', () => {
     const data = editorial([photo]);
     data.project.phase = null;
     data.edition = { id: 'approved', seq: 1, approvedAt: '2026-10-23', approvedBy: 'studio', notice: null };
-    data.composition = { hero: { assetId: photo.id }, held: [], chapters: [] };
+    data.composition = { hero: { assetId: photo.id }, held: [], chapters: [{ key: 'cover', headline: 'Your bed is on the way to the house', standing: null }] };
     const issue = houseIssue(data)!;
     expect(issue.hero?.id).toBe('bed');
+    const { container } = render(
+      <HouseIssueHead
+        issue={issue}
+        chapters={editionChapters(issue, [])}
+        doorplate={null}
+        letterhead={{ studioName: 'Birchwood Studio', projectName: 'Elm Street House', preparedFor: 'June Brennan' }}
+        ledger={null}
+        todayLines={null}
+        rows={{ spoken: false, invoices: projection(), asks: [], gate: null, readFailed: false }}
+        plan={{ unread: true, rooms: null, marks: [] }}
+      />,
+    );
+    expect(container.querySelector('[data-testid="house-issue-hero"]')).not.toHaveAttribute('data-hero-frame');
+    expect(container.querySelector('.ed-hero--contained')).not.toBeNull();
     const chapters = editionChapters(issue, ['doorstep'])!;
     expect(chapters.get('cover')!.eyebrow).toBe('01 · Elm Street House');
     expect(heroPreloads(data)[0].imageSrcSet).toContain('/pair-1600.avif');

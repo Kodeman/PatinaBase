@@ -445,8 +445,8 @@ describe('Reveal', () => {
   const pair = { rect: [0, 197, 1600, 1143] as const, widths: [768, 1024, 1600] };
   const piece = { rect: [0, 0, 1600, 1600] as const, widths: [256, 512, 768] };
   it.each(['pair', 'piece'] as const)('shows a white-ground %s photograph, not a drawing, with stock and its caption', (crop) => {
-    const a = asset({ ground: 'white', width: 1600, height: 1600, crops: crop === 'pair' ? { pair, piece } : { piece } });
-    const { container } = render(<HeroPlate scopeId={SCOPE} asset={a} eyebrow="01 · Man Den" headline="The rooms" fallback={{ name: 'Sierra Queen Bed', category: '.', silhouetteKind: 'case' }} />);
+    const a = asset({ ground: 'white', lqip: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><rect width="24" height="24" fill="purple"/></svg>'), width: 1600, height: 1600, crops: crop === 'pair' ? { pair, piece } : { piece } });
+    const { container } = render(<HeroPlate scopeId={SCOPE} asset={a} eyebrow="01 · Man Den" headline="The rooms" fallback={{ name: 'Sierra Queen Bed', category: '.', silhouetteKind: '.' }} />);
     const img = container.querySelector('img')!;
     expect(img).not.toBeNull();
     expect(img.getAttribute('src')).toContain('/' + crop + '-');
@@ -457,6 +457,9 @@ describe('Reveal', () => {
     expect(container.querySelector('.ed-tab')).toHaveAttribute('data-tab-mode', 'below');
     const link = preloadLink(SCOPE, a)[0];
     expect(link.imageSrcSet).toBe(container.querySelector('source')!.getAttribute('srcset'));
+    expect(link.imageSizes).toBe(container.querySelector('source')!.getAttribute('sizes'));
+    expect(container.querySelector('.ed-hero-slot')).toHaveStyle({ '--ed-hero-aspect': crop === 'pair' ? String(1600 / 1143) : '1' });
+    if (process.env.HERO_CAPTURE_DIR) require('fs').writeFileSync(require('path').join(process.env.HERO_CAPTURE_DIR, crop + '.html'), container.innerHTML);
     fireEvent.error(img);
     expect(screen.getByTestId('piece-silhouette')).toHaveAttribute('data-silhouette', 'bed');
     expect(screen.getByText('Picture did not load.')).toBeInTheDocument();
@@ -466,9 +469,21 @@ describe('Reveal', () => {
     const { container } = render(<HeroPlate scopeId={SCOPE} asset={asset()} eyebrow="01 · House" headline="The rooms" fallback={fallback} />);
     expect(container.querySelector('figure')).toHaveClass('ed-hero--bleed');
     expect(container.querySelector('figure')).not.toHaveClass('ed-hero--contained');
+    if (process.env.HERO_CAPTURE_DIR) require('fs').writeFileSync(require('path').join(process.env.HERO_CAPTURE_DIR, 'scene.html'), container.innerHTML);
   });
-  it('infers a bed when no rendition exists and the reader supplies generic case', () => {
-    render(<SilhouettePlate name="Sierra Queen Bed" category="." silhouetteKind="case" />);
+  it('does not measure a contained hero even when passed a short-frame position', () => {
+    const observer = jest.spyOn(window, 'ResizeObserver');
+    observer.mockClear();
+    render(<HeroPlate scopeId={SCOPE} asset={asset({ ground: 'white', width: 1600, height: 1600, crops: { pair } })} eyebrow="01 · House" headline="Your bed is on the way to the house" phoneObjectPosition="50% 50%" fallback={fallback} />);
+    expect(observer).not.toHaveBeenCalled();
+    observer.mockRestore();
+  });
+  it('honours an explicit case kind rather than overriding it with name inference', () => {
+    render(<SilhouettePlate name="Sierra Queen Bed" category="case" silhouetteKind="case" />);
+    expect(screen.getByTestId('piece-silhouette')).toHaveAttribute('data-silhouette', 'case');
+  });
+  it('infers a bed when no rendition exists and the reader supplies an unknown category', () => {
+    render(<SilhouettePlate name="Sierra Queen Bed" category="." silhouetteKind="." />);
     expect(screen.getByTestId('piece-silhouette')).toHaveAttribute('data-silhouette', 'bed');
   });
  });

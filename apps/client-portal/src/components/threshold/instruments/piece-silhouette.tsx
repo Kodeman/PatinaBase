@@ -15,11 +15,11 @@ export type SilhouetteCategory = 'bed' | 'chair' | 'table' | 'case' | 'light' | 
 
 /** First match wins, so the narrower vocabularies are read first. */
 const CATEGORY_WORDS: ReadonlyArray<readonly [SilhouetteCategory, RegExp]> = [
-  ['bed', /\bbed\b|\bbeds\b|headboard|bedframe/i],
   ['light', /light|lamp|sconce|chandelier|pendant|luminaire|fixture/i],
-  ['textile', /rug|runner|carpet|curtain|drape|textile|upholst|pillow|cushion|throw/i],
+  ['textile', /rug|runner|carpet|curtain|drape|textile|upholst|pillow|cushion|throw|linen|bedding|blanket|duvet|quilt/i],
   ['chair', /chair|stool|settee|sofa|bench|seating|ottoman/i],
-  ['table', /table|desk|console/i],
+  ['table', /table|desk|console|nightstand|bed-?side/i],
+  ['bed', /\bbeds?\b|headboard|bed[ -]?frame|daybed/i],
   ['case', /case|cabinet|shelv|shelf|credenza|sideboard|bookcase|dresser|wardrobe|storage/i],
 ];
 

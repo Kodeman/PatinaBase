@@ -148,6 +148,10 @@ describe('the shorter phone frame', () => {
     expect(hero).toMatchObject({ contained: true, layout: 'measure', main: 'pair', phone: null, width: 1600, height: 1143 });
     expect(platePicture('p', bed, hero.main, hero.sizes)!.src).toContain('/pair-1600.webp');
     expect(heroPreloadSources('p', bed)[0].imageSrcSet).toContain('/pair-1600.avif 1600w');
+    expect(hero.sizes).toContain('(max-width: 600px) min(1600px, calc(calc(100vw - 32px) * 0.8 - 2px)');
+    expect(hero.sizes).toContain('72svh');
+    expect(hero.sizes).toContain('min(1104px, calc(100vw - 48px))');
+    expect(heroPreloadSources('p', bed)[0].imageSizes).toBe(hero.sizes);
   });
   it('uses piece when pair is absent and caps its size at the stored width', () => {
     expect(heroPicture({ ...bed, crops: { piece } })).toMatchObject({ contained: true, main: 'piece', width: 768, height: 768 });

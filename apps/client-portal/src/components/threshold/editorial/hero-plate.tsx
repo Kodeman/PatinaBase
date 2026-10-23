@@ -54,7 +54,7 @@ function heroSlotStyle(
   measured: string | null | undefined,
 ): CSSProperties | undefined {
   if (hero.contained) {
-    return { '--ed-hero-max-width': `${hero.width}px`, '--ed-hero-max-height': `${hero.height}px` } as CSSProperties;
+    return { '--ed-hero-max-width': `${hero.width}px`, '--ed-hero-aspect': hero.width / hero.height } as CSSProperties;
   }
   if (!nominal) return undefined;
   return {
@@ -72,7 +72,7 @@ export function HeroPlate(props: HeroPlateProps) {
   const [phonePosition, setPhonePosition] = useState<string | null>();
 
   useLayoutEffect(() => {
-    if (!props.phoneObjectPosition) return;
+    if (contained || !props.phoneObjectPosition) return;
     const image = ref.current?.querySelector('img');
     if (!image) return;
     const measure = () => {
@@ -89,7 +89,7 @@ export function HeroPlate(props: HeroPlateProps) {
       observer.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [props.asset, props.phoneObjectPosition]);
+  }, [contained, props.asset, props.phoneObjectPosition]);
 
   return (
     <div
