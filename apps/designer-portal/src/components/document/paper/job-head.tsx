@@ -17,7 +17,7 @@ export function JobHead({ returnTo, jobName, context }: JobHeadProps) {
   return (
     <header
       data-job-head=""
-      className="sticky top-0 z-30 flex h-[var(--r8-head)] items-center gap-[12px] border-b border-[var(--hairline-strong)] bg-[var(--paper)] px-[18px] min-[600px]:gap-[24px] min-[600px]:px-[4%]"
+      className="sticky top-0 z-30 flex min-h-[var(--r8-head)] items-center gap-[12px] border-b border-[var(--hairline-strong)] bg-[var(--paper)] px-[18px] min-[600px]:gap-[24px] min-[600px]:px-[4%]"
     >
       <Link
         href={returnTo.href}
@@ -31,11 +31,11 @@ export function JobHead({ returnTo, jobName, context }: JobHeadProps) {
         aria-hidden="true"
         className="h-[20px] shrink-0 border-l border-[var(--hairline-strong)]"
       />
-      <p className="t-body-sm min-w-0 truncate font-medium text-[var(--text-primary)]">
+      <p className="t-body-sm min-w-0 [overflow-wrap:anywhere] font-medium text-[var(--text-primary)]">
         {jobName}
       </p>
       {context ? (
-        <p className="r8-small hidden min-w-0 truncate text-[var(--text-muted)] min-[1180px]:block">
+        <p className="r8-small hidden min-w-0 [overflow-wrap:anywhere] text-[var(--text-muted)] min-[1180px]:block">
           {context}
         </p>
       ) : null}

@@ -124,6 +124,15 @@ describe('ContentsMargin', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('bounds its own scroll area to the viewport below its sticky offset', () => {
+    renderMargin();
+    expect(screen.getByRole('complementary')).toHaveClass(
+      'top-[calc(var(--r8-head)+24px)]',
+      'max-h-[calc(100dvh-(var(--r8-head)+24px))]',
+      'overflow-y-auto',
+    );
+  });
+
   it('carries no region roots, so the running index never observes it', () => {
     const { container } = renderMargin();
     expect(container.querySelector('[data-index-region]')).toBeNull();

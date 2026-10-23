@@ -49,10 +49,28 @@ describe('JobHead', () => {
     expect(screen.getByRole('link', { name: 'Studio' })).toHaveFocus();
   });
 
-  it('sticks at the round-8 head height', () => {
+  it('sticks with the round-8 head height as a minimum, not a fixed height', () => {
     render(
       <JobHead returnTo={{ href: '/desk', label: 'Studio' }} jobName="Lake Mendota House" />,
     );
-    expect(screen.getByRole('banner')).toHaveClass('sticky', 'top-0', 'h-[var(--r8-head)]');
+    const banner = screen.getByRole('banner');
+    expect(banner).toHaveClass('sticky', 'top-0', 'min-h-[var(--r8-head)]');
+    expect(banner).not.toHaveClass('h-[var(--r8-head)]');
+  });
+
+  it('wraps long identity and context text, including unbroken strings', () => {
+    const jobName = `Lake Mendota House — ${'LongJobName'.repeat(20)}`;
+    const context = `Full service + building team — ${'LongContext'.repeat(20)}`;
+    render(
+      <JobHead returnTo={{ href: '/desk', label: 'Studio' }} jobName={jobName} context={context} />,
+    );
+    for (const text of [jobName, context]) {
+      const node = screen.getByText(text);
+      for (const className of ['truncate', 'whitespace-nowrap', 'text-ellipsis']) {
+        expect(node).not.toHaveClass(className);
+      }
+      expect(node).toHaveClass('min-w-0', '[overflow-wrap:anywhere]');
+      expect(node).toHaveTextContent(text);
+    }
   });
 });

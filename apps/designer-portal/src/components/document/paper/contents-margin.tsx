@@ -36,7 +36,7 @@ export function ContentsMargin<K extends string>({
   return (
     <aside
       data-contents-margin=""
-      className="sticky top-[calc(var(--r8-head)+24px)] hidden w-[var(--r8-contents)] self-start min-[1180px]:block"
+      className="sticky top-[calc(var(--r8-head)+24px)] max-h-[calc(100dvh-(var(--r8-head)+24px))] overflow-y-auto hidden w-[var(--r8-contents)] self-start min-[1180px]:block"
     >
       <p className="t-authorship border-b border-[var(--ink)] pb-[12px] text-[var(--text-primary)]">
         In this job
