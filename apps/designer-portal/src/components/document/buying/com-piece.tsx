@@ -6,14 +6,16 @@ import {
   useFfeComSpec,
   useFfePairLines,
   useLinkFfePair,
+  useProjectSubmittals,
   useUpdateFfeComSpec,
   type ComSpec,
   type FfePairLine,
 } from '@patina/supabase';
 import { formatTenths, readYardage, type YardageInput } from '@/lib/document/com-yardage';
+import { specQuantityLabel } from '@/lib/spec-books/model';
 import { DocumentAction } from '../document-action';
 import { CellSub, FIELD_CLS, LABEL_CLS } from '../line-unfold/cell';
-import { LineSubmittals } from './submittals';
+import { LineSubmittals, SUBMITTAL_KIND_LABEL, submittalFacts } from './submittals';
 
 /**
  * C-24 (D1-04): the custom piece. A frame and its COM fabric are two lines,
@@ -465,6 +467,106 @@ function LinkFabric({
   );
 }
 
+const recorded = (value: string | null | undefined) => value || 'Not recorded';
+
+function pairQuantity(line: FfePairLine): string {
+  if (line.quantity == null || !line.unit) return 'Quantity or unit not recorded';
+  const unit = line.unit === 'each' ? 'each' : line.unit;
+  return `${specQuantityLabel(line.quantity, unit)}${unit === 'each' ? ' each' : ''}`;
+}
+
+function pairPurchase(line: FfePairLine): string {
+  const po = line.purchase_order;
+  if (!po) return 'No purchase order linked';
+  return `${po.po_number || 'PO number not recorded'} · ${po.status.replace(/_/g, ' ')}`;
+}
+
+function ComMaterialReading({ material, piece }: { material: FfePairLine; piece: FfePairLine }) {
+  const form = formFromSpec(piece.spec?.com_spec);
+  return (
+    <div className="min-w-0 break-words">
+      <p className="font-medium">{form.fabricName || material.name}</p>
+      <p>Pattern · {recorded(form.pattern)}</p>
+      <p>Colour · {recorded(material.spec?.color_fabric)}</p>
+      <p>Vendor · {recorded(material.vendor_name)}</p>
+      <p>Material quantity · {pairQuantity(material)}</p>
+      {material.unit === 'each' && <p>Material measure not recorded</p>}
+    </div>
+  );
+}
+
+function ComPrerequisites({
+  projectId, material, piece,
+}: { projectId: string; material: FfePairLine; piece: FfePairLine }) {
+  const { data, isLoading, isError } = useProjectSubmittals(projectId);
+  if (isError) return <CellSub>Prerequisites could not be read</CellSub>;
+  if (isLoading || !data) return <CellSub>Reading prerequisites…</CellSub>;
+  const rows = data.filter((row) =>
+    [piece.id, material.id].includes(row.ffe_item_id ?? '') && row.decision !== 'approved',
+  );
+  return <ComPrerequisiteList rows={rows} material={material} piece={piece} />;
+}
+
+function ComPrerequisiteList({
+  rows, material, piece,
+}: {
+  rows: NonNullable<ReturnType<typeof useProjectSubmittals>['data']>;
+  material: FfePairLine;
+  piece: FfePairLine;
+}) {
+  if (rows.length === 0) return <CellSub>No outstanding submittals recorded</CellSub>;
+  return (
+    <div>
+      <p className={LABEL_CLS}>Outstanding prerequisites</p>
+      <ul className="list-disc pl-4">
+        {rows.map((row) => (
+          <li key={`${row.source}:${row.id}`}>
+            {SUBMITTAL_KIND_LABEL[row.kind ?? ''] ?? 'Submittal'} ·{' '}
+            {row.ffe_item_id === material.id ? material.name : piece.name} · {submittalFacts(row)}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ComDependency({
+  projectId, material, piece,
+}: { projectId: string; material: FfePairLine; piece: FfePairLine }) {
+  return (
+    <section
+      aria-label={`COM dependency · ${material.name}`}
+      data-testid="com-dependency"
+      className="mt-2 flex min-w-0 flex-col gap-1.5 border-l border-[var(--color-pearl)] pl-3 text-[11px] text-[var(--color-charcoal)]"
+    >
+      <p className={LABEL_CLS}>Material & finished piece</p>
+      <ComMaterialReading material={material} piece={piece} />
+      <div className="break-words">
+        <p>Material purchase · {pairPurchase(material)}</p>
+        <p>Finished-piece purchase · {pairPurchase(piece)}</p>
+        <p>Finished-piece quantity · {pairQuantity(piece)}</p>
+      </div>
+      <div>
+        <p>Workroom confirmation · Not confirmed</p>
+        <p>Awaiting {piece.vendor_name || 'the workroom'}’s confirmation of material quantity and identity.</p>
+      </div>
+      <ComPrerequisites projectId={projectId} material={material} piece={piece} />
+      <p className="text-[var(--text-muted)]">Material arrival alone does not release fabrication.</p>
+    </section>
+  );
+}
+
+function ComPairReadings({
+  projectId, itemId, pair, lines,
+}: { projectId: string; itemId: string; pair: PairReading; lines: FfePairLine[] }) {
+  const piece = pair.parent ?? lines.find((line) => line.id === itemId);
+  if (!piece) return null;
+  const materials = pair.parent ? lines.filter((line) => line.id === itemId) : pair.children;
+  return materials.map((material) => (
+    <ComDependency key={material.id} projectId={projectId} material={material} piece={piece} />
+  ));
+}
+
 /**
  * The pair in "The buy" cell. A fabric line names its piece; a piece names
  * its fabric and carries the COM facts; a line in no pair offers "This piece
@@ -483,7 +585,8 @@ export function ComPiece({
   const link = useLinkFfePair({ errorSurface: 'inline' });
   const [linking, setLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pair = readPair(item, lines ?? []);
+  const projectLines = lines ?? [];
+  const pair = readPair(item, projectLines);
   const unlink = (childId: string) => {
     setError(null);
     link
@@ -558,6 +661,7 @@ export function ComPiece({
           canEdit={canEdit}
         />
       )}
+      <ComPairReadings projectId={projectId} itemId={item.id} pair={pair} lines={projectLines} />
       <LineSubmittals
         projectId={projectId}
         itemId={item.id}
