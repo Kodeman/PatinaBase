@@ -225,7 +225,7 @@ const STAMP_WORD_FIXTURES: {
     state: 'ordered',
     row: { status: 'ordered', blocked: false, received_quantity: null },
     kind: 'ordered',
-    word: 'Released to maker',
+    word: 'Ordered',
   },
   {
     state: 'in production',

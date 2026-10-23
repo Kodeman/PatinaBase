@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Zap } from 'lucide-react';
 import { type FFEStageKey } from '@patina/types';
+import type { PurchaseOrderFacts } from '@/lib/document/stamp-derivation';
 import { STAGES, stageColor, stageLabel } from './stages';
 
 /**
@@ -31,9 +32,10 @@ export function poSync(item: {
   purchase_order_id?: string | null;
   status?: string | null;
   po_number?: string | null;
+  purchase_order?: PurchaseOrderFacts | null;
 }): StageSyncInfo {
   return {
-    systemSet: !!item.purchase_order_id && PO_SYNCED_STAGES.includes(item.status ?? ''),
+    systemSet: !!item.purchase_order?.sent_at && PO_SYNCED_STAGES.includes(item.status ?? ''),
     // The board's items query doesn't join purchase_orders — the legacy
     // po_number column is the best label available (null → generic copy).
     poNumber: item.po_number ?? null,

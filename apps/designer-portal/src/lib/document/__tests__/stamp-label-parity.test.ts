@@ -153,6 +153,24 @@ describe('D1 parity · the TS mirror equals ffe_line_stage (00736)', () => {
   it('where the server has no stage (ordered on), the goods word prints', () => {
     const ordered = SERVER_ROWS.find((r) => r.ffe_line_stage == null)!;
     const stamp = deriveLineStamp({ ...ordered, stage: lineStageInputFromRow(ordered) });
-    expect(lineStampLabel(stamp.kind)).toBe('Released to maker');
+    expect(lineStampLabel(stamp.kind)).toBe('Ordered');
+  });
+});
+
+describe('F-02 shared stamps (paper, Build and spec book)', () => {
+  it.each([
+    [{ status: 'draft' }, 'Order drafted'],
+    [{ status: 'held_for_release' }, 'Order drafted'],
+    [{ status: 'draft', released_at: '2026-10-01' }, 'Released, not sent'],
+    [{ status: 'draft', released_at: '2026-10-01', sent_at: '2026-10-02' }, 'Sent to vendor'],
+  ])('prints the PO fact before the ordered stage: %s', (purchase_order, word) => {
+    const row = { status: 'approved', blocked: false, received_quantity: null, purchase_order };
+    expect(lineStampLabel(deriveLineStamp({ ...row, stage: lineStageInputFromRow(row) }).kind)).toBe(word);
+  });
+  it('never renders Released to maker for an unsent PO (source guard)', () => {
+    const fs = require('fs'); const path = require('path');
+    for (const file of ['src/lib/document/stamp-derivation.ts', 'src/components/portal/ffe/stages.ts', 'src/components/document/line-unfold/order-cell.tsx', 'src/components/document/orders-ledger.tsx']) {
+      expect(fs.readFileSync(path.join(process.cwd(), file), 'utf8')).not.toMatch(/['"]Released to maker['"]/);
+    }
   });
 });

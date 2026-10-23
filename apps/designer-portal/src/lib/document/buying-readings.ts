@@ -13,14 +13,24 @@
  */
 
 import { fmtDay } from './format';
-import { OPEN_DAMAGE_CLAIM_STATES } from './stamp-derivation';
-import { canLogAck, canSend } from '@/components/document/line-unfold/next-act';
+import { lineStampLabel, purchaseOrderState, OPEN_DAMAGE_CLAIM_STATES } from './stamp-derivation';
+import { canLogAck } from '@/components/document/line-unfold/next-act';
 import {
   formatCurrencyTotal,
   rowCurrency,
   sumByCurrency,
   type CurrencyTotal,
 } from '@/lib/currency-totals';
+
+/** Money is committed by a sent PO or a live recorded purchase, never a draft link. */
+export interface BuyingCommitment {
+  purchase_order?: { sent_at?: string | null; status?: string | null } | null;
+  studio_purchases?: { status: string }[] | null;
+}
+export function isCommittedBuyingLine(line: BuyingCommitment): boolean {
+  return Boolean(line.purchase_order?.sent_at && line.purchase_order.status !== 'cancelled') ||
+    (line.studio_purchases ?? []).some((p) => p.status === 'recorded' || p.status === 'billed');
+}
 
 export type BuyingReading = 'room' | 'maker' | 'next';
 
@@ -32,6 +42,7 @@ export interface BuyingPurchaseOrder {
   vendor_po_number?: string | null;
   sidemark?: string | null;
   status?: string | null;
+  released_at?: string | null;
   sent_at?: string | null;
   acknowledged_at?: string | null;
   confirmed_eta?: string | null;
@@ -131,10 +142,11 @@ export function purchaseOrderFoot(po: BuyingPurchaseOrder): string {
     return parts.join(' · ');
   }
   if (po.sent_at) {
-    parts.push(`sent ${fmtDay(po.sent_at)}`);
+    parts.push(`Sent to vendor ${fmtDay(po.sent_at)}`);
     parts.push(po.acknowledged_at ? 'acknowledged' : 'awaiting acknowledgment');
   } else {
-    parts.push('not yet sent');
+    const state = purchaseOrderState(po);
+    parts.push(state ? lineStampLabel(state) : 'Not yet sent');
   }
   if (po.status === 'delivered') {
     parts.push(po.delivered_date ? `delivered ${fmtDay(po.delivered_date)}` : 'delivered');
@@ -339,7 +351,8 @@ export const READY_TO_ORDER = 'Ready to order';
 
 /** Lifecycle steps for a line on its way, in the order the work moves. */
 const LIFECYCLE_STEPS = [
-  'To send',
+  'Order drafted',
+  'Released, not sent',
   'Waiting on the ack',
   'Ordered',
   'In production',
@@ -384,11 +397,14 @@ function lifecycleStep(line: NextActLine): LifecycleStep | null {
   if (status === 'delivered') {
     return line.received_quantity == null ? 'To receive' : 'To install';
   }
-  if (onOrder && canSend(po)) return 'To send';
+  if (onOrder && po) {
+    const state = purchaseOrderState(po);
+    if (state === 'order_drafted' || state === 'order_released') return lineStampLabel(state) as LifecycleStep;
+  }
   if (onOrder && canLogAck(po)) return 'Waiting on the ack';
   if (status === 'shipped') return 'Shipped';
   if (status === 'production') return 'In production';
-  if (status === 'ordered' || onOrder) return 'Ordered';
+  if (status === 'ordered' || po?.sent_at) return 'Ordered';
   return null;
 }
 

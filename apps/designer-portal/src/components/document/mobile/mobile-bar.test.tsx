@@ -469,9 +469,9 @@ describe('the left zone · household and the current stop (OD-11, A-08)', () => 
     mountBar({ doc: { ...heldDocument, readingIndex: 'ffe' } });
     const bar = screen.getByTestId('mobile-bar');
     expect(bar).toHaveAttribute('data-reading-index', 'ffe');
-    expect(screen.getByText('Section: Pieces')).toBeInTheDocument();
+    expect(screen.getByText('Section: Pieces & purchasing')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Open project contents, at Pieces' }),
+      screen.getByRole('button', { name: 'Open project contents, at Pieces & purchasing' }),
     ).toBeInTheDocument();
   });
 
@@ -563,7 +563,7 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     [
       'Client approvals',
       'Project schedule',
-      'Pieces',
+      'Pieces & purchasing',
       'Project financials',
       'Project closeout',
       'The record',

@@ -16,7 +16,7 @@ jest.mock('@portabletext/react', () => ({
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { StageSelect } from '../stage-select';
+import { StageSelect, poSync } from '../stage-select';
 
 describe('StageSelect PO-sync indicator', () => {
   it('renders no sync badge or explainer when sync is absent', () => {
@@ -113,5 +113,19 @@ describe('StageSelect PO-sync indicator', () => {
     // Confirm with Enter — should call onChangeStatus with 'quoted'.
     fireEvent.keyDown(listbox, { key: 'Enter' });
     await waitFor(() => expect(onChangeStatus).toHaveBeenCalledWith('quoted'));
+  });
+});
+
+describe('F-02 PO stage facts', () => {
+  it('calls the manual stage Ordered, not Released to maker', () => {
+    render(<StageSelect currentStatus="ordered" onChangeStatus={jest.fn()} />);
+    expect(screen.getByRole('button', { name: /Stage: Ordered/ })).toBeInTheDocument();
+    expect(screen.queryByText('Released to maker')).not.toBeInTheDocument();
+  });
+  it('does not mark a draft or released-unsent PO as system-ordered', () => {
+    for (const purchase_order of [{ status: 'draft' }, { status: 'draft', released_at: '2026-10-01' }]) {
+      expect(poSync({ purchase_order_id: 'po', status: 'ordered', purchase_order }).systemSet).toBe(false);
+    }
+    expect(poSync({ purchase_order_id: 'po', status: 'ordered', purchase_order: { sent_at: '2026-10-02' } }).systemSet).toBe(true);
   });
 });

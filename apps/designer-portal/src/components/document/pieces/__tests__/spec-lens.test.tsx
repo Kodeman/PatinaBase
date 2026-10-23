@@ -1143,7 +1143,7 @@ describe("a line past ordered, or a Trade Scope line (T-33c, F3)", () => {
     [0, "Engaged", "Trade Scope lines change in their scope."],
     [
       1,
-      "Released to maker",
+      "Ordered",
       "This line is released. Quantity and unit change through Record a change.",
     ],
   ])(
