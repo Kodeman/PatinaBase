@@ -1,3 +1,4 @@
+import { PlannedDestination } from '../destinations/planned-destination';
 import { useState } from 'react';
 import type { StudioPurchaseRow } from '@patina/supabase';
 import { AckRecord, usePoAckSummary } from '../buying/ack-check';
@@ -71,6 +72,7 @@ export function OrderCell({
   if (!po && purchase) {
     return (
       <UnfoldCell head="Order" testId="line-po-cell">
+      {projectId && <PlannedDestination projectId={projectId} itemId={item.id} locationId={item.planned_destination_location_id ?? null} canEdit={canChange} />}
         <CellValue>{purchase.payee_name}</CellValue>
         <PurchaseFact purchase={purchase} className="text-[11px] text-[var(--text-muted)]" />
       </UnfoldCell>
@@ -89,6 +91,7 @@ export function OrderCell({
 
   return (
     <UnfoldCell head="Order" testId="line-po-cell">
+      {projectId && <PlannedDestination projectId={projectId} itemId={item.id} locationId={item.planned_destination_location_id ?? null} canEdit={canChange} />}
       {po && poLabel ? (
         <CellValue>
           <button

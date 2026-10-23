@@ -20,6 +20,8 @@ const mockSetShipTo = jest.fn();
 const mockSetShipToLocation = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
+  useProjectDestinationLocations: () => ({ data: [] }),
+  useStudioContacts: () => ({ data: [] }),
   useOrganizations: () => ({ data: mockSources.orgs }),
   useProject: () => ({ data: mockSources.project }),
   useStudioIdentity: (params: Record<string, unknown>) => {
@@ -180,7 +182,7 @@ describe('useShipToAddresses · "The studio" is the project studio (F11)', () =>
   it('uses the address of projects.studio_id, not the first org', () => {
     mockSources.project = { studio_id: 'org-project', designer_id: 'owner-1', site_address: SITE };
     const { result } = renderHook(() => useShipToAddresses('project-1'));
-    expect(result.current).toEqual({ locations: [], studioAddress: STUDIO, siteAddress: SITE });
+    expect(result.current).toEqual(expect.objectContaining({ locations: [], studioAddress: STUDIO, siteAddress: SITE }));
     // studio_id is on file, so the owner fallback is never asked.
     expect(mockStudioIdentityCalls.every((p) => !p.designerId)).toBe(true);
   });
@@ -242,8 +244,8 @@ describe('ShipToChoice', () => {
     expect(radios).toHaveLength(6);
     radios.forEach((r) => expect(r).not.toBeChecked());
     const names = radios.map((r) => r.closest('label')?.textContent ?? '');
-    expect(names[0]).toMatch(/^Badger Receiving · Default receiver7 Dock Rd/);
-    expect(names[1]).toBe('Acme Freight');
+    expect(names[0]).toMatch(/^Badger Receiving · receiver · Default receiver7 Dock Rd/);
+    expect(names[1]).toBe('Acme Freight · receiver');
     expect(names[2]).toMatch(/^Able Workroom/);
     expect(names[3]).toMatch(/^The studio/);
     expect(names[4]).toMatch(/^The job site/);
@@ -322,3 +324,19 @@ describe('the hardcoded ship-to placeholder', () => {
     }
   });
 });
+
+ describe('job destinations', () => {
+   it('lists job places before other studio places and never selects one silently', () => {
+     render(<ShipToChoice locations={[BADGER, { ...WORKROOM, is_private_home: true, receivingParty: 'Hollis', instructions: 'Use rear door.' }]} jobLocationIds={new Set([WORKROOM.id])} studioAddress={STUDIO} siteAddress={null} value={EMPTY_SHIP_TO} onChange={jest.fn()} />);
+     const radios = screen.getAllByRole('radio');
+     expect(radios[0].closest('label')).toHaveTextContent('Able Workroom · workroom · Private home · On this job');
+     expect(radios[0].closest('label')).toHaveTextContent('Receiving party: Hollis');
+     expect(radios[0].closest('label')).toHaveTextContent('Use rear door.');
+     expect(radios[1].closest('label')).toHaveTextContent('Badger Receiving');
+     expect(radios[radios.length - 1].closest('label')).toHaveTextContent('Somewhere else');
+     radios.forEach((radio) => expect(radio).not.toBeChecked());
+   });
+   it('keeps receiving facts in the selected review text', () => {
+     expect(formatLocation({ ...WORKROOM, receivingParty: 'Hollis', receiving_hours: 'Tue 9–3', instructions: 'Rear door.' })).toBe('Able Workroom, Verona, WI\nHollis\nTue 9–3\nRear door.');
+   });
+ });
