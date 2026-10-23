@@ -43,6 +43,15 @@ FROM auth.users WHERE id IN ('f0180000-0000-4000-8000-000000000002', 'f0180000-0
 ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name,
   display_name = EXCLUDED.display_name, role = EXCLUDED.role, is_designer = true;
 
+-- Match the native "Skip for now" state read by HelpStateProvider.
+UPDATE public.profiles
+SET help_state = jsonb_set(
+  coalesce(help_state, '{}'::jsonb), '{tours}',
+  coalesce(help_state->'tours', '{}'::jsonb)
+    || '{"desk-walkthrough":{"abandoned":true,"atStep":0}}'::jsonb
+)
+WHERE id = 'f0180000-0000-4000-8000-000000000002';
+
 INSERT INTO public.user_roles (user_id, role_id)
 SELECT p.id, r.id FROM public.profiles p CROSS JOIN public.roles r
 WHERE p.id IN ('f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000003')
