@@ -1543,15 +1543,14 @@ const calendarDaysTo = (ymd: string, now: Date) => -calendarDaysPast(ymd, now);
 
 // C-20 (D1-08): the vendor's claim window, one need the day before it closes.
 // It reads the claim_window_closing notice (the cron decides the day) and
-// clears with the act: the claim reaches the vendor (no drafted claim left)
-// or the line is marked good (the latest inspection is clean). A window that
-// has already closed stays until then — the studio can still file.
+// clears with the act: no receipt on the PO has a drafted claim left. A clean
+// later receipt cannot clear an earlier receipt's claim. A closed window stays
+// until then — the studio can still file.
 const needClaimWindow: NeedRule = ({ claimWindows, now }) => {
   const open = (claimWindows ?? [])
     .filter(
       (w) =>
         w.claimStates.includes('drafted') &&
-        w.latestOutcome !== 'clean' &&
         calendarDaysTo(w.deadline, now) <= 1,
     )
     .sort((a, b) => (a.deadline < b.deadline ? -1 : a.deadline > b.deadline ? 1 : 0));

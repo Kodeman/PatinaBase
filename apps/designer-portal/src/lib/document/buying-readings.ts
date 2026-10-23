@@ -13,7 +13,7 @@
  */
 
 import { fmtDay } from './format';
-import { lineStampLabel, purchaseOrderState, OPEN_DAMAGE_CLAIM_STATES } from './stamp-derivation';
+import { lineStampLabel, purchaseOrderState, orderReachedVendor, OPEN_DAMAGE_CLAIM_STATES } from './stamp-derivation';
 import { canLogAck } from '@/components/document/line-unfold/next-act';
 import {
   formatCurrencyTotal,
@@ -22,13 +22,13 @@ import {
   type CurrencyTotal,
 } from '@/lib/currency-totals';
 
-/** Money is committed by a sent PO or a live recorded purchase, never a draft link. */
+/** Money is committed by a vendor-reached PO or a live recorded purchase, never a draft link. */
 export interface BuyingCommitment {
   purchase_order?: { sent_at?: string | null; status?: string | null } | null;
   studio_purchases?: { status: string }[] | null;
 }
 export function isCommittedBuyingLine(line: BuyingCommitment): boolean {
-  return Boolean(line.purchase_order?.sent_at && line.purchase_order.status !== 'cancelled') ||
+  return orderReachedVendor(line.purchase_order) ||
     (line.studio_purchases ?? []).some((p) => p.status === 'recorded' || p.status === 'billed');
 }
 
@@ -404,7 +404,7 @@ function lifecycleStep(line: NextActLine): LifecycleStep | null {
   if (onOrder && canLogAck(po)) return 'Waiting on the ack';
   if (status === 'shipped') return 'Shipped';
   if (status === 'production') return 'In production';
-  if (status === 'ordered' || po?.sent_at) return 'Ordered';
+  if (status === 'ordered' || orderReachedVendor(po)) return 'Ordered';
   return null;
 }
 

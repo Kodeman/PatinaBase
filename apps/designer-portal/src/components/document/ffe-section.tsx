@@ -268,6 +268,7 @@ function stampProps(stamp: LineStamp): {
         color: 'var(--color-terracotta)',
         ink: 'var(--color-terracotta-ink)',
       };
+    case 'order_confirmed':
     case 'order_sent':
       return { label, color: STAGE_CONFIG.ordered.color, ink: STAGE_INK.ordered };
     // Arrived, awaiting inspection — its own word, not STAGE_CONFIG's
@@ -306,6 +307,7 @@ function stampProps(stamp: LineStamp): {
  *  whose journey is judged work rather than logistics. */
 function ffeStampTone(kind: LineStamp['kind']): StampTone | null {
   switch (kind) {
+    case 'order_confirmed':
     case 'order_sent':
     case 'ordered':
     case 'production':
@@ -343,6 +345,7 @@ function ffeThumbSrc(item: FFERow): string | null {
 }
 
 const UNDERWAY = new Set([
+  'order_confirmed',
   'order_sent',
   'ordered',
   'production',
@@ -390,7 +393,7 @@ function vendorLine(
   if (stamp.kind === 'delivered') parts.push('awaiting inspection');
   else if (
     item.eta &&
-    (stamp.kind === 'order_sent' || stamp.kind === 'ordered' ||
+    (stamp.kind === 'order_confirmed' || stamp.kind === 'order_sent' || stamp.kind === 'ordered' ||
       stamp.kind === 'production' ||
       stamp.kind === 'shipped')
   )

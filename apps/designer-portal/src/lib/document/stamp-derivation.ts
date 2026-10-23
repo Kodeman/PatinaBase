@@ -42,6 +42,7 @@ export type LineStampKind =
   | 'order_drafted'
   | 'order_released'
   | 'order_sent'
+  | 'order_confirmed'
   | 'ordered'
   | 'production'
   | 'shipped'
@@ -113,10 +114,16 @@ export interface PurchaseOrderFacts {
   sent_at?: string | null;
 }
 
+/** A send or a vendor-acknowledged status proves this order reached the vendor. */
+export function orderReachedVendor(po: Pick<PurchaseOrderFacts, 'sent_at' | 'status'> | null | undefined): boolean {
+  return po != null && po.status !== 'cancelled' &&
+    (po.sent_at != null || ['confirmed', 'in_production', 'shipped', 'delivered'].includes(po.status ?? ''));
+}
+
 /** Release is internal; a send or vendor-acknowledged status proves the order reached the vendor (00863). */
-export function purchaseOrderState(po: PurchaseOrderFacts): 'order_drafted' | 'order_released' | 'order_sent' | null {
+export function purchaseOrderState(po: PurchaseOrderFacts): 'order_drafted' | 'order_released' | 'order_sent' | 'order_confirmed' | null {
   if (po.status === 'cancelled') return null;
-  if (po.sent_at || ['confirmed', 'in_production', 'shipped', 'delivered'].includes(po.status ?? '')) return 'order_sent';
+  if (orderReachedVendor(po)) return po.sent_at != null ? 'order_sent' : 'order_confirmed';
   if (po.released_at) return 'order_released';
   return po.status === 'draft' || po.status === 'held_for_release' ? 'order_drafted' : null;
 }
@@ -346,6 +353,7 @@ const LINE_STAMP_LABEL: Record<LineStampKind, string> = {
   order_drafted: 'Order drafted',
   order_released: 'Released, not sent',
   order_sent: 'Sent to vendor',
+  order_confirmed: 'Confirmed by vendor',
   ordered: 'Ordered',
   production: 'In production',
   shipped: 'In transit',

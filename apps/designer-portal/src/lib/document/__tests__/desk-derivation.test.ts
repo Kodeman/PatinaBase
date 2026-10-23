@@ -1751,8 +1751,8 @@ describe('C-20 — the claim window need (D1-08)', () => {
     expect(derive(claimWindow({ claimStates: ['resolved'] }))).toBeNull();
   });
 
-  it('clears once the line is marked good', () => {
-    expect(derive(claimWindow({ latestOutcome: 'clean' }))).toBeNull();
+  it('keeps a drafted receipt claim when the latest receipt is clean', () => {
+    expect(derive(claimWindow({ latestOutcome: 'clean' }))?.kind).toBe('claim_window');
   });
 
   it('keeps a closed window until the act, and says the studio can still file', () => {
