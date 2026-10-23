@@ -16,6 +16,9 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { Banknote, Inbox, MessageSquare, PackageCheck, Receipt, Send, type LucideIcon } from 'lucide-react';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
 import { DocSheet } from '../overlays/doc-sheet';
+import { usePurchaseOrders } from '@patina/supabase';
+import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
+import { PoPreview } from '../po-preview';
 import { ReadyToSendSheet } from '../outbound/ready-to-send-sheet';
 import { actSheetKindOf, recordsPayment, type ActSheetKind } from './act-sheet-kind';
 import { RecordPaymentSheet } from './record-payment-sheet';
@@ -40,6 +43,15 @@ export function useNeedActSheet(): NeedActSheetApi {
   return useContext(NeedActSheetContext);
 }
 
+function ReleasedOrderPreview({ need, onDone }: { need: DeskNeed; onDone: () => void }) {
+  const { data: orders } = usePurchaseOrders();
+  const po = orders?.find((order) => order.id === need.need.recordId);
+  if (!po) return <p>Reading the purchase order…</p>;
+  return <PoPreview open onOpenChange={(open) => { if (!open) onDone(); }} purchaseOrderId={po.id}
+    vendorName={po.vendor?.name ?? 'the vendor'}
+    vendorEmailHint={clientVendorEmailHint(po.vendor ?? null)} />;
+}
+
 type SheetKind = ActSheetKind | 'ready-to-send';
 
 const SHEETS: Record<
@@ -57,6 +69,10 @@ const SHEETS: Record<
   'invoice-reminder': { title: 'Send an invoice reminder', icon: Receipt, Body: InvoiceReminderSheet },
   'proposal-follow-up': { title: 'Follow up on this proposal', icon: MessageSquare, Body: ProposalFollowUpSheet },
   'release-order': { title: "Approve this order's release", icon: PackageCheck, Body: ReleaseOrderSheet },
+  'released-order': {
+    title: 'Review and send', icon: Send, ownsHead: true,
+    Body: ReleasedOrderPreview,
+  },
   'ready-to-send': {
     title: 'Ready to send',
     icon: Inbox,

@@ -298,7 +298,7 @@ export function LineUnfold({
       variant={variant}
       onClick={() => setPreviewOpen(true)}
     >
-      Send to vendor
+      {po?.released_at ? 'Review and send' : 'Send to vendor'}
     </DocumentAction>
   );
   const inspectAct = (variant: DocumentActionVariant) => (
@@ -323,6 +323,9 @@ export function LineUnfold({
 
       {next && (
         <div data-testid="line-next-act" className="mb-3">
+          {next.kind === 'send' && po?.released_at && <p className="doc-type-body text-[var(--color-charcoal)]">
+            Released by {po.released_by_profile?.full_name?.trim().split(/\s+/)[0] || 'an owner or admin'} · not sent
+          </p>}
           {/* R-PB1: a consequence sentence above the act, never a block. */}
           {next.kind === 'order' &&
             readiness.warnings.map((warning) => (

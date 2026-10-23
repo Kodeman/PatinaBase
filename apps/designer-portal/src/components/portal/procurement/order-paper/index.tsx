@@ -24,6 +24,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileText } from 'lucide-react';
 import {
@@ -138,6 +139,7 @@ type PaperRecord =
   | { kind: 'ordered'; at: string }
   // C-32: held for an owner/admin, or sent back to draft with a note.
   | { kind: 'held'; at: string; releaser: string }
+  | { kind: 'released'; at: string }
   | { kind: 'sent_back'; at: string; note: string };
 
 type Busy = 'send' | 'mark' | 'save' | 'order' | 'bill' | 'hold' | null;
@@ -581,11 +583,13 @@ function PaperSheet({
   };
 
   // ─── The terminal act, and its phone/portal twin ───────────────────────
+  const { user } = useAuth();
+  const releasingForBuyer = releasePaper.mode === 'release' && !!purchaseOrder && purchaseOrder.created_by !== user?.id;
   const send = async (mode: 'send' | 'mark_sent') => {
     if (busy) return;
     setError(null);
     if (refuseBlocked()) return;
-    if (!hasShipTo) {
+    if (!releasingForBuyer && !hasShipTo) {
       setShipToInvalid(true);
       setError(SHIP_TO_REQUIRED_MESSAGE);
       return;
@@ -597,6 +601,12 @@ function PaperSheet({
       // A held PO returns to draft on release, so its header can be written.
       const releasing = releasePaper.mode === 'release';
       if (releasing && releasePaper.held && poId) await releasePaper.release(poId);
+      if (releasingForBuyer && poId) {
+        if (!releasePaper.held) await releasePaper.release(poId);
+        settled();
+        if (alive.current) setRecord({ kind: 'released', at: todayIso() });
+        return;
+      }
       const id = await ensurePurchaseOrder();
       if (releasing && !releasePaper.held) await releasePaper.release(id);
       const result = await sendPo.mutateAsync({
@@ -799,10 +809,10 @@ function PaperSheet({
   const label =
     releaseMode === 'hold'
       ? `Hold for release · ${amount}`
-      : releaseMode === 'release' && releasePaper.held
-        ? `Release to ${vendor.name} · ${amount}`
+      : releaseMode === 'release'
+        ? `${releasingForBuyer ? 'Approve release' : 'Release and send'} · ${amount}`
         : terminalLabel({ vendorName: vendor.name, amount, isPatinaMaker });
-  const terminalHeld = !isPatinaMaker && !hasShipTo;
+  const terminalHeld = !isPatinaMaker && !hasShipTo && !releasingForBuyer;
   const shipToHolds = terminalHeld
     ? [{
         id: 'ship-to',
@@ -1306,6 +1316,8 @@ function PaperRecordLine({
         ? `Released by phone or portal · ${day}`
         : record.kind === 'saved'
           ? `Saved as a draft · ${day}. Nothing went to ${vendorName}.`
+          : record.kind === 'released'
+            ? `Released · not sent. The buyer reviews and sends to ${vendorName}.`
           : record.kind === 'held'
             ? `Held for release · ${day}. ${record.releaser} releases it before it goes to ${vendorName}.`
             : record.kind === 'sent_back'

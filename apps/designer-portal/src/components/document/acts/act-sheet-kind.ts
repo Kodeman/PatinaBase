@@ -40,6 +40,7 @@ export type ActSheetKind =
   | 'invoice-reminder'
   | 'proposal-follow-up'
   | 'release-order'
+  | 'released-order'
   | 'record-payment';
 
 /**
@@ -67,7 +68,7 @@ export function actSheetKindOf({ need }: DeskNeed): ActSheetKind | null {
     case 'proposal_expired':
       return 'proposal-follow-up';
     case 'po_unsent':
-      return need.releaseHeld ? 'release-order' : null;
+      return need.releasedOrder ? 'released-order' : need.releaseHeld ? 'release-order' : null;
     default:
       return null;
   }
