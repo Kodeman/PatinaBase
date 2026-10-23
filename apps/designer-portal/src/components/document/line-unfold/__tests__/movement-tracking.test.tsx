@@ -18,6 +18,7 @@ jest.mock('@tanstack/react-query', () => ({
 
 const mockSetTracking = jest.fn();
 const mockUpdateEta = jest.fn();
+const mockRecordShipment = jest.fn();
 jest.mock('@patina/supabase', () => ({
   useSetPurchaseOrderTracking: () => ({
     mutateAsync: mockSetTracking,
@@ -29,7 +30,7 @@ jest.mock('@patina/supabase', () => ({
   usePoShipments: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useProcurementItems: () => ({ data: [], isLoading: false }),
-  useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRecordPoShipment: () => ({ mutateAsync: mockRecordShipment, isPending: false }),
 }));
 
 const mockUpload = jest.fn();
@@ -75,8 +76,30 @@ describe('trackingUrl', () => {
     );
   });
 
+  it.each([
+    ['UPS', 'https://www.ups.com/track?tracknum=123'],
+    ['FedEx', 'https://www.fedex.com/fedextrack/?trknbr=123'],
+    ['USPS', 'https://tools.usps.com/go/TrackConfirmAction?tLabels=123'],
+    ['Estes', 'https://www.estes-express.com/myestes/shipment-tracking/?type=PRO&query=123'],
+    ['Old Dominion', 'https://www.odfl.com/us/en/tools/trace-track-ltl-freight.html'],
+    ['XPO', 'https://www.xpo.com/help-center/shipment-tracking-and-reporting/how-track-ltl-shipment/'],
+    ['R+L', 'https://www.rlcarriers.com/freight/shipping/shipment-tracing'],
+    ['Saia', 'https://www.saia.com/track'],
+    ['ABF / ArcBest', 'https://arcb.com/tools/tracking.html'],
+    ['SEFL', 'https://www.sefl.com/webconnect/tracing?Type=PN&RefNum1=123'],
+    ['Other', null],
+  ])('uses the explicit %s carrier template', (carrier, url) => {
+    expect(trackingUrl(carrier, '123')).toBe(url);
+  });
+
+  it('normalizes a SEFL terminal prefix, dashes and leading zeros', () => {
+    expect(trackingUrl('SEFL', ' ATL-000123-45 ')).toBe(
+      'https://www.sefl.com/webconnect/tracing?Type=PN&RefNum1=12345',
+    );
+  });
+
   it('is null for any other carrier or a missing number', () => {
-    expect(trackingUrl('Estes', '4471-0091')).toBeNull();
+    expect(trackingUrl('not UPS', '1Z999')).toBeNull();
     expect(trackingUrl('Their truck', '12')).toBeNull();
     expect(trackingUrl('UPS', '  ')).toBeNull();
     expect(trackingUrl(null, '1Z')).toBeNull();
@@ -166,10 +189,24 @@ describe('MovementCell tracking (C-18)', () => {
   });
 
   it('shows an unknown carrier’s number as plain text', () => {
-    renderCell({ carrier: 'Estes', tracking_number: '4471-0091' });
+    renderCell({ carrier: 'Local truck', tracking_number: '4471-0091' });
     const tracking = screen.getByTestId('line-movement-tracking');
-    expect(tracking).toHaveTextContent('Estes 4471-0091');
+    expect(tracking).toHaveTextContent('Local truck 4471-0091');
     expect(within(tracking).queryByRole('link')).toBeNull();
+  });
+
+  it('keeps landing-page carriers separate from the copyable PRO', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    renderCell({ carrier: 'Old Dominion', tracking_number: '00123456' });
+    const tracking = screen.getByTestId('line-movement-tracking');
+    expect(within(tracking).getByRole('link', { name: 'Open Old Dominion tracking' })).toHaveAttribute(
+      'href', 'https://www.odfl.com/us/en/tools/trace-track-ltl-freight.html',
+    );
+    expect(within(tracking).getByText('00123456')).toBeInTheDocument();
+    fireEvent.click(within(tracking).getByRole('button', { name: 'Copy PRO' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('00123456'));
+    expect(mockRecordShipment).not.toHaveBeenCalled();
   });
 
   it('lists the ETA history quietly, newest first', () => {
@@ -194,6 +231,7 @@ describe('MovementCell tracking (C-18)', () => {
       purchaseOrderId: 'po-1',
       tracking: { trackingNumber: '1Z000' },
     });
+    expect(mockRecordShipment).not.toHaveBeenCalled();
     // The edit folds away once saved.
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Save tracking' })).toBeNull(),

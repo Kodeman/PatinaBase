@@ -17,13 +17,14 @@ import {
   type PoShipmentRequest,
   type PoShipmentWithLines,
   type ShipmentMode,
+  type ProcurementItemRow,
 } from '@patina/supabase';
 import { useUploadFolioFile } from '@/hooks/use-folio';
 import { fmtDay, todayYmd } from '@/lib/document/format';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction } from '../document-action';
 import { CellSub, FIELD_CLS, LABEL_CLS } from './cell';
-import { trackingUrl } from './movement-tracking';
+import { CarrierPicker, CarrierTrackingNumber } from './movement-tracking';
 
 export const SHIPMENT_MODES: ReadonlyArray<{ value: ShipmentMode; label: string }> = [
   { value: 'parcel', label: 'parcel' },
@@ -161,7 +162,7 @@ export function PoShipments({
       {list.length > 0 && (
         <ul aria-label="Shipments" className="flex flex-col gap-1">
           {list.map((s) => (
-            <ShipmentRow key={s.id} shipment={s} poId={poId} projectId={projectId} />
+            <ShipmentRow key={s.id} shipment={s} shipments={list} poId={poId} projectId={projectId} />
           ))}
         </ul>
       )}
@@ -172,6 +173,7 @@ export function PoShipments({
             itemId={itemId}
             projectId={projectId}
             shipments={list}
+            poStatus={poStatus}
             onClose={() => setRecording(false)}
           />
         ) : (
@@ -209,10 +211,12 @@ function useShipmentWrite(projectId: string) {
 /** One shipment: its record, what travelled, its arrival, its delivery. */
 function ShipmentRow({
   shipment,
+  shipments,
   poId,
   projectId,
 }: {
   shipment: PoShipmentWithLines;
+  shipments: readonly PoShipmentWithLines[];
   poId: string;
   projectId: string;
 }) {
@@ -222,7 +226,6 @@ function ShipmentRow({
   const [deliveredOn, setDeliveredOn] = useState<string | null>(() => todayYmd());
   const [error, setError] = useState<string | null>(null);
   const number = shipment.tracking?.trim() || null;
-  const href = trackingUrl(shipment.carrier, number);
   const pieces = shipmentPieces(shipment, (items ?? []) as ShipmentPiece[]);
 
   const patch = (request: PoShipmentRequest) => {
@@ -239,27 +242,19 @@ function ShipmentRow({
       <CellSub>
         {shipmentRecord(shipment)}
         {number && ' '}
-        {number &&
-          (href ? (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline decoration-[var(--color-pearl)] underline-offset-2 hover:text-[var(--color-charcoal)]"
-            >
-              {number}
-            </a>
-          ) : (
-            <span>{number}</span>
-          ))}
+        {number && <CarrierTrackingNumber carrier={shipment.carrier} number={number} />}
       </CellSub>
       {pieces && <CellSub>{pieces}</CellSub>}
+      {(items ?? []).filter((p) => (shipment.po_shipment_lines ?? []).some((l) => l.ffe_item_id === p.id)).map((p) => (
+        <CellSub key={p.id}>{remainingQty(p, shipments)} remain to ship · {p.name}</CellSub>
+      ))}
+      <CellSub>Entered by studio · source not recorded</CellSub>
       {shipment.delivered_on ? (
         <CellSub>delivered {fmtDay(shipment.delivered_on)}</CellSub>
       ) : (
         <>
           <label className="flex items-baseline gap-1.5">
-            <span className={LABEL_CLS}>arrives</span>
+            <span className={LABEL_CLS}>ETA (entered by studio)</span>
             <DateTextInput
               value={shipment.current_eta}
               ariaLabel="Shipment arrives"
@@ -330,6 +325,34 @@ function ShipmentRow({
   );
 }
 
+function shipmentQuantityText(raw: string | undefined, left: number, name: string) {
+  const text = raw?.trim() || '0';
+  if (!/^\d+$/.test(text)) return 'Enter a whole quantity · ' + name;
+  const count = Number(text);
+  if (count > left) return 'Only ' + left + ' remain to ship · ' + name;
+  return count + ' in this shipment · ' + (left - count) + ' remain · ' + name;
+}
+
+function DispatchConsequences({ status, po }: {
+  status: string;
+  po: ProcurementItemRow['purchase_order'] | undefined;
+}) {
+  if (!['confirmed', 'in_production'].includes(status)) return null;
+  return <>
+    <CellSub>Marks the order shipped.</CellSub>
+    {po && <ShipmentBalanceConsequence po={po} />}
+  </>;
+}
+
+function ShipmentBalanceConsequence({ po }: { po: NonNullable<ProcurementItemRow['purchase_order']> }) {
+  // 00184 status cascade + 00718 local-day dating require a paid deposit.
+  if (!['fifty_fifty', 'thirty_seventy'].includes(po.payment_pattern)) return null;
+  const payments = po.payments ?? [];
+  if (!payments.some((p) => p.kind === 'deposit' && p.state === 'paid')) return null;
+  if (!payments.some((p) => p.kind === 'balance' && p.state === 'pending' && !p.due_date)) return null;
+  return <CellSub>Balance installments due on shipment become due today.</CellSub>;
+}
+
 /**
  * Record a shipment: mode, carrier, PRO or tracking, ship date, arrival, the
  * bill of lading, and how many of each piece travelled. Its own component,
@@ -340,12 +363,14 @@ function ShipmentForm({
   itemId,
   projectId,
   shipments,
+  poStatus,
   onClose,
 }: {
   poId: string;
   itemId: string;
   projectId: string;
   shipments: readonly PoShipmentWithLines[];
+  poStatus: string;
   onClose: () => void;
 }) {
   const write = useShipmentWrite(projectId);
@@ -404,14 +429,8 @@ function ShipmentForm({
       </label>
       <label className="flex items-baseline gap-1.5">
         <span className={LABEL_CLS}>carrier</span>
-        <input
-          aria-label="Shipment carrier"
-          value={current.carrier}
-          maxLength={120}
-          disabled={busy}
-          onChange={(e) => set({ carrier: e.target.value })}
-          className={FIELD_CLS}
-        />
+        <CarrierPicker ariaLabel="Shipment carrier" value={current.carrier}
+          disabled={busy} onChange={(carrier) => set({ carrier })} />
       </label>
       <label className="flex items-baseline gap-1.5">
         <span className={LABEL_CLS}>tracking</span>
@@ -436,7 +455,7 @@ function ShipmentForm({
         />
       </label>
       <label className="flex items-baseline gap-1.5">
-        <span className={LABEL_CLS}>arrives</span>
+        <span className={LABEL_CLS}>ETA (entered by studio)</span>
         <DateTextInput
           value={current.currentEta || null}
           ariaLabel="Shipment ETA"
@@ -460,7 +479,7 @@ function ShipmentForm({
                 className={`${FIELD_CLS} w-10 border-b border-[var(--color-pearl)]`}
               />
               <span>
-                of {left} · {p.name}
+                {shipmentQuantityText(current.qty[p.id], left, p.name)}
               </span>
             </label>
           );
@@ -481,6 +500,8 @@ function ShipmentForm({
           Say how many of each piece travelled.
         </p>
       )}
+      <CellSub>Manual record · no automatic carrier updates</CellSub>
+      <DispatchConsequences status={poStatus} po={items?.[0]?.purchase_order} />
       <div className="flex items-center gap-2">
         <DocumentAction
           actionKey="record-po-shipment"
@@ -492,7 +513,7 @@ function ShipmentForm({
           loadingLabel="Saving…"
           onClick={() => void save()}
         >
-          Save as shipped
+          Record dispatch
         </DocumentAction>
         <DocumentAction
           actionKey="close-record-po-shipment"

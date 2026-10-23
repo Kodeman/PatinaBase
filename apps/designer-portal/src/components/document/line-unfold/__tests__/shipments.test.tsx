@@ -9,7 +9,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 const mockRecord = jest.fn();
 const mockShipments: { data: unknown[] } = { data: [] };
 const mockItems = [
-  { id: 'line-sofa', name: 'Halden Sofa', quantity: 1, purchase_order_id: 'po-1' },
+  { id: 'line-sofa', name: 'Halden Sofa', quantity: 1, purchase_order_id: 'po-1',
+    purchase_order: { payment_pattern: 'fifty_fifty', payments: [] as Record<string, unknown>[] } },
   { id: 'line-chair', name: 'Lawson Chair', quantity: 4, purchase_order_id: 'po-1' },
 ];
 
@@ -62,6 +63,8 @@ const shipment = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   mockRecord.mockReset().mockResolvedValue({ purchase_order_id: 'po-1' });
   mockShipments.data = [];
+  mockItems[0].purchase_order!.payment_pattern = 'fifty_fifty';
+  mockItems[0].purchase_order!.payments = [];
 });
 
 describe('partial shipments', () => {
@@ -103,7 +106,7 @@ describe('partial shipments', () => {
     fireEvent.change(within(form).getByRole('combobox', { name: 'Shipment mode' }), {
       target: { value: 'ltl' },
     });
-    fireEvent.change(within(form).getByRole('textbox', { name: 'Shipment carrier' }), {
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Shipment carrier' }), {
       target: { value: 'Estes' },
     });
     fireEvent.change(within(form).getByRole('textbox', { name: 'Shipment tracking' }), {
@@ -115,7 +118,7 @@ describe('partial shipments', () => {
     fireEvent.change(within(form).getByRole('textbox', { name: 'Halden Sofa pieces shipped' }), {
       target: { value: '' },
     });
-    fireEvent.click(within(form).getByRole('button', { name: 'Save as shipped' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Record dispatch' }));
     await waitFor(() => expect(mockRecord).toHaveBeenCalledTimes(1));
     expect(mockRecord).toHaveBeenCalledWith({
       purchaseOrderId: 'po-1',
@@ -129,6 +132,42 @@ describe('partial shipments', () => {
         lines: [{ ffeItemId: 'line-chair', qty: 2 }],
       },
     });
+  });
+
+  it('shows this shipment quantity and what remains before saving', () => {
+    render(<PoShipments poId="po-1" itemId="line-sofa" projectId="project-1" poStatus="in_production" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record a shipment' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Lawson Chair pieces shipped' }), {
+      target: { value: '2' },
+    });
+    expect(screen.getByText('2 in this shipment · 2 remain · Lawson Chair')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record dispatch' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['paid deposit and undated pending balance', 'in_production', 'fifty_fifty', [
+      { kind: 'deposit', state: 'paid' }, { kind: 'balance', state: 'pending', due_date: null },
+    ], true],
+    ['no paid deposit', 'confirmed', 'fifty_fifty', [{ kind: 'balance', state: 'pending', due_date: null }], false],
+    ['dated balance', 'confirmed', 'thirty_seventy', [
+      { kind: 'deposit', state: 'paid' }, { kind: 'balance', state: 'pending', due_date: '2026-11-01' },
+    ], false],
+    ['already shipped', 'shipped', 'fifty_fifty', [
+      { kind: 'deposit', state: 'paid' }, { kind: 'balance', state: 'pending', due_date: null },
+    ], false],
+    ['net thirty', 'confirmed', 'net_30', [
+      { kind: 'deposit', state: 'paid' }, { kind: 'balance', state: 'pending', due_date: null },
+    ], false],
+    ['paid balance', 'confirmed', 'fifty_fifty', [
+      { kind: 'deposit', state: 'paid' }, { kind: 'balance', state: 'paid', due_date: null },
+    ], false],
+  ])('explains dispatch consequences only when true: %s', (_name, status, pattern, payments, expected) => {
+    mockItems[0].purchase_order!.payment_pattern = pattern as string;
+    mockItems[0].purchase_order!.payments = payments as Record<string, unknown>[];
+    render(<PoShipments poId="po-1" itemId="line-sofa" projectId="project-1" poStatus={status as string} />);
+    fireEvent.click(screen.getByRole('button', { name: /Record .*shipment/ }));
+    expect(Boolean(screen.queryByText('Balance installments due on shipment become due today.'))).toBe(expected);
+    expect(Boolean(screen.queryByText('Marks the order shipped.'))).toBe(status !== 'shipped');
   });
 
   it('marks one shipment delivered, by its id', async () => {
