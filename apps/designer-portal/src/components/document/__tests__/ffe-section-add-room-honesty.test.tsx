@@ -13,6 +13,20 @@ const mockAddRoom = {
   pending: [] as { id: string; name: string; budgetCents?: number | null; sortOrder: number }[],
 };
 
+// Job places have their own suite (destinations/__tests__).
+jest.mock('@/components/document/destinations/use-job-places', () => ({
+  useJobPlaces: () => ({
+    organizationId: null,
+    locations: [],
+    jobLocationIds: new Set(),
+    jobPlaces: [],
+    studioAddress: undefined,
+    siteAddress: null,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),

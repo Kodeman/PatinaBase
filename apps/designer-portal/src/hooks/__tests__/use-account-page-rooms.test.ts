@@ -50,6 +50,7 @@ function line(overrides: Partial<ItemSlice> & Pick<ItemSlice, 'id'>): ItemSlice 
     unit_price_cents: null,
     quantity: 1,
     status: 'ordered',
+    purchase_order: { status: 'draft', sent_at: '2026-10-01' },
     project_room_id: null,
     item_type: 'flooring',
     currency: 'USD',

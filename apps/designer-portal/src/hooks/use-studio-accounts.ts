@@ -10,16 +10,14 @@
  * along so the surface can stay honest when trade pricing is thin (margin '—').
  */
 
+import { isCommittedBuyingLine, type BuyingCommitment } from '@/lib/document/buying-readings';
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
 import { isMixed, sumByCurrency } from '@/lib/currency-totals';
 
 const getSupabase = () => createBrowserClient() as any;
 
-// Mirror use-account-page.ts COMMITTED_STATUSES exactly.
-const COMMITTED_STATUSES = new Set(['ordered', 'production', 'shipped', 'delivered', 'installed']);
-
-interface ItemSlice {
+interface ItemSlice extends BuyingCommitment {
   unit_price_cents: number | null;
   trade_price_cents: number | null;
   quantity: number | null;
@@ -57,14 +55,14 @@ export function useStudioMargin(studioIds: readonly string[]) {
       const { data, error } = await supabase
         .from('project_ffe_items')
         .select(
-          'unit_price_cents, trade_price_cents, quantity, status, currency, project:projects!project_ffe_items_project_id_fkey(studio_id)',
+          'unit_price_cents, trade_price_cents, quantity, status, currency, purchase_order:purchase_orders!purchase_order_id(status, sent_at), studio_purchases(status), project:projects!project_ffe_items_project_id_fkey(studio_id)',
         );
       if (error) throw error;
 
       const books = new Set(studioIds);
       const committed = ((data ?? []) as ItemSlice[]).filter((i) => {
         const studioId = studioOf(i);
-        return COMMITTED_STATUSES.has(i.status) && studioId !== null && books.has(studioId);
+        return isCommittedBuyingLine(i) && studioId !== null && books.has(studioId);
       });
       const withTrade = committed.filter((i) => i.trade_price_cents != null);
       // A blended margin across currencies would divide a sum of mixed

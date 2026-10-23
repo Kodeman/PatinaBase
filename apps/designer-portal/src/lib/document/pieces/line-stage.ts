@@ -86,13 +86,14 @@ export function pieceLineStage(
       received_quantity: line.received_quantity ?? null,
       quantity: line.quantity ?? null,
       trade_scope_document_id: line.trade_scope_document_id ?? null,
+      purchase_order: line.purchase_order,
       stage: input,
     },
     tradeProgress,
   );
   if (!trade && !ordered) {
     const stage = deriveLineStage(input);
-    if (!HELD.has(kind)) return { kind: stage, stage, lock: null };
+    if (!HELD.has(kind)) return { kind: kind.startsWith('order_') ? kind : stage, stage, lock: null };
     return { kind, stage: stage === "ready" ? "specced" : stage, lock: null };
   }
   return {

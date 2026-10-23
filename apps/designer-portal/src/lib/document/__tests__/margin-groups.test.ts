@@ -66,14 +66,14 @@ describe('the margin has ONE grouper (W5F-06)', () => {
     expect(counts(sheet)).toEqual(counts(rail));
     expect(counts(sheet)).toEqual({
       'THE WHOLE JOB': 4,
-      'BESIDE PIECES': 3,
+      'BESIDE PIECES & PURCHASING': 3,
     });
     expect(sheet.map((g) => g.heading)).toEqual([
       'THE WHOLE JOB',
-      'BESIDE PIECES',
+      'BESIDE PIECES & PURCHASING',
     ]);
     expect(rail.map((g) => g.heading)).toEqual([
-      'BESIDE PIECES',
+      'BESIDE PIECES & PURCHASING',
       'THE WHOLE JOB',
     ]);
   });

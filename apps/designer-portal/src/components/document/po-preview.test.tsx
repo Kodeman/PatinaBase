@@ -24,7 +24,8 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
-
+  useProjectDestinationLocations: () => ({ data: [] }),
+  useStudioContacts: () => ({ data: [] }),
   usePoReleaseState: () => ({ data: { cleared: true, group_total_cents: 1248000, threshold_cents: 2000000 } }),
   usePoReleasePreview: () => ({ data: { cleared: true, group_total_cents: 1248000, threshold_cents: 2000000 } }),
 

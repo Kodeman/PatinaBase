@@ -501,7 +501,7 @@ describe('US-19 F6-9 (D17, one-voice) — the acknowledgment form behind a door'
       />,
     );
     expect(screen.getByTestId('line-po-cell')).toHaveTextContent(
-      `sent to the maker ${fmtDay(SENT)} · awaiting acknowledgment`,
+      `Sent to vendor ${fmtDay(SENT)} · awaiting acknowledgment`,
     );
   });
 });
@@ -531,7 +531,7 @@ describe('flag off — the form stands open as today', () => {
       />,
     );
     expect(screen.getByTestId('line-po-cell')).toHaveTextContent(
-      `sent to vendor ${fmtDay(SENT)} · awaiting acknowledgment`,
+      `Sent to vendor ${fmtDay(SENT)} · awaiting acknowledgment`,
     );
   });
 });

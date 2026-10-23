@@ -3,6 +3,20 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 let mockAskThePaper = true;
 let mockItems: Record<string, unknown>[] = [];
 
+// Job places have their own suite (destinations/__tests__).
+jest.mock('@/components/document/destinations/use-job-places', () => ({
+  useJobPlaces: () => ({
+    organizationId: null,
+    locations: [],
+    jobLocationIds: new Set(),
+    jobPlaces: [],
+    studioAddress: undefined,
+    siteAddress: null,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (flag: string) => ({
     value: flag === 'ask-the-paper' ? mockAskThePaper : false,

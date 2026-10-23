@@ -35,6 +35,7 @@ import {
   derivePurchaseOrderLifecycle,
   procurementExpected,
 } from '@/lib/document/procurement-lifecycle';
+import { lineStampLabel, purchaseOrderState } from '@/lib/document/stamp-derivation';
 import { PoStateWord } from './accounts/money-state-word';
 import { DateTextInput } from './date-text-input';
 import { LogAckInline, PoPreview } from './po-preview';
@@ -713,9 +714,9 @@ export function OrdersLedger({
                               <PoStateWord
                                 status={po.status}
                                 label={
-                                  position
-                                    ? procurementStepLabel(position.key)
-                                    : po.status.replace(/_/g, ' ')
+                                  !po.sent_at || !position || position.key === 'released_to_maker' || position.key === 'cleared_to_produce'
+                                    ? (purchaseOrderState(po) ? lineStampLabel(purchaseOrderState(po)!) : po.status.replace(/_/g, ' '))
+                                    : procurementStepLabel(position.key)
                                 }
                               />
                             )}

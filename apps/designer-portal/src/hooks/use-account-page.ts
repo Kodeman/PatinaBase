@@ -6,6 +6,7 @@
  * (00204). Studio eyes only — excluded from the client mirror (CI test).
  */
 
+import { isCommittedBuyingLine, type BuyingCommitment } from '@/lib/document/buying-readings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient, useOptimisticMutation } from '@patina/supabase';
 import type { SectionKey } from '@/lib/document/desk-derivation';
@@ -34,7 +35,7 @@ export interface AccountMilestone {
   sort_order: number;
 }
 
-export interface ItemSlice {
+export interface ItemSlice extends BuyingCommitment {
   id: string;
   line_total_cents: number | null;
   trade_price_cents: number | null;
@@ -97,14 +98,6 @@ export interface AccountPageData {
   milestones: AccountMilestone[];
 }
 
-const COMMITTED_STATUSES = new Set([
-  'ordered',
-  'production',
-  'shipped',
-  'delivered',
-  'installed',
-]);
-
 export function useAccountPage(projectId: string | null) {
   return useQuery<AccountPageData>({
     queryKey: ['account-page', projectId],
@@ -126,7 +119,7 @@ export function useAccountPage(projectId: string | null) {
             .single(),
           supabase
             .from('project_ffe_items')
-            .select('id, line_total_cents, trade_price_cents, unit_price_cents, quantity, status, project_room_id, item_type, currency')
+            .select('id, line_total_cents, trade_price_cents, unit_price_cents, quantity, status, project_room_id, item_type, currency, purchase_order:purchase_orders!purchase_order_id(status, sent_at), studio_purchases(status)')
             .eq('project_id', projectId),
           supabase
             .from('project_rooms')
@@ -150,7 +143,7 @@ export function useAccountPage(projectId: string | null) {
       if (plErr) throw plErr;
 
       const all = (items ?? []) as ItemSlice[];
-      const committed = all.filter((i) => COMMITTED_STATUSES.has(i.status));
+      const committed = all.filter(isCommittedBuyingLine);
 
       const committedTotal = sumByCurrency(committed, (i) => i.line_total_cents ?? 0);
       const committedCents = centsOf(committedTotal);

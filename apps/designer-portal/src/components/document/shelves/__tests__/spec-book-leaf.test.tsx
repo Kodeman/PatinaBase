@@ -9,6 +9,20 @@ import { fireEvent, render, screen } from '@testing-library/react';
 let mockItems: Record<string, unknown>[] = [];
 let mockPlacements: Record<string, unknown>[] = [];
 
+// Job places have their own suite (destinations/__tests__).
+jest.mock('@/components/document/destinations/use-job-places', () => ({
+  useJobPlaces: () => ({
+    organizationId: null,
+    locations: [],
+    jobLocationIds: new Set(),
+    jobPlaces: [],
+    studioAddress: undefined,
+    siteAddress: null,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
@@ -208,7 +222,7 @@ const STATES: { state: string; row: Record<string, unknown>; word: string }[] =
     {
       state: 'ordered',
       row: { status: 'ordered', received_quantity: null },
-      word: 'Released to maker',
+      word: 'Ordered',
     },
     // US-21 D1: before an order the word is the stage (a3, a4). SPECIFIED
     // never prints.
@@ -413,7 +427,7 @@ describe('the shelf leaf stopped printing the raw column', () => {
     mockItems = [line({ status: 'ordered', received_quantity: null })];
     renderLeaf();
 
-    expect(screen.getByText('Released to maker')).toBeInTheDocument();
+    expect(screen.getByText('Ordered')).toBeInTheDocument();
     expect(screen.queryByText(/STAGE_CONFIG:/)).not.toBeInTheDocument();
   });
 });
@@ -472,8 +486,8 @@ describe('US-21 T-32 — the unit and the also-in line on the shelf', () => {
 
     expect(screen.queryByText(/ALSO IN/)).not.toBeInTheDocument();
     expect(screen.queryByText(/ each/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Released to maker/).textContent).toBe(
-      'Released to maker$6,800',
+    expect(screen.getByText(/Ordered/).textContent).toBe(
+      'Ordered$6,800',
     );
   });
 });
