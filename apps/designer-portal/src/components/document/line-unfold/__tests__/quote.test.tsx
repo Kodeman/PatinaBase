@@ -12,9 +12,13 @@ jest.mock('@/lib/analytics/document-events', () => ({
 const mockApply = jest.fn();
 const mockRecord = jest.fn();
 let mockQuotes: unknown[] = [];
+let mockVendor = { orders_email: 'orders@hewn.example', contact_info: { email: 'hello@hewn.example' } };
+const mockCopy = jest.fn();
+const mockFetch = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   isChangeOrderRequired: jest.requireActual('@patina/supabase').isChangeOrderRequired,
+  useVendor: () => ({ data: mockVendor }),
   useVendorQuotes: () => ({ data: mockQuotes }),
   useApplyVendorQuoteToLines: () => ({ mutateAsync: mockApply, isPending: false }),
   useRecordVendorQuote: () => ({ mutateAsync: mockRecord, isPending: false }),
@@ -78,6 +82,11 @@ beforeEach(() => {
   mockApply.mockReset();
   mockRecord.mockReset();
   mockQuotes = [];
+  mockVendor = { orders_email: 'orders@hewn.example', contact_info: { email: 'hello@hewn.example' } };
+  mockCopy.mockReset().mockResolvedValue(undefined);
+  mockFetch.mockReset();
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: mockCopy } });
+  global.fetch = mockFetch;
 });
 
 describe('the quote request — form args', () => {
@@ -358,12 +367,71 @@ describe('Use this price — apply args and refusal routing', () => {
     renderCell({ trade_price_cents: 184_000 });
     expect(screen.getByText('trade cost is the quoted $1,840')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Use this price' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Record a new quote…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record quote' })).toBeInTheDocument();
   });
 
   it('with no quote, stays quiet and offers to record one', () => {
     renderCell();
     expect(screen.getByRole('group', { name: 'Quote' })).toHaveTextContent('No quote recorded');
-    expect(screen.getByRole('button', { name: 'Record a quote…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record quote' })).toBeInTheDocument();
+  });
+});
+
+describe('quote verbs and the manual request draft', () => {
+  const cell = (canEdit = true, purchase_order_id: string | null = null) => render(
+    <QuoteCell item={{ id: 'line-1', name: 'Halden Sofa', quantity: 2, purchase_order_id }}
+      projectId="p1" projectName="Lake House" vendor={{ id: 'v1', name: 'Hewn' }} canEdit={canEdit} />,
+  );
+
+  it('separates a copyable request from recording the maker’s reply, without sending', async () => {
+    cell();
+    expect(screen.getByRole('button', { name: 'Record quote' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Draft quote request' }));
+    expect(screen.getByText('orders@hewn.example')).toBeInTheDocument();
+    expect(screen.getByText('Nothing is sent from Patina')).toBeInTheDocument();
+    const text = screen.getByRole('textbox', { name: 'Quote request text' });
+    expect((text as HTMLTextAreaElement).value).toContain('Halden Sofa ×2');
+    expect((text as HTMLTextAreaElement).value).toContain('Lake House');
+    fireEvent.change(text, { target: { value: 'Please quote the sofa in oak.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy request text' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Request text copied');
+    expect(mockCopy).toHaveBeenCalledWith('Please quote the sofa in oak.');
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockRecord).not.toHaveBeenCalled();
+    expect(mockApply).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['contact email', { orders_email: '', contact_info: { email: 'hello@hewn.example' } }, 'hello@hewn.example'],
+    ['missing email', { orders_email: '', contact_info: { email: '' } }, 'Vendor email not recorded'],
+  ])('reads %s without inventing a recipient', (_name, vendor, expected) => {
+    mockVendor = vendor as typeof mockVendor;
+    cell();
+    fireEvent.click(screen.getByRole('button', { name: 'Draft quote request' }));
+    expect(screen.getByText(expected as string)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Quote request text' })).toBeInTheDocument();
+  });
+
+  it('keeps text selectable and reports a refused clipboard without claiming success', async () => {
+    mockCopy.mockRejectedValue(new Error('Denied'));
+    cell();
+    fireEvent.click(screen.getByRole('button', { name: 'Draft quote request' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy request text' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Select and copy the request text');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Quote request text' })).toBeInTheDocument();
+  });
+
+  it('explains that Record quote records a reply the maker already sent', () => {
+    cell();
+    fireEvent.click(screen.getByRole('button', { name: 'Record quote' }));
+    expect(screen.getByText('Record a quote the maker already sent. Nothing is sent from Patina.')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Quote request text' })).toBeNull();
+  });
+
+  it.each([[false, null], [true, 'po-1']])('keeps quote acts unavailable with edit=%s and order=%s', (canEdit, order) => {
+    cell(canEdit as boolean, order as string | null);
+    expect(screen.queryByRole('button', { name: 'Draft quote request' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Record quote' })).toBeNull();
   });
 });

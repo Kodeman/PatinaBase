@@ -40,8 +40,7 @@ export function sampleSentence(row: SampleRequestRow, vendorName?: string | null
     return row.returned_on ? `${head} · returned ${fmtDay(row.returned_on)}` : `${head} · returned`;
   }
   if (row.return_by) return `${head} · return by ${fmtDay(row.return_by)}`;
-  if (row.status === 'received') return `${head} · received`;
-  return `${head} · requested`;
+  return `${head} · ${row.status === 'received' ? 'received' : 'requested'} · Return terms not recorded`;
 }
 
 export interface SampleRequestScope {
@@ -74,7 +73,7 @@ function RequestSample({ scope }: { scope: SampleRequestScope }) {
         variant="tertiary"
         onClick={() => setOpen(true)}
       >
-        Request a sample
+        Record sample request
       </DocumentAction>
     );
   }
@@ -112,6 +111,8 @@ function RequestSample({ scope }: { scope: SampleRequestScope }) {
 
   return (
     <div data-testid="request-sample-form" className="flex flex-col gap-1.5">
+      <CellSub>Record a sample you already requested. Nothing is sent from Patina.</CellSub>
+      <CellSub>{returnBy ? `Return by ${fmtDay(returnBy)}` : 'Return terms not recorded'}</CellSub>
       <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
         <label className="flex items-baseline gap-1.5">
           <span className={LABEL_CLS}>Kind</span>

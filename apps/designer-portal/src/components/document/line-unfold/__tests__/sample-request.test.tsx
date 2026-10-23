@@ -64,10 +64,10 @@ describe('sampleSentence', () => {
     expect(sampleSentence(sample() as never, null)).toBe('Memo · return by 21 October');
   });
 
-  it('reads "received" once received, with no return-by yet', () => {
+  it('states missing return terms on a received sample', () => {
     expect(
       sampleSentence(sample({ status: 'received', return_by: null }) as never, 'Kravet'),
-    ).toBe('Memo from Kravet · received');
+    ).toBe('Memo from Kravet · received · Return terms not recorded');
   });
 
   it('reads "returned …" once returned', () => {
@@ -99,14 +99,14 @@ describe('LineSamples — "Request a sample" in the unfold (line scope)', () => 
   it('shows none recorded, and offers to request one', () => {
     render(<LineSamples projectId={PROJECT} itemId={ITEM} canEdit />);
     expect(screen.getByText('None recorded')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Request a sample' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record sample request' })).toBeInTheDocument();
   });
 
   it('records a sample against the line, with kind, description, dates, fee and billable', async () => {
     render(
       <LineSamples projectId={PROJECT} itemId={ITEM} vendorId={VENDOR} vendorName="Kravet" canEdit />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Request a sample' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record sample request' }));
     fireEvent.change(screen.getByLabelText('Sample kind'), { target: { value: 'loaner' } });
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Jute rug, 8x10' } });
     fireEvent.change(screen.getByLabelText('Requested on'), { target: { value: '2026-10-02' } });
@@ -132,7 +132,7 @@ describe('LineSamples — "Request a sample" in the unfold (line scope)', () => 
 
   it('defaults kind to memo, omits an unfilled description/return-by/fee', async () => {
     render(<LineSamples projectId={PROJECT} itemId={ITEM} canEdit />);
-    fireEvent.click(screen.getByRole('button', { name: 'Request a sample' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record sample request' }));
     fireEvent.change(screen.getByLabelText('Requested on'), { target: { value: '2026-10-02' } });
     fireEvent.click(screen.getByRole('button', { name: 'Record it' }));
 
@@ -149,7 +149,7 @@ describe('LineSamples — "Request a sample" in the unfold (line scope)', () => 
 
   it('refuses a malformed fee without recording', () => {
     render(<LineSamples projectId={PROJECT} itemId={ITEM} canEdit />);
-    fireEvent.click(screen.getByRole('button', { name: 'Request a sample' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record sample request' }));
     fireEvent.change(screen.getByLabelText('Fee'), { target: { value: 'free!' } });
     fireEvent.click(screen.getByRole('button', { name: 'Record it' }));
 
@@ -183,7 +183,7 @@ describe('LineSamples — "Request a sample" in the unfold (line scope)', () => 
   it('reads quietly, no act, when the line cannot be edited', () => {
     mockSamples = [sample()];
     render(<LineSamples projectId={PROJECT} itemId={ITEM} canEdit={false} />);
-    expect(screen.queryByRole('button', { name: 'Request a sample' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record sample request' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Mark returned' })).not.toBeInTheDocument();
   });
 });
@@ -193,7 +193,7 @@ describe('VendorSamples — "Request a sample" on the Vendors maker card', () =>
     render(
       <VendorSamples organizationId="org-1" vendorId={VENDOR} vendorName="Kravet" canEdit />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Request a sample' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record sample request' }));
     fireEvent.click(screen.getByRole('button', { name: 'Record it' }));
 
     await waitFor(() =>
@@ -204,5 +204,30 @@ describe('VendorSamples — "Request a sample" on the Vendors maker card', () =>
     const call = mockRecord.mock.calls[0][0];
     expect(call.projectId).toBeUndefined();
     expect(call.ffeItemId).toBeUndefined();
+  });
+});
+
+describe('sample recording and return duties', () => {
+  it('explains recording without sending and previews the return duty before saving', () => {
+    render(<LineSamples projectId={PROJECT} itemId={ITEM} canEdit />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record sample request' }));
+    expect(screen.getByText('Record a sample you already requested. Nothing is sent from Patina.')).toBeInTheDocument();
+    expect(screen.getByText('Return terms not recorded')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Return by'), { target: { value: '2026-10-21' } });
+    expect(screen.getByText('Return by 21 October')).toBeInTheDocument();
+    expect(screen.queryByText('Return terms not recorded')).toBeNull();
+    expect(mockRecord).not.toHaveBeenCalled();
+  });
+
+  it('states missing return terms on an open line sample', () => {
+    mockSamples = [sample({ return_by: null })];
+    render(<LineSamples projectId={PROJECT} itemId={ITEM} canEdit={false} />);
+    expect(screen.getByText('Memo · requested · Return terms not recorded')).toBeInTheDocument();
+  });
+
+  it('states missing return terms on the maker card too', () => {
+    mockSamples = [sample({ return_by: null })];
+    render(<VendorSamples organizationId="org-1" vendorId={VENDOR} vendorName="Kravet" canEdit={false} />);
+    expect(screen.getByText('Memo from Kravet · requested · Return terms not recorded')).toBeInTheDocument();
   });
 });

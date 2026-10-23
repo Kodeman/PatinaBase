@@ -15,6 +15,7 @@ import {
   type LineQuote,
 } from './quote-model';
 import { RecordQuoteAct } from './record-quote';
+import { DraftQuoteRequestAct } from './quote-request-draft';
 
 type FFERow = any;
 
@@ -123,6 +124,9 @@ export function QuoteCell({
       )}
       {quote && !applied && !onOrder && canEdit && (
         <UseQuotedPrice quote={quote} itemId={item.id} projectId={projectId} />
+      )}
+      {!onOrder && canEdit && vendor && (
+        <DraftQuoteRequestAct item={item} projectName={projectName} vendor={vendor} />
       )}
       {!onOrder && canEdit && vendor && (
         <RecordQuoteAct
