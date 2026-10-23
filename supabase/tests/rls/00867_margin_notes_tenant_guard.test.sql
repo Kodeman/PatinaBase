@@ -20,8 +20,18 @@
 --      case must have differed from it before the migration (the negative
 --      assertion fails on the old policies); a `keeps` case must not have.
 --   Each probe runs in a subtransaction that is rolled back, so no probe can
---   feed another. The privileged readback at the end runs the forbidden
---   writes for real and compares every fixture row with the snapshot.
+--   feed another. The privileged readback runs the forbidden writes for real
+--   and compares every fixture row with the snapshot.
+--   6. Last, the generated ACL seed (supabase/seed/00-legacy-grants.sql) is
+--      applied over the migrated state, as `supabase db reset` would, and the
+--      helper's EXECUTE grants are asserted again as a reset leaves them.
+--
+-- LINEAGE: a studio-less anchor rides a scoped row only for its owner, or
+--   when a same-designer scoped anchor is recorded as the same engagement
+--   (proposals.project_id, projects.proposal_id, proposals.designer_client_id).
+--   Fixture links, one per leg: Q0.project_id = PA (N11, X-07, X-09, W-07),
+--   P0.proposal_id = QA (X-23), QA.designer_client_id = R0 (X-24). QB is
+--   linked to nothing (X-16 … X-22).
 --
 -- ACTORS: D designer seated in studios A and B · A1 only A · B1 only B ·
 --   U outsider (own studio C) · CL the client (with a client team seat) ·
@@ -74,7 +84,7 @@ SELECT label, ('86700000-0000-4000-8000-' || suffix)::uuid
     ('N4',  '000000007004'), ('N5',  '000000007005'), ('N6',  '000000007006'),
     ('N7',  '000000007007'), ('N8',  '000000007008'), ('N9',  '000000007009'),
     ('N10', '000000007010'), ('N11', '000000007011'), ('N12', '000000007012'),
-    ('N13', '000000007013')
+    ('N13', '000000007013'), ('N14', '000000007014')
   ) AS v(label, suffix);
 GRANT SELECT ON m867_id TO PUBLIC;
 
@@ -97,8 +107,8 @@ LANGUAGE sql AS $$ SELECT id FROM m867_id WHERE label = p_label $$;
 -- ─── 3 · probes ─────────────────────────────────────────────────────────────
 -- pg_temp.probe runs p_setup as postgres, then p_sql as the authenticated
 -- actor, then raises to roll the whole subtransaction back (state, role and
--- JWT claims alike). Outcome: the SELECT's text value, 'rows=N', or 'denied'
--- (42501, a row-level-security refusal).
+-- JWT claims alike). Outcome: the SELECT's (or a WITH … SELECT's) text value,
+-- 'rows=N', or 'denied' (42501, a row-level-security refusal).
 CREATE FUNCTION pg_temp.probe(p_actor uuid, p_sql text, p_setup text)
 RETURNS text LANGUAGE plpgsql AS $$
 DECLARE v_out text; v_rows bigint;
@@ -108,7 +118,7 @@ BEGIN
     PERFORM set_config('request.jwt.claims',
       json_build_object('sub', p_actor::text, 'role', 'authenticated')::text, true);
     EXECUTE 'SET LOCAL ROLE authenticated';
-    IF p_sql ~* '^\s*select' THEN
+    IF p_sql ~* '^\s*(select|with)\M' THEN
       EXECUTE p_sql INTO v_out;
       v_out := COALESCE(v_out, 'null');
     ELSE
@@ -200,6 +210,20 @@ INSERT INTO public.designer_clients (id, designer_id, client_id, household_id, s
 VALUES (pg_temp.id('RA'), pg_temp.id('D'), pg_temp.id('CL'), pg_temp.id('HA'), 'active'),
        (pg_temp.id('R0'), pg_temp.id('D'), NULL, NULL, 'lead');
 
+-- Recorded engagement lineage (see LINEAGE above), one link per leg so each
+-- leg is exercised alone. QB stays unlinked. The links are written only
+-- through their RPCs: job/proposal by activate_proposal_as_project (00390
+-- copy-immutability, 00398 project provenance), proposal/relationship by
+-- set_document_client (00796). The fixture records those results with
+-- triggers off for these three statements, one direction each (an activation
+-- writes both; PA.proposal_id and QA.project_id stay NULL so each leg is
+-- isolated).
+SET LOCAL session_replication_role = replica;
+UPDATE public.proposals SET project_id = pg_temp.id('PA') WHERE id = pg_temp.id('Q0');
+UPDATE public.projects SET proposal_id = pg_temp.id('QA') WHERE id = pg_temp.id('P0');
+UPDATE public.proposals SET designer_client_id = pg_temp.id('R0') WHERE id = pg_temp.id('QA');
+SET LOCAL session_replication_role = origin;
+
 INSERT INTO public.field_captures (id, client_capture_id, designer_id, title)
 VALUES (pg_temp.id('FC'), gen_random_uuid(), pg_temp.id('D'), '867 legacy capture');
 INSERT INTO public.scope_change_requests (id, project_id, requested_by, title, description)
@@ -207,6 +231,8 @@ VALUES (pg_temp.id('SCR'), pg_temp.id('P0'), pg_temp.id('D'), '867 scope change'
 
 -- Notes. N6–N8 and N13 are the legacy studio-less rows; N6 carries every
 -- column the readback must preserve (anchor, due, escalation, field capture).
+-- N14 is SQ-1854 F3's injected row: B1's note on D's legacy job P0, carried
+-- by D's unrelated B proposal QB (same designer, no recorded lineage).
 INSERT INTO public.margin_notes
   (id, project_id, proposal_id, designer_client_id, designer_id, body,
    anchor_kind, anchor_id, due_date, escalated_to_scope_change_id, field_capture_id)
@@ -223,7 +249,8 @@ VALUES
   (pg_temp.id('N10'), pg_temp.id('PA'), pg_temp.id('QB'), NULL, pg_temp.id('D'),  'N10 A job + B proposal', 'letterhead', NULL, NULL, NULL, NULL),
   (pg_temp.id('N11'), pg_temp.id('PA'), pg_temp.id('Q0'), NULL, pg_temp.id('A1'), 'N11 A job + unstamped proposal', 'letterhead', NULL, NULL, NULL, NULL),
   (pg_temp.id('N12'), pg_temp.id('PU'), pg_temp.id('QA'), NULL, pg_temp.id('A1'), 'N12 stranger job masked by A proposal', 'letterhead', NULL, NULL, NULL, NULL),
-  (pg_temp.id('N13'), pg_temp.id('P0'), NULL, NULL, pg_temp.id('A1'), 'N13 coauthored legacy note', 'letterhead', NULL, NULL, NULL, NULL);
+  (pg_temp.id('N13'), pg_temp.id('P0'), NULL, NULL, pg_temp.id('A1'), 'N13 coauthored legacy note', 'letterhead', NULL, NULL, NULL, NULL),
+  (pg_temp.id('N14'), pg_temp.id('P0'), pg_temp.id('QB'), NULL, pg_temp.id('B1'), 'N14 B1 note on D legacy job via unrelated B proposal', 'letterhead', NULL, NULL, NULL, NULL);
 
 DO $$
 BEGIN
@@ -236,6 +263,15 @@ BEGIN
      AND (SELECT studio_id FROM public.proposals WHERE id = pg_temp.id('QB')) = pg_temp.id('SB')
      AND (SELECT studio_id IS NULL FROM public.proposals WHERE id = pg_temp.id('Q0')),
     'FIXTURE: proposal tenancy is not as recorded';
+  ASSERT (SELECT project_id FROM public.proposals WHERE id = pg_temp.id('Q0')) = pg_temp.id('PA')
+     AND (SELECT proposal_id IS NULL FROM public.projects WHERE id = pg_temp.id('PA'))
+     AND (SELECT proposal_id FROM public.projects WHERE id = pg_temp.id('P0')) = pg_temp.id('QA')
+     AND (SELECT project_id IS NULL FROM public.proposals WHERE id = pg_temp.id('QA'))
+     AND (SELECT designer_client_id FROM public.proposals WHERE id = pg_temp.id('QA')) = pg_temp.id('R0')
+     AND (SELECT project_id IS NULL AND designer_client_id IS NULL
+            FROM public.proposals WHERE id = pg_temp.id('QB'))
+     AND NOT EXISTS (SELECT 1 FROM public.projects WHERE proposal_id = pg_temp.id('QB')),
+    'FIXTURE: engagement lineage is not as recorded';
   -- The F1 premise: the shared helper admits B1 (and A1) to D's rows.
   ASSERT pg_temp.probe(pg_temp.id('B1'),
            format('SELECT public.is_studio_comember(%L::uuid)::text', pg_temp.id('D')), NULL) = 'true'
@@ -269,6 +305,10 @@ CREATE FUNCTION pg_temp.sel(p_note text) RETURNS text LANGUAGE sql AS $$
 CREATE FUNCTION pg_temp.upd(p_note text, p_set text DEFAULT 'body = body || '' (edited)''')
 RETURNS text LANGUAGE sql AS $$
   SELECT 'UPDATE public.margin_notes SET ' || p_set || ' WHERE id = {' || p_note || '}' $$;
+-- The update as an outcome: rows reached and the author each row kept.
+CREATE FUNCTION pg_temp.upd_author(p_note text, p_set text) RETURNS text LANGUAGE sql AS $$
+  SELECT 'WITH u AS (UPDATE public.margin_notes SET ' || p_set || ' WHERE id = {' || p_note || '} RETURNING designer_id) '
+      || 'SELECT ''rows='' || count(*) || '' author='' || COALESCE(string_agg(designer_id::text, '',''), ''none'') FROM u' $$;
 CREATE FUNCTION pg_temp.del(p_note text) RETURNS text LANGUAGE sql AS $$
   SELECT 'DELETE FROM public.margin_notes WHERE id = {' || p_note || '}' $$;
 CREATE FUNCTION pg_temp.ins(p_project text, p_proposal text, p_relationship text, p_author text)
@@ -366,6 +406,17 @@ INSERT INTO m867_case (name, actor, setup, probe, expect, kind) VALUES
   ('X-13 A1 inserts stranger job masked by A proposal', 'A1', NULL, pg_temp.ins('PU', 'QA', NULL, 'A1'), 'denied', 'closes'),
   ('X-14 A1 inserts A job + D Discovery (A household)', 'A1', NULL, pg_temp.ins('PA', NULL, 'RA', 'A1'), 'rows=1', 'keeps'),
   ('X-15 B1 inserts B job + D Discovery (A household)', 'B1', NULL, pg_temp.ins('PB', NULL, 'RA', 'B1'), 'denied', 'closes'),
+  -- X · same designer is not lineage (SQ-1854 F3): a studio-less anchor rides
+  -- a scoped one only for its owner or by a recorded engagement link
+  ('X-16 B1 inserts D legacy job + unrelated B proposal', 'B1', NULL, pg_temp.ins('P0', 'QB', NULL, 'B1'), 'denied', 'closes'),
+  ('X-17 B1 reads her injected note on D legacy job',    'B1', NULL, pg_temp.sel('N14'), '0', 'closes'),
+  ('X-18 B1 updates her injected note on D legacy job',  'B1', NULL, pg_temp.upd('N14'), 'rows=0', 'closes'),
+  ('X-19 B1 deletes her injected note on D legacy job',  'B1', NULL, pg_temp.del('N14'), 'rows=0', 'closes'),
+  ('X-20 D reads the note injected on her legacy job',   'D',  NULL, pg_temp.sel('N14'), '1', 'keeps'),
+  ('X-21 B1 inserts B job + unlinked D legacy proposal', 'B1', NULL, pg_temp.ins('PB', 'Q0', NULL, 'B1'), 'denied', 'closes'),
+  ('X-22 B1 inserts B proposal + unlinked D legacy Discovery', 'B1', NULL, pg_temp.ins(NULL, 'QB', 'R0', 'B1'), 'denied', 'closes'),
+  ('X-23 A1 inserts legacy job + the A proposal it records', 'A1', NULL, pg_temp.ins('P0', 'QA', NULL, 'A1'), 'rows=1', 'keeps'),
+  ('X-24 A1 inserts A proposal + the legacy Discovery it records', 'A1', NULL, pg_temp.ins(NULL, 'QA', 'R0', 'A1'), 'rows=1', 'keeps'),
   -- L · legacy studio-less rows, seeded before 00867
   ('L-01 D reads legacy job note identically',       'D',  NULL, pg_temp.row_md5('N6'),  'snapshot:N6',  'keeps'),
   ('L-02 D reads legacy proposal note identically',  'D',  NULL, pg_temp.row_md5('N7'),  'snapshot:N7',  'keeps'),
@@ -378,13 +429,24 @@ INSERT INTO m867_case (name, actor, setup, probe, expect, kind) VALUES
   ('L-09 A1 reads own coauthored legacy note',       'A1', NULL, pg_temp.sel('N13'), '0', 'closes'),
   ('L-10 A1 updates legacy job note',                'A1', NULL, pg_temp.upd('N6'), 'rows=0', 'closes'),
   ('L-11 A1 inserts self-authored on legacy job',    'A1', NULL, pg_temp.ins('P0', NULL, NULL, 'A1'), 'denied', 'closes'),
-  ('L-12 D inserts A1-authored note on legacy job',  'D',  NULL, pg_temp.ins('P0', NULL, NULL, 'A1'), 'denied', 'closes'),
+  -- The guard decides tenancy only (SQ-1854 F1): on her own legacy job the
+  -- owner authors for a co-member exactly as before; the row stays hers alone.
+  ('L-12 D inserts A1-authored note on her legacy job', 'D', NULL, pg_temp.ins('P0', NULL, NULL, 'A1'), 'rows=1', 'keeps'),
   ('L-13 D inserts self-authored on legacy job',     'D',  NULL, pg_temp.ins('P0', NULL, NULL, 'D'), 'rows=1', 'keeps'),
   ('L-14 D moves legacy note due date',              'D',  NULL, pg_temp.upd('N6', 'due_date = due_date + interval ''1 day'''), 'rows=1', 'keeps'),
   ('L-15 D deletes legacy proposal note',            'D',  NULL, pg_temp.del('N7'), 'rows=1', 'keeps'),
   ('L-16 U inserts self-authored on D legacy job',   'U',  NULL, pg_temp.ins('P0', NULL, NULL, 'U'), 'denied', 'closes'),
   ('L-17 D inserts self-authored legacy Discovery',  'D',  NULL, pg_temp.ins(NULL, NULL, 'R0', 'D'), 'rows=1', 'keeps'),
   ('L-18 A1 inserts self-authored legacy Discovery', 'A1', NULL, pg_temp.ins(NULL, NULL, 'R0', 'A1'), 'denied', 'closes'),
+  -- SQ-1854 F1: the owner keeps every verb on a coauthored legacy note (the
+  -- portal escalates by updating the note after drafting); A1 stays the author
+  ('L-19 D edits coauthored legacy note body',       'D',  NULL,
+     pg_temp.upd_author('N13', 'body = body || '' (owner edit)'''), 'rows=1 author={A1}', 'keeps'),
+  ('L-20 D dates coauthored legacy note',            'D',  NULL,
+     pg_temp.upd_author('N13', 'due_date = ''2026-11-16 17:00+00'''), 'rows=1 author={A1}', 'keeps'),
+  ('L-21 D escalates coauthored legacy note',        'D',  NULL,
+     pg_temp.upd_author('N13', 'escalated_to_scope_change_id = {SCR}'), 'rows=1 author={A1}', 'keeps'),
+  ('L-22 D deletes coauthored legacy note',          'D',  NULL, pg_temp.del('N13'), 'rows=1', 'keeps'),
   -- M · membership removal and studio suspension (setup inside the probe)
   ('M-01 removed A1 reads own note on A job',        'A1', pg_temp.remove_a1(), pg_temp.sel('N2'), '0', 'closes'),
   ('M-02 removed A1 inserts self-authored on A job', 'A1', pg_temp.remove_a1(), pg_temp.ins('PA', NULL, NULL, 'A1'), 'denied', 'closes'),
@@ -410,6 +472,17 @@ UPDATE m867_case AS c
    SET expect = (SELECT md5(s::text) FROM m867_snapshot AS s
                   WHERE s.id = pg_temp.id(substr(c.expect, length('snapshot:') + 1)))
  WHERE c.expect LIKE 'snapshot:%';
+
+-- {LABEL} in an expectation is that fixture uuid as text (one label each).
+UPDATE m867_case AS c
+   SET expect = replace(c.expect, '{' || i.label || '}', i.id::text)
+  FROM m867_id AS i
+ WHERE c.expect LIKE '%{' || i.label || '}%';
+DO $$
+BEGIN
+  ASSERT NOT EXISTS (SELECT 1 FROM m867_case WHERE expect ~ '\{[A-Z0-9]+\}'),
+    'CASES: an expectation still carries an unresolved label';
+END $$;
 
 -- ─── 6 · PRE: the policies as they stand before 00867 ─────────────────────
 UPDATE m867_case
@@ -457,7 +530,7 @@ END $$;
 DO $$
 DECLARE
   v_guard record;
-  v_fn    regprocedure := 'public.margin_note_tenant_admits(uuid, uuid, uuid, uuid, boolean)';
+  v_fn    regprocedure := 'public.margin_note_tenant_admits(uuid, uuid, uuid, uuid)';
 BEGIN
   ASSERT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.margin_notes'::regclass),
     'CATALOG: RLS must stay enabled on margin_notes';
@@ -474,10 +547,14 @@ BEGIN
   ASSERT v_guard.polcmd = '*', 'CATALOG: the guard must cover ALL commands';
   ASSERT v_guard.polroles = ARRAY['authenticated'::regrole]::oid[],
     'CATALOG: the guard must apply TO authenticated';
-  ASSERT v_guard.qual LIKE 'margin_note_tenant_admits(project_id, proposal_id, designer_client_id, designer_id, false)',
-    'CATALOG: guard USING is not the old-row tenant gate: ' || v_guard.qual;
-  ASSERT v_guard.with_check LIKE 'margin_note_tenant_admits(project_id, proposal_id, designer_client_id, designer_id, true)',
-    'CATALOG: guard WITH CHECK is not the new-row tenant gate: ' || v_guard.with_check;
+  ASSERT v_guard.qual = 'margin_note_tenant_admits(project_id, proposal_id, designer_client_id, designer_id)',
+    'CATALOG: guard USING is not the tenant gate: ' || v_guard.qual;
+  ASSERT v_guard.with_check = v_guard.qual,
+    'CATALOG: guard WITH CHECK must be the same tenant gate as USING: ' || v_guard.with_check;
+  ASSERT (SELECT count(*) FROM pg_proc
+           WHERE proname = 'margin_note_tenant_admits'
+             AND pronamespace = 'public'::regnamespace) = 1,
+    'CATALOG: exactly one margin_note_tenant_admits overload (the 4-arg gate)';
 
   -- The five permissive policies are untouched: 00867 only narrows them.
   ASSERT NOT EXISTS (
@@ -510,7 +587,7 @@ BEGIN
   ASSERT has_table_privilege('authenticated', 'public.margin_notes', 'SELECT, INSERT, UPDATE, DELETE'),
     'CATALOG: authenticated keeps the four verbs the policies govern';
 
-  RAISE NOTICE '00867 catalog passed: one RESTRICTIVE ALL guard over both images, five permissive policies unchanged, helper SECURITY DEFINER + pinned search_path, EXECUTE to authenticated/service_role only';
+  RAISE NOTICE '00867 catalog passed: one RESTRICTIVE ALL guard, one tenant gate for both images, five permissive policies unchanged, one helper overload, SECURITY DEFINER + pinned search_path, EXECUTE to authenticated/service_role only';
 END $$;
 
 -- ─── 10 · privileged readback: forbidden writes, run for real ─────────────
@@ -539,6 +616,10 @@ BEGIN
   ASSERT v_outcome = 'denied', 'READBACK: U foreign insert was ' || v_outcome;
   v_outcome := pg_temp.act(pg_temp.id('CL'), pg_temp.sql_of(pg_temp.ins('PA', NULL, NULL, 'CL')));
   ASSERT v_outcome = 'denied', 'READBACK: client insert was ' || v_outcome;
+  v_outcome := pg_temp.act(pg_temp.id('B1'), pg_temp.sql_of(pg_temp.ins('P0', 'QB', NULL, 'B1')));
+  ASSERT v_outcome = 'denied', 'READBACK: B1 injection on legacy P0 via QB was ' || v_outcome;
+  v_outcome := pg_temp.act(pg_temp.id('B1'), pg_temp.sql_of(pg_temp.del('N14')));
+  ASSERT v_outcome = 'rows=0', 'READBACK: B1 delete of injected N14 reached ' || v_outcome;
 
   ASSERT current_user = 'postgres', 'READBACK: must read back as postgres, not ' || current_user;
   SELECT count(*) INTO v_drift FROM (
@@ -552,10 +633,40 @@ BEGIN
   ASSERT (SELECT count(*) FROM public.margin_notes
            WHERE project_id IN (pg_temp.id('PA'), pg_temp.id('PB'), pg_temp.id('P0'), pg_temp.id('PU'))
               OR proposal_id IN (pg_temp.id('QA'), pg_temp.id('QB'), pg_temp.id('Q0'))
-              OR designer_client_id IN (pg_temp.id('RA'), pg_temp.id('R0'))) = 13,
+              OR designer_client_id IN (pg_temp.id('RA'), pg_temp.id('R0'))) = 14,
     'READBACK: a forbidden write left a row behind';
 
-  RAISE NOTICE '00867 readback passed: 10 forbidden writes ran for real, all 13 fixture notes byte-identical to the pre-00867 snapshot';
+  RAISE NOTICE '00867 readback passed: 12 forbidden writes ran for real, all 14 fixture notes byte-identical to the pre-00867 snapshot';
+END $$;
+
+-- ─── 11 · ACLs as a reset leaves them (SQ-1854 F2) ────────────────────────
+-- `supabase db reset` replays the migrations, then this generated seed: a
+-- blanket legacy GRANT on every public object, then every migration's
+-- GRANT/REVOKE in order. Applied here over the migrated state, last, so the
+-- helper's grants are read the way a fresh stack would hold them.
+\ir ../../seed/00-legacy-grants.sql
+
+DO $$
+DECLARE
+  v_fn regprocedure := 'public.margin_note_tenant_admits(uuid, uuid, uuid, uuid)';
+  v_seen bigint;
+BEGIN
+  ASSERT NOT has_function_privilege('anon', v_fn, 'EXECUTE'),
+    'RESET ACL: anon must not EXECUTE the helper once the legacy-grants seed has run';
+  ASSERT NOT EXISTS (SELECT 1 FROM pg_proc, aclexplode(proacl) AS acl
+                      WHERE oid = v_fn AND acl.grantee = 0),
+    'RESET ACL: PUBLIC must not EXECUTE the helper once the legacy-grants seed has run';
+  ASSERT has_function_privilege('authenticated', v_fn, 'EXECUTE')
+     AND has_function_privilege('service_role', v_fn, 'EXECUTE'),
+    'RESET ACL: authenticated and service_role must EXECUTE the helper';
+  -- The legacy baseline still hands anon the table; no policy names anon.
+  EXECUTE 'SET LOCAL ROLE anon';
+  SELECT count(*) INTO v_seen FROM public.margin_notes
+   WHERE id IN (SELECT id FROM m867_id WHERE label LIKE 'N%');
+  EXECUTE 'RESET ROLE';
+  ASSERT v_seen = 0, 'RESET ACL: anon reached ' || v_seen || ' margin note(s)';
+
+  RAISE NOTICE '00867 reset ACL passed: after the legacy-grants seed the helper is EXECUTE to authenticated/service_role only, and anon reaches no margin note';
 END $$;
 
 ROLLBACK;
