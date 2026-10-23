@@ -494,6 +494,114 @@ describe("P02 round-8 plate (Kody 2026-10-23)", () => {
   const strippedRound8 = round8Css.replace(/\/\*[\s\S]*?\*\//g, "");
   const round8Rules = cssRules(strippedRound8);
 
+  const ts = require("typescript") as typeof import("typescript");
+  type Element = import("typescript").JsxElement | import("typescript").JsxSelfClosingElement;
+
+  function jsxElements(source: string): Element[] {
+    const elements: Element[] = [];
+    const visit = (node: import("typescript").Node): void => {
+      if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) elements.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(ts.createSourceFile("round8.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX));
+    return elements;
+  }
+
+  function attribute(element: Element, name: string) {
+    const opening = ts.isJsxElement(element) ? element.openingElement : element;
+    const property = opening.attributes.properties.find(
+      (prop) => ts.isJsxAttribute(prop) && prop.name.getText() === name,
+    );
+    return property && ts.isJsxAttribute(property) ? property.initializer : undefined;
+  }
+
+  function hasLiteralVariants(source: string): boolean {
+    const spelled = source.match(/(['"])(plate|terminal)\1/g)?.length ?? 0;
+    const literal = source.match(/variant="(plate|terminal)"/g)?.length ?? 0;
+    const computed = jsxElements(source).some((element) => {
+      const opening = ts.isJsxElement(element) ? element.openingElement : element;
+      const variant = attribute(element, "variant");
+      return opening.tagName.getText() === "DocumentAction" && variant !== undefined && !ts.isStringLiteral(variant);
+    });
+    // Keep the ledger ban as well as rejecting expressions with no quoted tier.
+    return !computed && spelled === literal;
+  }
+
+  function descriptionKey(value: import("typescript").JsxAttributeValue | undefined): string | undefined {
+    if (!value) return undefined;
+    const expression = ts.isJsxExpression(value) ? value.expression : value;
+    if (!expression) return undefined;
+    if (ts.isStringLiteral(expression)) return expression.text.trim() ? `text:${expression.text}` : undefined;
+    return `expression:${expression.getText()}`;
+  }
+
+  function hasSentence(element: import("typescript").JsxElement | import("typescript").JsxFragment): boolean {
+    return element.children.some((child) => {
+      if (ts.isJsxText(child)) return child.text.trim().length > 0;
+      if (ts.isJsxElement(child) || ts.isJsxFragment(child)) return hasSentence(child);
+      if (ts.isJsxExpression(child) && child.expression && ts.isStringLiteral(child.expression)) {
+        return child.expression.text.trim().length > 0;
+      }
+      return false;
+    });
+  }
+
+  function unboundTerminals(source: string): string[] {
+    const elements = jsxElements(source);
+    const sentences = new Set(elements
+      .filter((element) => ts.isJsxElement(element) && hasSentence(element))
+      .map((element) => descriptionKey(attribute(element, "id")))
+      .filter((key) => key !== undefined));
+    return elements.flatMap((element) => {
+      const opening = ts.isJsxElement(element) ? element.openingElement : element;
+      const variant = attribute(element, "variant");
+      if (opening.tagName.getText() !== "DocumentAction" || !variant || !ts.isStringLiteral(variant) || variant.text !== "terminal") return [];
+      const describedBy = descriptionKey(attribute(element, "aria-describedby"));
+      const key = attribute(element, "actionKey");
+      return describedBy && sentences.has(describedBy) ? [] : [key && ts.isStringLiteral(key) ? key.text : "(no actionKey)"];
+    });
+  }
+
+  it.each([
+    ["computed prop carrying plate and a consequential key", '<DocumentActionGroup><DocumentAction variant={variant} actionKey="send-invoice"/><DocumentAction variant={variant} actionKey="pay-invoice"/></DocumentActionGroup>'],
+    ["computed call", '<DocumentAction variant={chooseVariant()} actionKey="send-invoice"/>'],
+    ["computed string literal", '<DocumentAction variant={"plate"} actionKey="save"/>'],
+  ])("rejects %s", (_name, source) => {
+    expect(hasLiteralVariants(source)).toBe(false);
+  });
+
+  it.each([
+    ["data-id target", '<p data-id={sentenceId}>This sends the invoice.</p>'],
+    ["self-closing target", '<span id={sentenceId}/>'],
+    ["empty paired target", '<span id={sentenceId}></span>'],
+    ["whitespace target", '<span id={sentenceId}>  \n </span>'],
+    ["comment-only target", '<span id={sentenceId}>{/* sentence goes here */}</span>'],
+  ])("rejects terminal with %s", (_name, target) => {
+    const source = `const view = <><DocumentAction variant="terminal" actionKey="send-invoice" aria-describedby={sentenceId}/>${target}</>`;
+    expect(unboundTerminals(source)).toEqual(["send-invoice"]);
+  });
+
+  it.each(['""', '"   "', '{""}', '{"   "}'])(
+    "rejects empty terminal aria-describedby=%s",
+    (description) => {
+      const source = `const view = <><DocumentAction variant="terminal" actionKey="send-invoice" aria-describedby=${description}/><p id=${description}>This sends the invoice.</p></>`;
+      expect(unboundTerminals(source)).toEqual(["send-invoice"]);
+    },
+  );
+
+  it.each([
+    '<p id={sentenceId}>This sends the invoice.</p>',
+    '<p id={sentenceId}>This <strong>sends</strong> the invoice.</p>',
+  ])("accepts a terminal bound to a real consequence sentence: %s", (target) => {
+    const source = `const view = <><DocumentAction variant="terminal" actionKey="send-invoice" aria-describedby={sentenceId}/>${target}</>`;
+    expect(hasLiteralVariants(source)).toBe(true);
+    expect(unboundTerminals(source)).toEqual([]);
+  });
+
+  it("accepts literal plate and primary variants for the other P02 checks", () => {
+    expect(hasLiteralVariants('<DocumentActionGroup><DocumentAction variant="plate" actionKey="save"/><DocumentAction variant="primary" actionKey="next"/></DocumentActionGroup>')).toBe(true);
+  });
+
   it("holds every round-8 rule in its own delimited sheet, none in globals.css", () => {
     expect(round8Css.trimStart().startsWith("/* Round 8 paper renderer (P02)")).toBe(true);
     expect(round8Css.trimEnd().endsWith("/* end Round 8 paper renderer */")).toBe(true);
@@ -565,9 +673,7 @@ describe("P02 round-8 plate (Kody 2026-10-23)", () => {
     const offences: string[] = [];
     for (const file of round8SourceFiles()) {
       const source = readFileSync(file, "utf8");
-      const spelled = source.match(/(['"])(plate|terminal)\1/g)?.length ?? 0;
-      const literal = source.match(/variant="(plate|terminal)"/g)?.length ?? 0;
-      if (spelled !== literal) offences.push(file.slice(COMPONENTS.length + 1));
+      if (!hasLiteralVariants(source)) offences.push(file.slice(COMPONENTS.length + 1));
     }
     expect(offences).toEqual([]);
   });
@@ -589,13 +695,8 @@ describe("P02 round-8 plate (Kody 2026-10-23)", () => {
     const unbound: string[] = [];
     for (const file of round8SourceFiles()) {
       const source = readFileSync(file, "utf8");
-      for (const element of documentActionElements(source)) {
-        if (!element.includes('variant="terminal"')) continue;
-        const describedBy = element.match(/aria-describedby=(\{[^}]+\}|"[^"]+")/)?.[1];
-        const key = element.match(/actionKey="([^"]+)"/)?.[1] ?? "(no actionKey)";
-        if (!describedBy || !source.includes(`id=${describedBy}`)) {
-          unbound.push(`${file.slice(COMPONENTS.length + 1)}: ${key}`);
-        }
+      for (const key of unboundTerminals(source)) {
+        unbound.push(`${file.slice(COMPONENTS.length + 1)}: ${key}`);
       }
     }
     expect(unbound).toEqual([]);
