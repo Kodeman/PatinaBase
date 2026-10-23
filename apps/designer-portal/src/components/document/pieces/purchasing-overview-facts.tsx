@@ -54,7 +54,8 @@ function Quantity({ line }: { line: PurchasingOverviewLine }) {
 }
 
 function purchasingDestination(po: PurchasingOverviewLine['purchase_order']) {
-  return po?.ship_to?.trim() || 'No destination yet';
+  if (!po) return null;
+  return po.ship_to?.trim() || 'No destination yet';
 }
 
 function PurchasingFactLine({ projectId, line }: { projectId: string; line: PurchasingOverviewLine }) {

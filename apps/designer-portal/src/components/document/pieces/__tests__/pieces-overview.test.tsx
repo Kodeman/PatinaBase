@@ -444,9 +444,16 @@ describe('P-01 truthful purchasing overview', () => {
   });
 
   it('names missing destination and owner without inventing a job-site default', () => {
-    show();
+    show([{ ...pieces[0], purchase_order: { ...pieces[0].purchase_order!, ship_to: '' } }, pieces[1]]);
     expect(screen.getByText('No destination yet')).toBeInTheDocument();
     expect(screen.getByText('Next: Owner not named')).toBeInTheDocument();
+  });
+
+  it('leaves the destination cell empty when there is no purchase order', () => {
+    show();
+    const rug = document.querySelector('[data-purchasing-line="rug"]');
+    expect(rug).not.toBeNull();
+    expect(rug!.children[1]).toBeEmptyDOMElement();
   });
 
   it('hands a held order to the active studio owner, not its creator or invited owner', () => {
