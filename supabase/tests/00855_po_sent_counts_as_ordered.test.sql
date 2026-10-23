@@ -103,8 +103,8 @@ WHERE id=(SELECT item_id FROM f02_cases WHERE name='add_line');
 SELECT pg_temp.check_f02('adding a line to a sent PO orders it',
   (SELECT status='ordered' FROM public.project_ffe_items WHERE id=(SELECT item_id FROM f02_cases WHERE name='add_line')));
 UPDATE public.purchase_orders SET status='confirmed' WHERE id=(SELECT po_id FROM f02_cases WHERE name='draft');
-SELECT pg_temp.check_f02('confirmation without sent_at does not order the item',
-  (SELECT status='approved' FROM public.project_ffe_items WHERE id=(SELECT item_id FROM f02_cases WHERE name='draft')));
+SELECT pg_temp.check_f02('vendor confirmation without sent_at counts as ordered (00862 F2)',
+  (SELECT status='ordered' FROM public.project_ffe_items WHERE id=(SELECT item_id FROM f02_cases WHERE name='draft')));
 UPDATE public.purchase_orders SET status='cancelled' WHERE id=(SELECT po_id FROM f02_cases WHERE name='cancel');
 SELECT pg_temp.check_f02('cancelling an unsent draft leaves no stale ordered stage',
   (SELECT status='approved' AND purchase_order_id IS NULL FROM public.project_ffe_items
