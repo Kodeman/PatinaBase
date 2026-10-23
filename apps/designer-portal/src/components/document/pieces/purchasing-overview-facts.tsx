@@ -3,12 +3,13 @@
 import { useOrganizationMembers, useProjectV2 } from '@patina/supabase';
 import type { Database } from '@patina/supabase';
 import type { OverviewLine } from '@/lib/document/pieces/overview-derivation';
+import { useJobPlaces } from '../destinations/use-job-places';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type PurchaseOrder = Database['public']['Tables']['purchase_orders']['Row'];
 type FfeItem = Database['public']['Tables']['project_ffe_items']['Row'];
 
-export type PurchasingOverviewLine = OverviewLine & Partial<Pick<FfeItem, 'name' | 'unit'>> & {
+export type PurchasingOverviewLine = OverviewLine & Partial<Pick<FfeItem, 'name' | 'unit' | 'planned_destination_location_id'>> & {
   purchase_order?: (Pick<PurchaseOrder, 'status' | 'created_by' | 'ship_to'> & {
     creator?: Pick<Profile, 'display_name' | 'full_name'> | null;
   }) | null;
@@ -53,19 +54,27 @@ function Quantity({ line }: { line: PurchasingOverviewLine }) {
   </>;
 }
 
-function purchasingDestination(po: PurchasingOverviewLine['purchase_order']) {
-  if (!po) return null;
-  return po.ship_to?.trim() || 'No destination yet';
+function purchasingDestination(line: PurchasingOverviewLine, jobPlaces: ReturnType<typeof useJobPlaces>['jobPlaces']) {
+  const committed = line.purchase_order?.ship_to?.trim();
+  if (committed) return committed;
+  const planned = jobPlaces.find((place) => place.id === line.planned_destination_location_id);
+  return planned
+    ? `Planned: ${planned.label} · ${planned.kind}${planned.is_private_home ? ' · Private home' : ''}`
+    : null;
 }
 
-function PurchasingFactLine({ projectId, line }: { projectId: string; line: PurchasingOverviewLine }) {
+function PurchasingFactLine({ projectId, line, jobPlaces }: {
+  projectId: string;
+  line: PurchasingOverviewLine;
+  jobPlaces: ReturnType<typeof useJobPlaces>['jobPlaces'];
+}) {
   return (
     <li data-purchasing-line={line.id} className="grid min-w-0 gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
       <span className="min-w-0 break-words">
         {line.name || 'Unnamed piece'} · <Quantity line={line} />
       </span>
       <span className="min-w-0 whitespace-pre-line break-words">
-        {purchasingDestination(line.purchase_order)}
+        {purchasingDestination(line, jobPlaces)}
       </span>
       <span className="min-w-0 break-words">
         Next: <NextOwner projectId={projectId} po={line.purchase_order} />
@@ -78,9 +87,10 @@ export function PurchasingOverviewFacts({ projectId, lines }: {
   projectId: string;
   lines: readonly PurchasingOverviewLine[];
 }) {
+  const { jobPlaces } = useJobPlaces(projectId);
   return (
     <ul aria-label="Purchasing at a glance" className="mb-3 space-y-2 text-[14px] text-[var(--ink)]">
-      {lines.map((line) => <PurchasingFactLine key={line.id} projectId={projectId} line={line} />)}
+      {lines.map((line) => <PurchasingFactLine key={line.id} projectId={projectId} line={line} jobPlaces={jobPlaces} />)}
     </ul>
   );
 }

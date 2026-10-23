@@ -22,6 +22,10 @@ let mockMemberState = { isPending: false, isError: false };
 let mockPlacements: OverviewPlacement[] = [];
 let mockPalettes: Array<{ scope_room_id: string | null; swatches: unknown }> = [];
 
+jest.mock('../../destinations/use-job-places', () => ({
+  useJobPlaces: () => ({ jobPlaces: [{ id: 'home', label: 'Hartwell home', kind: 'site', is_private_home: true }] }),
+}));
+
 jest.mock('@patina/supabase', () => ({
   useProjectRoomPlacements: () => ({ data: mockPlacements }),
   useProjectPalettes: () => ({ data: mockPalettes }),
@@ -45,6 +49,7 @@ jest.mock('../../strata-mark', () => ({
 }));
 
 import { PiecesOverview } from '../pieces-overview';
+import type { PurchasingOverviewLine } from '../purchasing-overview-facts';
 
 const ROOMS = [
   { id: 'hall', name: 'Hall' },
@@ -428,7 +433,7 @@ describe('P-01 truthful purchasing overview', () => {
         creator: { display_name: 'Morgan', full_name: 'Morgan Buyer' } } },
     { ...placeholder('rug', 'living', 1, 100), name: 'Rug' },
   ];
-  function show(lines = pieces) {
+  function show(lines: PurchasingOverviewLine[] = pieces) {
     return render(<PiecesOverview projectId="project-1" docId="doc-1" lines={lines}
       rooms={ROOMS} job={deriveOverviewJob(lines)} onAddLine={jest.fn()} renderLines={() => null} />);
   }
@@ -443,10 +448,28 @@ describe('P-01 truthful purchasing overview', () => {
     expect(within(room).getByText('Next: Morgan')).toBeInTheDocument();
   });
 
-  it('names missing destination and owner without inventing a job-site default', () => {
+  it('leaves an unplanned destination empty without inventing a job-site default', () => {
     show([{ ...pieces[0], purchase_order: { ...pieces[0].purchase_order!, ship_to: '' } }, pieces[1]]);
-    expect(screen.getByText('No destination yet')).toBeInTheDocument();
+    expect(document.querySelector('[data-purchasing-line="chairs"]')!.children[1]).toBeEmptyDOMElement();
     expect(screen.getByText('Next: Owner not named')).toBeInTheDocument();
+  });
+
+  it('shows planned job-place intent without a PO and keeps the PO snapshot first', () => {
+    show(pieces.map((piece) => ({ ...piece, planned_destination_location_id: 'home' })));
+    expect(document.querySelector('[data-purchasing-line="chairs"]')!.children[1])
+      .toHaveTextContent('Receiving warehouse 12 Main St');
+    expect(document.querySelector('[data-purchasing-line="rug"]')!.children[1])
+      .toHaveTextContent('Planned: Hartwell home · site · Private home');
+  });
+
+  it('falls back from blank PO paper to planned intent but never to an unrelated studio place', () => {
+    show([
+      { ...pieces[0], planned_destination_location_id: 'home', purchase_order: { ...pieces[0].purchase_order!, ship_to: '  ' } },
+      { ...pieces[1], planned_destination_location_id: 'other-studio-place' },
+    ]);
+    expect(document.querySelector('[data-purchasing-line="chairs"]')!.children[1])
+      .toHaveTextContent('Planned: Hartwell home · site · Private home');
+    expect(document.querySelector('[data-purchasing-line="rug"]')!.children[1]).toBeEmptyDOMElement();
   });
 
   it('leaves the destination cell empty when there is no purchase order', () => {
