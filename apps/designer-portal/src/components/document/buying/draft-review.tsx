@@ -119,6 +119,7 @@ export function DraftReview({
     Date.now() - new Date(draft.updated_at).getTime() > STALLED_SEND_MS;
   const pending = update.isPending || send.isPending || discard.isPending || resend.isPending;
   const recipient = draft.to_email?.trim() || null;
+  const receivingNotice = draft.kind === 'vendor_claim_notice' || draft.kind === 'receiver_inbound_notice';
   const edited = subject.trim() !== draft.subject || body !== draft.body;
   const blank = !subject.trim() || !body.trim();
   const label = DRAFT_KIND_LABEL[draft.kind] ?? 'Letter';
@@ -192,7 +193,7 @@ export function DraftReview({
           <div className="flex flex-wrap items-baseline gap-x-3">
             {/* 506-2: no address holds the Send (§A5), never native disabled,
                 so its reason is reachable by keyboard. */}
-            <DocumentAction
+            {(!receivingNotice || recipient) && <DocumentAction
               actionKey="send-procurement-draft"
               surfaceKey={surfaceKey}
               regionKey={regionKey}
@@ -206,17 +207,17 @@ export function DraftReview({
               onClick={sendDraft}
             >
               Send correspondence
-            </DocumentAction>
-            {!recipient && onAddAddress && (
+            </DocumentAction>}
+            {!recipient && (onAddAddress || receivingNotice) && (
               <DocumentAction
                 id={`${fieldId}-recipient-fix`}
                 actionKey="add-maker-address"
                 surfaceKey={surfaceKey}
                 regionKey={regionKey}
                 variant="tertiary"
-                onClick={onAddAddress}
+                onClick={onAddAddress ?? (() => { void import('../command-bar').then(({ openLedger }) => openLedger('people')); })}
               >
-                Add recipient email
+                {receivingNotice ? 'Add receiver contact' : 'Add recipient email'}
               </DocumentAction>
             )}
             <DocumentAction
