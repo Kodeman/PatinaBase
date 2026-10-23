@@ -103,7 +103,7 @@ describe('useMarginSheet (W5-R1, the whole margin)', () => {
 
     expect(result.current.groups.map((g) => g.heading)).toEqual([
       'THE WHOLE JOB',
-      'BESIDE PIECES',
+      'BESIDE PIECES & PURCHASING',
     ]);
     expect(result.current.groups[0].rows).toHaveLength(4);
     expect(result.current.groups[1].rows).toHaveLength(3);
@@ -122,7 +122,7 @@ describe('useMarginSheet (W5-R1, the whole margin)', () => {
       useMarginSheet({ projectId: 'proj-1', proposalId: null }),
     );
 
-    const besidePieces = result.current.groups.find((g) => g.heading === 'BESIDE PIECES');
+    const besidePieces = result.current.groups.find((g) => g.heading === 'BESIDE PIECES & PURCHASING');
     expect(besidePieces?.rows[0].lineLabel).toBe(
       'Living Room · Reading Chair — COM Fabric Pending',
     );
