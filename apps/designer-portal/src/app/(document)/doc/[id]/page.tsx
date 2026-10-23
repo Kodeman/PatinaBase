@@ -1,5 +1,8 @@
 'use client';
 
+import { LegacyDocumentFrame } from '@/components/document/frame/legacy-document-frame';
+import type { DocumentFrameSlots } from '@/components/document/frame/frame-slots';
+
 import { calendarDaysPast } from '@patina/supabase';
 /**
  * The open document — full bleed (D12): the paper IS the screen. No
@@ -3392,8 +3395,50 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       }
     : null;
 
-  return (
-    <>
+  const supportingSlots =
+    row.engagement_kind === 'project' && row.project_id
+      ? {
+          accountBand: (
+            <>
+              {/* Supporting project records follow the active work so a newly
+                  opened document reaches the schedule before its reference material.
+                  W2 — the accounts moved into the money region on the Project
+                  spread; every other section keeps the band here, where it has
+                  always been (Install and Care mount the region without them). */}
+              {/* F1 — the band and the money region's accounts are one
+                  either-or, so both sides read the SAME section. The money region
+                  mounts inside the pinned spread; a band gated on the live row
+                  would print the accounts twice (or nowhere) for as long as an
+                  armed turn goes unpressed. Off the flag `spreadSection` IS
+                  `row.active_section`. */}
+              {spreadSection !== 'project' && (
+                <AccountBand
+                  projectId={row.project_id}
+                  clientName={row.client_name}
+                  activeSection={spreadSection}
+                />
+              )}
+            </>
+          ),
+          kickoff: (
+            <>
+              {/* The four supporting rooms moved to the shelves, so the
+                  not-started band that collapsed them has nothing left to
+                  collapse. The first-staffing nudge has no other home and stays
+                  here, ungated: it self-silences on the flag, a staffed sheet, or
+                  its own dismissal. */}
+              <KickoffBand
+                projectId={row.project_id}
+                rows={rosterRows ?? []}
+                isLead={Boolean(user?.id) && handoffLead?.leadUserId === user?.id}
+              />
+            </>
+          ),
+        }
+      : { accountBand: null, kickoff: null };
+
+  const slots: DocumentFrameSlots = {
+    arrival: (<>
     {/* N10 arrival C — held under the loading register, the DocumentSkeleton
         stands over the paper (zero height, so the paper beneath still lays out
         and reads exactly as it will once shown) and nothing is veiled: the
@@ -3415,35 +3460,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </>
     )}
-    <div
-      ref={lensShellRef}
-      data-document-shell
-      // Held, the paper is mounted (every read runs beside the ready
-      // waterfall) but unmarked, and arrival.css hides it under `arr-pre`.
-      data-arrival={arrivalHeld ? undefined : 'document'}
-      data-arrival-held={arrivalHeld ? 'document' : undefined}
-      // N10 — no arr-pre veil under the register: the held paper hides itself
-      // (laid out, out of sight and out of the accessibility tree) beneath its
-      // skeleton until ready.
-      style={arrivalHeld && loadingRegister ? { visibility: 'hidden' } : undefined}
-      data-arrival-ready={arrivalReady ? '' : undefined}
-      data-arr-engagement={row.engagement_id}
-      data-shell-regime="single-below-1180-narrow-to-1439-full-from-1440"
-      // W3 · the reading stop, published where the rail and the mobile bar
-      // already publish it. Absent rather than `"null"` when nothing reads.
-      data-reading-index={activeKey ?? undefined}
-      className="relative grid min-h-screen grid-cols-1 overflow-x-clip bg-[var(--doc-paper)] [grid-template-rows:auto_1fr] min-[1180px]:grid-cols-[136px_minmax(0,1fr)] min-[1180px]:[grid-template-rows:none] min-[1440px]:grid-cols-[200px_minmax(0,1fr)_232px] motion-safe:animate-[doc-raise_270ms_ease-out] motion-reduce:animate-[doc-fade_200ms_ease-out]"
-    >
-      {/* Paper grain at the threshold of perception */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0"
-        style={{
-          background:
-            'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(139,115,85,0.01) 3px, rgba(139,115,85,0.01) 4px)',
-        }}
-      />
 
+    </>),
+    spine: (<>
       <DocSpine
         sections={sections}
         onJump={jumpToSection}
@@ -3477,17 +3496,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         onReleaseRoom={toggleRoom}
       />
 
-      {/* No z-index here: a stacking context on main would trap the fixed
-          procurement panels (inspection drawer, Order Assistant) mounted in
-          line unfolds beneath the aside rail and the drawer strip. The z-0
-          grain painting over content is imperceptible at 1% alpha. */}
-      <main
-        ref={mainRef}
-        data-document-paper
-        data-spotlight-frame
-        data-shelf-open={openShelf ? 'true' : undefined}
-        className="w-full min-w-0 max-w-[1040px] justify-self-center px-7 pb-32 pt-8 min-[1180px]:px-10 min-[1440px]:px-12"
-      >
+
+    </>),
+    letterhead: (<>
         {/* The household — who this document is for — is a first-class subtitle
             in the title block (R68.2): a prominent clickable line directly under
             the title, not a tiny line tucked below the divider. View / set /
@@ -3551,12 +3562,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           instruments={letterheadInstruments}
         />
 
+
+    </>),
+    ticketFacts: (<>
         {/* The document's own reads — mounted by the DOCUMENT rather than the
             section, so all seven spreads read identically (B1, B2). Prints
             nothing; it reports the rows and the input the band and the ladder
             are derived from. */}
         {ticketFacts}
 
+
+    </>),
+    band: (<>
         {/* THE BAND — where the ticket stood, and the one printing of the
             worst standing exception (or the stage's guide sentence) at every
             width. It carries `#doc-ticket-sentinel` as its own immediate
@@ -3585,6 +3602,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         )}
         {/* US-19 D8 — the one-note tour, in flow under the band. */}
         {bandModel && <BandTourNote hasAct={bandModel.voice.next !== null} />}
+
+    </>),
+    household: (<>
         {/* D10 — the SETUP row's `Link a client` opens the household sheet the
             chip uses; the chip prints nothing while no client is linked. */}
         {setupHouseholdOpen && row.engagement_kind === 'project' && (
@@ -3602,6 +3622,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           />
         )}
 
+
+    </>),
+    frontMatter: (<>
         {row.engagement_kind === 'project' && row.project_id && (
           <FolioLetterhead projectId={row.project_id} />
         )}
@@ -3629,6 +3652,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             Margin sheet (mobile-bar's "In this document" door) replaces it.
             The `marginCount` it needs rides `useMobileActiveDoc` below. */}
 
+
+    </>),
+    approvals: (<>
         <ProjectApprovalDocumentMount
           quietLeader={approvalsQuietLeaderAct}
           projectId={
@@ -3641,27 +3667,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           phases={phases}
         />
 
-        {/* ScheduleNavProvider wires the Rule (below) to the Spine (mounted
-            deeper, inside the active section) so a minimap click reveals
-            through to the ledger (§3.5). Context.Provider renders no wrapper
-            element — it adds nothing to the DOM, so the Rule's real parent
-            stays <main> (the mount contract in schedule-rule.tsx's header)
-            and the gate-off tree below is unaffected by its presence. */}
-        <ScheduleNavProvider>
-          {/* RippleProvider owns the ONE time-edit preview session (Slice 04
-              R100). It wraps the SAME subtree as ScheduleNavProvider so the two
-              surfaces that begin an edit — the Rule's drags and the Spine's
-              inline duration/anchor fields — share a single session, and the
-              confirm strip below reads the same diff. It renders no DOM (a
-              context provider), so the gate-off / non-project DOM stays
-              byte-identical; on a PROJECT doc with the gate off the provider
-              does add a background schedule fetch (useResolvedSchedule —
-              React-Query-deduped against the Rule/Spine's own reads, so at most
-              one extra schedule-milestones query; negligible). On an empty id
-              (a non-project document) the hook is fully inert — `??''` keeps
-              the provider total there (proposal/brief docs never begin a
-              ripple). */}
-          <RippleProvider projectId={row.project_id ?? ''}>
+
+    </>),
+    schedule: (<>
             {/* Field Coordination (light-PM slice): the phase schedule as a
                 horizontal instrument — status-weighted segments, a today cut,
                 draggable phase bars. Project-wide (shows across
@@ -3678,6 +3686,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               summary={scheduleRuleSummary}
             />
 
+
+    </>),
+    activeSpread: (<>
           {/* The active section — exactly one (§4). */}
           <div
             id={sectionAnchorId(row.active_section)}
@@ -3988,42 +3999,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             )}
             </TableFrame>
           </div>
-          </RippleProvider>
-        </ScheduleNavProvider>
 
-        {row.engagement_kind === 'project' && row.project_id && (
-          <>
-            {/* Supporting project records follow the active work so a newly
-                opened document reaches the schedule before its reference material.
-                W2 — the accounts moved into the money region on the Project
-                spread; every other section keeps the band here, where it has
-                always been (Install and Care mount the region without them). */}
-            {/* F1 — the band and the money region's accounts are one
-                either-or, so both sides read the SAME section. The money region
-                mounts inside the pinned spread; a band gated on the live row
-                would print the accounts twice (or nowhere) for as long as an
-                armed turn goes unpressed. Off the flag `spreadSection` IS
-                `row.active_section`. */}
-            {spreadSection !== 'project' && (
-              <AccountBand
-                projectId={row.project_id}
-                clientName={row.client_name}
-                activeSection={spreadSection}
-              />
-            )}
-            {/* The four supporting rooms moved to the shelves, so the
-                not-started band that collapsed them has nothing left to
-                collapse. The first-staffing nudge has no other home and stays
-                here, ungated: it self-silences on the flag, a staffed sheet, or
-                its own dismissal. */}
-            <KickoffBand
-              projectId={row.project_id}
-              rows={rosterRows ?? []}
-              isLead={Boolean(user?.id) && handoffLead?.leadUserId === user?.id}
-            />
-          </>
-        )}
-
+    </>),
+    record: (<>
         {/* The Record — the settled bars, at the FOOT of the paper: history is
             an appendix, not a preamble. Every phase with a read-only body
             unfolds in place so completed work stays reviewable (R66); reached
@@ -4108,6 +4086,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           })}
         </PreviousWork>
 
+
+    </>),
+    colophon: (<>
         {/* R29: the colophon — the paper's last line states its own facts. */}
         {row.engagement_kind === 'project' && row.project_id && (
           <DocColophon
@@ -4118,8 +4099,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             handsOnTheWork={others}
           />
         )}
-      </main>
 
+    </>),
+    margin: (<>
       {/* Margin rail (D12; D2: the margin IS the notification model).
           Below 1180px the margin lives as anchored chips + the mobile spine
           sheet's summary. From 1180–1439px it opens on demand; only the wide
@@ -4146,6 +4128,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         )}
       </ResponsiveMarginRail>
 
+
+    </>),
+    overlays: (<>
       {/* D1: the Call Sheet is an overlay, never a section — mounted once
           here (closed by default), opened by document:open-call-sheet from
           ⌘K, the letterhead instrument, and the kickoff band. Project docs
@@ -4203,7 +4188,30 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       {row.engagement_kind === 'project' && row.project_id && (
         <RecordAChangeSheet projectId={row.project_id} clientName={row.client_name} />
       )}
-    </div>
-    </>
+
+    </>),
+    ...supportingSlots,
+    // Both schedule surfaces retain the same provider scope and mount order.
+    scheduleScope: (children) => (
+      <ScheduleNavProvider>
+        <RippleProvider projectId={row.project_id ?? ''}>{children}</RippleProvider>
+      </ScheduleNavProvider>
+    ),
+  };
+
+  return (
+    <LegacyDocumentFrame
+      slots={slots}
+      shellProps={{
+        ref: lensShellRef,
+        'data-arrival': arrivalHeld ? undefined : 'document',
+        'data-arrival-held': arrivalHeld ? 'document' : undefined,
+        style: arrivalHeld && loadingRegister ? { visibility: 'hidden' } : undefined,
+        'data-arrival-ready': arrivalReady ? '' : undefined,
+        'data-arr-engagement': row.engagement_id,
+        'data-reading-index': activeKey ?? undefined,
+      }}
+      paperProps={{ ref: mainRef, 'data-shelf-open': openShelf ? 'true' : undefined }}
+    />
   );
 }
