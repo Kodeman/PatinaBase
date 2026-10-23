@@ -3,7 +3,8 @@ export const BASE = "http://localhost:3400";
 export const PROJECT = "50500000-0000-4000-8000-000000000002";
 export const SCREENS = "/Users/kody/Code/patina-merged/artifacts/purchasing-workflow-review-2026-10-22/walk/screens";
 export async function open(email = "us50-member@patina.dev", viewport = { width: 1440, height: 900 }) {
-  const browser = await chromium.launch();
+  // Enable Chromium's PDF viewer so the purchasing walk can inspect rendered PDFs.
+  const browser = await chromium.launch({ channel: 'chromium' });
   const ctx = await browser.newContext({ viewport });
   const page = await ctx.newPage();
   await page.addInitScript(() => { try { localStorage.setItem("help-system.welcome-shown.first-project-walkthrough", "1"); } catch {}
