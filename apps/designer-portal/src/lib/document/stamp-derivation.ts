@@ -113,10 +113,10 @@ export interface PurchaseOrderFacts {
   sent_at?: string | null;
 }
 
-/** Release is internal; only sent_at proves a vendor send (00855). */
+/** Release is internal; a send or vendor-acknowledged status proves the order reached the vendor (00863). */
 export function purchaseOrderState(po: PurchaseOrderFacts): 'order_drafted' | 'order_released' | 'order_sent' | null {
   if (po.status === 'cancelled') return null;
-  if (po.sent_at) return 'order_sent';
+  if (po.sent_at || ['confirmed', 'in_production', 'shipped', 'delivered'].includes(po.status ?? '')) return 'order_sent';
   if (po.released_at) return 'order_released';
   return po.status === 'draft' || po.status === 'held_for_release' ? 'order_drafted' : null;
 }

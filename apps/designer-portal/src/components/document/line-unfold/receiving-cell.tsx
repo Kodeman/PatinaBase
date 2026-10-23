@@ -34,6 +34,8 @@ export function ReceivingCell({
     !!po?.delivered_date &&
     (stampKind === 'delivered' ||
       (stampKind === 'damaged' && openClaims.some((c) => c.state === 'drafted')));
+  const claimReceipts = [...new Set(openClaims.filter(c => c.state === 'drafted')
+    .map(c => c.receiving_inspection_id ?? null))];
   return (
     <UnfoldCell head="Receiving" testId="line-receiving-cell">
       <CellValue>{value}</CellValue>
@@ -42,11 +44,11 @@ export function ReceivingCell({
         {receiving && <LogInspectionDrawer open onOpenChange={setReceiving} purchaseOrderId={po.id} projectId={item.project_id}
           poLabel={po.po_number ?? 'Purchase order'} vendorName={item.vendor_name ?? 'Vendor'} projectName={item.project?.name ?? 'Project'} buyerUserId={po.created_by} />}
       </>}
-      {clockRuns && (openClaims.some(c => c.state === 'drafted')
-        ? openClaims.filter(c => c.state === 'drafted').map((claim, index) => (
-          <ClaimClockLine key={claim.id ?? index}
+      {clockRuns && (claimReceipts.length > 0
+        ? claimReceipts.map(receiptId => (
+          <ClaimClockLine key={receiptId ?? 'purchase-order'}
             purchaseOrderId={po.id}
-            receivingInspectionId={claim.receiving_inspection_id}
+            receivingInspectionId={receiptId}
             vendorId={po.vendor_id ?? item.vendor_id}
             vendorName={item.vendor_name ?? 'The vendor'}
             className="mt-0.5 text-[11px]"

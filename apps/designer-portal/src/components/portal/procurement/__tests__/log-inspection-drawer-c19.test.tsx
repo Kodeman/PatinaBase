@@ -28,7 +28,10 @@ jest.mock('@patina/supabase', () => ({
   useFfePlacementReceipts: () => ({ data: undefined, isLoading: false }),
 }));
 
-jest.mock('@/components/document/line-unfold/claim-clock', () => ({ ClaimClockLine: () => null }));
+jest.mock('@/components/document/line-unfold/claim-clock', () => ({
+  ClaimClockLine: ({ receivingInspectionId }: { receivingInspectionId?: string }) =>
+    <p data-testid="saved-receipt-clock">{receivingInspectionId ?? 'purchase-order'}</p>,
+}));
 
 jest.mock('@/components/portal/toast-provider', () => ({
   useToast: () => ({ toast: jest.fn() }),
@@ -124,6 +127,14 @@ describe('LogInspectionDrawer — C-19 per-line check-in', () => {
         ],
       }),
     );
+  });
+
+  it('shows the newly saved receipt clock instead of the PO clock', async () => {
+    mutateAsync.mockResolvedValue({ damageClaimCreated: true, inspection: { id: 'receipt-new', outcome: 'damaged' } });
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('Condition of Pendant cluster'), { target: { value: 'damaged' } });
+    submit();
+    expect(await screen.findByTestId('saved-receipt-clock')).toHaveTextContent('receipt-new');
   });
 
   it('a damaged line noted on the BOL suggests Damaged and drafts a claim for that line only', async () => {
