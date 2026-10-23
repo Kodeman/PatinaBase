@@ -23,7 +23,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSetNeedState, type TeammateActed } from '@patina/supabase';
-import type { DeskHolder, DeskScope } from '@/lib/document/desk-scope';
+import { holderCalled, type DeskHolder, type DeskScope } from '@/lib/document/desk-scope';
 import { deskActionLabel, deskNeedText } from '@/lib/document/desk-derivation';
 import {
   cardStateWords,
@@ -423,7 +423,7 @@ function SheetLine({
     >
       <p ref={lineRef} tabIndex={-1} data-part={top ? 'headline' : undefined} className="line [overflow-wrap:anywhere]">
         <Sentence text={sentence} overdue={need.kind.startsWith('overdue_')} />
-        {theirs && ` The move is ${card.holder?.name ? holderWord(card.holder.name) : 'the lead’s'}.`}
+        {theirs && card.holder && ` The move is ${holderWord(holderCalled(card.holder))}.`}
       </p>
       {fact && factName && (
         <p data-day-sheet-fact className="t-body-sm text-[var(--text-subtle)]">

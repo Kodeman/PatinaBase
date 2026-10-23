@@ -207,26 +207,36 @@ export function useOrganization(id: string) {
 }
 
 /**
- * Get members of an organization
+ * Get members of an organization — or, given a list of ids, of every one of
+ * them (one seat per membership, so a person in two studios appears twice).
+ * SQ-1806: the Desk reads jobs across every studio its viewer sits in, and a
+ * designer always sits in at least two (00295 provisions her own), so naming
+ * whoever holds a job needs the members of all of them.
  */
-export function useOrganizationMembers(organizationId: string) {
+export function useOrganizationMembers(organizationId: string | readonly string[]) {
+  const ids =
+    typeof organizationId === 'string'
+      ? null
+      : [...new Set(organizationId.filter(Boolean))].sort();
   return useQuery({
-    queryKey: ['organization-members', organizationId],
+    queryKey: ['organization-members', ids ?? organizationId],
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data, error } = await supabase
+      const read = supabase
         .from('organization_members')
         .select(`
           *,
           profiles!organization_members_user_id_fkey (id, email, full_name, display_name, avatar_url)
-        `)
-        .eq('organization_id', organizationId)
-        .in('status', ['active', 'invited']);
+        `);
+      const { data, error } = await (ids
+        ? read.in('organization_id', ids)
+        : read.eq('organization_id', organizationId as string)
+      ).in('status', ['active', 'invited']);
 
       if (error) throw error;
       return data as unknown as OrganizationMemberWithProfile[];
     },
-    enabled: !!organizationId,
+    enabled: ids ? ids.length > 0 : !!organizationId,
   });
 }
 

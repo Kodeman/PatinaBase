@@ -352,6 +352,19 @@ describe('DeskLedgerRow — standing (US-28 S3 change 2)', () => {
     expect(actCell(container).childElementCount).toBe(0);
   });
 
+  // SQ-1806 — an unnamed holder reads "the lead" only when she leads the job.
+  it.each([
+    [{ userId: 'u-nameless', name: null, mine: false, lead: false }, 'a teammate’s'],
+    [{ userId: 'u-lead', name: null, mine: false, lead: true }, 'the lead’s'],
+  ])('a row held by an unnamed holder says whose move it is: %o', (holder, word) => {
+    const { container } = render(
+      <DeskLedgerRow line={line({ ...need, act: { label: 'Chase the maker', href: '/doc/reinhardt' } })} standing="yours" holder={holder} />,
+    );
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      new RegExp(`^Fabric samples, not yet opened The move is ${word}.$`),
+    );
+  });
+
   it('a row she carries keeps its one act', () => {
     const { container } = render(
       <DeskLedgerRow

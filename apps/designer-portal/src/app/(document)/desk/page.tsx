@@ -129,6 +129,10 @@ export default function DeskPage() {
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
   const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
   const studioId = studio?.id ?? '';
+  const seatedStudioIds = useMemo(
+    () => (orgs ?? []).filter((o) => o.type === 'design_studio').map((o) => o.id),
+    [orgs],
+  );
   const { data, isLoading, isError, isSuccess, isPlaceholderData, refetch } =
     useDeskEngagements({ organizationId: studioId || null });
   const { user } = useAuth();
@@ -283,9 +287,15 @@ export default function DeskPage() {
     [roster],
   );
   const people = useMemo(() => deriveRosterPeople(studioMembers ?? []), [studioMembers]);
+  // SQ-1806 — whoever holds a job is named from every studio she sits in: the
+  // Desk's jobs span them all, while `studio` is only the first one read.
+  const { data: seatedMembers } = useOrganizationMembers(seatedStudioIds);
   const names = useMemo(
-    () => new Map(people.map((person) => [person.id, person.name] as const)),
-    [people],
+    () =>
+      new Map(
+        [...people, ...deriveRosterPeople(seatedMembers ?? [])].map((person) => [person.id, person.name] as const),
+      ),
+    [people, seatedMembers],
   );
   const holderOf = useMemo(
     () => deskHolderOf(projectLeads ?? new Map(), user?.id, deskDesignersOf(data?.live ?? []), names),

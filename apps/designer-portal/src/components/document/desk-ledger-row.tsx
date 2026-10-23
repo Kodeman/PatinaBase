@@ -16,7 +16,7 @@ import type { Landing } from '@/lib/arrival/types';
 import { STAGE_WORD } from '@/lib/document/act-names';
 import { paperRegionsForSection } from '@/lib/document/document-index';
 import type { DeskLedgerLine, RosterLine } from '@/lib/document/desk-roster-derivation';
-import type { DeskHolder } from '@/lib/document/desk-scope';
+import { holderCalled, type DeskHolder } from '@/lib/document/desk-scope';
 import { parseSourceDate } from '@/lib/document/dates';
 import { DocumentAction } from './document-action';
 import { openLedger } from './command-bar';
@@ -145,7 +145,7 @@ export function DeskLedgerRow({
     sentence = back.reason ? `${need || sentence} · ${back.reason}` : need || sentence;
     when = `Back ${shortDay(back.until) ?? 'soon'}`;
   } else if (theirs) {
-    sentence = `${sentence} The move is ${holder?.name ? holderWord(holder.name) : 'the lead’s'}.`;
+    sentence = `${sentence} The move is ${holder ? holderWord(holderCalled(holder)) : 'the lead’s'}.`;
   }
   const quietRow = !!waiting || !!back || theirs || !!settled;
 

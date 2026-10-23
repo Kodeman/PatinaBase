@@ -1501,6 +1501,6 @@ describe('buyer-owned ledger holder', () => {
       holderOf, now: new Date(2026, 9, 12), sheet: { lines: [], alsoYours: entries, waitingOn: [], setAside: [], standing: new Map([['buyer-job', 'yours' as const]]) } });
     const section = ledger.sections.find(s => s.groups.some(g => g.lines.length));
     expect(section?.key).toBe('person-buyer');
-    expect(section?.groups.flatMap(g => g.lines)[0]?.holder).toEqual({ userId: 'buyer', name: 'Jordan', mine: true });
+    expect(section?.groups.flatMap(g => g.lines)[0]?.holder).toEqual({ userId: 'buyer', name: 'Jordan', mine: true, lead: false });
   });
 });
