@@ -67,7 +67,7 @@ function LedgerGroup({
             <DeskLedgerRow
               key={ledgerLine.line.engagementId}
               {...ledgerLine}
-              holder={holderOf?.(ledgerLine.line.projectId ?? ledgerLine.line.engagementId) ?? null}
+              holder={ledgerLine.holder ?? holderOf?.(ledgerLine.line.projectId ?? ledgerLine.line.engagementId) ?? null}
               onUndone={onUndone}
             />
           ))}

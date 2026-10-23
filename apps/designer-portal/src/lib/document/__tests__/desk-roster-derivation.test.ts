@@ -1489,3 +1489,18 @@ describe('deriveDeskLedger (US-28 changes 2 and 5)', () => {
     ]);
   });
 });
+
+describe('buyer-owned ledger holder', () => {
+  it('groups and frames the next move by its assignee instead of the job lead', () => {
+    const job = row('buyer-job', 'project', { designer_id: 'lead' });
+    const buyerNeed = need({ key: 'damage_claim:buyer-job', kind: 'damage_claim', assignedToUserId: 'buyer' });
+    const roster = { folders: [{ row: job, need: buyerNeed, needs: [buyerNeed] }], chips: [], live: [job], scope: 'studio' as const, meUserId: 'buyer' };
+    const entries = deriveDeskNeedList(roster, new Date(2026, 9, 12));
+    const holderOf = deskHolderOf(new Map(), 'buyer', deskDesignersOf([job]), new Map([['buyer', 'Jordan Reyes']]));
+    const ledger = deriveDeskLedger({ roster, cards: [], people: [{ id: 'buyer', name: 'Jordan Reyes', isPrincipal: false }, { id: 'lead', name: 'Leah', isPrincipal: true }],
+      holderOf, now: new Date(2026, 9, 12), sheet: { lines: [], alsoYours: entries, waitingOn: [], setAside: [], standing: new Map([['buyer-job', 'yours' as const]]) } });
+    const section = ledger.sections.find(s => s.groups.some(g => g.lines.length));
+    expect(section?.key).toBe('person-buyer');
+    expect(section?.groups.flatMap(g => g.lines)[0]?.holder).toEqual({ userId: 'buyer', name: 'Jordan', mine: true });
+  });
+});

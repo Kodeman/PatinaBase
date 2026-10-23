@@ -94,6 +94,7 @@ export interface DocumentStateRow {
   /** R7 (00192): open damage claims on this project's POs. */
   open_claim_count: number;
   open_claim_po: string | null;
+  openClaimBuyerId?: string;
   /** D5 (00195): current-week draft pulses (rise on the Desk Friday). */
   unsent_pulse_count: number;
   pulse_week_of: string | null;
@@ -214,7 +215,7 @@ export function deskActionLabel(
   if (need.releaseHeld) return 'Approve release';
   // US-31 B5a — the ready-to-send sheet reviews every held draft on the job.
   if (need.outbound) return need.actionLabel;
-  if (need.draft) return OPEN_THE_HELD_DRAFT;
+  if (need.draft) return need.assignedToUserId ? need.actionLabel : OPEN_THE_HELD_DRAFT;
   if (need.namedAct) return need.actionLabel;
   return needActLabel(need.kind, clientFirstName);
 }
@@ -605,6 +606,7 @@ export interface DeskReleasedOrderSignal {
   buyerId: string;
   releasedAt: string;
   releasedByName: string | null;
+  buyerName?: string | null;
 }
 
 export interface DeskLeadSignal {
@@ -716,6 +718,7 @@ export interface NeedLine {
    *  on the release control (FR2 499-9). */
   releaseHeld?: true;
   releasedOrder?: true;
+  releaseBuyerName?: string | null;
   assignedToUserId?: string;
   /** N3 — `actionLabel` is this need's one act name on the Desk. An event's
    *  act is not its kind's: a signature on a live job orders the pieces, it
@@ -1582,6 +1585,7 @@ const needDamageClaim: NeedRule = ({ row }) => {
     const n = row.open_claim_count;
     return {
       kind: 'damage_claim',
+      ...(row.openClaimBuyerId ? { assignedToUserId: row.openClaimBuyerId } : {}),
       text:
         n === 1
           ? `${row.open_claim_po ?? 'A delivery'} has an open damage claim`
@@ -1649,6 +1653,7 @@ const needHeldForRelease: NeedRule = ({ row, heldReleases }) => {
     text,
     actionLabel: 'Approve release',
     releaseHeld: true,
+    releaseBuyerName: first.heldByName,
     // Keyed on the held order, never the project: a held order and the
     // drafted-unsent aggregate are two needs that share the `po_unsent` kind.
     recordId: first.purchaseOrderId,
@@ -1987,6 +1992,7 @@ const releasedOrderNeed = (first: DeskReleasedOrderSignal): UnkeyedNeed => {
     text: 'Released by ' + firstName(first.releasedByName, 'an owner or admin') + ' · not sent',
     actionLabel: 'Review and send',
     releasedOrder: true,
+    releaseBuyerName: first.buyerName,
     namedAct: true,
     assignedToUserId: first.buyerId,
     recordId: first.purchaseOrderId,

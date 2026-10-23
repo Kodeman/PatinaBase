@@ -101,15 +101,17 @@ export function deskHolderOf(
   meUserId: string | null | undefined,
   designers: DeskDesigners = new Map(),
   names: ReadonlyMap<string, string> = new Map(),
-): (jobId: string) => DeskHolder {
-  return (jobId) => {
+): (jobId: string, assignee?: string) => DeskHolder {
+  return (jobId, assignee) => {
     const lead = leads.get(jobId);
-    const userId = lead ? lead.leadUserId : (designers.get(jobId) ?? null);
-    const named = lead?.leadName?.trim() ? lead.leadName : userId ? names.get(userId) : null;
+    const userId = assignee ?? (lead ? lead.leadUserId : (designers.get(jobId) ?? null));
+    const named = userId && userId !== lead?.leadUserId
+      ? names.get(userId)
+      : lead?.leadName?.trim() ? lead.leadName : userId ? names.get(userId) : null;
     return {
       userId,
       name: firstName(named),
-      mine: isMyJob(jobId, leads, meUserId, designers),
+      mine: assignee ? assignee === meUserId : isMyJob(jobId, leads, meUserId, designers),
     };
   };
 }
