@@ -1,6 +1,6 @@
 # Delivery sequence and work packages
 
-These are specifications for later execution, not running tasks or a second queue. No development team is launched by this preparation. At kickoff, the integration lead enqueues the commissioned work through `agent_tasks`, linking the applicable WP ID and branch. Queue transitions and evidence stay in the canonical audited system.
+These are specifications for later execution, not running tasks or a second queue. No development team is launched by this preparation. For commissioned repository work, follow K1 in [DECISIONS.md](DECISIONS.md): Sidequest owns engineering dispatch through integration; `agent_tasks` remains the Agent OS runtime business queue. Keep the Agent OS restrictions below.
 
 ## Work packages
 

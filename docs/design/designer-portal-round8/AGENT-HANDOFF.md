@@ -6,7 +6,7 @@ Read root AGENTS.md, REDESIGN.md, this program README, the relevant brief and sk
 
 Integration branch: **`redesign/designer-portal-round8`**. The reference artifact commit and preparation docs belong here. Each commissioned work package uses its own feature branch/worktree based on this integration branch. Do not implement on the user's shared checkout or let separate agents share an index.
 
-The WP catalog is a specification index. Operational tasks, claims, statuses and audits use **`agent_tasks` and its RPCs**. Do not create another runtime queue or revive `cowork_tasks`. Do not enqueue/start the development program merely because this preparation exists.
+The WP catalog is a specification index. For commissioned repository work, follow K1 in [DECISIONS.md](DECISIONS.md): Sidequest owns engineering dispatch, claims, candidate verification, review and integration; `agent_tasks` remains the Agent OS runtime business queue. Do not mirror engineering lifecycle there or revive `cowork_tasks`. Do not enqueue/start the development program merely because this preparation exists.
 
 At commissioned dispatch, name the intended queue environment and authorized connection/capability using `docs/agent-os/agent-roles-runbook.md` and current RPC grants; do not infer the queue target from a portal `.env.local` or create another database queue. `agent_reader`/`agent_writer` are NOLOGIN roles, not credentials. Migration 00484 revokes `agent_writer` table access and grants the enqueue RPC to `agent_writer`/`service_role`; never insert directly. Credentials remain server-side. A request to prepare this branch is not authorization to write operational tasks to Strata.
 
