@@ -173,7 +173,7 @@ function RemoveLineForm({
 }
 
 function releaseActorName(po: FFERow): string {
-  return po.released_by_profile?.full_name?.trim().split(/\s+/)[0] || 'an owner or admin';
+  return (po.released_by_profile?.full_name?.trim() || po.released_by_profile?.display_name?.trim())?.split(/\s+/)[0] || 'an owner or admin';
 }
 
 function ReleasedOrderReading({ kind, po }: { kind: string; po: FFERow }) {
