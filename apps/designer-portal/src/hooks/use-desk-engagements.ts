@@ -606,14 +606,22 @@ export function buildDeskPurchaseOrders(rows: any): Map<string, DeskPurchaseOrde
   return map;
 }
 
+function isReleasedUnsentOrder(row: ReleasedPurchaseOrder): boolean {
+  return !!row.created_by && !!row.released_at && !row.sent_at && row.status !== 'cancelled';
+}
+
+function unreadReleaseLabels(unread: boolean): string[] {
+  return unread ? ['released orders'] : [];
+}
+
 export function buildDeskReleasedOrders(rows: readonly ReleasedPurchaseOrder[]): Map<string, DeskReleasedOrderSignal[]> {
   const map = new Map<string, DeskReleasedOrderSignal[]>();
   for (const row of rows) {
-    if (!row.created_by || !row.released_at || row.sent_at || row.status === 'cancelled') continue;
+    if (!isReleasedUnsentOrder(row)) continue;
     map.set(row.project_id, [...(map.get(row.project_id) ?? []), {
       purchaseOrderId: row.id,
-      buyerId: row.created_by,
-      releasedAt: row.released_at,
+      buyerId: row.created_by!,
+      releasedAt: row.released_at!,
       releasedByName: row.released_by_profile?.full_name ?? null,
     }]);
   }
@@ -850,7 +858,7 @@ export function composeDeskRead(
     ...(quoteRowsError ? ['quotes'] : []),
     ...(exceptionRowsError ? ['exceptions'] : []),
     ...(heldRowsError ? ['held orders'] : []),
-    ...(releasesUnread ? ['released orders'] : []),
+    ...unreadReleaseLabels(releasesUnread),
     ...(sampleRowsError ? ['samples'] : []),
   ];
 

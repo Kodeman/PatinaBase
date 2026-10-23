@@ -212,7 +212,6 @@ export function deskActionLabel(
   // is never in its held form here. SQ-764 F22: release_purchase_order (00710)
   // only returns the held order to draft; nothing is sent.
   if (need.releaseHeld) return 'Approve release';
-  if (need.releasedOrder) return 'Review and send';
   // US-31 B5a — the ready-to-send sheet reviews every held draft on the job.
   if (need.outbound) return need.actionLabel;
   if (need.draft) return OPEN_THE_HELD_DRAFT;
@@ -1986,6 +1985,7 @@ const releasedOrderNeed = (first: DeskReleasedOrderSignal): UnkeyedNeed => {
     text: 'Released by ' + firstName(first.releasedByName, 'an owner or admin') + ' · not sent',
     actionLabel: 'Review and send',
     releasedOrder: true,
+    namedAct: true,
     assignedToUserId: first.buyerId,
     recordId: first.purchaseOrderId,
     at: first.releasedAt,
@@ -1995,8 +1995,16 @@ const releasedOrderNeed = (first: DeskReleasedOrderSignal): UnkeyedNeed => {
   };
 };
 
+function unreleasedDraftCount(row: DocumentStateRow, releases: readonly DeskReleasedOrderSignal[] | null = []): number {
+  return row.draft_unsent_po_count - (releases?.length ?? 0);
+}
+
+function releasedNeeds(releases?: readonly DeskReleasedOrderSignal[] | null): UnkeyedNeed[] {
+  return (releases ?? []).map(releasedOrderNeed);
+}
+
 const needPoUnsent: NeedRule = ({ row, now, releasedOrders }) => {
-  const count = row.draft_unsent_po_count - (releasedOrders?.length ?? 0);
+  const count = unreleasedDraftCount(row, releasedOrders);
   if (count > 0 && row.oldest_draft_po_created_at) {
     const days = daysBetween(row.oldest_draft_po_created_at, now);
     if (days >= PO_DRAFT_UNSENT_DAYS) {
@@ -2180,7 +2188,7 @@ export function deriveNeeds(
     seen.add(key);
     needs.push({ ...need, key });
   };
-  for (const order of ctx.releasedOrders ?? []) push(releasedOrderNeed(order));
+  releasedNeeds(ctx.releasedOrders).forEach(push);
   for (const rule of NEED_RULES) {
     const result = rule(ctx);
     if (result === null) continue;

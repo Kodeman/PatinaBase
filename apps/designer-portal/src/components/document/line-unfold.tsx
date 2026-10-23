@@ -169,6 +169,15 @@ function RemoveLineForm({
   );
 }
 
+function releaseActorName(po: FFERow): string {
+  return po.released_by_profile?.full_name?.trim().split(/\s+/)[0] || 'an owner or admin';
+}
+
+function ReleasedOrderReading({ kind, po }: { kind: string; po: FFERow }) {
+  if (kind !== 'send' || !po?.released_at) return null;
+  return <p className="doc-type-body text-[var(--color-charcoal)]">Released by {releaseActorName(po)} · not sent</p>;
+}
+
 export function LineUnfold({
   item,
   projectId,
@@ -323,9 +332,7 @@ export function LineUnfold({
 
       {next && (
         <div data-testid="line-next-act" className="mb-3">
-          {next.kind === 'send' && po?.released_at && <p className="doc-type-body text-[var(--color-charcoal)]">
-            Released by {po.released_by_profile?.full_name?.trim().split(/\s+/)[0] || 'an owner or admin'} · not sent
-          </p>}
+          <ReleasedOrderReading kind={next.kind} po={po} />
           {/* R-PB1: a consequence sentence above the act, never a block. */}
           {next.kind === 'order' &&
             readiness.warnings.map((warning) => (

@@ -54,6 +54,11 @@ export function recordsPayment({ need }: DeskNeed): boolean {
   return need.kind === 'payment_due' && !!need.ledger?.context?.purchaseOrderId;
 }
 
+function unsentOrderSheet(need: NeedLine): ActSheetKind | null {
+  if (need.releasedOrder) return 'released-order';
+  return need.releaseHeld ? 'release-order' : null;
+}
+
 export function actSheetKindOf({ need }: DeskNeed): ActSheetKind | null {
   if (!need.recordId) return null;
   switch (need.kind) {
@@ -68,7 +73,7 @@ export function actSheetKindOf({ need }: DeskNeed): ActSheetKind | null {
     case 'proposal_expired':
       return 'proposal-follow-up';
     case 'po_unsent':
-      return need.releasedOrder ? 'released-order' : need.releaseHeld ? 'release-order' : null;
+      return unsentOrderSheet(need);
     default:
       return null;
   }

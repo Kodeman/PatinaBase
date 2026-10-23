@@ -271,6 +271,20 @@ function ExistingPaperLines({
   );
 }
 
+function releaseIsForBuyer(mode: string, order: OrderPaperProps['purchaseOrder'], user: { id: string } | null | undefined): boolean {
+  return mode === 'release' && !!order && order.created_by !== user?.id;
+}
+
+function paperTerminalLabel(mode: string, forBuyer: boolean, amount: string, vendorName: string, isPatinaMaker: boolean): string {
+  if (mode === 'hold') return `Hold for release · ${amount}`;
+  if (mode === 'release') return `${forBuyer ? 'Approve release' : 'Release and send'} · ${amount}`;
+  return terminalLabel({ vendorName, amount, isPatinaMaker });
+}
+
+function shipToBlocksSend(isPatinaMaker: boolean, hasShipTo: boolean, forBuyer: boolean): boolean {
+  return !isPatinaMaker && !hasShipTo && !forBuyer;
+}
+
 function PaperSheet({
   onClose,
   vendor,
@@ -583,12 +597,22 @@ function PaperSheet({
 
   // ─── The terminal act, and its phone/portal twin ───────────────────────
   const { user } = useAuth();
-  const releasingForBuyer = releasePaper.mode === 'release' && !!purchaseOrder && purchaseOrder.created_by !== user?.id;
+  const releasingForBuyer = releaseIsForBuyer(releasePaper.mode, purchaseOrder, user);
+  const releaseForBuyer = async () => {
+    if (!releasingForBuyer) return false;
+    await releasePaper.release(poId!);
+    settled();
+    if (alive.current) setRecord({ kind: 'released', at: todayIso() });
+    return true;
+  };
+  const recordRelease = async (id: string, held: boolean) => {
+    if (releasePaper.mode === 'release' && releasePaper.held === held) await releasePaper.release(id);
+  };
   const send = async (mode: 'send' | 'mark_sent') => {
     if (busy) return;
     setError(null);
     if (refuseBlocked()) return;
-    if (!releasingForBuyer && !hasShipTo) {
+    if (shipToBlocksSend(false, hasShipTo, releasingForBuyer)) {
       setShipToInvalid(true);
       setError(SHIP_TO_REQUIRED_MESSAGE);
       return;
@@ -596,18 +620,11 @@ function PaperSheet({
     setBusy(mode === 'send' ? 'send' : 'mark');
     noteCoverageOverride();
     try {
-      // C-32: an owner/admin's release goes on record first, then the send.
-      // A held PO returns to draft on release, so its header can be written.
-      const releasing = releasePaper.mode === 'release';
-      if (releasing && releasePaper.held && poId) await releasePaper.release(poId);
-      if (releasingForBuyer && poId) {
-        if (!releasePaper.held) await releasePaper.release(poId);
-        settled();
-        if (alive.current) setRecord({ kind: 'released', at: todayIso() });
-        return;
-      }
+      // Another buyer's approval ends here; only the buyer's explicit act sends.
+      if (await releaseForBuyer()) return;
+      if (poId) await recordRelease(poId, true);
       const id = await ensurePurchaseOrder();
-      if (releasing && !releasePaper.held) await releasePaper.release(id);
+      await recordRelease(id, false);
       const result = await sendPo.mutateAsync({
         purchaseOrderId: id,
         mode,
@@ -805,13 +822,8 @@ function PaperSheet({
   const releaseSentence = releaseConsequence(releasePaper.ownerFirstName, vendor.name);
   const paperConsequence =
     releaseMode === 'hold' || releaseMode === 'waiting' ? releaseSentence : consequence;
-  const label =
-    releaseMode === 'hold'
-      ? `Hold for release · ${amount}`
-      : releaseMode === 'release'
-        ? `${releasingForBuyer ? 'Approve release' : 'Release and send'} · ${amount}`
-        : terminalLabel({ vendorName: vendor.name, amount, isPatinaMaker });
-  const terminalHeld = !isPatinaMaker && !hasShipTo && !releasingForBuyer;
+  const label = paperTerminalLabel(releaseMode, releasingForBuyer, amount, vendor.name, isPatinaMaker);
+  const terminalHeld = shipToBlocksSend(isPatinaMaker, hasShipTo, releasingForBuyer);
   const shipToHolds = terminalHeld
     ? [{
         id: 'ship-to',
@@ -1099,7 +1111,7 @@ function PaperSheet({
         {/* The consequence, then the one act — or the act's record. */}
         <footer className={`flex flex-col gap-3 pt-4 ${RULE}`}>
           {record ? (
-            <PaperRecordLine
+            <ReleasedPaperRecordLine
               record={record}
               vendorName={vendor.name}
               checkoutError={checkoutError}
@@ -1295,7 +1307,7 @@ function PaperSheet({
   );
 }
 
-function PaperRecordLine({
+function ReleasedPaperRecordLine({
   record,
   vendorName,
   checkoutError,
@@ -1304,6 +1316,13 @@ function PaperRecordLine({
   vendorName: string;
   checkoutError: string | null;
 }) {
+  if (record.kind === 'released') return <p data-order-paper-record className="doc-type-body text-[var(--color-charcoal)]">
+    Released · not sent. The buyer reviews and sends to {vendorName}.
+  </p>;
+  return <PaperRecordLine record={record} vendorName={vendorName} checkoutError={checkoutError} />;
+}
+
+function PaperRecordLine({ record, vendorName, checkoutError }: { record: Exclude<PaperRecord, { kind: 'released' }>; vendorName: string; checkoutError: string | null }) {
   const day = fmtDay(record.at);
   const text =
     record.kind === 'sent'
@@ -1312,8 +1331,6 @@ function PaperRecordLine({
         ? `Released by phone or portal · ${day}`
         : record.kind === 'saved'
           ? `Saved as a draft · ${day}. Nothing went to ${vendorName}.`
-          : record.kind === 'released'
-            ? `Released · not sent. The buyer reviews and sends to ${vendorName}.`
           : record.kind === 'held'
             ? `Held for release · ${day}. ${record.releaser} releases it before it goes to ${vendorName}.`
             : record.kind === 'sent_back'

@@ -9,6 +9,8 @@ import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { FfePairLine } from '@patina/supabase';
 
+jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'buyer' } }) }));
+
 const mockCreate = jest.fn();
 const mockSetHeader = jest.fn();
 const mockSend = jest.fn();
