@@ -164,8 +164,11 @@ export function placeSummary(
   return `${name} · ${plural(place.lines, "line", "lines")} · ${figure}`;
 }
 
-/** Whether something on the sheet holds Esc, so leaving must wait. */
-function escapeIsHeld(event: KeyboardEvent, embedded = false): boolean {
+/**
+ * Whether something on the sheet holds Esc, so leaving must wait. Exported so
+ * the unfold instrument that hosts an embedded sheet uses the same guard.
+ */
+export function escapeIsHeld(event: KeyboardEvent, embedded = false): boolean {
   if (event.defaultPrevented) return true;
   const target = event.target;
   if (

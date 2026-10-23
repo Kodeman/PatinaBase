@@ -15,6 +15,8 @@
  *   the unfold parameters away. Focus then returns through `return-context`.
  * - Buffered edits registered under `autosaveOwner` hold the close with a
  *   visible "Saving…" until they persist; a failed save keeps the sheet open.
+ *   Back is never blocked: a save that finishes after Back, a reopen or an
+ *   unmount still lands, but no longer closes anything.
  *
  * The host is never `role="dialog"` or `aria-modal`: an embedded Build room
  * reads any rendered dialog as holding Esc (SQ-1819 review).
@@ -23,6 +25,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -31,14 +34,11 @@ import {
   type ReactNode,
 } from "react";
 import type { BoardOwnerRef } from "@patina/types";
-import {
-  isElementRendered,
-  topActiveModalDialog,
-  topDismissiblePopover,
-} from "@/components/document/overlays/active-dialog";
+import { escapeIsHeld } from "@/components/document/pieces/build-room-shell";
 import {
   captureReturnContext,
   isReturnContext,
+  PAPER_CHAPTER_ATTR,
   restoreReturnContext,
   type ReturnContext,
   type ReturnContextInput,
@@ -47,6 +47,7 @@ import {
   closedUrl,
   isUuid,
   parseUnfoldSearch,
+  UNFOLD_HOME_CHAPTER,
   unfoldUrl,
   type UnfoldAddress,
   type UnfoldKind,
@@ -103,18 +104,29 @@ const serverSearch = () => "";
 
 /**
  * Unfold `address` over the paper, remembering the place it was opened from
- * (`opener` is the control pressed). Already unfolded, it re-addresses the
- * same entry instead of stacking another.
+ * (`opener` is the control pressed). Already unfolded, as the URL says, it
+ * re-addresses the same entry instead of stacking another, so one Back still
+ * folds away. An entry this module did not push (a deep link or a reload)
+ * stays unpushed, and takes the opener as its return place when the opener
+ * stands on the paper rather than inside the sheet that folds away.
  */
 export function openUnfold(
   address: UnfoldAddress,
   context: ReturnContextInput,
   opener: Element | null = document.activeElement,
 ): void {
-  const current = readEntry();
   const url = unfoldUrl(window.location, address);
-  if (current && new URLSearchParams(window.location.search).has("unfold")) {
-    window.history.replaceState(entryState(current), "", url);
+  const unfolded =
+    parseUnfoldSearch(new URLSearchParams(window.location.search), {
+      canSeeMoney: false,
+    }) !== null;
+  if (unfolded) {
+    const onPaper = opener?.closest("[data-unfold-instrument]") ? null : opener;
+    const entry: UnfoldEntry = readEntry() ?? {
+      pushed: false,
+      context: captureReturnContext(context, onPaper),
+    };
+    window.history.replaceState(entryState(entry), "", url);
   } else {
     const entry: UnfoldEntry = {
       pushed: true,
@@ -163,42 +175,6 @@ function useAutosaveSnapshot(owner: BoardOwnerRef | null | undefined) {
   return useSyncExternalStore(subscribe, read, read);
 }
 
-/** Whether something inside or over the instrument holds Esc for itself. */
-function escapeHeldElsewhere(event: ReactKeyboardEvent): boolean {
-  if (event.defaultPrevented) return true;
-  const target = event.target;
-  if (
-    (target instanceof HTMLInputElement ||
-      target instanceof HTMLTextAreaElement) &&
-    target.value !== ""
-  ) {
-    return true;
-  }
-  if (target instanceof HTMLSelectElement) return true;
-  if (
-    target instanceof HTMLElement &&
-    target.isContentEditable &&
-    (target.textContent ?? "") !== ""
-  ) {
-    return true;
-  }
-  if (
-    target instanceof Element &&
-    target.closest('[role="status"], [role="alert"], [data-holds-escape]')
-  ) {
-    return true;
-  }
-  return Boolean(
-    topActiveModalDialog() ||
-      topDismissiblePopover() ||
-      Array.from(
-        document.querySelectorAll<HTMLElement>(
-          '[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="menu"], [data-open-thing]',
-        ),
-      ).some(isElementRendered),
-  );
-}
-
 /** Folds the unfold away: Back when it pushed the entry, else a replace. */
 function foldAway(): void {
   if (readEntry()?.pushed) {
@@ -228,7 +204,26 @@ export interface UnfoldInstrumentProps {
   canSeeMoney: boolean;
   /** The owner whose buffered edits must land before the sheet folds away. */
   autosaveOwner?: BoardOwnerRef | null;
+  /**
+   * The chapter key that hosts the instrument, for the return place when the
+   * entry recorded none (a deep link or a reload). Defaults to the nearest
+   * enclosing `[data-paper-chapter]`, then the unfold kind's home chapter.
+   */
+  chapter?: string | null;
   children: (unfold: UnfoldRenderProps) => ReactNode;
+}
+
+/** The return place an entry with no recorded context folds back to. */
+function addressReturnContext(
+  address: UnfoldAddress,
+  chapter: string | null,
+): ReturnContext {
+  const documentId =
+    /^\/doc\/([^/]+)/.exec(window.location.pathname)?.[1] ?? "";
+  return captureReturnContext(
+    { documentId, chapter, room: address.room, line: address.line },
+    null,
+  );
 }
 
 export const UNFOLD_SAVING_MESSAGE =
@@ -244,6 +239,7 @@ export function UnfoldInstrument({
   label,
   canSeeMoney,
   autosaveOwner,
+  chapter,
   children,
 }: UnfoldInstrumentProps) {
   const parsed = useUnfoldAddress(canSeeMoney);
@@ -258,15 +254,33 @@ export function UnfoldInstrument({
   const [returnMessage, setReturnMessage] = useState("");
 
   const contextRef = useRef<ReturnContext | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
+  // Moves on every open, close and unmount, so a save that finishes later can
+  // tell whether the spell that asked to close is still the current one.
+  const generation = useRef(0);
+  useLayoutEffect(() => {
+    generation.current += 1;
+    return () => {
+      generation.current += 1;
+    };
+  }, [open]);
 
   // While open, hold the entry's return context: Back leaves the entry
   // before the close is seen, and a reload brings the context back with it.
+  // An entry that recorded none returns to the place its address names.
   useEffect(() => {
-    if (!open) return;
+    if (!address) return;
     const entry = readEntry();
-    if (entry?.context) contextRef.current = entry.context;
-  }, [open, parsed]);
+    const hostChapter =
+      chapter ??
+      sectionRef.current
+        ?.closest(`[${PAPER_CHAPTER_ATTR}]`)
+        ?.getAttribute(PAPER_CHAPTER_ATTR) ??
+      UNFOLD_HOME_CHAPTER[address.kind];
+    contextRef.current =
+      entry?.context ?? addressReturnContext(address, hostChapter);
+  }, [address, chapter]);
 
   useEffect(() => {
     if (open) {
@@ -296,12 +310,17 @@ export function UnfoldInstrument({
     }
     setClosing(true);
     setCloseError(null);
+    // The edits drain whatever happens next, but the close belongs to this
+    // spell: after Back, a reopen or an unmount, the late answer is dropped.
+    const asked = generation.current;
     flushBoardOwnerAutosaves({ kind: ownerKind, id: ownerId }).then(
       () => {
+        if (generation.current !== asked) return;
         setClosing(false);
         foldAway();
       },
       () => {
+        if (generation.current !== asked) return;
         setClosing(false);
         setCloseError(UNFOLD_UNSAVED_MESSAGE);
       },
@@ -336,7 +355,11 @@ export function UnfoldInstrument({
 
   const onKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
-      if (event.key !== "Escape" || escapeHeldElsewhere(event)) return;
+      // The embedded sheet's own guard: any rendered holder in the document
+      // holds Esc, not only the target's ancestors.
+      if (event.key !== "Escape" || escapeIsHeld(event.nativeEvent, true)) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       close();
@@ -356,6 +379,7 @@ export function UnfoldInstrument({
     <>
       {announcer}
       <section
+        ref={sectionRef}
         aria-label={label}
         data-unfold-instrument={kind}
         data-unfold-state={closing ? "saving" : "open"}

@@ -4,6 +4,7 @@ import {
   restoreReturnContext,
   RETURN_CONTROL_ATTR,
   RETURN_FALLBACK_MESSAGES,
+  RETURN_PLACE_MESSAGES,
 } from "@/lib/document/paper/return-context";
 
 const ROOM = "6f1c2b3a-1111-4222-8333-444455556666";
@@ -138,12 +139,26 @@ describe("return-context", () => {
     expect(restoreReturnContext(ctx)).toBe("chapter");
   });
 
-  it("says nothing when no control was recorded (a deep link)", () => {
+  it("says only where the reader stands when no control was recorded (a deep link)", () => {
     paper();
     const ctx = captureReturnContext({ documentId: "d1", room: ROOM }, null);
     const announce = jest.fn();
     expect(restoreReturnContext(ctx, { announce })).toBe("room");
-    expect(announce).not.toHaveBeenCalled();
+    expect(announce).toHaveBeenCalledWith(RETURN_PLACE_MESSAGES.room);
+  });
+
+  it("falls back to the paper root when neither room nor chapter is on the paper", () => {
+    document.body.innerHTML = `<main data-document-paper><p>Job</p></main>`;
+    const ctx = captureReturnContext(
+      { documentId: "d1", chapter: "ffe", room: ROOM },
+      null,
+    );
+    const announce = jest.fn();
+    expect(restoreReturnContext(ctx, { announce })).toBe("paper");
+    const root = document.querySelector("[data-document-paper]");
+    expect(document.activeElement).toBe(root);
+    expect(root).toHaveAttribute("tabindex", "-1");
+    expect(announce).toHaveBeenCalledWith(RETURN_PLACE_MESSAGES.paper);
   });
 
   it("reports none when nothing is left to hold focus", () => {

@@ -1,24 +1,143 @@
+import { useEffect, useRef, useState } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useUpdateProjectFfeSpec } from "@patina/supabase";
 import {
   openUnfold,
   UNFOLD_SAVING_MESSAGE,
   UNFOLD_UNSAVED_MESSAGE,
   UnfoldInstrument,
 } from "@/components/document/paper/unfold-instrument";
-import { RETURN_FALLBACK_MESSAGES } from "@/lib/document/paper/return-context";
+import { BuildRoomShell } from "@/components/document/pieces/build-room-shell";
+import {
+  RETURN_FALLBACK_MESSAGES,
+  RETURN_PLACE_MESSAGES,
+} from "@/lib/document/paper/return-context";
 import {
   registerBoardOwnerAutosave,
   resetProposalAutosaveRegistryForTests,
 } from "@/lib/proposal-autosave-registry";
 
+// The real write path of the FF&E sheet (SpecFieldsPane → this hook).
+const mockMutateAsync = jest.fn();
+jest.mock("@patina/supabase", () => {
+  const mutation = {
+    mutateAsync: (input: unknown) => mockMutateAsync(input),
+    isPending: false,
+  };
+  return { useUpdateProjectFfeSpec: () => mutation };
+});
+
 const DOC = "d1";
 const ROOM = "6f1c2b3a-1111-4222-8333-444455556666";
 const LINE = "0a9b8c7d-aaaa-4bbb-8ccc-ddddeeeeffff";
 const OWNER = { kind: "project" as const, id: "p1" };
+const DEEP_LINK = `/doc/${DOC}?sheet=call&unfold=pieces&lens=spec`;
 
-const save = jest.fn();
+/**
+ * A buffered Maker field wired like the sheet's spec fields: it registers
+ * with the owner's autosave barrier and writes through the save hook.
+ */
+function SpecEditor() {
+  const updateSpec = useUpdateProjectFfeSpec();
+  const [value, setValue] = useState("");
+  const live = useRef({ value: "", saved: "", error: null as string | null });
+  const registration = useRef<{ notify: () => void } | null>(null);
 
-function Paper({ withOpener = true }: { withOpener?: boolean }) {
+  useEffect(() => {
+    const handle = registerBoardOwnerAutosave(OWNER, {
+      getSnapshot: () => ({
+        dirty: live.current.value !== live.current.saved,
+        flushing: false,
+        error: live.current.error,
+      }),
+      flush: async () => {
+        const next = live.current.value;
+        if (next === live.current.saved) return;
+        try {
+          await updateSpec.mutateAsync({
+            specId: "s1",
+            expectedRowVersion: 1,
+            changes: { maker: next },
+          });
+          live.current.saved = next;
+          live.current.error = null;
+        } catch (error) {
+          live.current.error = "The save did not reach the server.";
+          throw error;
+        }
+      },
+    });
+    registration.current = handle;
+    return () => handle.unregister();
+  }, [updateSpec]);
+
+  return (
+    <input
+      aria-label="Maker"
+      value={value}
+      onChange={(event) => {
+        live.current.value = event.target.value;
+        setValue(event.target.value);
+        registration.current?.notify();
+      }}
+    />
+  );
+}
+
+type Sheet = "editor" | "embedded";
+
+function Paper({
+  withOpener = true,
+  sheet = "editor",
+  inChapter = false,
+}: {
+  withOpener?: boolean;
+  sheet?: Sheet;
+  inChapter?: boolean;
+}) {
+  const instrument = (
+    <UnfoldInstrument label="FF&E schedule" canSeeMoney autosaveOwner={OWNER}>
+      {({ address, close, navigate }) =>
+        sheet === "embedded" ? (
+          <BuildRoomShell
+            embedded
+            onRequestClose={close}
+            onReturn={close}
+            onNavigate={() => {}}
+            docId={DOC}
+            jobName="Job"
+            lens="spec"
+            room={null}
+            rooms={[]}
+            counts={{
+              job: { lines: 0, placeholders: 0, ready: 0 },
+              rooms: {},
+              throughout: { lines: 0, placeholders: 0, ready: 0 },
+              unassigned: { lines: 0, placeholders: 0, ready: 0 },
+            }}
+            removedCount={0}
+            canSeeMoney
+          >
+            <button type="button">Sheet action</button>
+          </BuildRoomShell>
+        ) : (
+          <div data-testid="sheet">
+            <p data-testid="address">
+              {address.lens}|{address.room}|{address.line}
+            </p>
+            <SpecEditor />
+            <button type="button">Save</button>
+            <button type="button" onClick={() => navigate({ lens: "price" })}>
+              Price lens
+            </button>
+            <button type="button" onClick={close}>
+              Sheet back
+            </button>
+          </div>
+        )
+      }
+    </UnfoldInstrument>
+  );
   return (
     <div data-document-shell>
       <section data-paper-chapter="ffe">
@@ -42,26 +161,9 @@ function Paper({ withOpener = true }: { withOpener?: boolean }) {
             </button>
           ) : null}
         </section>
+        {inChapter ? instrument : null}
       </section>
-      <UnfoldInstrument label="FF&E schedule" canSeeMoney autosaveOwner={OWNER}>
-        {({ address, close, navigate }) => (
-          <div data-testid="sheet">
-            <p data-testid="address">
-              {address.lens}|{address.room}|{address.line}
-            </p>
-            <input aria-label="Maker" />
-            <button type="button" onClick={() => save()}>
-              Save
-            </button>
-            <button type="button" onClick={() => navigate({ lens: "price" })}>
-              Price lens
-            </button>
-            <button type="button" onClick={close}>
-              Sheet back
-            </button>
-          </div>
-        )}
-      </UnfoldInstrument>
+      {inChapter ? null : instrument}
     </div>
   );
 }
@@ -90,11 +192,33 @@ async function settle() {
   );
 }
 
+/** A dirty buffer whose flush waits until the test lets it finish. */
+function pendingBuffer() {
+  let dirty = true;
+  let finish!: () => void;
+  const registration = registerBoardOwnerAutosave(OWNER, {
+    getSnapshot: () => ({ dirty, flushing: false, error: null }),
+    flush: () =>
+      new Promise<void>((resolve) => {
+        finish = () => {
+          dirty = false;
+          resolve();
+        };
+      }),
+  });
+  return { registration, finish: () => finish() };
+}
+
+/** The instrument's host (an embedded sheet names its own section too). */
+function region() {
+  return document.querySelector("[data-unfold-instrument]");
+}
+
 describe("UnfoldInstrument", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", `/doc/${DOC}?sheet=call`);
     resetProposalAutosaveRegistryForTests();
-    save.mockReset();
+    mockMutateAsync.mockReset();
     window.scrollTo = jest.fn();
     window.scrollBy = jest.fn();
     Element.prototype.scrollIntoView = jest.fn();
@@ -123,9 +247,9 @@ describe("UnfoldInstrument", () => {
     expect(screen.getByTestId("address")).toHaveTextContent(
       `spec|${ROOM}|${LINE}`,
     );
-    const region = screen.getByRole("region", { name: "FF&E schedule" });
-    expect(region).not.toHaveAttribute("role", "dialog");
-    expect(region).not.toHaveAttribute("aria-modal");
+    const host = screen.getByRole("region", { name: "FF&E schedule" });
+    expect(host).not.toHaveAttribute("role", "dialog");
+    expect(host).not.toHaveAttribute("aria-modal");
     expect(container.querySelector("[data-document-shell]")).toBe(shell);
   });
 
@@ -172,6 +296,25 @@ describe("UnfoldInstrument", () => {
     expect(screen.getByTestId("sheet")).toBeInTheDocument();
   });
 
+  it("Esc leaves the instrument open while the embedded sheet's phone picker holds it", () => {
+    const backSpy = jest.spyOn(window.history, "back");
+    render(<Paper sheet="embedded" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /All project selections/ }),
+    );
+    const elsewhere = screen.getByRole("button", { name: "Sheet action" });
+    elsewhere.focus();
+
+    fireEvent.keyDown(elsewhere, { key: "Escape" });
+
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(region()).toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get("unfold")).toBe(
+      "pieces",
+    );
+  });
+
   it("Back closes and Forward reopens, restoring from the entry", async () => {
     render(<Paper />);
     const opener = screen.getByRole("button", { name: "Open sofa" });
@@ -191,10 +334,10 @@ describe("UnfoldInstrument", () => {
     await act(async () => popstate());
     await settle();
     expect(document.activeElement).toBe(opener);
-    expect(save).not.toHaveBeenCalled();
+    expect(mockMutateAsync).not.toHaveBeenCalled();
   });
 
-  it("a reload on ?unfold= reopens without replaying a write and closes by replace", () => {
+  it("a reload on ?unfold= reopens without a call to the write path and closes by replace", () => {
     window.history.replaceState(
       null,
       "",
@@ -205,13 +348,14 @@ describe("UnfoldInstrument", () => {
     render(<Paper />);
 
     expect(screen.getByTestId("address")).toHaveTextContent(`release|${ROOM}|`);
-    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Maker")).toHaveValue("");
 
     fireEvent.click(screen.getByRole("button", { name: "Return to the room" }));
     expect(backSpy).not.toHaveBeenCalled();
     expect(replace).toHaveBeenCalled();
     expect(window.location.search).toBe("?sheet=call");
     expect(screen.queryByTestId("sheet")).toBeNull();
+    expect(mockMutateAsync).not.toHaveBeenCalled();
   });
 
   it("re-addresses in place without a new entry, so one Back still closes", async () => {
@@ -229,19 +373,83 @@ describe("UnfoldInstrument", () => {
     expect(window.location.search).toBe("?sheet=call");
   });
 
-  it("holds the close with a visible saving state until buffered edits land", async () => {
-    let dirty = true;
-    let finish!: () => void;
-    const registration = registerBoardOwnerAutosave(OWNER, {
-      getSnapshot: () => ({ dirty, flushing: false, error: null }),
-      flush: () =>
-        new Promise<void>((resolve) => {
-          finish = () => {
-            dirty = false;
-            resolve();
-          };
-        }),
+  it("re-addresses a deep-linked unfold by replace, so one Back closes", async () => {
+    window.history.pushState(null, "", DEEP_LINK);
+    const push = jest.spyOn(window.history, "pushState");
+    render(<Paper />);
+    expect(region()).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+
+    expect(push).not.toHaveBeenCalled();
+    expect(new URLSearchParams(window.location.search).get("line")).toBe(LINE);
+    await back();
+    expect(region()).toBeNull();
+    expect(window.location.search).toBe("?sheet=call");
+  });
+
+  it("closes a deep link to the room heading its address names, and says so", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      `/doc/${DOC}?unfold=pieces&lens=spec&room=${ROOM}`,
+    );
+    render(<Paper />);
+    const returnButton = screen.getByRole("button", {
+      name: "Return to the room",
     });
+    returnButton.focus();
+    fireEvent.click(returnButton);
+    await settle();
+
+    expect(region()).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "Living room" }),
+    );
+    expect(document.querySelector("[data-unfold-return]")).toHaveTextContent(
+      RETURN_PLACE_MESSAGES.room,
+    );
+  });
+
+  it("closes a deep link with no room to its chapter heading", async () => {
+    window.history.replaceState(null, "", DEEP_LINK);
+    render(<Paper inChapter />);
+    const returnButton = screen.getByRole("button", {
+      name: "Return to the room",
+    });
+    returnButton.focus();
+    fireEvent.click(returnButton);
+    await settle();
+
+    expect(region()).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "FF&E" }),
+    );
+    expect(document.querySelector("[data-unfold-return]")).toHaveTextContent(
+      RETURN_PLACE_MESSAGES.chapter,
+    );
+  });
+
+  it("closes a deep link outside any chapter to its kind's home chapter", async () => {
+    window.history.replaceState(null, "", DEEP_LINK);
+    render(<Paper />);
+    const returnButton = screen.getByRole("button", {
+      name: "Return to the room",
+    });
+    returnButton.focus();
+    fireEvent.click(returnButton);
+    await settle();
+
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "FF&E" }),
+    );
+    expect(document.querySelector("[data-unfold-return]")).toHaveTextContent(
+      RETURN_PLACE_MESSAGES.chapter,
+    );
+  });
+
+  it("holds the close with a visible saving state until buffered edits land", async () => {
+    const { registration, finish } = pendingBuffer();
     const backSpy = jest.spyOn(window.history, "back");
     render(<Paper />);
     fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
@@ -259,21 +467,73 @@ describe("UnfoldInstrument", () => {
     act(() => registration.unregister());
   });
 
-  it("keeps the sheet open, with an alert, when the buffered save fails", async () => {
-    registerBoardOwnerAutosave(OWNER, {
-      getSnapshot: () => ({ dirty: true, flushing: false, error: "offline" }),
-      flush: async () => {},
-    });
+  it("a save that finishes after Back and a reopen leaves the new instrument open", async () => {
+    const { finish } = pendingBuffer();
+    render(<Paper />);
+    const opener = screen.getByRole("button", { name: "Open sofa" });
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole("button", { name: "Return to the room" }));
+    expect(await screen.findByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+
+    // Back is never blocked by the pending save.
+    await back();
+    expect(region()).toBeNull();
+
+    fireEvent.click(opener);
+    expect(region()).toBeInTheDocument();
+    const reopened = window.location.href;
+    const backSpy = jest.spyOn(window.history, "back");
+    const replace = jest.spyOn(window.history, "replaceState");
+
+    await act(async () => finish());
+    await settle();
+
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    expect(window.location.href).toBe(reopened);
+    expect(region()).toBeInTheDocument();
+    expect(screen.queryByText(UNFOLD_SAVING_MESSAGE)).toBeNull();
+  });
+
+  it("a save that finishes after the instrument unmounts navigates nowhere", async () => {
+    const { finish } = pendingBuffer();
+    const { unmount } = render(<Paper />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Return to the room" }));
+    expect(await screen.findByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+    const before = window.location.href;
+    unmount();
+    const backSpy = jest.spyOn(window.history, "back");
+    const replace = jest.spyOn(window.history, "replaceState");
+
+    await act(async () => finish());
+
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    expect(window.location.href).toBe(before);
+  });
+
+  it("keeps the sheet open, with the typed value and focus, when the write fails", async () => {
+    mockMutateAsync.mockRejectedValue(new Error("offline"));
     const backSpy = jest.spyOn(window.history, "back");
     render(<Paper />);
     fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
-    fireEvent.keyDown(screen.getByRole("button", { name: "Save" }), {
-      key: "Escape",
+    const field = screen.getByLabelText("Maker");
+    fireEvent.change(field, { target: { value: "Holly Hunt" } });
+    const returnButton = screen.getByRole("button", {
+      name: "Return to the room",
     });
+    returnButton.focus();
+    fireEvent.click(returnButton);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       UNFOLD_UNSAVED_MESSAGE,
     );
+    expect(mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ changes: { maker: "Holly Hunt" } }),
+    );
+    expect(screen.getByLabelText("Maker")).toHaveValue("Holly Hunt");
+    expect(document.activeElement).toBe(returnButton);
     expect(screen.getByTestId("sheet")).toBeInTheDocument();
     expect(backSpy).not.toHaveBeenCalled();
   });

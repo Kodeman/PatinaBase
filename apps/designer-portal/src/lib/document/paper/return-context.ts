@@ -6,8 +6,9 @@
  * lens, filters, selection, a scroll anchor, and the control that opened it.
  * Restored on close: the anchor goes back where it stood, and focus returns to
  * that control. When the control is gone (its record was removed, or is no
- * longer readable), focus falls back to the room's heading, then the
- * chapter's, and a live-region message says why. The message never says "not
+ * longer readable) or was never recorded (a deep link or a reload), focus
+ * falls back to the room's heading, then the chapter's, then the paper root,
+ * and a live-region message says where the reader is. The message never says "not
  * found": a record the reader cannot see must not be told apart from one that
  * was removed (X02).
  *
@@ -25,6 +26,8 @@ export const RETURN_CONTROL_ATTR = "data-return-control";
 export const PAPER_CHAPTER_ATTR = "data-paper-chapter";
 /** Marks a chapter's heading inside its section. */
 export const CHAPTER_HEADING_ATTR = "data-chapter-heading";
+/** The paper root (shell DOM contract): the last rung of the focus ladder. */
+export const PAPER_ROOT_SELECTOR = "[data-document-paper]";
 
 export interface ReturnContext {
   documentId: string;
@@ -103,7 +106,7 @@ export function isReturnContext(value: unknown): value is ReturnContext {
   );
 }
 
-export type RestoreOutcome = "control" | "room" | "chapter" | "none";
+export type RestoreOutcome = "control" | "room" | "chapter" | "paper" | "none";
 
 export interface RestoreOptions {
   root?: ParentNode;
@@ -161,23 +164,35 @@ function restoreScroll(ctx: ReturnContext): void {
   window.scrollTo({ top: ctx.scrollY, behavior: "auto" });
 }
 
-/** A heading takes focus without joining the tab order. */
+/** A heading, or the paper, takes focus without joining the tab order. */
 function focusHeading(heading: HTMLElement): void {
   if (!heading.hasAttribute("tabindex")) heading.tabIndex = -1;
   heading.focus({ preventScroll: true });
   heading.scrollIntoView?.({ block: "start", behavior: "auto" });
 }
 
+/** Said when the recorded opening control is gone. */
 export const RETURN_FALLBACK_MESSAGES = {
   room: "The item you opened this from is no longer on the paper. You are back at its room.",
   chapter:
     "The item you opened this from is no longer on the paper. You are back at its chapter.",
+  paper:
+    "The item you opened this from is no longer on the paper. You are back on the paper.",
 } as const;
+
+/** Said when no opening control was recorded (a deep link or a reload). */
+export const RETURN_PLACE_MESSAGES = {
+  room: "You are back at the room.",
+  chapter: "You are back at the chapter.",
+  paper: "You are back on the paper.",
+} as const;
+
+type FallbackOutcome = keyof typeof RETURN_PLACE_MESSAGES;
 
 /**
  * Puts the reader back. Focus goes to the opening control when it is still
- * on the paper; otherwise to the room's heading, then the chapter's, with a
- * message. Focus never drops to `<body>` by this hand.
+ * on the paper; otherwise to the room's heading, then the chapter's, then the
+ * paper root, with a message. Focus never drops to `<body>` by this hand.
  */
 export function restoreReturnContext(
   ctx: ReturnContext,
@@ -189,19 +204,21 @@ export function restoreReturnContext(
     control.focus({ preventScroll: true });
     return "control";
   }
-  // Only a control that was recorded and is now gone needs explaining.
-  const say = ctx.initiatingControlId ? announce : undefined;
-  const room = roomHeadingFor(root, ctx.room);
-  if (usable(room)) {
-    focusHeading(room);
-    say?.(RETURN_FALLBACK_MESSAGES.room);
-    return "room";
-  }
-  const chapter = chapterHeadingFor(root, ctx.chapter);
-  if (usable(chapter)) {
-    focusHeading(chapter);
-    say?.(RETURN_FALLBACK_MESSAGES.chapter);
-    return "chapter";
+  // A recorded control that is gone is explained; with none recorded, the
+  // message says only where the reader now stands.
+  const messages = ctx.initiatingControlId
+    ? RETURN_FALLBACK_MESSAGES
+    : RETURN_PLACE_MESSAGES;
+  const rungs: [FallbackOutcome, HTMLElement | null][] = [
+    ["room", roomHeadingFor(root, ctx.room)],
+    ["chapter", chapterHeadingFor(root, ctx.chapter)],
+    ["paper", root.querySelector<HTMLElement>(PAPER_ROOT_SELECTOR)],
+  ];
+  for (const [outcome, target] of rungs) {
+    if (!usable(target)) continue;
+    focusHeading(target);
+    announce?.(messages[outcome]);
+    return outcome;
   }
   return "none";
 }

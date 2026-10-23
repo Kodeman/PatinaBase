@@ -20,6 +20,14 @@ import {
 export const UNFOLD_KINDS = ["pieces"] as const;
 export type UnfoldKind = (typeof UNFOLD_KINDS)[number];
 
+/**
+ * The `data-paper-chapter` key each instrument belongs to: where an unfold
+ * whose entry recorded no return place (a deep link, a reload) folds back to.
+ */
+export const UNFOLD_HOME_CHAPTER: Record<UnfoldKind, string> = {
+  pieces: "ffe",
+};
+
 export interface UnfoldAddress {
   kind: UnfoldKind;
   lens: BuildRoomLens;
