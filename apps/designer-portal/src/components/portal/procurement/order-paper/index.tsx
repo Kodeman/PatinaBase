@@ -23,6 +23,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileText } from 'lucide-react';
 import {
@@ -138,6 +139,7 @@ type PaperRecord =
   | { kind: 'ordered'; at: string }
   // C-32: held for an owner/admin, or sent back to draft with a note.
   | { kind: 'held'; at: string; releaser: string }
+  | { kind: 'released'; at: string }
   | { kind: 'sent_back'; at: string; note: string };
 
 type Busy = 'send' | 'mark' | 'save' | 'order' | 'bill' | 'hold' | null;
@@ -268,6 +270,20 @@ function ExistingPaperLines({
       purchaseOrder={purchaseOrder}
     />
   );
+}
+
+function releaseIsForBuyer(mode: string, order: OrderPaperProps['purchaseOrder'], user: { id: string } | null | undefined): boolean {
+  return mode === 'release' && !!order && order.created_by !== user?.id;
+}
+
+function paperTerminalLabel(mode: string, forBuyer: boolean, amount: string, vendorName: string, isPatinaMaker: boolean): string {
+  if (mode === 'hold') return `Hold for release · ${amount}`;
+  if (mode === 'release') return `${forBuyer ? 'Approve release' : 'Release and send'} · ${amount}`;
+  return isPatinaMaker ? terminalLabel({ vendorName, amount, isPatinaMaker }) : `Review for ${vendorName} · ${amount}`;
+}
+
+function shipToBlocksSend(isPatinaMaker: boolean, hasShipTo: boolean, forBuyer: boolean): boolean {
+  return !isPatinaMaker && !hasShipTo && !forBuyer;
 }
 
 function PaperSheet({
@@ -581,11 +597,23 @@ function PaperSheet({
   };
 
   // ─── The terminal act, and its phone/portal twin ───────────────────────
+  const { user } = useAuth();
+  const releasingForBuyer = releaseIsForBuyer(releasePaper.mode, purchaseOrder, user);
+  const releaseForBuyer = async () => {
+    if (!releasingForBuyer) return false;
+    await releasePaper.release(poId!);
+    settled();
+    if (alive.current) setRecord({ kind: 'released', at: todayIso() });
+    return true;
+  };
+  const recordRelease = async (id: string, held: boolean) => {
+    if (releasePaper.mode === 'release' && releasePaper.held === held) await releasePaper.release(id);
+  };
   const prepareReviewOrMark = async (mode: 'send' | 'mark_sent') => {
     if (busy) return;
     setError(null);
     if (refuseBlocked()) return;
-    if (!hasShipTo) {
+    if (shipToBlocksSend(false, hasShipTo, releasingForBuyer)) {
       setShipToInvalid(true);
       setError(SHIP_TO_REQUIRED_MESSAGE);
       return;
@@ -593,18 +621,16 @@ function PaperSheet({
     setBusy(mode === 'send' ? 'send' : 'mark');
     noteCoverageOverride();
     try {
-      // C-32: an owner/admin's release goes on record first, then the send.
-      // A held PO returns to draft on release, so its header can be written.
-      const releasing = releasePaper.mode === 'release';
+      // Another buyer's approval ends here; review is the buyer's explicit send.
+      if (await releaseForBuyer()) return;
       if (mode === 'send') {
-        // A held paper is frozen; release it only at the review sheet's Send.
         if (!releasePaper.held) await ensurePurchaseOrder();
         setPreviewOpen(true);
         return;
       }
-      if (releasing && releasePaper.held && poId) await releasePaper.release(poId);
+      if (poId) await recordRelease(poId, true);
       const id = await ensurePurchaseOrder();
-      if (releasing && !releasePaper.held) await releasePaper.release(id);
+      await recordRelease(id, false);
       await sendPo.mutateAsync({
         purchaseOrderId: id,
         mode,
@@ -796,15 +822,8 @@ function PaperSheet({
   const releaseSentence = releaseConsequence(releasePaper.ownerFirstName, vendor.name);
   const paperConsequence =
     releaseMode === 'hold' || releaseMode === 'waiting' ? releaseSentence : consequence;
-  const label =
-    releaseMode === 'hold'
-      ? `Hold for release · ${amount}`
-      : releaseMode === 'release' && releasePaper.held
-        ? `Review release to ${vendor.name} · ${amount}`
-        : isPatinaMaker
-          ? terminalLabel({ vendorName: vendor.name, amount, isPatinaMaker })
-          : `Review for ${vendor.name} · ${amount}`;
-  const terminalHeld = !isPatinaMaker && !hasShipTo;
+  const label = paperTerminalLabel(releaseMode, releasingForBuyer, amount, vendor.name, isPatinaMaker);
+  const terminalHeld = shipToBlocksSend(isPatinaMaker, hasShipTo, releasingForBuyer);
   const shipToHolds = terminalHeld
     ? [{
         id: 'ship-to',
@@ -1101,7 +1120,7 @@ function PaperSheet({
         {/* The consequence, then the one act — or the act's record. */}
         <footer className={`flex flex-col gap-3 pt-4 ${RULE}`}>
           {record ? (
-            <PaperRecordLine
+            <ReleasedPaperRecordLine
               record={record}
               vendorName={vendor.name}
               checkoutError={checkoutError}
@@ -1303,7 +1322,7 @@ function PaperSheet({
   );
 }
 
-function PaperRecordLine({
+function ReleasedPaperRecordLine({
   record,
   vendorName,
   checkoutError,
@@ -1312,6 +1331,13 @@ function PaperRecordLine({
   vendorName: string;
   checkoutError: string | null;
 }) {
+  if (record.kind === 'released') return <p data-order-paper-record className="doc-type-body text-[var(--color-charcoal)]">
+    Released · not sent. The buyer reviews and sends to {vendorName}.
+  </p>;
+  return <PaperRecordLine record={record} vendorName={vendorName} checkoutError={checkoutError} />;
+}
+
+function PaperRecordLine({ record, vendorName, checkoutError }: { record: Exclude<PaperRecord, { kind: 'released' }>; vendorName: string; checkoutError: string | null }) {
   const day = fmtDay(record.at);
   const text =
     record.kind === 'sent'

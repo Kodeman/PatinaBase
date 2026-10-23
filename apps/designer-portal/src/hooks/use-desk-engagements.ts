@@ -34,6 +34,8 @@ import { useRef } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import {
   createBrowserClient,
+  fetchReleasedPurchaseOrders,
+  type ReleasedPurchaseOrder,
   docKeys,
   type HeldPurchaseOrder,
   type Invoice,
@@ -52,6 +54,7 @@ import {
   type DeskLeadSignal,
   type DeskProposalOutcomeSignal,
   type DeskPurchaseOrderSignal,
+  type DeskReleasedOrderSignal,
   type DeskFolder,
   type DocumentStateRow,
   type MotionChip,
@@ -603,6 +606,28 @@ export function buildDeskPurchaseOrders(rows: any): Map<string, DeskPurchaseOrde
   return map;
 }
 
+function isReleasedUnsentOrder(row: ReleasedPurchaseOrder): boolean {
+  return !!row.created_by && !!row.released_at && !row.sent_at && row.status !== 'cancelled';
+}
+
+function unreadReleaseLabels(unread: boolean): string[] {
+  return unread ? ['released orders'] : [];
+}
+
+export function buildDeskReleasedOrders(rows: readonly ReleasedPurchaseOrder[]): Map<string, DeskReleasedOrderSignal[]> {
+  const map = new Map<string, DeskReleasedOrderSignal[]>();
+  for (const row of rows) {
+    if (!isReleasedUnsentOrder(row)) continue;
+    map.set(row.project_id, [...(map.get(row.project_id) ?? []), {
+      purchaseOrderId: row.id,
+      buyerId: row.created_by!,
+      releasedAt: row.released_at!,
+      releasedByName: row.released_by_profile?.full_name ?? null,
+    }]);
+  }
+  return map;
+}
+
 /** N6: each open lead's arrival and contact name, keyed by lead id. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildDeskLeads(rows: any): Map<string, DeskLeadSignal> | undefined {
@@ -688,6 +713,8 @@ export function composeDeskRead(
   today: string,
   now: Date,
   pulseRows?: readonly PulseCountRow[],
+  releasedRows: readonly ReleasedPurchaseOrder[] = [],
+  releasesUnread = false,
 ): DeskQueryData {
   const feed = (key: string) => deskFeed(read, key);
   const { data: events, error: eventsError } = feed('delivery_events');
@@ -831,6 +858,7 @@ export function composeDeskRead(
     ...(quoteRowsError ? ['quotes'] : []),
     ...(exceptionRowsError ? ['exceptions'] : []),
     ...(heldRowsError ? ['held orders'] : []),
+    ...unreadReleaseLabels(releasesUnread),
     ...(sampleRowsError ? ['samples'] : []),
   ];
 
@@ -856,6 +884,7 @@ export function composeDeskRead(
     purchaseOrders,
     leads,
     pulseRows,
+    buildDeskReleasedOrders(releasedRows),
   );
   return {
     ...result,
@@ -928,7 +957,11 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
         }
       }
 
-      const desk = composeDeskRead(read, rows, today, new Date());
+      const released = await fetchReleasedPurchaseOrders(supabase).then(
+        (data) => ({ data, unread: false }),
+        () => ({ data: [], unread: true }),
+      );
+      const desk = composeDeskRead(read, rows, today, new Date(), undefined, released.data, released.unread);
       previousResultRef.current = desk;
       return desk;
     },

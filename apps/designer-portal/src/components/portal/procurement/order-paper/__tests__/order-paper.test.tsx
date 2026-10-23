@@ -7,6 +7,8 @@
 import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
+jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'buyer' } }) }));
+
 const mockCreate = jest.fn();
 const mockSetHeader = jest.fn();
 const mockSend = jest.fn();

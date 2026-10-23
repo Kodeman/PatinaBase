@@ -40,6 +40,7 @@ export type ActSheetKind =
   | 'invoice-reminder'
   | 'proposal-follow-up'
   | 'release-order'
+  | 'released-order'
   | 'record-payment';
 
 /**
@@ -51,6 +52,11 @@ export function recordsPayment({ need }: DeskNeed): boolean {
   if (!need.recordId) return false;
   if (need.kind === 'overdue_invoice') return true;
   return need.kind === 'payment_due' && !!need.ledger?.context?.purchaseOrderId;
+}
+
+function unsentOrderSheet(need: NeedLine): ActSheetKind | null {
+  if (need.releasedOrder) return 'released-order';
+  return need.releaseHeld ? 'release-order' : null;
 }
 
 export function actSheetKindOf({ need }: DeskNeed): ActSheetKind | null {
@@ -67,7 +73,7 @@ export function actSheetKindOf({ need }: DeskNeed): ActSheetKind | null {
     case 'proposal_expired':
       return 'proposal-follow-up';
     case 'po_unsent':
-      return need.releaseHeld ? 'release-order' : null;
+      return unsentOrderSheet(need);
     default:
       return null;
   }

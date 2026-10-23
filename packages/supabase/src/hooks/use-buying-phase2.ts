@@ -1898,6 +1898,22 @@ export function useProjectPoCostLines(projectId: string | null | undefined) {
   });
 }
 
+export type ReleasedPurchaseOrder = Pick<Database['public']['Tables']['purchase_orders']['Row'],
+  'id' | 'project_id' | 'created_by' | 'released_at' | 'sent_at' | 'status'> & {
+  released_by_profile: { full_name: string | null } | null;
+};
+
+/** P-03: release custody is the original buyer's, not the project's lead's. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchReleasedPurchaseOrders(supabase: any): Promise<ReleasedPurchaseOrder[]> {
+  const { data, error } = await supabase.from('purchase_orders')
+    .select('id, project_id, created_by, released_at, sent_at, status, released_by_profile:profiles!purchase_orders_released_by_fkey(full_name)')
+    .not('released_at', 'is', null).is('sent_at', null).neq('status', 'cancelled')
+    .order('released_at');
+  if (error) throw error;
+  return data ?? [];
+}
+
 // --- C-32 release (SQ-430) ---
 
 /** A PO held for release, with whether THIS viewer's seat may release it. */

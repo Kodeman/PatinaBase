@@ -600,6 +600,13 @@ export interface DeskPurchaseOrderSignal {
 }
 
 /** N6 — a lead's arrival, from `leads`, keyed by lead id. */
+export interface DeskReleasedOrderSignal {
+  purchaseOrderId: string;
+  buyerId: string;
+  releasedAt: string;
+  releasedByName: string | null;
+}
+
 export interface DeskLeadSignal {
   createdAt: string;
   contactName: string | null;
@@ -607,6 +614,7 @@ export interface DeskLeadSignal {
 
 /** N3/N6/N8 — the live-job reads one engagement's chain takes beyond its row. */
 export interface DeskLiveSignals {
+  releasedOrders?: readonly DeskReleasedOrderSignal[] | null;
   proposalOutcomes?: readonly DeskProposalOutcomeSignal[] | null;
   landedPayments?: readonly DeskLandedPaymentSignal[] | null;
   purchaseOrders?: readonly DeskPurchaseOrderSignal[] | null;
@@ -707,6 +715,8 @@ export interface NeedLine {
   /** C-32: the need is an order held for this seat's release; its act lands
    *  on the release control (FR2 499-9). */
   releaseHeld?: true;
+  releasedOrder?: true;
+  assignedToUserId?: string;
   /** N3 — `actionLabel` is this need's one act name on the Desk. An event's
    *  act is not its kind's: a signature on a live job orders the pieces, it
    *  opens no project. */
@@ -1022,6 +1032,7 @@ export function folderTab(
 /** Everything deriveNeed used to read off its parameter list, bundled so the
  *  chain below can be a list of rules instead of one long function. */
 interface NeedContext {
+  releasedOrders?: readonly DeskReleasedOrderSignal[] | null;
   row: DocumentStateRow;
   now: Date;
   conflict?: DeskConflictInput | null;
@@ -1968,11 +1979,36 @@ const needScheduleUnconfigured: NeedRule = ({ row, schedule }) => {
 // R18: the send weave. A drafted PO the studio never sent is the
 // designer's own pen (rises first); a sent PO the vendor hasn't
 // acknowledged is a nudge. Both thresholds provisional (constants watch).
-const needPoUnsent: NeedRule = ({ row, now }) => {
-  if (row.draft_unsent_po_count > 0 && row.oldest_draft_po_created_at) {
+const releasedOrderNeed = (first: DeskReleasedOrderSignal): UnkeyedNeed => {
+  return {
+    kind: 'po_unsent',
+    text: 'Released by ' + firstName(first.releasedByName, 'an owner or admin') + ' · not sent',
+    actionLabel: 'Review and send',
+    releasedOrder: true,
+    namedAct: true,
+    assignedToUserId: first.buyerId,
+    recordId: first.purchaseOrderId,
+    at: first.releasedAt,
+    stamp: { label: 'UNSENT', ...STAMP.clay },
+    urgent: false,
+    owner: 'designer',
+  };
+};
+
+function unreleasedDraftCount(row: DocumentStateRow, releases: readonly DeskReleasedOrderSignal[] | null = []): number {
+  return row.draft_unsent_po_count - (releases?.length ?? 0);
+}
+
+function releasedNeeds(releases?: readonly DeskReleasedOrderSignal[] | null): UnkeyedNeed[] {
+  return (releases ?? []).map(releasedOrderNeed);
+}
+
+const needPoUnsent: NeedRule = ({ row, now, releasedOrders }) => {
+  const count = unreleasedDraftCount(row, releasedOrders);
+  if (count > 0 && row.oldest_draft_po_created_at) {
     const days = daysBetween(row.oldest_draft_po_created_at, now);
     if (days >= PO_DRAFT_UNSENT_DAYS) {
-      const n = row.draft_unsent_po_count;
+      const n = count;
       return {
         kind: 'po_unsent',
         text:
@@ -2152,6 +2188,7 @@ export function deriveNeeds(
     seen.add(key);
     needs.push({ ...need, key });
   };
+  releasedNeeds(ctx.releasedOrders).forEach(push);
   for (const rule of NEED_RULES) {
     const result = rule(ctx);
     if (result === null) continue;
@@ -2444,6 +2481,7 @@ export function partitionDesk(
   /** US-34 N7 — the rows the studio's weekly Pulse count is summed over, when
    *  `rows` is narrower than the studio (one engagement's scoped need). */
   pulseRows: readonly PulseCountRow[] = rows,
+  releasedOrders?: ReadonlyMap<string, readonly DeskReleasedOrderSignal[]>,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -2548,6 +2586,7 @@ export function partitionDesk(
       heldReleaseSignals,
       sampleSignals,
       {
+        releasedOrders: perProject(releasedOrders, row.project_id),
         proposalOutcomes: perProject(proposalOutcomes, row.project_id),
         landedPayments: perProject(landedPayments, row.project_id),
         purchaseOrders: perProject(purchaseOrders, row.project_id),

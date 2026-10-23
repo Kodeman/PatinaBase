@@ -26,6 +26,7 @@ const mockRpc = jest.fn();
 const mockGetSession = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
+  fetchReleasedPurchaseOrders: jest.fn(async () => []),
   createBrowserClient: jest.fn(() => ({
     from: (...args: unknown[]) => mockFrom(...args),
     rpc: (...args: unknown[]) => mockRpc(...args),
