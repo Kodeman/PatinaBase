@@ -1288,6 +1288,41 @@ describe('the sixth rung derives from the ticket (B2-L3)', () => {
     }
   });
 
+  it('leaves the authorization line alone before any order reaches the vendor', () => {
+    for (const value of ['2 not ordered yet', 'No pieces yet', 'Reading…']) {
+      const guide = deriveDocumentGuide({
+        row: row('project'),
+        now: NOW,
+        ticketRows: withPieces(value),
+        buyingLines: [],
+      });
+      expect(guide.headline).toBe('');
+      expect(guide.action).toBeNull();
+    }
+  });
+
+  it.each([
+    { purchase_order: { status: 'draft', sent_at: '2026-10-23' } },
+    { purchase_order: { status: 'confirmed', sent_at: null } },
+    { studio_purchases: [{ status: 'recorded' }] },
+    { studio_purchases: [{ status: 'billed' }] },
+  ])('keeps the rest sentence for a vendor-reached order or recorded purchase: %j', (line) => {
+    const guide = deriveDocumentGuide({ row: row('project'), now: NOW, buyingLines: [line] });
+    expect(guide.headline).toBe('Everything ordered is moving.');
+    expect(guide.action?.label).toBe('Release the next room');
+  });
+
+  it.each([
+    { purchase_order: { status: 'draft', sent_at: null } },
+    { purchase_order: { status: 'held_for_release', released_at: '2026-10-23' } },
+    { purchase_order: { status: 'cancelled', sent_at: '2026-10-23' } },
+    { studio_purchases: [{ status: 'voided' }] },
+  ])('does not call an uncommitted line moving: %j', (line) => {
+    const guide = deriveDocumentGuide({ row: row('project'), now: NOW, buyingLines: [line] });
+    expect(guide.headline).toBe('');
+    expect(guide.action).toBeNull();
+  });
+
   it('keeps the rest sentence once the job has lines', () => {
     const guide = deriveDocumentGuide({
       row: row('project'),

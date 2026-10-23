@@ -11,6 +11,7 @@ import type { CommercialDocumentKind, CommercialState } from './commercial-docum
 import { familyLabel } from './family-label';
 import type { SectionScheduleFacts } from './section-derivation';
 import type { SendWallLine } from './proposal-watch-derivation';
+import { isCommittedBuyingLine, type BuyingCommitment } from './buying-readings';
 import type { TicketRow } from './ticket-derivation';
 import { deriveTicketLeader, leadTicketException } from './ticket-leader';
 import { DAY_MONTH_FORMAT, WEEKDAY_FORMAT } from './dates';
@@ -146,6 +147,8 @@ interface DeriveDocumentGuideInput {
    *  `stageCopy`/`restCopy` path below, so a spread without a map is guided
    *  exactly as it was. */
   ticketRows?: readonly TicketRow[] | null;
+  /** The existing FF&E read, including vendor-reached PO and recorded-purchase facts. */
+  buyingLines?: readonly BuyingCommitment[];
   /** R5 — this discovery has ALREADY seeded its draft direction
    *  (`client_discovery.seeded_proposal_id`). The rest act then opens what
    *  exists rather than running the seed a second time. */
@@ -950,6 +953,7 @@ function deriveGuide(
     closureReady,
     inputsPending = false,
     ticketRows,
+    buyingLines,
     alreadySeeded = false,
   }: DeriveDocumentGuideInput,
   voice: ActVoice | null,
@@ -1086,6 +1090,8 @@ function deriveGuide(
       : isRestState(stage, row, inputFacts, closureReady, inputsPending);
   if (restActive) {
     const rest = restCopy[stage];
+    const beforeAnyOrder = stage === 'project' && buyingLines !== undefined &&
+      !buyingLines.some(isCommittedBuyingLine);
     // The leader's other seven states. With no row unclear it returns this
     // stage's `restCopy` row, so routing the rest half through it too is what
     // makes "fourteen states, all derived from the ticket" true of the wired
@@ -1132,10 +1138,11 @@ function deriveGuide(
       headline:
         stage === 'install'
           ? installHeadline!
+          : beforeAnyOrder ? ''
           : ((stage === 'project' ? projectRestHeadline(ticketRows) : null) ??
             leader?.headline ??
             rest.headline),
-      action: restAction,
+      action: beforeAnyOrder ? null : restAction,
     }, inputFacts, row.client_name);
   }
 

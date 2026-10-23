@@ -316,6 +316,7 @@ interface ProjectVitalsRecord {
  * columns included), plus which room a line belongs to.
  */
 type TicketFFERow = LineStampRow & {
+  studio_purchases?: { status: string }[] | null;
   id: string;
   project_room_id?: string | null;
   removed_at?: string | null;
@@ -1859,6 +1860,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // The Desk composition enriches guidance; it never gates it. A cold deep-link
   // renders the document's own derivation on first paint and upgrades in place
   // if the need read later contributes a need the row alone cannot carry.
+  const ownActFfe = useProjectFFEItems(row?.engagement_kind === 'project' ? (row.project_id ?? '') : '') as {
+    data: (InstallReadingPiece & TicketFFERow)[] | undefined;
+  };
   const guideModel = row
     ? deriveDocumentGuide({
         row,
@@ -1874,6 +1878,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         gate: nearestGate,
         closureReady,
         ticketRows,
+        buyingLines: ownActFfe.data?.filter((item) => item.removed_at == null) ?? [],
         alreadySeeded: Boolean(discoveryQuery.data?.row?.seeded_proposal_id),
         oneVoice,
       })
@@ -2651,11 +2656,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // the test the Desk's `new_lead` need applies.
   const ownActProjectId =
     oneVoice && row?.engagement_kind === 'project' ? (row.project_id ?? '') : '';
-  const ownActFfe = useProjectFFEItems(ownActProjectId) as {
-    data:
-      | (InstallReadingPiece & TicketFFERow)[]
-      | undefined;
-  };
+
   const ownActWindow = useInstallWindow(ownActProjectId || undefined);
   const ownActPieces = useMemo(
     () => ownActFfe.data?.filter((item) => item.removed_at == null),

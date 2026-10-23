@@ -448,10 +448,23 @@ describe('P-01 truthful purchasing overview', () => {
     expect(within(room).getByText('Next: Morgan')).toBeInTheDocument();
   });
 
+  it('prints the existing next act, not an unnamed owner, before any order', () => {
+    show([{ ...pieces[1], vendor_id: 'maker', product_id: 'product', unit_price_cents: 100,
+      ffe_line_authorization: 'executed', design_disposition: 'selected' }]);
+    const rug = document.querySelector('[data-purchasing-line="rug"]')!;
+    expect(rug).toHaveTextContent('Next: Prepare a PO');
+    expect(rug).not.toHaveTextContent('Owner not named');
+  });
+
+  it('omits the Next fragment when an unnamed line has no next act', () => {
+    show([pieces[1]]);
+    expect(document.querySelector('[data-purchasing-line="rug"]')!.children[2]).toBeEmptyDOMElement();
+  });
+
   it('leaves an unplanned destination empty without inventing a job-site default', () => {
     show([{ ...pieces[0], purchase_order: { ...pieces[0].purchase_order!, ship_to: '' } }, pieces[1]]);
     expect(document.querySelector('[data-purchasing-line="chairs"]')!.children[1]).toBeEmptyDOMElement();
-    expect(screen.getByText('Next: Owner not named')).toBeInTheDocument();
+    expect(screen.getByText('Next: Morgan')).toBeInTheDocument();
   });
 
   it('shows planned job-place intent without a PO and keeps the PO snapshot first', () => {

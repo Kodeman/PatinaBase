@@ -170,6 +170,7 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
           *,
           ffe_line_stage,
           ffe_line_authorization,
+          studio_purchases(status),
           primary_image_url,
           suggested_lead_time_weeks:ffe_item_suggested_lead_time_weeks,
           suggested_lead_time_source:ffe_item_suggested_lead_time_source,
