@@ -4,9 +4,11 @@ import {
   deskHolderOf,
   handoffNoteFor,
   handoffReadFor,
+  holderCalled,
   scopeDeskNeeds,
   type DeskLeads,
 } from '../desk-scope';
+import { deriveRosterPeople } from '../desk-roster-derivation';
 import type { NeedState } from '@patina/supabase';
 import type { DeskNeed } from '../desk-need-list';
 import type { DocumentStateRow, NeedLine } from '../desk-derivation';
@@ -95,11 +97,50 @@ describe('Desk scope and custody', () => {
     const names = new Map([['u-other', 'Nina Park'], ['u-me', 'Maya Lee']]);
     const holderOf = deskHolderOf(leads, 'u-me', designers, names);
 
-    expect(holderOf('mine')).toEqual({ userId: 'u-me', name: 'Maya', mine: true });
-    expect(holderOf('theirs')).toEqual({ userId: 'u-other', name: 'Nina', mine: false });
-    expect(holderOf('eng-hers')).toEqual({ userId: 'u-other', name: 'Nina', mine: false });
-    expect(holderOf('eng-mine')).toEqual({ userId: 'u-me', name: 'Maya', mine: true });
-    expect(holderOf('unknown')).toEqual({ userId: null, name: null, mine: false });
+    expect(holderOf('mine')).toEqual({ userId: 'u-me', name: 'Maya', mine: true, lead: true });
+    expect(holderOf('theirs')).toEqual({ userId: 'u-other', name: 'Nina', mine: false, lead: true });
+    expect(holderOf('eng-hers')).toEqual({ userId: 'u-other', name: 'Nina', mine: false, lead: true });
+    expect(holderOf('eng-mine')).toEqual({ userId: 'u-me', name: 'Maya', mine: true, lead: true });
+    expect(holderOf('unknown')).toEqual({ userId: null, name: null, mine: false, lead: true });
+  });
+
+  // SQ-1806 — the owner's Desk named her buyer "the lead": the buyer's only
+  // name is a display_name, and she sits in the job's studio, not the first
+  // studio the owner's membership read returned.
+  it('names a non-lead assignee from her display_name in any studio the viewer sits in', () => {
+    const member = (organization_id: string, user_id: string, display_name: string | null, role = 'member') => ({
+      organization_id, user_id, role, status: 'active',
+      profiles: { full_name: null, display_name },
+    }) as unknown as Parameters<typeof deriveRosterPeople>[0][number];
+    const seated = [
+      member('own-studio', 'u-owner', 'US-51 Walk Owner', 'owner'),
+      member('job-studio', 'u-owner', 'US-51 Walk Owner', 'owner'),
+      member('job-studio', 'u-buyer', 'Rowan Pike'),
+    ];
+    const names = new Map(deriveRosterPeople(seated).map((p) => [p.id, p.name] as const));
+    const jobLeads: DeskLeads = new Map([
+      ['job', { leadUserId: 'u-owner', leadName: 'US-51 Walk Owner', previousLeadUserId: null, previousLeadName: null, assignedAt: null }],
+    ]);
+    const holderOf = deskHolderOf(jobLeads, 'u-owner', new Map(), names);
+
+    const buyer = holderOf('job', 'u-buyer');
+    expect(buyer).toEqual({ userId: 'u-buyer', name: 'Rowan', mine: false, lead: false });
+    expect(holderCalled(buyer)).toBe('Rowan');
+    // The lead's own need still reads as the lead's.
+    expect(holderOf('job', 'u-owner')).toMatchObject({ name: 'US-51', mine: true, lead: true });
+  });
+
+  it('calls an unnamed holder "the lead" only when she leads the job, else "a teammate"', () => {
+    const jobLeads: DeskLeads = new Map([
+      ['job', { leadUserId: 'u-lead', leadName: '', previousLeadUserId: null, previousLeadName: null, assignedAt: null }],
+    ]);
+    const holderOf = deskHolderOf(jobLeads, 'u-me', new Map(), new Map());
+
+    const unnamedAssignee = holderOf('job', 'u-nameless');
+    expect(unnamedAssignee).toEqual({ userId: 'u-nameless', name: null, mine: false, lead: false });
+    expect(holderCalled(unnamedAssignee)).toBe('a teammate');
+    expect(holderCalled(holderOf('job'))).toBe('the lead');
+    expect(holderCalled(holderOf('job', 'u-lead'))).toBe('the lead');
   });
 
   it('shows an unread project hand-off only to its new lead, then suppresses it after acting', () => {

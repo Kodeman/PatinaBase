@@ -981,9 +981,14 @@ describe('cardStateWords — the card’s one state sentence (US-43 R7)', () => 
     expect(cardStateWords({ holder: mine, lines: [open, overdue] })).toBe('Overdue, and yours today.');
     expect(cardStateWords({ holder: jordan, lines: [open] })).toBe('With Jordan today.');
     expect(cardStateWords({ holder: jordan, lines: [overdue] })).toBe('Overdue, with Jordan today.');
-    expect(cardStateWords({ holder: { userId: null, name: null, mine: false }, lines: [open] })).toBe(
+    expect(cardStateWords({ holder: { userId: null, name: null, mine: false, lead: true }, lines: [open] })).toBe(
       'With the lead today.',
     );
+    // SQ-1806 — a teammate holding the job's need, with no name on record, is
+    // never "the lead".
+    expect(
+      cardStateWords({ holder: { userId: 'u-buyer', name: null, mine: false, lead: false }, lines: [open] }),
+    ).toBe('With a teammate today.');
   });
 
   it('reads only the open lines while any stand, and says a settled card once, never as a count', () => {

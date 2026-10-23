@@ -92,6 +92,15 @@ export interface DeskHolder {
   name: string | null;
   /** This seat carries it (`isMyJob`). */
   mine: boolean;
+  /** She holds the job's seat (its lead, else its designer), not only one need
+   *  assigned to her. */
+  lead: boolean;
+}
+
+/** SQ-1806 — the holder in words: her first name; with none on record, "the
+ *  lead" only when she leads the job, else "a teammate". */
+export function holderCalled(holder: Pick<DeskHolder, 'name' | 'lead'>): string {
+  return holder.name ?? (holder.lead ? 'the lead' : 'a teammate');
 }
 
 /** The holder of each job, by the id the leads map is keyed on. `names` maps a
@@ -104,7 +113,8 @@ export function deskHolderOf(
 ): (jobId: string, assignee?: string) => DeskHolder {
   return (jobId, assignee) => {
     const lead = leads.get(jobId);
-    const userId = assignee ?? (lead ? lead.leadUserId : (designers.get(jobId) ?? null));
+    const seat = lead ? lead.leadUserId : (designers.get(jobId) ?? null);
+    const userId = assignee ?? seat;
     const named = userId && userId !== lead?.leadUserId
       ? names.get(userId)
       : lead?.leadName?.trim() ? lead.leadName : userId ? names.get(userId) : null;
@@ -112,6 +122,7 @@ export function deskHolderOf(
       userId,
       name: firstName(named),
       mine: assignee ? assignee === meUserId : isMyJob(jobId, leads, meUserId, designers),
+      lead: !assignee || assignee === seat,
     };
   };
 }

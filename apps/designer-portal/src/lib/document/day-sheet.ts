@@ -24,6 +24,7 @@ import { classOfNeed } from './need-class';
 import {
   firstName,
   handoffReadFor,
+  holderCalled,
   scopeDeskNeeds,
   type DeskDesigners,
   type DeskHolder,
@@ -436,7 +437,7 @@ function settledCardWords(lines: readonly SheetEntry[]): string {
 }
 
 /** Who else carries the job, where it is not hers; null where it is. */
-const theirName = (holder: DeskHolder | null) => (holder && !holder.mine ? (holder.name ?? 'the lead') : null);
+const theirName = (holder: DeskHolder | null) => (holder && !holder.mine ? holderCalled(holder) : null);
 
 function openCardWords(theirs: string | null, late: boolean): string {
   if (theirs) return late ? `Overdue, with ${theirs} today.` : `With ${theirs} today.`;

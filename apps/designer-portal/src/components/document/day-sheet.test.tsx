@@ -813,6 +813,36 @@ describe('buyer-owned Today framing', () => {
     expect(words).toContain('Released · waiting on Jordan to send');
     expect(words).not.toMatch(/Vendor|Orders released/);
   });
+  // SQ-1806 — the owner's Studio tab said "With the lead today." / "The move is
+  // the lead’s." for her buyer, whose only name is a profile display_name.
+  it('names a display_name-only buyer on the owner’s Studio tab, in the header, the row and the settle', () => {
+    const { deriveRosterPeople } = require('@/lib/document/desk-roster-derivation');
+    const seated = [
+      { user_id: 'lead', role: 'owner', status: 'active', profiles: { full_name: null, display_name: 'Leah Strand' } },
+      { user_id: 'me', role: 'member', status: 'active', profiles: { full_name: null, display_name: 'Rowan Pike' } },
+    ];
+    const seatedNames = new Map<string, string>(
+      deriveRosterPeople(seated).map((p: { id: string; name: string }) => [p.id, p.name]),
+    );
+    const need = entry(1, { kind: 'po_unsent', releasedOrder: true, actionLabel: 'Review and send', assignedToUserId: 'me', namedAct: true } as Partial<NeedLine>);
+    const { container } = renderSheet([need], { leads: jobLeads as never, meUserId: 'lead' }, {
+      scope: 'studio', holderOf: deskHolderOf(jobLeads, 'lead', new Map(), seatedNames), names: seatedNames,
+    });
+    expect(container).toHaveTextContent('With Rowan today.');
+    expect(container).toHaveTextContent('The move is Rowan’s.');
+    expect(container).not.toHaveTextContent('the lead');
+    const { settledWords } = require('./day-sheet');
+    expect(settledWords(need, { kind: 'acted', at: at(9) }, seatedNames)).toContain('Released · waiting on Rowan to send');
+  });
+  it('calls a nameless buyer on the lead’s Studio tab a teammate, never the lead', () => {
+    const need = entry(1, { kind: 'damage_claim', actionLabel: 'Review the claim', assignedToUserId: 'nameless', namedAct: true } as Partial<NeedLine>);
+    const { container } = renderSheet([need], { leads: jobLeads as never, meUserId: 'lead' }, {
+      scope: 'studio', holderOf: deskHolderOf(jobLeads, 'lead', new Map(), names), names,
+    });
+    expect(container).toHaveTextContent('With a teammate today.');
+    expect(container).toHaveTextContent('The move is a teammate’s.');
+    expect(container).not.toHaveTextContent('the lead');
+  });
 });
 
 it('separates different holders on one job so neither inherits the other’s framing', () => {
