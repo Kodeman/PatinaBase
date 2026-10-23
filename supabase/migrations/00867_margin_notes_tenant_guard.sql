@@ -31,17 +31,45 @@
 --     in it, and only while that studio is active, except for the caller's own
 --     note or the caller's own job (00556: suspension withdraws the shared
 --     workspace, not a member's own rows);
---   · an anchor that records no studio may ride a scoped row only for its own
---     designer of record, or when a scoped anchor on the same row has that
---     same designer AND the two are one engagement by a recorded link:
---     proposals.project_id, projects.proposal_id or proposals.designer_client_id
---     (a job's unstamped proposal stays usable; a stranger's record, or an
---     unrelated record of the same designer, cannot be masked by a scoped one);
---   · a row with no recorded studio at all is its anchors' owner's alone. No
---     co-member.
--- The guard decides only WHICH STUDIO; USING and WITH CHECK are the same test,
--- so an owner keeps every verb on a coauthored legacy note without rewriting
--- its author. Who may write inside the studio stays with the five policies.
+--   · if ANY anchor records no studio, the row is admitted only to a caller who
+--     owns EVERY anchor (projects/proposals/designer_clients.designer_id), on
+--     top of the seat a recorded studio needs. No co-member, and no link
+--     vouches for a studio-less anchor (SQ-1858 F3): proposals.project_id and
+--     proposals.designer_client_id are written by a co-member's direct draft
+--     INSERT (00401:515-517, 00387:633-674), so they prove nothing about who
+--     owns the engagement. Owner pointers do not move under a co-member:
+--     proposals (guard_proposal_authority), projects (00563 reassignment only).
+-- The guard decides only WHICH STUDIO (or, studio-less, WHOSE); USING and
+-- WITH CHECK are the same test, so an owner keeps every verb on a coauthored
+-- legacy note without rewriting its author. Who may write inside the studio
+-- stays with the five permissive policies.
+--
+-- THE DISCOVERY TENANT POINTER IS GUARDED HERE TOO (SQ-1858 F4). A
+-- relationship's studio is its household's organization, but
+-- designer_clients.household_id was writable by any co-member of the
+-- relationship's designer (00316:39-42 designer_clients_studio_rw, 00555
+-- designer standing), so a member of B alone could re-point A's relationship
+-- at a B household and then write Discovery notes "in B". client_households
+-- already holds ITS organization to both images (00632:287-299,
+-- is_active_studio_member on USING and WITH CHECK); the pointer now gets the
+-- same rule from guard_designer_client_household (BEFORE UPDATE OF
+-- household_id): a signed-in caller must hold an active, non-guest seat in the
+-- old household's organization (if any) and in the new one's (if any).
+-- Writer trace for designer_clients.household_id (main ee9c450a5):
+--   · useCreateClientHousehold (packages/supabase/src/hooks/use-households.ts
+--     :543-551), the household band's "Open a household": a direct
+--     authenticated UPDATE, NULL → a household it just inserted in the job's
+--     studio (project_consent_org). The caller may be ANY member on the job,
+--     not only the relationship's designer, so the guard asks for seats, not
+--     designership. Keeps working: the caller holds a seat in that studio.
+--   · ON DELETE SET NULL (00632:319-321) when a household is deleted: the
+--     referential action runs as the table owner (postgres). Keeps working.
+--   · No RPC, edge function, service or migration writes the column (00632's
+--     add_household_member/set_household_threshold write client_households and
+--     project_party_authority only). postgres (SECURITY DEFINER code, seeds,
+--     migrations) and service_role (the server-side boundary, which bypasses
+--     RLS on this table anyway) are not asked; no service_role writer exists
+--     today.
 --
 -- NOTHING IS BACKFILLED OR DELETED. Rows the guard narrows are counted below
 -- (a NOTICE) for evidence-based studio stamping. Typed subjects and escalation
@@ -62,22 +90,20 @@ SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $$
   WITH anchor AS (
-    SELECT 'project'::text        AS kind,
-           project.id IS NOT NULL AS resolved,
+    SELECT project.id IS NOT NULL AS resolved,
            project.studio_id      AS tenant,
            project.designer_id    AS owner
       FROM (SELECT p_project_id AS id) AS supplied
       LEFT JOIN public.projects AS project ON project.id = supplied.id
      WHERE supplied.id IS NOT NULL
     UNION ALL
-    SELECT 'proposal', proposal.id IS NOT NULL, proposal.studio_id,
-           proposal.designer_id
+    SELECT proposal.id IS NOT NULL, proposal.studio_id, proposal.designer_id
       FROM (SELECT p_proposal_id AS id) AS supplied
       LEFT JOIN public.proposals AS proposal ON proposal.id = supplied.id
      WHERE supplied.id IS NOT NULL
     UNION ALL
-    SELECT 'relationship', relationship.id IS NOT NULL,
-           household.organization_id, relationship.designer_id
+    SELECT relationship.id IS NOT NULL, household.organization_id,
+           relationship.designer_id
       FROM (SELECT p_designer_client_id AS id) AS supplied
       LEFT JOIN public.designer_clients AS relationship
         ON relationship.id = supplied.id
@@ -86,57 +112,33 @@ AS $$
      WHERE supplied.id IS NOT NULL
   ),
   recorded AS (
-    SELECT count(*) AS anchors,
-           bool_and(resolved) AS resolved,
-           count(DISTINCT tenant) AS tenants
+    SELECT count(*)               AS anchors,
+           bool_and(resolved)     AS resolved,
+           count(DISTINCT tenant) AS tenants,
+           bool_or(tenant IS NULL) AS studio_less
       FROM anchor
-  ),
-  -- The pairs of supplied anchors that are one engagement by a recorded link.
-  lineage (near, far) AS (
-    SELECT 'project', 'proposal'
-     WHERE EXISTS (SELECT 1 FROM public.proposals AS proposal
-                    WHERE proposal.id = p_proposal_id
-                      AND proposal.project_id = p_project_id)
-        OR EXISTS (SELECT 1 FROM public.projects AS project
-                    WHERE project.id = p_project_id
-                      AND project.proposal_id = p_proposal_id)
-    UNION ALL
-    SELECT 'proposal', 'relationship'
-     WHERE EXISTS (SELECT 1 FROM public.proposals AS proposal
-                    WHERE proposal.id = p_proposal_id
-                      AND proposal.designer_client_id = p_designer_client_id)
   )
   SELECT COALESCE(
     (SELECT r.anchors > 0 AND r.resolved AND r.tenants <= 1 FROM recorded AS r)
     AND NOT EXISTS (
       SELECT 1
-        FROM anchor AS a
+        FROM anchor AS a, recorded AS r
        WHERE NOT COALESCE(
-         CASE
-           WHEN a.tenant IS NOT NULL THEN EXISTS (
-             SELECT 1
-               FROM public.organization_members AS seat
-               JOIN public.organizations AS studio
-                 ON studio.id = seat.organization_id
-              WHERE seat.organization_id = a.tenant
-                AND seat.user_id = auth.uid()
-                AND seat.status = 'active'
-                AND seat.role <> 'guest'
-                AND (studio.status = 'active'
-                     OR p_author = auth.uid()
-                     OR a.owner = auth.uid()))
-           WHEN (SELECT r.tenants FROM recorded AS r) = 1 THEN
-             a.owner = auth.uid()
-             OR EXISTS (SELECT 1
-                          FROM anchor AS scoped
-                          JOIN lineage AS link
-                            ON (link.near = scoped.kind AND link.far = a.kind)
-                            OR (link.near = a.kind AND link.far = scoped.kind)
-                         WHERE scoped.tenant IS NOT NULL
-                           AND scoped.owner = a.owner)
-           ELSE
-             a.owner = auth.uid()
-         END,
+         -- A studio-less anchor anywhere on the row: every anchor is the caller's.
+         (NOT r.studio_less OR a.owner = auth.uid())
+         -- A recorded studio: the caller's active, non-guest seat in it.
+         AND (a.tenant IS NULL OR EXISTS (
+           SELECT 1
+             FROM public.organization_members AS seat
+             JOIN public.organizations AS studio
+               ON studio.id = seat.organization_id
+            WHERE seat.organization_id = a.tenant
+              AND seat.user_id = auth.uid()
+              AND seat.status = 'active'
+              AND seat.role <> 'guest'
+              AND (studio.status = 'active'
+                   OR p_author = auth.uid()
+                   OR a.owner = auth.uid()))),
          false)
     ),
     false);
@@ -151,10 +153,8 @@ COMMENT ON FUNCTION public.margin_note_tenant_admits(uuid, uuid, uuid, uuid) IS
   'Tenant gate for margin_notes_tenant_guard (00867, SQ-1846 F1/F2). True when '
   'every supplied anchor resolves, the anchors record at most one studio, the '
   'caller holds an active non-guest seat in that studio (active studio, or her '
-  'own note/job), and any studio-less anchor is the caller''s or shares its '
-  'designer and a recorded link (proposals.project_id, projects.proposal_id, '
-  'proposals.designer_client_id) with a scoped anchor on the row. A row '
-  'recording no studio is its anchors'' owner''s alone. Decides tenancy only, '
+  'own note/job), and, if any anchor records no studio, the caller owns every '
+  'anchor (no co-member, no vouching link: SQ-1858 F3). Decides tenancy only, '
   'identically for both images. Reads the record, never the caller''s studio. '
   'SECURITY DEFINER so a parent the caller cannot see reads as "not yours", '
   'not as "no studio" (00625 §1).';
@@ -173,32 +173,84 @@ COMMENT ON POLICY margin_notes_tenant_guard ON public.margin_notes IS
   'SQ-1846 F1/F2 (00867): RESTRICTIVE, so it narrows all five permissive '
   'policies (00196 designer_all, 00316 studio_read, 00584 insert/update/delete) '
   'for every verb and both UPDATE images. The row must belong, by its recorded '
-  'anchors, to a studio where the caller holds an active non-guest seat; a '
-  'studio-less legacy row is its owner''s alone. See margin_note_tenant_admits.';
+  'anchors, to a studio where the caller holds an active non-guest seat; a row '
+  'with any studio-less anchor is its anchors'' owner''s alone. See '
+  'margin_note_tenant_admits.';
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.margin_notes TO authenticated;
 GRANT ALL ON TABLE public.margin_notes TO service_role;
 
+-- ── The Discovery tenant pointer (SQ-1858 F4) ───────────────────────────────
+-- SECURITY INVOKER, because current_user is how it tells a signed-in caller
+-- from database code (00813 guard_proposal_studio_stamp). The household reads
+-- run under the caller's own client_households RLS, which shows a household
+-- only to an active member of its studio, and the seat is asked again
+-- explicitly: a household the caller cannot see is a refusal, never a pass.
+CREATE OR REPLACE FUNCTION public.guard_designer_client_household()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF current_user IN ('postgres', 'service_role')
+     OR NEW.household_id IS NOT DISTINCT FROM OLD.household_id THEN
+    RETURN NEW;
+  END IF;
+  IF (OLD.household_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1
+          FROM public.client_households AS household
+         WHERE household.id = OLD.household_id
+           AND public.is_active_studio_member(household.organization_id)))
+     OR (NEW.household_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1
+          FROM public.client_households AS household
+         WHERE household.id = NEW.household_id
+           AND public.is_active_studio_member(household.organization_id)))
+  THEN
+    RAISE EXCEPTION 'A client record moves between households only inside studios you hold a seat in.'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- SECURITY INVOKER, so nobody holds it (as 00813's studio-stamp guard).
+REVOKE ALL ON FUNCTION public.guard_designer_client_household()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMENT ON FUNCTION public.guard_designer_client_household() IS
+  'SQ-1858 F4 (00867): a signed-in caller re-points designer_clients.household_id '
+  'only with an active non-guest seat in the old household''s studio (if any) '
+  'and the new one''s (if any), the rule client_households already holds its '
+  'organization_id to (00632). postgres (SECURITY DEFINER code, seeds, ON '
+  'DELETE SET NULL) and service_role are not asked.';
+
+DROP TRIGGER IF EXISTS guard_designer_client_household_trg ON public.designer_clients;
+CREATE TRIGGER guard_designer_client_household_trg
+  BEFORE UPDATE OF household_id ON public.designer_clients
+  FOR EACH ROW EXECUTE FUNCTION public.guard_designer_client_household();
+
 -- ── Inventory of the rows the guard narrows (no data is changed) ───────────
 DO $inventory$
 DECLARE
-  v_unscoped    integer;
+  v_studio_less integer;
+  v_mixed       integer;
   v_coauthored  integer;
+  v_no_owner    integer;
   v_conflicting integer;
-  v_unvouched   integer;
 BEGIN
   WITH anchor AS (
-    SELECT note.id, 'project'::text AS kind, note.designer_id AS author,
+    SELECT note.id, note.designer_id AS author,
            project.studio_id AS tenant, project.designer_id AS owner
       FROM public.margin_notes AS note
       JOIN public.projects AS project ON project.id = note.project_id
     UNION ALL
-    SELECT note.id, 'proposal', note.designer_id, proposal.studio_id,
-           proposal.designer_id
+    SELECT note.id, note.designer_id, proposal.studio_id, proposal.designer_id
       FROM public.margin_notes AS note
       JOIN public.proposals AS proposal ON proposal.id = note.proposal_id
     UNION ALL
-    SELECT note.id, 'relationship', note.designer_id,
+    SELECT note.id, note.designer_id,
            household.organization_id, relationship.designer_id
       FROM public.margin_notes AS note
       JOIN public.designer_clients AS relationship
@@ -206,53 +258,30 @@ BEGIN
       LEFT JOIN public.client_households AS household
         ON household.id = relationship.household_id
   ),
-  lineage AS (
-    SELECT note.id, 'project'::text AS near, 'proposal'::text AS far
-      FROM public.margin_notes AS note
-     WHERE EXISTS (SELECT 1 FROM public.proposals AS proposal
-                    WHERE proposal.id = note.proposal_id
-                      AND proposal.project_id = note.project_id)
-        OR EXISTS (SELECT 1 FROM public.projects AS project
-                    WHERE project.id = note.project_id
-                      AND project.proposal_id = note.proposal_id)
-    UNION ALL
-    SELECT note.id, 'proposal', 'relationship'
-      FROM public.margin_notes AS note
-     WHERE EXISTS (SELECT 1 FROM public.proposals AS proposal
-                    WHERE proposal.id = note.proposal_id
-                      AND proposal.designer_client_id = note.designer_client_id)
-  ),
   per_note AS (
     SELECT id,
-           count(DISTINCT tenant) AS tenants,
-           bool_or(owner IS DISTINCT FROM author) AS foreign_owner,
-           bool_or(tenant IS NULL
-                   AND NOT EXISTS (
-                     SELECT 1
-                       FROM anchor AS scoped
-                       JOIN lineage AS link
-                         ON link.id = scoped.id
-                        AND ((link.near = scoped.kind AND link.far = anchor.kind)
-                          OR (link.near = anchor.kind AND link.far = scoped.kind))
-                      WHERE scoped.id = anchor.id
-                        AND scoped.tenant IS NOT NULL
-                        AND scoped.owner = anchor.owner))
-             AS unvouched
+           count(DISTINCT tenant)  AS tenants,
+           bool_or(tenant IS NULL) AS studio_less,
+           -- exactly one anchor owner, and no anchor without one
+           count(DISTINCT owner) = 1 AND bool_and(owner IS NOT NULL) AS one_owner,
+           bool_and(owner IS NOT DISTINCT FROM author) AS by_owner
       FROM anchor
      GROUP BY id
   )
-  SELECT count(*) FILTER (WHERE tenants = 0),
-         count(*) FILTER (WHERE tenants = 0 AND foreign_owner),
-         count(*) FILTER (WHERE tenants > 1),
-         count(*) FILTER (WHERE tenants = 1 AND unvouched)
-    INTO v_unscoped, v_coauthored, v_conflicting, v_unvouched
+  SELECT count(*) FILTER (WHERE tenants = 0 AND one_owner),
+         count(*) FILTER (WHERE tenants = 1 AND studio_less AND one_owner),
+         count(*) FILTER (WHERE tenants <= 1 AND studio_less AND one_owner
+                            AND NOT by_owner),
+         count(*) FILTER (WHERE tenants <= 1 AND studio_less AND NOT one_owner),
+         count(*) FILTER (WHERE tenants > 1)
+    INTO v_studio_less, v_mixed, v_coauthored, v_no_owner, v_conflicting
     FROM per_note;
 
-  RAISE NOTICE '00867 margin_notes_tenant_guard: % note(s) record no studio '
-    '(owner-only from now on; % of them not authored by an anchor owner), '
-    '% name two studios (refused to every reader), % carry a studio-less anchor '
-    'with no same-designer scoped anchor linked to it (its owner only). No row '
-    'was changed.',
-    v_unscoped, v_coauthored, v_conflicting, v_unvouched;
+  RAISE NOTICE '00867 margin_notes_tenant_guard: % note(s) record no studio and '
+    '% carry a studio-less anchor beside a studio''s; each is now its single '
+    'anchor owner''s alone (% of them not authored by that owner). % note(s) '
+    'carry studio-less anchors with no single owner and % name two studios: '
+    'both are refused to every reader. No row was changed.',
+    v_studio_less, v_mixed, v_coauthored, v_no_owner, v_conflicting;
 END;
 $inventory$;

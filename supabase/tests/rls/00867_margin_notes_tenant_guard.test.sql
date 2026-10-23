@@ -8,9 +8,11 @@
 --     -v ON_ERROR_STOP=1 -f supabase/tests/rls/00867_margin_notes_tenant_guard.test.sql
 --
 -- HOW IT PROVES BOTH DIRECTIONS IN ONE RUN
---   1. The guard is DROPPED inside this transaction, so the table is back on
---      its pre-00867 policies (00196 designer_all, 00316 studio_read, 00584
---      insert/update/delete), whether or not the DB already carries 00867.
+--   1. The guard and the household-pointer trigger are DROPPED inside this
+--      transaction, so the tables are back on their pre-00867 rules (00196
+--      designer_all, 00316 studio_read, 00584 insert/update/delete; a
+--      designer_clients.household_id any co-member may move), whether or not
+--      the DB already carries 00867.
 --   2. Fixture rows, legacy studio-less rows included, are seeded as postgres
 --      and snapshotted.
 --   3. Every case runs as an authenticated actor (never an RLS-exempt role)
@@ -20,23 +22,31 @@
 --      case must have differed from it before the migration (the negative
 --      assertion fails on the old policies); a `keeps` case must not have.
 --   Each probe runs in a subtransaction that is rolled back, so no probe can
---   feed another. The privileged readback runs the forbidden writes for real
---   and compares every fixture row with the snapshot.
+--   feed another. A probe may be a chain (steps joined by ' ;; '), run in
+--   order by the same signed-in actor, each step reporting on its own, so a
+--   case can create the authority it then leans on (SQ-1858 F3/F4). The
+--   privileged readback runs the forbidden writes for real and compares
+--   every fixture row with the snapshot.
 --   6. Last, the generated ACL seed (supabase/seed/00-legacy-grants.sql) is
 --      applied over the migrated state, as `supabase db reset` would, and the
 --      helper's EXECUTE grants are asserted again as a reset leaves them.
 --
--- LINEAGE: a studio-less anchor rides a scoped row only for its owner, or
---   when a same-designer scoped anchor is recorded as the same engagement
---   (proposals.project_id, projects.proposal_id, proposals.designer_client_id).
---   Fixture links, one per leg: Q0.project_id = PA (N11, X-07, X-09, W-07),
---   P0.proposal_id = QA (X-23), QA.designer_client_id = R0 (X-24). QB is
---   linked to nothing (X-16 … X-22).
+-- STUDIO-LESS ANCHORS (SQ-1858 F3): if any anchor on a row records no studio,
+--   only a caller who owns every anchor is admitted. No link vouches: the
+--   fixture still records one per leg (Q0.project_id = PA, P0.proposal_id =
+--   QA, QA.designer_client_id = R0), and X-07/X-09/W-07/X-23/X-24 show the
+--   co-member denied anyway; X-25/X-26 have B1 write the link herself, as a
+--   signed-in draft INSERT, and still be denied the note.
+--
+-- THE DISCOVERY POINTER (SQ-1858 F4): designer_clients.household_id moves
+--   only for a caller seated in the old household's studio and the new one's
+--   (H-01 … H-09, the legitimate writers included).
 --
 -- ACTORS: D designer seated in studios A and B · A1 only A · B1 only B ·
 --   U outsider (own studio C) · CL the client (with a client team seat) ·
 --   AG guest / AS suspended / AR removed seats in A · BT a member of B only
---   holding a team seat on A's job (a wrong-studio team seat).
+--   holding a team seat on A's job (a wrong-studio team seat). D, A1 and B1
+--   carry designer standing, as studio designers do.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -46,6 +56,7 @@ SET LOCAL lock_timeout = '10s';
 
 -- ─── 1 · pre-00867 state ────────────────────────────────────────────────────
 DROP POLICY IF EXISTS margin_notes_tenant_guard ON public.margin_notes;
+DROP TRIGGER IF EXISTS guard_designer_client_household_trg ON public.designer_clients;
 
 CREATE TEMP TABLE m867_pre_policy AS
 SELECT polname, polcmd, polpermissive, polroles,
@@ -78,7 +89,9 @@ SELECT label, ('86700000-0000-4000-8000-' || suffix)::uuid
     ('PA',  '0000000010a0'), ('PB',  '0000000010b0'), ('P0',  '000000001000'),
     ('PU',  '0000000010c0'),
     ('QA',  '0000000020a0'), ('QB',  '0000000020b0'), ('Q0',  '000000002000'),
-    ('HA',  '0000000030a0'), ('RA',  '0000000040a0'), ('R0',  '000000004000'),
+    ('QS',  '0000000020f1'), ('QT',  '0000000020f2'),
+    ('HA',  '0000000030a0'), ('HB',  '0000000030b0'), ('HN',  '0000000030a1'),
+    ('RA',  '0000000040a0'), ('R0',  '000000004000'),
     ('FC',  '000000005000'), ('SCR', '000000006000'),
     ('N1',  '000000007001'), ('N2',  '000000007002'), ('N3',  '000000007003'),
     ('N4',  '000000007004'), ('N5',  '000000007005'), ('N6',  '000000007006'),
@@ -108,24 +121,35 @@ LANGUAGE sql AS $$ SELECT id FROM m867_id WHERE label = p_label $$;
 -- pg_temp.probe runs p_setup as postgres, then p_sql as the authenticated
 -- actor, then raises to roll the whole subtransaction back (state, role and
 -- JWT claims alike). Outcome: the SELECT's (or a WITH … SELECT's) text value,
--- 'rows=N', or 'denied' (42501, a row-level-security refusal).
+-- 'rows=N', or 'denied' (42501, a row-level-security or guard refusal). A
+-- chain (steps joined by ' ;; ') runs step by step as the same actor, each in
+-- its own subtransaction so a refused step does not stop the next; the
+-- outcomes are joined by ' | '.
 CREATE FUNCTION pg_temp.probe(p_actor uuid, p_sql text, p_setup text)
 RETURNS text LANGUAGE plpgsql AS $$
-DECLARE v_out text; v_rows bigint;
+DECLARE v_out text; v_one text; v_step text; v_rows bigint;
 BEGIN
   BEGIN
     IF p_setup IS NOT NULL THEN EXECUTE p_setup; END IF;
     PERFORM set_config('request.jwt.claims',
       json_build_object('sub', p_actor::text, 'role', 'authenticated')::text, true);
     EXECUTE 'SET LOCAL ROLE authenticated';
-    IF p_sql ~* '^\s*(select|with)\M' THEN
-      EXECUTE p_sql INTO v_out;
-      v_out := COALESCE(v_out, 'null');
-    ELSE
-      EXECUTE p_sql;
-      GET DIAGNOSTICS v_rows = ROW_COUNT;
-      v_out := 'rows=' || v_rows;
-    END IF;
+    FOREACH v_step IN ARRAY string_to_array(p_sql, ' ;; ') LOOP
+      BEGIN
+        IF v_step ~* '^\s*(select|with)\M' THEN
+          EXECUTE v_step INTO v_one;
+          v_one := COALESCE(v_one, 'null');
+        ELSE
+          EXECUTE v_step;
+          GET DIAGNOSTICS v_rows = ROW_COUNT;
+          v_one := 'rows=' || v_rows;
+        END IF;
+      EXCEPTION
+        WHEN insufficient_privilege THEN v_one := 'denied';
+        WHEN OTHERS THEN v_one := 'error ' || SQLSTATE || ': ' || SQLERRM;
+      END;
+      v_out := CASE WHEN v_out IS NULL THEN v_one ELSE v_out || ' | ' || v_one END;
+    END LOOP;
     RAISE EXCEPTION USING ERRCODE = 'U0867', MESSAGE = 'probe rollback';
   EXCEPTION
     WHEN SQLSTATE 'U0867' THEN RETURN v_out;
@@ -165,6 +189,10 @@ INSERT INTO public.profiles (id, email, full_name)
 SELECT id, label || '-867@test.invalid', '867 ' || label
   FROM m867_id WHERE label IN ('D','A1','B1','U','CL','AG','AS','AR','BT')
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
+-- Studio designers carry designer standing (designer_clients' restrictive
+-- writer/updater policies, 00555), so the pointer cases test the pointer.
+UPDATE public.profiles SET is_designer = true
+ WHERE id IN (pg_temp.id('D'), pg_temp.id('A1'), pg_temp.id('B1'));
 
 INSERT INTO public.organizations (id, type, name, slug)
 VALUES (pg_temp.id('SA'), 'design_studio', '867 Studio A', 'sq1847-867-studio-a'),
@@ -205,19 +233,18 @@ UPDATE public.proposals SET studio_id = pg_temp.id('SB') WHERE id = pg_temp.id('
 UPDATE public.proposals SET studio_id = NULL WHERE id = pg_temp.id('Q0');
 
 INSERT INTO public.client_households (id, organization_id, designer_id, display_name)
-VALUES (pg_temp.id('HA'), pg_temp.id('SA'), pg_temp.id('D'), '867 A household');
+VALUES (pg_temp.id('HA'), pg_temp.id('SA'), pg_temp.id('D'), '867 A household'),
+       (pg_temp.id('HB'), pg_temp.id('SB'), pg_temp.id('D'), '867 B household');
 INSERT INTO public.designer_clients (id, designer_id, client_id, household_id, status)
 VALUES (pg_temp.id('RA'), pg_temp.id('D'), pg_temp.id('CL'), pg_temp.id('HA'), 'active'),
        (pg_temp.id('R0'), pg_temp.id('D'), NULL, NULL, 'lead');
 
--- Recorded engagement lineage (see LINEAGE above), one link per leg so each
--- leg is exercised alone. QB stays unlinked. The links are written only
--- through their RPCs: job/proposal by activate_proposal_as_project (00390
--- copy-immutability, 00398 project provenance), proposal/relationship by
--- set_document_client (00796). The fixture records those results with
--- triggers off for these three statements, one direction each (an activation
--- writes both; PA.proposal_id and QA.project_id stay NULL so each leg is
--- isolated).
+-- Recorded engagement links, one per leg, as an activation (00398) or
+-- set_document_client (00796) would leave them. They no longer vouch for a
+-- studio-less anchor (SQ-1858 F3); they stay so the denials prove that even a
+-- genuine link does not. QB stays unlinked. Recorded with triggers off for
+-- these three statements, one direction each (PA.proposal_id and
+-- QA.project_id stay NULL). X-25/X-26 write a link as a signed-in actor.
 SET LOCAL session_replication_role = replica;
 UPDATE public.proposals SET project_id = pg_temp.id('PA') WHERE id = pg_temp.id('Q0');
 UPDATE public.projects SET proposal_id = pg_temp.id('QA') WHERE id = pg_temp.id('P0');
@@ -231,8 +258,9 @@ VALUES (pg_temp.id('SCR'), pg_temp.id('P0'), pg_temp.id('D'), '867 scope change'
 
 -- Notes. N6–N8 and N13 are the legacy studio-less rows; N6 carries every
 -- column the readback must preserve (anchor, due, escalation, field capture).
+-- N11 and N14 carry a studio-less anchor beside a studio's (owner D's alone).
 -- N14 is SQ-1854 F3's injected row: B1's note on D's legacy job P0, carried
--- by D's unrelated B proposal QB (same designer, no recorded lineage).
+-- by D's unrelated B proposal QB.
 INSERT INTO public.margin_notes
   (id, project_id, proposal_id, designer_client_id, designer_id, body,
    anchor_kind, anchor_id, due_date, escalated_to_scope_change_id, field_capture_id)
@@ -322,6 +350,17 @@ CREATE FUNCTION pg_temp.view_sel(p_note text) RETURNS text LANGUAGE sql AS $$
   SELECT 'SELECT count(*)::text FROM public.margin_items WHERE kind = ''note'' AND item_id = {' || p_note || '}' $$;
 CREATE FUNCTION pg_temp.row_md5(p_note text) RETURNS text LANGUAGE sql AS $$
   SELECT 'SELECT md5(n::text) FROM public.margin_notes AS n WHERE n.id = {' || p_note || '}' $$;
+-- SQ-1858 F4: the Discovery tenant pointer, moved by the actor herself.
+CREATE FUNCTION pg_temp.repoint(p_relationship text, p_household text) RETURNS text LANGUAGE sql AS $$
+  SELECT 'UPDATE public.designer_clients SET household_id = '
+      || COALESCE('{' || p_household || '}', 'NULL') || ' WHERE id = {' || p_relationship || '}' $$;
+-- SQ-1858 F3: B1 drafts a proposal of D's, parented on D's B proposal QB and
+-- linked (p_column) to one of D's studio-less records, then reads its stamp.
+CREATE FUNCTION pg_temp.draft(p_id text, p_column text, p_target text) RETURNS text LANGUAGE sql AS $$
+  SELECT 'INSERT INTO public.proposals (id, designer_id, title, status, ' || p_column
+      || ', parent_proposal_id) VALUES ({' || p_id || '}, {D}, ''867 drafted by B1'', ''draft'', {'
+      || p_target || '}, {QB}) ;; SELECT COALESCE(studio_id::text, ''none'') FROM public.proposals WHERE id = {'
+      || p_id || '}' $$;
 
 -- Setups (run as postgres inside the probe's own rolled-back subtransaction).
 CREATE FUNCTION pg_temp.remove_a1() RETURNS text LANGUAGE sql AS $$
@@ -378,7 +417,7 @@ INSERT INTO m867_case (name, actor, setup, probe, expect, kind) VALUES
   ('W-04 A1 adds B proposal to A job note',          'A1', NULL, pg_temp.upd('N1', 'proposal_id = {QB}'), 'denied', 'closes'),
   ('W-05 D adds B proposal to A job note',           'D',  NULL, pg_temp.upd('N1', 'proposal_id = {QB}'), 'denied', 'closes'),
   ('W-06 A1 adds stranger job to A proposal note',   'A1', NULL, pg_temp.upd('N4', 'project_id = {PU}'), 'denied', 'closes'),
-  ('W-07 A1 adds job designer unstamped proposal',   'A1', NULL, pg_temp.upd('N1', 'proposal_id = {Q0}'), 'rows=1', 'keeps'),
+  ('W-07 A1 adds job designer unstamped proposal',   'A1', NULL, pg_temp.upd('N1', 'proposal_id = {Q0}'), 'denied', 'closes'),
   ('W-08 B1 moves D note from B job to A job',       'B1', NULL, pg_temp.upd('N3', 'project_id = {PA}'), 'denied', 'closes'),
   ('W-09 A1 hands D note authorship to B1',          'A1', NULL, pg_temp.upd('N1', 'designer_id = {B1}'), 'denied', 'keeps'),
   -- P · proposal-only and Discovery-only rows
@@ -397,17 +436,19 @@ INSERT INTO m867_case (name, actor, setup, probe, expect, kind) VALUES
   ('X-04 A1 reads conflicting-anchor note',          'A1', NULL, pg_temp.sel('N10'), '0', 'closes'),
   ('X-05 B1 reads conflicting-anchor note',          'B1', NULL, pg_temp.sel('N10'), '0', 'closes'),
   ('X-06 D inserts conflicting anchors',             'D',  NULL, pg_temp.ins('PA', 'QB', NULL, 'D'), 'denied', 'closes'),
-  ('X-07 A1 reads A job + unstamped proposal note',  'A1', NULL, pg_temp.sel('N11'), '1', 'keeps'),
+  -- A studio-less anchor beside a studio's: the owner of every anchor alone,
+  -- even where a genuine link joins them (Q0.project_id = PA)
+  ('X-07 A1 reads own note on A job + linked unstamped proposal', 'A1', NULL, pg_temp.sel('N11'), '0', 'closes'),
   ('X-08 B1 reads A job + unstamped proposal note',  'B1', NULL, pg_temp.sel('N11'), '0', 'closes'),
-  ('X-09 A1 inserts A job + unstamped proposal',     'A1', NULL, pg_temp.ins('PA', 'Q0', NULL, 'A1'), 'rows=1', 'keeps'),
+  ('X-09 A1 inserts A job + linked unstamped proposal', 'A1', NULL, pg_temp.ins('PA', 'Q0', NULL, 'A1'), 'denied', 'closes'),
   ('X-10 A1 reads stranger job masked by A proposal','A1', NULL, pg_temp.sel('N12'), '0', 'closes'),
   ('X-11 U reads masked note on own job',            'U',  NULL, pg_temp.sel('N12'), '0', 'closes'),
   ('X-12 D reads masked note',                       'D',  NULL, pg_temp.sel('N12'), '0', 'closes'),
   ('X-13 A1 inserts stranger job masked by A proposal', 'A1', NULL, pg_temp.ins('PU', 'QA', NULL, 'A1'), 'denied', 'closes'),
   ('X-14 A1 inserts A job + D Discovery (A household)', 'A1', NULL, pg_temp.ins('PA', NULL, 'RA', 'A1'), 'rows=1', 'keeps'),
   ('X-15 B1 inserts B job + D Discovery (A household)', 'B1', NULL, pg_temp.ins('PB', NULL, 'RA', 'B1'), 'denied', 'closes'),
-  -- X · same designer is not lineage (SQ-1854 F3): a studio-less anchor rides
-  -- a scoped one only for its owner or by a recorded engagement link
+  -- X · same designer vouches for nothing (SQ-1854 F3), and neither does a
+  -- link (SQ-1858 F3): a studio-less anchor admits only its owner
   ('X-16 B1 inserts D legacy job + unrelated B proposal', 'B1', NULL, pg_temp.ins('P0', 'QB', NULL, 'B1'), 'denied', 'closes'),
   ('X-17 B1 reads her injected note on D legacy job',    'B1', NULL, pg_temp.sel('N14'), '0', 'closes'),
   ('X-18 B1 updates her injected note on D legacy job',  'B1', NULL, pg_temp.upd('N14'), 'rows=0', 'closes'),
@@ -415,8 +456,44 @@ INSERT INTO m867_case (name, actor, setup, probe, expect, kind) VALUES
   ('X-20 D reads the note injected on her legacy job',   'D',  NULL, pg_temp.sel('N14'), '1', 'keeps'),
   ('X-21 B1 inserts B job + unlinked D legacy proposal', 'B1', NULL, pg_temp.ins('PB', 'Q0', NULL, 'B1'), 'denied', 'closes'),
   ('X-22 B1 inserts B proposal + unlinked D legacy Discovery', 'B1', NULL, pg_temp.ins(NULL, 'QB', 'R0', 'B1'), 'denied', 'closes'),
-  ('X-23 A1 inserts legacy job + the A proposal it records', 'A1', NULL, pg_temp.ins('P0', 'QA', NULL, 'A1'), 'rows=1', 'keeps'),
-  ('X-24 A1 inserts A proposal + the legacy Discovery it records', 'A1', NULL, pg_temp.ins(NULL, 'QA', 'R0', 'A1'), 'rows=1', 'keeps'),
+  ('X-23 A1 inserts legacy job + the A proposal it records', 'A1', NULL, pg_temp.ins('P0', 'QA', NULL, 'A1'), 'denied', 'closes'),
+  ('X-24 A1 inserts A proposal + the legacy Discovery it records', 'A1', NULL, pg_temp.ins(NULL, 'QA', 'R0', 'A1'), 'denied', 'closes'),
+  -- SQ-1858 F3 as a signed-in actor: B1 writes the link herself (a draft
+  -- INSERT of D's proposal, stamped B from its parent QB), then leans on it
+  ('X-25 B1 drafts Q* on D legacy job, then notes P0+Q*', 'B1', NULL,
+     pg_temp.draft('QS', 'project_id', 'P0') || ' ;; ' || pg_temp.ins('P0', 'QS', NULL, 'B1'),
+     'rows=1 | {SB} | denied', 'closes'),
+  ('X-26 B1 drafts Q* on D legacy Discovery, then notes Q*+R0', 'B1', NULL,
+     pg_temp.draft('QT', 'designer_client_id', 'R0') || ' ;; ' || pg_temp.ins(NULL, 'QT', 'R0', 'B1'),
+     'rows=1 | {SB} | denied', 'closes'),
+  -- the owner of every anchor keeps such rows
+  ('X-27 D reads A1 note on her A job + unstamped proposal', 'D', NULL, pg_temp.sel('N11'), '1', 'keeps'),
+  ('X-28 D inserts her A job + her unstamped proposal', 'D', NULL, pg_temp.ins('PA', 'Q0', NULL, 'D'), 'rows=1', 'keeps'),
+  ('X-29 D inserts her legacy job + her A proposal', 'D', NULL, pg_temp.ins('P0', 'QA', NULL, 'D'), 'rows=1', 'keeps'),
+  ('X-30 D inserts her A proposal + her legacy Discovery', 'D', NULL, pg_temp.ins(NULL, 'QA', 'R0', 'D'), 'rows=1', 'keeps'),
+  ('X-31 A1 edits own note on A job + unstamped proposal', 'A1', NULL, pg_temp.upd('N11'), 'rows=0', 'closes'),
+  -- H · the Discovery tenant pointer (SQ-1858 F4)
+  ('H-01 B1 moves D A relationship to a B household, then notes it', 'B1', NULL,
+     pg_temp.repoint('RA', 'HB') || ' ;; ' || pg_temp.ins(NULL, NULL, 'RA', 'B1'), 'denied | denied', 'closes'),
+  ('H-02 B1 detaches D A relationship from its household', 'B1', NULL, pg_temp.repoint('RA', NULL), 'denied', 'closes'),
+  ('H-03 A1 (A only) moves D A relationship to a B household', 'A1', NULL, pg_temp.repoint('RA', 'HB'), 'denied', 'closes'),
+  ('H-04 D (seated in A and B) moves her relationship to B', 'D', NULL, pg_temp.repoint('RA', 'HB'), 'rows=1', 'keeps'),
+  -- the household band (useCreateClientHousehold): any member on the job
+  -- opens a household in the job's studio and points the client record at it
+  ('H-05 A1 opens an A household for D legacy relationship, then notes it', 'A1', NULL,
+     'INSERT INTO public.client_households (id, organization_id, designer_id, display_name) VALUES ({HN}, {SA}, {D}, ''867 band household'') ;; '
+     || pg_temp.repoint('R0', 'HN') || ' ;; ' || pg_temp.ins(NULL, NULL, 'R0', 'A1'),
+     'rows=1 | rows=1 | rows=1', 'keeps'),
+  ('H-06 A1 (seated in A) clears D A relationship household', 'A1', NULL, pg_temp.repoint('RA', NULL), 'rows=1', 'keeps'),
+  -- ON DELETE SET NULL runs as the table owner: deleting the household clears
+  -- the pointer even though the household it named is already gone
+  ('H-07 D (A owner) deletes the A household; the pointer clears', 'D', NULL,
+     'DELETE FROM public.client_households WHERE id = {HA} ;; SELECT COALESCE(household_id::text, ''none'') FROM public.designer_clients WHERE id = {RA}',
+     'rows=1 | none', 'keeps'),
+  -- a studio member may adopt a studio-less relationship into her studio
+  -- (the band's own shape); the owner's legacy Discovery note stays hers
+  ('H-08 B1 adopts D legacy relationship into B; reads D legacy note', 'B1', NULL,
+     pg_temp.repoint('R0', 'HB') || ' ;; ' || pg_temp.sel('N8'), 'rows=1 | 0', 'keeps'),
   -- L · legacy studio-less rows, seeded before 00867
   ('L-01 D reads legacy job note identically',       'D',  NULL, pg_temp.row_md5('N6'),  'snapshot:N6',  'keeps'),
   ('L-02 D reads legacy proposal note identically',  'D',  NULL, pg_temp.row_md5('N7'),  'snapshot:N7',  'keeps'),
@@ -515,9 +592,10 @@ BEGIN
    WHERE post IS DISTINCT FROM expect
       OR (kind = 'closes' AND pre IS NOT DISTINCT FROM expect)
       OR (kind = 'keeps'  AND pre IS DISTINCT FROM expect)
-      -- A probe that errored for any reason other than RLS proves nothing,
-      -- least of all a `closes` case whose PRE merely had to differ.
-      OR pre LIKE 'error %' OR post LIKE 'error %';
+      -- A probe (or any step of a chain) that errored for any reason other
+      -- than a privilege refusal proves nothing, least of all a `closes` case
+      -- whose PRE merely had to differ.
+      OR pre LIKE '%error %' OR post LIKE '%error %';
   IF v_failed IS NOT NULL THEN
     RAISE EXCEPTION E'00867 actor matrix FAILED:\n%', v_failed;
   END IF;
@@ -587,7 +665,21 @@ BEGIN
   ASSERT has_table_privilege('authenticated', 'public.margin_notes', 'SELECT, INSERT, UPDATE, DELETE'),
     'CATALOG: authenticated keeps the four verbs the policies govern';
 
-  RAISE NOTICE '00867 catalog passed: one RESTRICTIVE ALL guard, one tenant gate for both images, five permissive policies unchanged, one helper overload, SECURITY DEFINER + pinned search_path, EXECUTE to authenticated/service_role only';
+  -- The Discovery tenant pointer (SQ-1858 F4)
+  ASSERT (SELECT pg_get_triggerdef(oid) FROM pg_trigger
+           WHERE tgrelid = 'public.designer_clients'::regclass
+             AND tgname = 'guard_designer_client_household_trg' AND tgenabled = 'O')
+       = 'CREATE TRIGGER guard_designer_client_household_trg BEFORE UPDATE OF household_id ON public.designer_clients FOR EACH ROW EXECUTE FUNCTION guard_designer_client_household()',
+    'CATALOG: designer_clients must carry the enabled BEFORE UPDATE OF household_id pointer guard';
+  ASSERT (SELECT NOT prosecdef AND proconfig @> ARRAY['search_path=public, pg_temp']
+            FROM pg_proc WHERE oid = 'public.guard_designer_client_household()'::regprocedure),
+    'CATALOG: the pointer guard must be SECURITY INVOKER (current_user tells database code apart) with a pinned search_path';
+  ASSERT NOT has_function_privilege('authenticated', 'public.guard_designer_client_household()', 'EXECUTE')
+     AND NOT has_function_privilege('anon', 'public.guard_designer_client_household()', 'EXECUTE')
+     AND NOT has_function_privilege('service_role', 'public.guard_designer_client_household()', 'EXECUTE'),
+    'CATALOG: nobody holds EXECUTE on the pointer guard';
+
+  RAISE NOTICE '00867 catalog passed: one RESTRICTIVE ALL guard, one tenant gate for both images, five permissive policies unchanged, one helper overload, SECURITY DEFINER + pinned search_path, EXECUTE to authenticated/service_role only; household pointer guard BEFORE UPDATE OF household_id, SECURITY INVOKER, held by nobody';
 END $$;
 
 -- ─── 10 · privileged readback: forbidden writes, run for real ─────────────
@@ -620,6 +712,18 @@ BEGIN
   ASSERT v_outcome = 'denied', 'READBACK: B1 injection on legacy P0 via QB was ' || v_outcome;
   v_outcome := pg_temp.act(pg_temp.id('B1'), pg_temp.sql_of(pg_temp.del('N14')));
   ASSERT v_outcome = 'rows=0', 'READBACK: B1 delete of injected N14 reached ' || v_outcome;
+  -- SQ-1858 F3 for real: B1's own draft link stays, and buys her nothing.
+  v_outcome := pg_temp.act(pg_temp.id('B1'), pg_temp.sql_of(
+    'INSERT INTO public.proposals (id, designer_id, title, status, project_id, parent_proposal_id) '
+    || 'VALUES ({QS}, {D}, ''867 drafted by B1'', ''draft'', {P0}, {QB})'));
+  ASSERT v_outcome = 'rows=1', 'READBACK: B1 draft of Q* was ' || v_outcome;
+  v_outcome := pg_temp.act(pg_temp.id('B1'), pg_temp.sql_of(pg_temp.ins('P0', 'QS', NULL, 'B1')));
+  ASSERT v_outcome = 'denied', 'READBACK: B1 note on P0 via her own Q* link was ' || v_outcome;
+  -- SQ-1858 F4 for real: the pointer does not move.
+  v_outcome := pg_temp.act(pg_temp.id('B1'), pg_temp.sql_of(pg_temp.repoint('RA', 'HB')));
+  ASSERT v_outcome = 'denied', 'READBACK: B1 move of RA to a B household was ' || v_outcome;
+  ASSERT (SELECT household_id FROM public.designer_clients WHERE id = pg_temp.id('RA')) = pg_temp.id('HA'),
+    'READBACK: RA no longer points at its A household';
 
   ASSERT current_user = 'postgres', 'READBACK: must read back as postgres, not ' || current_user;
   SELECT count(*) INTO v_drift FROM (
@@ -633,10 +737,31 @@ BEGIN
   ASSERT (SELECT count(*) FROM public.margin_notes
            WHERE project_id IN (pg_temp.id('PA'), pg_temp.id('PB'), pg_temp.id('P0'), pg_temp.id('PU'))
               OR proposal_id IN (pg_temp.id('QA'), pg_temp.id('QB'), pg_temp.id('Q0'))
-              OR designer_client_id IN (pg_temp.id('RA'), pg_temp.id('R0'))) = 14,
+              OR designer_client_id IN (pg_temp.id('RA'), pg_temp.id('R0'))) = 14
+     AND NOT EXISTS (SELECT 1 FROM public.margin_notes WHERE proposal_id = pg_temp.id('QS')),
     'READBACK: a forbidden write left a row behind';
 
-  RAISE NOTICE '00867 readback passed: 12 forbidden writes ran for real, all 14 fixture notes byte-identical to the pre-00867 snapshot';
+  RAISE NOTICE '00867 readback passed: 14 forbidden writes ran for real (B1''s Q* draft itself stands), RA still points at HA, all 14 fixture notes byte-identical to the pre-00867 snapshot';
+END $$;
+
+-- ─── 10b · the trusted pointer writers (SQ-1858 F4 trace) ──────────────────
+-- postgres (SECURITY DEFINER code, seeds, ON DELETE SET NULL) and
+-- service_role move the pointer unasked; the signed-in band path is H-05.
+DO $$
+DECLARE
+  v_ra uuid := pg_temp.id('RA');
+  v_ha uuid := pg_temp.id('HA');
+  v_hb uuid := pg_temp.id('HB');
+BEGIN
+  UPDATE public.designer_clients SET household_id = v_hb WHERE id = v_ra;
+  ASSERT (SELECT household_id FROM public.designer_clients WHERE id = v_ra) = v_hb,
+    'TRUSTED: postgres must move the pointer';
+  EXECUTE 'SET LOCAL ROLE service_role';
+  UPDATE public.designer_clients SET household_id = v_ha WHERE id = v_ra;
+  EXECUTE 'RESET ROLE';
+  ASSERT (SELECT household_id FROM public.designer_clients WHERE id = v_ra) = v_ha,
+    'TRUSTED: service_role must move the pointer';
+  RAISE NOTICE '00867 trusted pointer writers passed: postgres and service_role move designer_clients.household_id';
 END $$;
 
 -- ─── 11 · ACLs as a reset leaves them (SQ-1854 F2) ────────────────────────
@@ -659,6 +784,10 @@ BEGIN
   ASSERT has_function_privilege('authenticated', v_fn, 'EXECUTE')
      AND has_function_privilege('service_role', v_fn, 'EXECUTE'),
     'RESET ACL: authenticated and service_role must EXECUTE the helper';
+  ASSERT NOT has_function_privilege('anon', 'public.guard_designer_client_household()', 'EXECUTE')
+     AND NOT has_function_privilege('authenticated', 'public.guard_designer_client_household()', 'EXECUTE')
+     AND NOT has_function_privilege('service_role', 'public.guard_designer_client_household()', 'EXECUTE'),
+    'RESET ACL: nobody may hold EXECUTE on the pointer guard once the legacy-grants seed has run';
   -- The legacy baseline still hands anon the table; no policy names anon.
   EXECUTE 'SET LOCAL ROLE anon';
   SELECT count(*) INTO v_seen FROM public.margin_notes
@@ -666,7 +795,7 @@ BEGIN
   EXECUTE 'RESET ROLE';
   ASSERT v_seen = 0, 'RESET ACL: anon reached ' || v_seen || ' margin note(s)';
 
-  RAISE NOTICE '00867 reset ACL passed: after the legacy-grants seed the helper is EXECUTE to authenticated/service_role only, and anon reaches no margin note';
+  RAISE NOTICE '00867 reset ACL passed: after the legacy-grants seed the helper is EXECUTE to authenticated/service_role only, nobody holds the pointer guard, and anon reaches no margin note';
 END $$;
 
 ROLLBACK;
