@@ -31,6 +31,16 @@ test('F01 live studio opens its full-service job with 36 living-room lines and 8
   // The first next dev compile of /doc/[id] is slow.
   await expect(page).toHaveURL(new RegExp(`/doc/${job}`), { timeout: 60_000 });
   await expect(page.locator('[data-document-shell]')).toBeVisible({ timeout: 30_000 });
+  let index = page.getByRole('navigation', { name: 'This paper', exact: true });
+  if ((page.viewportSize()?.width ?? 1440) < 1180) {
+    await page.locator('[data-sections-door]').click();
+    index = page.getByRole('dialog', { name: 'Sections of this document', exact: true });
+  }
+  await index.getByRole('button', { name: /^Pieces & purchasing\b/i }).click();
+  await expect(page.getByText('80 lines · not yet on the paper · press Pieces & purchasing on the index to open', { exact: true })).toHaveCount(0);
+  const rooms = page.locator('[data-pieces-room]');
+  await expect(rooms).toHaveCount(3);
+  for (const visibleRoom of await rooms.all()) await expect(visibleRoom).toBeVisible();
   const room = page.locator(`[data-pieces-room="${living}"]`);
   await expect(room.getByRole('button', { name: livingName, exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(room, 'legacy room overview displays its 36-line count').toContainText('36 lines');
