@@ -101,6 +101,8 @@ export interface StudioLocationRequest {
   receivingFeeCentsPiece?: number | null;
   instructions?: string | null;
   isDefaultReceiver?: boolean;
+  /** A studio-visible marker, not an access restriction. */
+  isPrivateHome?: boolean;
 }
 
 export const studioBuyingKeys = {
@@ -108,6 +110,7 @@ export const studioBuyingKeys = {
   vendorAccount: (organizationId: string, vendorId: string) =>
     ['studio-vendor-accounts', organizationId, vendorId] as const,
   locations: (organizationId: string) => ['studio-locations', organizationId] as const,
+  projectDestinations: (projectId: string) => ['project-destination-locations', projectId] as const,
   marginVisibility: (organizationId: string) =>
     ['studio-margin-visibility', organizationId] as const,
   canSeeMargin: (organizationId: string) => ['studio-can-see-margin', organizationId] as const,
@@ -320,6 +323,87 @@ export function useArchiveStudioLocation() {
     onSuccess: (row) => {
       queryClient.invalidateQueries({ queryKey: studioBuyingKeys.locations(row.organization_id) });
     },
+  });
+}
+
+export type ProjectDestinationLocationRow = PublicSchema['Tables']['project_destination_locations']['Row'];
+
+/** Associations only; useStudioLocations supplies the studio-visible place details. */
+export function useProjectDestinationLocations(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: studioBuyingKeys.projectDestinations(projectId ?? ''),
+    queryFn: async (): Promise<ProjectDestinationLocationRow[]> => {
+      const { data, error } = await getSupabase()
+        .from('project_destination_locations')
+        .select('*')
+        .eq('project_id', projectId as string)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!projectId,
+  });
+}
+
+export interface ProjectDestinationLocationInput {
+  projectId: string;
+  locationId: string;
+}
+
+export function useAddProjectDestinationLocation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectId, locationId }: ProjectDestinationLocationInput) => {
+      const { data, error } = await getSupabase().rpc('add_project_destination_location', {
+        p_project_id: projectId,
+        p_location_id: locationId,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_row, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: studioBuyingKeys.projectDestinations(projectId) });
+    },
+  });
+}
+
+/** Removing a job place also clears any line's planned intent for that place. */
+export function useRemoveProjectDestinationLocation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectId, locationId }: ProjectDestinationLocationInput) => {
+      const { error } = await getSupabase().rpc('remove_project_destination_location', {
+        p_project_id: projectId,
+        p_location_id: locationId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_row, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: studioBuyingKeys.projectDestinations(projectId) });
+      invalidateFfeCaches(queryClient, projectId);
+    },
+  });
+}
+
+export interface SetProjectFfePlannedDestinationInput {
+  ffeItemId: string;
+  locationId: string | null;
+}
+
+/** Planned intent only: this never changes an order's ship-to. */
+export function useSetProjectFfePlannedDestination() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ffeItemId, locationId }: SetProjectFfePlannedDestinationInput) => {
+      const { data, error } = await getSupabase().rpc('set_project_ffe_planned_destination', {
+        p_ffe_item_id: ffeItemId,
+        // Supabase generates non-null argument types even for nullable SQL parameters.
+        p_location_id: locationId as string,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (item) => invalidateFfeCaches(queryClient, item.project_id),
   });
 }
 
