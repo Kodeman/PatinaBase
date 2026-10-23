@@ -39,6 +39,10 @@ describe('P-03 release custody', () => {
   it.each([
     ['sent', { sent_at: '2026-10-22T11:30:00Z' }],
     ['cancelled', { status: 'cancelled' }],
+    ['confirmed', { status: 'confirmed' }],
+    ['in production', { status: 'in_production' }],
+    ['shipped', { status: 'shipped' }],
+    ['delivered', { status: 'delivered' }],
     ['unreleased', { released_at: '' }],
     ['unassigned', { created_by: '' }],
   ])('does not hand back a %s PO', (_name, change) => {
@@ -46,7 +50,7 @@ describe('P-03 release custody', () => {
   });
   it('reads existing release and buyer facts without changing the database', async () => {
     const query = { select: jest.fn().mockReturnThis(), not: jest.fn().mockReturnThis(),
-      is: jest.fn().mockReturnThis(), neq: jest.fn().mockReturnThis(),
+      is: jest.fn().mockReturnThis(), neq: jest.fn().mockReturnThis(), in: jest.fn().mockReturnThis(),
       order: jest.fn().mockResolvedValue({ data: [release], error: null }) };
     const from = jest.fn().mockReturnValue(query);
     expect(await fetchReleasedPurchaseOrders({ from })).toEqual([release]);
@@ -54,6 +58,6 @@ describe('P-03 release custody', () => {
     expect(query.select).toHaveBeenCalledWith(expect.stringContaining('created_by, released_at'));
     expect(query.select).toHaveBeenCalledWith(expect.stringContaining('purchase_orders_released_by_fkey'));
     expect(query.is).toHaveBeenCalledWith('sent_at', null);
-    expect(query.neq).toHaveBeenCalledWith('status', 'cancelled');
+    expect(query.in).toHaveBeenCalledWith('status', ['draft', 'held_for_release']);
   });
 });

@@ -62,6 +62,7 @@ import {
   type PulseCountRow,
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
+import { orderReachedVendor } from '@/lib/document/stamp-derivation';
 import { lineMaker, linePoNumber } from '@/lib/document/install-reading';
 import {
   buildDeskProposalSignals,
@@ -455,9 +456,7 @@ export function buildDeskClaimWindows(
     const po = one(notice?.purchase_order);
     if (!po?.id || !po.project_id || byPo.has(po.id)) continue;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inspections = ((po.inspections ?? []) as any[])
-      .slice()
-      .sort((a, b) => String(b?.inspected_at ?? '').localeCompare(String(a?.inspected_at ?? '')));
+    const inspections = (po.inspections ?? []) as any[];
     byPo.set(po.id, {
       projectId: po.project_id,
       purchaseOrderId: po.id,
@@ -467,7 +466,6 @@ export function buildDeskClaimWindows(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ((i?.claims ?? []) as any[]).map((c) => String(c?.state)),
       ),
-      latestOutcome: inspections[0]?.outcome ?? null,
     });
   }
   const live = [...byPo.values()].filter(
@@ -607,7 +605,7 @@ export function buildDeskPurchaseOrders(rows: any): Map<string, DeskPurchaseOrde
 }
 
 function isReleasedUnsentOrder(row: ReleasedPurchaseOrder): boolean {
-  return !!row.created_by && !!row.released_at && !row.sent_at && row.status !== 'cancelled';
+  return !!row.created_by && !!row.released_at && !orderReachedVendor(row) && row.status !== 'cancelled';
 }
 
 function unreadReleaseLabels(unread: boolean): string[] {

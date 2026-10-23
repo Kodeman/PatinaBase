@@ -139,7 +139,6 @@ function claimWindow(partial: Partial<DeskClaimWindowSignal> = {}): DeskClaimWin
     vendorName: 'Hewn',
     deadline: '2026-06-12',
     claimStates: ['drafted'],
-    latestOutcome: 'damaged',
     ...partial,
   };
 }
@@ -1749,10 +1748,6 @@ describe('C-20 — the claim window need (D1-08)', () => {
   it('clears once the claim reaches the vendor', () => {
     expect(derive(claimWindow({ claimStates: ['vendor_notified'] }))).toBeNull();
     expect(derive(claimWindow({ claimStates: ['resolved'] }))).toBeNull();
-  });
-
-  it('keeps a drafted receipt claim when the latest receipt is clean', () => {
-    expect(derive(claimWindow({ latestOutcome: 'clean' }))?.kind).toBe('claim_window');
   });
 
   it('keeps a closed window until the act, and says the studio can still file', () => {

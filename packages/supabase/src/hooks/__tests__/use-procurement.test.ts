@@ -2244,6 +2244,32 @@ describe('useTodayProcurementCounts', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useUpdateDamageClaim', () => {
+  it('drafted → resolved with a reason closes without notifying the vendor', async () => {
+    queueTableResults('damage_claims',
+      { data: { id: 'not-filed', state: 'drafted' }, error: null },
+      { data: { id: 'not-filed', state: 'resolved' }, error: null },
+    );
+    const config = useUpdateDamageClaim() as unknown as { mutationFn: (input: unknown) => Promise<unknown> };
+    const before = Date.now();
+    await config.mutationFn({ id: 'not-filed', state: 'resolved', resolution_notes: 'Not filed: Studio accepted the mark' });
+    const after = Date.now();
+    const updates = builders.damage_claims.__chain.filter((c) => c.method === 'update');
+    expect(updates).toHaveLength(1);
+    const payload = updates[0].args[0] as Record<string, any>;
+    expect(payload.state).toBe('resolved');
+    expect(payload.resolution_notes).toBe('Not filed: Studio accepted the mark');
+    expect(Date.parse(payload.resolved_at)).toBeGreaterThanOrEqual(before);
+    expect(Date.parse(payload.resolved_at)).toBeLessThanOrEqual(after);
+    expect(payload.vendor_notified_at).toBeUndefined();
+  });
+
+  it.each([undefined, '', '   '])('refuses drafted → resolved without a non-empty reason (%s)', async (resolution_notes) => {
+    queueTableResults('damage_claims', { data: { id: 'not-filed', state: 'drafted' }, error: null });
+    const config = useUpdateDamageClaim() as unknown as { mutationFn: (input: unknown) => Promise<unknown> };
+    await expect(config.mutationFn({ id: 'not-filed', state: 'resolved', resolution_notes })).rejects.toThrow(/Invalid damage_claim state transition/);
+    expect(builders.damage_claims.__chain.filter((c) => c.method === 'update')).toHaveLength(0);
+  });
+
   it('drafted → vendor_notified sets vendor_notified_at = now() when not supplied', async () => {
     // Sequential calls to damage_claims:
     //   1. SELECT current state via .single() → returns 'drafted'.

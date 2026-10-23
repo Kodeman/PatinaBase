@@ -10,7 +10,8 @@ import { InspectionPhotoStrip } from './inspection-photo-strip';
 /**
  * PRC-11 (R84): the claim lifecycle acts on the line's open item-grain
  * claims — DamageClaimDrawer's state machine (drafted → vendor_notified →
- * resolved, forward only, useUpdateDamageClaim) ported into the unfold's
+ * resolved, or drafted → resolved with a not-filed reason, via
+ * useUpdateDamageClaim) ported into the unfold's
  * quiet grammar. Creation stays with the inspection drawer's auto-draft;
  * this is the walk forward.
  */
@@ -41,21 +42,25 @@ export function ClaimActs({
     event.stopPropagation();
     if (updateClaim.isPending) return;
     const opener = event.currentTarget.parentElement?.querySelector<HTMLElement>(
-      '[data-action-key="open-resolve-ffe-claim"]',
+      '[data-action-key="open-resolve-ffe-claim"], [data-action-key="open-close-ffe-claim"]',
     );
     setResolvingId(null);
     window.requestAnimationFrame(() => opener?.focus());
   };
 
-  const run = async (id: string, state: 'vendor_notified' | 'resolved') => {
-    if (updateClaim.isPending) return;
+  const run = async (
+    id: string,
+    state: 'vendor_notified' | 'resolved',
+    notFiled = false,
+  ) => {
+    if (updateClaim.isPending || (notFiled && !note.trim())) return;
     setError(null);
     try {
       await updateClaim.mutateAsync({
         id,
         state,
         ...(state === 'resolved' && note.trim()
-          ? { resolution_notes: note.trim() }
+          ? { resolution_notes: notFiled ? `Not filed: ${note.trim()}` : note.trim() }
           : {}),
       });
       // One act, many surfaces (§5): line stamp, Receiving book, Desk need.
@@ -64,7 +69,9 @@ export function ClaimActs({
       setConfirmed(
         state === 'vendor_notified'
           ? 'Vendor notified — the claim is with them now.'
-          : 'Resolved — folded into the record.',
+          : notFiled
+            ? 'Closed without filing — folded into the record.'
+            : 'Resolved — folded into the record.',
       );
       setResolvingId(null);
       setNote('');
@@ -97,6 +104,23 @@ export function ClaimActs({
                 {oneVoice ? 'Notify the maker' : 'Notify vendor'}
               </DocumentAction>
             )}
+            {c.state === 'drafted' && (
+              <DocumentAction
+                actionKey="open-close-ffe-claim"
+                surfaceKey="project"
+                regionKey="ffe-claim"
+                variant="tertiary"
+                disabled={updateClaim.isPending}
+                onClick={() => {
+                  setResolvingId((cur) => (cur === c.id ? null : c.id));
+                  setNote('');
+                  setError(null);
+                }}
+                aria-expanded={resolvingId === c.id}
+              >
+                Close without filing
+              </DocumentAction>
+            )}
             {c.state === 'vendor_notified' && (
               <DocumentAction
                 actionKey="open-resolve-ffe-claim"
@@ -116,24 +140,32 @@ export function ClaimActs({
           {resolvingId === c.id && (
             <div className="mt-1 flex items-end gap-2" onKeyDown={onResolveKeyDown}>
               <textarea
-                rows={2}
+                rows={c.state === 'drafted' ? 1 : 2}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="How was it resolved? (replacement shipped, credit issued…)"
-                aria-label="Resolution notes"
+                placeholder={
+                  c.state === 'drafted'
+                    ? 'Why is the studio not filing?'
+                    : 'How was it resolved? (replacement shipped, credit issued…)'
+                }
+                aria-label={
+                  c.state === 'drafted' ? 'Reason for not filing' : 'Resolution notes'
+                }
                 className="min-w-0 flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)]"
               />
               <DocumentAction
                 actionKey="resolve-ffe-claim"
                 surfaceKey="project"
                 regionKey="ffe-claim-resolution"
-                variant="primary"
-                disabled={updateClaim.isPending}
+                variant={c.state === 'drafted' ? 'tertiary' : 'primary'}
+                disabled={
+                  updateClaim.isPending || (c.state === 'drafted' && !note.trim())
+                }
                 loading={updateClaim.isPending}
-                loadingLabel="Resolving…"
-                onClick={() => void run(c.id, 'resolved')}
+                loadingLabel={c.state === 'drafted' ? 'Closing…' : 'Resolving…'}
+                onClick={() => void run(c.id, 'resolved', c.state === 'drafted')}
               >
-                Mark resolved
+                {c.state === 'drafted' ? 'Close without filing' : 'Mark resolved'}
               </DocumentAction>
             </div>
           )}
