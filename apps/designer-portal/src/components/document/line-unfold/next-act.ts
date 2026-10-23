@@ -25,6 +25,7 @@ export type NextAct =
   | { kind: 'log-ack' }
   | { kind: 'advance'; to: 'in_production' | 'shipped'; label: string }
   | { kind: 'inspect' }
+  | { kind: 'complete-inspection'; inspectionId: string }
   | { kind: 'install' };
 
 export interface NextActPo {
@@ -61,6 +62,7 @@ export function deriveNextAct({
   purchase,
   ready,
   inspected,
+  pendingInspectionId,
   hasOpenClaim,
 }: {
   /** `project_ffe_items.status`. */
@@ -72,9 +74,11 @@ export function deriveNextAct({
   ready: boolean;
   /** The receipt has been inspected (`received_quantity` recorded). */
   inspected: boolean;
+  pendingInspectionId?: string;
   /** An open claim carries its own lead act (Notify vendor / Mark resolved). */
   hasOpenClaim: boolean;
 }): NextAct | null {
+  if (pendingInspectionId) return { kind: 'complete-inspection', inspectionId: pendingInspectionId };
   if (!po) {
     if (purchase?.status === 'recorded' || purchase?.status === 'billed') {
       return itemStatus === 'installed' ? null : { kind: 'purchase-arrival' };

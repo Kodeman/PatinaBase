@@ -18,6 +18,7 @@ const mockAdvancePo = jest.fn();
 const mockRecordInstalled = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
+  useReceivingInspections: () => ({ data: [] }),
   useSetFfeItemLabel: () => ({ mutateAsync: jest.fn(), isPending: false }),
   itemLabelRefusal: () => null,
   useVendorQuotes: () => ({ data: [] }),

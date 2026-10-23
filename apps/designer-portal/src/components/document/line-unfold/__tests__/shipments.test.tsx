@@ -141,6 +141,8 @@ describe('partial shipments', () => {
       target: { value: '2' },
     });
     expect(screen.getByText('2 in this shipment · 2 remain · Lawson Chair')).toBeInTheDocument();
+    expect(screen.getByText('Records 3 of 5 as shipped · 2 remain with the vendor')).toBeInTheDocument();
+    expect(screen.queryByText('Marks the order shipped.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Record dispatch' })).toBeInTheDocument();
   });
 

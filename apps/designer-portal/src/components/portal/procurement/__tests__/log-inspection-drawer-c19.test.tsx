@@ -9,15 +9,16 @@ import { LogInspectionDrawer } from '../log-inspection-drawer';
 const mutateAsync = jest.fn();
 const mockFollowUp = jest.fn();
 let mockShipments: any[] = [];
+let mockReceipts: any[] = [];
 let items: Array<{ id: string; name: string; quantity: number; project_id?: string }> = [];
 
 jest.mock('@patina/supabase', () => ({
   useCompleteReceivingInspection: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useRetryReceivingFollowUp: () => ({ mutateAsync: mockFollowUp, isPending: false }),
   usePoShipments: () => ({ data: mockShipments, isLoading: false }),
-  useReceivingInspections: () => ({ data: [], isLoading: false }),
+  useReceivingInspections: () => ({ data: mockReceipts, isLoading: false }),
   useProjectRecordedStudio: () => ({ data: 'studio-1' }),
-  useOrganizationMembers: () => ({ data: [{ user_id: 'member-1', status: 'active', profiles: { full_name: 'Morgan' } }] }),
+  useOrganizationMembers: () => ({ data: [{ user_id: 'member-1', status: 'active', profiles: { full_name: '', display_name: 'Morgan', email: 'morgan@example.com' } }] }),
   useStudioLocations: () => ({ data: [{ id: 'location-1', label: 'Warehouse' }] }),
   useUser: () => ({ user: { id: 'member-1' } }),
   useCreateReceivingInspection: () => ({ mutateAsync, isPending: false }),
@@ -95,6 +96,7 @@ beforeEach(() => {
   mutateAsync.mockReset().mockResolvedValue({ damageClaimCreated: false, inspection: { id: 'inspection-1', outcome: 'clean' } });
   mockFollowUp.mockReset().mockResolvedValue(undefined);
   mockShipments = [];
+  mockReceipts = [];
   Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => 'receipt-key-1' });
   fetchMock.mockReset();
   global.fetch = fetchMock as unknown as typeof fetch;
@@ -300,4 +302,39 @@ describe('US-51 receipt standing and follow-up preservation', () => {
     submit();
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'clean', poShipmentId: 'shipment-a', items: [expect.objectContaining({ receivedQuantity: 4, condition: 'good' })] })));
   });
+});
+
+const delivery = (id: string) => ({ id, carrier: 'Estes', tracking: id,
+  po_shipment_lines: [{ ffe_item_id: 'ffe-1', qty: 2 }] });
+
+it('preselects the only unreceived shipment and preserves a changed choice', () => {
+  mockShipments = [delivery('ship-1')];
+  const view = renderDrawer();
+  expect(screen.getByLabelText('Shipment')).toHaveValue('ship-1');
+  expect(screen.getByRole('option', { name: 'Morgan' })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Shipment'), { target: { value: '' } });
+  view.rerender(<LogInspectionDrawer open onOpenChange={jest.fn()} purchaseOrderId="po-1" poLabel="PO-1" vendorName="Vendor" projectName="Project" />);
+  expect(screen.getByLabelText('Shipment')).toHaveValue('');
+});
+
+it('requires an explicit shipment when several remain', async () => {
+  mockShipments = [delivery('ship-1'), delivery('ship-2')];
+  renderDrawer();
+  expect(screen.getByLabelText('Shipment')).toHaveValue('');
+  expect(screen.getByLabelText('Shipment')).toBeRequired();
+  submit();
+  expect(await screen.findByText('Choose the shipment for this delivery.')).toBeInTheDocument();
+  expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+it('excludes fully received shipments but defaults a partially received shipment to its remainder', () => {
+  mockShipments = [delivery('ship-1'), delivery('ship-2')];
+  mockReceipts = [
+    { id: 'r1', purchase_order_id: 'po-1', po_shipment_id: 'ship-1', receiving_inspection_lines: [{ ffe_item_id: 'ffe-1', quantity_received: 2 }] },
+    { id: 'r2', purchase_order_id: 'po-1', po_shipment_id: 'ship-2', receiving_inspection_lines: [{ ffe_item_id: 'ffe-1', quantity_received: 1 }] },
+  ];
+  renderDrawer();
+  expect(screen.getByLabelText('Shipment')).toHaveValue('ship-2');
+  expect(screen.queryByRole('option', { name: 'Estes · ship-1' })).not.toBeInTheDocument();
+  expect(screen.getByText('1 expected in this delivery · 2 ordered')).toBeInTheDocument();
 });

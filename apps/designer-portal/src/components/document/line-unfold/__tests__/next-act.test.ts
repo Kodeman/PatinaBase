@@ -155,3 +155,8 @@ describe('recorded purchases bypass the maker lifecycle', () => {
     expect(deriveNextAct({ ...base, itemStatus: 'installed', purchase: { status: 'recorded' } })).toBeNull();
   });
 });
+
+it('completes a pending inspection before receiving again or installing', () => {
+  expect(deriveNextAct({ ...base, itemStatus: 'delivered', po: { status: 'delivered' }, inspected: true,
+    pendingInspectionId: 'receipt-1' })).toEqual({ kind: 'complete-inspection', inspectionId: 'receipt-1' });
+});

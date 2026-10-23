@@ -1,5 +1,5 @@
 jest.mock('@/components/document/destinations/planned-destination', () => ({ PlannedDestination: () => null }));
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -8,6 +8,11 @@ jest.mock('@/lib/analytics/document-events', () => ({
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
+
+let mockReceipts: any[] = [];
+let mockShipments: any[] = [];
+const mockDrawer = jest.fn();
+beforeEach(() => { mockReceipts = []; mockShipments = []; mockDrawer.mockClear(); });
 
 jest.mock('@patina/supabase', () => ({
   useSetFfeItemLabel: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -40,7 +45,7 @@ jest.mock('@patina/supabase', () => ({
   useUpsertPoCostLine: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useStudioIdentity: () => ({ data: undefined }),
   useStudioContacts: () => ({ data: [] }),
-  usePoShipments: () => ({ data: [] }),
+  usePoShipments: () => ({ data: mockShipments }),
   // C-28 drafts ride in the cells; their own suite is draft-review.test.tsx.
   useProcurementDrafts: () => ({ data: [] }),
   // C-27: no acknowledgment yet; the check's own suite is ack-check.test.tsx.
@@ -48,7 +53,7 @@ jest.mock('@patina/supabase', () => ({
   useUnresolvedProcurementExceptions: () => ({ data: [] }),
   useOpenProcurementException: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useOrganizationMembers: () => ({ data: [] }),
-  useReceivingInspections: () => ({ data: [], isLoading: false }),
+  useReceivingInspections: () => ({ data: mockReceipts, isLoading: false }),
   useProcurementItems: () => ({ data: [], isLoading: false }),
   useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
   // C-29: the Quote cell; its own suite is quote.test.tsx.
@@ -75,7 +80,7 @@ jest.mock('@/components/document/buying/com-piece', () => ({
   ComPiece: () => <div data-testid="com-piece" />,
 }));
 jest.mock('@/components/portal/procurement/log-inspection-drawer', () => ({
-  LogInspectionDrawer: () => null,
+  LogInspectionDrawer: (props: any) => { mockDrawer(props); return null; },
 }));
 jest.mock('@/components/portal/procurement/po-send-actions', () => ({
   clientVendorEmailHint: () => null,
@@ -397,4 +402,22 @@ it('lifts pickup and arrival for a recorded purchase without a maker trail', () 
   expect(screen.queryByRole('button', { name: 'Mark in production' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Order' })).not.toBeInTheDocument();
   expect(screen.getByTestId('line-money-out-cell')).toHaveTextContent('Payment recorded with the purchase');
+});
+
+it('opens the existing completion drawer for the pending PO receipt from NEXT', () => {
+  mockReceipts = [{ id: 'pending-1', purchase_order_id: po.id, outcome: null }];
+  renderUnfold({ status: 'delivered', received_quantity: 1, purchase_order_id: po.id,
+    purchase_order: { ...po, status: 'delivered' } });
+  fireEvent.click(within(screen.getByTestId('line-next-act')).getByRole('button', { name: 'Complete inspection' }));
+  expect(mockDrawer).toHaveBeenLastCalledWith(expect.objectContaining({ open: true, inspectionId: 'pending-1',
+    purchaseOrderId: po.id, poLabel: 'PO-1042' }));
+  expect(screen.queryByRole('button', { name: 'Log inspection' })).not.toBeInTheDocument();
+});
+
+it('reads partial shipment quantities in both movement sentences', () => {
+  mockShipments = [{ id: 'ship-1', shipped_on: '2026-10-22', mode: 'ltl', po_shipment_lines: [{ ffe_item_id: 'line-1', qty: 4 }] }];
+  renderUnfold({ quantity: 6, status: 'shipped', purchase_order_id: po.id, purchase_order: { ...po, status: 'shipped' } });
+  const movement = within(screen.getByTestId('line-movement-cell'));
+  expect(movement.getByText('4 of 6 shipped')).toBeInTheDocument();
+  expect(movement.getByText('4 of 6 shipped — no scheduled arrival')).toBeInTheDocument();
 });

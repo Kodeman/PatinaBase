@@ -1419,6 +1419,8 @@ export interface ReceivingInspection {
     vendor_id: string;
     project_id: string;
     status: POStatus;
+    po_number?: string | null;
+    vendor_po_number?: string | null;
     vendor?: { id: string; name: string };
     project?: { id: string; name: string };
   };
@@ -1643,7 +1645,7 @@ export function useReceivingInspections(filters?: ReceivingInspectionFilters) {
           `
           *,
           purchase_order:purchase_orders!receiving_inspections_purchase_order_id_fkey(
-            id, vendor_id, project_id, status,
+            id, vendor_id, project_id, status, po_number, vendor_po_number,
             vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
             project:projects!purchase_orders_project_id_fkey(id, name)
           ),
