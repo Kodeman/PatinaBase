@@ -167,8 +167,10 @@ test("an overdue gate's elapsed-time derivation prints once more above the paper
   ).toBeVisible();
 
   await page.locator('[data-lens-more]').click();
+  // PP-2 (8f80366f9): the derivation prints the house day-month date,
+  // `dayMonth()` in lib/document/dates.ts — "oldest due 18 October".
   const row = page.locator('[data-standing-row][data-standing-tier="overdue"]', {
-    hasText: /\d+ decisions? overdue — oldest due [A-Z][a-z]{2} \d{1,2}/,
+    hasText: /\d+ decisions? overdue — oldest due \d{1,2} [A-Z][a-z]+/,
   });
   await expect(row).toHaveCount(1);
   await expect(row.locator('[data-action-key]')).toHaveText('Chase the approval');

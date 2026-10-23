@@ -42,11 +42,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("Desk — whole-desk error state", () => {
-  test("a forced document_state failure shows one coherent error surface; retry recovers", async ({
+  test("a forced desk_read failure shows one coherent error surface; retry recovers", async ({
     authenticatedPage: page,
   }) => {
     let forceFail = true;
-    await page.route("**/rest/v1/document_state**", (route) => {
+    // The Desk reads every feed through the one `desk_read` RPC (00791, US-34
+    // N8, use-desk-engagements.ts); it no longer reads `document_state` over
+    // REST, so that is the read whose failure must raise the error surface.
+    await page.route("**/rest/v1/rpc/desk_read**", (route) => {
       if (!forceFail) return route.continue();
       return route.fulfill({
         status: 500,
