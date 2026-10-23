@@ -244,7 +244,7 @@ export function buildDeskReturns(rows: any): Map<string, DeskReturnSignal[]> | u
  * draft (no project) has no engagement to rise on, so it is dropped here.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildDeskDrafts(rows: any, outboundRows?: any): Map<string, DeskDraftSignal[]> | undefined {
+export function buildDeskDrafts(rows: any, outboundRows?: any, orders: readonly ReleasedPurchaseOrder[] = []): Map<string, DeskDraftSignal[]> | undefined {
   if (!Array.isArray(rows)) return undefined;
   const map = new Map<string, DeskDraftSignal[]>();
   // US-31 B5a: staged outbound drafts ride the same map, marked by `outbound`.
@@ -266,11 +266,15 @@ export function buildDeskDrafts(rows: any, outboundRows?: any): Map<string, Desk
       },
     ]);
   }
+  const buyers = new Map(orders.map((order) => [order.id, order.created_by]));
   for (const row of rows) {
     if (!row?.id || !row.project_id) continue;
+    const buyer = buyers.get(row.purchase_order_id);
     map.set(row.project_id, [
       ...(map.get(row.project_id) ?? []),
       {
+        ...(buyer && ['vendor_claim_notice', 'receiver_inbound_notice'].includes(row.kind)
+          ? { assignedToUserId: buyer } : {}),
         id: row.id,
         kind: row.kind,
         status: row.status,
@@ -620,7 +624,7 @@ export function buildDeskReleasedOrders(rows: readonly ReleasedPurchaseOrder[]):
       purchaseOrderId: row.id,
       buyerId: row.created_by!,
       releasedAt: row.released_at!,
-      releasedByName: row.released_by_profile?.full_name ?? null,
+      releasedByName: row.released_by_profile?.full_name?.trim() || row.released_by_profile?.display_name?.trim() || null,
     }]);
   }
   return map;
@@ -810,7 +814,7 @@ export function composeDeskRead(
   const drafts =
     draftRowsError && outboundRowsError
       ? undefined
-      : buildDeskDrafts(draftRowsError ? [] : draftRows, outboundRowsError ? [] : outboundRows);
+      : buildDeskDrafts(draftRowsError ? [] : draftRows, outboundRowsError ? [] : outboundRows, releasedRows);
   const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
   const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
   const heldReleases = heldRowsError
@@ -955,7 +959,11 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
         }
       }
 
-      const released = await fetchReleasedPurchaseOrders(supabase).then(
+      const draftFeed = deskFeed(read, 'drafts');
+      const draftPoIds = Array.isArray(draftFeed.data)
+        ? [...new Set(draftFeed.data.map((draft: { purchase_order_id?: string }) => draft.purchase_order_id).filter((id): id is string => !!id))]
+        : [];
+      const released = await fetchReleasedPurchaseOrders(supabase, draftPoIds).then(
         (data) => ({ data, unread: false }),
         () => ({ data: [], unread: true }),
       );

@@ -1900,16 +1900,19 @@ export function useProjectPoCostLines(projectId: string | null | undefined) {
 
 export type ReleasedPurchaseOrder = Pick<Database['public']['Tables']['purchase_orders']['Row'],
   'id' | 'project_id' | 'created_by' | 'released_at' | 'sent_at' | 'status'> & {
-  released_by_profile: { full_name: string | null } | null;
+  released_by_profile: { full_name: string | null; display_name?: string | null } | null;
 };
 
 /** P-03: release custody is the original buyer's, not the project's lead's. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function fetchReleasedPurchaseOrders(supabase: any): Promise<ReleasedPurchaseOrder[]> {
-  const { data, error } = await supabase.from('purchase_orders')
-    .select('id, project_id, created_by, released_at, sent_at, status, released_by_profile:profiles!purchase_orders_released_by_fkey(full_name)')
-    .not('released_at', 'is', null).is('sent_at', null).in('status', ['draft', 'held_for_release'])
-    .order('released_at');
+export async function fetchReleasedPurchaseOrders(supabase: any, draftPoIds: readonly string[] = []): Promise<ReleasedPurchaseOrder[]> {
+  let query = supabase.from('purchase_orders')
+    .select('id, project_id, created_by, released_at, sent_at, status, released_by_profile:profiles!purchase_orders_released_by_fkey(full_name, display_name)');
+  // Reuse the Desk's one supplemental read for custody of already-projected drafts.
+  query = draftPoIds.length
+    ? query.or(`and(released_at.not.is.null,sent_at.is.null,status.in.(draft,held_for_release)),id.in.(${draftPoIds.join(',')})`)
+    : query.not('released_at', 'is', null).is('sent_at', null).in('status', ['draft', 'held_for_release']);
+  const { data, error } = await query.order('released_at');
   if (error) throw error;
   return data ?? [];
 }

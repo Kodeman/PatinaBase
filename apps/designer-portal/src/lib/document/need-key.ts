@@ -12,6 +12,8 @@ import type { NeedLine } from './desk-derivation';
 export type NeedKey = string;
 
 export function needKeyOf(need: Omit<NeedLine, 'key'>, projectId: string): NeedKey {
+  // Approval and the buyer's subsequent Send are different acts on the same PO.
+  if (need.releasedOrder) return `${need.kind}:${need.recordId}:released:${need.at}`;
   return need.recordId
     ? `${need.kind}:${need.recordId}`
     : `${need.kind}:project:${projectId}`;

@@ -377,6 +377,8 @@ export interface DeskReturnSignal {
  *  The row's own columns, so the Desk's draft review reads it as it is. */
 export interface DeskDraftSignal {
   id: string;
+  /** The PO buyer carries claim and receiver letters, not the project lead. */
+  assignedToUserId?: string;
   /** ack_discrepancy_reply | ack_chase | receiver_inbound_notice | vendor_claim_notice | … */
   kind: string;
   status: string;
@@ -1707,7 +1709,9 @@ export function studioOutboundNeed(
   };
 }
 
-const needDraftReview: NeedRule = ({ drafts, purchaseOrders, now }) => {
+const needDraftReview: NeedRule = (ctx) => draftReviewNeed({ ...ctx, drafts: ctx.drafts?.filter((draft) => !draft.assignedToUserId) });
+
+const draftReviewNeed: NeedRule = ({ drafts, purchaseOrders, now }) => {
   // N3: a chase for a PO the maker has since acknowledged asks for nothing.
   const acked = new Set(
     (purchaseOrders ?? []).filter((po) => po.acknowledgedAt).map((po) => po.purchaseOrderId),
@@ -1740,6 +1744,7 @@ const needDraftReview: NeedRule = ({ drafts, purchaseOrders, now }) => {
     kind: shape?.kind ?? 'po_unsent',
     // The procurement letter keeps the line's key while one is held.
     recordId: (first ?? oldest).id,
+    ...(oldest.assignedToUserId ? { assignedToUserId: oldest.assignedToUserId } : {}),
     at: oldest.created_at,
     text:
       stalled.length > 0
@@ -2186,6 +2191,17 @@ export function deriveNeeds(
     needs.push({ ...need, key });
   };
   releasedNeeds(ctx.releasedOrders).forEach(push);
+  const buyerDrafts = new Map<string, DeskDraftSignal[]>();
+  for (const draft of drafts ?? []) {
+    if (!draft.assignedToUserId) continue;
+    const group = buyerDrafts.get(draft.assignedToUserId) ?? [];
+    group.push(draft);
+    buyerDrafts.set(draft.assignedToUserId, group);
+  }
+  for (const group of buyerDrafts.values()) {
+    const need = draftReviewNeed({ ...ctx, drafts: group });
+    if (need && !('sealed' in need)) push(need);
+  }
   for (const rule of NEED_RULES) {
     const result = rule(ctx);
     if (result === null) continue;
