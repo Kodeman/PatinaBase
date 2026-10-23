@@ -950,3 +950,87 @@ describe('US-46 R203 · the Next plate reads on its own ground and focuses on pa
     },
   );
 });
+
+/**
+ * House sheet SPEC §H (Room Proof 08, 2026-10-23) — the round-8 renderer
+ * spends production tokens directly, on stocks the legacy paper pairs less
+ * often (green-record, the second sheet, warm fill, the rail). Every
+ * text/stock pair token-mapping §2 prints is measured here, so a retune of
+ * any one of them fails by name. The survey-blue `-ink` is also in the F56
+ * sweep above, on the five light grounds.
+ */
+describe('§H round 8 · every text/stock pair the mapping prints', () => {
+  const NON_TEXT_CONTRAST = 3;
+  const pairs = (inks: readonly string[], grounds: readonly string[]) =>
+    inks.flatMap((ink) =>
+      grounds.map((ground) => [
+        `${ink} on ${ground}`,
+        resolveToken(ink),
+        ground.startsWith('#') ? ground : resolveToken(ground),
+      ] as [string, string, string]),
+    );
+
+  it('declares survey blue once, at :root, as the pigment/ink pair SPEC §H-1 rules', () => {
+    expect(tokens.get('--color-survey-blue')).toBe('#58717B');
+    expect(tokens.get('--color-survey-blue-ink')).toBe('#4E6770');
+    expect(css.match(/--color-survey-blue\s*:/g) ?? []).toHaveLength(1);
+    expect(css.match(/--color-survey-blue-ink\s*:/g) ?? []).toHaveLength(1);
+    expect(css).toMatch(/:root\s*\{[^}]*--color-survey-blue:\s*#58717B;/);
+  });
+
+  it('clears 4.5:1 for every text pair on its round-8 stock', () => {
+    expect(
+      failuresBelowAA([
+        ...pairs(['--ink'], ['--paper', '--paper-doc', '--color-green-record', '--doc-sheet-2', '--bg-warm']),
+        ...pairs(
+          ['--ink-faint'],
+          ['--paper', '--paper-doc', WHITE, '--color-green-record', '--doc-sheet-2', '--bg-warm', '--rail'],
+        ),
+        ...pairs(['--color-forest'], ['--paper', '--paper-doc', '--color-green-record', '--doc-sheet-2', '--rail']),
+        ...pairs(['--terracotta-ink'], ['--paper', '--paper-doc', '--color-green-record', '--bg-warm']),
+        ...pairs(['--clay-ink'], ['--paper', '--color-green-record', '--rail']),
+        ...pairs(['--color-survey-blue-ink'], ['--color-green-record', '--rail']),
+        // the plate (charcoal and its hover), the terminal and the return bar
+        ...pairs(['--ink-paper'], ['--ink', '#1F1D1A', '--color-forest', '--color-forest-press']),
+      ]),
+    ).toEqual([]);
+  });
+
+  it('clears 3:1 for every non-text mark on its round-8 stock', () => {
+    const marks = [
+      ...pairs(['--color-survey-blue'], ['--paper', '--paper-doc', '--color-green-record', '--rail']),
+      ...pairs(['--focus-ring'], ['--paper', '--paper-doc']),
+      ...pairs(['--color-forest'], ['--paper']),
+    ];
+    const failing = marks
+      .map(([label, mark, ground]) => [label, Number(contrastRatio(mark, ground).toFixed(2))] as const)
+      .filter(([, ratio]) => ratio < NON_TEXT_CONTRAST);
+    expect(failing).toEqual([]);
+  });
+
+  it('measures the survey pigment below text grade on green-record and the rail', () => {
+    // why the pigment is a mark only: as a word it would fail on two of the
+    // stocks round 8 prints it near
+    for (const ground of ['--color-green-record', '--rail']) {
+      expect(contrastRatio(resolveToken('--color-survey-blue'), resolveToken(ground))).toBeLessThan(AA_NORMAL_TEXT);
+    }
+  });
+
+  it('spends the survey pigment as text nowhere under src/', () => {
+    const TEXT_FORMS = [
+      /text-\[var\(--color-survey-blue\)\]/g,
+      /(?<![-\w])color:\s*['"]?var\(--color-survey-blue\)/g,
+    ];
+    const offences: string[] = [];
+    for (const file of sourceFiles(SRC_ROOT)) {
+      const relative = file.slice(APP_ROOT.length + 1);
+      if (relative === 'src/lib/document/__tests__/contrast.test.ts') continue;
+      const source = readFileSync(file, 'utf8');
+      for (const pattern of TEXT_FORMS) {
+        const hits = source.match(pattern);
+        if (hits) offences.push(`${relative} — ${hits.length}× survey blue as text`);
+      }
+    }
+    expect(offences).toEqual([]);
+  });
+});

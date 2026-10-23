@@ -1375,3 +1375,20 @@ Further rules inside the scope:
    - Design: token-mapping §7.2.
 
 Answers: Kody 2026-10-23 (R8-01, P01, P02); `docs/design/designer-portal-round8/DECISIONS.md`; US-52 WP-00.4.
+
+**H-4. Correction: where the round-8 rules live (2026-10-23, WP-01.3, SQ-1821).** This corrects §H-3 by
+appending; the text above is left as written.
+- **One lazy sheet.** Every rule under `[data-paper-renderer="round8"]` lives in
+  `apps/designer-portal/src/components/document/paper/round8.css`, imported only by the `next/dynamic`
+  Round8PaperFrame and the round-8 studio body. The legacy renderer never loads it.
+- **globals.css gains only the §H-1 pair.** `--color-survey-blue` and `--color-survey-blue-ink` sit at
+  `:root`, because `contrast.test.ts` parses only that file.
+- **§H-3.3 reads "every stylesheet other than `round8.css`"** where it says "other than `globals.css`".
+  `globals.css` stays at zero shadows with every other stylesheet.
+- **§H-3.4's gates read that sheet.** `shadow-gate.test.ts` allowlists the five (selector, token) pairs in
+  `round8.css` only. The P02 describe in `document-action-hierarchy-contract.test.ts` reads `round8.css`, and
+  asserts `globals.css` carries no `data-paper-renderer` rule.
+- **Terminal binding.** A round-8 terminal names its §A6 sentence through `aria-describedby`, and the same file
+  renders the element with that id. This is how the gate proves the consequence sentence is present.
+
+Answers: US-52 story decision #5 (SQ-1811 addendum); WP-01.3.
