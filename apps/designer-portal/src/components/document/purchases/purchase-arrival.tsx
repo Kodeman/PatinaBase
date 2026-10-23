@@ -17,7 +17,7 @@ export function PurchaseArrival({ item, purchase, projectId, projectName, canEdi
   const [method, setMethod] = useState<'picked_up' | 'delivered'>('picked_up');
   const [open, setOpen] = useState(false);
   const { data: receipts, isLoading, error } = useReceivingInspections({ studioPurchaseId: purchase.id });
-  const pending = receipts?.find((receipt) => receipt.inspection_pending);
+  const pending = receipts?.find((receipt) => receipt.outcome === null);
   const received = item.received_quantity ?? 0;
   const complete = received >= item.quantity;
   const checked = complete && !!receipts?.length && receipts.every((receipt) => receipt.outcome === 'clean');

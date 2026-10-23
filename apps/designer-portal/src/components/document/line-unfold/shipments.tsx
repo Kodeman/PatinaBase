@@ -333,14 +333,25 @@ function shipmentQuantityText(raw: string | undefined, left: number, name: strin
   return count + ' in this shipment · ' + (left - count) + ' remain · ' + name;
 }
 
-function DispatchConsequences({ status, po }: {
+export function lineShipmentWord(quantity: number, shipped: number): string {
+  return shipped > 0 && shipped < quantity ? shipped + ' of ' + quantity + ' shipped' : 'Shipped';
+}
+
+function DispatchConsequences({ status, po, pieces, shipments, draft }: {
   status: string;
   po: ProcurementItemRow['purchase_order'] | undefined;
+  pieces: readonly ShipmentPiece[];
+  shipments: readonly PoShipmentWithLines[];
+  draft: ShipmentDraft;
 }) {
-  if (!['confirmed', 'in_production'].includes(status)) return null;
+  const total = pieces.reduce((n, p) => n + (p.quantity ?? 1), 0);
+  const dispatched = pieces.reduce((n, p) => n + shippedQty(shipments, p.id), 0);
+  const sending = Object.values(draft.qty).reduce((n, raw) => n + (/^\d+$/.test(raw) ? Number(raw) : 0), 0);
+  const remaining = Math.max(0, total - dispatched - sending);
   return <>
-    <CellSub>Marks the order shipped.</CellSub>
-    {po && <ShipmentBalanceConsequence po={po} />}
+    {remaining > 0 ? <CellSub>Records {sending} of {total} as shipped · {remaining} remain with the vendor</CellSub>
+      : ['confirmed', 'in_production'].includes(status) && <CellSub>Marks the order shipped.</CellSub>}
+    {po && ['confirmed', 'in_production'].includes(status) && <ShipmentBalanceConsequence po={po} />}
   </>;
 }
 
@@ -501,7 +512,7 @@ function ShipmentForm({
         </p>
       )}
       <CellSub>Manual record · no automatic carrier updates</CellSub>
-      <DispatchConsequences status={poStatus} po={items?.[0]?.purchase_order} />
+      <DispatchConsequences status={poStatus} po={items?.[0]?.purchase_order} pieces={pieces} shipments={shipments} draft={current} />
       <div className="flex items-center gap-2">
         <DocumentAction
           actionKey="record-po-shipment"

@@ -534,7 +534,7 @@ export function ReceivingBookPage({
         </p>
       ) : (
         <>
-          {filteredInspections.filter(i => i.inspection_pending).map(i => <div key={i.id} className="mb-3">
+          {filteredInspections.filter(i => i.outcome === null).map(i => <div key={i.id} className="mb-3">
             <p>Inspection pending · {i.purchase_order?.vendor?.name ?? 'Delivery'} · received {fmtDay(i.received_on ?? i.created_at)}</p>
             <button className="min-h-11 underline" onClick={() => setTarget({ ...i.purchase_order, inspectionId: i.id })}>Complete inspection</button>
           </div>)}
@@ -663,7 +663,7 @@ export function ReceivingBookPage({
             target.vendor_po_number ??
             target.po_number ??
             target.sidemark ??
-            'PO'
+            'Delivery'
           }
           vendorName={target.vendor?.name ?? 'Vendor'}
           projectName={target.project?.name ?? 'Project'}

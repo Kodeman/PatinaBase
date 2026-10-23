@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useArchiveProjectSelection,
   useVendor,
+  useReceivingInspections,
   type StudioPurchaseRow,
 } from '@patina/supabase';
 import { OrderPaper } from '@/components/portal/procurement/order-paper';
@@ -231,6 +232,9 @@ export function LineUnfold({
 
   const [paperOpen, setPaperOpen] = useState(false);
   const [inspectionOpen, setInspectionOpen] = useState(false);
+  const { data: receipts } = useReceivingInspections(purchase ? { studioPurchaseId: purchase.id } : { projectId });
+  const pendingInspection = receipts?.find(receipt => receipt.outcome === null &&
+    (po ? receipt.purchase_order_id === po.id : receipt.studio_purchase_id === purchase?.id));
   const [previewOpen, setPreviewOpen] = useState(false);
   // R1-F29: removing asks for a reason; a line on an instrument or a PO is
   // refused in place (a8), the same sentence the RPC's refusal maps to.
@@ -290,6 +294,7 @@ export function LineUnfold({
     purchase,
     ready: readiness.ready,
     inspected: item.received_quantity != null,
+    pendingInspectionId: po ? pendingInspection?.id : undefined,
     hasOpenClaim: openClaims.length > 0,
   });
 
@@ -319,7 +324,7 @@ export function LineUnfold({
       variant={variant}
       onClick={() => setInspectionOpen(true)}
     >
-      Log inspection
+      {pendingInspection ? 'Complete inspection' : 'Log inspection'}
     </DocumentAction>
   );
 
@@ -358,7 +363,7 @@ export function LineUnfold({
             <span className={LABEL_CLS}>Next</span>
             {next.kind === 'order' && orderAct('primary')}
             {next.kind === 'send' && sendAct('primary')}
-            {next.kind === 'inspect' && inspectAct('primary')}
+            {(next.kind === 'inspect' || next.kind === 'complete-inspection') && inspectAct('primary')}
             {next.kind === 'log-ack' && (
               // C-10: the vendor phoned or emailed — log the acknowledgment on
               // the line itself (the Orders ledger's canAck predicate).
@@ -431,7 +436,7 @@ export function LineUnfold({
         ) : <MoneyOutCell po={po} projectId={projectId} itemId={item.id} />}
         {purchase && !po ? (
           <UnfoldCell head="Receiving" testId="line-receiving-cell"><CellSub>Arrival and inspection are recorded separately. A physical receipt is not an inspection.</CellSub></UnfoldCell>
-        ) : <ReceivingCell item={item} stampKind={stamp.kind} openClaims={openClaims} />}
+        ) : <ReceivingCell item={item} stampKind={stamp.kind} openClaims={openClaims} pendingInspectionId={pendingInspection?.id} />}
       </div>
 
       {/* R7 (M7): the fifteen-step trail — the position, where the cells above
@@ -529,7 +534,7 @@ export function LineUnfold({
         {/* Acts that apply but are not the lifted one stay reachable here. */}
         {!purchase && readiness.ready && next?.kind !== 'order' && orderAct('secondary')}
         {sendable && next?.kind !== 'send' && sendAct('secondary')}
-        {inspectable && next?.kind !== 'inspect' && inspectAct('secondary')}
+        {inspectable && next?.kind !== 'inspect' && next?.kind !== 'complete-inspection' && inspectAct('secondary')}
         {/* R76 — bill this line: the composer opens FF&E-prefilled and
             intersects against what's still billable (covered lines fall out
             with a quiet notice), so the act needs no coverage gate here. */}
@@ -621,8 +626,10 @@ export function LineUnfold({
             open={inspectionOpen}
             onOpenChange={setInspectionOpen}
             purchaseOrderId={po.id}
+            inspectionId={pendingInspection?.id}
+            buyerUserId={po.created_by}
             projectId={projectId}
-            poLabel={po.vendor_po_number ?? po.sidemark ?? 'PO'}
+            poLabel={po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'Delivery'}
             vendorName={item.vendor_name ?? vendor?.name ?? 'Vendor'}
             projectName={projectName}
           />

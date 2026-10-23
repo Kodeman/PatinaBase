@@ -58,7 +58,7 @@ it.each(['Picked up', 'Delivered'])('links a %s purchase arrival through the rea
 });
 
 it('completes the pending purchase receipt using its snapshot without receiving quantities twice', async () => {
-  mockReceipts = [{ id: 'receipt-pending', inspection_pending: true, outcome: null, receiving_inspection_lines: [
+  mockReceipts = [{ id: 'receipt-pending', outcome: null, receiving_inspection_lines: [
     { ffe_item_id: 'line-1', received_quantity: 1, quantity_received: 1 },
   ] }];
   renderArrival({ received_quantity: 2 });

@@ -272,6 +272,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const [receivedOn, setReceivedOn] = useState('');
   const [location, setLocation] = useState('');
   const [shipmentId, setShipmentId] = useState('');
+  const shipmentChoiceTouched = useRef(false);
   const [receiptKey, setReceiptKey] = useState('');
   const savedClaimItemIds = useRef<string[]>([]);
   const [saved, setSaved] = useState<CreateReceivingInspectionResult | null>(null);
@@ -319,11 +320,18 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const expectedFor = (id: string, quantity: number): number => props.inspectionId
     ? original?.receiving_inspection_lines?.find(l => l.ffe_item_id === id)?.quantity_received ?? 0
     : shipment
-    ? shipment.po_shipment_lines.filter(l => l.ffe_item_id === id).reduce((n, l) => n + l.qty, 0)
+    ? shipmentRemaining(shipment, id)
     : Math.max(0, quantity - (items.find(it => it.id === id)?.received_quantity ?? 0));
   const baselineFor = (id: string) => items.find(it => it.id === id)?.received_quantity ?? 0;
   const snapshotFor = (id: string) => original?.receiving_inspection_lines?.find(l => l.ffe_item_id === id);
-  const availableShipments = (shipments.data ?? []).filter(s => !(inspections.data ?? []).some(i => i.po_shipment_id === s.id));
+  const shipmentRemaining = (s: NonNullable<typeof shipments.data>[number], itemId: string) => {
+    const sent = s.po_shipment_lines.filter(l => l.ffe_item_id === itemId).reduce((n, l) => n + l.qty, 0);
+    const arrived = (inspections.data ?? []).filter(i => i.po_shipment_id === s.id)
+      .flatMap(i => i.receiving_inspection_lines ?? []).filter(l => l.ffe_item_id === itemId)
+      .reduce((n, l) => n + l.quantity_received, 0);
+    return Math.max(0, sent - arrived);
+  };
+  const availableShipments = (shipments.data ?? []).filter(s => s.po_shipment_lines.some(l => shipmentRemaining(s, l.ffe_item_id) > 0));
 
   // Reset form whenever the drawer reopens for a new PO.
   useEffect(() => {
@@ -332,6 +340,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     setOwner(props.buyerUserId ?? user?.id ?? '');
     setSource('studio_member'); setSourceText(''); setLocation('');
     setReceivedOn(new Date().toLocaleDateString('en-CA'));
+    shipmentChoiceTouched.current = false;
     setShipmentId(''); setReceiptKey(crypto.randomUUID());
     setSaved(null); setFailedPhotos([]);
     setOutcome('clean');
@@ -346,6 +355,11 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     setPhotos([]);
     setPhotoError(null);
   }, [open, purchaseOrderId, props.studioPurchaseId, props.inspectionId]);
+
+  useEffect(() => {
+    if (!open || props.inspectionId || shipmentChoiceTouched.current || shipments.isLoading || inspections.isLoading) return;
+    setShipmentId(availableShipments.length === 1 ? availableShipments[0].id : '');
+  }, [open, props.inspectionId, shipments.data, inspections.data, shipments.isLoading, inspections.isLoading]);
 
   useEffect(() => {
     if (!original) return;
@@ -472,6 +486,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const handleSubmit = async () => {
     if (saved || busy) return;
     if (!items.length) { setSubmitError('The delivery items are still loading.'); return; }
+    if (!props.inspectionId && availableShipments.length > 1 && !shipmentId) { setSubmitError('Choose the shipment for this delivery.'); return; }
     if (!checked) { setSubmitError('Choose whether the delivery was opened and checked.'); return; }
     if (checked === 'no' && !owner) { setSubmitError('Name the person responsible for inspection.'); return; }
     if (source === 'receiver_report' && !sourceText.trim()) { setSubmitError('Name the source of the receiver report.'); return; }
@@ -658,8 +673,8 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 {saved.damageClaimCreated && <p>Claim draft ready · not sent. Reviewer: {members.data?.find(m => m.user_id === owner)?.profiles?.full_name ?? 'the assigned buyer'}.</p>}
               </section> : <>
               {!props.inspectionId && <div className="mb-5 space-y-3">
-                <label className="block">Shipment<Select aria-label="Shipment" value={shipmentId} onChange={e => { setShipmentId(e.target.value); setReceived({}); }}>
-                  <option value="">Delivery without a recorded shipment</option>
+                <label className="block">Shipment<Select aria-label="Shipment" required={availableShipments.length > 1} value={shipmentId} onChange={e => { shipmentChoiceTouched.current = true; setShipmentId(e.target.value); setReceived({}); }}>
+                  <option value="">{availableShipments.length > 1 ? 'Choose a recorded shipment' : 'Delivery without a recorded shipment'}</option>
                   {availableShipments.map(s => <option key={s.id} value={s.id}>{s.carrier ?? 'Shipment'} · {s.tracking ?? s.shipped_on}</option>)}
                 </Select></label>
                 <label className="block">Arrival date<Input aria-label="Arrival date" type="date" value={receivedOn} onChange={e => setReceivedOn(e.target.value)} /></label>
@@ -675,7 +690,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 </Select></label>
               </div>}
               <label className="mb-5 block">Responsible person<Select aria-label="Responsible person" value={owner} onChange={e => setOwner(e.target.value)}>
-                <option value="">Choose a studio member</option>{members.data?.filter(m => m.status === 'active').map(m => <option key={m.user_id} value={m.user_id}>{m.profiles?.full_name ?? m.profiles?.email ?? m.user_id}</option>)}
+                <option value="">Choose a studio member</option>{members.data?.filter(m => m.status === 'active').map(m => <option key={m.user_id} value={m.user_id}>{m.profiles?.full_name?.trim() || m.profiles?.display_name?.trim() || m.profiles?.email || m.user_id}</option>)}
               </Select></label>
 
               <div className="mb-5">

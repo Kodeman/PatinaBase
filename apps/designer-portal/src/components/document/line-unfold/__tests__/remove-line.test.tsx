@@ -23,6 +23,7 @@ const mockArchive = jest.fn();
 const mockArchiveHook = jest.fn(() => ({ mutateAsync: mockArchive, isPending: false }));
 
 jest.mock('@patina/supabase', () => ({
+  useReceivingInspections: () => ({ data: [] }),
   useSetFfeItemLabel: () => ({ mutateAsync: jest.fn(), isPending: false }),
   itemLabelRefusal: () => null,
   useArchiveProjectSelection: () => mockArchiveHook(),

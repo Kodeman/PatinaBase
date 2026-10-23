@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   OPEN_PROCUREMENT_DRAFT_STATUSES,
   useProcurementDrafts,
+  usePoShipments,
   useUpdatePurchaseOrderETA,
   useUpdatePurchaseOrderStatus,
 } from '@patina/supabase';
@@ -24,7 +25,7 @@ import { DocumentAction } from '../document-action';
 import { CellValue, FIELD_CLS, LABEL_CLS, UnfoldCell } from './cell';
 import { ShipmentTracking, etaMoveText, etaMoves } from './movement-tracking';
 import { NEXT_PO_STATUS } from './next-act';
-import { PoShipments } from './shipments';
+import { PoShipments, shippedQty, lineShipmentWord } from './shipments';
 import { DraftReview, PurchaseOrderDrafts, landOnMakerAddress } from '../buying/draft-review';
 
 type FFERow = any;
@@ -189,6 +190,10 @@ export function MovementCell({
   onAdvanced: (to: 'in_production' | 'shipped') => void;
 }) {
   const qc = useQueryClient();
+  const { data: shipments } = usePoShipments(po?.id ?? null);
+  const movementWord = item.status === 'shipped'
+    ? lineShipmentWord(item.quantity, shippedQty(shipments ?? [], item.id))
+    : item.status.charAt(0).toUpperCase() + item.status.slice(1);
   const updateEta = useUpdatePurchaseOrderETA({ errorSurface: 'inline' });
   const moves = etaMoves(po?.eta_history);
   const showMoves = moves.some((m) => m.was || m.note);
@@ -229,7 +234,7 @@ export function MovementCell({
   return (
     <UnfoldCell head="Movement" testId="line-movement-cell">
       <CellValue>
-        {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+        {movementWord}
       </CellValue>
       {po && nextStatus && showAdvance && (
         <PoStatusAct
@@ -271,7 +276,7 @@ export function MovementCell({
           </label>
           {!eta && po.status === 'shipped' && !error && (
             <p className="text-[11px] text-[var(--text-muted)]">
-              shipped — no scheduled arrival
+              {movementWord} — no scheduled arrival
             </p>
           )}
           {saved && !error && (

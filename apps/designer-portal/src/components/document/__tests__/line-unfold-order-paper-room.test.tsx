@@ -19,6 +19,7 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 jest.mock('@patina/supabase', () => ({
+  useReceivingInspections: () => ({ data: [] }),
   useSetFfeItemLabel: () => ({ mutateAsync: mockSetLabel, isPending: false }),
   itemLabelRefusal: (message: string) => message.includes('already uses') ? message : null,
   useVendorQuotes: () => ({ data: [] }),
