@@ -126,7 +126,7 @@ describe('deriveLensBand · line 1, per spread kind (OD-1)', () => {
       input({
         readingStop: {
           key: 'ffe',
-          label: 'Pieces',
+          label: 'Pieces & purchasing',
           countLine: '36 lines · 4 rooms · 1 damaged',
         },
       }),
@@ -1272,13 +1272,13 @@ describe('deriveLensBand · the announcement (OD-7 / DL-03)', () => {
       input({
         readingStop: {
           key: 'ffe',
-          label: 'Pieces',
+          label: 'Pieces & purchasing',
           countLine: '36 lines · 4 rooms · 1 damaged',
         },
       }),
     );
     expect(model.announcement).toBe(
-      'Now at Pieces · 36 lines · 4 rooms · 1 damaged',
+      'Now at Pieces & purchasing · 36 lines · 4 rooms · 1 damaged',
     );
   });
 

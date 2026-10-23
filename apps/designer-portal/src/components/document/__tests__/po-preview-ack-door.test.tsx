@@ -46,6 +46,11 @@ jest.mock('@patina/supabase', () => ({
   useProcurementDrafts: () => ({ data: [] }),
 }));
 
+// The standings on the paper have their own suite (order-paper/__tests__).
+jest.mock('@/components/portal/procurement/order-paper/purchase-order-standings', () => ({
+  SavedPurchaseOrderStandings: () => null,
+}));
+
 let mockOneVoice = false;
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (name: string) => ({ value: name === 'one-voice' && mockOneVoice, isLoading: false }),

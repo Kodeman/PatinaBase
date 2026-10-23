@@ -218,21 +218,21 @@ describe('FF&E project-mode region head', () => {
     line({ product_id: 'product-1', ...over });
   const head = () => document.querySelector('[data-region-head="ffe"]') as HTMLElement;
 
-  it('US-43 R4 — a release held by its prerequisite elects no lead: Edit selections stays a quiet tool', () => {
+  it('US-43 R4 — a release held by its prerequisite elects no lead: Edit pieces & purchasing stays a quiet tool', () => {
     mockItems = [settled()];
     mockCoverage = { 'line-1': { coverage: 'invoiced' } };
     renderProject();
     expect(document.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(0);
     const edit = document.querySelector('[data-action-key="work-the-pieces"]');
-    expect(edit).toHaveTextContent('Edit selections');
+    expect(edit).toHaveTextContent('Edit pieces & purchasing');
     expect(edit).toHaveAttribute('data-action-variant', 'secondary');
     expect(edit).toHaveAttribute('href', '/doc/project-1/pieces?lens=rough');
     expect(head()).toHaveTextContent(
-      'Selections are ready, but purchasing authorization is held.',
+      'Purchasing authorization is held.',
     );
   });
 
-  it('US-43 R4 — prints the elected lead, Edit selections, Add items, the held release, then More', () => {
+  it('US-43 R4 — prints the elected lead, Edit pieces & purchasing, Add items, the held release, then More', () => {
     renderProject();
     const keys = Array.from(head().querySelectorAll('[data-action-key]'))
       .map((el) => el.getAttribute('data-action-key'))
@@ -362,7 +362,7 @@ describe('FF&E project-mode region head', () => {
 
     expect(document.querySelector('[data-fold-seam]')).toBeNull();
     expect(document.querySelector('[data-region-head]')).not.toBeNull();
-    expect(screen.getByRole('heading', { name: 'FF&E selections' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pieces & purchasing' })).toBeInTheDocument();
   });
 
   it('renders the fold seam with its summary when she folded it herself', () => {
@@ -402,7 +402,7 @@ describe('FF&E project-mode region head', () => {
     renderProject();
     fireEvent.click(screen.getByRole('button', { name: /expand/i }));
     expect(
-      screen.getByRole('heading', { name: 'FF&E selections' }),
+      screen.getByRole('heading', { name: 'Pieces & purchasing' }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Collapse ↑' }),
@@ -410,7 +410,7 @@ describe('FF&E project-mode region head', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse ↑' }));
     expect(
-      screen.queryByRole('heading', { name: 'FF&E selections' }),
+      screen.queryByRole('heading', { name: 'Pieces & purchasing' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/expand/i)).toBeInTheDocument();
   });
@@ -514,7 +514,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     ];
     renderProject();
 
-    expect(screen.getByRole('heading', { name: 'FF&E selections' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pieces & purchasing' })).toBeInTheDocument();
     // W4-R1: the count line IS the head's status line.
     const head = document.querySelector('[data-region-head="ffe"]')!;
     expect(head).toHaveTextContent('2 lines · 1 room');
@@ -527,7 +527,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        '2 lines · not yet on the paper · press Pieces on the index to open',
+        '2 lines · not yet on the paper · press Pieces & purchasing on the index to open',
       ),
     ).toHaveClass('sr-only');
 
@@ -626,7 +626,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     const quietBox = regionBoxSignature(
       document.querySelector('[data-index-region="ffe"]'),
     );
-    const heading = screen.getByRole('heading', { name: 'FF&E selections' });
+    const heading = screen.getByRole('heading', { name: 'Pieces & purchasing' });
 
     act(() => {
       __setDensityForTest('full');
@@ -636,7 +636,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     );
 
     expect(document.querySelector('[data-region-head="ffe"]')).toBe(head);
-    expect(screen.getByRole('heading', { name: 'FF&E selections' })).toBe(heading);
+    expect(screen.getByRole('heading', { name: 'Pieces & purchasing' })).toBe(heading);
     expect(
       document.querySelector('[data-index-region="ffe"]'),
     ).toHaveAttribute('data-density', 'full');
@@ -664,7 +664,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
 
     expect(document.querySelector('[data-fold-seam]')).not.toBeNull();
     expect(
-      screen.queryByRole('heading', { name: 'FF&E selections' }),
+      screen.queryByRole('heading', { name: 'Pieces & purchasing' }),
     ).not.toBeInTheDocument();
     expect(
       document.querySelector('[data-index-region="ffe"]'),
