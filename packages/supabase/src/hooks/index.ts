@@ -1807,6 +1807,8 @@ export {
   useDeliveryCalendar,
   useTodayProcurementCounts,
   useCreateReceivingInspection,
+  useCompleteReceivingInspection,
+  useRetryReceivingFollowUp,
   useUpdateDamageClaim,
   autoDraftDamageClaimDescription,
   // Sprint 3 / Wave 3.2 — QBO Bookkeeper Export
@@ -1861,6 +1863,7 @@ export type {
   ReceivingInspectionFilters,
   DamageClaimFilters,
   CreateReceivingInspectionInput,
+  CompleteReceivingInspectionInput,
   // W5-T2 — partial receiving (per-item received quantities)
   ReceivingInspectionItemInput,
   CreateReceivingInspectionResult,

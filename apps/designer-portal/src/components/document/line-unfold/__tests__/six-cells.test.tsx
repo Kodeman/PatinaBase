@@ -252,7 +252,7 @@ describe('LineUnfold · six cells (C-14)', () => {
   it('keeps the receiving facts in Receiving', () => {
     renderUnfold({ status: 'delivered' });
     expect(screen.getByRole('group', { name: 'Receiving' })).toHaveTextContent(
-      'Awaiting inspection',
+      'Confirm physical receipt',
     );
   });
 

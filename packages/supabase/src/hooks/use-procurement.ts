@@ -332,6 +332,7 @@ export function usePurchaseOrders(filters?: POFilters) {
           *,
           vendor:vendors!purchase_orders_vendor_id_fkey(id, name, default_payment_terms, is_patina_catalog, orders_email, contact_info),
           project:projects!purchase_orders_project_id_fkey(id, name, studio_id),
+          receiving_items:project_ffe_items!purchase_order_id(id, quantity, received_quantity, status),
           payments:po_payments(*)
         `
         )
@@ -1394,7 +1395,7 @@ export type DamageClaimState = 'drafted' | 'vendor_notified' | 'resolved';
 
 export interface ReceivingInspection {
   id: string;
-  purchase_order_id: string;
+  purchase_order_id: string | null;
   inspected_at: string;
   inspected_by: string;
   outcome: ReceivingInspectionOutcome | null;
@@ -1419,6 +1420,7 @@ export interface ReceivingInspection {
     vendor?: { id: string; name: string };
     project?: { id: string; name: string };
   };
+  receiving_inspection_lines?: Array<{ ffe_item_id: string; received_quantity: number; quantity_received: number }>;
   damage_claims?: DamageClaim[];
 }
 
@@ -1471,6 +1473,8 @@ export interface DeliveryEvent {
 }
 
 export interface ReceivingInspectionFilters {
+  /** Explicit purchase-only read; legacy PO queues remain PO-only by default. */
+  studioPurchaseId?: string;
   vendorId?: string;
   projectId?: string;
   outcome?: ReceivingInspectionOutcome;
@@ -1641,12 +1645,15 @@ export function useReceivingInspections(filters?: ReceivingInspectionFilters) {
             vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
             project:projects!purchase_orders_project_id_fkey(id, name)
           ),
+          receiving_inspection_lines(*),
           damage_claims(*)
         `,
         )
-        .not('purchase_order_id', 'is', null)
         .order('inspected_at', { ascending: false });
 
+      query = filters?.studioPurchaseId
+        ? query.eq('studio_purchase_id', filters.studioPurchaseId)
+        : query.not('purchase_order_id', 'is', null);
       if (filters?.outcome) query = query.eq('outcome', filters.outcome);
       if (filters?.sinceDate) query = query.gte('inspected_at', filters.sinceDate);
 
@@ -1891,6 +1898,7 @@ export interface CreateReceivingInspectionResult {
   inspection: Omit<ReceivingInspection, 'purchase_order_id'> & { purchase_order_id: string | null };
   claimDraftSkipped?: 'no_purchase_order';
   damageClaimCreated: boolean;
+  claimDraftError?: string;
   /** Retained as an always-empty N-1 result field; the batch RPC is atomic. */
   itemUpdateFailures: string[];
 }
@@ -1907,6 +1915,83 @@ export interface CreateReceivingInspectionResult {
  *              ['today-procurement-counts'], and — when projectId is
  *              provided — both FF&E namespaces via invalidateFfeCaches().
  */
+/** The existing claim-draft authority, shared by arrival and later inspection. */
+async function draftReceivingClaims(
+  input: Pick<CreateReceivingInspectionInput, 'notes' | 'damagedFfeItemIds'>,
+  inspection: CreateReceivingInspectionResult['inspection'],
+): Promise<boolean> {
+  const supabase = getSupabase() as any;
+  let damageClaimCreated = false;
+  if (inspection.purchase_order_id && (inspection.outcome === 'damaged' || inspection.outcome === 'partial')) {
+    type ResolvedPoRow = {
+      id: string;
+      vendor_po_number: string | null;
+      vendor?: { id: string; name: string } | null;
+    };
+    let poRow: ResolvedPoRow | null = null;
+
+    try {
+      const { data: po, error: poError } = await supabase
+        .from('purchase_orders')
+        .select(
+          `
+          id, vendor_po_number,
+          vendor:vendors!purchase_orders_vendor_id_fkey(id, name)
+        `,
+        )
+        .eq('id', inspection.purchase_order_id)
+        .single();
+      if (poError) {
+        console.warn(
+          `useCreateReceivingInspection: failed to load parent PO ${inspection.purchase_order_id}`,
+          poError,
+        );
+      } else {
+        poRow = po as ResolvedPoRow;
+      }
+    } catch (e) {
+      console.warn(
+        `useCreateReceivingInspection: PO load threw for ${inspection.purchase_order_id}`,
+        e,
+      );
+    }
+
+    const vendorName = poRow?.vendor?.name ?? 'vendor';
+    const poNumber = poRow?.vendor_po_number ?? null;
+    const description = autoDraftDamageClaimDescription(
+      inspection.outcome,
+      input.notes,
+      vendorName,
+      poNumber,
+    );
+
+    const itemIds = (input.damagedFfeItemIds ?? []).filter(Boolean);
+    const claimRows =
+      itemIds.length > 0
+        ? itemIds.map((ffeItemId) => ({
+            receiving_inspection_id: inspection.id,
+            state: 'drafted',
+            description,
+            ffe_item_id: ffeItemId,
+          }))
+        : [{ receiving_inspection_id: inspection.id, state: 'drafted', description }];
+
+    const { error: claimError } = await supabase.from('damage_claims').insert(claimRows);
+
+    if (claimError) {
+      throw new Error(
+        `Receiving was recorded (${inspection.id}), but the claim draft failed: ${
+          claimError.message ?? String(claimError)
+        }. Retry to finish the claim.`,
+      );
+    }
+    // INSERT returned without error → the damage_claim row exists.
+    damageClaimCreated = true;
+  }
+
+  return damageClaimCreated;
+}
+
 export function useCreateReceivingInspection() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -1975,84 +2060,14 @@ export function useCreateReceivingInspection() {
         created_at: now,
         updated_at: now,
       };
-      const inspectionId = inspectionRow.id;
-
-      // Step 2: IF outcome != 'clean', INSERT damage_claims (critical path).
-      // The parent PO is read only on this path — solely to source the
-      // vendor name + PO number for the auto-draft description.
-      // Tracks whether the row was actually written so the resolved value
-      // exposes ground truth to callers — analytics events keyed on
-      // damageClaimCreated stay accurate even if step 2 throws (W3.5.5 HIGH-1).
       let damageClaimCreated = false;
-      if (input.purchaseOrderId && (recordedOutcome === 'damaged' || recordedOutcome === 'partial')) {
-        type ResolvedPoRow = {
-          id: string;
-          vendor_po_number: string | null;
-          vendor?: { id: string; name: string } | null;
-        };
-        let poRow: ResolvedPoRow | null = null;
-
-        try {
-          const { data: po, error: poError } = await supabase
-            .from('purchase_orders')
-            .select(
-              `
-              id, vendor_po_number,
-              vendor:vendors!purchase_orders_vendor_id_fkey(id, name)
-            `,
-            )
-            .eq('id', input.purchaseOrderId)
-            .single();
-          if (poError) {
-            console.warn(
-              `useCreateReceivingInspection: failed to load parent PO ${input.purchaseOrderId}`,
-              poError,
-            );
-          } else {
-            poRow = po as ResolvedPoRow;
-          }
-        } catch (e) {
-          console.warn(
-            `useCreateReceivingInspection: PO load threw for ${input.purchaseOrderId}`,
-            e,
-          );
-        }
-
-        const vendorName = poRow?.vendor?.name ?? 'vendor';
-        const poNumber = poRow?.vendor_po_number ?? null;
-        const description = autoDraftDamageClaimDescription(
-          recordedOutcome,
-          input.notes,
-          vendorName,
-          poNumber,
-        );
-
-        const itemIds = (input.damagedFfeItemIds ?? []).filter(Boolean);
-        const claimRows =
-          itemIds.length > 0
-            ? itemIds.map((ffeItemId) => ({
-                receiving_inspection_id: inspectionId,
-                state: 'drafted',
-                description,
-                ffe_item_id: ffeItemId,
-              }))
-            : [{ receiving_inspection_id: inspectionId, state: 'drafted', description }];
-
-        const { error: claimError } = await supabase.from('damage_claims').insert(claimRows);
-
-        if (claimError) {
-          throw new Error(
-            `Receiving was recorded (${inspectionId}), but the claim draft failed: ${
-              claimError.message ?? String(claimError)
-            }. Retry to finish the claim.`,
-          );
-        }
-        // INSERT returned without error → the damage_claim row exists.
-        damageClaimCreated = true;
-      }
+      let claimDraftError: string | undefined;
+      try { damageClaimCreated = await draftReceivingClaims(input, inspectionRow); }
+      catch (error) { claimDraftError = error instanceof Error ? error.message : String(error); }
 
       return {
         inspection: inspectionRow,
+        claimDraftError,
         ...(receiptRow.claim_draft_skipped === 'no_purchase_order'
           ? { claimDraftSkipped: 'no_purchase_order' as const }
           : {}),
@@ -2085,6 +2100,92 @@ export function useCreateReceivingInspection() {
         // views refresh.
         queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
       }
+    },
+  });
+}
+
+/** Follow-ups use the saved inspection identity; they never invoke a receipt RPC. */
+export function useRetryReceivingFollowUp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      inspection: CreateReceivingInspectionResult['inspection'];
+      damagedFfeItemIds?: string[];
+      photoAssetIds?: string[];
+      retryClaim?: boolean;
+    }) => {
+      const supabase = getSupabase() as any;
+      if (input.photoAssetIds) {
+        const { data, error } = await supabase.from('receiving_inspections')
+          .select('photo_asset_ids').eq('id', input.inspection.id).single();
+        if (error) throw error;
+        const ids = [...new Set([...(data?.photo_asset_ids ?? []), ...input.photoAssetIds])];
+        const { error: updateError } = await supabase.from('receiving_inspections')
+          .update({ photo_asset_ids: ids }).eq('id', input.inspection.id).select('id').single();
+        if (updateError) throw updateError;
+      }
+      if (input.retryClaim) await draftReceivingClaims({
+        notes: input.inspection.notes ?? undefined,
+        damagedFfeItemIds: input.damagedFfeItemIds,
+      }, input.inspection);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
+      queryClient.invalidateQueries({ queryKey: ['damage-claims'] });
+    },
+  });
+}
+
+export interface CompleteReceivingInspectionInput {
+  inspectionId: string;
+  outcome: ReceivingInspectionOutcome;
+  items: ReceivingInspectionItemInput[];
+  notes?: string;
+  projectId?: string;
+}
+
+/** Completes the pending check on the original receipt; never records another arrival. */
+export function useCompleteReceivingInspection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CompleteReceivingInspectionInput): Promise<CreateReceivingInspectionResult> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('complete_receiving_inspection', {
+        p_inspection_id: input.inspectionId,
+        p_outcome: input.outcome,
+        p_lines: input.items.map((item) => ({
+          selectionId: item.ffeItemId,
+          receivedQuantity: item.receivedQuantity,
+          condition: item.condition,
+          notedOnBol: item.notedOnBol ?? false,
+        })),
+        p_notes: input.notes ?? null,
+      });
+      if (error) throw error;
+      if (!data?.id) throw new Error('The inspection completion returned no identity.');
+      const inspection = data as CreateReceivingInspectionResult['inspection'];
+      let damageClaimCreated = false;
+      let claimDraftError: string | undefined;
+      try { damageClaimCreated = await draftReceivingClaims({
+        notes: inspection.notes ?? undefined,
+        damagedFfeItemIds: input.items.filter((item) => item.condition !== 'good').map((item) => item.ffeItemId),
+      }, inspection); } catch (error) { claimDraftError = error instanceof Error ? error.message : String(error); }
+      return {
+        claimDraftError,
+        inspection,
+        damageClaimCreated,
+        ...(inspection.studio_purchase_id && inspection.outcome !== 'clean'
+          ? { claimDraftSkipped: 'no_purchase_order' as const } : {}),
+        itemUpdateFailures: [],
+      };
+    },
+    onSuccess: (_result, input) => {
+      queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
+      queryClient.invalidateQueries({ queryKey: ['damage-claims'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', _result.inspection.purchase_order_id] });
+      queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
+      if (input.projectId) invalidateFfeCaches(queryClient, input.projectId);
     },
   });
 }

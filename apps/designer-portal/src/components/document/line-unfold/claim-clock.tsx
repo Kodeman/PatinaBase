@@ -49,6 +49,7 @@ export function claimClockSentence({
 export function ClaimClockLine({
   purchaseOrderId,
   vendorName,
+  vendorId,
   className = '',
 }: {
   purchaseOrderId: string | null | undefined;
@@ -65,7 +66,7 @@ export function ClaimClockLine({
   });
   if (!line) return null;
   return (
-    <p
+    <div
       data-testid="claim-clock"
       data-passed={line.passed ? 'true' : undefined}
       className={`${className} ${
@@ -74,7 +75,13 @@ export function ClaimClockLine({
           : 'text-[var(--color-charcoal)]'
       }`}
     >
-      {line.sentence}
-    </p>
+      <p>Vendor: {line.sentence}</p>
+      {clock.claims_window_days == null && vendorId && <button className="min-h-11 underline" onClick={() => {
+        void import('../command-bar').then(({ openLedger }) => openLedger('orders', { page: 'vendors', vendorId, vendorPage: 'terms' }));
+      }}>Add vendor terms in People</button>}
+      <p>Carrier: {clock.concealed_carrier_days == null || !clock.carrier_deadline
+        ? 'Notice window unknown — check carrier terms'
+        : 'Written notice by ' + clock.carrier_deadline.slice(0, 10) + ' (' + clock.concealed_carrier_days + ' days from recorded delivery, per carrier terms).'}</p>
+    </div>
   );
 }

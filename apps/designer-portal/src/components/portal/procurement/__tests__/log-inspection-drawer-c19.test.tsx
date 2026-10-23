@@ -7,9 +7,19 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogInspectionDrawer } from '../log-inspection-drawer';
 
 const mutateAsync = jest.fn();
+const mockFollowUp = jest.fn();
+let mockShipments: any[] = [];
 let items: Array<{ id: string; name: string; quantity: number; project_id?: string }> = [];
 
 jest.mock('@patina/supabase', () => ({
+  useCompleteReceivingInspection: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRetryReceivingFollowUp: () => ({ mutateAsync: mockFollowUp, isPending: false }),
+  usePoShipments: () => ({ data: mockShipments, isLoading: false }),
+  useReceivingInspections: () => ({ data: [], isLoading: false }),
+  useProjectRecordedStudio: () => ({ data: 'studio-1' }),
+  useOrganizationMembers: () => ({ data: [{ user_id: 'member-1', status: 'active', profiles: { full_name: 'Morgan' } }] }),
+  useStudioLocations: () => ({ data: [{ id: 'location-1', label: 'Warehouse' }] }),
+  useUser: () => ({ user: { id: 'member-1' } }),
   useCreateReceivingInspection: () => ({ mutateAsync, isPending: false }),
   useProcurementItems: () => ({ data: items, isLoading: false }),
   // T-54 — no line here is placed in several rooms.
@@ -17,6 +27,8 @@ jest.mock('@patina/supabase', () => ({
   useProjectRooms: () => ({ data: [], isLoading: false }),
   useFfePlacementReceipts: () => ({ data: undefined, isLoading: false }),
 }));
+
+jest.mock('@/components/document/line-unfold/claim-clock', () => ({ ClaimClockLine: () => null }));
 
 jest.mock('@/components/portal/toast-provider', () => ({
   useToast: () => ({ toast: jest.fn() }),
@@ -58,7 +70,7 @@ const fetchMock = jest.fn();
 
 // null: the caller names no project.
 function renderDrawer(projectId: string | null = '11111111-1111-4111-8111-111111111111') {
-  return render(
+  const result = render(
     <LogInspectionDrawer
       open
       onOpenChange={jest.fn()}
@@ -69,12 +81,18 @@ function renderDrawer(projectId: string | null = '11111111-1111-4111-8111-111111
       projectName="Maple St"
     />,
   );
+  fireEvent.change(screen.getByLabelText('Opened and checked?'), { target: { value: 'yes' } });
+  fireEvent.change(screen.getByLabelText('Arrival location'), { target: { value: 'location-1' } });
+  return result;
 }
 
-const submit = () => fireEvent.click(screen.getByRole('button', { name: 'Log inspection' }));
+const submit = () => fireEvent.click(screen.getByRole('button', { name: 'Save receipt' }));
 
 beforeEach(() => {
-  mutateAsync.mockReset().mockResolvedValue({ damageClaimCreated: false });
+  mutateAsync.mockReset().mockResolvedValue({ damageClaimCreated: false, inspection: { id: 'inspection-1', outcome: 'clean' } });
+  mockFollowUp.mockReset().mockResolvedValue(undefined);
+  mockShipments = [];
+  Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => 'receipt-key-1' });
   fetchMock.mockReset();
   global.fetch = fetchMock as unknown as typeof fetch;
   URL.createObjectURL = jest.fn(() => 'blob:preview');
@@ -124,9 +142,9 @@ describe('LogInspectionDrawer — C-19 per-line check-in', () => {
     expect(args.outcome).toBe('damaged');
     expect(args.items).toEqual([
       { ffeItemId: 'ffe-1', receivedQuantity: 2, orderedQuantity: 2, condition: 'damaged', notedOnBol: true },
-      { ffeItemId: 'ffe-2', receivedQuantity: 3, orderedQuantity: 4, condition: 'good', notedOnBol: false },
+      { ffeItemId: 'ffe-2', receivedQuantity: 3, orderedQuantity: 4, condition: 'short', notedOnBol: false },
     ]);
-    expect(args.damagedFfeItemIds).toEqual(['ffe-1']);
+    expect(args.damagedFfeItemIds).toEqual(['ffe-1', 'ffe-2']);
   });
 
   it('refuses a clean outcome over a line not in good condition, before any write', async () => {
@@ -222,5 +240,53 @@ describe('LogInspectionDrawer — C-19 per-line check-in', () => {
       screen.getByText('The order is still loading. Add the photos again in a moment.'),
     ).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('US-51 receipt standing and follow-up preservation', () => {
+  it('pending needs an owner and saves no clean certification', async () => {
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('Opened and checked?'), { target: { value: 'no' } });
+    fireEvent.change(screen.getByLabelText('Responsible person'), { target: { value: '' } });
+    submit();
+    expect(await screen.findByText('Name the person responsible for inspection.')).toBeInTheDocument();
+    expect(mutateAsync).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Responsible person'), { target: { value: 'member-1' } });
+    submit();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ outcome: null, inspectionPending: true, inspectionOwnerUserId: 'member-1', receiptKey: 'receipt-key-1' })));
+  });
+
+  it('a failed photo retry never re-receives the delivery', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({ error: { message: 'Upload failed' } }) });
+    renderDrawer();
+    await act(async () => fireEvent.change(document.querySelector('input[type=file]')!, { target: { files: [new File(['x'], 'box.jpg')] } }));
+    submit();
+    const retry = await screen.findByRole('button', { name: 'Retry photos' });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: { assetId: 'photo-1' } }) });
+    await act(async () => fireEvent.click(retry));
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mockFollowUp).toHaveBeenCalledWith(expect.objectContaining({ inspection: expect.objectContaining({ id: 'inspection-1' }), photoAssetIds: ['photo-1'] }));
+  });
+
+  it('claim failure retries only the saved inspection follow-up', async () => {
+    mutateAsync.mockResolvedValue({ damageClaimCreated: false, claimDraftError: 'unavailable', inspection: { id: 'inspection-1', outcome: 'damaged' } });
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('Condition of Pendant cluster'), { target: { value: 'damaged' } });
+    submit();
+    const retry = await screen.findByRole('button', { name: 'Retry claim draft' });
+    await act(async () => fireEvent.click(retry));
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mockFollowUp).toHaveBeenCalledWith(expect.objectContaining({ retryClaim: true, damagedFfeItemIds: ['ffe-1'] }));
+  });
+
+  it('four good chairs on a six-chair order are a clean four-chair shipment, not two short', async () => {
+    items = [{ id: 'ffe-1', name: 'Dining chairs with a full wrapping name', quantity: 6 }];
+    mockShipments = [{ id: 'shipment-a', carrier: 'Carrier', tracking: 'PRO-1', po_shipment_lines: [{ ffe_item_id: 'ffe-1', qty: 4 }] }];
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('Shipment'), { target: { value: 'shipment-a' } });
+    expect(screen.getByLabelText('Received quantity for Dining chairs with a full wrapping name')).toHaveValue(4);
+    submit();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'clean', poShipmentId: 'shipment-a', items: [expect.objectContaining({ receivedQuantity: 4, condition: 'good' })] })));
   });
 });

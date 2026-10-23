@@ -24276,6 +24276,18 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00861_receipt_per_delivery_and_inspection_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.complete_receiving_inspection(uuid,text,jsonb,text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00861_receipt_per_delivery_and_inspection_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.complete_receiving_inspection(uuid,text,jsonb,text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

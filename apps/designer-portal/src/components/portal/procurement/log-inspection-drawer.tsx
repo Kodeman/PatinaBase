@@ -1,30 +1,6 @@
 'use client';
 
-/**
- * LogInspectionDrawer — small right-slide sheet for the Procurement → Receiving
- * "Pending Inspection" tab.
- *
- * The phone-first receiving flow lives in the iOS app (PRD §9 "Log on
- * phone"); this drawer is the desktop door for a box already at the studio.
- * C-19: each line takes its count, a condition (good / damaged / short /
- * wrong) and whether it was noted on the bill of lading, and photos upload
- * through the media proxy (`/api/media/assets`).
- *
- * Submits via `useCreateReceivingInspection`, which records the receipt and
- * the per-line check-in in record_project_ffe_inspection (00700), then
- * auto-drafts one `damage_claims` row per line not in good condition when
- * the outcome is not 'clean'.
- *
- * While the designer hasn't explicitly picked an outcome it is suggested
- * from the lines: a damaged or wrong line suggests Damaged, a short count or
- * short line suggests Partial, otherwise Clean.
- *
- * US-21 T-54: a line placed in two or more rooms asks which rooms the
- * delivery covers, pre-filled in placement order; the split rides the
- * receipt as `placements` (00754/00756). A single-room line asks nothing.
- *
- * Mirrors the slide-from-right pattern used by the Sprint 1 OrderAssistant.
- */
+/** One delivery receipt, with a separate pending-inspection and follow-up path. */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -32,6 +8,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import {
   useCreateReceivingInspection,
+  useCompleteReceivingInspection, useRetryReceivingFollowUp,
+  usePoShipments, useReceivingInspections, useProjectRecordedStudio,
+  useOrganizationMembers, useStudioLocations, useUser,
+  type CreateReceivingInspectionResult,
   useFfePlacementReceipts,
   useProcurementItems,
   useProjectRoomPlacements,
@@ -43,6 +23,7 @@ import { useToast } from '@/components/portal/toast-provider';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
 import { forThisSubject } from '@/lib/analytics/subject';
 import { Button, IconButton, Input, Select, Textarea } from '@/components/ui/controls';
+import { ClaimClockLine } from '@/components/document/line-unfold/claim-clock';
 import { unitWord } from '@/components/document/pieces/placement-chips';
 import type { FfeRoomPlacement } from '@patina/types';
 
@@ -225,7 +206,12 @@ export interface LogInspectionDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** PO under inspection. */
-  purchaseOrderId: string;
+  purchaseOrderId: string | null;
+  studioPurchaseId?: string;
+  arrivalMethod?: 'picked_up' | 'delivered';
+  inspectionId?: string;
+  receiptItems?: Array<ReceivingInspectionItemInput & { name: string; unit?: string | null; project_id?: string; quantity: number; received_quantity?: number | null }>;
+  buyerUserId?: string;
   /**
    * Project the PO belongs to. When provided, the FF&E caches for the
    * project are invalidated after a logged inspection (the 00184 triggers
@@ -279,6 +265,26 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     projectName,
   } = props;
 
+  const [checked, setChecked] = useState('');
+  const [owner, setOwner] = useState('');
+  const [source, setSource] = useState('studio_member');
+  const [sourceText, setSourceText] = useState('');
+  const [receivedOn, setReceivedOn] = useState('');
+  const [location, setLocation] = useState('');
+  const [shipmentId, setShipmentId] = useState('');
+  const [receiptKey, setReceiptKey] = useState('');
+  const savedClaimItemIds = useRef<string[]>([]);
+  const [saved, setSaved] = useState<CreateReceivingInspectionResult | null>(null);
+  const [failedPhotos, setFailedPhotos] = useState<File[]>([]);
+  const complete = useCompleteReceivingInspection();
+  const followUp = useRetryReceivingFollowUp();
+  const shipments = usePoShipments(purchaseOrderId);
+  const inspections = useReceivingInspections(props.studioPurchaseId ? { studioPurchaseId: props.studioPurchaseId } : undefined);
+  const original = inspections.data?.find(i => i.id === props.inspectionId);
+  const { data: studioId } = useProjectRecordedStudio(projectId ?? '');
+  const members = useOrganizationMembers(studioId ?? '');
+  const locations = useStudioLocations(studioId);
+  const { user } = useUser();
   const [outcome, setOutcome] = useState<ReceivingInspectionOutcome>('clean');
   // W5-T2 — once the designer explicitly picks an outcome, the per-item
   // auto-suggest below stops overriding it.
@@ -305,12 +311,29 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const { toast } = useToast();
 
   // W5-T2 — the PO's linked FF&E lines for the per-item receipt section.
-  const itemsQuery = useProcurementItems({ purchaseOrderId });
-  const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+  const itemsQuery = useProcurementItems({ purchaseOrderId: purchaseOrderId ?? undefined });
+  const items = useMemo(() => props.receiptItems
+    ? props.receiptItems.map(it => ({ ...it, id: it.ffeItemId }))
+    : itemsQuery.data ?? [], [itemsQuery.data, props.receiptItems]);
+  const shipment = shipments.data?.find(s => s.id === shipmentId);
+  const expectedFor = (id: string, quantity: number): number => props.inspectionId
+    ? original?.receiving_inspection_lines?.find(l => l.ffe_item_id === id)?.quantity_received ?? 0
+    : shipment
+    ? shipment.po_shipment_lines.filter(l => l.ffe_item_id === id).reduce((n, l) => n + l.qty, 0)
+    : Math.max(0, quantity - (items.find(it => it.id === id)?.received_quantity ?? 0));
+  const baselineFor = (id: string) => items.find(it => it.id === id)?.received_quantity ?? 0;
+  const snapshotFor = (id: string) => original?.receiving_inspection_lines?.find(l => l.ffe_item_id === id);
+  const availableShipments = (shipments.data ?? []).filter(s => !(inspections.data ?? []).some(i => i.po_shipment_id === s.id));
 
   // Reset form whenever the drawer reopens for a new PO.
   useEffect(() => {
     if (!open) return;
+    setChecked(props.inspectionId ? 'yes' : '');
+    setOwner(props.buyerUserId ?? user?.id ?? '');
+    setSource('studio_member'); setSourceText(''); setLocation('');
+    setReceivedOn(new Date().toLocaleDateString('en-CA'));
+    setShipmentId(''); setReceiptKey(crypto.randomUUID());
+    setSaved(null); setFailedPhotos([]);
     setOutcome('clean');
     setOutcomeTouched(false);
     setNotes('');
@@ -322,7 +345,13 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     photosRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl));
     setPhotos([]);
     setPhotoError(null);
-  }, [open, purchaseOrderId]);
+  }, [open, purchaseOrderId, props.studioPurchaseId, props.inspectionId]);
+
+  useEffect(() => {
+    if (!original) return;
+    setNotes(original.notes ?? '');
+    if (original.inspection_owner_user_id) setOwner(original.inspection_owner_user_id);
+  }, [original?.id]);
 
   // Previews are object URLs: released on removal, reset and unmount.
   useEffect(
@@ -338,7 +367,8 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     );
 
   const receivedFor = (itemId: string, ordered: number): number =>
-    received[itemId] ?? ordered;
+    props.inspectionId ? snapshotFor(itemId)?.received_quantity ?? 0
+      : baselineFor(itemId) + (received[itemId] ?? expectedFor(itemId, ordered));
   const conditionFor = (itemId: string): LineCondition => conditions[itemId] ?? 'good';
 
   const suggestedOutcome = useMemo<ReceivingInspectionOutcome>(() => {
@@ -348,14 +378,14 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     if (
       items.some(
         (it) =>
-          conditionFor(it.id) === 'short' || receivedFor(it.id, it.quantity) < it.quantity,
+          conditionFor(it.id) === 'short' || receiptFor(it) < expectedFor(it.id, it.quantity),
       )
     ) {
       return 'partial';
     }
     return 'clean';
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, received, conditions]);
+  }, [items, received, conditions, shipmentId, shipments.data, original]);
 
   // Suggest the outcome from the lines while the designer hasn't explicitly
   // chosen one. An explicit click (outcomeTouched) always wins.
@@ -407,8 +437,9 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     }));
   };
   // This delivery's count for a line: the received count less earlier ones.
-  const receiptFor = (it: { id: string; quantity: number; received_quantity?: number | null }) =>
-    receivedFor(it.id, it.quantity) - (it.received_quantity ?? 0);
+  function receiptFor(it: { id: string; quantity: number; received_quantity?: number | null }) {
+    return props.inspectionId ? snapshotFor(it.id)?.quantity_received ?? 0 : receivedFor(it.id, it.quantity) - baselineFor(it.id);
+  }
   const splitFor = (it: { id: string; quantity: number; received_quantity?: number | null }) =>
     roomSplits[it.id] ?? fillReceiptRooms(roomsFor(it.id), receiptFor(it));
 
@@ -429,26 +460,34 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
         ]);
       } catch (e) {
         setPhotoError((e as Error).message);
+        setFailedPhotos(prev => [...prev, file]);
       } finally {
         setUploading((n) => n - 1);
       }
     }
   };
 
-  const busy = createInspection.isPending || uploading > 0;
+  const busy = createInspection.isPending || complete.isPending || followUp.isPending || uploading > 0;
 
   const handleSubmit = async () => {
+    if (saved || busy) return;
+    if (!items.length) { setSubmitError('The delivery items are still loading.'); return; }
+    if (!checked) { setSubmitError('Choose whether the delivery was opened and checked.'); return; }
+    if (checked === 'no' && !owner) { setSubmitError('Name the person responsible for inspection.'); return; }
+    if (source === 'receiver_report' && !sourceText.trim()) { setSubmitError('Name the source of the receiver report.'); return; }
+    if (!props.inspectionId && (!receivedOn || !location)) { setSubmitError('Enter the arrival date and location.'); return; }
+    if (props.inspectionId && !original) { setSubmitError('The original receipt is still loading.'); return; }
     const capture = forThisSubject();
     setSubmitError(null);
     const flaggedItemIds = items
-      .filter((it) => conditionFor(it.id) !== 'good')
+      .filter((it) => (conditionFor(it.id) !== 'good' || receiptFor(it) < expectedFor(it.id, it.quantity)))
       .map((it) => it.id);
-    if (outcome === 'clean' && flaggedItemIds.length > 0) {
+    if (checked === 'yes' && outcome === 'clean' && flaggedItemIds.length > 0) {
       setSubmitError('A clean receipt needs every line in good condition.');
       return;
     }
     // T-54 — a placed line's rooms add up to its delivery.
-    const roomedLines = items
+    const roomedLines = (props.inspectionId ? [] : items)
       .map((it) => ({ it, rooms: roomsFor(it.id), receipt: receiptFor(it) }))
       .filter(({ rooms, receipt }) => rooms.length >= 2 && receipt > 0);
     for (const { it, rooms, receipt } of roomedLines) {
@@ -468,10 +507,15 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     };
     try {
       const photoAssetIds = photos.map((p) => p.assetId);
-      const result = await createInspection.mutateAsync({
+      const request = {
         purchaseOrderId,
         projectId,
-        outcome,
+        outcome: checked === 'no' ? null : outcome,
+        poShipmentId: shipmentId || undefined, studioPurchaseId: props.studioPurchaseId,
+        arrivalMethod: props.arrivalMethod, inspectionPending: checked === 'no',
+        inspectionOwnerUserId: owner || undefined, receivedOn,
+        locationId: location || undefined, reportedBy: source as 'studio_member' | 'receiver_report',
+        reportSource: sourceText.trim() || undefined, receiptKey,
         notes: notes.trim() ? notes.trim() : undefined,
         photoAssetIds,
         // C-19 — every line carries its count, condition and BOL note, so
@@ -484,7 +528,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                   ffeItemId: it.id,
                   receivedQuantity: receivedFor(it.id, it.quantity),
                   orderedQuantity: it.quantity,
-                  condition: conditionFor(it.id),
+                  condition: receiptFor(it) < expectedFor(it.id, it.quantity) && conditionFor(it.id) === 'good' ? 'short' as const : conditionFor(it.id),
                   notedOnBol: notedOnBol[it.id] ?? false,
                   // T-54 — the rooms this delivery covers (00756).
                   ...(placements ? { placements } : {}),
@@ -495,7 +539,16 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
         // claim per line not in good condition; those lines carry the stamp.
         damagedFfeItemIds:
           outcome !== 'clean' && flaggedItemIds.length > 0 ? flaggedItemIds : undefined,
-      });
+      };
+      const result = props.inspectionId
+        ? await complete.mutateAsync({ inspectionId: props.inspectionId, outcome, items: request.items ?? [], notes: request.notes, projectId })
+        : await createInspection.mutateAsync(request);
+      savedClaimItemIds.current = flaggedItemIds;
+      setSaved(result);
+      if (props.inspectionId && photoAssetIds.length) {
+        try { await followUp.mutateAsync({ inspection: result.inspection, photoAssetIds }); }
+        catch (e) { setPhotoError('Receipt saved. Photos could not be attached. Retry photos.'); }
+      }
 
       capture(procurementEvents.inspectionLogged, {
         outcome,
@@ -512,14 +565,14 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
         capture(procurementEvents.damageClaimCreated, { outcome });
       }
 
-      const successMsg =
+      const successMsg = result.claimDraftError ? 'Receipt saved. Claim draft could not be created.' : checked === 'no' ? 'Receipt saved. Inspection pending.' :
         outcome === 'clean'
           ? `Inspection logged — ${poLabel} cleared.`
           : outcome === 'damaged'
             ? `Inspection logged — damage claim drafted for ${vendorName}.`
             : `Inspection logged — partial delivery noted for ${vendorName}.`;
       toast(successMsg, outcome === 'clean' ? 'success' : 'warning');
-      onOpenChange(false);
+
     } catch (e) {
       setSubmitError((e as Error)?.message ?? 'Failed to log inspection.');
     }
@@ -544,6 +597,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
             aria-hidden="true"
           />
           <motion.div
+            onKeyDown={e => { if (e.key === 'Escape' && !busy) { e.stopPropagation(); onOpenChange(false); } }}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
@@ -551,15 +605,15 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
             role="dialog"
             aria-modal="true"
             aria-label={`Log inspection for ${poLabel}`}
-            className="fixed bottom-0 right-0 top-0 z-50 flex w-[440px] max-w-[92vw] flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-xl"
+            className="fixed bottom-0 right-0 top-0 z-50 flex w-[440px] max-w-full flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)]"
           >
             {/* Header */}
             <div className="flex items-start justify-between gap-3 border-b border-[var(--border-default)] px-5 py-4">
               <div className="min-w-0">
                 <div className="type-meta-small text-[var(--color-clay-ink)]">
-                  Log inspection
+                  {props.inspectionId ? 'Complete inspection' : 'Receive a delivery'}
                 </div>
-                <div className="mt-0.5 truncate font-heading text-[1rem] font-medium text-[var(--text-primary)]">
+                <div className="mt-0.5 break-words font-heading text-[1rem] font-medium text-[var(--text-primary)]">
                   {poLabel}
                 </div>
                 <div className="type-meta-small text-[var(--text-muted)]">
@@ -569,7 +623,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
               <IconButton
                 label="Close"
                 onClick={() => !createInspection.isPending && onOpenChange(false)}
-                disabled={createInspection.isPending}
+                disabled={busy || !!saved}
                 size="sm"
               >
                 <X size={18} />
@@ -578,6 +632,52 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-5 py-5">
+              {saved ? <section role="status" className="space-y-3">
+                <p>Receipt saved. {saved.inspection.inspection_pending ? 'Inspection pending.' : 'Inspection recorded.'}</p>
+                {saved.claimDraftError && <><p>Claim draft could not be created.</p><Button disabled={busy} onClick={async () => {
+                  try { await followUp.mutateAsync({ inspection: saved.inspection, retryClaim: true,
+                    damagedFfeItemIds: savedClaimItemIds.current });
+                    setSaved({ ...saved, claimDraftError: undefined, damageClaimCreated: true });
+                  } catch (e) { setSubmitError((e as Error).message); }
+                }}>Retry claim draft</Button></>}
+                {(photoError || failedPhotos.length > 0) && <><p>Receipt saved. {failedPhotos.length || 'Some'} photos were not uploaded or attached.</p>
+                  <Button disabled={busy} onClick={async () => {
+                    try {
+                      const ids = photos.map(p => p.assetId);
+                      for (const file of [...failedPhotos]) {
+                        const assetId = await uploadInspectionPhoto(file, poProjectId!);
+                        ids.push(assetId);
+                        setPhotos(prev => [...prev, { assetId, name: file.name, previewUrl: URL.createObjectURL(file) }]);
+                        setFailedPhotos(prev => prev.filter(f => f !== file));
+                      }
+                      await followUp.mutateAsync({ inspection: saved.inspection, photoAssetIds: ids });
+                      setPhotoError(null);
+                    } catch (e) { setPhotoError((e as Error).message); }
+                  }}>Retry photos</Button></>}
+                {purchaseOrderId && <ClaimClockLine purchaseOrderId={purchaseOrderId} vendorId={null} vendorName={vendorName} />}
+                {saved.damageClaimCreated && <p>Claim draft ready · not sent. Reviewer: {members.data?.find(m => m.user_id === owner)?.profiles?.full_name ?? 'the assigned buyer'}.</p>}
+              </section> : <>
+              {!props.inspectionId && <div className="mb-5 space-y-3">
+                <label className="block">Shipment<Select aria-label="Shipment" value={shipmentId} onChange={e => { setShipmentId(e.target.value); setReceived({}); }}>
+                  <option value="">Delivery without a recorded shipment</option>
+                  {availableShipments.map(s => <option key={s.id} value={s.id}>{s.carrier ?? 'Shipment'} · {s.tracking ?? s.shipped_on}</option>)}
+                </Select></label>
+                <label className="block">Arrival date<Input aria-label="Arrival date" type="date" value={receivedOn} onChange={e => setReceivedOn(e.target.value)} /></label>
+                <label className="block">Location<Select aria-label="Arrival location" value={location} onChange={e => setLocation(e.target.value)}>
+                  <option value="">Choose location</option>{locations.data?.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+                </Select></label>
+                <label className="block">Who saw it?<Select aria-label="Receipt source" value={source} onChange={e => setSource(e.target.value)}>
+                  <option value="studio_member">Studio member · direct observation</option><option value="receiver_report">Sourced receiver report</option>
+                </Select></label>
+                {source === 'receiver_report' && <label className="block">Report source<Textarea aria-label="Report source" value={sourceText} onChange={e => setSourceText(e.target.value)} /></label>}
+                <label className="block">Opened and checked?<Select aria-label="Opened and checked?" value={checked} onChange={e => setChecked(e.target.value)}>
+                  <option value="">Choose inspection standing</option><option value="yes">Yes · inspected</option><option value="no">Not yet · inspection pending</option>
+                </Select></label>
+              </div>}
+              <label className="mb-5 block">Responsible person<Select aria-label="Responsible person" value={owner} onChange={e => setOwner(e.target.value)}>
+                <option value="">Choose a studio member</option>{members.data?.filter(m => m.status === 'active').map(m => <option key={m.user_id} value={m.user_id}>{m.profiles?.full_name ?? m.profiles?.email ?? m.user_id}</option>)}
+              </Select></label>
+
               <div className="mb-5">
                 <div
                   className="mb-2"
@@ -589,7 +689,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                     color: 'var(--text-muted)',
                   }}
                 >
-                  Outcome
+                  {checked === 'no' ? 'Inspection pending — no clean certification' : 'Outcome'}
                 </div>
                 <div className="flex flex-col gap-2">
                   {OUTCOME_OPTIONS.map((opt) => {
@@ -653,10 +753,10 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                   >
                     Items received
                   </div>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2" hidden={checked !== 'yes'}>
                     {items.map((it) => {
-                      const value = receivedFor(it.id, it.quantity);
-                      const missing = it.quantity - value;
+                      const value = receiptFor(it);
+                      const missing = expectedFor(it.id, it.quantity) - value;
                       const condition = conditionFor(it.id);
                       return (
                         <div
@@ -673,11 +773,11 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                         >
                           <div className="flex items-center gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-[0.8rem] text-[var(--text-primary)]">
+                              <div className="break-words text-[0.8rem] text-[var(--text-primary)]">
                                 {it.name}
                               </div>
                               <div className="text-[0.65rem] text-[var(--text-muted)]">
-                                {it.quantity} ordered
+                                {expectedFor(it.id, it.quantity)} expected in this delivery · {it.quantity} ordered
                                 {missing > 0 && (
                                   <span style={{ color: 'var(--color-golden-hour)' }}>
                                     {' '}
@@ -691,10 +791,11 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                               type="number"
                               inputMode="numeric"
                               min={0}
-                              max={it.quantity}
+                              max={Math.min(expectedFor(it.id, it.quantity), it.quantity - baselineFor(it.id))}
                               value={value}
                               disabled={createInspection.isPending}
                               aria-label={`Received quantity for ${it.name}`}
+                              readOnly={!!props.inspectionId}
                               title={`Received quantity (0–${it.quantity})`}
                               onChange={(e) => {
                                 const raw = Number.parseInt(e.target.value, 10);
@@ -710,7 +811,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                           </div>
                           {/* C-19 — the line's condition, and the BOL note once
                               it is anything but good. */}
-                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2" hidden={checked !== 'yes'}>
                             <Select
                               aria-label={`Condition of ${it.name}`}
                               value={condition}
@@ -795,7 +896,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                       ? 'e.g. All 3 pieces accounted for. Packaging intact.'
                       : outcome === 'damaged'
                         ? 'e.g. Chip on canopy of pendant cluster. Estimated 2cm chip.'
-                        : 'e.g. 2 of 3 chairs delivered; one back-ordered.'
+                        : 'e.g. 2 of 3 expected chairs arrived.'
                   }
                 />
               </div>
@@ -855,6 +956,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 )}
               </div>
 
+              </>}
               {submitError && (
                 <div
                   className="mt-4 rounded-md border px-3 py-2 text-[0.75rem]"
@@ -878,16 +980,16 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 onClick={() => onOpenChange(false)}
                 disabled={createInspection.isPending}
               >
-                Cancel
+                {saved ? 'Done' : 'Cancel'}
               </Button>
               <Button
                 variant="primary"
                 size="sm"
                 onClick={handleSubmit}
-                disabled={busy}
-                loading={createInspection.isPending}
+                disabled={busy || !!saved || itemsQuery.isLoading || inspections.isLoading || shipments.isLoading}
+                loading={createInspection.isPending || complete.isPending}
               >
-                Log inspection
+                {props.inspectionId ? 'Complete inspection' : 'Save receipt'}
               </Button>
             </div>
           </motion.div>

@@ -1,4 +1,7 @@
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
+'use client';
+
+import { useState } from 'react';
+import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { CellValue, UnfoldCell } from './cell';
 import { ClaimClockLine } from './claim-clock';
 import { PurchaseOrderDrafts } from '../buying/draft-review';
@@ -17,23 +20,13 @@ export function ReceivingCell({
   stampKind: string;
   openClaims: readonly { state: string }[];
 }) {
-  // US-19 FR3 F3-20 / 515-6 (`one-voice`) — what is left to inspect, or what
-  // was inspected once that is the fact; never `N of M`.
-  const oneVoice = useFeatureFlag('one-voice').value === true;
-  const inspected = item.received_quantity ?? 0;
-  const toInspect = Math.max((item.quantity ?? 0) - inspected, 0);
-  const value =
-    stampKind === 'damaged'
-      ? `Open claim${openClaims.length > 1 ? 's' : ''} · ${openClaims[0]?.state === 'vendor_notified' ? 'vendor notified' : 'drafted'}`
-      : stampKind === 'received'
-        ? !oneVoice
-          ? `${item.received_quantity ?? 0} of ${item.quantity} inspected`
-          : toInspect > 0
-            ? `${toInspect} to inspect`
-            : `${inspected} inspected`
-        : stampKind === 'delivered'
-          ? 'Awaiting inspection'
-          : '—';
+  const [receiving, setReceiving] = useState(false);
+  // Physical counts are not proof that cartons were opened and inspected.
+  const value = stampKind === 'damaged'
+    ? `Open claim${openClaims.length > 1 ? 's' : ''} · ${openClaims[0]?.state === 'vendor_notified' ? 'vendor notified' : 'drafted'}`
+    : (item.received_quantity ?? 0) > 0
+      ? `${item.received_quantity} received · inspection recorded separately`
+      : stampKind === 'delivered' ? 'Confirm physical receipt' : '—';
   // C-20: the claim clock runs from delivery until the line is inspected good
   // or its claim reaches the vendor.
   const po = item.purchase_order;
@@ -44,6 +37,11 @@ export function ReceivingCell({
   return (
     <UnfoldCell head="Receiving" testId="line-receiving-cell">
       <CellValue>{value}</CellValue>
+      {po?.id && <>
+        <button className="min-h-11 text-left underline" onClick={() => setReceiving(true)}>Receive a delivery</button>
+        {receiving && <LogInspectionDrawer open onOpenChange={setReceiving} purchaseOrderId={po.id} projectId={item.project_id}
+          poLabel={po.po_number ?? 'Purchase order'} vendorName={item.vendor_name ?? 'Vendor'} projectName={item.project?.name ?? 'Project'} buyerUserId={po.created_by} />}
+      </>}
       {clockRuns && (
         <ClaimClockLine
           purchaseOrderId={po.id}
