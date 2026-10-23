@@ -129,3 +129,11 @@ describe('F-02 PO stage facts', () => {
     expect(poSync({ purchase_order_id: 'po', status: 'ordered', purchase_order: { sent_at: '2026-10-02' } }).systemSet).toBe(true);
   });
 });
+
+it.each(['confirmed', 'in_production', 'shipped', 'delivered'])('marks vendor-reached %s without sent_at as system-ordered', (status) => {
+  expect(poSync({ status: 'ordered', purchase_order: { status } }).systemSet).toBe(true);
+  expect(poSync({ status: 'specified', purchase_order: { status } }).systemSet).toBe(false);
+});
+it('never marks a cancelled sent PO as system-ordered', () => {
+  expect(poSync({ status: 'ordered', purchase_order: { status: 'cancelled', sent_at: '2026-10-01' } }).systemSet).toBe(false);
+});

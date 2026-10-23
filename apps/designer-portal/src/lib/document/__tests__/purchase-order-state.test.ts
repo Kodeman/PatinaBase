@@ -1,10 +1,11 @@
 import { purchaseOrderState } from '../stamp-derivation';
 
 describe('vendor-reached purchase order state (00863)', () => {
-  it('treats every vendor-acknowledged status as sent without a send timestamp', () => {
+  it('treats every vendor-acknowledged status as confirmed without inventing a send timestamp', () => {
     for (const status of ['confirmed', 'in_production', 'shipped', 'delivered']) {
-      expect(purchaseOrderState({ status })).toBe('order_sent');
-      expect(purchaseOrderState({ status, released_at: '2026-10-01' })).toBe('order_sent');
+      expect(purchaseOrderState({ status })).toBe('order_confirmed');
+      expect(purchaseOrderState({ status, released_at: '2026-10-01' })).toBe('order_confirmed');
+      expect(purchaseOrderState({ status, sent_at: '2026-10-01' })).toBe('order_sent');
     }
   });
 

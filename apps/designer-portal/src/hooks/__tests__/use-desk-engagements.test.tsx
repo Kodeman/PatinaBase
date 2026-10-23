@@ -923,3 +923,16 @@ describe('F-02 Desk sent-only proposal count', () => {
     expect(reading!.get('job')![0]).toMatchObject({ lineCount: 3, orderedCount: 1 });
   });
 });
+
+describe('per-receipt claim windows', () => {
+  it('keeps an older drafted claim after a newer clean receipt', () => {
+    const po = { ...LIVE_CLAIM_PO, inspections: [
+      { inspected_at: '2026-10-02', outcome: 'clean', claims: [] },
+      { inspected_at: '2026-10-01', outcome: 'damaged', claims: [{ state: 'drafted' }] },
+    ] };
+    expect(buildDeskClaimWindows([{ purchase_order: po }], [
+      { purchase_order_id: 'po-claim', vendor_deadline: '2026-10-15' },
+    ])?.get('p-quiet')).toEqual([expect.objectContaining({ latestOutcome: 'clean', deadline: '2026-10-15' })]);
+    expect(buildDeskClaimWindows([{ purchase_order: po }], null)).toBeUndefined();
+  });
+});

@@ -435,7 +435,7 @@ export function buildDeskHeldReleases(
  * C-20: the claim_window_closing notices (00700's procurement-clocks-daily
  * writes one the day before the vendor deadline) folded to one signal per PO,
  * keyed by project_id, each carrying its deadline from
- * procurement_claim_deadline. Only POs whose drafted claim has not reached the
+ * procurement_receipt_claim_deadline. Only POs whose drafted claim has not reached the
  * vendor ask for a deadline; the derivation decides the rest. desk_read
  * answers those deadlines as one set (`claim_deadlines`, the old per-PO N+1).
  * A failed deadline read degrades to no answer only when a live PO needed it,
@@ -471,7 +471,7 @@ export function buildDeskClaimWindows(
     });
   }
   const live = [...byPo.values()].filter(
-    (w) => w.claimStates.includes('drafted') && w.latestOutcome !== 'clean',
+    (w) => w.claimStates.includes('drafted'),
   );
   if (live.length > 0 && !Array.isArray(deadlines)) return undefined;
   const deadlineByPo = new Map<string, string | null>(
