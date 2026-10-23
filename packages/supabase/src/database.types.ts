@@ -25034,27 +25034,33 @@ export type Database = {
       }
       receiving_inspection_lines: {
         Row: {
-          condition: string
+          condition: string | null
           created_at: string
           ffe_item_id: string
           inspection_id: string
           noted_on_bol: boolean
+          quantity_received: number | null
+          receipt_key: string | null
           received_quantity: number
         }
         Insert: {
-          condition: string
+          condition?: string | null
           created_at?: string
           ffe_item_id: string
           inspection_id: string
           noted_on_bol?: boolean
+          quantity_received?: number | null
+          receipt_key?: string | null
           received_quantity: number
         }
         Update: {
-          condition?: string
+          condition?: string | null
           created_at?: string
           ffe_item_id?: string
           inspection_id?: string
           noted_on_bol?: boolean
+          quantity_received?: number | null
+          receipt_key?: string | null
           received_quantity?: number
         }
         Relationships: [
@@ -25076,47 +25082,104 @@ export type Database = {
       }
       receiving_inspections: {
         Row: {
+          arrival_method: string | null
           created_at: string
           id: string
           inspected_at: string
           inspected_by: string
           inspected_local_date: string | null
+          inspection_owner_user_id: string | null
+          inspection_pending: boolean
+          location_id: string | null
           notes: string | null
-          outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          outcome:
+            | Database["public"]["Enums"]["receiving_inspection_outcome"]
+            | null
           photo_asset_ids: string[]
-          purchase_order_id: string
+          po_shipment_id: string | null
+          purchase_order_id: string | null
+          receipt_response: Json | null
+          received_on: string | null
+          report_source: string | null
+          reported_by: string
+          studio_purchase_id: string | null
           updated_at: string
         }
         Insert: {
+          arrival_method?: string | null
           created_at?: string
           id?: string
           inspected_at?: string
           inspected_by: string
           inspected_local_date?: string | null
+          inspection_owner_user_id?: string | null
+          inspection_pending?: boolean
+          location_id?: string | null
           notes?: string | null
-          outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          outcome?:
+            | Database["public"]["Enums"]["receiving_inspection_outcome"]
+            | null
           photo_asset_ids?: string[]
-          purchase_order_id: string
+          po_shipment_id?: string | null
+          purchase_order_id?: string | null
+          receipt_response?: Json | null
+          received_on?: string | null
+          report_source?: string | null
+          reported_by?: string
+          studio_purchase_id?: string | null
           updated_at?: string
         }
         Update: {
+          arrival_method?: string | null
           created_at?: string
           id?: string
           inspected_at?: string
           inspected_by?: string
           inspected_local_date?: string | null
+          inspection_owner_user_id?: string | null
+          inspection_pending?: boolean
+          location_id?: string | null
           notes?: string | null
-          outcome?: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          outcome?:
+            | Database["public"]["Enums"]["receiving_inspection_outcome"]
+            | null
           photo_asset_ids?: string[]
-          purchase_order_id?: string
+          po_shipment_id?: string | null
+          purchase_order_id?: string | null
+          receipt_response?: Json | null
+          received_on?: string | null
+          report_source?: string | null
+          reported_by?: string
+          studio_purchase_id?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "receiving_inspections_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "studio_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receiving_inspections_po_shipment_id_fkey"
+            columns: ["po_shipment_id"]
+            isOneToOne: false
+            referencedRelation: "po_shipments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "receiving_inspections_purchase_order_id_fkey"
             columns: ["purchase_order_id"]
             isOneToOne: false
             referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receiving_inspections_studio_purchase_id_fkey"
+            columns: ["studio_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "studio_purchases"
             referencedColumns: ["id"]
           },
         ]
@@ -38707,11 +38770,21 @@ export type Database = {
       }
       _record_project_ffe_receipt_batch_00446_impl: {
         Args: {
+          p_arrival_method?: string
+          p_inspection_owner_user_id?: string
+          p_inspection_pending?: boolean
           p_lines: Json
+          p_location_id?: string
           p_notes?: string
           p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
           p_photo_asset_ids?: string[]
+          p_po_shipment_id?: string
           p_purchase_order_id: string
+          p_receipt_key?: string
+          p_received_on?: string
+          p_report_source?: string
+          p_reported_by?: string
+          p_studio_purchase_id?: string
         }
         Returns: Json
       }
@@ -45372,11 +45445,21 @@ export type Database = {
       }
       record_project_ffe_inspection: {
         Args: {
+          p_arrival_method?: string
+          p_inspection_owner_user_id?: string
+          p_inspection_pending?: boolean
           p_lines: Json
+          p_location_id?: string
           p_notes?: string
           p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
           p_photo_asset_ids?: string[]
+          p_po_shipment_id?: string
           p_purchase_order_id: string
+          p_receipt_key?: string
+          p_received_on?: string
+          p_report_source?: string
+          p_reported_by?: string
+          p_studio_purchase_id?: string
         }
         Returns: Json
       }
@@ -45464,11 +45547,21 @@ export type Database = {
       }
       record_project_ffe_receipt_batch: {
         Args: {
+          p_arrival_method?: string
+          p_inspection_owner_user_id?: string
+          p_inspection_pending?: boolean
           p_lines: Json
+          p_location_id?: string
           p_notes?: string
           p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
           p_photo_asset_ids?: string[]
+          p_po_shipment_id?: string
           p_purchase_order_id: string
+          p_receipt_key?: string
+          p_received_on?: string
+          p_report_source?: string
+          p_reported_by?: string
+          p_studio_purchase_id?: string
         }
         Returns: Json
       }
