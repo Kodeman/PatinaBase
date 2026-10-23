@@ -3,7 +3,7 @@
 /**
  * The order paper (C-23, D1-05): the purchase order itself, editable in
  * place, with one terminal act. It replaces the Order Assistant's four steps
- * (review / coverage / details / created) and its second send screen.
+ * (review / coverage / details / created). Email Send uses PoPreview's shared review.
  *
  * - Header: the studio's letterhead, the vendor and the studio's account
  *   facts, sidemark, requested ship date, ship-to (nothing preselected,
@@ -12,13 +12,13 @@
  *   blocks), terms from the studio account, the note to the vendor.
  * - One terminal act with the amount inside its label. It creates the PO,
  *   writes the header (set_purchase_order_header, 00701) and the ship-to, then
- *   sends through po-send. "Save, don't send" keeps the paper as a draft.
+ *   opens PoPreview for explicit Send. "Save, don't send" keeps a draft.
  * - Patina-maker lane (`is_patina_catalog`): "Order from Patina · $X" goes to
  *   Stripe hosted Checkout. Patina carries sidemark, ship-to and freight, so
  *   they are not on the paper. V1: no Patina margin or fee appears here.
  *
  * Opened on an existing unsent PO (the Orders ledger's drafts), an edit is a
- * header write at once and the terminal act only sends.
+ * header write at once and the terminal act opens the shared review.
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -96,6 +96,7 @@ import {
 } from './model';
 import { latestQuoteForLine } from '@/components/document/line-unfold/quote-model';
 import { PoRiders } from './riders';
+import { PurchaseOrderStandings } from './purchase-order-standings';
 import { ComLineNote, useComPaper } from './com-slot';
 import {
   SendBackAct,
@@ -278,7 +279,7 @@ function releaseIsForBuyer(mode: string, order: OrderPaperProps['purchaseOrder']
 function paperTerminalLabel(mode: string, forBuyer: boolean, amount: string, vendorName: string, isPatinaMaker: boolean): string {
   if (mode === 'hold') return `Hold for release · ${amount}`;
   if (mode === 'release') return `${forBuyer ? 'Approve release' : 'Release and send'} · ${amount}`;
-  return terminalLabel({ vendorName, amount, isPatinaMaker });
+  return isPatinaMaker ? terminalLabel({ vendorName, amount, isPatinaMaker }) : `Review for ${vendorName} · ${amount}`;
 }
 
 function shipToBlocksSend(isPatinaMaker: boolean, hasShipTo: boolean, forBuyer: boolean): boolean {
@@ -608,7 +609,7 @@ function PaperSheet({
   const recordRelease = async (id: string, held: boolean) => {
     if (releasePaper.mode === 'release' && releasePaper.held === held) await releasePaper.release(id);
   };
-  const send = async (mode: 'send' | 'mark_sent') => {
+  const prepareReviewOrMark = async (mode: 'send' | 'mark_sent') => {
     if (busy) return;
     setError(null);
     if (refuseBlocked()) return;
@@ -620,28 +621,27 @@ function PaperSheet({
     setBusy(mode === 'send' ? 'send' : 'mark');
     noteCoverageOverride();
     try {
-      // Another buyer's approval ends here; only the buyer's explicit act sends.
+      // Another buyer's approval ends here; review is the buyer's explicit send.
       if (await releaseForBuyer()) return;
+      if (mode === 'send') {
+        if (!releasePaper.held) await ensurePurchaseOrder();
+        setPreviewOpen(true);
+        return;
+      }
       if (poId) await recordRelease(poId, true);
       const id = await ensurePurchaseOrder();
       await recordRelease(id, false);
-      const result = await sendPo.mutateAsync({
+      await sendPo.mutateAsync({
         purchaseOrderId: id,
         mode,
-        recipientEmail: mode === 'send' ? (recipient ?? undefined) : undefined,
-        message: mode === 'send' ? vendorNote.trim() || undefined : undefined,
       });
       procurementEvents.poSent({
-        method: mode === 'send' ? 'email' : 'manual',
+        method: 'manual',
         vendor_id: vendor.id,
       });
       settled();
       if (!alive.current) return;
-      setRecord(
-        mode === 'send'
-          ? { kind: 'sent', at: todayIso(), recipient: result.recipient ?? recipient }
-          : { kind: 'marked', at: todayIso() },
-      );
+      setRecord({ kind: 'marked', at: todayIso() });
     } catch (e) {
       failWith(e, 'The order did not send.');
     } finally {
@@ -1108,6 +1108,15 @@ function PaperSheet({
           </p>
         )}
 
+        <PurchaseOrderStandings
+          projectId={project.id}
+          vendorId={vendor.id}
+          totalCents={totalCents}
+          itemIds={ffeItems.map((item) => item.id)}
+          purchaseOrderId={poId}
+          releasedTotalCents={existing?.released_total_cents}
+        />
+
         {/* The consequence, then the one act — or the act's record. */}
         <footer className={`flex flex-col gap-3 pt-4 ${RULE}`}>
           {record ? (
@@ -1178,7 +1187,7 @@ function PaperSheet({
                   held={terminalHeld}
                   aria-describedby={terminalHeld ? 'order-paper-held-reason' : undefined}
                   holds={shipToHolds}
-                  onClick={() => send('send')}
+                  onClick={() => prepareReviewOrMark('send')}
                 >
                   {label}
                 </DocumentAction>
@@ -1247,7 +1256,7 @@ function PaperSheet({
                   variant="tertiary"
                   loading={busy === 'mark'}
                   disabled={busy !== null}
-                  onClick={() => send('mark_sent')}
+                  onClick={() => prepareReviewOrMark('mark_sent')}
                 >
                   Released by phone or portal — mark as sent
                 </DocumentAction>
@@ -1299,8 +1308,14 @@ function PaperSheet({
           onOpenChange={setPreviewOpen}
           purchaseOrderId={poId}
           vendorName={vendor.name}
-          vendorEmailHint={recipient}
+          vendorEmailHint={clientVendorEmailHint(vendor)}
+          initialNote={vendorNote}
+          beforeSend={async () => {
+            if (releasePaper.mode === 'release') await releasePaper.release(poId);
+            noteCoverageOverride();
+          }}
           onSent={(at) => setRecord({ kind: 'sent', at, recipient })}
+          onMarked={(at) => setRecord({ kind: 'marked', at })}
         />
       )}
     </DocSheet>

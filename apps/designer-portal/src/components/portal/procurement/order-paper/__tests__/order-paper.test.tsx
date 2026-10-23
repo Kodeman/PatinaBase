@@ -22,6 +22,15 @@ const mockQuotes: { data: unknown[] } = { data: [] };
 const mockPlacements: { data: { ffeItemId: string; projectRoomId: string }[] } = { data: [] };
 
 jest.mock('@patina/supabase', () => ({
+  usePurchaseOrders: () => ({ data: ['po-1', 'po-9', 'po-1043'].map(id => ({
+    id, project_id: 'project-1', vendor_id: 'vendor-hewn', total_cents: 1248000,
+    ship_to: 'Dock 4, Racine', status: 'draft', sent_at: null,
+  })) }),
+  usePurchaseOrderChanges: () => ({ data: [] }),
+
+  usePoReleaseState: () => ({ data: { cleared: true, group_total_cents: 1248000, threshold_cents: 2000000 } }),
+  usePoReleasePreview: () => ({ data: { cleared: true, group_total_cents: 1248000, threshold_cents: 2000000 } }),
+
   useVendorQuotes: () => ({ data: mockQuotes.data }),
   useProjectRoomPlacements: () => ({ data: mockPlacements.data }),
   useCreatePurchaseOrder: () => ({ mutateAsync: mockCreate, isPending: false }),
@@ -101,7 +110,17 @@ jest.mock('@/components/document/overlays/doc-sheet', () => ({
     </div>
   ),
 }));
-jest.mock('@/components/document/po-preview', () => ({ PoPreview: () => null }));
+jest.mock('@/components/document/buying/ack-check', () => ({
+  AckCheckForm: () => null, AckRecord: () => null, usePoAckSummary: () => ({ copy: null }),
+}));
+
+jest.mock('@/hooks/use-project-purchasing-agreement', () => ({
+  useProjectPurchasingAgreement: () => ({ data: { state: 'patina_signed' } }),
+}));
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  useProjectInstruments: () => ({ data: [{ state: 'executed', number: 1, items: [{ sourceFfeItemId: 'line-sofa' }] }] }),
+}));
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
@@ -150,7 +169,7 @@ const renderPaper = (props: Partial<Parameters<typeof OrderPaper>[0]> = {}) =>
     />,
   );
 
-const terminal = (name = 'Send to Hewn · $12,480') => screen.getByRole('button', { name });
+const terminal = (name = 'Review for Hewn · $12,480') => screen.getByRole('button', { name });
 const shipToGroup = () => screen.getByRole('group', { name: 'Ship to' });
 
 beforeEach(() => {
@@ -161,7 +180,9 @@ beforeEach(() => {
   mockCreate.mockResolvedValue({ id: 'po-1', total_cents: 1_248_000 });
   mockSetHeader.mockResolvedValue({ id: 'po-1', project_id: 'project-1' });
   mockSetShipTo.mockResolvedValue({ id: 'po-1' });
-  mockSend.mockResolvedValue({ ok: true, recipient: 'orders@hewn.example' });
+  mockSend.mockImplementation(async ({ mode }) => mode === 'preview'
+    ? { ok: true, signedUrl: 'https://files.test/po.pdf' }
+    : { ok: true, recipient: 'orders@hewn.example' });
   mockFetchPayments.mockResolvedValue([{ id: 'pay-1' }]);
   mockStartCheckout.mockResolvedValue({ url: '#stripe-checkout' });
 });
@@ -215,8 +236,11 @@ describe('ship-to', () => {
     expect(mockSend).not.toHaveBeenCalled();
   });
 
-  it("shows po-send's 422 refusal inline and marks the ship-to", async () => {
-    mockSend.mockRejectedValueOnce(new Error('ship_to_required'));
+  it("shows po-send's 422 refusal on the shared review sheet", async () => {
+    mockSend.mockImplementation(async ({ mode }) => {
+      if (mode === 'preview') return { signedUrl: 'https://files.test/po.pdf' };
+      throw new Error('ship_to_required');
+    });
     const po: OrderPaperPurchaseOrder = {
       id: 'po-9',
       project_id: 'project-1',
@@ -232,14 +256,16 @@ describe('ship-to', () => {
     };
     renderPaper({ purchaseOrder: po });
     fireEvent.click(terminal());
+    await screen.findByTitle('Purchase order PDF');
+    fireEvent.click(screen.getByRole('button', { name: 'Send to vendor' }));
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent('Choose where this ships.'),
+      expect(screen.getByText('Choose where this ships.')).toBeInTheDocument(),
     );
     expect(mockSend).toHaveBeenCalledWith(
       expect.objectContaining({ purchaseOrderId: 'po-9', mode: 'send' }),
     );
     expect(mockCreate).not.toHaveBeenCalled();
-    expect(shipToGroup()).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('dialog', { name: 'Purchase order preview' })).toHaveTextContent('Choose where this ships.');
     expect(screen.queryByText(/^Sent/)).not.toBeInTheDocument();
   });
 });
@@ -258,7 +284,9 @@ describe('header edits', () => {
 
     fireEvent.click(terminal());
 
-    await waitFor(() => expect(mockSend).toHaveBeenCalled());
+    await screen.findByTitle('Purchase order PDF');
+    fireEvent.click(screen.getByRole('button', { name: 'Send to vendor' }));
+    await waitFor(() => expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ mode: 'send' })));
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         projectId: 'project-1',
@@ -294,7 +322,7 @@ describe('header edits', () => {
     expect(order).toEqual([...order].sort((a, b) => a - b));
     // The act is replaced by its record.
     expect(await screen.findByText(/^Sent to orders@hewn\.example · /)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Send to Hewn · $12,480' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review for Hewn · $12,480' })).not.toBeInTheDocument();
   });
 
   it('write an existing PO’s header at once, and only what changed', () => {
@@ -381,12 +409,14 @@ describe('Order all — the queue', () => {
 
     fireEvent.click(within(shipToGroup()).getByRole('radio', { name: /The job site/ }));
     fireEvent.click(terminal());
+    await screen.findByTitle('Purchase order PDF');
+    fireEvent.click(screen.getByRole('button', { name: 'Send to vendor' }));
     const next = await screen.findByRole('button', { name: 'Next paper · 2 of 2 →' });
     fireEvent.click(next);
 
     expect(screen.getByTestId('running-head')).toHaveTextContent('2 of 2 · Hewn');
     expect(screen.getByText('Ashby house')).toBeInTheDocument();
-    expect(terminal('Send to Hewn · $2,100')).toBeInTheDocument();
+    expect(terminal('Review for Hewn · $2,100')).toBeInTheDocument();
     // The next paper starts clean: nothing chosen, nothing recorded.
     within(shipToGroup())
       .getAllByRole('radio')
@@ -504,5 +534,26 @@ describe('the sidemark room (T-60j F19)', () => {
     mockPlacements.data = [{ ffeItemId: 'line-sofa', projectRoomId: 'room-living' }];
     renderPaper({ ffeItems: [spreadMapping(row('line-sofa', LIVING))] });
     expect(screen.getByLabelText('Sidemark')).toHaveValue('MWS-KOCHAVER-LR');
+  });
+});
+
+describe('the shared review entrance', () => {
+  it('opens the same recipient, note, PDF and four standings without sending', async () => {
+    renderPaper();
+    fireEvent.change(screen.getByLabelText(/^Note to Hewn/), { target: { value: 'Walnut, please.' } });
+    fireEvent.click(within(shipToGroup()).getByRole('radio', { name: /The job site/ }));
+    fireEvent.click(terminal());
+    await screen.findByTitle('Purchase order PDF');
+    const sheet = screen.getByRole('dialog', { name: 'Purchase order preview' });
+    expect(sheet.parentElement).toBe(document.body);
+    expect(within(sheet).getByText('Sends to orders@hewn.example')).toBeInTheDocument();
+    expect(within(sheet).getByLabelText('Note to the vendor')).toHaveValue('Walnut, please.');
+    expect(within(sheet).getByRole('button', { name: 'Send to vendor' })).toBeEnabled();
+    for (const standings of screen.getAllByLabelText('Purchasing standings')) {
+      for (const label of ['Agreement', 'Client authorization', 'Funds received', 'Internal release']) {
+        expect(within(standings).getByText(label)).toBeInTheDocument();
+      }
+    }
+    expect(mockSend.mock.calls.map(([input]) => input.mode)).toEqual(['preview']);
   });
 });

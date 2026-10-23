@@ -30,6 +30,8 @@ import {
   type PurchaseOrderChangeKind,
 } from '@patina/supabase';
 import { poSendErrorMessage } from '@/components/portal/procurement/po-send-actions';
+import { releaseErrorMessage } from '@/components/portal/procurement/order-paper/release-slot';
+import { SavedPurchaseOrderStandings } from '@/components/portal/procurement/order-paper/purchase-order-standings';
 import {
   EMPTY_SHIP_TO,
   SHIP_TO_REQUIRED_MESSAGE,
@@ -55,6 +57,10 @@ export interface PoPreviewProps {
   /** 'resend' renders the muted re-send wording for already-sent POs. */
   mode?: 'send' | 'resend';
   onSent?: (sentAtIso: string) => void;
+  onMarked?: (sentAtIso: string) => void;
+  initialNote?: string;
+  /** The order paper records any required internal release at the explicit send. */
+  beforeSend?: () => Promise<void>;
   /**
    * PRC-07 (R84): ack context for the resend preview. When the PO has been
    * sent but never acknowledged, the paper offers the log-acknowledgment act
@@ -253,6 +259,9 @@ export function PoPreview({
   vendorEmailHint,
   mode = 'send',
   onSent,
+  onMarked,
+  initialNote = '',
+  beforeSend,
   sentAt,
   acknowledgedAt,
   vendorPoNumber,
@@ -293,8 +302,8 @@ export function PoPreview({
   const recipient = studioInbox ?? (vendorEmailHint?.trim() || null);
 
   useEffect(() => {
-    setNote('');
-  }, [purchaseOrderId]);
+    setNote(initialNote);
+  }, [purchaseOrderId, initialNote]);
 
   // Render + store the PDF the moment the paper lifts (mode 'preview'
   // stamps nothing — the server always allows it). Re-run once a ship-to is
@@ -339,6 +348,7 @@ export function PoPreview({
     (sendMode === 'send' ? setSending : setMarking)(true);
     setError(null);
     try {
+      await beforeSend?.();
       const r = await sendPo.mutateAsync({
         purchaseOrderId,
         mode: sendMode,
@@ -356,11 +366,14 @@ export function PoPreview({
       void qc.invalidateQueries({ queryKey: ['project-ffe-items'] });
       void qc.invalidateQueries({ queryKey: ['document-state'] });
       void qc.invalidateQueries({ queryKey: ['margin-items'] });
-      onSent?.(stamped);
+      (sendMode === 'mark_sent' ? onMarked ?? onSent : onSent)?.(stamped);
       onOpenChange(false);
       void r;
     } catch (e) {
-      setError(poSendErrorMessage((e as Error).message));
+      const message = (e as Error).message;
+      setError(message.includes('ship_to_required')
+        ? SHIP_TO_REQUIRED_MESSAGE
+        : releaseErrorMessage(message) ?? poSendErrorMessage(message));
     } finally {
       (sendMode === 'send' ? setSending : setMarking)(false);
     }
@@ -408,12 +421,18 @@ export function PoPreview({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 bg-[#3a3631]">
+        {po && (
+          <div className="border-b border-[var(--color-pearl)] px-5 py-3">
+            <SavedPurchaseOrderStandings po={po} />
+          </div>
+        )}
+
+        <div className="min-h-[240px] flex-1 bg-[#3a3631]">
           {signedUrl ? (
             <iframe
               title="Purchase order PDF"
               src={signedUrl}
-              className="h-full w-full border-0"
+              className="h-full min-h-[240px] w-full border-0"
             />
           ) : (
             <p className="px-5 py-6 text-[12px] italic text-[rgba(250,247,242,0.6)]">
@@ -473,7 +492,7 @@ export function PoPreview({
           className="border-t border-[var(--color-pearl)] px-5 py-3"
         >
           {error && signedUrl && (
-            <p className="text-[11px] text-[var(--color-terracotta-ink)]">{error}</p>
+            <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">{error}</p>
           )}
           {warning && !error && (
             <p className="text-[11px] text-[var(--text-muted)]">{warning}</p>
