@@ -34,6 +34,10 @@
 
 **Rule C3-R1.** Appearing on the roster, in a supplier directory entry, in a dropdown choice or in a proposed role creates none of the three. Every gate for a consequential act checks authority on the server and fails closed.
 
+**Revision 2026-10-23 (SQ-1861, answering the SQ-1857 re-review at `55569724f9b3`).** Marked inline with `SQ-1857 T#`:
+- **T7** (§3.2): the gate defines a minimum per evidence route and requires every instructed unit to be covered by a current, approved submittal revision bound to that unit before approval (C5 bindings). It takes the submittals as lock step 8.
+- **T8** (§3.2): a replayed receipt goes only to the original requester who still has current access to the job; grants, holds and later lifecycle are not re-checked on an exact replay.
+
 ## 1. Role inventory: current representation and gaps
 
 | Role | Current representation (cite) | Gap and contract |
@@ -308,7 +312,8 @@ public.assert_fabrication_instruction_authority(
   p_units                text[]  -- SQ-1851 R5: the units this instruction covers
 ) RETURNS jsonb
 -- {projectId, studioId, scopeEditionId, fulfilmentId, packageKey, packageId, manifestId, manifestHash,
---  partyId, authorityId, amountCents, units, actorId, evidenceStatus: 'reported' | 'verified'}
+--  partyId, authorityId, amountCents, units, actorId, evidenceStatus: 'reported' | 'verified',
+--  evidenceRoute: 'shop_drawing' | 'configured' | 'approved_submittal', coverage: [{unit, revisionIds}]}  -- SQ-1857 T7
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
 -- REVOKE ALL FROM PUBLIC, anon, authenticated; no grant (§2.4).
 ```
@@ -333,7 +338,8 @@ The gate is now keyed by the C5 fulfilment. That row is the source of the amount
   5. The authorizing seat (`project_parties`) row FOR SHARE. This conflicts with the seat-close UPDATE, so a concurrent close serialises.
   6. That seat's live fabrication grant FOR SHARE. This conflicts with `revoke_fabrication_authority`'s FOR UPDATE, so a concurrent revoke serialises.
   7. The manifest row FOR SHARE.
-  - **Why this order cannot deadlock.** Every C5 writer takes steps 1, 2 and 3 in that order and never locks a package, seat, grant or manifest. `revoke_fabrication_authority` and seat close take only seat then grant, matching steps 5–6. C1 manifest creation takes `projects` FOR KEY SHARE, the package and members, and never a fulfilment. The instruction insert that follows is a C6 contributing write, so it takes the shared service-obligation lock after all of these row locks (C6 §2.5).
+  8. **(SQ-1857 T7)** Every `client_decisions` row that a `coordination_item_revision` member belongs to, FOR SHARE in id order, then this fulfilment's evidence-binding rows FOR SHARE. The revision writer (`00218`, RPC-only) must take its submittal row FOR UPDATE before inserting a new round; the WP-08 slice confirms that it does, or adds it, so a new round cannot land between the gate's "latest revision" read and the instruction insert.
+  - **Why this order cannot deadlock.** Every C5 writer takes steps 1, 2 and 3 in that order and never locks a package, seat, grant or manifest. The C5 binding writer takes steps 1–3 and then the submittal row, the same relative order as step 8. The revision writer locks only the submittal and never a fulfilment, package, seat, grant or manifest. `revoke_fabrication_authority` and seat close take only seat then grant, matching steps 5–6. C1 manifest creation takes `projects` FOR KEY SHARE, the package and members, and never a fulfilment. The instruction insert that follows is a C6 contributing write, so it takes the shared service-obligation lock after all of these row locks (C6 §2.5).
 - **Capability and edition (SQ-1851 R4).** After the locks, in this order:
   - `scope_editions` must be enabled (`object_not_in_prerequisite_state`, `scope_editions_inactive`), so C2 deactivation stops both instruction routes even if a grant is restored (C2 §2.8);
   - J must have an `active` edition; a `stale` edition counts as none (`scope_edition_not_active`);
@@ -356,7 +362,21 @@ The gate is now keyed by the C5 fulfilment. That row is the source of the amount
   - A NULL amount raises `fabrication_amount_unknown`, and a negative amount raises `fabrication_amount_invalid`. Both fail before the grant is consulted, and both apply to every grant, including one with no threshold.
   - Neither `record_fabrication_instruction` nor C5's event RPC has an amount parameter. An `amountCents` key inside `p_evidence` is stored as reported evidence only, never compared with a threshold.
 - **Authority.** `party_holds_fabrication_authority(p_authorizing_party_id, amountCents, current_date)` must be true. The live grant row it relied on is the returned `authorityId`. Otherwise raise `fabrication_authority_insufficient`.
-- **Evidence.** Every `coordination_item_revision` member of the manifest is `approved`. Otherwise raise `fabrication_evidence_not_approved`.
+- **Evidence: minimum per route and coverage of the instructed units (Revision 2026-10-23, SQ-1857 T7).** The previous rule only required that coordination revisions which *happened* to be members were approved. An empty manifest, or one holding only unrelated evidence from the same job, passed whenever its package and purpose metadata matched, and nothing tied any member to the units being instructed. Package metadata is not proof of content. The gate now validates content, after the step-8 locks (lock order above), in this order:
+  1. **Every coordination member is current and approved.** Each `coordination_item_revision` member must be `approved` **and** be the highest `rev_number` of its submittal (`client_decisions` row, 00214:25-40), so a later `revise_resubmit` or `rejected` round withdraws an earlier approval. Otherwise `fabrication_evidence_not_approved`.
+  2. **The route is known.** The fulfilment's `kind` and `configuration_id` (C5 §3.1) select exactly one permitted route; anything else raises `fabrication_evidence_route_unknown`:
+
+     | Route | Applies to | Minimum members, in addition to unit coverage (step 3) |
+     |---|---|---|
+     | `shop_drawing` | `kind = 'gc_cabinetry'` | the `plan_issue` member equal to the issue named by the fulfilment's latest `package_issued` event (C5 §3.1). No `package_issued` event, or the manifest lacks that issue, raises `fabrication_evidence_issue_missing`. The instruction is therefore against the exact issued set (A09, A18) |
+     | `configured` | any kind with `configuration_id` set | the `product_configuration` member for that `configuration_id`, whose cited `snapshot_hash` is the configuration's current one. Otherwise `fabrication_evidence_configuration_missing` |
+     | `approved_submittal` | `client_furnishing` or `other_external` without `configuration_id` | none beyond unit coverage |
+
+     A `gc_cabinetry` fulfilment with a `configuration_id` must satisfy both the `shop_drawing` and the `configured` minimum.
+  3. **Every instructed unit is covered.** For each `u` in `p_units`, the manifest must contain at least one `coordination_item_revision` member that passed step 1 and whose submittal is bound to this fulfilment **and** to `u` by a C5 evidence binding (C5 §3.1, `project_external_fulfilment_evidence_bindings`), where that binding's `bound_at` is earlier than the revision's `reviewed_at`. The approver therefore approved a submittal that was already declared to cover `u`; a binding added after approval never counts. A unit without such a member raises `fabrication_evidence_insufficient`, naming the unit.
+  - Consequences: an empty manifest always fails (the unit set is non-empty, R5). A manifest of unrelated same-job evidence fails step 3 because nothing in it is bound to this fulfilment's units. Supporting kinds (`plan_print`, `plan_issue_print`, `review_item`, `approval_artifact`, `po_spec_snapshot`, `custom_commission_revision`) may be members, and are hashed and frozen, but never cover a unit on their own.
+  - The returned result gains `evidenceRoute` and `coverage` (`[{unit, revisionIds}]`), which the caller stores on the instruction event with the other gate outputs.
+  - "Unaffected units with their own approved evidence" (§3.3 item 4) means exactly this: approved, current revisions bound to those units.
 - **Actor (SQ-1817 F6).** `actorId := auth.uid()`, which must not be NULL. Then exactly one branch applies:
   - **`reported`.** The actor is an active non-guest member of the recorded studio: `is_active_studio_member(project_recorded_studio(J))`, with `is_studio_comember(projects.designer_id)` as the 00624 narrowing. The caller never supplies the studio, and it is never derived from the caller.
   - **`verified`.** The actor is the authorizing seat's own user (`project_parties.profile_id = auth.uid()`). This branch stays refused (`fabrication_instruction_verified_inactive`) until the C4/K5 consumer work activates it by its own reviewed migration.
@@ -365,7 +385,16 @@ The gate is now keyed by the C5 fulfilment. That row is the source of the amount
 
 **`record_fabrication_instruction(p_fulfilment_id uuid, p_manifest_id uuid, p_authorizing_party_id uuid, p_units text[], p_evidence jsonb, p_client_request_id uuid) RETURNS jsonb`** (SQ-1851 R3/R5: keyed by fulfilment, with units)
 - Calls the gate first and then inserts the C5 `fabrication_instruction` event on `p_fulfilment_id` from its result, through the same insert C5's route uses, with `affected_units` = the gate's `units`.
-- Idempotency is the C5 event key `(fulfilment_id, client_request_id)` (C5 §3.1), with a request hash over `{fulfilmentId, manifestId, authorizingPartyId, units (sorted), evidence}`. The receipt is checked first, before the gate: a replay returns the original event with `replayed: true`, and a changed request raises `idempotency_key_reused`. Both routes share this key, so the same act through the other route replays rather than duplicating.
+- Idempotency is the C5 event key `(fulfilment_id, client_request_id)` (C5 §3.1), with a request hash over `{fulfilmentId, manifestId, authorizingPartyId, units (sorted), evidence}`. The receipt is checked first, before the gate. Both routes share this key, so the same act through the other route replays rather than duplicating.
+- **Who may receive a replayed receipt (Revision 2026-10-23, SQ-1857 T8).** The previous text returned a matching receipt before the gate, and the gate held the only actor and tenant checks, so a different authenticated person holding the payload and key, or a former studio member, received the success receipt without any authorization. The replay path now runs these checks, in order, before it returns anything, following C4 §2.2a's same-caller rule:
+  1. `auth.uid()` is not NULL.
+  2. **Original requester.** `auth.uid()` equals the stored event's `actor_id`. A different caller with the same key and hash raises `idempotency_key_reused`, the C4 code, so the response reveals nothing beyond what a fresh conflicting call would. No other "authorized replay" exists: a colleague who wants the outcome reads it through the studio read RPC, which applies its own predicate.
+  3. **Current access, not current authority.** On the `reported` branch the original actor must still be an active non-guest member of the job's recorded studio (`is_active_studio_member(project_recorded_studio(J))` with the `is_studio_comember(projects.designer_id)` narrowing, the same predicate as the gate's actor rule). On the `verified` branch the original actor must still hold the authorizing seat with `stage='active' AND off_job_at IS NULL`. Otherwise `insufficient_privilege` (42501). A removed member therefore gets no receipt.
+  4. Same request hash; otherwise `idempotency_key_reused`.
+  Then it returns the original event with `replayed: true` and writes nothing. It takes only `_ffe_lock_job_labels(J)` and the fulfilment row FOR SHARE, enough to read the event consistently.
+  - The C2 §2.8 entry check (`scope_editions_inactive`) still runs first on every call, replay included, because it is the deactivation suspension, not an act guard.
+  - **Deliberately not re-checked on replay:** the fabrication grant (it may since be spent by amount, ended or revoked), the seat's authority, the active edition, the external-only rule, holds, evidence coverage and the fulfilment's later lifecycle (it may since be `installed` or `cancelled`). The act already happened; re-running those guards would turn an honest retry of a committed instruction into a false failure, and a no-write replay grants nothing new.
+  - The same rule applies to C5's `fabrication_instruction` route and to every other C5 event kind (C5 §3.4, with `recorded_by` as the original requester).
 - It ships inactive, with the same REVOKE/GRANT pattern as §2.4. C2 deactivation revokes it with the C5 mutations, and the gate's capability check refuses it regardless of grants (C2 §2.8, SQ-1851 R4).
 
 **Tests (SQ-1817 F4, F6, F20), all in `fabrication_authority_test.sql`:**
@@ -392,6 +421,22 @@ The gate is now keyed by the C5 fulfilment. That row is the source of the amount
 - **Revocation window (SQ-1851 R2).** Revoking a grant whose `effective_from` is tomorrow succeeds, leaves `effective_to = effective_from`, and the predicate is false on that day. Revoking an open grant and a finite grant also satisfy the 00624 CHECK.
 - **Actor retention (SQ-1851 R18).** Deleting the profile in `ended_by` fails on the FK. Deleting the profile in `granted_by` of a fabrication row fails with `fabrication_authority_immutable`. Deleting the granter of a `money` row still nulls `granted_by`.
 - **Signature (SQ-1851 R17).** The migration creates `grant_fabrication_authority` and C1's `create_project_package` as written, and the suite calls each with named and with positional required arguments.
+- **Evidence coverage (SQ-1857 T7).** A `gc_cabinetry` fulfilment with units `{k-1, k-2}`, a `package_issued` event on issue I, and submittals S1 bound to `{k-1}` and S2 bound to `{k-2}` before their approvals. Both routes give the same answers:
+  - an empty manifest (C1 refuses it at mint; a service-role fixture plants one) raises `fabrication_evidence_insufficient`;
+  - a manifest of I plus an approved revision of an unrelated same-job submittal S3 raises `fabrication_evidence_insufficient` for every unit;
+  - a manifest without I raises `fabrication_evidence_issue_missing`; one citing an older issue than the latest `package_issued` raises the same;
+  - I + S1's approved revision instructs `{k-1}` and stores `coverage = [{k-1, [S1 rev]}]`; the same manifest refuses `{k-1, k-2}` naming `k-2`;
+  - S2 bound to `{k-2}` only *after* its revision was approved does not cover `k-2`;
+  - S1's approved Rev 1 followed by a `revise_resubmit` Rev 2 raises `fabrication_evidence_not_approved`, even though Rev 1 is the member;
+  - a configured `client_furnishing` fulfilment without its `product_configuration` member raises `fabrication_evidence_configuration_missing`; with it plus bound approved coverage, it instructs;
+  - a fulfilment kind outside the route table raises `fabrication_evidence_route_unknown`;
+  - race: a new submittal round inserted while an instruction holds the step-8 lock waits, and in the other order the instruction sees the new round and refuses.
+- **Replay authorization (SQ-1857 T8).** A studio member M of A records an instruction with key K. Through both routes:
+  - M retries K with the same payload: `replayed: true`, the original event, no write;
+  - another A member with K and the same payload: `idempotency_key_reused`; a B-only co-member of the designer and the job client: the same code, and no event body in the error;
+  - M removed from studio A (membership `inactive`), then retries K: `insufficient_privilege`, no receipt;
+  - M's grant revoked, the fulfilment later `installed`, or the edition `stale`: M's exact retry still replays (none of these is re-checked). With `scope_editions` off it refuses `scope_editions_inactive` (the C2 §2.8 suspension runs first);
+  - on the `verified` branch, the seat user's retry replays while the seat is open and is refused once the seat is closed (`off_job_at` set).
 
 ### 3.3 Holds (contract items 3 and 4, unchanged)
 

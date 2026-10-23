@@ -6,6 +6,8 @@ Status: proposed (WP-00.5b, SQ-1813). Contracts: `C2-scope-editions.md`, `C4-evi
 
 **Revision 2026-10-23 (SQ-1856).** Brought in line with the contract corrections for the SQ-1851 re-review at `6ac0c5acc`: R1/R16/R10/R6/R7 (P04), R3/R4/R5/R9 (P05), R8/R20 (P06, both examples), R11/R12/R15/R19 (P07, Example 1). K3, K4 and K5 remain **OPEN**.
 
+**Revision 2026-10-23 (SQ-1861).** Brought in line with the SQ-1857 re-review at `55569724f9b3`: T1/T3/T4 (P04, both examples), T2/T7/T8 (P05, Example 1), T3 (P06), T5 (K5). K3, K4, K5, F19 and the C7 audience questions remain **OPEN**.
+
 **Which items need Kody:**
 - **K3:** completion (P06).
 - **K4:** signers (P07).
@@ -25,7 +27,9 @@ P04 and P05 are engineering and product decisions that the contracts settle with
 - **One package key (SQ-1851 R1, R16).** A package key has one form, `pkg.<slug>`, defined once in C2 §2.2a. The server allocates it from the package title when the composer gives none, and C1 copies the same string onto the project package. The C1 code-derived key is withdrawn, so the signed key always reaches fabrication.
 - **Keys are never dropped (SQ-1851 R10).** An amendment keeps every package key of the edition it amends. Taking a package out of scope sets it to `excluded`, which is itself the kept record.
 - **Assigning lines to packages (SQ-1851 R7).** A line's package is set through one C2 RPC under the plan-composition capability, checked against the active edition. An external line's package is its fulfilment's.
-- **Rollback (F8).** Turning editions off suspends C4, C5 and C6 mutations, and the C3 direct fabrication route, in the same step (SQ-1851 R4). An addendum executed while off makes the active edition `stale`. Turning editions back on requires an explicit reconciliation per project, which replays **every** executed amendment in order, one edition per document (SQ-1851 R6).
+- **Rollback (F8).** Turning editions off suspends C4, C5 and C6 mutations, and the C3 direct fabrication route, in the same step (SQ-1851 R4). An addendum executed while off makes the active edition `stale`. Turning editions back on requires an explicit reconciliation per project, which replays **every** executed amendment in order, one edition per document (SQ-1851 R6). "In order" means the per-project execution sequence the countersign records under the job lock, never signature timestamps or ids (SQ-1857 T4).
+- **Proposal authority is tenant-first (SQ-1857 T1).** Arrangement and reconciliation writes authorize against the proposal's recorded studio (`proposals.studio_id`, designer-only when unstamped), with `_can_author_proposal` called on the designer id only as a narrowing.
+- **Services are bound per package (SQ-1857 T3).** A package part names the proposal phases that deliver its studio services (`servicePhaseIds`), and the client signs that binding. C6 blocks an included studio design or installation package that has no binding of its own.
 
 **Rejected:**
 1. **A new `scope_editions` draft table beside agreement parts.** It would duplicate the composer and the signed-fingerprint path. Parts are already hashed in full (`00575:48-49`).
@@ -41,8 +45,10 @@ P04 and P05 are engineering and product decisions that the contracts settle with
 - **GC cabinetry.** GC cabinetry has no priced FF&E row by default. When it has room presence, it is an *unpriced* external presence line that can never go on a PO and never through a studio purchase.
 - **Client-bought furnishings.** These keep their selection line but are converted to external and unpriced. Their reference price lives on the fulfilment record. Conversion is refused while any studio commitment holds the line, including a draft or sent authorization (F16).
 - **Who owes, not who buys (F17).** The external rail accepts a package only when the studio is neither buyer, payer nor fabrication contracting party. Anything the studio pays for or contracts goes through existing commerce: a PO, a studio purchase or a trade scope. One internal helper holds this rule for C5 and the C3 gate (SQ-1851 R4).
-- **No stranded fulfilment (SQ-1851 R9).** Once a fulfilment has a contract, an amendment that would make the studio its buyer, payer or contracting party is held: it cannot be sent or countersigned (C2 §2.5a). Before a contract, the studio first reverses the conversion and cancels the fulfilment. An audited transfer from the external rail into studio commerce is not designed and stays OPEN.
+- **No stranded fulfilment (SQ-1851 R9, SQ-1857 T2).** An amendment that would make the studio a package's buyer, payer or contracting party is held while that package has **any** live external binding: a non-cancelled fulfilment, an external line, or a contracted cancellation not yet verified (C2 §2.5a). With a contract it stays held until a transfer contract exists. Without one, the server makes the studio reverse the conversion and cancel the fulfilment first; those two exit acts stay available even while the job has no active edition. An audited transfer from the external rail into studio commerce is not designed and stays OPEN.
 - **Fabrication instruction.** Every writer, including C5's generic event route, first calls the one shared C3 gate `public.assert_fabrication_instruction_authority` (C3 §3.2) (F20). It is refused until that gate exists. The gate is keyed by the fulfilment, locks that fulfilment's amount and holds before it reads them, and names the exact units it instructs, which a partial hold can withhold (SQ-1851 R3, R5).
+- **Evidence must cover what is instructed (SQ-1857 T7).** The gate checks a route minimum (the issued drawing set for GC cabinetry, the configuration for configured goods) and that every instructed unit has a current, approved submittal that was bound to that unit before it was approved. An empty manifest or unrelated evidence never passes.
+- **Replays stay authorized (SQ-1857 T8).** A retried instruction returns its receipt only to the person who made it, and only while they still have access to the job. A revoked grant or a later lifecycle state does not turn an honest retry into a failure.
 
 **Rejected:**
 1. **Reusing `studio_purchases`.** It is studio-paid or member-reimbursed commerce, billable to the client by default (`00703:56-97`).
@@ -55,7 +61,7 @@ P04 and P05 are engineering and product decisions that the contracts settle with
 **Recommended ruling** (not yet ruled):
 1. **Included obligations block.** These are:
    - included studio obligations from the agreed edition: its phases, and studio-purchased lines in included packages, which must be installed;
-   - studio **services** on included packages, whoever buys the goods: in a package the studio installs, every line and fulfilment must be verified installed; a package the studio designs is discharged by the agreed phases (SQ-1851 R8, C6 §2.3);
+   - studio **services** on included packages, whoever buys the goods: in a package the studio installs, every line and fulfilment must be verified installed; a package the studio designs is discharged by the agreed phases bound to that package (SQ-1851 R8, C6 §2.3). A studio design or installation package with nothing of its own bound to it blocks rather than passing on another package's work (SQ-1857 T3);
    - any line or fulfilment whose package key is missing from the agreed edition (fails closed, SQ-1851 R10);
    - unresolved studio decisions and scope changes;
    - mandatory client acceptance.
@@ -105,6 +111,7 @@ P04 and P05 are engineering and product decisions that the contracts settle with
    - The recorder also transcribes what the paper says (accept, accept with conditions, or return; any conditions or return reason) and the request number and hashes printed on it. The server hashes the stored file. A mismatched hash is refused (F11, C4 §2.1).
    - A different studio owner or admin reviews it. Review confirms or rejects the transcription against the stored file. It is not the client's choice, and the reviewer cannot change the disposition.
    - Only a confirmed intake counts. It is stored as `paper_intake`, with the recorder and the reviewer named.
+   - Paper binds to the signer policy revision printed on it. A signer replacement lapses every pending paper intake on that request, and confirmation re-checks the signer, revision and hashes at that moment, so earlier paper never counts against a changed policy (C4 §2.1, SQ-1857 T5). This is the shape if K5 allows paper; it does not rule K5.
    - It is never stored as the client's own response. This is unlike `record_paper_trade_acceptance`, which stamps `accepted_by` with the client (`00475:1889`, `:1893`).
 3. **Not acceptance:**
    - email replies;
@@ -135,13 +142,14 @@ P04 and P05 are engineering and product decisions that the contracts settle with
   | `pkg.lighting` | excluded | none | none | none | none |
 
 - Signer policy (an `acceptance_signer_policy` part the clients sign): Nora (required) and Eli (required), with Eli on an invited client account.
+- Each included package's part lists, in `servicePhaseIds`, the template phases that deliver its studio services: the cabinetry design phase for `pkg.kitchen-cabinetry`, and the living-room design phase for `pkg.living-ffe`. `pkg.living-ffe`'s studio installation is also bound by its own lines (SQ-1857 T3).
 - The edition is minted as E1 on countersign. Its phases are bound to the project phases the same transaction created.
 
 **Application.** Applying the arrangement twice (a double-click and a retry) returns the same phase ids. Choosing `design_only` afterwards on the same draft is refused, even after discarding its parts. The studio starts a fresh draft proposal for `design_only` (F13).
 
 **Build.**
 - Cabinetry gets a C5 fulfilment (`gc_cabinetry`) and an unpriced presence line in the kitchen. The external-only rule passes: the GC buys and contracts, and the client pays. Had the package said payer = studio, C5 would refuse it and send it to a PO or trade scope (F17).
-- The GC's fabrication instruction is recorded only after `public.assert_fabrication_instruction_authority` passes (F20).
+- The GC's fabrication instruction is recorded only after `public.assert_fabrication_instruction_authority` passes (F20). Its manifest cites the issued kitchen set and, for each cabinet run, the current approved shop-drawing revision of a submittal the studio bound to that run before approval (SQ-1857 T7). If a retry of that instruction reaches the server twice, only the person who recorded it, still on the job, gets the receipt back (SQ-1857 T8).
 - The GC's contract and receipt are *reported*. The install is *verified* by the studio owner.
 - The studio budget, payables and invoices never include the cabinets.
 - `close_project` waits for the verified install, but service completion does not.
@@ -154,7 +162,7 @@ P04 and P05 are engineering and product decisions that the contracts settle with
   - R1 is still open (`sent`, outcome `pending`), so replacement is allowed (F12). Eli's slot is marked `replaced` and Ada is added as a required signer.
   - The replacement passes the signer-set checks (Ada holds no other slot, belongs to the household and has an account) and raises R1's policy revision from 1 to 2. Nora's earlier acceptance still counts (SQ-1851 R11, R12).
   - Ada accepts on iOS, presenting revision 2. Outcome: `accepted`.
-- **Supersession (alternative path).** Before Ada responds, the clients add a lighting package by service addendum, which executes as E2.
+- **Supersession (alternative path).** Before Ada responds, the clients add a lighting package by service addendum, which executes as E2. The addendum's `pkg.lighting` part (now included, studio design) lists the addendum's own lighting design phase; without it, C6 would block `pkg.lighting` as `studio_design_unbound` rather than count the E1 phases (SQ-1857 T3).
   - R1 becomes `superseded`, and Nora's acceptance remains readable history.
   - The designer drafts R2 against E2. Nora and Ada must both respond again.
 - **Completion.**
@@ -176,6 +184,7 @@ P04 and P05 are engineering and product decisions that the contracts settle with
   | `pkg.furnishings` | included for specification | client | client | none | client |
 
 - Signer policy: Sam (required, portal account) and Pat (required, no account).
+- The `pkg.design-documents` part lists the design phases in `servicePhaseIds`, so its studio design is bound to its own phases (SQ-1857 T3).
 
 **Selections.** Twelve FF&E selections are converted to `client_furnishing` external lines. They are unpriced, with retail reference prices on the fulfilment record. A thirteenth line sitting on a draft furnishings authorization is refused until that draft is voided (F16).
 - The working budget shows a "bought by client (not billed by studio)" group.
