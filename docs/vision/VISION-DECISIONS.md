@@ -464,7 +464,7 @@ LibreOffice for EMF and `.ppt`, PDF decks via pdfjs.
 - **Activation sets `assignment_scope` (T-60h, 00763, F18).** Activating a proposal with items in rooms had failed since 00438 ("non-room assignment cannot carry a room"); fixed in `_activate_proposal_as_project_impl` and `_apply_client_decision_authorized`.
 - **The order paper takes a room name (T-60j, F19).** ORDER on a line in a room had crashed (`input.split`). Pre-existing on main, now fixed.
 
-**Still open (recorded, not ruled):** F23 (admin cannot open a studio-layer product, RLS), F25 (a draft PO stamps the line `ordered` / RELEASED TO MAKER, pre-existing from 00703/00709/00718), F26 (`po-send` numbers a PO before uploading it), F27 (the invoice picker offers a Specced line the release held out — may be meant for studio-direct buys). See `docs/design/the-document/DECISIONS.md` § Open — needs design ruling.
+**Still open (recorded, not ruled):** F23 (admin cannot open a studio-layer product, RLS), ~~F25~~ (ruled in V26, 2026-10-22: draft, held and sent are separate facts) (a draft PO stamps the line `ordered` / RELEASED TO MAKER, pre-existing from 00703/00709/00718), F26 (`po-send` numbers a PO before uploading it), F27 (the invoice picker offers a Specced line the release held out — may be meant for studio-direct buys). See `docs/design/the-document/DECISIONS.md` § Open — needs design ruling.
 
 **Source:** `artifacts/pieces-building-room-2026-10-08/build/CONTRACT.md` §6 step 7; `synthesis/direction.md` §"Rulings"; story log #1, #2, #4, #15, #20 (US-21).
 
@@ -692,3 +692,25 @@ Ships to everyone, with no flag. Dark mode stays deferred (U-Q9). Leah: “I nee
 ### V2-5 / C3 — The House Issue build (US-49)
 
 For The House Issue, C3 is always on for plate-only editions: when the prose is unchanged from the current approved edition, the edition auto-publishes; the designer’s Press band lists every published edition with Undo. V2-5 remains open operationally: scans and installed photographs may reach the composition model only after the client privacy page ships, with the live setting enabled only after that page is available. This records the build rulings and does not resolve V1–V5.
+
+## Ruled — 2026-10-22 (US-50 purchasing workflow review)
+
+### V26 · Buying for a job: F-01–F-09 ruled; the first eight and four "next" items build before the first purchase — Kody 2026-10-22
+
+- **Scope.** Build P-01 to P-08, plus P-09 (dealer and retail pickup), P-10 (job destinations and a planned destination per line), P-12 (COM steps) and P-13 (quote verbs). Do this before the studio's first real purchase in production. That purchase waits until the build is live and walked. P-11 (connected tracking) follows the build. P-14 to P-16 stay LATER.
+- **F-01 — Pieces & purchasing.** Use this one name in the heading, the contents rail and every Orders book link. Buying stays inside The Document.
+- **F-02 — Draft, held and sent are separate facts.** A draft PO no longer stamps the line ordered or "Released to maker". Only a PO sent to the vendor counts as ordered. **This rules F25** (V15 "Still open").
+- **F-03 — The assigned buyer owns continuity.** The person who starts an order owns it to the end. An owner release hands the order back to them. Receiving and claim duties can be named per person, and one person can hold several roles.
+- **F-04 — The studio enters the receiver's report.** A studio member records the warehouse or receiver report with its source. "Arrived, inspection pending" is allowed, with a named person responsible for the inspection. No external receiver gets portal access (P-16 stays LATER).
+- **F-05 — One ship-to per order.** Splitting one accepted order across destinations (P-14) waits for a real job that needs it. Never duplicate an accepted purchase to reroute goods.
+- **F-06 — One review before every PO Send.** The same sheet shows the recipient, the note and a preview of the order on every path. The designer still presses Send (V22).
+- **F-07 — Tracking stays manual for now.** No provider trial and no signup. The manual instrument (P-06) adds a freight-carrier picker that builds a tracking link from the PRO number for Estes and the other LTL carriers, the way UPS, FedEx and USPS links work today. Automatic tracking (P-11) comes after this build.
+- **F-08 — Tracking is for the studio only.** Homeowners see no carrier, number or arrival date. Anything sent to a client goes out as a draft and waits for a designer's Send (V22).
+- **F-09 — R6, R7, R9 and R-DI4/5 stay open.** Show only sourced dates and actual amounts. Invent no thresholds, client date promises or margin rules.
+- **Claims clock.** When a vendor's notice window is unknown, show "Notice window unknown — add vendor terms" and count from the actual delivery date once terms are entered. There is no invented default.
+- **Saved homes.** A client's home saved as a place is visible across the studio and marked as a private home. P-10 narrows it to the job.
+- **Release.** No flag. It ships to production after cross-provider review and a local walk. Rollback is the previous Worker version.
+
+**Source:** Kody, 2026-10-22 (multiple-choice interview); `artifacts/purchasing-workflow-review-2026-10-22/synthesis/direction.md` §8–9; deck https://claude.ai/artifact/UP5k8aC5Eo8KAiaQjbKkRt.
+
+*Entries add: … · V22 · V23 · V24 (US-33) · V25 · V26 (US-50; F25 ruled) · last id = V26*
