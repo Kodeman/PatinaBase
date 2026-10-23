@@ -8,6 +8,9 @@
  */
 
 import { LegacyDeskBody } from '@/components/document/frame/legacy-desk-body';
+import { DeskTodaySkeleton } from '@/components/loading';
+import { usePaperRenderer } from '@/hooks/use-paper-renderer';
+import dynamic from 'next/dynamic';
 
 import {
   useEffect,
@@ -110,6 +113,26 @@ function heldDeskPlace(): DeskPlace | null {
     return null;
   }
 }
+
+/** The Desk while the renderer is undecided, or its round-8 body is loading:
+ *  Today's quiet frames, never either body (the latch mounts one, once). */
+function DeskPending({ dateLabel }: { dateLabel?: string }) {
+  return (
+    <main
+      data-desk-renderer-pending
+      className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14"
+    >
+      <DeskTodaySkeleton dateLabel={dateLabel} />
+    </main>
+  );
+}
+
+// WP-01.8 — the round-8 studio and its stylesheet load only once the latch
+// says round 8, so the legacy Desk never downloads either.
+const Round8Desk = dynamic(() => import('@/components/document/studio/round8-desk'), {
+  ssr: false,
+  loading: () => <DeskPending />,
+});
 
 /** `desk-first-touch` is a first-hour line (return-teaching §2). */
 const FIRST_HOUR_MS = 60 * 60 * 1000;
@@ -584,6 +607,60 @@ export default function DeskPage() {
     if (!target?.closest?.('a[href]')) return;
     pressedAnchor.current = target.closest('[data-ledger-row]')?.id ?? null;
   };
+
+  const paper = usePaperRenderer();
+  // Round 8 names the control she pressed itself, and Back returns focus to it.
+  const holdPlace = (anchor: string | null) => {
+    pressedAnchor.current = anchor;
+    holdDeskPlace(anchor);
+  };
+  const [backAnchor] = useState(() => placeToRestore?.anchor ?? null);
+
+  if (paper.renderer === 'pending') return <DeskPending dateLabel={dateLabel} />;
+  if (paper.renderer === 'round8') {
+    return (
+      <Round8Desk
+        sheet={sheet}
+        cards={cards}
+        ledger={ledger}
+        recorded={recorded}
+        scope={deskScope}
+        onScope={setDeskScope}
+        oneVoice={oneVoice}
+        now={now}
+        dateLabel={dateLabel}
+        teammateActed={teammateActed}
+        names={names}
+        holderOf={holderOf}
+        deskLine={deskLine}
+        othersHold={othersHold}
+        loading={isLoading && !data}
+        loadingRegister={loadingRegister}
+        deskEmpty={deskEmpty}
+        arrivalHeld={arrivalHeld}
+        arrivalRoot={arrivalRoot}
+        arrivalReady={arrivalReady}
+        deskRead={deskRead}
+        deskRoot={deskRoot}
+        notePress={notePress}
+        firstName={firstName}
+        greetingWord={greetingWord}
+        isError={isError}
+        refetch={refetch}
+        captureOpen={captureOpen}
+        setCaptureOpen={setCaptureOpen}
+        openProjectOpen={openProjectOpen}
+        setOpenProjectOpen={setOpenProjectOpen}
+        setRecorded={setRecorded}
+        studioName={studio?.name ?? null}
+        viewerName={name}
+        roster={roster}
+        live={data?.live ?? []}
+        holdPlace={holdPlace}
+        backAnchor={backAnchor}
+      />
+    );
+  }
 
   return (
     <LegacyDeskBody
