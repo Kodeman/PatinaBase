@@ -457,6 +457,13 @@ ROLLBACK TO SAVEPOINT s_b;
 
 SAVEPOINT s_c;
 
+-- 00867 (SQ-1847): a margin note is admitted only inside the studio its job
+-- RECORDS. The seeded job records none locally, which leaves its notes to
+-- its owner alone, so the co-member note below needs the job stamped to the
+-- studio the two share (section M pins the studio-less shape).
+UPDATE public.projects SET studio_id = 'b0000000-0000-0000-0000-000000000001'
+ WHERE id = 'b0000000-0000-0000-0000-0000000000d1';
+
 DO $$
 DECLARE v_seen integer; v_rows integer; v_msg text;
 BEGIN
@@ -1043,9 +1050,45 @@ ROLLBACK TO SAVEPOINT s_l;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- M · margin_notes UPDATE (item 12) — 00316 widened only the SELECT
+--
+-- 00867 (SQ-1847) puts a tenant-first RESTRICTIVE guard over every
+-- margin_notes policy: the co-member widening holds only on a job that
+-- RECORDS the shared studio. The seeded job b0…d1 records none locally (its
+-- designer holds seats in two studios, so nothing stamped it), and there the
+-- note is its owner's alone. Both shapes are pinned explicitly here rather
+-- than inherited from the seed.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 SAVEPOINT s_m;
+
+UPDATE public.projects SET studio_id = NULL
+ WHERE id = 'b0000000-0000-0000-0000-0000000000d1';
+
+DO $$
+DECLARE v_rows integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+
+  UPDATE public.margin_notes SET body = '00584 co-member edited, no studio'
+   WHERE id = '58300000-0000-4000-8000-00000000004f';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 0,
+    'FAIL M3: on a job recording no studio the co-member must reach no note (00867 owner-only legacy); rows=' || v_rows;
+
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  UPDATE public.margin_notes SET body = '00584 owner edited, no studio'
+   WHERE id = '58300000-0000-4000-8000-00000000004f';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 1,
+    'FAIL M4: the job''s owner keeps her note on a job recording no studio; rows=' || v_rows;
+
+  PERFORM pg_temp.reset_role();
+END $$;
+
+UPDATE public.projects SET studio_id = 'b0000000-0000-0000-0000-000000000001'
+ WHERE id = 'b0000000-0000-0000-0000-0000000000d1';
 
 DO $$
 DECLARE v_rows integer;
@@ -1056,7 +1099,7 @@ BEGIN
    WHERE id = '58300000-0000-4000-8000-00000000004f';
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   ASSERT v_rows = 1,
-    'FAIL M1: co-member must UPDATE the designer''s margin note; rows=' || v_rows;
+    'FAIL M1: co-member must UPDATE the designer''s margin note on a job recording their shared studio; rows=' || v_rows;
 
   PERFORM pg_temp.reset_role();
   PERFORM pg_temp.assume_user('cf100000-0000-4000-8000-000000000001');
@@ -1067,7 +1110,7 @@ BEGIN
   ASSERT v_rows = 0, 'FAIL M2: outsider must update no margin note; rows=' || v_rows;
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '00584 M passed: margin_notes update';
+  RAISE NOTICE '00584 M passed: margin_notes update (recorded studio: co-member; no studio: owner only)';
 END $$;
 
 ROLLBACK TO SAVEPOINT s_m;
