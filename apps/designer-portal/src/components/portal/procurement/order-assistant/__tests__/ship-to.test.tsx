@@ -327,7 +327,9 @@ describe('the hardcoded ship-to placeholder', () => {
 
  describe('job destinations', () => {
    it('lists job places before other studio places and never selects one silently', () => {
-     render(<ShipToChoice locations={[BADGER, { ...WORKROOM, is_private_home: true, receivingParty: 'Hollis', instructions: 'Use rear door.' }]} jobLocationIds={new Set([WORKROOM.id])} studioAddress={STUDIO} siteAddress={null} value={EMPTY_SHIP_TO} onChange={jest.fn()} />);
+     // The choice renders the caller's order (useShipToAddresses orders job places first; the COM paper puts workrooms first).
+     const jobIds = new Set([WORKROOM.id]);
+     render(<ShipToChoice locations={orderShipToLocations([BADGER, { ...WORKROOM, is_private_home: true, receivingParty: 'Hollis', instructions: 'Use rear door.' }], jobIds)} jobLocationIds={jobIds} studioAddress={STUDIO} siteAddress={null} value={EMPTY_SHIP_TO} onChange={jest.fn()} />);
      const radios = screen.getAllByRole('radio');
      expect(radios[0].closest('label')).toHaveTextContent('Able Workroom · workroom · Private home · On this job');
      expect(radios[0].closest('label')).toHaveTextContent('Receiving party: Hollis');

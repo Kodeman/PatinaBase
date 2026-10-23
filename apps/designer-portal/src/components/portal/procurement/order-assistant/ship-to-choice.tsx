@@ -171,7 +171,7 @@ export function ShipToChoice({
   invalid,
 }: ShipToChoiceProps) {
   const name = useId();
-  const options: ShipToOption[] = orderShipToLocations(locations, jobLocationIds).map((l) => ({
+  const options: ShipToOption[] = locations.map((l) => ({
     key: `location:${l.id}`,
     kind: 'location',
     locationId: l.id,
