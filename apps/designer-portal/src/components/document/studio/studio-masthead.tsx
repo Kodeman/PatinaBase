@@ -65,7 +65,7 @@ export function StudioMasthead({
       <div className="mx-auto flex w-full max-w-[var(--r8-studio-measure)] flex-wrap items-center gap-x-7 gap-y-2 px-[4%] py-5 max-[599px]:gap-x-4 max-[599px]:px-4 max-[599px]:py-4">
         <p className="font-heading text-[30px] leading-none max-[599px]:text-[27px]">Patina</p>
         {studioName && (
-          <p className="r8-small border-l border-[var(--hairline-strong)] pl-6 max-[1179px]:mr-auto max-[599px]:pl-4">
+          <p className="r8-small min-w-0 flex-1 [overflow-wrap:anywhere] border-l border-[var(--hairline-strong)] pl-6 max-[1179px]:mr-auto max-[599px]:pl-4">
             {studioName}
             {firstName && (
               <span className="block text-[var(--ink-faint)]">{`${firstName}’s workspace`}</span>
@@ -74,9 +74,9 @@ export function StudioMasthead({
         )}
         <nav
           aria-label="Studio"
-          className="ml-auto max-[1179px]:order-3 max-[1179px]:ml-0 max-[1179px]:w-full max-[1179px]:border-t max-[1179px]:border-[var(--hairline-strong)] max-[1179px]:pt-1"
+          className="ml-auto hidden min-[1180px]:block"
         >
-          <ul className="flex items-center gap-x-6 max-[599px]:gap-x-4 max-[1179px]:overflow-x-auto max-[1179px]:whitespace-nowrap">
+          <ul className="flex flex-wrap items-center gap-x-6">
             {STUDIO_DOORS.map((door) => (
               <li key={door.key}>
                 <button
@@ -100,7 +100,7 @@ export function StudioMasthead({
           <span aria-hidden="true">{initialsOf(viewerName)}</span>
         </button>
       </div>
-      <div className="mx-auto flex w-full max-w-[var(--r8-studio-measure)] items-center justify-between gap-5 px-[4%] pb-4 max-[599px]:px-4">
+      <div className="mx-auto flex w-full max-w-[var(--r8-studio-measure)] flex-wrap items-center justify-between gap-x-5 gap-y-2 px-[4%] pb-4 max-[599px]:px-4">
         <span className="r8-small text-[var(--ink-faint)]">{dateLabel}</span>
         <form
           role="search"
