@@ -412,6 +412,10 @@ jest.mock('@/hooks/use-section-work', () => ({
   useSectionTasks: () => ({ data: [] }),
 }));
 const mockFlagOn = { current: true };
+// WP-01.5 — this suite reads the legacy paper; the renderer latch is not under test.
+jest.mock('@/hooks/use-paper-renderer', () => ({
+  usePaperRenderer: () => ({ renderer: 'legacy', source: 'override' }),
+}));
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (name: string) => ({
     value: name === 'worktable' && mockFlagOn.current,

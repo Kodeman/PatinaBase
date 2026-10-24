@@ -13,10 +13,11 @@
  * (their bodies are other suites' subject), which is exactly the contract under
  * test: WHERE the page mounts them, not what they draw.
  */
-import { render } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import DocumentPage from './page';
+import DocumentPage from '../page';
 import { PROJECT_PAPER_ORDER } from '@/lib/document/document-index';
+import { ROUND8_INDEX_KEYS, ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
 
 jest.mock('@portabletext/react', () => ({
   PortableText: () => null,
@@ -259,6 +260,21 @@ jest.mock('@/hooks/use-section-work', () => ({
   useSectionGates: () => ({ data: [] }),
   useSectionTasks: () => ({ data: [] }),
 }));
+// WP-01.5 (G5) — records every request for the round-8 frame's module: the
+// legacy paper must never load it; only the round-8 renderer's lazy import does.
+const mockRound8FrameRequested = jest.fn();
+jest.mock('@/components/document/frame/round8-paper-frame', () => {
+  mockRound8FrameRequested();
+  return jest.requireActual('@/components/document/frame/round8-paper-frame');
+});
+// WP-01.5 — the renderer latch's answer, switched per describe.
+let mockPaperRenderer: { renderer: 'legacy' | 'round8'; source: 'override' } = {
+  renderer: 'legacy',
+  source: 'override',
+};
+jest.mock('@/hooks/use-paper-renderer', () => ({
+  usePaperRenderer: () => mockPaperRenderer,
+}));
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));
@@ -443,5 +459,104 @@ describe('the canonical paper order', () => {
         container.querySelector('[data-index-region="money"]')!.contains(bands[0]),
       ).toBe(false);
     });
+  });
+});
+
+/**
+ * WP-01.5 (R8-02) — the round-8 paper states its own order. A project job is
+ * one continuous paper: its chapters mount in `ROUND8_PAPER_ORDER`, each
+ * carrying the legacy region it wraps, and the legacy frame never mounts
+ * beside it. The legacy order above is untouched by the same render.
+ */
+describe('the legacy renderer', () => {
+  it('never requests the round-8 frame module (every legacy render above, and this one)', () => {
+    const { container } = render(<DocumentPage params={params} />);
+
+    expect(container.querySelector('[data-paper-renderer]')).toBeNull();
+    expect(container.querySelector('[data-paper-chapter]')).toBeNull();
+    expect(mockRound8FrameRequested).not.toHaveBeenCalled();
+  });
+});
+
+describe('the round-8 paper order', () => {
+  beforeEach(() => {
+    mockPaperRenderer = { renderer: 'round8', source: 'override' };
+    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: /min-width:\s*(\d+)px/.test(query),
+      media: query,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    })) as unknown as typeof window.matchMedia;
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }) as typeof window.requestAnimationFrame;
+    HTMLElement.prototype.scrollIntoView = jest.fn();
+  });
+  afterEach(() => {
+    mockPaperRenderer = { renderer: 'legacy', source: 'override' };
+  });
+
+  async function renderRound8() {
+    // The frame is its own lazily loaded chunk: the page suspends on it, so
+    // the render is an awaited act that lets the import resolve.
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<DocumentPage params={params} />);
+    });
+    await waitFor(() =>
+      expect(view.container.querySelector('[data-paper-renderer="round8"]')).not.toBeNull(),
+    );
+    return view;
+  }
+
+  it('mounts one shell and one paper, never the legacy frame beside it', async () => {
+    const { container } = await renderRound8();
+
+    // The frame arrived through its lazy import.
+    expect(mockRound8FrameRequested).toHaveBeenCalledTimes(1);
+
+    expect(container.querySelectorAll('[data-document-shell]')).toHaveLength(1);
+    expect(container.querySelectorAll('main[data-document-paper][data-spotlight-frame]')).toHaveLength(1);
+    expect(container.querySelector('[data-document-shell]')!.getAttribute('data-shell-regime')).toBe(
+      'single-below-1180-narrow-to-1439-full-from-1440',
+    );
+    // §4's one active spread is the legacy composition; the continuous paper has none.
+    expect(container.querySelector('[data-active-section]')).toBeNull();
+  });
+
+  it('mounts the chapters with content, continuously, in exactly ROUND8_PAPER_ORDER', async () => {
+    const { container } = await renderRound8();
+
+    const chapters = Array.from(container.querySelectorAll('[data-paper-chapter]')).map((el) =>
+      el.getAttribute('data-paper-chapter'),
+    );
+    // This job has no lead, no proposal, no Room File and no visit, and
+    // nothing backs Cabinetry yet: those chapters do not stand empty.
+    expect(chapters).toEqual(['approvals', 'schedule', 'ffe', 'financials', 'closeout', 'record']);
+    expect(chapters).toEqual(ROUND8_INDEX_KEYS.filter((key) => chapters.includes(key)));
+  });
+
+  it('puts every legacy region inside the chapter that carries it', async () => {
+    const { container } = await renderRound8();
+
+    for (const chapter of ROUND8_PAPER_ORDER) {
+      if (!chapter.region) continue;
+      const root = container.querySelector(`[data-paper-chapter="${chapter.key}"]`);
+      expect(root).not.toBeNull();
+      const inner = Array.from(
+        container.querySelectorAll(`[data-index-region="${chapter.region}"]`),
+      ).filter((el) => el !== root);
+      expect(inner).toHaveLength(1);
+      expect(root!.contains(inner[0])).toBe(true);
+    }
+  });
+
+  it('prints the accounts once, inside the Financials chapter', async () => {
+    const { container } = await renderRound8();
+
+    const bands = container.querySelectorAll('[data-account-band]');
+    expect(bands).toHaveLength(1);
+    expect(container.querySelector('[data-paper-chapter="financials"]')!.contains(bands[0])).toBe(true);
   });
 });

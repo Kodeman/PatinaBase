@@ -52,7 +52,7 @@ export function ContentsMargin<K extends string>({
                   data-contents-entry={entry.key}
                   aria-current={current ? 'location' : undefined}
                   onClick={() => onSelect(entry.key)}
-                  className={`relative block min-h-[44px] w-full border-b border-l-[length:var(--tick-stage)] border-b-[var(--hairline-strong)] py-[12px] pl-[24px] pr-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] ${
+                  className={`relative block min-h-[44px] w-full border-b border-l-[length:var(--tick-stage)] border-b-[var(--hairline-strong)] py-[12px] pl-[24px] pr-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] ${
                     current
                       ? 'border-l-[var(--color-forest)]'
                       : 'border-l-transparent'
