@@ -184,6 +184,27 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
     await test.info().attach('first-slice-save-failed-1440', { body: await page.screenshot(), contentType: 'image/png' });
 
     await page.unroute(specWrite);
+    const returnToRoom = instrument(page).getByRole('button', { name: /Return to the room/ });
+    await returnToRoom.focus();
+    await expect.poll(
+      () => psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`),
+      { message: 'the retry persists when the failed field is committed' },
+    ).toBe(failed);
+    expect(new URL(page.url()).searchParams.get('unfold'), 'reload starts while the sheet is open').toBe('pieces');
+    const writesBeforeReload = writeRequests;
+    const versionBeforeReload = psqlScalar(
+      `SELECT row_version::text FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`,
+    );
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
+    await expect(instrument(page), 'reload reopens the unfolding address').toBeVisible({ timeout: 60_000 });
+    await settled(page);
+    await expect(instrument(page).getByTestId('spec-fields-pane').getByRole('textbox', { name: 'Finish' })).toHaveValue(failed);
+    expect(writeRequests, 'reload reopens the sheet without replaying a save').toBe(writesBeforeReload);
+    expect(
+      psqlScalar(`SELECT row_version::text FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`),
+      'the reload did not mutate the row version',
+    ).toBe(versionBeforeReload);
+
     await instrument(page).getByRole('button', { name: /Return to the room/ }).focus();
     await page.keyboard.press('Enter');
     await expect(instrument(page)).toHaveCount(0, { timeout: 30_000 });
@@ -198,16 +219,6 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
     expect(afterRow.spec, 'the spec identity is unchanged').toBe(beforeRow.spec);
     expect(afterRow.finish, 'the retried finish is persisted').toBe(failed);
     expect(afterRow.version, 'the saved row version advances').toBeGreaterThan(beforeRow.version);
-    const writesBeforeReload = writeRequests;
-    await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
-    await expect(instrument(page), 'reload reopens the unfolding address').toBeVisible({ timeout: 60_000 });
-    await settled(page);
-    await expect(instrument(page).getByTestId('spec-fields-pane').getByRole('textbox', { name: 'Finish' })).toHaveValue(failed);
-    expect(writeRequests, 'reload reopens the sheet without replaying a save').toBe(writesBeforeReload);
-    expect(
-      psqlScalar(`SELECT row_version::text FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`),
-      'the reload did not mutate the row version',
-    ).toBe(String(afterRow.version));
 
     const peer = await page.context().newPage();
     await openJob(peer, `?unfold=pieces&lens=spec&room=${LIVING}&line=${line}`);
