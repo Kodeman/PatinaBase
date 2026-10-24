@@ -25,7 +25,11 @@ import {
   QueryClientProvider,
   useQuery,
 } from "@tanstack/react-query";
-import { resetProposalAutosaveRegistryForTests } from "@/lib/proposal-autosave-registry";
+import {
+  getProposalAutosaveSnapshot,
+  resetProposalAutosaveRegistryForTests,
+} from "@/lib/proposal-autosave-registry";
+import { ffeSheetAutosaveOwner } from "../ffe-work-room";
 import {
   UNFOLD_SAVING_MESSAGE,
   UNFOLD_UNSAVED_MESSAGE,
@@ -606,6 +610,160 @@ describe("SQ-1897 F1: Back holds like Return", () => {
     });
     await waitFor(() => expect(unfolded()).toBeNull());
     expect(mockUpdateSpec).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("story #40: Back holds exactly like Return", () => {
+  const UNFOLD = `/doc/${DOC}?unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`;
+  /** Opens the unfold over `previous`: pushed by a door, or a direct open. */
+  function openOver(previous: string, pushed: boolean) {
+    window.history.replaceState({}, "", previous);
+    window.history.pushState(
+      pushed ? { __patinaUnfold: { pushed: true, context: null } } : {},
+      "",
+      UNFOLD,
+    );
+    return render(
+      <FfeChapter docId={DOC}>
+        <p>The chapter body</p>
+      </FfeChapter>,
+      { wrapper },
+    );
+  }
+  /** A Back the sheet holds never reaches later listeners: wait for the put-back. */
+  async function heldBack(push: jest.SpyInstance, times: number) {
+    act(() => window.history.back());
+    await waitFor(() => expect(push).toHaveBeenCalledTimes(times));
+  }
+  async function blurWith(field: HTMLElement, value: string) {
+    fireEvent.change(field, { target: { value } });
+    await act(async () => {
+      fireEvent.blur(field);
+    });
+  }
+  const registrations = () =>
+    getProposalAutosaveSnapshot(ffeSheetAutosaveOwner(DOC)).registeredBuffers;
+
+  it("a Back while a save is out holds, then folds once it lands, with no loop", async () => {
+    const write = held();
+    mockUpdateSpec.mockImplementationOnce(() => write.promise);
+    openOver(`/doc/${DOC}`, true);
+    const field = await finish();
+    await waitFor(() => expect(field).toHaveValue("Old finish"));
+    await blurWith(field, "Pending finish");
+    const length = window.history.length;
+    const push = jest.spyOn(window.history, "pushState");
+
+    await heldBack(push, 1);
+    expect(window.location.href).toBe(`http://localhost${UNFOLD}`);
+    expect(window.history.length).toBe(length);
+    expect(field).toBeInTheDocument();
+    expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+
+    await act(async () => write.resolve(await saved(2)({
+      specId: `spec-${SECOND}`,
+      changes: { finish: "Pending finish" },
+    })));
+    await waitFor(() => expect(unfolded()).toBeNull());
+    expect(window.location.pathname).toBe(`/doc/${DOC}`);
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(mockUpdateSpec).toHaveBeenCalledTimes(1);
+  });
+
+  it("a Back while a save is out holds; its refusal keeps the sheet open on the marked field", async () => {
+    const write = held();
+    mockUpdateSpec.mockImplementationOnce(() => write.promise);
+    openOver(`/doc/${DOC}`, true);
+    const field = await finish();
+    await waitFor(() => expect(field).toHaveValue("Old finish"));
+    await blurWith(field, "Pending finish");
+    const push = jest.spyOn(window.history, "pushState");
+
+    await heldBack(push, 1);
+    await act(async () => write.reject(new Error("The field was not saved.")));
+
+    await screen.findByText(UNFOLD_UNSAVED_MESSAGE);
+    expect(unfolded()).toBe("pieces");
+    expect(field).toHaveValue("Pending finish");
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(document.activeElement).toBe(field);
+    expect(
+      screen
+        .getAllByRole("alert")
+        .some((alert) => alert.textContent === "The field was not saved."),
+    ).toBe(true);
+    expect(mockUpdateSpec).toHaveBeenCalledTimes(1);
+  });
+
+  it("a Back to another document over a marked field is held: the draft and its registration stay", async () => {
+    mockUpdateSpec.mockRejectedValueOnce(new Error("The field was not saved."));
+    openOver("/desk", false);
+    const field = await finish();
+    await waitFor(() => expect(field).toHaveValue("Old finish"));
+    await blurWith(field, "Typed finish");
+    await screen.findByText("The field was not saved.");
+    field.blur();
+    const held = registrations();
+    expect(held).toBeGreaterThan(0);
+    const length = window.history.length;
+    const push = jest.spyOn(window.history, "pushState");
+
+    await heldBack(push, 1);
+    await screen.findByText(UNFOLD_UNSAVED_MESSAGE);
+    expect(window.location.pathname).toBe(`/doc/${DOC}`);
+    expect(unfolded()).toBe("pieces");
+    expect(window.history.length).toBe(length);
+    expect(field).toBeInTheDocument();
+    expect(field).toHaveValue("Typed finish");
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(document.activeElement).toBe(field);
+    expect(registrations()).toBe(held);
+    expect(mockUpdateSpec).toHaveBeenCalledTimes(1);
+
+    // Saved, the next Back reaches /desk and is not held again.
+    mockUpdateSpec.mockImplementationOnce(saved(2));
+    await act(async () => {
+      field.blur();
+    });
+    expect(field).not.toHaveAttribute("aria-invalid");
+    await act(async () => {
+      window.history.back();
+    });
+    await waitFor(() => expect(window.location.pathname).toBe("/desk"));
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
+  it("SQ-1899 F4: an answer never takes the lens's cached row back a version", async () => {
+    const write = held();
+    mockUpdateSpec.mockImplementationOnce(() => write.promise);
+    renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`);
+    const field = await finish();
+    await waitFor(() => expect(field).toHaveValue("Old finish"));
+    await blurWith(field, "Linen");
+
+    // A refetch lands a newer row (v3) before the write's own answer (v2).
+    const query = client
+      .getQueryCache()
+      .getAll()
+      .find((q) => (q.state.data as { specs?: object } | undefined)?.specs);
+    const row = () =>
+      (query!.state.data as { specs: Record<string, { row_version: number; material: string | null }> })
+        .specs[SECOND];
+    act(() => {
+      client.setQueryData(query!.queryKey, (data: { specs: Record<string, object> }) => ({
+        ...data,
+        specs: {
+          ...data.specs,
+          [SECOND]: { ...data.specs[SECOND], finish: "Linen", material: "Oak", row_version: 3 },
+        },
+      }));
+    });
+    await act(async () =>
+      write.resolve(
+        await saved(2)({ specId: `spec-${SECOND}`, changes: { finish: "Linen" } }),
+      ),
+    );
+    expect(row()).toMatchObject({ row_version: 3, material: "Oak" });
   });
 });
 

@@ -16,7 +16,7 @@
  */
 
 import { useState } from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import type { BoardOwnerRef } from "@patina/types";
 import {
   flushBoardOwnerAutosaves,
@@ -33,6 +33,8 @@ const mockSpecCalls: Call[] = [];
 const mockPlace = jest.fn();
 const mockSetLabel = jest.fn();
 const mockAddFabric = jest.fn();
+const mockAddLabor = jest.fn();
+const mockSetPlacements = jest.fn();
 const mutation = (fn: (input: never) => unknown) => ({
   mutateAsync: fn,
   isPending: false,
@@ -51,8 +53,8 @@ jest.mock("@patina/supabase", () => ({
   usePlaceProductInProjectV2: () => mutation((i: never) => mockPlace(i)),
   useSetFfeItemLabel: () => mutation((i: never) => mockSetLabel(i)),
   itemLabelRefusal: () => null,
-  useSetLinePlacements: () => mutation(jest.fn()),
-  useAddLaborLine: () => mutation(jest.fn()),
+  useSetLinePlacements: () => mutation((i: never) => mockSetPlacements(i)),
+  useAddLaborLine: () => mutation((i: never) => mockAddLabor(i)),
   useFfePairLines: () => ({ data: [] }),
   useLinkFfePair: () => mutation(jest.fn()),
 }));
@@ -204,6 +206,8 @@ beforeEach(() => {
   mockPlace.mockReset();
   mockSetLabel.mockReset();
   mockAddFabric.mockReset();
+  mockAddLabor.mockReset();
+  mockSetPlacements.mockReset();
   onFilled.mockReset();
   server = {
     id: "spec-1",
@@ -455,6 +459,198 @@ describe("F12: child editors' writes reach the same hold", () => {
     });
     expect(folded).toBe(true);
     expect(snapshot().dirty).toBe(false);
+  });
+});
+
+describe("SQ-1899 F1: a child editor's mark belongs to its open attempt", () => {
+  async function addLabor() {
+    fireEvent.click(screen.getByRole("button", { name: "ADD LABOR" }));
+    fireEvent.change(screen.getByPlaceholderText("Install, wallpaper hanger"), {
+      target: { value: "Install sofa" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "ADD THE LABOR LINE" }));
+    });
+  }
+  async function saveRoom() {
+    fireEvent.click(screen.getByRole("button", { name: /Change A room's share/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "SAVE" }));
+    });
+  }
+  const putBack = (form: RegExp) =>
+    fireEvent.click(
+      within(screen.getByRole("form", { name: form })).getByRole("button", {
+        name: "PUT BACK",
+      }),
+    );
+
+  it("Labor: put back while the write is out, its late refusal marks nothing and holds nothing", async () => {
+    const write = deferred();
+    mockAddLabor.mockImplementation(() => write.promise);
+    render(<Harness />);
+    await addLabor();
+    expect(snapshot()).toMatchObject({ dirty: true, flushing: true });
+
+    putBack(/Add labor to Sofa/);
+    await act(async () => write.reject(new Error("The labor line was refused.")));
+
+    expect(screen.queryByRole("form", { name: /Add labor to Sofa/ })).toBeNull();
+    expect(screen.queryByText("The labor line was refused.")).toBeNull();
+    expect(snapshot()).toMatchObject({ dirty: false, error: null });
+    expect(await flush()).toBeUndefined();
+    expect(mockAddLabor).toHaveBeenCalledTimes(1);
+  });
+
+  it("Labor: a close already waiting still stops once on the cancelled refusal, then folds", async () => {
+    const write = deferred();
+    mockAddLabor.mockImplementation(() => write.promise);
+    render(<Harness />);
+    await addLabor();
+    let refusal: string | undefined;
+    const waiting = flushBoardOwnerAutosaves(owner).catch((e: Error) => {
+      refusal = e.message;
+    });
+    putBack(/Add labor to Sofa/);
+    await act(async () => {
+      write.reject(new Error("The labor line was refused."));
+      await waiting;
+    });
+    // The close that was waiting stops once, and says why.
+    expect(refusal).toBeDefined();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The labor line was refused.",
+    );
+    expect(snapshot().dirty).toBe(false);
+    expect(await flush()).toBeUndefined();
+  });
+
+  it("Rooms: put back while the write is out, its late refusal marks nothing and holds nothing", async () => {
+    const write = deferred();
+    mockSetPlacements.mockImplementation(() => write.promise);
+    render(<Harness />);
+    await saveRoom();
+    expect(snapshot()).toMatchObject({ dirty: true, flushing: true });
+
+    putBack(/A room/);
+    await act(async () => write.reject(new Error("The rooms were refused.")));
+
+    expect(screen.queryByRole("form", { name: /A room/ })).toBeNull();
+    expect(screen.queryByText("The rooms were refused.")).toBeNull();
+    expect(snapshot()).toMatchObject({ dirty: false, error: null });
+    expect(await flush()).toBeUndefined();
+    expect(mockSetPlacements).toHaveBeenCalledTimes(1);
+  });
+
+  it("Rooms: a late success for a put-back form does not close the form opened since", async () => {
+    const write = deferred();
+    mockSetPlacements.mockImplementation(() => write.promise);
+    render(<Harness />);
+    await saveRoom();
+    putBack(/A room/);
+    fireEvent.click(screen.getByRole("button", { name: /Change A room's share/ }));
+    await act(async () => write.resolve(undefined));
+    expect(screen.getByRole("form", { name: /A room/ })).toBeInTheDocument();
+  });
+
+  it("Item label: Esc while the write is out, its late refusal marks nothing", async () => {
+    const write = deferred();
+    mockSetLabel.mockImplementation(() => write.promise);
+    render(<Harness />);
+    const label = screen.getByRole("textbox", { name: "Item label" });
+    fireEvent.change(label, { target: { value: "A-7" } });
+    await act(async () => {
+      fireEvent.blur(label);
+    });
+    fireEvent.keyDown(label, { key: "Escape" });
+    await act(async () => write.reject(new Error("The label is taken.")));
+
+    expect(label).toHaveValue("");
+    expect(label).not.toHaveAttribute("aria-invalid");
+    expect(snapshot()).toMatchObject({ dirty: false, error: null });
+    expect(await flush()).toBeUndefined();
+  });
+});
+
+describe("SQ-1899 F2: a marked field keeps its alert", () => {
+  it("another field's write and save leave the marked field's alert in place", async () => {
+    render(<Harness />);
+    await type("Finish", "Refused");
+    await refuse(0, "Refused once.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Refused once.");
+
+    await type("Material", "Oak");
+    expect(screen.getByRole("alert")).toHaveTextContent("Refused once.");
+    await answer(1);
+    expect(field("Finish")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent("Refused once.");
+
+    // Put back: the failure is gone, and so is its alert.
+    await type("Finish", "Old finish");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("SQ-1899 F4: an answer for a pane that is gone publishes nothing", () => {
+  let setMounted: (mounted: boolean) => void = () => {};
+  let setShared: (spec: SpecLensSpec) => void = () => {};
+  const onSpecSaved = jest.fn();
+  /** The shared row (the lens's cache) above a pane that mounts and unmounts. */
+  function Shared() {
+    const [spec, setSpec] = useState<SpecLensSpec>(server);
+    const [mounted, mount] = useState(true);
+    shown = spec;
+    setMounted = mount;
+    setShared = setSpec;
+    return mounted ? (
+      <SpecFieldsPane
+        projectId="p1"
+        canSeeMoney
+        line={line}
+        spec={spec}
+        needLabel="Sofa"
+        piece={null}
+        laborLines={[]}
+        placements={[]}
+        rooms={[]}
+        onSpecSaved={(saved) => {
+          onSpecSaved(saved);
+          setSpec((current) => ({ ...current, ...saved }));
+        }}
+        autosaveOwner={owner}
+      />
+    ) : null;
+  }
+  const remount = async () => {
+    await act(async () => setMounted(false));
+    await act(async () => setMounted(true));
+  };
+
+  it("a detached acknowledgement never takes the shared row back a version; the next write uses the latest", async () => {
+    onSpecSaved.mockReset();
+    render(<Shared />);
+    await type("Finish", "Linen");
+    // The pane goes; its write commits at the table (v2) but answers late.
+    await act(async () => setMounted(false));
+    server = { ...server, finish: "Linen", row_version: 2 } as SpecLensSpec;
+    const late = { ...server };
+    // A refetch hands the row on at v2, and the pane reopens on it.
+    await act(async () => setShared(late));
+    await act(async () => setMounted(true));
+    await type("Material", "Oak");
+    expect(mockSpecCalls[1].input.expectedRowVersion).toBe(2);
+    await answer(1);
+    expect(shown).toMatchObject({ row_version: 3, material: "Oak" });
+
+    // The gone pane's answer arrives now: nothing is published.
+    await act(async () => mockSpecCalls[0].resolve(late));
+    expect(onSpecSaved).toHaveBeenCalledTimes(1);
+    expect(shown).toMatchObject({ row_version: 3, material: "Oak" });
+
+    // Reopened again, the next write goes on the latest version.
+    await remount();
+    await type("Color", "Red");
+    expect(mockSpecCalls[2].input.expectedRowVersion).toBe(3);
   });
 });
 

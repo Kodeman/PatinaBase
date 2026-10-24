@@ -329,6 +329,15 @@ export interface PaneWriteHold {
   mark: (message: string | null) => void;
 }
 
+/** The child editors that hold through `PaneWriteHold` and print their own alert. */
+type ChildField = "Item label" | "Rooms" | "Labor" | "COM";
+const CHILD_FIELDS: ReadonlySet<string> = new Set<ChildField>([
+  "Item label",
+  "Rooms",
+  "Labor",
+  "COM",
+]);
+
 const CONTROL = "input, select, textarea, button";
 
 /** The control a held field's name points at: the field itself, or its first. */
@@ -664,9 +673,12 @@ export function SpecFieldsPane({
         })
         .then(
           (saved) => {
+            // Gone, its answer publishes nothing: the shared row may already
+            // hold a newer version (SQ-1899 F4).
+            if (!alive.current) return;
             acked.current = saved;
             onSpecSaved(saved);
-            if (alive.current) for (const [field] of latest()) revert(field);
+            for (const [field] of latest()) revert(field);
           },
           (e: unknown) => {
             const current = latest();
@@ -719,7 +731,7 @@ export function SpecFieldsPane({
   });
 
   /** A child editor's link to the hold: the unfold only (WP-01.6, F12). */
-  const childHold = (field: string): PaneWriteHold | undefined =>
+  const childHold = (field: ChildField): PaneWriteHold | undefined =>
     autosaveOwner
       ? {
           track: (write) => void hold.track(field, write),
@@ -918,6 +930,15 @@ export function SpecFieldsPane({
 
   const makerName = (line.vendor_name ?? "").trim();
   const specFields = spec != null;
+  // Under the unfold, a field still marked keeps its alert after another
+  // write clears the pane's last message (SQ-1899 F2). Child editors print
+  // their own.
+  const shownError =
+    error ??
+    (autosaveOwner
+      ? ([...hold.unsaved].find(([field]) => !CHILD_FIELDS.has(field))?.[1] ??
+        null)
+      : null);
 
   return (
     <section
@@ -1332,12 +1353,12 @@ export function SpecFieldsPane({
         </p>
       )}
 
-      {error && (
+      {shownError && (
         <p
           role="alert"
           className="font-sans text-[13px] text-[color:var(--color-terracotta-ink)]"
         >
-          {error}
+          {shownError}
         </p>
       )}
 

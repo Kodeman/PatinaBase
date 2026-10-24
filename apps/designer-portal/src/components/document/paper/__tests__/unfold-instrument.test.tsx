@@ -192,21 +192,36 @@ async function settle() {
   );
 }
 
-/** A dirty buffer whose flush waits until the test lets it finish. */
+/** A dirty buffer whose flush waits until the test lets it finish or fail. */
 function pendingBuffer() {
   let dirty = true;
+  let error: string | null = null;
   let finish!: () => void;
+  let fail!: () => void;
   const registration = registerBoardOwnerAutosave(OWNER, {
-    getSnapshot: () => ({ dirty, flushing: false, error: null }),
+    getSnapshot: () => ({ dirty, flushing: false, error }),
     flush: () =>
-      new Promise<void>((resolve) => {
+      new Promise<void>((resolve, reject) => {
         finish = () => {
           dirty = false;
           resolve();
         };
+        fail = () => {
+          error = "The save did not reach the server.";
+          reject(new Error(error));
+        };
       }),
   });
-  return { registration, finish: () => finish() };
+  return { registration, finish: () => finish(), fail: () => fail() };
+}
+
+/**
+ * A Back the open sheet holds: the event never reaches later listeners, so
+ * wait for the entry to be put back instead.
+ */
+async function heldBack(push: jest.SpyInstance, times: number) {
+  act(() => window.history.back());
+  await waitFor(() => expect(push).toHaveBeenCalledTimes(times));
 }
 
 /** The instrument's host (an embedded sheet names its own section too). */
@@ -467,32 +482,147 @@ describe("UnfoldInstrument", () => {
     act(() => registration.unregister());
   });
 
-  it("a save that finishes after Back and a reopen leaves the new instrument open", async () => {
+  // Story #40 rescinds "Back is never blocked by the pending save": Back is
+  // never lost. It holds like Return and completes once the save lands.
+  it("Back is never lost: a held Back completes once its save lands, in one step", async () => {
     const { finish } = pendingBuffer();
     render(<Paper />);
     const opener = screen.getByRole("button", { name: "Open sofa" });
     fireEvent.click(opener);
+    const unfolded = window.location.href;
+    const length = window.history.length;
     fireEvent.click(screen.getByRole("button", { name: "Return to the room" }));
     expect(await screen.findByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+    const push = jest.spyOn(window.history, "pushState");
 
-    // Back is never blocked by the pending save.
-    await back();
-    expect(region()).toBeNull();
-
-    fireEvent.click(opener);
+    // Held twice: the entry is put back, and history never grows.
+    await heldBack(push, 1);
+    expect(window.location.href).toBe(unfolded);
+    expect(window.history.length).toBe(length);
     expect(region()).toBeInTheDocument();
-    const reopened = window.location.href;
+    await heldBack(push, 2);
+    expect(window.location.href).toBe(unfolded);
+    expect(window.history.length).toBe(length);
+    expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+
     const backSpy = jest.spyOn(window.history, "back");
-    const replace = jest.spyOn(window.history, "replaceState");
+    const landed = popstate();
+    await act(async () => finish());
+    await act(async () => landed);
+    await settle();
+
+    // One Back completes it; the earlier Return's answer adds none, and the
+    // completing pop is not held again.
+    expect(backSpy).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(window.location.search).toBe("?sheet=call");
+    expect(region()).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("a held Back whose save fails stays open, says so, and holds again", async () => {
+    const { fail } = pendingBuffer();
+    render(<Paper />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    const unfolded = window.location.href;
+    const push = jest.spyOn(window.history, "pushState");
+    const backSpy = jest.spyOn(window.history, "back");
+
+    await heldBack(push, 1);
+    expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+    await act(async () => fail());
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      UNFOLD_UNSAVED_MESSAGE,
+    );
+    expect(window.location.href).toBe(unfolded);
+    expect(region()).toBeInTheDocument();
+    // `back` was called once, by the test; the sheet never completes it.
+    expect(backSpy).toHaveBeenCalledTimes(1);
+
+    // Still failed: the next Back holds too.
+    await heldBack(push, 2);
+    expect(window.location.href).toBe(unfolded);
+    expect(region()).toBeInTheDocument();
+  });
+
+  it("a held Back to another document completes there once the save lands, without looping", async () => {
+    // Opened straight on the unfold (no earlier in-document entry), over /desk.
+    window.history.replaceState(null, "", "/desk");
+    window.history.pushState(null, "", DEEP_LINK);
+    const { finish } = pendingBuffer();
+    render(<Paper />);
+    expect(region()).toBeInTheDocument();
+    const length = window.history.length;
+    const push = jest.spyOn(window.history, "pushState");
+
+    await heldBack(push, 1);
+    expect(window.location.pathname).toBe(`/doc/${DOC}`);
+    expect(window.history.length).toBe(length);
+    expect(region()).toBeInTheDocument();
+
+    const landed = popstate();
+    await act(async () => finish());
+    await act(async () => landed);
+    await settle();
+    expect(window.location.pathname).toBe("/desk");
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(region()).toBeNull();
+  });
+
+  it("a held Back whose save finishes after the instrument unmounts navigates nowhere", async () => {
+    const { finish } = pendingBuffer();
+    const { unmount } = render(<Paper />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    const push = jest.spyOn(window.history, "pushState");
+    await heldBack(push, 1);
+    const before = window.location.href;
+    unmount();
+    const backSpy = jest.spyOn(window.history, "back");
 
     await act(async () => finish());
     await settle();
-
     expect(backSpy).not.toHaveBeenCalled();
-    expect(replace).not.toHaveBeenCalled();
-    expect(window.location.href).toBe(reopened);
-    expect(region()).toBeInTheDocument();
-    expect(screen.queryByText(UNFOLD_SAVING_MESSAGE)).toBeNull();
+    expect(window.location.href).toBe(before);
+  });
+
+  it("asks the browser to confirm leaving only while a write is pending or marked", () => {
+    let snapshot: { dirty: boolean; flushing: boolean; error: string | null } = {
+      dirty: false,
+      flushing: false,
+      error: null,
+    };
+    const registration = registerBoardOwnerAutosave(OWNER, {
+      getSnapshot: () => snapshot,
+      flush: () => Promise.resolve(),
+    });
+    const set = (next: typeof snapshot) =>
+      act(() => {
+        snapshot = next;
+        registration.notify();
+      });
+    /** A reload, a tab close or a Back to another browser document. */
+    const leaveCancelled = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    const { unmount } = render(<Paper />);
+    expect(leaveCancelled()).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    expect({ "clean": leaveCancelled() }).toEqual({ "clean": false });
+
+    set({ dirty: true, flushing: false, error: null });
+    expect({ "a buffered edit": leaveCancelled() }).toEqual({ "a buffered edit": true });
+    set({ dirty: true, flushing: true, error: null });
+    expect({ "a write in flight": leaveCancelled() }).toEqual({ "a write in flight": true });
+    set({ dirty: false, flushing: false, error: null });
+    expect({ "saved": leaveCancelled() }).toEqual({ "saved": false });
+    set({ dirty: true, flushing: false, error: "The save did not reach the server." });
+    expect({ "a marked failure": leaveCancelled() }).toEqual({ "a marked failure": true });
+
+    unmount();
+    expect({ "unmounted": leaveCancelled() }).toEqual({ "unmounted": false });
   });
 
   it("a save that finishes after the instrument unmounts navigates nowhere", async () => {

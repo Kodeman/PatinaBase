@@ -171,6 +171,12 @@ export function LaborAct({
   const rootRef = useRef<HTMLDivElement>(null);
   const addRef = useRef<HTMLButtonElement>(null);
   /**
+   * The open form's attempt. PUT BACK and a new start end it, so a late
+   * answer for an ended attempt marks nothing and moves nothing; a waiting
+   * close still stops once on its refusal (`hold.track`).
+   */
+  const attempt = useRef(0);
+  /**
    * After the form closes, focus never drops to the page (T-60a F6): ADD
    * LABOR holds it, and a new labor line's name takes it once it is here.
    */
@@ -218,10 +224,12 @@ export function LaborAct({
     setRough("");
     setError(null);
     hold?.mark(null);
+    attempt.current += 1;
     setOpen(true);
   };
 
   const close = () => {
+    attempt.current += 1;
     setOpen(false);
     setError(null);
     hold?.mark(null);
@@ -256,13 +264,16 @@ export function LaborAct({
       roughCents,
     });
     hold?.track(sent);
+    const mine = attempt.current;
     sent
       .then((added) => {
+        if (attempt.current !== mine) return;
         setOpen(false);
         setFocusAfter({ lineId: added?.selectionId ?? null, at: Date.now() });
         hold?.mark(null);
       })
       .catch((e: Error) => {
+        if (attempt.current !== mine) return;
         // The form stays open with what was typed: it holds the fold.
         const message = e.message || "The labor line was not added.";
         setError(message);

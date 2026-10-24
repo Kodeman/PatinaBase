@@ -258,7 +258,12 @@ export function SpecLens({
     queryClient.setQueryData<SpecFieldRows>(
       specFieldRowsKey(projectId, [...orderedIds].sort()),
       (current) =>
-        current
+        // Never back to an older version than the cache already holds.
+        current &&
+        !(
+          (current.specs[saved.ffe_item_id]?.row_version ?? -1) >
+          saved.row_version
+        )
           ? {
               ...current,
               specs: {

@@ -15,8 +15,9 @@
  *   the unfold parameters away. Focus then returns through `return-context`.
  * - Buffered edits registered under `autosaveOwner` hold the close with a
  *   visible "Saving…" until they persist; a failed save keeps the sheet open.
- *   Back is never blocked: a save that finishes after Back, a reopen or an
- *   unmount still lands, but no longer closes anything.
+ *   Back is held exactly like Return (story #40), wherever it leads: the
+ *   entry is put back, and the Back completes once the save lands. A save
+ *   that finishes after a reopen or an unmount navigates nowhere.
  *
  * The host is never `role="dialog"` or `aria-modal`: an embedded Build room
  * reads any rendered dialog as holding Esc (SQ-1819 review).
@@ -99,44 +100,50 @@ function subscribeLocation(listener: () => void): () => void {
   };
 }
 
+/** The entry an open sheet stands on: its address and its whole state. */
+interface Standing {
+  url: string;
+  /** Next's own keys included, so putting it back goes past Next's patch. */
+  state: unknown;
+}
+
 /**
- * SQ-1897 F1 — an open sheet whose marked field holds a refused draft. A Back
- * that leaves its entry within the document is read as still standing on it,
- * so no render folds the sheet (Next renders the popped address eagerly,
- * before any later popstate listener runs); the sheet's own listener then
- * puts the entry back and asks to close.
+ * Story #40 — an open sheet whose pane has a write out or a field marked
+ * unsaved. A Back (or Forward) that leaves its entry, to this document or
+ * another, is read as still standing on it, so no render folds the sheet;
+ * the sheet's own capture listener stops the event before Next sees it,
+ * puts the entry back and holds the Back like Return.
  */
 interface BackHold {
   kind: UnfoldKind;
-  standing: () => { url: string; entry: UnfoldEntry | null } | null;
-  failed: () => boolean;
+  standing: () => Standing | null;
+  holds: () => boolean;
 }
 const backHolds = new Set<BackHold>();
 
-/** The standing entry a Back to `search` must not leave, or `null`. */
-function heldBack(
-  search: string,
-): { hold: BackHold; url: string; entry: UnfoldEntry | null } | null {
+/** The standing entry the current address must not have left, or `null`. */
+function heldBack(): ({ hold: BackHold } & Standing) | null {
+  const { href, pathname, search } = window.location;
   for (const hold of backHolds) {
     const standing = hold.standing();
-    if (!standing) continue;
-    const at = new URL(standing.url);
-    if (at.search === search) continue;
-    if (at.pathname !== window.location.pathname) continue;
-    const now = parseUnfoldSearch(new URLSearchParams(search), {
-      canSeeMoney: true,
-    });
-    if (now?.kind === hold.kind) continue;
-    if (!hold.failed()) continue;
+    if (!standing || standing.url === href) continue;
+    // Still unfolded on the same document: a re-address, not a leave.
+    if (
+      new URL(standing.url).pathname === pathname &&
+      parseUnfoldSearch(new URLSearchParams(search), { canSeeMoney: true })
+        ?.kind === hold.kind
+    ) {
+      continue;
+    }
+    if (!hold.holds()) continue;
     return { hold, ...standing };
   }
   return null;
 }
 
 const readSearch = () => {
-  const search = window.location.search;
-  const held = heldBack(search);
-  return held ? new URL(held.url).search : search;
+  const held = heldBack();
+  return held ? new URL(held.url).search : window.location.search;
 };
 const serverSearch = () => "";
 
@@ -364,44 +371,99 @@ export function UnfoldInstrument({
       },
     );
   }, [closing, ownerKind, ownerId, snapshot]);
-  const closeRef = useRef(close);
-  closeRef.current = close;
-
-  // SQ-1897 F1 — Back over a field showing a draft its write refused holds
-  // like Return. The entry the unfold stands on is kept; a Back that leaves
-  // it while a field is marked unsaved is read as still standing (see
-  // `heldBack`), then puts the entry back (a push, as the unfold made it) and
-  // asks to close: the marked field takes focus, and nothing is written
-  // again. Any other Back folds away as before, a save that is still out
-  // included (it lands on its own).
-  const standing = useRef<{ url: string; entry: UnfoldEntry | null } | null>(
-    null,
-  );
+  // Story #40 — Back is held exactly like Return while the pane has a write
+  // out or a field marked unsaved, whether it leads within this document or
+  // to another one. The capture listener runs before Next's own, stops the
+  // event, and pushes the standing entry back over the one Back reached, so
+  // that entry stays right under it and history never grows. Once the save
+  // lands, one `history.back()` completes the Back to that destination, and
+  // the listener lets exactly that pop through. A refusal keeps the sheet
+  // open on the marked field; nothing is written again.
+  const standing = useRef<Standing | null>(null);
+  const destination = useRef<string | null>(null);
+  const releasing = useRef<string | null>(null);
   useLayoutEffect(() => {
     standing.current = address
-      ? { url: window.location.href, entry: readEntry() }
+      ? { url: window.location.href, state: window.history.state }
       : null;
   }, [address]);
+
+  const holdBack = useCallback(() => {
+    if (!ownerKind || !ownerId) return;
+    // The held Back takes over any close already waiting: one navigation.
+    const asked = (generation.current += 1);
+    setClosing(true);
+    setCloseError(null);
+    flushBoardOwnerAutosaves({ kind: ownerKind, id: ownerId }).then(
+      () => {
+        if (generation.current !== asked || destination.current === null) {
+          return;
+        }
+        setClosing(false);
+        releasing.current = destination.current;
+        window.history.back();
+      },
+      () => {
+        if (generation.current !== asked) return;
+        setClosing(false);
+        setCloseError(UNFOLD_UNSAVED_MESSAGE);
+      },
+    );
+  }, [ownerKind, ownerId]);
+  const holdBackRef = useRef(holdBack);
+  holdBackRef.current = holdBack;
+
   useEffect(() => {
     if (!open || !ownerKind || !ownerId) return;
     const owner = { kind: ownerKind, id: ownerId };
     const hold: BackHold = {
       kind,
       standing: () => standing.current,
-      failed: () => Boolean(getProposalAutosaveSnapshot(owner).error),
+      holds: () =>
+        releasing.current !== window.location.href &&
+        !isProposalAutosaveSnapshotClean(getProposalAutosaveSnapshot(owner)),
     };
-    const onPop = () => {
-      const held = heldBack(window.location.search);
+    const onPop = (event: PopStateEvent) => {
+      const released = releasing.current;
+      releasing.current = null;
+      if (released !== null && released === window.location.href) return;
+      const held = heldBack();
       if (held?.hold !== hold) return;
-      window.history.pushState(entryState(held.entry), "", held.url);
+      event.stopImmediatePropagation();
+      destination.current = window.location.href;
+      window.history.pushState(held.state, "", held.url);
       locationChanged();
-      closeRef.current();
+      holdBackRef.current();
     };
+    // A Back across a browser-document boundary (the unfold was loaded or
+    // reloaded at its address), a reload or a tab close fires no popstate, so
+    // nothing can re-push: while a write is pending or marked, ask the browser
+    // to confirm leaving. Native dialog only; a confirmed leave drops the draft.
+    const onUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    let guarding = false;
+    const guard = () => {
+      const unsaved = !isProposalAutosaveSnapshotClean(
+        getProposalAutosaveSnapshot(owner),
+      );
+      if (unsaved === guarding) return;
+      guarding = unsaved;
+      if (unsaved) window.addEventListener("beforeunload", onUnload);
+      else window.removeEventListener("beforeunload", onUnload);
+    };
+    guard();
+    const unsubscribe = subscribeToProposalAutosaves(owner, guard);
     backHolds.add(hold);
-    window.addEventListener("popstate", onPop);
+    window.addEventListener("popstate", onPop, { capture: true });
     return () => {
+      unsubscribe();
+      window.removeEventListener("beforeunload", onUnload);
       backHolds.delete(hold);
-      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("popstate", onPop, { capture: true });
+      destination.current = null;
+      releasing.current = null;
     };
   }, [open, ownerKind, ownerId, kind]);
 

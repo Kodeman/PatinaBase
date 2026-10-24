@@ -295,6 +295,141 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       'the retry wrote the typed value',
     ).toBe(typed);
   });
+
+  // Story log #40 — Back is held exactly like Return: a Back taken while the
+  // save is still in flight waits on it; when it fails, the sheet stays open
+  // on the marked field.
+  test('Back over a pending Spec save that then fails stays open on the field', async ({
+    authenticatedPage: page,
+  }) => {
+    const line = livingLineId('F01 Living Room selection 10');
+    const typed = `Pending-Back finish ${Date.now()}`;
+    await openJob(page);
+    await holdShell(page);
+    await (await livingRoomDoor(page)).click();
+    await expect(instrument(page)).toBeVisible({ timeout: 30_000 });
+    await instrument(page)
+      .getByRole('group', { name: 'Schedule view' })
+      .getByRole('button', { name: 'Specifications' })
+      .click();
+    await instrument(page).locator(`[data-line-id="${line}"] button`).click({ force: true });
+    const pane = instrument(page).getByTestId('spec-fields-pane');
+    await expect(pane).toContainText('F01 Living Room selection 10', { timeout: 30_000 });
+    const finish = pane.getByRole('textbox', { name: 'Finish' });
+    await expect(finish).toBeAttached({ timeout: 30_000 });
+
+    const specWrite = (url: URL) => url.pathname.endsWith('/rest/v1/project_ffe_specs');
+    let sent = 0;
+    let answer: () => void = () => {};
+    const answered = new Promise<void>((resolve) => (answer = resolve));
+    await page.route(specWrite, async (route) => {
+      if (route.request().method() !== 'PATCH') return route.continue();
+      sent += 1;
+      await answered;
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'XX000', message: 'Forced failure (SQ-1900 e2e)' }),
+      });
+    });
+    await finish.fill(typed, { force: true });
+    await finish.evaluate((el: HTMLElement) => el.blur());
+    await expect.poll(() => sent, { timeout: 30_000 }).toBe(1);
+    const length = await page.evaluate(() => history.length);
+
+    await page.goBack();
+    await expect(instrument(page)).toBeVisible();
+    expect(unfoldParams(page).unfold, 'a pending save holds Back').toBe('pieces');
+    answer();
+    await expect(instrument(page).getByText(/Your changes are not saved yet/)).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(pane.getByRole('alert')).toContainText(/Forced failure|not saved/);
+    await expect(finish).toHaveAttribute('aria-invalid', 'true');
+    await expect(finish).toHaveValue(typed);
+    await expect(finish, 'the failed save focuses its field').toBeFocused();
+    expect(unfoldParams(page).unfold).toBe('pieces');
+    expect(new URL(page.url()).searchParams.get('line')).toBe(line);
+    expect(await page.evaluate(() => history.length), 'a held Back grows no history').toBe(length);
+    expect(sent, 'Back replayed nothing').toBe(1);
+    expect(await sameShell(page), 'Back held the unfold without a remount').toBe(true);
+    await test.info().attach('spec-pending-back-failed', { body: await page.screenshot(), contentType: 'image/png' });
+
+    await page.unroute(specWrite);
+    await instrument(page).getByRole('button', { name: /Return to the room/ }).click();
+    await expect(instrument(page)).toHaveCount(0, { timeout: 30_000 });
+    expect(
+      psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`),
+      'the retry wrote the typed value',
+    ).toBe(typed);
+  });
+
+  // Story log #40 — the unfold is the document's first entry (a client
+  // navigation from the desk straight to its address): Back would leave the
+  // document, and over a failed save it is held there all the same. Once the
+  // save lands, the same Back goes on to the desk, once, without looping.
+  // (`window.next.router` is Next's debugging handle; it is the one way to
+  // reach this entry without a full page load, which no popstate can hold.)
+  test('Back to the desk over a failed Spec save is held, then goes on once it lands', async ({
+    authenticatedPage: page,
+  }) => {
+    const line = livingLineId('F01 Living Room selection 11');
+    const typed = `Desk-held finish ${Date.now()}`;
+    await openJob(page); // compiles /doc before the client navigation below
+    await page.goto('about:blank');
+    await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+    const studio = page.locator('[data-studio="round8"]');
+    // Hydrated and settled (studio.spec.ts), so Next's router is in place.
+    await expect(studio).toHaveAttribute('data-arrival-ready', '', { timeout: 60_000 });
+    const address = `/doc/${JOB}?unfold=pieces&lens=spec&room=${LIVING}&line=${line}`;
+    await page.evaluate((href) => {
+      (window as unknown as { next: { router: { push(href: string): void } } }).next.router.push(href);
+    }, address);
+    await expect(instrument(page)).toBeVisible({ timeout: 60_000 });
+    await holdShell(page);
+    const pane = instrument(page).getByTestId('spec-fields-pane');
+    await expect(pane).toContainText('F01 Living Room selection 11', { timeout: 30_000 });
+    const finish = pane.getByRole('textbox', { name: 'Finish' });
+    await expect(finish).toBeAttached({ timeout: 30_000 });
+
+    const specWrite = (url: URL) => url.pathname.endsWith('/rest/v1/project_ffe_specs');
+    let refused = 0;
+    await page.route(specWrite, (route) => {
+      if (route.request().method() !== 'PATCH') return route.continue();
+      refused += 1;
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'XX000', message: 'Forced failure (SQ-1900 e2e)' }),
+      });
+    });
+    await finish.fill(typed, { force: true });
+    await finish.evaluate((el: HTMLElement) => el.blur());
+    await expect(finish).toHaveAttribute('aria-invalid', 'true', { timeout: 30_000 });
+    const length = await page.evaluate(() => history.length);
+
+    await page.goBack();
+    await expect(instrument(page).getByText(/Your changes are not saved yet/)).toBeVisible({
+      timeout: 30_000,
+    });
+    expect(new URL(page.url()).pathname, 'Back did not leave the document').toBe(`/doc/${JOB}`);
+    expect(unfoldParams(page).unfold).toBe('pieces');
+    await expect(finish).toHaveValue(typed);
+    await expect(finish, 'Back focuses the unsaved field').toBeFocused();
+    expect(await sameShell(page), 'Back held the unfold without a remount').toBe(true);
+    expect(await page.evaluate(() => history.length), 'a held Back grows no history').toBe(length);
+    await test.info().attach('spec-desk-back-held', { body: await page.screenshot(), contentType: 'image/png' });
+
+    await page.unroute(specWrite);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/desk(\?|$)/, { timeout: 30_000 });
+    await expect(studio).toBeVisible({ timeout: 30_000 });
+    expect(await page.evaluate(() => history.length), 'the Back went on without a loop').toBe(length);
+    expect(
+      psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`),
+      'the Back retried the save and wrote the typed value',
+    ).toBe(typed);
+  });
 });
 
 /** RPC-made line ids are not stable (f01-fixture.sql): read one by name. */

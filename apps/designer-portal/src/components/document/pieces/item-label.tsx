@@ -68,9 +68,13 @@ export function ItemLabelField({
   // re-render would otherwise send the write twice.
   const labelInFlight = useRef(false);
   const labelRefused = useRef<string | null>(null);
+  // Esc puts the draft back and ends the attempt: a late refusal for it marks
+  // nothing (SQ-1899 F1); a waiting close still stops once (`hold.track`).
+  const labelAttempt = useRef(0);
   const commitLabel = async (fromEnter: boolean) => {
     const next = labelDraft.trim();
     if (next === labelBaseline.current || next === labelRefused.current || labelInFlight.current) return;
+    const attempt = labelAttempt.current;
     labelInFlight.current = true;
     setLabelStatus(null);
     try {
@@ -83,6 +87,7 @@ export function ItemLabelField({
       setLabelStatus(SAVED);
       hold?.mark(null);
     } catch (error) {
+      if (labelAttempt.current !== attempt) return;
       labelRefused.current = next;
       const refusal = itemLabelRefusal((error as Error).message, next) ?? (error as Error).message;
       setLabelStatus(refusal);
@@ -128,6 +133,7 @@ export function ItemLabelField({
           if (event.key === "Enter") { event.preventDefault(); void commitLabel(true); }
           if (event.key === "Escape") {
             skipLabelBlurCommit.current = true;
+            labelAttempt.current += 1;
             setLabelDraft(labelBaseline.current);
             setLabelStatus(null);
             hold?.mark(null);

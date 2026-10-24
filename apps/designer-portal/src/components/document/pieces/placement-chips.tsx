@@ -1,6 +1,12 @@
 "use client";
 
-import { useId, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useSetLinePlacements } from "@patina/supabase";
 import type { FfeLineUnit, FfeRoomPlacement } from "@patina/types";
 import type { PaneWriteHold } from "./spec-fields-pane";
@@ -272,7 +278,15 @@ export function PlacementChips({
   const placed = shares.reduce((sum, s) => sum + s.quantity, 0);
   const pending = setPlacements.isPending;
 
+  /**
+   * The open room form's attempt. PUT BACK and opening another form end it,
+   * so a late answer for an ended attempt marks nothing and closes nothing; a
+   * waiting close still stops once on its refusal (`hold.track`).
+   */
+  const attempt = useRef(0);
+
   const close = () => {
+    attempt.current += 1;
     setEditing(null);
     setError(null);
     hold?.mark(null);
@@ -299,12 +313,15 @@ export function PlacementChips({
       })),
     });
     hold?.track(sent);
+    const mine = attempt.current;
     sent
       .then(() => {
+        if (attempt.current !== mine) return;
         setEditing(null);
         hold?.mark(null);
       })
       .catch((e: Error) => {
+        if (attempt.current !== mine) return;
         const message = e.message || "The rooms were not saved.";
         setError(message);
         if (drafting) hold?.mark(message);
@@ -312,6 +329,7 @@ export function PlacementChips({
   };
 
   const openRoom = (share: Share) => {
+    attempt.current += 1;
     setError(null);
     hold?.mark(null);
     setDraftQuantity(String(share.quantity));
@@ -320,6 +338,7 @@ export function PlacementChips({
 
   const openNew = () => {
     if (free.length === 0) return;
+    attempt.current += 1;
     setError(null);
     hold?.mark(null);
     setDraftRoom(free[0].id);
