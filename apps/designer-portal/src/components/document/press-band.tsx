@@ -16,7 +16,7 @@
  * its photographs. A closed project's frozen edition offers no act at all.
  */
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -181,6 +181,7 @@ export function PressBand({
           projectId={projectId}
           edition={pending}
           allowEdit={!frozen}
+          refreshEdition={async () => (await refetch()).isSuccess}
           current={current}
           name={name}
           sourceUrls={urls}
@@ -292,9 +293,24 @@ function JobControls({
   );
 }
 
-function useEditionFocal(edition: ClientEdition, approving: boolean) {
+function focalFraming(image: ClientEditionImage | undefined, point = image?.focal): string {
+  return JSON.stringify([point, image?.subjectBox]);
+}
+
+function useEditionFocal(edition: ClientEdition, approving: boolean, refreshEdition: () => Promise<boolean>) {
   const [focal, setFocal] = useState<FocalEdit | null>(null);
-  // Successful writes bridge only the current read, never a refreshed projection.
+  const [refreshState, setRefreshState] = useState<'refreshing' | 'failed' | null>(null);
+  const latestImages = useRef(edition.images);
+  latestImages.current = edition.images;
+  const baseline = useRef({ before: '', saved: '' });
+  const refreshCrop = () => {
+    setRefreshState('refreshing');
+    void refreshEdition().then(
+      (success) => setRefreshState(success ? null : 'failed'),
+      () => setRefreshState('failed'),
+    );
+  };
+  // Successful writes bridge only their pre-save framing, never a conflicting read.
   const [savedFocals, setSavedFocals] = useState({
     images: edition.images,
     points: {} as Record<string, PlatePoint>,
@@ -302,13 +318,26 @@ function useEditionFocal(edition: ClientEdition, approving: boolean) {
   if (savedFocals.images !== edition.images) {
     setSavedFocals({ images: edition.images, points: {} });
   }
+  const finishCrop = (edit: FocalEdit) => {
+    const framing = focalFraming(latestImages.current.find((image) => image.assetId === edit.assetId));
+    setFocal(null);
+    if (framing === baseline.current.saved) return;
+    if (framing === baseline.current.before) {
+      setSavedFocals((current) => ({ images: current.images, points: { ...current.points, [edit.assetId]: edit.point } }));
+    } else {
+      refreshCrop();
+    }
+  };
   const cropReasonId = useId();
+  const cropBlocked = Boolean(focal ?? refreshState);
   return {
     focal,
     setFocal,
     cropReasonId,
-    approvalDescriptionId: focal ? cropReasonId : undefined,
-    approvalDisabled: approving || focal !== null,
+    refreshState,
+    refreshCrop,
+    approvalDescriptionId: cropBlocked ? cropReasonId : undefined,
+    approvalDisabled: approving || cropBlocked,
     savingCrop: focal?.status === 'saving',
     previewEdition: {
       ...edition,
@@ -317,15 +346,38 @@ function useEditionFocal(edition: ClientEdition, approving: boolean) {
         : image),
     },
     onFocalChange: (edit: FocalEdit | null) => {
-      if (edit?.status === 'saved') {
-        setSavedFocals((current) => ({ images: current.images, points: { ...current.points, [edit.assetId]: edit.point } }));
-        setFocal(null);
-      } else setFocal(edit);
+      if (!edit) return setFocal(null);
+      if (edit.status === 'saving') {
+        const image = edition.images.find((image) => image.assetId === edit.assetId);
+        baseline.current = {
+          before: focalFraming(image, savedFocals.points[edit.assetId] ?? image?.focal),
+          saved: focalFraming(image, edit.point),
+        };
+      }
+      if (edit.status === 'saved') finishCrop(edit);
+      else setFocal(edit);
     },
   };
 }
 
-function CropApprovalReason({ edit, id }: { edit: FocalEdit | null; id: string }) {
+function CropApprovalReason({ edit, id, refreshState, refreshCrop }: {
+  edit: FocalEdit | null;
+  id: string;
+  refreshState: 'refreshing' | 'failed' | null;
+  refreshCrop: () => void;
+}) {
+  if (refreshState) return (
+    <div>
+      <p id={id} role="status" className="text-[15px] text-[var(--text-muted)]">
+        Refresh the stored crop before approval
+      </p>
+      {refreshState === 'failed' && (
+        <DocumentAction actionKey="press-refresh-crop" surfaceKey="open-document" regionKey="press-band" variant="secondary" onClick={refreshCrop}>
+          Refresh crop
+        </DocumentAction>
+      )}
+    </div>
+  );
   return edit && <p id={id} role="status" className="text-[15px] text-[var(--text-muted)]">
     {edit.status === 'saving' ? 'Saving this crop before approval' : 'Use this crop or cancel first'}
   </p>;
@@ -339,9 +391,11 @@ function PendingEdition({
   name,
   sourceUrls,
   allowEdit,
+  refreshEdition,
 }: {
   headingId: string;
   allowEdit: boolean;
+  refreshEdition: () => Promise<boolean>;
   projectId: string;
   edition: ClientEdition;
   current: ClientEdition | null;
@@ -351,7 +405,7 @@ function PendingEdition({
   const [editing, setEditing] = useState(false);
   const [overrides, setOverrides] = useState<ClientEditionOverrides>({});
   const approve = useApproveClientEdition();
-  const { focal, setFocal, previewEdition, savingCrop, cropReasonId, approvalDescriptionId, approvalDisabled, onFocalChange } = useEditionFocal(edition, approve.isPending);
+  const { focal, setFocal, previewEdition, savingCrop, cropReasonId, approvalDescriptionId, approvalDisabled, onFocalChange, refreshState, refreshCrop } = useEditionFocal(edition, approve.isPending, refreshEdition);
   const hold = useHoldClientEdition();
   const trayId = useId();
 
@@ -419,7 +473,7 @@ function PendingEdition({
           </DocumentAction>}
         </DocumentActionRow>
       </div>
-      <CropApprovalReason id={cropReasonId} edit={focal} />
+      <CropApprovalReason id={cropReasonId} edit={focal} refreshState={refreshState} refreshCrop={refreshCrop} />
       <ActFailLine error={approve.error ?? hold.error} />
       <ProjectGalleryPreview
         projectId={projectId}

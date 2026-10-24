@@ -573,7 +573,11 @@ describe('PressBand — focal point', () => {
   });
 
   it('a refetch during a pending crop save preserves the successful crop against the current read', () => {
-    const { rerender } = renderBand([PENDING_ROW]);
+    const baseline = {
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: null })],
+    };
+    const { rerender } = renderBand([baseline]);
     const tray = openHeroFocal();
     dragHero(tray);
     const savedPosition = previewPosition();
@@ -597,6 +601,79 @@ describe('PressBand — focal point', () => {
     rerender(<PressBand projectId="p-1" clientFirstName="June" />);
     expect(previewPosition()).toBe(savedPosition);
     expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it('a delayed crop success cannot overlay a newer framing, even with structurally shared reads (SQ-1940 R3)', async () => {
+    const row = (focal: number[]) => ({
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal })],
+    });
+    const { rerender } = renderBand([row([0.5, 0.5])]);
+    const tray = openHeroFocal();
+    dragHero(tray);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    let finishRead!: (result: { isSuccess: boolean }) => void;
+    mockRefetchEditions.mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve; }));
+    mockData = editions([row([0.8, 0.7])]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    const authoritative = document.createElement('div');
+    const expected = render(<PressBandPreview edition={mockData.editions[0]} current={null} sourceUrls={{ 'a-hero': 'https://example.com/hero.jpg' }} />, { container: authoritative });
+    const position = authoritative.querySelector<HTMLElement>('[data-gallery-frame="cover_phone"] [data-press-cover]')!.style.objectPosition;
+    expected.unmount();
+    expect(previewPosition()).toBe(position);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(mockRefetchEditions).toHaveBeenCalledTimes(1);
+    // React Query can return the exact same data object after a successful read.
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(previewPosition()).toBe(position);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    await reactAct(async () => finishRead({ isSuccess: true }));
+    expect(previewPosition()).toBe(position);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it.each(['failure', 'rejection'])('a conflicting crop stays guarded after refresh %s until a successful retry', async (outcome) => {
+    const { rerender } = renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    dragHero(tray);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    mockData = editions([{
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: [0.8, 0.7] })],
+    }]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    mockRefetchEditions.mockImplementationOnce(() => outcome === 'failure'
+      ? Promise.resolve({ isSuccess: false })
+      : Promise.reject(new Error('Offline')));
+    await reactAct(async () => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription('Refresh the stored crop before approval');
+    // Closing the editor must not clear an unresolved authoritative-read guard.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    mockRefetchEditions.mockResolvedValueOnce({ isSuccess: true });
+    await reactAct(async () => fireEvent.click(screen.getByRole('button', { name: 'Refresh crop' })));
+    expect(mockRefetchEditions).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it('a read already carrying the saved crop needs no conflict refresh', () => {
+    const { rerender } = renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    dragHero(tray);
+    const position = previewPosition();
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    const point = mockSetFocal.mock.calls[0][0].focal;
+    mockData = editions([{
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: point })],
+    }]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(previewPosition()).toBe(position);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(mockRefetchEditions).not.toHaveBeenCalled();
   });
 
   it.each([false, true])('null framing matches the Gallery default when opening or rebaselining, refresh=%s', (refresh) => {
