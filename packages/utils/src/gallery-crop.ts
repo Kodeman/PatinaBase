@@ -2,6 +2,8 @@
 export type GalleryRect = readonly [number, number, number, number];
 export type GalleryPoint = readonly [number, number];
 
+export const GALLERY_DEFAULT_FOCAL: GalleryPoint = [0.5, 0.5];
+
 export const GALLERY_PHONE_ASPECT = 390 / 796;
 export const GALLERY_DESKTOP_ASPECT = 1440 / 852;
 
@@ -34,7 +36,7 @@ export function galleryCropPosition(
   width: number, height: number, aspect: number, subject?: GalleryRect | null, focal?: GalleryPoint | null,
 ): string | null {
   if (![width, height, aspect].every((n) => Number.isFinite(n) && n > 0)) return null;
-  const box = gallerySubject(width, height, subject, focal ?? [0.5, 0.5]);
+  const box = gallerySubject(width, height, subject, focal ?? GALLERY_DEFAULT_FOCAL);
   const centre = galleryFocal(box, focal);
   if (![...box, ...centre].every(Number.isFinite)) return null;
   const sourceAspect = width / height;

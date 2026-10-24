@@ -572,6 +572,54 @@ describe('PressBand — focal point', () => {
     expect(mockSetFocal).not.toHaveBeenCalled();
   });
 
+  it('a refetch during a pending crop save preserves the successful crop against the current read', () => {
+    const { rerender } = renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    dragHero(tray);
+    const savedPosition = previewPosition();
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    const savedPoint = mockSetFocal.mock.calls[0][0].focal;
+    const refreshed = (point: number[] | null) => ({
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: point, captionWhen: 'November' })],
+    });
+    mockData = editions([refreshed(null)]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(previewPosition()).toBe(savedPosition);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(previewPosition()).toBe(savedPosition);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(within(tray).getByRole('button', { name: 'Use this crop' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(previewPosition()).toBe(savedPosition);
+    mockData = editions([refreshed(savedPoint)]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(previewPosition()).toBe(savedPosition);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it.each([false, true])('null framing matches the Gallery default when opening or rebaselining, refresh=%s', (refresh) => {
+    const row = (focal: number[] | null) => ({
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal, subjectBox: null })],
+    });
+    const { rerender } = renderBand([row(refresh ? [0.3, 0.4] : null)]);
+    const tray = openHeroFocal();
+    if (refresh) {
+      mockData = editions([row(null)]);
+      rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    }
+    for (const frame of ['cover_phone', 'wide']) {
+      const preview = document.querySelector(`[data-gallery-frame="${frame}"] [data-press-cover]`) as HTMLElement;
+      const editor = tray.querySelector(`[data-focal-frame="${frame}"] img`) as HTMLElement;
+      expect(editor.style.objectPosition).toBe(preview.style.objectPosition);
+    }
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 50 across, 50 down/ })).toHaveLength(2);
+    expect(within(tray).getByRole('button', { name: 'Use this crop' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
   it('a second editor refetch replaces the temporary saved crop overlay (R3)', () => {
     const current = { ...CURRENT_ROW, images: PENDING_ROW.images };
     const { rerender } = renderBand([PENDING_ROW, current]);

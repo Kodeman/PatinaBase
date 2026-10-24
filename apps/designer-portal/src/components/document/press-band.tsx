@@ -318,7 +318,7 @@ function useEditionFocal(edition: ClientEdition, approving: boolean) {
     },
     onFocalChange: (edit: FocalEdit | null) => {
       if (edit?.status === 'saved') {
-        setSavedFocals({ images: edition.images, points: { ...savedFocals.points, [edit.assetId]: edit.point } });
+        setSavedFocals((current) => ({ images: current.images, points: { ...current.points, [edit.assetId]: edit.point } }));
         setFocal(null);
       } else setFocal(edit);
     },

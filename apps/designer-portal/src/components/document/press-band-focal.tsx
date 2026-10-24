@@ -4,9 +4,9 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useSetPlateFocal, type ClientEditionImage } from '@patina/supabase';
+import { GALLERY_DEFAULT_FOCAL } from '@patina/utils';
 import { ActFailLine } from '@/components/feedback/act-fail-line';
 import {
-  DEFAULT_CENTRE,
   objectPositionOf,
   type PlateBox,
   type PlatePoint,
@@ -98,7 +98,7 @@ function FocalEditor({
       ? inBox([image.focal[0], image.focal[1]], hold)
       : box
         ? [box[0] + box[2] / 2, box[1] + box[3] / 2]
-        : DEFAULT_CENTRE;
+        : GALLERY_DEFAULT_FOCAL;
   const [focal, setFocal] = useState<PlatePoint>(initial);
   const saved = useRef(initial);
   const [moved, setMoved] = useState(false);
