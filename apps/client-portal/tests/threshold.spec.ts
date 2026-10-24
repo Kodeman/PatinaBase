@@ -47,7 +47,8 @@ const MULTI_SEEDED_HOUSES = ['Aspen Loft Refresh', 'Birch Hollow', 'Marrow & Val
        her acceptance                                           → $2,980.00
    4 · invoice INV-2026-0301, sent and unpaid: 406000c due CURRENT_DATE + 7
    ────────────────────────────────────────────────────────────────────────── */
-const AUTHORIZATION_TOTAL = '$8,120.00';
+// The unchanged signed-document renderer prints whole dollars.
+const AUTHORIZATION_TOTAL = /\$8,120(?:\.00)?(?:\D|$)/;
 const LIVE_WORKING_FIGURE = '$7,800';
 const MAKER = 'Marta Voss';
 const HELD_DRAW = '$2,980.00';
@@ -316,7 +317,7 @@ test.describe('The Threshold — the client page', () => {
 
     // 1 · what she authorized, at the figure she put her name to — and never
     //     the studio's live working row.
-    await expect(body).toContainText(AUTHORIZATION_TOTAL);
+    await expect(page.getByTestId('instrument-reading')).toContainText(AUTHORIZATION_TOTAL);
     await expect(body).not.toContainText(LIVE_WORKING_FIGURE);
     await page.keyboard.press('Escape');
     await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
