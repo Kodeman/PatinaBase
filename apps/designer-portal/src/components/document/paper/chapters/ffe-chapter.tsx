@@ -217,20 +217,23 @@ function useSheetLanding(
       host.scrollIntoView?.({ block: 'start' });
       return true;
     };
-    if (land()) return;
-    const retry = () => {
-      if (land()) stop();
+    const observer = new MutationObserver(() => {
+      if (land()) observer.disconnect();
+    });
+    // The title taking focus is no DOM change; it is heard here. The sheet
+    // can take it again after landing (its landing effect re-runs, as React
+    // does in development), so the title is listened to for the whole wait.
+    const onFocus = (event: FocusEvent) => {
+      if (event.target === title() && land()) observer.disconnect();
     };
-    const observer = new MutationObserver(retry);
     const timer = window.setTimeout(stop, LANDING_WAIT_MS);
     function stop() {
       observer.disconnect();
-      host.removeEventListener('focusin', retry);
+      host.removeEventListener('focusin', onFocus);
       window.clearTimeout(timer);
     }
-    observer.observe(host, { childList: true, subtree: true });
-    // The title taking focus is no DOM change; it is heard here.
-    host.addEventListener('focusin', retry);
+    host.addEventListener('focusin', onFocus);
+    if (!land()) observer.observe(host, { childList: true, subtree: true });
     return stop;
   }, [hostRef, lens, room, line]);
 }
