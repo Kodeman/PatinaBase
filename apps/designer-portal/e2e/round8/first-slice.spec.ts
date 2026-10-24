@@ -23,7 +23,11 @@ async function settled(page: Page) {
 }
 
 async function openStudio(page: Page) {
-  await page.goto('/desk', { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  // Authentication already lands here. Do not abort its first hydrated read
+  // with a second full navigation before the studio has settled.
+  if (new URL(page.url()).pathname !== '/desk') {
+    await page.goto('/desk', { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  }
   const studio = page.locator('[data-studio="round8"]');
   await expect(studio, 'round-8 studio is mounted').toBeVisible({ timeout: 60_000 });
   await expect(studio, 'the studio reads have settled').toHaveAttribute('data-arrival-ready', '', {
