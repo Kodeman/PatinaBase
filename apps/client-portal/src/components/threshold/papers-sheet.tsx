@@ -79,6 +79,8 @@ function isFrameable(storagePath: string | null): boolean {
 export interface PapersSheetProps {
   projectId: string;
   open: boolean;
+  /** Gallery supplies the single modal, focus boundary and scroll lock. */
+  embedded?: boolean;
   onDismiss: () => void;
   /**
    * The door's read view, when the page has one: an executed instrument is
@@ -94,6 +96,7 @@ export function PapersSheet({
   open,
   onDismiss,
   onOpenInstrument,
+  embedded = false,
 }: PapersSheetProps) {
   if (!open) return null;
   return (
@@ -101,289 +104,116 @@ export function PapersSheet({
       projectId={projectId}
       onDismiss={onDismiss}
       onOpenInstrument={onOpenInstrument}
+      embedded={embedded}
     />
   );
 }
 
-function PapersSheetBody({
-  projectId,
-  onDismiss,
-  onOpenInstrument,
-}: Omit<PapersSheetProps, 'open'>) {
+function tabTarget(event: ReactKeyboardEvent<HTMLDivElement>, container: HTMLDivElement) {
+  const focusable = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE));
+  const edge = event.shiftKey ? focusable[0] : focusable.at(-1);
+  if (document.activeElement !== edge && document.activeElement !== container) return null;
+  return event.shiftKey ? focusable.at(-1) : focusable[0];
+}
+function trapTab(event: ReactKeyboardEvent<HTMLDivElement>, container: HTMLDivElement | null) {
+  if (event.key !== 'Tab' || !container) return;
+  const target = tabTarget(event, container);
+  if (target) { event.preventDefault(); target.focus(); }
+}
+
+function useSheetBoundary(embedded: boolean, onDismiss: () => void) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useScrollLock(!embedded);
+  useEffect(() => {
+    if (embedded) return;
+    const opener = document.activeElement as HTMLElement | null;
+    containerRef.current?.focus();
+    return () => opener?.focus();
+  }, [embedded]);
+  useEffect(() => {
+    if (embedded) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onDismiss(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [embedded, onDismiss]);
+  return { containerRef, handleKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => trapTab(event, containerRef.current) };
+}
+
+type ViewingSheet = { sheet: ClientPlanSheet; url: string };
+function SheetViewer({ viewing, onBack }: { viewing: ViewingSheet; onBack: () => void }) {
+  return <div data-testid="papers-sheet-viewer" className="mt-6">
+    <p className={META_CLASS}>{[viewing.sheet.number, viewing.sheet.revLetter ? 'Rev ' + viewing.sheet.revLetter : null].filter(Boolean).join(' · ')}</p>
+    <h3 className="mt-1 font-heading text-[1.35rem]">{viewing.sheet.title}</h3>
+    {isFrameable(viewing.sheet.storagePath) && <iframe title={viewing.sheet.title} src={viewing.url} className="mt-4 h-[62vh] w-full border border-[var(--border-subtle)]" />}
+    <div className="flex flex-wrap items-baseline gap-x-4">
+      <ScoredAction actionKey="papers_sheet_back" regionKey="papers" surfaceKey="the_threshold" variant="tertiary" onClick={onBack}>Back to the papers</ScoredAction>
+      <ScoredAction actionKey="papers_sheet_save" regionKey="papers" surfaceKey="the_threshold" variant="tertiary" href={viewing.url} target="_blank" rel="noopener noreferrer" aria-label={'Save ' + viewing.sheet.title}>Save it</ScoredAction>
+    </div>
+  </div>;
+}
+
+type RegisterRead = { isLoading: boolean; isError: boolean };
+function answered(query: RegisterRead) { return !query.isLoading && !query.isError; }
+function RegisterError({ read, testId, children }: { read: RegisterRead; testId: string; children: React.ReactNode }) {
+  return read.isError ? <p data-testid={testId} className="mt-6 text-[16px] leading-relaxed">{children}</p> : null;
+}
+function FiledRegister({ title, testId, documents, read }: { title: string; testId: string; documents: ClientDocument[]; read: RegisterRead }) {
+  if (!answered(read) || !documents.length) return null;
+  return <section data-testid={testId}><h3 className={HEAD_CLASS}>{title}</h3><ul className="mt-1 list-none">{documents.map(document => <FiledLine key={document.id} document={document} />)}</ul></section>;
+}
+function DrawingsRegister({ read, onOpened }: { read: ReturnType<typeof useClientPlanSet>; onOpened: (viewing: ViewingSheet) => void }) {
+  const groups = groupClientPlanSet(read.data ?? []);
+  if (!answered(read) || !groups.length) return null;
+  return <section data-testid="papers-sheet-drawings"><h3 className={HEAD_CLASS}>Your drawings</h3>
+    {groups.map(group => <div key={group.discipline} className="mt-4"><p className={META_CLASS}>{group.discipline}</p><ul className="mt-1 list-none">
+      {group.sheets.map(sheet => <SheetLine key={sheet.sheetId} sheet={sheet} onOpened={url => onOpened({ sheet, url })} />)}
+    </ul></div>)}
+  </section>;
+}
+function InstrumentsRegister({ read, onOpenInstrument }: { read: ReturnType<typeof useProjectDocuments>; onOpenInstrument?: (id: string) => void }) {
+  const executed = (read.data ?? []).filter(isExecutedInstrument);
+  if (!answered(read) || !executed.length) return null;
+  return <section data-testid="papers-sheet-instruments"><h3 className={HEAD_CLASS}>What you have signed</h3><ul className="mt-1 list-none">
+    {executed.map(instrument => <InstrumentLine key={instrument.id} instrument={instrument} onOpenInstrument={onOpenInstrument} />)}
+  </ul></section>;
+}
+function NothingFiled({ reads, lengths }: { reads: RegisterRead[]; lengths: number[] }) {
+  if (!reads.every(answered) || lengths.some(length => length > 0)) return null;
+  return <p data-testid="papers-sheet-empty" className="mt-6 border-t border-[var(--border-subtle)] pt-4 text-[16px]">Nothing has been filed here yet.</p>;
+}
+function filedPapers(read: ReturnType<typeof useClientDocuments>, projectId: string) {
+  return papersForProject(read.data?.documents ?? [], projectId, read.data?.proposalProjectIds ?? {});
+}
+function PapersRegisters({ projectId, onOpened, onOpenInstrument }: { projectId: string; onOpened: (viewing: ViewingSheet) => void; onOpenInstrument?: (proposalId: string) => void }) {
   const planSet = useClientPlanSet([projectId]);
   const filed = useClientDocuments([projectId]);
   const instruments = useProjectDocuments(projectId);
-  const [viewing, setViewing] = useState<{ sheet: ClientPlanSheet; url: string } | null>(
-    null,
-  );
-  const containerRef = useRef<HTMLDivElement>(null);
+  const { papers, earlier } = filedPapers(filed, projectId);
+  return <>
+    {[planSet, filed, instruments].every(read => read.isLoading) && <div aria-hidden="true" data-testid="papers-sheet-hold" className="min-h-[40vh]" />}
+    <RegisterError read={planSet} testId="plan-set-error">The drawings could not be read just now. Please refresh.</RegisterError>
+    <RegisterError read={filed} testId="papers-sheet-error">The documents could not be read just now. Please refresh.</RegisterError>
+    <RegisterError read={instruments} testId="instruments-error">The signed papers could not be read just now. Please refresh.</RegisterError>
+    <DrawingsRegister read={planSet} onOpened={onOpened} />
+    <FiledRegister title="Other papers" testId="papers-sheet-other" documents={papers} read={filed} />
+    <FiledRegister title="Earlier papers" testId="papers-sheet-earlier" documents={earlier} read={filed} />
+    <InstrumentsRegister read={instruments} onOpenInstrument={onOpenInstrument} />
+    <NothingFiled reads={[planSet, filed, instruments]} lengths={[planSet.data?.length ?? 0, papers.length, earlier.length, (instruments.data ?? []).filter(isExecutedInstrument).length]} />
+  </>;
+}
 
-  // The sheet takes the reading, gives it back to whatever laid it down, and
-  // holds the house still underneath it while it is down.
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    containerRef.current?.focus();
-    return () => {
-      opener?.focus?.();
-    };
-  }, []);
-  // The details sheet mounts in the same wrapper and holds the same lock; two
-  // independent capture/restore pairs strand the page scrolled-locked when
-  // they close in the other order.
-  useScrollLock(true);
-
-  // Escape is bound on the document, not the dialog: once the reading is
-  // inside a cross-origin frame no keydown reaches a React handler.
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onDismiss();
-    }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onDismiss]);
-
-  function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (event.key !== 'Tab') return;
-    const container = containerRef.current;
-    if (!container) return;
-    const focusable = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE));
-    if (focusable.length === 0) return;
-    const first = focusable[0]!;
-    const last = focusable[focusable.length - 1]!;
-    const active = document.activeElement;
-    if (event.shiftKey && (active === first || active === container)) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
-  // A register that failed has not answered. React Query drops `isLoading` on
-  // error, so folding `isError` in is what keeps a failed read from printing
-  // "Nothing has been filed here yet." over files that are simply unreadable.
-  const answered = (query: { isLoading: boolean; isError: boolean }) =>
-    !query.isLoading && !query.isError;
-  // Each register stands on its own read. A failed drawings leg may not blank
-  // the contracts and the signed PDFs that came back perfectly well — the
-  // surface being absorbed says so in as many words
-  // (app/documents/page.tsx:53-58) — so the conjunction below decides only
-  // whether "Nothing has been filed here yet." may be asserted at all.
-  const planSettled = answered(planSet);
-  const filedSettled = answered(filed);
-  const instrumentsSettled = answered(instruments);
-  const settled = planSettled && filedSettled && instrumentsSettled;
-  const nothingAnswered = planSet.isLoading && filed.isLoading && instruments.isLoading;
-
-  const sheets = planSet.data ?? [];
-  const groups = groupClientPlanSet(sheets);
-  const { papers, earlier } = papersForProject(
-    filed.data?.documents ?? [],
-    projectId,
-    filed.data?.proposalProjectIds ?? {},
-  );
-  const executed = (instruments.data ?? []).filter(isExecutedInstrument);
-  const nothingFiled =
-    settled &&
-    sheets.length === 0 &&
-    papers.length === 0 &&
-    earlier.length === 0 &&
-    executed.length === 0;
-
-  return (
-    <div
-      data-testid="papers-sheet-overlay"
-      className="fixed inset-0 z-[30] overflow-y-auto bg-[var(--bg-primary)] px-[clamp(14px,4vw,48px)] py-[clamp(18px,4vh,56px)]"
-    >
-      <div
-        ref={containerRef}
-        id="papers-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="papers-sheet-title"
-        tabIndex={-1}
-        onKeyDown={handleKeyDown}
-        data-testid="papers-sheet"
-        className="mx-auto w-full max-w-[760px] border border-[var(--border-default)] bg-[var(--bg-primary)] p-[clamp(16px,3vw,32px)] focus-visible:outline-none"
-      >
-        <div className="flex flex-wrap items-baseline justify-between gap-4">
-          <h2
-            id="papers-sheet-title"
-            className="font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]"
-          >
-            The papers
-          </h2>
-          <ScoredAction
-            actionKey="papers_sheet_tab"
-            regionKey="papers"
-            surfaceKey="the_threshold"
-            variant="tertiary"
-            onClick={onDismiss}
-          >
-            {PAPERS_TAB_LABEL}
-          </ScoredAction>
-        </div>
-
-        {nothingAnswered && (
-          <div
-            aria-hidden="true"
-            data-testid="papers-sheet-hold"
-            className="min-h-[40vh]"
-          />
-        )}
-
-        {viewing && (
-          <div data-testid="papers-sheet-viewer" className="mt-6">
-            <p className={META_CLASS}>
-              {[
-                viewing.sheet.number,
-                viewing.sheet.revLetter ? `Rev ${viewing.sheet.revLetter}` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
-            <h3 className="mt-1 font-heading text-[1.35rem] font-medium tracking-[-0.012em]">
-              {viewing.sheet.title}
-            </h3>
-            {isFrameable(viewing.sheet.storagePath) && (
-              <iframe
-                title={viewing.sheet.title}
-                src={viewing.url}
-                className="mt-4 h-[62vh] w-full border border-[var(--border-subtle)]"
-              />
-            )}
-            <div className="flex flex-wrap items-baseline gap-x-4">
-              <ScoredAction
-                actionKey="papers_sheet_back"
-                regionKey="papers"
-                surfaceKey="the_threshold"
-                variant="tertiary"
-                onClick={() => setViewing(null)}
-              >
-                Back to the papers
-              </ScoredAction>
-              <ScoredAction
-                actionKey="papers_sheet_save"
-                regionKey="papers"
-                surfaceKey="the_threshold"
-                variant="tertiary"
-                href={viewing.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`Save ${viewing.sheet.title}`}
-              >
-                Save it
-              </ScoredAction>
-            </div>
-          </div>
-        )}
-
-        {!viewing && (
-          <>
-            {/* Absence is silence about CONTENT; it does not license silence
-                about a failure the client can act on by refreshing. The
-                retired page said these in the first person ("We couldn't load
-                your drawings…"); the page voice here is third, and first
-                person is reserved for a note the studio actually wrote. Same
-                fact, this surface's voice. */}
-            {planSet.isError && (
-              <section className="mt-6" data-testid="plan-set-error">
-                <h3 className={HEAD_CLASS}>Your drawings</h3>
-                <p className="mt-2 text-[15px] leading-relaxed text-[var(--text-body)]">
-                  The drawings could not be read just now. Please refresh.
-                </p>
-              </section>
-            )}
-
-            {filed.isError && (
-              <p
-                data-testid="papers-sheet-error"
-                className="mt-6 text-[15px] leading-relaxed text-[var(--text-body)]"
-              >
-                The documents could not be read just now. Please refresh.
-              </p>
-            )}
-
-            {instruments.isError && (
-              <p
-                data-testid="instruments-error"
-                className="mt-6 text-[15px] leading-relaxed text-[var(--text-body)]"
-              >
-                The signed papers could not be read just now. Please refresh.
-              </p>
-            )}
-
-            {planSettled && groups.length > 0 && (
-              <section data-testid="papers-sheet-drawings">
-                <h3 className={HEAD_CLASS}>Your drawings</h3>
-                {groups.map((group) => (
-                  <div key={group.discipline} className="mt-4">
-                    <p className={META_CLASS}>{group.discipline}</p>
-                    <ul className="mt-1 list-none">
-                      {group.sheets.map((sheet) => (
-                        <SheetLine
-                          key={sheet.sheetId}
-                          sheet={sheet}
-                          onOpened={(url) => setViewing({ sheet, url })}
-                        />
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </section>
-            )}
-
-            {filedSettled && papers.length > 0 && (
-              <section data-testid="papers-sheet-other">
-                <h3 className={HEAD_CLASS}>Other papers</h3>
-                <ul className="mt-1 list-none">
-                  {papers.map((document) => (
-                    <FiledLine key={document.id} document={document} />
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {filedSettled && earlier.length > 0 && (
-              <section data-testid="papers-sheet-earlier">
-                <h3 className={HEAD_CLASS}>Earlier papers</h3>
-                <ul className="mt-1 list-none">
-                  {earlier.map((document) => (
-                    <FiledLine key={document.id} document={document} />
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {instrumentsSettled && executed.length > 0 && (
-              <section data-testid="papers-sheet-instruments">
-                <h3 className={HEAD_CLASS}>What you have signed</h3>
-                <ul className="mt-1 list-none">
-                  {executed.map((instrument) => (
-                    <InstrumentLine
-                      key={instrument.id}
-                      instrument={instrument}
-                      onOpenInstrument={onOpenInstrument}
-                    />
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {nothingFiled && (
-              <p
-                data-testid="papers-sheet-empty"
-                className="mt-6 border-t border-[var(--border-subtle)] pt-4 text-[15px] leading-relaxed text-[var(--text-body)]"
-              >
-                Nothing has been filed here yet.
-              </p>
-            )}
-          </>
-        )}
+function PapersSheetBody({ projectId, onDismiss, onOpenInstrument, embedded = false }: Omit<PapersSheetProps, 'open'>) {
+  const [viewing, setViewing] = useState<ViewingSheet | null>(null);
+  const { containerRef, handleKeyDown } = useSheetBoundary(embedded, onDismiss);
+  return <div data-testid="papers-sheet-overlay" className={embedded ? 'gallery-documents' : 'fixed inset-0 z-[30] overflow-y-auto bg-[var(--bg-primary)] px-[clamp(14px,4vw,48px)] py-[clamp(18px,4vh,56px)]'}>
+    <div ref={containerRef} id="papers-sheet" role={embedded ? undefined : 'dialog'} aria-modal={embedded ? undefined : true} aria-labelledby="papers-sheet-title" tabIndex={-1}
+      onKeyDown={embedded ? undefined : handleKeyDown} data-testid="papers-sheet" className="mx-auto w-full max-w-[760px] border border-[var(--border-default)] bg-[var(--bg-primary)] p-[clamp(16px,3vw,32px)] focus-visible:outline-none">
+      <div className="flex flex-wrap items-baseline justify-between gap-4"><h2 id="papers-sheet-title" className={HEAD_CLASS}>The papers</h2>
+        <ScoredAction actionKey="papers_sheet_tab" regionKey="papers" surfaceKey="the_threshold" variant="tertiary" onClick={onDismiss}>{PAPERS_TAB_LABEL}</ScoredAction>
       </div>
+      {viewing ? <SheetViewer viewing={viewing} onBack={() => setViewing(null)} /> : <PapersRegisters projectId={projectId} onOpened={setViewing} onOpenInstrument={onOpenInstrument} />}
     </div>
-  );
+  </div>;
 }
 
 function SheetLine({

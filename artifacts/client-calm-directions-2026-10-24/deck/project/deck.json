@@ -1,0 +1,20 @@
+{
+  "v": 4,
+  "createdOnFiles": { "v": 1, "at": "2026-10-24T09:55:00Z" },
+  "lists": "css",
+  "title": "Calm, photo-forward client page — three directions",
+  "order": ["cover", "feedback", "today", "refs", "keep", "a-hero", "a-phone", "a-rules", "b-hero", "b-phone", "b-rules", "c-hero", "c-phone", "c-rules", "compare", "recommend", "decisions", "next"],
+  "sections": {
+    "s1": { "description": "What the design team asked for, and why the page reads busy today.", "start": "cover" },
+    "s2": { "description": "Direction A, Gallery: one photograph per screen, the asks in one quiet line.", "start": "a-hero" },
+    "s3": { "description": "Direction B, Lookbook: a pinned photograph beside quiet words, the asks in one card.", "start": "b-hero" },
+    "s4": { "description": "Direction C, Album: the house as a contact sheet, papers on their own page.", "start": "c-hero" },
+    "s5": { "description": "How the three compare, what we recommend, and what the founders rule on.", "start": "compare" }
+  },
+  "faces": {
+    "playfair-display": { "family": "Playfair Display", "href": "https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..700&display=swap" },
+    "inter": { "family": "Inter", "href": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" },
+    "dm-mono": { "family": "DM Mono", "href": "https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" }
+  },
+  "designSystems": []
+}

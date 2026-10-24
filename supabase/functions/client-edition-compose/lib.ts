@@ -36,6 +36,7 @@ import { type Media, readRendition, RENDITION_TIMEOUT_MS, type RenditionUse } fr
 import {
   type Box,
   type HeroAnswer,
+  headlineFault,
   isPlainObject,
   JUDGE_UNAVAILABLE,
   type Judgement,
@@ -288,54 +289,28 @@ function meetsCrop(aspect: number, floor: Size, asset: FactsAsset): boolean {
   return keepsEnough && holdsSubject(box, asset) && box.w >= floor.w && box.h >= floor.h;
 }
 
-function meetsDesktop(asset: FactsAsset): boolean {
-  const portrait = asset.height > asset.width && asset.width >= 1040;
-  return meetsCrop(1.6, { w: 1600, h: 1000 }, asset) || meetsCrop(1.6, { w: 1248, h: 0 }, asset) || portrait;
+function heroSized(asset: FactsAsset): boolean {
+  return Math.max(asset.width, asset.height) >= 2000 && Math.min(asset.width, asset.height) >= 1200;
 }
 
-/** The phone cover (39:34, 780×680) and a desktop layout (bleed, measure or portrait). */
+/** Gallery's full-height arrival must hold its subject in both viewport crops. */
 export function meetsHero(asset: FactsAsset): boolean {
-  const sized = asset.width > 0 && asset.height > 0;
-  return sized && meetsDesktop(asset) && meetsCrop(39 / 34, { w: 780, h: 680 }, asset);
+  return heroSized(asset) && asset.ground === "scene" && asset.sourceKind !== "concept" &&
+    holdsSubject(cropBox(390 / 796, asset), asset) && holdsSubject(cropBox(1440 / 852, asset), asset);
 }
 
-// ── Phase 1 deterministic headlines (copied from client-portal chapters.ts;
-//    lib.test.ts holds the shared fixture) ─────────────────────────────────
-
-const MATERIALS: readonly string[] = [
-  "walnut", "oak", "ash", "maple", "cherry", "birch", "elm", "hickory", "pine", "cedar", "teak",
-  "linen", "wool", "bouclé", "boucle", "leather", "velvet", "mohair", "cotton", "silk", "jute",
-  "cane", "rattan", "brass", "bronze", "copper", "iron", "steel", "marble", "travertine",
-  "limestone", "slate", "stone", "terrazzo", "plaster", "glass", "ceramic", "concrete",
-];
-const NUMBER_WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
-const IN_TRANSIT = /order|production|transit|ship|fabricat/i;
-const MATERIAL_PATTERNS = MATERIALS.map((material) => ({
-  word: material === "boucle" ? "bouclé" : material,
-  pattern: new RegExp(`(^|[^\\p{L}])${material}([^\\p{L}]|$)`, "u"),
-}));
-
-function series(words: readonly string[]): string {
-  if (words.length <= 1) return words.join("");
-  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
-}
+// ── Gallery deterministic headlines ──────────────────────────────────────
 
 function roomHeadline(room: FactsRoom): string {
-  const found = room.items.flatMap((item) =>
-    MATERIAL_PATTERNS.filter(({ pattern }) => pattern.test(item.nameAsSigned.toLowerCase())).map(({ word }) => word)
-  );
-  const materials = [...new Set(found)].slice(0, 3);
-  if (!materials.length) return room.name;
-  const text = series(materials);
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  const name = room.name.trim().replace(/\s+/gu, " ");
+  const headline = name.includes(" ") ? name : `The ${name.toLowerCase()}`;
+  return headlineFault(headline, false) || lintText(headline) ? "The room" : headline;
 }
 
-function coverHeadline(phase: string | null, rooms: readonly FactsRoom[]): string {
+function coverHeadline(phase: string | null): string {
   switch (phase) {
-    case "procurement": {
-      const moving = rooms.find((r) => r.items.some((i) => i.status && IN_TRANSIT.test(i.status)));
-      return moving ? `The ${moving.name.toLowerCase()} is on its way` : "The pieces are on their way";
-    }
+    case "procurement":
+      return "The pieces are on their way";
     case "installation":
       return "The rooms are going in";
     case "final_walkthrough":
@@ -345,18 +320,13 @@ function coverHeadline(phase: string | null, rooms: readonly FactsRoom[]): strin
   }
 }
 
-function houseHeadline(count: number): string {
-  if (count === 1) return "One room, read from the front door";
-  return `${NUMBER_WORDS[count] ?? "The"} rooms, read from the front door`;
-}
-
-/** The cover, house, room and progress headlines Phase 1 writes from the record alone. */
+/** Safe band and menu copy from the record alone; no standing sentences are invented. */
 export function deterministicHeadlines(facts: EditorialFacts): { key: string; headline: string }[] {
   return [
-    { key: "cover", headline: coverHeadline(facts.project.phase, facts.rooms) },
-    { key: "house", headline: houseHeadline(facts.rooms.length) },
+    { key: "cover", headline: coverHeadline(facts.project.phase) },
+    { key: "house", headline: "The house" },
     ...facts.rooms.map((room) => ({ key: room.anchor, headline: roomHeadline(room) })),
-    { key: "progress", headline: "In production, then on the truck, then here" },
+    { key: "progress", headline: "On the way" },
   ];
 }
 
@@ -501,9 +471,9 @@ function answered(ctx: Ctx, role: ClaudeRole, result: CallClaudeResult): Answer 
 
 const ALWAYS_SENT = new Set(["upload", "maker", "concept"]);
 const HER_HOME = new Set(["scan", "installed"]);
-const NEVER_HERO = new Set(["sheet", "concept"]);
+const HERO_SOURCE_KINDS = new Set(["installed", "upload", "scan", "maker"]);
 
-/** Sheets, boards and any kind not named here never; her home only once the privacy page is live. */
+/** Only installed, upload, scan and maker sources can be Gallery heroes. */
 function kindSendable(kind: string, privacyLive: boolean): boolean {
   return HER_HOME.has(kind) ? privacyLive : ALWAYS_SENT.has(kind);
 }
@@ -626,10 +596,10 @@ export interface HeroChoice {
   held: FactsAsset[];
 }
 
-/** Known provenance with no sheet or concept behind it, unflagged, ranked, and meeting the hero floors. */
+/** Known provenance from hero-allowed sources, unflagged, ranked, and meeting the hero floors. */
 function heroEligible(ctx: Ctx, asset: FactsAsset): boolean {
   const kinds = provenance(ctx, asset);
-  if (!kinds || kinds.some((kind) => NEVER_HERO.has(kind)) || flagged(ctx, asset)) return false;
+  if (!kinds || kinds.some((kind) => !HERO_SOURCE_KINDS.has(kind)) || flagged(ctx, asset)) return false;
   return tierOf(asset) !== null && meetsHero(framed(ctx, asset));
 }
 
@@ -639,7 +609,7 @@ function heroEligible(ctx: Ctx, asset: FactsAsset): boolean {
  */
 async function pickHero(ctx: Ctx): Promise<HeroChoice | null> {
   const eligible = ctx.facts.assets.filter((asset) => heroEligible(ctx, asset)).sort(compareAssets);
-  if (!eligible.length) return null;
+  if (!eligible.length) return fallbackHero(ctx);
   const code: HeroChoice = { asset: eligible[0], why: null, held: [] };
   const top = tierOf(eligible[0]);
   const candidates = eligible.filter((asset) => tierOf(asset) === top && sendable(ctx, asset)).slice(0, A2_CANDIDATES);
@@ -649,6 +619,26 @@ async function pickHero(ctx: Ctx): Promise<HeroChoice | null> {
   if (!chosen) return code;
   const held = chosen.held.map((i) => pool[i].asset).filter((asset) => meetsHeld(framed(ctx, asset)));
   return { asset: pool[chosen.index].asset, why: chosen.why, held };
+}
+
+function fallbackHero(ctx: Ctx): HeroChoice | null {
+  const asset = ctx.facts.assets.filter(asset => fallbackEligible(ctx, asset)).sort(compareAssets)[0];
+  return asset ? { asset, why: null, held: [] } : null;
+}
+
+function fallbackEligible(ctx: Ctx, asset: FactsAsset): boolean {
+  const kinds = provenance(ctx, asset);
+  if (!kinds || kinds.some(kind => !HERO_SOURCE_KINDS.has(kind)) || flagged(ctx, asset)) return false;
+  const source = framed(ctx, asset);
+  const box = source.subjectBox;
+  const crops = source.crops as Record<string, { rect?: readonly number[]; widths?: readonly number[] } | null> | undefined;
+  return Object.values(crops ?? {}).some(crop => {
+    if (!crop?.widths?.length || crop.rect?.length !== 4) return false;
+    const rect = crop.rect.every(n => n >= 0 && n <= 1) ? crop.rect
+      : [crop.rect[0] / source.width, crop.rect[1] / source.height, crop.rect[2] / source.width, crop.rect[3] / source.height];
+    return !box || [0, 1].every(axis => rect[axis] <= box[axis] + 1e-6
+      && rect[axis] + rect[axis + 2] >= box[axis] + box[axis + 2] - 1e-6);
+  });
 }
 
 /** Call A2 over the pool; null when it fails or the validator rejects the answer. */
@@ -732,13 +722,13 @@ function byPosition(prose: Partial<Prose>, plan: ChapterPlan) {
 function beforeLabel(ctx: Ctx, current: CurrentEdition | null): string | null {
   if (!current?.composition) return null;
   const before = ctx.facts.assets.find((asset) => asset.id === current.composition?.hero?.assetId);
-  if (!before) return "the drawn cover";
+  if (!before) return "the paint card";
   return flagged(ctx, before) ? "an earlier picture" : assetLabel(ctx.facts, before.id);
 }
 
 function opening(ctx: Ctx, hero: HeroChoice | null, current: CurrentEdition | null) {
   return {
-    now: hero ? assetLabel(ctx.facts, hero.asset.id) : "the drawn cover",
+    now: hero ? assetLabel(ctx.facts, hero.asset.id) : "the paint card",
     before: beforeLabel(ctx, current),
   };
 }
@@ -762,12 +752,17 @@ type WordsBrief = Omit<WordsInput, "avoid">;
 
 type Draft = { words: Words; avoid: null } | { words: null; avoid: string | null };
 
-/** One Call B draft: its words when valid, else the forbidden term the lint found (or none). */
+/** One Call B draft: valid words, or a forbidden term / Gallery limit for the retry. */
 async function draftWords(ctx: Ctx, plan: ChapterPlan, brief: WordsBrief, avoid?: string): Promise<Draft> {
   const answer = await ask(ctx, "draft", buildWordsRequest({ ...brief, avoid }), MIN_CALL_MS);
   if (!answer.ok) return noDraft(answer);
   const checked = validateWords(answer.response, plan.keys, ctx.names);
-  return checked.ok ? { words: checked.value, avoid: null } : { words: null, avoid: checked.term ?? null };
+  return checked.ok ? { words: checked.value, avoid: null } : { words: null, avoid: checked.term ?? galleryMiss(checked.reason) };
+}
+
+/** Only wording-limit failures join the lexicon's single-regeneration path. */
+function galleryMiss(reason: string): string | null {
+  return /^(headline|standing) /.test(reason) ? reason : null;
 }
 
 /** A Call B with no time left gives no words; one that failed fails the edition. */
@@ -784,9 +779,9 @@ function verdictOn(ctx: Ctx, draft: Draft): Promise<Judgement> | Judgement {
 
 /**
  * Call B, then C. A forbidden term (the shared lint's or the judge's) earns one
- * regeneration naming it. A second hit, an answer the validator rejects, a judge
- * that stays unavailable, or no time left leaves the deterministic headlines. A
- * failed B call fails the edition.
+ * regeneration naming it. A Gallery wording-limit miss also earns that retry.
+ * A second miss, a judge that stays unavailable, or no time left leaves the
+ * deterministic headlines. A failed B call fails the edition.
  */
 async function writeWords(ctx: Ctx, plan: ChapterPlan, brief: WordsBrief): Promise<Words | null> {
   let avoid: string | undefined;

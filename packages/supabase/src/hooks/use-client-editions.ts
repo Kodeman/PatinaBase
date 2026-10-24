@@ -241,6 +241,11 @@ export function useClientEditions(
 /** The editorial envelope's assets as the cover choice reads them (00842). */
 export interface ClientEditorialAsset {
   id: string;
+  sha256: string;
+  focal: readonly number[] | null;
+  crops: Partial<Record<string, { rect: readonly number[]; widths: readonly number[]; rev?: string }>>;
+  caption: { what: string | null; whose: string | null; when: string | null };
+  alt: string | null;
   sourceKind: PlateSourceKind | null;
   ground: "white" | "scene" | "drawing" | null;
   width: number;

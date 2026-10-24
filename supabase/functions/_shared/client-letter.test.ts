@@ -68,11 +68,11 @@ Deno.test("R3 — the subject invites, and never names Patina", () => {
 Deno.test("the standing sentence still says 'added you to' (R3)", () => {
   assertEquals(
     standingSentence(F1),
-    "Leah Hartwell of Middle West Studio added you to the Van Hise kitchen and back hall on 8 September. The page below holds the studio's record of the job — the plans, the papers, and the numbers.",
+    "Leah Hartwell of Middle West Studio added you to the Van Hise kitchen and back hall on 8 September. The page below holds the studio's record of the job — the plans, the papers, and the numbers. You can pay invoices and approve pieces there, and Leah will write when something needs you.",
   );
   assertEquals(
     standingSentence(F2),
-    "Nora Feld set up a page for your work together on 8 September. It's where Nora keeps the record — the plans, the papers, and the numbers, as they come.",
+    "Nora Feld set up a page for your work together on 8 September. It's where Nora keeps the record — the plans, the papers, and the numbers, as they come. You can pay invoices and approve pieces there, and Nora will write when something needs you.",
   );
 });
 

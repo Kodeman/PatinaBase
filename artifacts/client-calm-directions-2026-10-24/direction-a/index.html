@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elm Street House · Birchwood Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500&family=Playfair+Display:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body id="arrival">
+
+<!-- Arrival. One photograph owns the screen. On it: the studio, one control, and a solid deep band
+     at its foot holding the edition headline and, under it, the asks in one quiet line. -->
+<header class="arrival">
+  <div class="frame" style="--focal: 50% 64%; --focal-wide: 50% 34%">
+    <figure>
+      <img src="../../client-house-issue-2026-10-21/inputs/photos/14-plane-shavings.jpg"
+           alt="A hand plane resting on a walnut board, curled shavings across the bench">
+      <figcaption class="label">
+        <span data-triplet>Walnut top, planed · Harmon Bench Works · 15 October 2026</span>
+        <span class="ph">Placeholder photograph</span>
+      </figcaption>
+    </figure>
+    <div class="top">
+      <span class="chip">Birchwood Studio</span>
+      <a class="chip menu" href="#menu">Menu</a>
+    </div>
+    <div class="band">
+      <h1>Your sideboard, on the bench.</h1>
+      <a class="asks" href="pay.html"><span>Two things from Maren: an invoice past due, and the sofa.</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- One photograph per chapter, in the edition's order. Caption plus at most one sentence. -->
+  <section class="room full" id="sideboard" aria-label="The sideboard">
+    <figure style="--focal: 46% 50%; --ratio: 4 / 3">
+      <img src="../../client-house-issue-2026-10-21/inputs/photos/01-walnut-sideboard.jpg"
+           alt="A long dark-wood sideboard with three doors and a row of drawers">
+      <figcaption>
+        <span data-triplet>Walnut sideboard, before oil · Harmon Bench Works · 15 October 2026</span>
+        <span>Placeholder photograph</span>
+      </figcaption>
+    </figure>
+    <p class="line">Harmon Bench Works is building it now, in Dayton, Ohio.</p>
+  </section>
+
+  <section class="room hung" id="living-room" aria-label="The living room">
+    <figure style="--focal: 40% 50%">
+      <img src="../../client-house-issue-2026-10-21/inputs/photos/09-living-room-window.jpg"
+           alt="A low, warm living room with a long window wall onto trees">
+      <figcaption>
+        <span data-triplet>Living room reference · Birchwood Studio board · 2 October 2026</span>
+        <span>Placeholder photograph, not your house</span>
+      </figcaption>
+    </figure>
+    <p class="line">We are aiming to install the living room on 22 January 2027.</p>
+  </section>
+
+  <section class="room full" id="linen" aria-label="The sofa linen">
+    <figure>
+      <img src="../../client-house-issue-2026-10-21/inputs/photos/03-linen-fabric.jpg"
+           alt="Close weave of an oatmeal-coloured linen">
+      <figcaption>
+        <span data-triplet>Oatmeal performance linen · Birchwood Studio · 9 October 2026</span>
+        <span>Placeholder photograph</span>
+      </figcaption>
+    </figure>
+    <p class="line">We would like this on your sofa in place of the wool bouclé.</p>
+  </section>
+
+  <section class="room hung" id="materials" aria-label="Materials">
+    <figure>
+      <img src="../../client-house-issue-2026-10-21/inputs/photos/08-walnut-grain.jpg"
+           alt="Close view of oiled walnut grain">
+      <figcaption>
+        <span data-triplet>Walnut, oiled sample · Harmon Bench Works · 15 October 2026</span>
+        <span>Placeholder photograph</span>
+      </figcaption>
+    </figure>
+    <p class="line">The paint: Halvorsen Morning Oat, Larkin Prairie Pale Birch, Halvorsen Kettle Clay and Halvorsen Bur Oak Green.</p>
+  </section>
+
+  <!-- Maren's note: a short letter near the end -->
+  <section class="note" id="note" aria-label="A note from Maren">
+    <div data-letter>
+      <p class="date">16 October 2026</p>
+      <p>June, the page now opens on your sideboard; the workshop sent photographs on 15 October. Everything else is where it was.</p>
+      <p class="sign">Maren Holt</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot" id="papers">
+  <p class="house">Elm Street House · Prepared for June Brennan</p>
+  <p class="house">In procurement. Next, the living room installation.</p>
+  <ul>
+    <li><a href="pay.html"><b>Invoices</b>$1,375.00 open</a></li>
+    <li><a href="pay.html#sofa"><b>The sofa approval</b>$7,480.00</a></li>
+    <li><a href="pay.html#papers"><b>Documents</b></a></li>
+    <li><a href="tel:+16085550148"><b>Call Maren Holt</b>(608) 555-0148</a></li>
+  </ul>
+  <p class="colophon">Prepared by Birchwood Studio · Sent through Patina</p>
+</footer>
+
+<!-- The page index, one tap behind "Menu". Replaces the six-link row. -->
+<nav class="menu-sheet" id="menu" aria-label="This page">
+  <div class="menu-head">
+    <p>Elm Street House</p>
+    <a class="close" href="#arrival">Close</a>
+  </div>
+  <ul>
+    <li><a href="pay.html">An invoice past due <small>$600.00</small></a></li>
+    <li><a href="pay.html#sofa">The sofa, for your approval <small>$7,480.00</small></a></li>
+    <li class="gap" aria-hidden="true"></li>
+    <li><a href="#sideboard">The sideboard</a></li>
+    <li><a href="#living-room">The living room</a></li>
+    <li><a href="#linen">The sofa linen</a></li>
+    <li><a href="#materials">Materials</a></li>
+    <li><a href="#note">Maren’s note</a></li>
+    <li class="gap" aria-hidden="true"></li>
+    <li><a href="pay.html">All invoices <small>$1,375.00 open</small></a></li>
+    <li><a href="pay.html#papers">Documents</a></li>
+    <li><a href="tel:+16085550148">Call Maren Holt <small>(608) 555-0148</small></a></li>
+  </ul>
+</nav>
+
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elm Street House · Birchwood Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400&family=Inter:wght@400;500&family=Playfair+Display:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  /* The studio's chosen paint, used as the ground of each album tile until photographs arrive. */
+  .morning-oat { --frame: #E3D8C3; background: #E3D8C3; }
+  .pale-birch { --frame: #EEE8DC; background: #EEE8DC; }
+  .kettle-clay { --frame: #B59C84; background: #B59C84; }
+  .bur-oak { --frame: #6F715A; background: #6F715A; }
+  .linen { --frame: #DDD3C1; background: #DDD3C1; }
+  .drawn.kettle-clay svg { color: var(--ink); }
+  .drawn.bur-oak svg { color: var(--paper); }
+</style>
+</head>
+<body>
+
+<!-- Drawn silhouettes: single-weight line drawings from the specification. Never stock, never a render. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="sideboard" viewBox="0 0 220 110"><g fill="none" stroke="currentColor" stroke-linejoin="round">
+      <rect x="10" y="22" width="200" height="62"/><line x1="10" y1="40" x2="210" y2="40"/>
+      <line x1="60" y1="40" x2="60" y2="84"/><line x1="110" y1="22" x2="110" y2="84"/><line x1="160" y1="40" x2="160" y2="84"/>
+      <line x1="56" y1="31" x2="64" y2="31"/><line x1="106" y1="31" x2="114" y2="31"/><line x1="156" y1="31" x2="164" y2="31"/>
+      <line x1="22" y1="84" x2="18" y2="104"/><line x1="198" y1="84" x2="202" y2="104"/></g></symbol>
+    <symbol id="sofa" viewBox="0 0 220 110"><g fill="none" stroke="currentColor" stroke-linejoin="round">
+      <path d="M34 62 V28 Q34 20 42 20 H178 Q186 20 186 28 V62"/>
+      <rect x="10" y="48" width="26" height="40" rx="6"/><rect x="184" y="48" width="26" height="40" rx="6"/>
+      <rect x="36" y="62" width="148" height="26"/><line x1="110" y1="62" x2="110" y2="88"/>
+      <line x1="20" y1="88" x2="20" y2="100"/><line x1="200" y1="88" x2="200" y2="100"/></g></symbol>
+    <symbol id="bed" viewBox="0 0 220 110"><g fill="none" stroke="currentColor" stroke-linejoin="round">
+      <rect x="12" y="14" width="44" height="80"/><rect x="56" y="58" width="152" height="24"/>
+      <path d="M56 58 Q120 50 208 58"/><rect x="62" y="44" width="40" height="14" rx="5"/>
+      <line x1="60" y1="82" x2="60" y2="98"/><line x1="204" y1="82" x2="204" y2="98"/></g></symbol>
+    <symbol id="kitchen" viewBox="0 0 220 110"><g fill="none" stroke="currentColor" stroke-linejoin="round">
+      <rect x="10" y="8" width="200" height="34"/><line x1="60" y1="8" x2="60" y2="42"/><line x1="110" y1="8" x2="110" y2="42"/><line x1="160" y1="8" x2="160" y2="42"/>
+      <line x1="6" y1="62" x2="214" y2="62"/><rect x="10" y="62" width="200" height="40"/>
+      <line x1="76" y1="62" x2="76" y2="102"/><line x1="144" y1="62" x2="144" y2="102"/></g></symbol>
+  </defs>
+</svg>
+
+<header class="wrap top">
+  <a class="studio" href="empty.html">Birchwood Studio</a>
+  <nav aria-label="Page">
+    <a href="pay.html">Papers</a>
+    <a href="#maren">Maren</a>
+  </nav>
+</header>
+
+<main>
+  <!-- Arrival with no photographs: the hero piece is drawn, the room's paint stands beside it. -->
+  <section class="cover cover--empty" aria-label="Elm Street House">
+    <figure>
+      <div class="frame">
+        <div class="paint" aria-hidden="true"><i class="morning-oat"></i><i class="pale-birch"></i><i class="kettle-clay"></i><i class="bur-oak"></i></div>
+        <div class="drawn"><svg role="img" aria-label="Drawing of the walnut sideboard: four doors, three drawers, tapered legs"><use href="#sideboard"/></svg></div>
+        <div class="title">
+          <p class="for">Prepared for June Brennan</p>
+          <h1>Elm Street House</h1>
+        </div>
+      </div>
+      <div class="band">
+        <figcaption>
+          <span data-triplet>Walnut sideboard, drawn&nbsp;· Birchwood Studio&nbsp;· 2 October 2026</span>
+          <span class="ph">Photographs follow once the workshop starts</span>
+        </figcaption>
+        <a class="papers-line" href="pay.html">
+          <span><b>Papers:</b> <u>one invoice past due, one answer for Maren</u>&nbsp;<span aria-hidden="true">→</span></span>
+        </a>
+      </div>
+    </figure>
+  </section>
+
+  <section class="wrap sheet" aria-labelledby="sheet-h">
+    <h2 id="sheet-h" class="sr">The house, room by room</h2>
+    <ul class="tiles">
+      <li>
+        <a class="tile" href="#living-room">
+          <figure>
+            <div class="ph-frame drawn pale-birch"><svg role="img" aria-label="Drawing of the living room sofa"><use href="#sofa"/></svg></div>
+            <figcaption>
+              <span class="label">Living room</span>
+              <span data-triplet>Walls&nbsp;· Larkin Prairie&nbsp;· Pale Birch</span>
+              <span class="ph">Drawn from the specification</span>
+            </figcaption>
+          </figure>
+        </a>
+      </li>
+      <li>
+        <a class="tile" href="#sideboard">
+          <figure>
+            <div class="ph-frame drawn morning-oat"><svg role="img" aria-label="Drawing of the walnut sideboard"><use href="#sideboard"/></svg></div>
+            <figcaption>
+              <span class="label">The sideboard</span>
+              <span data-triplet>Trim&nbsp;· Halvorsen&nbsp;· Morning Oat</span>
+              <span class="ph">Drawn from the specification</span>
+            </figcaption>
+          </figure>
+        </a>
+      </li>
+      <li>
+        <a class="tile" href="#sofa">
+          <figure>
+            <div class="ph-frame linen" role="img" aria-label="Flat colour of the oatmeal linen sample"></div>
+            <figcaption>
+              <span class="label">The sofa linen</span>
+              <span data-triplet>Oatmeal linen&nbsp;· Birchwood Studio&nbsp;· 9 October 2026</span>
+              <span class="ph">Sample with Maren</span>
+            </figcaption>
+          </figure>
+        </a>
+      </li>
+      <li>
+        <a class="tile" href="#kitchen">
+          <figure>
+            <div class="ph-frame drawn kettle-clay"><svg role="img" aria-label="Drawing of the kitchen cabinets"><use href="#kitchen"/></svg></div>
+            <figcaption>
+              <span class="label">Kitchen</span>
+              <span data-triplet>Cabinets&nbsp;· Halvorsen&nbsp;· Kettle Clay</span>
+              <span class="ph">Drawn from the specification</span>
+            </figcaption>
+          </figure>
+        </a>
+      </li>
+      <li>
+        <a class="tile" href="#bedroom">
+          <figure>
+            <div class="ph-frame drawn bur-oak"><svg role="img" aria-label="Drawing of the bed"><use href="#bed"/></svg></div>
+            <figcaption>
+              <span class="label">Bedroom</span>
+              <span data-triplet>Walls&nbsp;· Halvorsen&nbsp;· Bur Oak Green</span>
+              <span class="ph">Drawn from the specification</span>
+            </figcaption>
+          </figure>
+        </a>
+      </li>
+    </ul>
+  </section>
+
+  <section class="wrap" aria-label="Maren's note">
+    <div class="note">
+      <blockquote>“Everything here is drawn for now; the workshop's photographs come once the walnut is cut.”</blockquote>
+      <div class="by">
+        <span>Maren Holt, 16 October 2026</span>
+        <a class="more" href="#letter">Read Maren's note</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap room" id="living-room" aria-labelledby="living-room-h">
+    <header>
+      <h2 id="living-room-h">Living room</h2>
+      <p class="standing">Pieces are being made and ordered. Installation is planned for 22 January 2027.</p>
+    </header>
+    <div class="pieces">
+      <article class="piece" id="sideboard">
+        <figure>
+          <div class="ph-frame drawn morning-oat"><svg role="img" aria-label="Drawing of the walnut sideboard"><use href="#sideboard"/></svg></div>
+          <figcaption>
+            <span data-triplet>Walnut sideboard, drawn&nbsp;· Birchwood Studio&nbsp;· 2 October 2026</span>
+            <span class="ph">Drawn from the specification</span>
+          </figcaption>
+        </figure>
+        <h3>Walnut sideboard</h3>
+        <p class="status">In production at Harmon Bench Works in Dayton, Ohio.</p>
+      </article>
+      <article class="piece" id="sofa">
+        <figure>
+          <div class="ph-frame drawn pale-birch"><svg role="img" aria-label="Drawing of the living room sofa"><use href="#sofa"/></svg></div>
+          <figcaption>
+            <span data-triplet>Sofa, edition 2, drawn&nbsp;· Birchwood Studio&nbsp;· 9 October 2026</span>
+            <span class="ph">Drawn from the specification</span>
+          </figcaption>
+        </figure>
+        <h3>Sofa</h3>
+        <p class="status">Waiting on your answer about the oatmeal linen. <a href="pay.html#sofa">It is in Papers.</a></p>
+      </article>
+    </div>
+  </section>
+
+  <section class="wrap room" id="kitchen" aria-labelledby="kitchen-h">
+    <header>
+      <h2 id="kitchen-h">Kitchen</h2>
+      <p class="standing">Maren is drawing the cabinets. The kitchen follows the living room.</p>
+    </header>
+    <figure class="wide">
+      <div class="ph-frame drawn kettle-clay"><svg role="img" aria-label="Drawing of the kitchen cabinets, wall and base"><use href="#kitchen"/></svg></div>
+      <figcaption>
+        <span data-triplet>Kitchen cabinets, drawn&nbsp;· Birchwood Studio&nbsp;· 2 October 2026</span>
+        <span class="ph">On Halvorsen, Kettle Clay</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="wrap room" id="bedroom" aria-labelledby="bedroom-h">
+    <header>
+      <h2 id="bedroom-h">Bedroom</h2>
+      <p class="standing">The linen is chosen. The bed comes in a later edition.</p>
+    </header>
+    <figure class="wide">
+      <div class="ph-frame drawn bur-oak"><svg role="img" aria-label="Drawing of a low bed with a tall headboard"><use href="#bed"/></svg></div>
+      <figcaption>
+        <span data-triplet>Bed, drawn&nbsp;· Birchwood Studio&nbsp;· 2 October 2026</span>
+        <span class="ph">On Halvorsen, Bur Oak Green</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="wrap room" id="paint" aria-labelledby="paint-h">
+    <header>
+      <h2 id="paint-h">The paint</h2>
+      <p class="standing">Chosen with Maren on 2 October 2026.</p>
+    </header>
+    <ul class="paint-names">
+      <li><i class="morning-oat"></i>Halvorsen, Morning Oat</li>
+      <li><i class="pale-birch"></i>Larkin Prairie, Pale Birch</li>
+      <li><i class="kettle-clay"></i>Halvorsen, Kettle Clay</li>
+      <li><i class="bur-oak"></i>Halvorsen, Bur Oak Green</li>
+    </ul>
+  </section>
+
+  <section class="wrap letter" id="letter" aria-labelledby="letter-h">
+    <div class="inner" id="maren">
+      <h2 id="letter-h">From Maren</h2>
+      <div data-letter>
+        <p>June, everything here is drawn for now. The workshop's photographs come once the walnut is cut, and the album fills in room by room as they arrive.</p>
+        <p class="sign">Maren Holt, 16 October 2026</p>
+      </div>
+      <div class="contact">
+        <a href="tel:+16085550148">Call Maren Holt, (608) 555-0148</a>
+        <a href="pay.html">Papers</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <p>Elm Street House · Prepared for June Brennan</p>
+  <p>Prepared by Birchwood Studio · Sent through Patina</p>
+</footer>
+
+</body>
+</html>

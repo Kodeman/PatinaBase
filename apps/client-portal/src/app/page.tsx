@@ -104,7 +104,7 @@ export default async function HomePage(props: {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <HeroPreloadLinks preloads={heroPreloads(editorial)} />
-      <main className="mx-auto w-full max-w-6xl px-6 py-10">
+      <main className="w-full min-w-0">
         <Threshold
           projectId={project.id}
           project={project}

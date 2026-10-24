@@ -1,6 +1,6 @@
 'use client';
 
-import { NOTE_NOT_YOUR_PIECE, captionTriplet, catalogueCaption } from '@/lib/editorial/caption';
+import { NOTE_NOT_YOUR_PIECE, piecePhotoCaption } from '@/lib/editorial/caption';
 import { SIZES } from '@/lib/editorial/crop';
 import { TIER, tierOf } from '@/lib/editorial/rank';
 import type { EditorialAsset, EditorialItem } from '@/lib/editorial/types';
@@ -9,6 +9,11 @@ import { Plate } from './plate';
 import { SilhouettePlate } from './silhouette-plate';
 
 const INSTALLED = /install/i;
+
+function pieceNote(item: PiecePlateProps['item'], asset: EditorialAsset) {
+  if (tierOf(asset) !== TIER.catalogue) return null;
+  return INSTALLED.test(item.status ?? '') ? null : NOTE_NOT_YOUR_PIECE;
+}
 
 export interface PiecePlateProps {
   scopeId: string;
@@ -19,18 +24,6 @@ export interface PiecePlateProps {
   /** Where the piece stands, in words: "In production". */
   statusWords: string;
   paletteHex?: string | null;
-}
-
-type PieceItem = PiecePlateProps['item'];
-
-/** A catalogue photograph says it shows the same model; an installed piece needs no note. */
-function pieceCaption(item: PieceItem, asset: EditorialAsset, showMakers: boolean) {
-  if (tierOf(asset) !== TIER.catalogue) return { caption: captionTriplet(asset.caption), note: null };
-  const caption = catalogueCaption(
-    showMakers ? item.nameAsSigned : asset.caption.what,
-    item.makerName, asset.caption.when, item.category, showMakers,
-  );
-  return { caption, note: INSTALLED.test(item.status ?? '') ? null : NOTE_NOT_YOUR_PIECE };
 }
 
 /**
@@ -55,7 +48,8 @@ export function PiecePlate({ scopeId, showMakers, item, asset, statusWords, pale
     );
   }
 
-  const { caption, note } = pieceCaption(item, asset, showMakers);
+  const caption = piecePhotoCaption(item, asset, showMakers);
+  const note = pieceNote(item, asset);
   const white = asset.ground === 'white';
 
   return (

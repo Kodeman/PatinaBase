@@ -36,8 +36,16 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectV2: () => ({ data: { name: 'Ridgeline' } }),
+  useProjectPalettes: () => ({ data: [] }),
   createBrowserClient: () => ({}),
   useClientEditions: () => ({ data: mockEditions }),
+  useClientEditorialAssets: () => ({
+    data: (mockEditions as import('@patina/supabase').ClientEditions | undefined)?.editions.flatMap(edition => edition.images.map(image => ({
+      ...image, id: image.assetId, sha256: image.assetId,
+      crops: { wide: { rect: [0, 0, image.width, image.height], widths: [image.width] } },
+    }))),
+  }),
   useClientEditionSourceUrls: () => ({
     data: { 'a-hero': 'https://example.com/hero.jpg', 'a-old': 'https://example.com/old.jpg' },
   }),

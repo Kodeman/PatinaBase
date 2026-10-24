@@ -59,3 +59,10 @@ export function waitingSentence(house: OtherHouse): string | null {
   const verb = parts.length === 1 && subject.startsWith('a ') ? 'is' : 'are';
   return `${subject.charAt(0).toUpperCase()}${subject.slice(1)} ${verb} waiting there.`;
 }
+
+/** Menu's quiet sentence is a fact only after both summary counts have loaded. */
+export function menuWaitingSentence(house: OtherHouse): string | null {
+  return waitingSentence(house) ?? (
+    house.approvalsPending === 0 && house.unreadMessages === 0 ? 'Nothing waiting there.' : null
+  );
+}

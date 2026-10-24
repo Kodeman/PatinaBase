@@ -29,12 +29,32 @@ function coherentPublishedPlan(
   ].every(Boolean);
 }
 
-export function BudgetCheckpointReview({ projectId }: { projectId: string }) {
-  return <PublishedBudget key={projectId} projectId={projectId} />;
+function pendingBudgetCheckpoint(budget: WorkingBudgetVersion | null | undefined, projectId: string): string | null {
+  return budget && coherentPublishedPlan(budget, projectId) && budget.checkpoint!.state !== "acknowledged"
+    ? "the published spending plan" : null;
 }
 
-function PublishedBudget({ projectId }: { projectId: string }) {
-  const query = useProjectWorkingBudget(projectId);
+type BudgetReviewProps = { projectId: string; query: ReturnType<typeof useProjectWorkingBudget> };
+
+function budgetReadReady(query: BudgetReviewProps['query']): boolean {
+  return !query.isPending && !query.isLoading && !query.isFetching && !query.isError;
+}
+
+export function budgetCheckpointProjection(projectId: string, query: BudgetReviewProps['query']) {
+  const ready = budgetReadReady(query);
+  const ask = ready ? pendingBudgetCheckpoint(query.data, projectId) : null;
+  return { ready, ask, showInMenu: Boolean(ask) || !ready };
+}
+
+export function BudgetCheckpointMenuAsk({ show }: { show: boolean }) {
+  return show ? <li><a href="#budget-checkpoint">Published spending plan</a></li> : null;
+}
+
+export function BudgetCheckpointReview({ projectId, query }: BudgetReviewProps) {
+  return <PublishedBudget key={projectId} projectId={projectId} query={query} />;
+}
+
+function PublishedBudget({ projectId, query }: BudgetReviewProps) {
   let content;
   if (query.isError) {
     content = (
@@ -74,6 +94,7 @@ function PublishedBudget({ projectId }: { projectId: string }) {
   }
   return (
     <section
+      id="budget-checkpoint"
       aria-label="Published spending plan"
       className="border-t border-[var(--border-default)] py-4"
     >

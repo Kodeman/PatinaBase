@@ -11,6 +11,17 @@ import {
 
 describe('silhouetteCategory', () => {
   it.each([
+    ['Sierra Queen Bed', '.', 'bed'],
+    ['Bed bench', '.', 'chair'],
+    ['End of bed bench', '.', 'chair'],
+    ['Bed throw', '.', 'textile'],
+    ['Bed linens', '.', 'textile'],
+    ['Bed pillows', '.', 'textile'],
+    ['Bed bedding blanket duvet quilt', '.', 'textile'],
+    ['Bed lamp', '.', 'light'],
+    ['Bed-side table', '.', 'table'],
+    ['Nightstand', '.', 'table'],
+    ['Daybed', '.', 'bed'],
     ['Brass library sconces', null, 'light'],
     ['Reading lamp', null, 'light'],
     ['Kilim runner', null, 'textile'],
@@ -61,6 +72,13 @@ describe('PieceSilhouette', () => {
     expect(container.querySelectorAll('image')).toHaveLength(0);
     expect(container.innerHTML).not.toContain('url(#');
     expect(container.innerHTML).not.toContain('Gradient');
+  });
+
+  it('draws a bed outline rather than a cabinet', () => {
+    expect(() => render(<PieceSilhouette category="bed" />)).not.toThrow();
+    expect(screen.getByTestId('piece-silhouette')).toHaveAttribute('data-silhouette', 'bed');
+    expect(screen.getByTestId('piece-silhouette-detail')).toBeInTheDocument();
+    expect(screen.getByTestId('piece-silhouette-hatch')).toHaveAttribute('stroke-opacity', '0.5');
   });
 
   it('stands on a floor line so the outline reads as a thing in a room', () => {

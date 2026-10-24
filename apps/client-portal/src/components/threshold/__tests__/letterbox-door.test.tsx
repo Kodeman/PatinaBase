@@ -157,17 +157,17 @@ beforeEach(() => {
 });
 
 describe("LetterboxDoor — the studio-only arrival", () => {
-  it("introduces the page with its purpose and the studio, not a project", () => {
+  it("names the studio without reviving the retired purpose sentence", () => {
     renderDoor();
 
     expect(screen.getByTestId("doorplate-title")).toHaveTextContent(
       "Birchwood Studio",
     );
     expect(
-      screen.getByText(
+      screen.queryByText(
         "Pay invoices, review approvals, and follow your project here.",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
   });
 
   it("offers Invoices, Approvals, Progress and help, each landing on the page", () => {

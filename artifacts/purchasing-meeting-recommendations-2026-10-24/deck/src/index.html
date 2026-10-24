@@ -1,0 +1,828 @@
+<title>Buying, round two</title><meta name="claude:viewport-fit-sides" content="cover"><meta name="description" content="US-54 founders' deck: what the first real buys on the Harchess job showed, what to change before the next ones, and a clickable proposal of the grouped web-checkout buy. Design-only; nothing built."><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap"><style>
+/* Layout: one central column of sheets on the studio's paper; every proposal is drawn in The Document's own light tokens (--m-*), which do not change in dark mode. */
+:root{
+--paper:#FAF7F2;--sheet:#FFFDF9;--wash:#F3EEE6;--ink:#2C2926;--body:#5C4A3C;--label:#8B7355;--rule:#E5E2DD;--rule-strong:#CDC5BA;--accent:#C4A57B;
+--m-page:#FAF7F2;--m-sheet:#FFFDF9;--m-rail:#F1ECE4;--m-pearl:#E5E2DD;--m-clay:#C4A57B;--m-oak:#8B7355;--m-mocha:#5C4A3C;--m-char:#2C2926;--m-wash:#F5F0E8;
+--display:'Playfair Display',Georgia,'Times New Roman',serif;--sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;--mono:'DM Mono',ui-monospace,SFMono-Regular,Menlo,monospace;--r:3px;
+color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#211D1A;--sheet:#2A2521;--wash:#2F2A25;--ink:#F3EEE7;--body:#D5CABD;--label:#CDB491;--rule:#3C3631;--rule-strong:#5A524A;--accent:#C4A57B;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#211D1A;--sheet:#2A2521;--wash:#2F2A25;--ink:#F3EEE7;--body:#D5CABD;--label:#CDB491;--rule:#3C3631;--rule-strong:#5A524A;--accent:#C4A57B;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{margin:0;background:var(--paper);color:var(--body);font:16px/1.6 var(--sans);-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+h1,h2,h3,h4,p,figure,blockquote,dl,dd,ul,ol{margin:0}
+ul,ol{padding:0}
+h2,h3,h4{text-wrap:balance;color:var(--ink)}
+h2{font:400 clamp(32px,4.4vw,56px)/1.12 var(--display);max-width:22ch;letter-spacing:-.005em}
+h3{font:400 24px/1.3 var(--display)}
+h4{font:600 15px/1.4 var(--sans)}
+p{max-width:68ch}
+strong{font-weight:600;color:var(--ink)}
+a{color:inherit;text-underline-offset:4px;text-decoration-color:var(--accent)}
+code{font:12.5px/1.5 var(--mono);color:var(--ink);overflow-wrap:anywhere}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--label);outline-offset:3px}
+img{max-width:100%}
+.meta{font:500 11px/1.6 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--label)}
+.num{font-variant-numeric:tabular-nums}
+
+/* chrome */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--rule-strong)}
+.nav-inner{max-width:1312px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:6px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.nav-title{font:400 20px/1.2 var(--display);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.nav-controls{display:flex;gap:6px;align-items:center;flex:none}
+.nav-controls button{min-height:44px;min-width:44px;padding:8px 12px;background:var(--sheet);border:1px solid var(--rule-strong);border-radius:var(--r);color:var(--ink)}
+.nav-count{min-width:68px;text-align:center;font:500 12px var(--mono);color:var(--ink)}
+.skip{position:absolute;left:16px;top:-100px}.skip:focus{top:60px;background:var(--sheet);padding:8px}
+main{max-width:1312px;margin:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* sheets */
+.sheet{padding-block:56px 40px;border-bottom:1px solid var(--rule-strong);display:grid;gap:28px;min-width:0}
+.sheet>*{min-width:0}
+.sheet-head{display:grid;gap:16px}
+.sheet-head>.meta{max-width:none;display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;border-top:1px solid var(--rule);padding-top:12px}
+.lede{font-size:20px;line-height:1.5;color:var(--ink);max-width:62ch}
+.sheet-foot{border-top:1px solid var(--rule);padding-top:14px;display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;font:500 11px/1.6 var(--mono);letter-spacing:.04em;color:var(--label)}
+.sheet-foot a{min-height:44px;display:inline-flex;align-items:center}
+.scope{border:1px solid var(--ink);border-radius:var(--r);padding:14px 18px;color:var(--ink);font-weight:500;max-width:none}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;border-block:1px solid var(--rule);padding-block:24px}
+.three p{font:400 22px/1.35 var(--display);color:var(--ink)}
+.three span{display:block;margin-bottom:8px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:32px;align-items:start}
+.cols.even{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols>*{min-width:0}
+.stack{display:grid;gap:14px;align-content:start;min-width:0}
+.fq{display:grid;gap:6px;padding-block:16px;border-block:1px solid var(--rule)}
+.fq blockquote{font:italic 400 clamp(20px,2.2vw,26px)/1.4 var(--display);color:var(--ink);max-width:48ch}
+.fq figcaption{font-size:14px}
+.fq+.fq{border-top:0;padding-top:0}
+.today p{font-size:15px}
+.anchors{list-style:none;display:grid}
+.anchors li{padding-block:8px;border-bottom:1px solid var(--rule);font-size:14px;line-height:1.5}
+.anchors li:first-child{border-top:1px solid var(--rule)}
+.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;border-block:1px solid var(--rule);padding-block:16px}
+.flow dt{font:500 11px/1.6 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--label);margin-bottom:6px}
+.flow dd{font-size:14px;color:var(--ink)}
+.vt{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;font-size:14px}
+.vt .meta{flex:none}
+.row-acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.walk-link{min-height:44px;padding:8px 14px;background:var(--sheet);border:1px solid var(--rule-strong);border-radius:var(--r);color:var(--ink);font-size:14px}
+.note{font-size:14px;color:var(--body)}
+.small{font-size:13px}
+.plain{list-style:none;display:grid}
+.plain li{padding-block:10px;border-bottom:1px solid var(--rule);font-size:15px}
+.plain li:first-child{border-top:1px solid var(--rule)}
+
+/* evidence */
+.shots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
+.shots.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.shots.three-up{grid-template-columns:repeat(3,minmax(0,1fr))}
+.shot{display:grid;gap:10px;min-width:0}
+.shot.expanded{grid-column:1/-1}
+.image-toggle{display:block;width:100%;padding:0;border:1px solid var(--rule-strong);border-radius:var(--r);background:var(--wash);overflow:hidden;cursor:zoom-in;text-align:left}
+.shot.expanded .image-toggle{cursor:zoom-out}
+.image-toggle img{display:block;width:100%;height:auto}
+.shot figcaption{display:grid;gap:4px}
+.shot figcaption p{font-size:14px;color:var(--ink)}
+.shot small{font:11px/1.5 var(--mono);color:var(--label);overflow-wrap:anywhere}
+
+/* tables as grids */
+.grid-table{display:grid;border-top:1px solid var(--rule-strong)}
+.gt-row{display:grid;gap:16px;padding-block:12px;border-bottom:1px solid var(--rule);align-items:baseline}
+.gt-row>*{min-width:0}
+.gt-head{border-bottom:1px solid var(--rule-strong)}
+.gt-head>*{font:500 11px/1.6 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--label)}
+.ft .gt-row{grid-template-columns:52px minmax(0,1.3fr) 140px minmax(0,1.5fr)}
+.ft .gt-row .q{font-style:italic;font-family:var(--display);font-size:16px;color:var(--ink)}
+.ft .parked{opacity:.55}
+.tag{font:500 11px/1.4 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);border:1px solid var(--rule-strong);border-radius:var(--r);padding:2px 6px;display:inline-block}
+.tag.tk{border-style:dashed}
+.rt .gt-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr)}
+.qt .gt-row{grid-template-columns:64px minmax(0,1fr) minmax(0,1.6fr) minmax(0,1.3fr)}
+.cell-label{display:none}
+
+/* swimlane */
+.lane-wrap{border:1px solid var(--rule-strong);border-radius:var(--r);background:var(--sheet)}
+.lane-row{display:grid;grid-template-columns:110px repeat(4,minmax(0,1fr));border-bottom:1px solid var(--rule)}
+.lane-row:last-child{border-bottom:0}
+.lane-row>div{padding:10px 12px;font-size:13px;line-height:1.5;color:var(--ink);border-left:1px solid var(--rule);min-width:0}
+.lane-row>div:first-child{border-left:0;font:500 11px/1.5 var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--label)}
+.lane-row.lh>div{font:500 11px/1.5 var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--label)}
+.lane-row .rid{font:500 11px var(--mono);color:var(--label);white-space:nowrap}
+.lane-row .ln{display:none}
+.lane-row>div:empty::after{content:"";}
+
+/* roadmap */
+.roadmap{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:28px}
+.roadmap>div{display:grid;gap:10px;align-content:start;min-width:0}
+.roadmap li{list-style:none;padding-block:8px;border-bottom:1px solid var(--rule);font-size:14px;color:var(--ink)}
+.roadmap li span{font:500 11px var(--mono);color:var(--label);margin-right:8px}
+.roadmap li em{font-style:normal;color:var(--body)}
+
+/* ---- Proposal drawings: The Document's own surface ---- */
+.draw{border:1px solid var(--rule-strong);border-radius:var(--r);overflow:hidden;min-width:0;background:var(--m-page)}
+.draw-label{font:500 11px/1.6 var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:8px 14px;border-bottom:1px solid var(--rule-strong);color:var(--label);background:var(--sheet);max-width:none}
+.ds{background:var(--m-page);color:var(--m-mocha);font:14px/1.55 var(--sans);padding:20px 22px;display:grid;gap:12px;min-width:0}
+.ds p{max-width:none}
+.dm{font:500 11px/1.6 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--m-oak)}
+.dh{font:400 21px/1.3 var(--display);color:var(--m-char)}
+.dname{font:400 17px/1.35 var(--display);color:var(--m-char)}
+.dk{color:var(--m-char);font-weight:500}
+.dsub{font-size:13px;color:var(--m-mocha)}
+.dnote{font:12.5px/1.55 var(--mono);color:var(--m-oak)}
+.dact{display:inline-flex;align-items:center;min-height:44px;background:none;border:0;padding:0;color:var(--m-char);font:500 14px/1.4 var(--sans);text-decoration:underline;text-decoration-color:var(--m-clay);text-underline-offset:5px;text-decoration-thickness:1px;text-align:left;cursor:pointer}
+.dbtn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;background:var(--m-char);color:var(--m-page);border:1px solid var(--m-char);border-radius:var(--r);padding:8px 16px;font:500 14px/1.3 var(--sans);text-align:center}
+.dbtn2{display:inline-flex;align-items:center;justify-content:center;min-height:44px;background:transparent;color:var(--m-char);border:1px solid var(--m-oak);border-radius:var(--r);padding:8px 14px;font:500 14px/1.3 var(--sans);text-align:left}
+.dbtn[disabled],.dbtn2[disabled]{opacity:.4;cursor:not-allowed}
+.drow{display:grid;gap:4px 16px;border-bottom:1px solid var(--m-pearl);padding-block:10px;min-width:0}
+.drow:first-child{border-top:1px solid var(--m-pearl)}
+.dline{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 16px;align-items:baseline}
+.dline>*{min-width:0}
+.dline>.dact,.stack>.dact,.stack>.dbtn2{justify-self:start}
+.dnext{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:6px 14px;align-items:center;background:var(--m-wash);padding:10px 12px;border-radius:var(--r)}
+.dnext>*{min-width:0}
+.dflag{border:1px solid var(--m-clay);border-radius:var(--r);padding:12px 14px;display:grid;gap:8px;background:var(--m-sheet)}
+.dfield{display:grid;gap:4px;min-width:0}
+.dfield input,.dfield select,.dinput{font:14px/1.4 var(--sans);color:var(--m-char);background:var(--m-sheet);border:1px solid var(--m-pearl);border-radius:var(--r);padding:10px 12px;min-height:44px;width:100%;min-width:0}
+.dfields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dchoice{display:grid;grid-template-columns:24px minmax(0,1fr) minmax(0,.9fr);gap:4px 10px;align-items:start;padding:10px 8px;border-bottom:1px solid var(--m-pearl);cursor:pointer;min-height:44px}
+.dchoice input{margin:3px 0 0;width:18px;height:18px;accent-color:var(--m-char)}
+.dchoice .dsub{color:var(--m-oak)}
+.dfile{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font:13px var(--mono);color:var(--m-char);padding:8px 10px;border:1px solid var(--m-pearl);border-radius:var(--r);background:var(--m-sheet)}
+.dpaper{border:1px solid var(--m-pearl);background:var(--m-sheet);border-radius:var(--r);padding:22px 24px;display:grid;gap:16px;min-width:0}
+.dpaper-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;border-bottom:1px solid var(--m-pearl);padding-bottom:12px}
+.dgroup{display:grid;gap:2px}
+.dopt{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;align-items:start;padding:8px 6px;min-height:44px;cursor:pointer;border-radius:var(--r)}
+.dopt input{margin:3px 0 0;width:18px;height:18px;accent-color:var(--m-char)}
+.dsplit{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+.dex{font:500 10.5px/1.4 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--m-oak);border:1px dashed var(--m-oak);border-radius:var(--r);padding:1px 5px;overflow-wrap:anywhere}
+.dcode{font:12.5px/1.6 var(--mono);color:var(--m-char);white-space:pre-wrap;overflow-wrap:anywhere;background:var(--m-sheet);border:1px solid var(--m-pearl);border-radius:var(--r);padding:14px}
+.dbefore{opacity:.6}
+
+/* ---- Mockup ---- */
+.mock{border:1px solid var(--rule-strong);border-radius:var(--r);background:var(--sheet);min-width:0}
+.mock-bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--rule-strong)}
+.mock-flag{font:500 11px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink);border:1px solid var(--ink);border-radius:var(--r);padding:5px 8px}
+.act-select{display:none;min-height:44px;max-width:100%;font:12px var(--mono);background:var(--sheet);color:var(--ink);border:1px solid var(--rule-strong)}
+.acts-nav{display:flex;flex-wrap:wrap;gap:6px}
+.acts-nav button,.stepper button,.widths button{min-height:44px;padding:6px 12px;border:1px solid var(--rule-strong);background:transparent;color:var(--body);border-radius:var(--r);font:500 11.5px/1.3 var(--mono);letter-spacing:.04em;text-transform:uppercase}
+.acts-nav button[aria-current="true"],.widths button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);background:var(--paper)}
+.stepper{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.stepper button[disabled]{opacity:.4;cursor:not-allowed}
+.frame-count{font:500 12px var(--mono);color:var(--ink);min-width:96px;text-align:center}
+.mock-cap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 20px;align-items:end;padding:14px;border-bottom:1px solid var(--rule)}
+.mock-cap h3{font-size:21px}
+.mock-cap .cap-act{font-size:14px;color:var(--ink)}
+.widths{display:flex;gap:6px;align-items:center}
+.mock-stage{background:var(--wash);padding:20px;display:grid;justify-items:center;min-width:0}
+.surface{width:100%;max-width:1200px;container-type:inline-size;background:var(--m-page);color:var(--m-mocha);border:1px solid var(--m-pearl);border-radius:var(--r);font:14px/1.55 var(--sans);min-width:0}
+.surface.is-phone{max-width:390px}
+.surface p{max-width:none}
+.shell{display:grid;grid-template-columns:176px minmax(0,1fr);min-height:520px}
+.rail{background:var(--m-rail);padding:22px 16px;display:grid;gap:16px;align-content:start;border-right:1px solid var(--m-pearl)}
+.rail-list{display:grid;gap:10px;font-size:13px;color:var(--m-mocha)}
+.rail-list .on{color:var(--m-char);font-weight:500;padding-left:9px;border-left:1px solid var(--m-char)}
+.col{padding:24px 32px;display:grid;gap:18px;align-content:start;min-width:0}
+.ph-bar{display:none;justify-content:space-between;gap:8px;padding:12px 16px;border-bottom:1px solid var(--m-pearl);background:var(--m-rail)}
+.hot{outline:2px solid var(--m-clay);outline-offset:3px;border-radius:var(--r)}
+.hint{font:12px/1.5 var(--mono);color:var(--m-oak)}
+.frame[hidden]{display:none!important}
+.done-note{font:12.5px/1.5 var(--mono);color:var(--m-char);background:var(--m-wash);border-radius:var(--r);padding:8px 10px}
+@container (max-width:700px){
+ .shell{display:block;min-height:0}
+ .rail{display:none}
+ .ph-bar{display:flex}
+ .col{padding:18px 16px;gap:16px}
+ .dnext{grid-template-columns:1fr}
+ .dfields{grid-template-columns:1fr}
+ .dchoice{grid-template-columns:24px minmax(0,1fr)}
+ .dchoice .dsub{grid-column:2}
+ .dpaper{padding:16px 14px}
+ .dline{grid-template-columns:1fr}
+ .dh{font-size:19px}
+}
+
+@media (max-width:1050px){.roadmap{grid-template-columns:1fr 1fr}.roadmap>div:first-child{grid-column:1/-1}.shots.four{grid-template-columns:repeat(2,minmax(0,1fr))}.qt .gt-row{grid-template-columns:56px minmax(0,1fr) minmax(0,1.4fr)}.qt .gt-row>:nth-child(4){grid-column:2/-1}}
+@media (max-width:760px){
+ .cols,.cols.even,.three,.flow,.roadmap,.shots,.shots.three-up{grid-template-columns:1fr}
+ .shots.four{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .roadmap>div:first-child{grid-column:auto}
+ .gt-head{display:none}
+ .ft .gt-row,.rt .gt-row,.qt .gt-row{grid-template-columns:1fr;gap:4px}
+ .qt .gt-row>:nth-child(4){grid-column:auto}
+ .cell-label{display:block;font:500 10.5px/1.6 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--label)}
+ .lane-row.lh{display:none}
+ .lane-row{grid-template-columns:1fr}
+ .lane-row>div{border-left:0;padding:4px 12px}
+ .lane-row>div:first-child{padding-top:12px}
+ .lane-row>div:last-child{padding-bottom:12px}
+ .lane-row>div:empty{display:none}
+ .lane-row .ln{display:block;font:500 10.5px/1.6 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--label)}
+}
+@media (max-width:640px){
+ .nav-title{font-size:17px}.nav-controls button{padding:8px}.nav-count{min-width:56px;font-size:11px}
+ .sheet{padding-block:36px 28px;gap:24px}.lede{font-size:18px}.three p{font-size:20px}
+ .mock-stage{padding:10px}.mock-cap{grid-template-columns:1fr}.frame-count{min-width:0}
+ .flow{gap:12px}
+ .acts-nav,.widths{display:none}.act-select{display:block;width:100%}.mock-bar{gap:6px;padding:8px}.stepper{gap:4px}.stepper button{font-size:10px;padding:6px}.mock-cap{padding:10px}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media print{.topbar{display:none}.sheet{break-before:page}.sheet:first-child{break-before:auto}}
+</style><header class="topbar"><a class="skip" href="#sheet-1">Skip to the deck</a><nav class="nav-inner" aria-label="Deck sheets"><span class="nav-title">Buying, round two</span><div class="nav-controls"><button type="button" id="previous" aria-label="Previous sheet">←</button><span class="nav-count num" id="count">01 / 20</span><button type="button" id="next" aria-label="Next sheet">→</button></div></nav></header><main>
+
+<!-- 1 -->
+<section class="sheet" id="sheet-1" aria-labelledby="t1"><header class="sheet-head"><p class="meta"><span>US-54 · founders' deck · Kody and Leah</span><span>01</span></p><h2 id="t1">After the first buys</h2><p class="lede">The path held. What went wrong was finding things, and money that didn't match the paper.</p><p class="meta">The Harchess job · 23 October walk-through · Leah, Ashley, Kody</p></header>
+<div class="three"><div><span class="meta">It works</span><p>The paper, release by phone, the payment, the ETA, receiving.</p></div><div><span class="meta">Hard to find</span><p>Why Order was held, the job's places, expenses, ordering together.</p></div><div><span class="meta">Nowhere honest to put a difference</span><p>A price that rose at checkout. Fees that come later.</p></div></div>
+<p class="scope">Proposal only · nothing built or purchased. Screens are local-walk evidence (Oct 22–23), seeded test data, not production. Street lines and zips are redacted; any dev badge is not product. Figures are the meeting's own; every other figure reads $— or is marked proposed example.</p>
+<div class="shots"><figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: Pieces on the walk's test job"><img src="{{IMG:02v-pieces-overview-viewport-1440.jpg}}" alt="Local walk screenshot: the Pieces section on a seeded test job" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>Pieces on the walk's seeded test job. This is the surface every change below lands on.</p><small>02v-pieces-overview-viewport-1440.png</small></figcaption></figure>
+<div class="stack"><p class="meta">How to read this deck</p><ul class="plain"><li>Sheets 2–4: what we watched, what stays, and the one idea underneath.</li><li>Sheet 5: the proposal as a clickable walk on the Harchess job.</li><li>Sheets 6–18: each change, with the meeting's words and where it lives today.</li><li>Sheets 19–20: what comes when, and seven questions for you to rule.</li></ul></div></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-2">Next sheet ↓</a></footer></section>
+
+<!-- 2 -->
+<section class="sheet" id="sheet-2" aria-labelledby="t2"><header class="sheet-head"><p class="meta"><span>What we watched · F1–F12</span><span>02</span></p><h2 id="t2">What we watched</h2><p class="lede">Two real buys, the Olaf wallpaper and the Sierra bed, and one asked-for case, two Rejuvenation pieces in one checkout, gave twelve findings.</p></header>
+<div class="grid-table ft" role="table" aria-label="Findings F1 to F12">
+<div class="gt-row gt-head" role="row"><span role="columnheader">#</span><span role="columnheader">Finding</span><span role="columnheader">Kind</span><span role="columnheader">In their words</span></div>
+<div class="gt-row" role="row"><strong>F1</strong><span>The Order act went away without saying why. The client's payment wasn't recorded.</span><span><span class="tag">exists, not found</span></span><span class="q">“my order button went away… I did something wrong.” <span class="meta">Kody · mtg:120, 131</span></span></div>
+<div class="gt-row" role="row"><strong>F2</strong><span>The Sierra bed rose $230.20 at checkout, and the trade cost is locked.</span><span><span class="tag">money truth</span></span><span class="q">“that's going to be complicated later to figure out why we did that.” <span class="meta">Leah · mtg:386</span></span></div>
+<div class="gt-row" role="row"><strong>F3</strong><span>A possible import or processing fee may arrive later. Type, rate and payee are unconfirmed.</span><span><span class="tag">money truth</span></span><span class="q">“I get sent another ding later on.” <span class="meta">Leah · mtg:100</span></span></div>
+<div class="gt-row" role="row"><strong>F4</strong><span>The receipt goes to Leah's inbox, so it isn't in hand when Ashley buys.</span><span><span class="tag">money truth</span></span><span class="q">“could I add the receipt like a second attachment? … Later?” <span class="meta">Ashley · mtg:174–178</span></span></div>
+<div class="gt-row" role="row"><strong>F5</strong><span>Two Rejuvenation pieces, one checkout, separate ship dates.</span><span><span class="tag">new shape</span></span><span class="q">“I think it'd be nice to be able to group your orders.” <span class="meta">Leah · mtg:462</span></span></div>
+<div class="gt-row" role="row"><strong>F6</strong><span>Freight is billed to the client, maybe with about 10% on top.</span><span><span class="tag">money truth</span></span><span class="q">“if I could mark the freight up 10%… I don't want to be greedy.” <span class="meta">Leah · mtg:307–308</span></span></div>
+<div class="gt-row" role="row"><strong>F7</strong><span>A place made outside the job showed on every job.</span><span><span class="tag">exists, not found</span></span><span class="q">“I forgot to do that with my den.” <span class="meta">Kody · mtg:259</span></span></div>
+<div class="gt-row" role="row"><strong>F8</strong><span>Curtain rings, screws and paint pass through at cost, with no approve-or-deny.</span><span><span class="tag">exists, not found</span></span><span class="q">“I'm not going to be like 73.97 for the gallon of paint, approve or deny.” <span class="meta">Leah · mtg:470</span></span></div>
+<div class="gt-row" role="row"><strong>F9</strong><span>The ETA as a benchmark.</span><span><span class="tag tk">keep</span></span><span class="q">“I think that's a nice benchmark.” <span class="meta">Leah · mtg:454</span></span></div>
+<div class="gt-row" role="row"><strong>F10</strong><span>The wallpaper's Order opened with no quote. That's right for a web buy.</span><span><span class="tag">exists, not found</span></span><span class="q">“I was able to click that order without getting a quote.” <span class="meta">Kody · mtg:199</span></span></div>
+<div class="gt-row" role="row"><strong>F11</strong><span>$21… typed for a $23,123.19 check. Ashley caught it.</span><span><span class="tag">money truth</span></span><span class="q">“You have 21, and I think it's supposed to be 23.” <span class="meta">Ashley · mtg:222</span></span></div>
+<div class="gt-row" role="row"><strong>F12</strong><span>Release by phone, the payment record, receiving, ship-to.</span><span><span class="tag tk">keep</span></span><span class="q">“That's super nice.” <span class="meta">Leah · mtg:151</span></span></div>
+<div class="gt-row parked" role="row"><strong>P1</strong><span>A job mailbox that takes in receipts and tracking.</span><span><span class="tag">parked</span></span><span class="q">“let's not worry about automation.” <span class="meta">Kody · mtg:172</span></span></div>
+<div class="gt-row parked" role="row"><strong>P2</strong><span>More lines, more bold, highlights. Goes to the redesign review.</span><span><span class="tag">parked</span></span><span class="q">“just some highlights.” <span class="meta">Leah · mtg:511–513</span></span></div>
+</div>
+<p class="note">Source: <code>transcript/findings.md</code>; how each works today: <code>transcript/as-built.md</code> §1–9. In the transcript Leah is labelled "Speaker 2"; the receipt lines (mtg:157–178) are Ashley's, as the findings record.</p>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-3">Next sheet ↓</a></footer></section>
+
+<!-- 3 -->
+<section class="sheet" id="sheet-3" aria-labelledby="t3"><header class="sheet-head"><p class="meta"><span>Keep · F9, F12 · R-15</span><span>03</span></p><h2 id="t3">Keep what drew “that's super nice”</h2><p class="lede">These stay as they are. Only one label changes, and that's R-06.</p></header>
+<div class="grid-table rt" role="table" aria-label="What we keep">
+<div class="gt-row gt-head" role="row"><span role="columnheader">Keep</span><span role="columnheader">They said</span><span role="columnheader">Today</span></div>
+<div class="gt-row" role="row"><span><strong>Mark the paper and keep it on file</strong> when you order on a site or by phone</span><span><span class="cell-label">They said</span>“you can just do this release by phone or portal, and then it keeps that on file.” Leah: “That's nice.” <span class="meta">mtg:144–147</span></span><span><span class="cell-label">Today</span><code>order-paper/index.tsx:1261</code></span></div>
+<div class="gt-row" role="row"><span><strong>Record the payment</strong> with a reference and a receipt</span><span><span class="cell-label">They said</span>“That's super nice.” <span class="meta">Leah · mtg:151</span></span><span><span class="cell-label">Today</span><code>record-payment.tsx:378-384</code></span></div>
+<div class="gt-row" role="row"><span><strong>Ship-to with a door into Destinations</strong>, dock and liftgate on the place</span><span><span class="cell-label">They said</span>“That's nice.” <span class="meta">Leah · mtg:137</span></span><span><span class="cell-label">Today</span><code>ship-to-choice.tsx:231</code></span></div>
+<div class="gt-row" role="row"><span><strong>The ETA as a benchmark</strong>, editable, with its history</span><span><span class="cell-label">They said</span>“I think that's a nice benchmark to know that that's about right.” <span class="meta">Leah · mtg:454</span></span><span><span class="cell-label">Today</span><code>movement-cell.tsx:256-285</code></span></div>
+<div class="gt-row" role="row"><span><strong>Field-app receiving</strong> with several photos and a claim</span><span><span class="cell-label">They said</span>“That's awesome.” <span class="meta">Leah · mtg:194</span></span><span><span class="cell-label">Today</span>screens 26–29 (390)</span></div>
+</div>
+<div class="shots three-up">
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: the paper's foot"><img src="{{IMG:07-paper-bottom-actions-1440.jpg}}" alt="Local walk screenshot: the order paper's foot with Save, Released by phone or portal, and Bill the client first" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>The paper's foot: “Released by phone or portal — mark as sent”.</p><small>07-paper-bottom-actions-1440.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: the record form's receipt"><img src="{{IMG:38-purchase-record-form-1440.jpg}}" alt="Local walk screenshot: the purchase record form with one Receipt file field" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>A buy recorded with its receipt. The maker payment form takes one receipt the same way.</p><small>38-purchase-record-form-1440.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: ship-to on the paper"><img src="{{IMG:32-fabric-paper-ship-to-workroom-1440.jpg}}" alt="Local walk screenshot: Ship to choices on the order paper, seeded test data, addresses redacted" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22 · not production</span><p>Ship-to on the paper, before US-51's job Destinations. Seeded test data; addresses redacted.</p><small>32-fabric-paper-ship-to-workroom-1440.png</small></figcaption></figure>
+</div>
+<div class="shots four">
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: phone inspection drawer"><img src="{{IMG:26-phone-inspection-drawer-390.jpg}}" alt="Local walk screenshot at phone width: the receiving inspection drawer" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk · 390</span><p>Receiving at the door.</p><small>26-phone-inspection-drawer-390.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: marked damaged"><img src="{{IMG:27-phone-inspection-damaged-390.jpg}}" alt="Local walk screenshot at phone width: an item marked damaged" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk · 390</span><p>Marked damaged.</p><small>27-phone-inspection-damaged-390.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: photo attached"><img src="{{IMG:28-phone-inspection-photo-attached-390.jpg}}" alt="Local walk screenshot at phone width: a photo attached to the inspection" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk · 390</span><p>A photo attached. Upload used a local stub; a real phone camera is unverified.</p><small>28-phone-inspection-photo-attached-390.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: after the damage was logged"><img src="{{IMG:29-phone-after-damage-logged-390.jpg}}" alt="Local walk screenshot at phone width: the line after damage was logged" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk · 390</span><p>The claim is on the line.</p><small>29-phone-after-damage-logged-390.png</small></figcaption></figure>
+</div>
+<p class="note">No client approve-or-deny for pass-through expenses also stays (mtg:470). The V26 rulings F-01 to F-09 stand.</p>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-4">Next sheet ↓</a></footer></section>
+
+<!-- 4 -->
+<section class="sheet" id="sheet-4" aria-labelledby="t4"><header class="sheet-head"><p class="meta"><span>The spine · Q-06</span><span>04</span></p><h2 id="t4">A web checkout is a paper marked placed</h2><p class="lede">Only the paper carries a ship-to, riders, an ETA and per-piece shipments. So a web checkout of a piece that ships goes through it, and grouping needs no new object.</p></header>
+<div class="lane-wrap" role="table" aria-label="The web-checkout buy as proposed, in four lanes">
+<div class="lane-row lh" role="row"><div role="columnheader">Step</div><div role="columnheader">Studio · Leah or Ashley</div><div role="columnheader">Vendor site · on Leah's login</div><div role="columnheader">Patina · The Document</div><div role="columnheader">Client billing</div></div>
+<div class="lane-row" role="row"><div>0 · clear to buy</div><div><span class="ln">Studio</span>Banks the client's check.</div><div></div><div><span class="ln">Patina</span>Next row: “Waiting on the client's deposit (A1) · Record the payment →”. The payment says “A1's deposit is clear.” Order appears in place. <span class="rid">R-01 R-02</span></div><div><span class="ln">Client billing</span>$23,123.19 recorded.</div></div>
+<div class="lane-row" role="row"><div>1 · open the paper</div><div><span class="ln">Studio</span>“2 ready from Rejuvenation · Order together →”</div><div></div><div><span class="ln">Patina</span>One paper per maker and job (Order all, reused). Ship-to starts with this job. Named fee riders. “No quote on file… the checkout total is the price.” <span class="rid">R-12 R-03 R-07 R-05</span></div><div></div></div>
+<div class="lane-row" role="row"><div>2 · check out</div><div><span class="ln">Studio</span>Cart, ship to the Harchess home, pay on the studio card.</div><div><span class="ln">Vendor site</span>Order number, confirmation page, email to Leah's inbox.</div><div></div><div></div></div>
+<div class="lane-row" role="row"><div>3 · mark placed</div><div><span class="ln">Studio</span>“Ordered on their site or by phone — mark as placed”</div><div></div><div><span class="ln">Patina</span>Proposed new review before marking placed (Q-07). Today mark-as-sent records directly. Nothing is sent. <span class="rid">R-06</span></div><div></div></div>
+<div class="lane-row" role="row"><div>4 · money out</div><div><span class="ln">Studio</span>One payment for the checkout, a screenshot or nothing.</div><div></div><div><span class="ln">Patina</span>Paid vs the paper: “Where did it go?” Receipt still owed, quietly. ETA “for both pieces on this order”. <span class="rid">R-08 R-09 R-14 · R-13 next</span></div><div><span class="ln">Client billing</span>The client's price does not move. The line is flagged (Q-01).</div></div>
+<div class="lane-row" role="row"><div>5 · bill</div><div></div><div></div><div><span class="ln">Patina</span>“Bill N unbilled riders” (reused). Cost plus says what it does. <span class="rid">R-11</span></div><div><span class="ln">Client billing</span>Delivery at cost, or at the job's freight markup (Q-05, R-16).</div></div>
+<div class="lane-row" role="row"><div>6 · paper later</div><div><span class="ln">Studio</span>The forwarded email or PDF.</div><div></div><div><span class="ln">Patina</span>“+ Add a receipt” on the money record; owed clears. <span class="rid">R-09</span></div><div></div></div>
+<div class="lane-row" role="row"><div>7 · fee later</div><div><span class="ln">Studio</span>The courier's “ding” arrives.</div><div><span class="ln">Vendor site</span>Possible fee; type, rate and payee await the bill.</div><div><span class="ln">Patina</span>Today payment and Actual are separate writes. Linking payment to this fee’s Actual is new (R-07). <span class="rid">R-07</span></div><div><span class="ln">Client billing</span>The fee joins unbilled riders.</div></div>
+<div class="lane-row" role="row"><div>8 · ships</div><div></div><div><span class="ln">Vendor site</span>The sconce ships first.</div><div><span class="ln">Patina</span>Record dispatch, “Pieces on this shipment · 1 of 1” (reused). The rod keeps the order ETA. <span class="rid">R-14</span></div><div></div></div>
+<div class="lane-row" role="row"><div>9 · arrives</div><div><span class="ln">Studio</span>Field app at the site: photo, good or damaged, claim. Kept as is.</div><div></div><div></div><div></div></div>
+<div class="lane-row" role="row"><div>10 · extras</div><div><span class="ln">Studio</span>Curtain rings, paint.</div><div></div><div><span class="ln">Patina</span>Add items → “An expense to pass through” (reused form, preset). <span class="rid">R-04</span></div><div><span class="ln">Client billing</span>“Bill N unbilled purchases” at final billing, at cost.</div></div>
+</div>
+<div class="cols even"><div class="stack today"><p class="meta">Today · why the paper</p><ul class="anchors"><li><code>movement-cell.tsx:216</code> · the ETA field needs a PO; without one it doesn't save.</li><li><code>00704_po_cost_lines_shipments.sql:56-59</code> · riders sit on the order.</li><li><code>00704:112-124, 158-163</code> · shipments and their per-piece quantities hang off the PO.</li><li><code>00703_studio_purchases.sql:119-122</code> · a recorded purchase covers at most one line.</li></ul></div>
+<div class="stack"><p class="meta">Off this lane, by design</p><p>A piece the studio walked out with, a find, or a pass-through cost goes through <strong>Bought it already</strong>. A piece that ships to a destination goes through the paper. That's ruling Q-06, recommended A.</p><p class="note">Settled in V26 and not reopened: one ship-to per order (F-05), one review before every Send (F-06), tracking stays manual (F-07).</p></div></div>
+<div class="vt"><span class="meta">Vision test</span><span>The Document · the minute after “Pay now” · margin on furniture sold · the studio won't notice Patina: one paper per checkout, nothing new to learn.</span></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-5">Next sheet ↓</a></footer></section>
+
+<!-- 5 · MOCKUP -->
+<section class="sheet" id="sheet-5" aria-labelledby="t5"><header class="sheet-head"><p class="meta"><span>The walk · proposal, clickable · 14 frames</span><span>05</span></p><h2 id="t5">Walk it: the Harchess buys, proposed</h2><p class="lede">One continuous walk in four acts. Click the act outlined in clay to move on, or use the stepper. The meeting's figures are real; everything else reads $— or is marked example.</p></header>
+<div class="mock" id="mock">
+<div class="mock-bar"><span class="mock-flag">Proposal — not built</span><div class="acts-nav" role="group" aria-label="Acts"><button type="button" data-act-jump="1">Act 1 · Clear to buy</button><button type="button" data-act-jump="4">Act 2 · One checkout</button><button type="button" data-act-jump="9">Act 3 · Money that didn't match</button><button type="button" data-act-jump="12">Act 4 · Afterwards</button></div><label class="act-select">Act <select id="m-act-select"><option value="1">1 · Clear to buy</option><option value="4">2 · One checkout</option><option value="9">3 · Money that didn’t match</option><option value="12">4 · Afterwards</option></select></label><div class="stepper"><button type="button" id="m-back">← Back</button><span class="frame-count num" id="m-count" aria-live="polite">Frame 01 / 14</span><button type="button" id="m-next">Next frame →</button><button type="button" id="m-restart">Start again</button></div></div>
+<div class="mock-cap"><div class="stack"><p class="meta" id="m-r">R-01</p><h3 id="m-title">Frame title</h3><p class="cap-act" id="m-act">The one act</p></div><div class="widths" id="m-widths" role="group" aria-label="Drawing width"><span class="meta">Width</span><button type="button" data-w="desk" aria-pressed="true">1440</button><button type="button" data-w="phone" aria-pressed="false">390</button></div></div>
+<div class="mock-stage"><div class="surface" id="m-surface">
+
+<!-- F1 -->
+<div class="frame" data-frame="1" data-act-n="1" data-w="desk" data-m390="1" data-r="R-01 · F1" data-title="Pieces &amp; purchasing on the Harchess job. The deposit holds the Rejuvenation pair, and the Next row says so." data-act="Record the payment →"><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span class="on">Pieces &amp; purchasing</span><span>Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">The Harchess job</span><span class="dm">Pieces</span></div><div class="col">
+<div class="stack" style="gap:8px"><p class="dm">Pieces &amp; purchasing · the Harchess job</p><div class="dline"><p class="dk">2 pieces approved and authorized · waiting on the deposit (A1)</p><button type="button" class="dact hot" data-go="2">Record the payment →</button></div></div>
+<div class="drow"><div class="dline"><p class="dname">Stanton adjustable drapery rod</p><span class="dm">Approved · authorized</span></div><p class="dsub">Rejuvenation · Room — · $—</p>
+<div class="dnext"><span class="dm">Next</span><div><p class="dk">Waiting on the client's deposit (A1) · $23,123.19 due</p><p class="dsub">Order opens as soon as it's recorded.</p></div><button type="button" class="dact" data-go="2">Record the payment →</button></div></div>
+<div class="drow"><div class="dline"><p class="dname">Eden swing arm sconce</p><span class="dm">Approved · authorized</span></div><p class="dsub">Rejuvenation · Room — · $—</p>
+<div class="dnext"><span class="dm">Next</span><p class="dsub">Same reason · waiting on the client's deposit (A1)</p><span></span></div></div>
+<p class="dnote">Today this row isn't drawn at all; the reason sits in an 11px list inside the order cell.</p>
+</div></div></div></div>
+
+<!-- F2 -->
+<div class="frame" data-frame="2" data-act-n="1" data-w="desk" data-r="R-02 · F11" data-title="The client payment, typed short, then corrected." data-act="Use $23,123.19, then Record the payment" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span>Pieces &amp; purchasing</span><span class="on">Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">The Harchess job</span><span class="dm">Money</span></div><div class="col">
+<div class="dpaper"><div class="dpaper-head"><p class="dm">Record a client payment · A1</p><p class="dm">Balance $23,123.19</p></div>
+<div class="dfields"><label class="dfield"><span class="dm">Received on</span><input class="dinput" id="m2-date" value="23 Oct" readonly></label><label class="dfield"><span class="dm">How</span><input class="dinput" id="m2-how" value="Check" readonly></label><label class="dfield"><span class="dm">Amount ($)</span><input class="dinput num" id="m2-amt" inputmode="decimal" value="21,123.19"></label></div>
+<div id="m2-msg" class="dflag" aria-live="polite"></div>
+<div class="dsplit"><button type="button" class="dbtn" id="m2-record">Record the payment</button><span class="hint" id="m2-hint"></span></div>
+<p class="dnote">Pre-filled at the balance; typed short here to show the sentence. Partials stay allowed. ($21,123.19 is illustrative; the transcript records only “21”.)</p>
+</div></div></div></div></div>
+
+<!-- F3 -->
+<div class="frame" data-frame="3" data-act-n="1" data-w="desk" data-r="R-01 · R-12 · F1, F5" data-title="Order is back in place without a refresh, and the head offers the pair." data-act="2 ready from Rejuvenation · Order together →" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span class="on">Pieces &amp; purchasing</span><span>Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">The Harchess job</span><span class="dm">Pieces</span></div><div class="col">
+<p class="done-note">Payment recorded · $23,123.19 · A1's deposit is clear.</p>
+<div class="stack" style="gap:6px"><p class="dm">Pieces &amp; purchasing · the Harchess job</p><div class="dline"><p class="dk">2 ready from Rejuvenation</p><button type="button" class="dact hot" data-go="4">Order together →</button></div><p class="dsub">One paper for both. Nothing is sent until you choose how.</p></div>
+<div class="drow"><div class="dline"><p class="dname">Stanton adjustable drapery rod</p><span class="dm">Ready to order</span></div><p class="dsub">Rejuvenation · Room — · $—</p><div class="dnext"><span class="dm">Next</span><button type="button" class="dact" data-go="4">Order</button><span></span></div></div>
+<div class="drow"><div class="dline"><p class="dname">Eden swing arm sconce</p><span class="dm">Ready to order</span></div><p class="dsub">Rejuvenation · Room — · $—</p><div class="dnext"><span class="dm">Next</span><button type="button" class="dact" data-go="4">Order</button><span></span></div></div>
+</div></div></div></div>
+
+<!-- F4 -->
+<div class="frame" data-frame="4" data-act-n="2" data-w="desk" data-r="R-03 · R-05 · R-12 · F7, F10" data-title="One paper, two lines. Ship-to starts with this job." data-act="Ship to the Harchess home" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span class="on">Pieces &amp; purchasing</span><span>Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">The order paper</span><span class="dm">Rejuvenation</span></div><div class="col">
+<div class="dpaper"><div class="dpaper-head"><p class="dm">The order paper · Rejuvenation</p><p class="dm">Purchase order · numbered at send</p></div>
+<div class="dline"><div><p class="dname">The studio</p><p class="dm">The Harchess job</p></div><p class="dk">to Rejuvenation</p></div>
+<fieldset class="dgroup" style="border:0;padding:0;margin:0"><legend class="dm" style="padding:0;margin-bottom:6px">Ship to</legend>
+<p class="dm" style="color:var(--m-mocha)">On this job</p>
+<label class="dopt hot" id="m4-home"><input type="radio" name="m4-ship" value="home"><span><span class="dk">The Harchess home</span><br><span class="dsub">Private home · no dock · needs a liftgate</span></span></label>
+<p class="dm" style="color:var(--m-mocha);margin-top:8px">Studio places</p>
+<label class="dopt"><input type="radio" name="m4-ship" value="studio"><span><span class="dk">The studio</span> <span class="dex">example</span></span></label>
+<label class="dopt"><input type="radio" name="m4-ship" value="recv"><span><span class="dk">Receiving warehouse</span> <span class="dex">example</span><br><span class="dsub">Default receiver</span></span></label>
+<button type="button" class="dact" id="m4-fold" aria-expanded="false">A home on another job…</button>
+<p class="dnote" id="m4-fold-note" hidden>Folded: private homes on other jobs. Kody's den isn't listed. It's a home on no job, so the Destinations sheet names it once.</p>
+</fieldset>
+<div class="grid-like"><div class="drow"><div class="dline"><p><span class="dm">1</span> &nbsp;<span class="dk">Stanton adjustable drapery rod</span></p><p class="num">×1 &nbsp;$—</p></div></div><div class="drow"><div class="dline"><p><span class="dm">2</span> &nbsp;<span class="dk">Eden swing arm sconce</span></p><p class="num">×1 &nbsp;$—</p></div></div></div>
+<p class="dnote">No quote on file. For a web checkout, the checkout total is the price.</p>
+<div class="dsplit"><button type="button" class="dbtn" id="m4-go" data-go="5" disabled>Continue on the paper →</button><span class="hint" id="m4-hint">Choose where it ships.</span></div>
+</div></div></div></div></div>
+
+<!-- F5 -->
+<div class="frame" data-frame="5" data-act-n="2" data-w="desk" data-r="R-07 · R-11 · F3, F6" data-title="One Freight rider on the order, and cost plus says what it does." data-act="+ Freight, crating, receiving, fees…" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span class="on">Pieces &amp; purchasing</span><span>Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">The order paper</span><span class="dm">Rejuvenation</span></div><div class="col">
+<div class="dpaper"><div class="dpaper-head"><p class="dm">The order paper · Rejuvenation</p><p class="dm" id="m5-ship">Choose a destination in frame 4</p></div>
+<div><div class="drow"><div class="dline"><p><span class="dm">1</span> &nbsp;<span class="dk">Stanton adjustable drapery rod</span></p><p class="num">×1 &nbsp;$—</p></div></div><div class="drow"><div class="dline"><p><span class="dm">2</span> &nbsp;<span class="dk">Eden swing arm sconce</span></p><p class="num">×1 &nbsp;$—</p></div></div></div>
+<div id="m5-rider" class="dflag" hidden><div class="dline"><div><p class="dk">Freight</p><p class="dsub">owed to Rejuvenation · $— estimate</p></div><div class="dsplit"><label class="dsplit" style="gap:6px;min-height:44px"><input type="checkbox" id="m5-bill" checked style="width:18px;height:18px;accent-color:var(--m-char)"> Bill the client</label><select class="dinput" id="m5-rule" style="width:auto"><option value="at_cost">at cost</option><option value="cost_plus" selected>cost plus</option></select></div></div><p class="dnote" id="m5-note">Set the billed figure when you bill. Patina doesn't add a percent yet.</p></div>
+<div class="stack" style="gap:6px"><button type="button" class="dact hot" id="m5-add" aria-expanded="false">+ Freight, crating, receiving, fees…</button>
+<div id="m5-picker" class="dcode" hidden><span class="dm">Rider · choose a kind</span>
+<div class="dsplit" style="margin-top:8px"><button type="button" class="dbtn2 hot" id="m5-freight">Freight</button><span class="dsub">Crating · Liftgate · Residential delivery · White glove · Receiving · Storage · Handling · Restocking</span></div>
+<p class="dsub" style="margin-top:8px">New: <span class="dk">Import tariff</span> · <span class="dk">Processing fee</span> · <span class="dk">Other (name it)</span></p></div></div>
+<div class="dsplit"><button type="button" class="dbtn" id="m5-go" data-go="6" disabled>Continue to the foot of the paper →</button></div>
+</div></div></div></div></div>
+
+<!-- F6 -->
+<div class="frame" data-frame="6" data-act-n="2" data-w="desk" data-r="R-06 · F12" data-title="The paper's foot, after the checkout on Rejuvenation's site." data-act="Ordered on their site or by phone — mark as placed" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span class="on">Pieces &amp; purchasing</span><span>Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">The order paper</span><span class="dm">Rejuvenation</span></div><div class="col">
+<div class="dpaper" id="m6-foot"><div class="dpaper-head"><p class="dm">The order paper · Rejuvenation</p><p class="dm">2 pieces · 1 rider</p></div>
+<div class="dline"><p class="dm">Total</p><p class="dk num">$—</p></div>
+<p class="dnote">Client payment · A1 deposit clear</p>
+<div class="dsplit"><button type="button" class="dbtn2" disabled>Send to Rejuvenation · $—</button></div>
+<div class="dsplit"><button type="button" class="dact">Save, don't send</button><button type="button" class="dact hot" id="m6-mark">Ordered on their site or by phone — mark as placed</button><button type="button" class="dact">Bill the client first →</button></div>
+<p class="dnote">Today: “Released by phone or portal — mark as sent” records directly, without review. This review is new, pending Q-07; V26 F-06 covers Send only.</p></div>
+<div class="dpaper" id="m6-review" hidden><div class="dpaper-head"><p class="dm">Review · before it's recorded</p><p class="dm">Proposed new review · Q-07</p></div>
+<p class="dk">Nothing is sent to Rejuvenation. This records an order you placed.</p>
+<ul class="plain" style="font-size:14px"><li>2 pieces · Stanton adjustable drapery rod, Eden swing arm sconce</li><li id="m6-ship">Choose a destination in frame 4</li><li>Freight · owed to Rejuvenation · bill the client</li></ul>
+<div class="dsplit"><button type="button" class="dbtn hot" data-go="7">Mark as placed</button><button type="button" class="dact" id="m6-back">Back to the paper</button></div></div>
+</div></div></div></div>
+
+<!-- F7 -->
+<div class="frame" data-frame="7" data-act-n="2" data-w="desk" data-r="R-09 · R-14 · R-13 next · F4, F5, F9" data-title="Money out on the order: one payment, a screenshot, the ETA." data-act="Record the payment" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span class="on">Pieces &amp; purchasing</span><span>Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">Rejuvenation</span><span class="dm">2 pieces</span></div><div class="col">
+<div class="stack" style="gap:4px"><p class="dm">Rejuvenation · the Harchess job · 2 pieces</p><p class="dk">Placed on their site or by phone · 24 Oct</p></div>
+<div class="dsplit" role="tablist" aria-label="Now or next"><button type="button" class="dbtn2" role="tab" id="m7-tnow" aria-selected="true" style="border-color:var(--m-char)">NOW-next · Record a payment</button><button type="button" class="dbtn2" role="tab" id="m7-tnext" aria-selected="false">Next · Record the checkout (R-13)</button></div>
+<div class="dpaper" id="m7-now"><div class="dfields"><label class="dfield"><span class="dm">Paid on</span><input class="dinput" value="24 Oct" readonly></label><label class="dfield"><span class="dm">Amount</span><input class="dinput num" value="$—" readonly></label><label class="dfield"><span class="dm">How</span><input class="dinput" value="Studio card ••—" readonly></label></div>
+<label class="dfield"><span class="dm">Reference · their order number</span><input class="dinput" value="RJ-—" readonly></label>
+<div class="dfield"><span class="dm">Receipts — add now or later</span><div class="dfile">checkout-screenshot.png <span class="dsub">attached</span></div></div>
+<div class="dfield"><span class="dm">Movement</span><p class="dk">Arrives ~ mid-December <span class="dex">example</span> · for both pieces on this order</p></div>
+<div class="dsplit"><button type="button" class="dbtn hot" data-go="8">Record the payment</button><span class="hint">Recorded once, on the order. Both lines read it.</span></div></div>
+<div class="dpaper" id="m7-next" hidden><p class="dm">Rejuvenation · the Harchess job · 2 pieces · Record the checkout</p>
+<div class="dfields"><label class="dfield"><span class="dm">Their order number</span><input class="dinput" value="RJ-—" readonly></label><label class="dfield"><span class="dm">Card charge</span><input class="dinput num" value="$—" readonly></label><label class="dfield"><span class="dm">With</span><input class="dinput" value="Studio card ••—" readonly></label></div>
+<div><div class="drow"><div class="dline"><span>Stanton adjustable drapery rod</span><span class="num">$— <span class="dsub">from the paper</span></span></div></div><div class="drow"><div class="dline"><span>Eden swing arm sconce</span><span class="num">$— <span class="dsub">from the paper</span></span></div></div><div class="drow"><div class="dline"><span>Freight</span><span class="num">$— <span class="dsub">fills the order's Freight rider</span></span></div></div><div class="drow"><div class="dline"><span>Fees</span><span class="dsub">+ Import tariff, processing fee…</span></div></div><div class="drow"><div class="dline"><span>Something else on this charge</span><span class="dsub">+ an expense</span></div></div></div>
+<div class="dfield"><span class="dm">Receipts</span><div class="dfile">checkout-screenshot.png <span class="dsub">or leave it owed</span></div></div>
+<p class="dk">Arrives about <span class="dex">date</span> for both pieces on this order</p>
+<div class="dsplit"><button type="button" class="dbtn" data-go="8">Record the checkout</button><span class="hint">One payment, one receipt, both pieces.</span></div></div>
+</div></div></div></div>
+
+<!-- F8 -->
+<div class="frame" data-frame="8" data-act-n="2" data-w="phone" data-m390="1" data-r="R-09 · F4" data-title="A week later, on the phone: Ashley adds the PDF Leah forwarded." data-act="+ Add a receipt" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Pieces &amp; purchasing</span><span class="on">Project financials</span></div></aside><div><div class="ph-bar"><span class="dm">The Harchess job</span><span class="dm">Money out</span></div><div class="col">
+<div class="dpaper"><p class="dname">Rejuvenation order · 2 pieces</p><p class="dk num">Paid $— · Studio card ••—</p><p class="dsub">24 Oct · Ashley</p>
+<div class="dfield"><span class="dm">Receipts</span><div class="stack" style="gap:6px" id="m8-files"><div class="dfile">checkout-screenshot.png</div></div></div>
+<button type="button" class="dbtn2 hot" id="m8-add">+ Add a receipt</button>
+<p class="done-note" id="m8-done" hidden>Added. The payment didn't change.</p></div>
+<div><div class="drow"><p class="dk">Stanton adjustable drapery rod</p><p class="dsub">Receipt · on the Rejuvenation order</p></div><div class="drow"><p class="dk">Eden swing arm sconce</p><p class="dsub">Receipt · on the Rejuvenation order</p></div></div>
+</div></div></div></div>
+
+<!-- F9 -->
+<div class="frame" data-frame="9" data-act-n="3" data-w="desk" data-r="R-08 · F2" data-title="The Sierra bed: first correct white glove $529.20 → $299; compare with the paper as it should have read." data-act="The bed cost more" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span class="on">Pieces &amp; purchasing</span><span>Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">Sierra bed</span><span class="dm">Money out</span></div><div class="col">
+<div class="dpaper"><div class="dpaper-head"><p class="dm">Money out · Sierra bed</p><p class="dm">PO —</p></div>
+<div class="dfields"><label class="dfield"><span class="dm">Paid on</span><input class="dinput" value="23 Oct" readonly></label><label class="dfield"><span class="dm">Amount</span><input class="dinput num" value="$3,978.20" readonly></label><label class="dfield"><span class="dm">How</span><input class="dinput" value="Studio card ••—" readonly></label></div>
+<p class="dnote">First correct the inflated white-glove rider: $529.20 → $299.00. The saved estimate plus inflated rider already equalled $3,978.20; it showed no difference.</p><p class="dk">As the paper should have read: $3,748.00 (bed $3,449.00 + white glove $299.00). The $3,978.20 charge is $230.20 more than this reconstructed baseline. Where did it go?</p>
+<div role="radiogroup" aria-label="Where did it go?">
+<label class="dchoice hot" id="m9-bedlab"><input type="radio" name="m9" value="bed"><span class="dk">The bed cost more</span><span class="dsub num">bed $3,449.00 → $3,679.20</span></label>
+<label class="dchoice"><input type="radio" name="m9" value="fee"><span class="dk">A fee or shipping not on the paper</span><span class="dsub">adds a rider to the order (R-07)</span></label>
+<label class="dchoice"><input type="radio" name="m9" value="else"><span class="dk">Something else on this charge</span><span class="dsub">records it as an expense (R-04) and takes it off this payment</span></label>
+<label class="dchoice"><input type="radio" name="m9" value="unsure"><span class="dk">Not sure — leave it flagged</span><span class="dsub">records the payment; the difference waits</span></label>
+</div>
+<label class="dfield"><span class="dm">Why, in a few words</span><input class="dinput" id="m9-why" placeholder="Example only: possible sale change"></label>
+<p class="dsub">Records $3,978.20 paid to the maker. <span class="dk">The client's price does not change.</span></p>
+<div class="dsplit"><button type="button" class="dbtn" id="m9-go" data-go="10" disabled>Record the payment · $3,978.20</button><span class="hint" id="m9-hint">Nothing is preselected.</span></div>
+</div></div></div></div></div>
+
+<!-- F10 -->
+<div class="frame" data-frame="10" data-act-n="3" data-w="desk" data-r="R-08 · Q-01 · F2" data-title="The bed's line after recording: flagged, showing what was chosen and what it changes." data-act="None chosen. The flag waits (ruling Q-01)." hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span class="on">Pieces &amp; purchasing</span><span>Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">The Harchess job</span><span class="dm">Pieces</span></div><div class="col">
+<div class="drow"><div class="dline"><p class="dname">Sierra bed</p><span class="dm">Ordered · paid</span></div><p class="dsub">Room — · placed on their site or by phone · 23 Oct</p></div>
+<div class="dflag" ><p class="dk num" id="m10-cost">Sierra bed · cost changed from $3,449.00 to $3,679.20</p><p class="dsub" id="m10-reason">Example reason: possible sale change · recorded by Leah, 23 Oct · margin on this piece down $230.20</p>
+<div class="dsplit" data-m10-pricing><button type="button" class="dbtn2" data-q01="keep">Keep the client's price</button><span class="dsub">the studio absorbs $230.20</span></div>
+<div class="dsplit" data-m10-pricing><button type="button" class="dbtn2" data-q01="ask">Ask the client for it</button><span class="dsub">opens Record a change → On the agreement, +$230.20 on the bed filled in</span></div>
+<p class="done-note" id="m10-note" hidden>Who chooses is ruling Q-01. The walk leaves it flagged: the buyer records, and the owner decides.</p></div>
+<div class="drow"><div class="dline"><p><span class="dk">White glove</span> · owed to the maker · bill the client</p><p class="dk num">$299.00</p></div><p class="dnote">In the meeting the $230.20 went in here, and this rider read $529.20.</p></div>
+</div></div></div></div>
+
+<!-- F11 -->
+<div class="frame" data-frame="11" data-act-n="3" data-w="desk" data-r="R-07 · F3" data-title="The wallpaper: a possible fee, details unconfirmed until the bill arrives." data-act="Record payment to the courier" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span class="on">Pieces &amp; purchasing</span><span>Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">The order paper</span><span class="dm">Wallpaper</span></div><div class="col">
+<div class="dpaper"><div class="dpaper-head"><p class="dm">The order paper · the wallpaper's maker</p><p class="dm">Placed on their site</p></div>
+<div class="drow"><div class="dline"><p><span class="dm">1</span> &nbsp;<span class="dk">Olaf mural · Misty Blue</span></p><p class="num">$—</p></div><p class="dsub">A whole room, nine-foot ceilings.</p></div>
+<p class="dm">Riders</p>
+<div class="drow" id="m11-fee"><div class="dline"><div><p class="dk">Possible import / processing fee</p><p class="dsub" id="m11-fee-sub">Type, rate, payee and amount unconfirmed · waiting for the vendor's bill</p></div><button type="button" class="dact hot" id="m11-pay">Show a later bill · example</button></div></div>
+<p class="dnote">Leah mentioned import fees; the site said it would cover new customs fees. Kody guessed 3%. This is not two confirmed charges.</p>
+<div class="dflag" id="m11-later" hidden><p class="dm">Weeks later · example bill naming the courier</p><div class="dfields"><label class="dfield"><span class="dm">Paid on</span><input class="dinput" value="—" readonly></label><label class="dfield"><span class="dm">Amount</span><input class="dinput num" value="$—" readonly></label><label class="dfield"><span class="dm">To</span><input class="dinput" value="The courier" readonly></label></div><div class="dsplit"><button type="button" class="dbtn hot" id="m11-rec">Record payment · $—</button><span class="hint">Proposed new linked write: payment plus this fee’s Actual. Today Actual is entered separately.</span></div></div>
+<div class="dsplit" id="m11-bill" hidden><p class="done-note">Example fee paid · $— · Actual linked by the proposal</p><button type="button" class="dact" id="m11-billbtn">Bill 1 unbilled rider →</button></div>
+<p class="dnote" id="m11-billnote" hidden>Opens the bill composer, which exists today. The walk comes back to billing in frame 14.</p>
+</div></div></div></div></div>
+
+<!-- F12 -->
+<div class="frame" data-frame="12" data-act-n="4" data-w="phone" data-m390="1" data-r="R-04 · F8" data-title="At the store on the phone: an expense to pass through, first in Add items." data-act="An expense to pass through, then Record the buy · $—" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span class="on">Pieces &amp; purchasing</span></div></aside><div><div class="ph-bar"><span class="dm">Add to the job</span><span class="dm">The Harchess job</span></div><div class="col">
+<div id="m12-menu" class="stack" style="gap:0">
+<button type="button" class="drow hot" id="m12-exp" style="text-align:left;background:none;border-left:0;border-right:0;cursor:pointer;min-height:44px;font:inherit;color:inherit;width:100%"><span class="dk">An expense to pass through</span><span class="dsub">Rings, screws, paint. Billed to the client at cost at final billing.</span></button>
+<div class="drow"><span class="dk">From the Library</span><span class="dsub">One product you already know.</span></div>
+<div class="drow"><span class="dk">Paste a link</span><span class="dsub">Any page; Patina reads the product off it.</span></div>
+<div class="drow"><span class="dk">A custom piece</span><span class="dsub">Made by a workroom, with or without the client's fabric.</span></div>
+<div class="drow"><span class="dk">Bought it already</span><span class="dsub">Paid for already: a store buy, a lot, an expense or a sample fee.</span></div>
+</div>
+<div id="m12-form" class="dpaper" hidden><p class="dm">An expense to pass through</p>
+<label class="dfield"><span class="dm">What</span><input class="dinput" id="m12-what" value="Curtain rings"></label><span class="dex" style="justify-self:start">Proposed example · the transcript says only that they weren't ordered</span>
+<label class="dfield"><span class="dm">Paid</span><input class="dinput num" value="$—" readonly></label>
+<div class="dfields"><label class="dfield"><span class="dm">Kind</span><input class="dinput" value="Expense" readonly></label><label class="dfield"><span class="dm">For</span><input class="dinput" value="This project" readonly></label><label class="dfield"><span class="dm">Line</span><input class="dinput" value="No line" readonly></label></div>
+<label class="dsplit" style="min-height:44px;gap:8px"><input type="checkbox" checked style="width:18px;height:18px;accent-color:var(--m-char)"> Bill the client, at cost, on its own line</label>
+<div class="dfield"><span class="dm">Receipts — add now or later</span><div class="dfile">none yet · owed quietly</div></div>
+<button type="button" class="dbtn hot" data-go="13">Record the buy · $—</button></div>
+</div></div></div></div>
+
+<!-- F13 -->
+<div class="frame" data-frame="13" data-act-n="4" data-w="phone" data-m390="1" data-r="R-14 · keep · F5, F9, F12" data-title="Field app at the Harchess home: the sconce arrives on its own shipment." data-act="Received — looks good" hidden><div class="shell"><aside class="rail"><p class="dm">Patina Field</p><div class="rail-list"><span class="on">Arriving</span></div></aside><div><div class="ph-bar"><span class="dm">Patina Field</span><span class="dm">The Harchess job</span></div><div class="col">
+<p class="dm">Arriving today</p>
+<div class="dpaper"><p class="dname">Eden swing arm sconce</p><p class="dsub">Rejuvenation · 1 of 1 on this shipment</p>
+<div class="dfile" style="min-height:120px;align-items:center;justify-content:center">Photo 1 · taken at the door</div>
+<div class="stack" id="m13-acts" style="gap:8px"><button type="button" class="dbtn hot" id="m13-good">Received — looks good</button><button type="button" class="dbtn2">Damaged — start a claim</button></div>
+<p class="done-note" id="m13-done" hidden>Received · 1 of 1 · looks good · 1 photo</p></div>
+<div class="drow"><p class="dk">Stanton adjustable drapery rod</p><p class="dsub">Still on its way · ships separately · keeps the order's “Arrives ~ mid-December” <span class="dex">example</span></p></div>
+</div></div></div></div>
+
+<!-- F14 -->
+<div class="frame" data-frame="14" data-act-n="4" data-w="desk" data-r="R-04 · R-07 · R-09 · F3, F4, F8" data-title="Before final billing: what's left to bill, and what paper is still owed." data-act="Bill 2 unbilled →" hidden><div class="shell"><aside class="rail"><p class="dm">The Harchess job</p><div class="rail-list"><span>Client approvals</span><span>Project schedule</span><span class="on">Pieces &amp; purchasing</span><span>Project financials</span><span>Project closeout</span><span>The record</span></div></aside><div><div class="ph-bar"><span class="dm">The Harchess job</span><span class="dm">Money</span></div><div class="col">
+<p class="dm">Pieces &amp; purchasing · money before final billing</p>
+<div><div class="drow"><div class="dline"><p><span class="dk">Expenses to pass through</span> · 1 · <span class="num">$—</span> · billed at final billing</p><span class="dsub">Curtain rings</span></div></div>
+<div class="drow"><div class="dline"><p><span class="dk">1 rider to bill</span> · processing fee on the wallpaper</p><span class="dsub num">$—</span></div></div>
+<div class="drow"><div class="dline"><p><span class="dk">1 receipt owed</span> · Sierra bed payment, 23 Oct <span class="dex">example</span></p><button type="button" class="dact">+ Add a receipt</button></div></div></div>
+<div class="dsplit"><button type="button" class="dbtn hot" id="m14-bill">Bill 2 unbilled →</button><span class="hint">No reminder. The count waits here and in closeout.</span></div>
+<div class="dpaper" id="m14-draft" hidden><div class="dpaper-head"><p class="dm">The bill · draft</p><p class="dm">At cost</p></div>
+<div class="drow"><div class="dline"><span>Curtain rings · pass-through expense</span><span class="num">$—</span></div></div><div class="drow"><div class="dline"><span>Processing fee · wallpaper delivery</span><span class="num">$—</span></div></div>
+<p class="dsub">Nothing goes to the client until you review and send it.</p>
+<div class="dsplit"><p class="done-note">End of the walk.</p><button type="button" class="dbtn2" id="m14-restart">Start again</button></div></div>
+</div></div></div></div>
+
+</div></div>
+<p class="note" style="padding:12px 14px;border-top:1px solid var(--rule)">Drawn on The Document's own tokens; stays light in dark mode, as the product does. Rooms read “Room —” because the job's real rooms aren't in this deck. Card endings read ••—. The client's street address and zip never appear.</p>
+</div>
+<div class="vt"><span class="meta">Covers</span><span>R-01 (1, 3) · R-02 (2) · R-03 (4) · R-04 (12, 14) · R-05 (4) · R-06 (6) · R-07 (5, 11, 14) · R-08 (9, 10) · R-09 (7, 8, 14) · R-11 (5) · R-12 (3) · R-13 next (7) · R-14 (7, 13). R-10 and R-16 are on sheets 13 and 12 only.</span></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-6">Next sheet ↓</a></footer></section>
+
+<!-- 6 · R-01 -->
+<section class="sheet" id="sheet-6" aria-labelledby="t6"><header class="sheet-head"><p class="meta"><span>R-01 · F1 · NOW-next · M</span><span>06</span></p><h2 id="t6">Order says why it's held</h2><p class="lede">“My order button went away” was a deposit gate speaking at 11px. The Next row should say the reason and offer the act that clears it.</p></header>
+<figure class="fq"><blockquote>“I guess I'm confused on this one because my order button went away… I did something wrong.”</blockquote><figcaption>Kody · <span class="meta">F1 · mtg:120, 131</span></figcaption></figure>
+<figure class="fq"><blockquote>“So we couldn't order because she hadn't.” / “We hadn't recorded her payment yet.”</blockquote><figcaption>Kody, then Leah · <span class="meta">F1 · mtg:239–240</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today</p><p>When a selected line can't be ordered, the next act returns nothing, so the whole Next row isn't drawn. The reasons drop into the order cell as a small muted list. After the payment was recorded, Order came back only on refresh (mtg:235).</p><ul class="anchors"><li><code>line-unfold/next-act.ts:87-90</code> · not ready returns <code>null</code></li><li><code>line-unfold.tsx:344</code> · no act, no Next row</li><li><code>line-unfold/order-cell.tsx:132-142</code> · an 11px list; “Before this can be ordered” is only an aria-label</li><li><code>authorization-derivation.ts:388-391</code> · “Authorized — the purchase order opens when the deposit clears (A{n})”, also 11px</li><li><code>authorization-derivation.ts:466-472</code> · the reasons, including “Waiting on the deposit (A{n})”</li></ul></div>
+<div class="draw"><p class="draw-label">Proposed · not built · the Harchess job</p><div class="ds">
+<p class="dm">Section head, once</p><p class="dk">2 pieces approved and authorized · waiting on the deposit (A1) — <span style="text-decoration:underline;text-decoration-color:var(--m-clay);text-underline-offset:4px">Record the payment →</span></p>
+<div class="dnext"><span class="dm">Next</span><div><p class="dk">Waiting on the client's deposit (A1) · $23,123.19 due</p><p class="dsub">Order opens as soon as it's recorded.</p></div><span class="dact">Record the payment →</span></div>
+<p class="dm" style="margin-top:6px">One map, reason to act · further reasons read “+2 more”</p>
+<div><div class="drow"><div class="dline"><span>Waiting on the client's deposit (A{n})</span><span class="dk">Record the payment →</span></div></div><div class="drow"><div class="dline"><span>Waiting on the client's authorization</span><span class="dk">Open the authorization →</span></div></div><div class="drow"><div class="dline"><span>Needs a maker before it can be ordered</span><span class="dk">Choose the maker →</span></div></div><div class="drow"><div class="dline"><span>Needs a client price</span><span class="dk">Set the price →</span></div></div><div class="drow"><div class="dline"><span>Waiting on a decision</span><span class="dk">Open the decision →</span></div></div></div>
+</div></div></div>
+<dl class="flow"><div><dt>What Leah or Ashley sees</dt><dd>The held reason in the Next row, with the amount due.</dd></div><div><dt>What they do</dt><dd>Record the payment →</dd></div><div><dt>What changes</dt><dd>Order appears in place, without a refresh.</dd></div><div><dt>Who acts next</dt><dd>The buyer orders the pair.</dd></div></dl>
+<p class="note">Engineering check, not a design change: confirm the client-payment write refreshes the line's deposit read. The meeting needed a refresh.</p>
+<div class="vt"><span class="meta">Vision test</span><span>The Document · the morning the studio starts buying · margin on furniture sold · nobody wonders whether they broke something.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="1">See it in the walk · frame 1 →</button><button type="button" class="walk-link" data-goto-frame="3">Frame 3, after the payment →</button></div>
+<div class="shots"><figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: a ready line with NEXT Order"><img src="{{IMG:03v-line-unfold-viewport-1440.jpg}}" alt="Local walk screenshot: a ready line unfold showing NEXT Order" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>A ready line on the walk's test job: “NEXT · Order”. When a line isn't ready, this row is not drawn at all.</p><small>03v-line-unfold-viewport-1440.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: the order cell without an act"><img src="{{IMG:30b-chair-buy-cell-1440.jpg}}" alt="Local walk screenshot: a line unfold with the order cell reading Not yet ordered and no Next row in view" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>A line with no Next row in view; the order cell says only “Not yet ordered”. The test job had no deposit gate, so the meeting's held state wasn't captured.</p><small>30b-chair-buy-cell-1440.png</small></figcaption></figure></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-7">Next sheet ↓</a></footer></section>
+
+<!-- 7 · R-02 -->
+<section class="sheet" id="sheet-7" aria-labelledby="t7"><header class="sheet-head"><p class="meta"><span>R-02 · F11 · NOW-next · M</span><span>07</span></p><h2 id="t7">The payment says what it leaves closed</h2><p class="lede">A short entry stays allowed. It should say the gap, and that the gap keeps the deposit gate shut.</p></header>
+<figure class="fq"><blockquote>“I think your amount is off. You have 21, and I think it's supposed to be 23.”</blockquote><figcaption>Ashley · <span class="meta">F11 · mtg:222</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today</p><p>Opening the Folio normally leaves the amount empty with a balance placeholder. The Money “record” entry (landOn=record) opens it with the balance filled (invoice-folio.tsx:274–282; money-region.tsx:317). Make both paths consistent. Only an amount over the balance is flagged. Anything under records as a partial without a word.</p><ul class="anchors"><li><code>accounts/invoice-folio.tsx:1205-1213</code> · balance as placeholder</li><li><code>invoice-folio.tsx:1250-1256</code> · “amount exceeds the remaining balance”</li><li><code>invoice-folio.tsx:606-607</code> · under the balance records as a partial</li></ul><p class="note">There's no walk screen of the Folio payment panel. This sheet uses the drawing only.</p></div>
+<div class="draw"><p class="draw-label">Proposed · not built · two states</p><div class="ds">
+<p class="dm">Typed short · $21,123.19, illustrative</p><div class="dflag"><p><span class="dk">$2,000.00 less than the balance.</span> $2,000.00 stays open, and the deposit on A1 isn't covered, so 2 pieces stay held.</p><span class="dbtn2" style="justify-self:start">Use $23,123.19</span></div>
+<p class="dm">Matches</p><div class="dflag"><p class="dk">Matches the balance. A1's deposit is clear, so 2 pieces can be ordered.</p></div>
+<p class="dnote">Pre-filled at the balance. Partials stay allowed. The transcript records only “21”.</p>
+</div></div></div>
+<dl class="flow"><div><dt>What Leah or Ashley sees</dt><dd>The balance, pre-filled.</dd></div><div><dt>What they do</dt><dd>Type the check's amount, or Use $23,123.19.</dd></div><div><dt>What changes</dt><dd>One sentence says what the amount leaves open, and what it clears.</dd></div><div><dt>Who acts next</dt><dd>The buyer, as Order opens.</dd></div></dl>
+<div class="vt"><span class="meta">Vision test</span><span>The Document, Money · banking the client's check · margin, since it unblocks buying · the second pair of eyes is always there.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="2">See it in the walk · frame 2 →</button></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-8">Next sheet ↓</a></footer></section>
+
+<!-- 8 · R-08 (1/2) -->
+<section class="sheet" id="sheet-8" aria-labelledby="t8"><header class="sheet-head"><p class="meta"><span>R-08 (1 of 2) · F2 · NOW-next · L</span><span>08</span></p><h2 id="t8">The price rose at checkout</h2><p class="lede">The $230.20 went into white glove because there was nowhere honest to put it. Money out should notice, and ask once.</p></header>
+<figure class="fq"><blockquote>“Ooh, that's going to be complicated later to figure out why we did that.” · “I know it says once you change it, it's done. But this is going to happen.”</blockquote><figcaption>Leah · <span class="meta">F2 · mtg:386, 391</span></figcaption></figure>
+<figure class="fq"><blockquote>“I think it's locked in… I'm going to have to change that.”</blockquote><figcaption>Kody · <span class="meta">F2 · mtg:395–396</span></figcaption></figure>
+<div class="grid-table rt" role="table" aria-label="What happened to the Sierra bed">
+<div class="gt-row gt-head" role="row"><span role="columnheader">What happened</span><span role="columnheader">Figure</span><span role="columnheader">Source</span></div>
+<div class="gt-row" role="row"><span>The bed's estimate on the line</span><span class="num"><strong>$3,449.00</strong></span><span class="meta">mtg:369–370</span></div>
+<div class="gt-row" role="row"><span>The bed at checkout; Ashley: “Maybe there was a sale before, and now there's not.”</span><span class="num"><strong>$3,679.20</strong> · +$230.20</span><span class="meta">mtg:357, 359, 371–374</span></div>
+<div class="gt-row" role="row"><span>White glove delivery on the paper</span><span class="num"><strong>$299.00</strong></span><span class="meta">mtg:339</span></div>
+<div class="gt-row" role="row"><span>The rider after the difference was parked in it, billed to the client as delivery</span><span class="num"><strong>$529.20</strong></span><span class="meta">mtg:374–378</span></div>
+<div class="gt-row" role="row"><span>The card charge</span><span class="num"><strong>$3,978.20</strong></span><span class="meta">$3,679.20 + $299.00</span></div>
+</div>
+<div class="cols"><div class="stack today"><p class="meta">Today</p><p>The maker payment pre-fills the order's remainder and never compares the amount with the paper. The line's cost is locked once released, and Record a change has no “it cost more”.</p><ul class="anchors"><li><code>line-unfold/record-payment.tsx:206-208</code> · amount pre-filled, no comparison</li><li><code>00809_us37_trade_pricing_core.sql:375-382</code> · “Released lines change through Record a change.”</li><li><code>line-unfold/change-order.tsx:26-35</code> · Cancel, Credit, Claim, Change the maker, Remedy</li><li><code>00705_po_acknowledgments.sql:52-57</code> · the ack path refuses on an authorized line, or once a payment is recorded</li></ul></div>
+<div class="draw"><p class="draw-label">Proposed · not built · Money out on the Sierra bed</p><div class="ds">
+<div class="dline"><p class="dm">Money out · Sierra bed</p><p class="dm">PO —</p></div>
+<p class="num">Paid on 23 Oct · Amount <span class="dk">$3,978.20</span> · How Studio card ••—</p>
+<p class="dnote">First correct the inflated white-glove rider: $529.20 → $299.00. The saved estimate plus inflated rider already equalled $3,978.20; it showed no difference.</p><p class="dk">As the paper should have read: $3,748.00 (bed $3,449.00 + white glove $299.00). The $3,978.20 charge is $230.20 more than this reconstructed baseline. Where did it go?</p>
+<div><div class="drow"><div class="dline"><span>○ The bed cost more</span><span class="dsub num">bed $3,449.00 → $3,679.20</span></div></div><div class="drow"><div class="dline"><span>○ A fee or shipping not on the paper</span><span class="dsub">adds a rider to the order (R-07)</span></div></div><div class="drow"><div class="dline"><span>○ Something else on this charge</span><span class="dsub">records it as an expense (R-04), off this payment</span></div></div><div class="drow"><div class="dline"><span>○ Not sure — leave it flagged</span><span class="dsub">records the payment; the difference waits</span></div></div></div>
+<p class="dsub">Why, in a few words · <span class="dsub">empty; example: possible sale change</span></p>
+<p class="dsub">Records $3,978.20 paid to the maker. <span class="dk">The client's price does not change.</span></p>
+<p class="dnote">Nothing preselected. A typo is fixed in the amount; there's no “I typed it wrong”. On a grouped order it first asks “Which piece?”.</p>
+</div></div></div>
+<dl class="flow"><div><dt>What Ashley sees</dt><dd>The difference against the paper, in dollars.</dd></div><div><dt>What she does</dt><dd>Chooses where it went, or leaves it flagged, and says why.</dd></div><div><dt>What changes</dt><dd>The cost is recorded with its reason. Freight stays freight.</dd></div><div><dt>Who acts next</dt><dd>Whoever holds pricing, on the flagged line (Q-01).</dd></div></dl>
+<div class="vt"><span class="meta">Vision test</span><span>The Document, Money out · right after checkout · margin, it protects the margin figure · the books explain themselves later.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="9">See it in the walk · frame 9 →</button></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-9">Next sheet ↓</a></footer></section>
+
+<!-- 9 · R-08 (2/2) Q-01 -->
+<section class="sheet" id="sheet-9" aria-labelledby="t9"><header class="sheet-head"><p class="meta"><span>R-08 (2 of 2) · Q-01 · F2</span><span>09</span></p><h2 id="t9">The client's price waits for the studio</h2><p class="lede">The cost changes and the margin shows the hit. The client's price moves only when someone chooses.</p></header>
+<figure class="fq"><blockquote>“This is probably why we mark up the freight because, yeah, then there's always something that's not quite right.”</blockquote><figcaption>Leah · <span class="meta">F2, F6 · mtg:362</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today · mostly built already</p><p>A cost change never moves the client price: it flags the line and holds the markup, and “keep the client's price” is allowed on a released line. The price table already draws the flag. What's missing is a reason on the change, and a writer that records an actual cost on a released line without touching the client's price.</p><ul class="anchors"><li><code>00809_us37_trade_pricing_core.sql:39-46</code> · “a cost change never moves the client price; it flags the line and HOLDS the markup”</li><li><code>00809:1343-1349</code> · <code>keep_client</code> allowed on a released line</li><li><code>pieces/price-table.tsx:636-648</code> · “cost changed from … to …” · Keep client price</li></ul></div>
+<div class="draw"><p class="draw-label">Proposed · not built · the bed's line, flagged</p><div class="ds"><div class="dflag" ><p class="dk num" >Sierra bed · cost changed from $3,449.00 to $3,679.20</p><p class="dsub">Example reason: possible sale change · recorded by Leah, 23 Oct · margin on this piece down $230.20</p><div class="dsplit"><span class="dbtn2">Keep the client's price</span><span class="dsub">the studio absorbs $230.20</span></div><div class="dsplit"><span class="dbtn2">Ask the client for it</span><span class="dsub">opens Record a change → On the agreement, +$230.20 on the bed filled in</span></div></div><p class="dnote">The flag stays until someone chooses. The same sentence shows beside “Paid” on Bought it already when a line is linked.</p></div></div></div>
+<div class="grid-table qt" role="table" aria-label="Ruling Q-01">
+<div class="gt-row gt-head" role="row"><span role="columnheader">Ruling</span><span role="columnheader">Question</span><span role="columnheader">Options</span><span role="columnheader">Recommended default</span></div>
+<div class="gt-row" role="row"><strong>Q-01</strong><span>Who absorbs a checkout price rise, and who decides?</span><span><span class="cell-label">Options</span>A. Preselect nothing: the line stays flagged, both buttons show the dollar effect, the owner chooses. B. The studio absorbs automatically below a threshold it sets. C. Always ask the client through Record a change.</span><span><span class="cell-label">Recommended default</span><strong>A.</strong> The buyer can record and leave it flagged; Ashley buys on Leah's logins, and absorbing is the owner's call. A threshold is the team’s inference from Leah’s freight-markup remark (mtg:308), not her stated preference on checkout rises. Open for you.</span></div></div>
+<div class="vt"><span class="meta">Vision test</span><span>The Document, Pieces · the day after checkout · margin · the client's price never moves without a person choosing it.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="10">See it in the walk · frame 10 →</button></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-10">Next sheet ↓</a></footer></section>
+
+<!-- 10 · R-07 -->
+<section class="sheet" id="sheet-10" aria-labelledby="t10"><header class="sheet-head"><p class="meta"><span>R-07 · F3 · NOW-next · L</span><span>10</span></p><h2 id="t10">Fees that come later</h2><p class="lede">A fee can arrive later with no amount yet. Its type, rate and payee stay unconfirmed until the vendor’s bill arrives.</p></header>
+<figure class="fq"><blockquote>“there is an import fee on orders this large… we'll also have to add track that cost to be billed later in our freight charges.” · “I get sent another ding later on.”</blockquote><figcaption>Leah · <span class="meta">F3 · mtg:48, 100</span></figcaption></figure>
+<figure class="fq"><blockquote>“There's an import fee, though. Maybe just put that in the shipping.”</blockquote><figcaption>Kody · <span class="meta">F3 · mtg:76</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today</p><p>The rider picker offers nine kinds. The table allows <code>other</code> with a note, a blank estimate and another payee. Actual is entered separately on blur (riders.tsx:477–511). The payment act has no cost-line id and only closes on completion (:540–549); record_vendor_payment (00718:624–780) inserts a payment, not Actual. Linking the two is new. Bought it already has only a Shipping field.</p><ul class="anchors"><li><code>order-paper/riders-model.ts:16-26</code> · Freight, Crating, Liftgate, Residential delivery, White glove, Receiving, Storage, Handling, Restocking</li><li><code>00704_po_cost_lines_shipments.sql:68, 73-75</code> · a <code>note</code> column and the <code>other</code> kind</li><li><code>00704:209-210</code> · <code>upsert_po_cost_line</code> takes a later <code>actualCents</code></li><li><code>riders-model.ts:55-60</code> · a blank estimate is allowed</li><li><code>purchases/purchase-record-form.tsx:243-246</code> · Shipping only</li></ul></div>
+<div class="draw"><p class="draw-label">Proposed · not built · the Olaf wallpaper's paper</p><div class="ds">
+<p class="dm">Riders · act reads “+ Freight, crating, receiving, fees…”</p>
+<div class="drow"><p><span class="dk">Possible import / processing fee</span> · type, rate, payee and amount unconfirmed until the vendor’s bill arrives</p></div><p class="dnote">Leah mentioned import fees; the site offered to cover new customs fees. The courier’s merchandise-processing fee is uncertain; 3% was Kody’s guess, not a rate to save.</p>
+<p class="dm">Weeks later</p><div class="dflag"><p>Record payment to the courier · <span class="num">$—</span> · proposed linked write fills this fee’s Actual; today enter Actual separately</p><p class="dk">Bill 1 unbilled rider →</p></div>
+<p class="dnote">New kinds: Import tariff, Processing fee, Other (name it). Until the kind constraint changes they ship as <code>other</code> with the name in <code>note</code>.</p></div></div></div>
+<dl class="flow"><div><dt>What Leah sees</dt><dd>The fee on the paper, named, with no amount.</dd></div><div><dt>What she does</dt><dd>Adds it at checkout; records the courier's bill weeks later.</dd></div><div><dt>What changes</dt><dd>The rider fills its actual and joins “Bill N unbilled riders”.</dd></div><div><dt>Who acts next</dt><dd>Whoever bills the client.</dd></div></dl>
+<p class="note">Verify a rider can be added after the order is marked placed. On Bought it already the same row is R-17, next.</p>
+<div class="vt"><span class="meta">Vision test</span><span>The Document, the paper · checkout, then the courier's bill weeks later · margin, an unbilled fee is margin lost · the paper remembers the ding, not Leah.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="11">See it in the walk · frame 11 →</button><button type="button" class="walk-link" data-goto-frame="5">Frame 5, the rider picker →</button></div>
+<div class="shots"><figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: the order paper's riders act"><img src="{{IMG:05-order-paper-sofa-1440.jpg}}" alt="Local walk screenshot: the order paper with the + Freight, crating, receiving act under the line" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>The paper's rider act, “+ Freight, crating, receiving…”, on a test-job sofa.</p><small>05-order-paper-sofa-1440.png</small></figcaption></figure></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-11">Next sheet ↓</a></footer></section>
+
+<!-- 11 · R-09 Q-04 -->
+<section class="sheet" id="sheet-11" aria-labelledby="t11"><header class="sheet-head"><p class="meta"><span>R-09 · Q-04 · F4 · NOW-next · L</span><span>11</span></p><h2 id="t11">Receipt now or later</h2><p class="lede">Recording money and attaching paper become separate acts. More than one file, owed quietly, no reminder.</p></header>
+<figure class="fq"><blockquote>“I'm using Leah's logins, and she gets the emails.” · “an opportunity to still save it, and then I can upload it… Or a screenshot?” · “If I attached a screenshot, could I add the receipt like a second attachment? … Later?”</blockquote><figcaption>Ashley · <span class="meta">F4 · mtg:157, 159–160, 174–178</span></figcaption></figure>
+<figure class="fq"><blockquote>“you want to be able to enter that in and say you did the purchase, but then come back in and attach a receipt once you get that receipt.”</blockquote><figcaption>Kody · <span class="meta">F4 · mtg:172</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today</p><p>A recorded purchase holds one file, in one column, filed only when the buy is for this project. A maker payment takes one file and files it to the line it was opened from. There's no attach-later path.</p><ul class="anchors"><li><code>purchase-record-form.tsx:88</code> · one <code>File</code></li><li><code>00703_studio_purchases.sql:78</code> · one <code>receipt_document_path</code></li><li><code>purchase-record-form.tsx:133-134</code> · filed only “for this project”</li><li><code>record-payment.tsx:212</code> · one receipt; <code>:8</code> “Payments are never edited”</li><li><code>purchases/purchase-choices.tsx:42</code> · <code>receiptAnchor: { kind: 'line' }</code></li><li><code>hooks/use-folio.ts:18-21</code> · the Folio anchors to a section, a line or the letterhead, not a money record</li></ul></div>
+<div class="draw"><p class="draw-label">Proposed · not built · Money out</p><div class="ds">
+<p class="dm">Receipts — add now or later</p><div class="dfile">checkout-screenshot.png</div><div class="dfile">order-confirmation.pdf <span class="dsub">added a week later</span></div><span class="dact">+ Add a receipt</span>
+<p class="dm">Recorded with none</p><p class="dsub">Receipt still owed</p>
+<p class="dm">On each line of that order</p><p class="dsub">Receipt · on the Rejuvenation order</p>
+<p class="dm">On Money out</p><p class="dk">2 receipts owed</p>
+<p class="dnote">Appending a file never edits the money, so “never edited” holds. One schema change: a money-record anchor.</p></div></div></div>
+<div class="grid-table qt" role="table" aria-label="Ruling Q-04"><div class="gt-row gt-head" role="row"><span role="columnheader">Ruling</span><span role="columnheader">Question</span><span role="columnheader">Options</span><span role="columnheader">Recommended default</span></div>
+<div class="gt-row" role="row"><strong>Q-04</strong><span>Is a receipt required before a purchase is “complete”?</span><span><span class="cell-label">Options</span>A. Not required: “receipt still owed” on the record, a Money out count, a closeout list. B. A, plus a Desk need to whoever holds the email after a set number of days. C. Required before the line bills or the job closes.</span><span><span class="cell-label">Recommended default</span><strong>A.</strong> Leah's reason is “bookkeeping and if we ever were to get audited” (mtg:155), which a closeout list serves without a gate in the buyer's way.</span></div></div>
+<dl class="flow"><div><dt>What Ashley sees</dt><dd>“Receipts — add now or later” on the payment.</dd></div><div><dt>What she does</dt><dd>Attaches a screenshot now, the PDF when Leah forwards it.</dd></div><div><dt>What changes</dt><dd>“Owed” clears. Every line on the order points to the one receipt.</dd></div><div><dt>Who acts next</dt><dd>Nobody is reminded. Closeout lists what's still owed.</dd></div></dl>
+<div class="vt"><span class="meta">Vision test</span><span>The Document, Money out · the first hand buying on the owner's logins · margin · nothing nags; the paper waits.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="7">See it in the walk · frame 7 →</button><button type="button" class="walk-link" data-goto-frame="8">Frame 8, a week later →</button></div>
+<div class="shots"><figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: record form, empty"><img src="{{IMG:38-purchase-record-form-1440.jpg}}" alt="Local walk screenshot: the record-a-purchase form with one Receipt file input" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>One Receipt field, “Choose File”.</p><small>38-purchase-record-form-1440.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: record form, filled"><img src="{{IMG:39-purchase-record-filled-1440.jpg}}" alt="Local walk screenshot: the record-a-purchase form filled in" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>The same form filled for a dealer find.</p><small>39-purchase-record-filled-1440.png</small></figcaption></figure></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-12">Next sheet ↓</a></footer></section>
+
+<!-- 12 · R-11 / R-16 / Q-05 -->
+<section class="sheet" id="sheet-12" aria-labelledby="t12"><header class="sheet-head"><p class="meta"><span>R-11 now · R-16 next · Q-05 · F6</span><span>12</span></p><h2 id="t12">Freight to the client, honestly</h2><p class="lede">“Cost plus” is a label that does nothing today. Say so now, and make it a percent once Q-05 is ruled.</p></header>
+<figure class="fq"><blockquote>“if I could mark the freight up 10% just to make sure we're covered for anything weird that might happen… I don't want to be greedy.”</blockquote><figcaption>Leah · <span class="meta">F6 · mtg:307–308</span></figcaption></figure>
+<figure class="fq"><blockquote>“And are we just adding what the freight is, or are you putting a markup on that as well?”</blockquote><figcaption>Ashley · <span class="meta">F6 · mtg:305</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today</p><p>A rider's “Bill the client” is on by default, with at cost or cost plus. The bill never reads the rule: it bills the actual, else the estimate, at cost, unless the studio types an override. No percent is stored. The job's markup override covers goods, never freight.</p><ul class="anchors"><li><code>order-paper/riders.tsx:393-430</code> · “Bill the client at cost — checked by default”</li><li><code>riders-model.ts:28-31</code> · at cost · cost plus</li><li><code>invoice-composer.ts:351-355</code> · billed at cost; <code>:597-604</code> · the typed override</li><li><code>00704:96-97</code> · open ruling R1, whether the client sees cost plus</li><li><code>00809:47-48</code> · “never freight/delivery/install”</li></ul></div>
+<div class="stack"><div class="draw"><p class="draw-label">Proposed · not built · Now (R-11)</p><div class="ds"><p><span class="dk">White glove</span> · owed to the maker · $299.00 · ☑ Bill the client · cost plus</p><p class="dnote">Set the billed figure when you bill. Patina doesn't add a percent yet.</p><p class="dsub">Leah's 10% works today by typing $328.90 in the bill.</p></div></div>
+<div class="draw"><p class="draw-label">Proposed · not built · Next (R-16), after Q-05</p><div class="ds"><p><span class="dk">White glove</span> · owed to the maker · <span class="num">$299.00</span></p><p>☑ Bill the client · cost plus · <span class="dk">10</span>%</p><p class="num">The client sees <span class="dk">White glove delivery $328.90</span></p><p class="dsub num">The studio keeps $29.90 · the job's freight markup (10%)</p><p class="dnote">The client sees one delivery figure, never a “markup” row. A rider that absorbed a price rise says “includes $230.20 not on the maker's shipping line” and points to R-08.</p></div></div></div></div>
+<div class="grid-table qt" role="table" aria-label="Ruling Q-05"><div class="gt-row gt-head" role="row"><span role="columnheader">Ruling</span><span role="columnheader">Question</span><span role="columnheader">Options</span><span role="columnheader">Recommended default</span></div>
+<div class="gt-row" role="row"><strong>Q-05</strong><span>The freight markup default, and whether the client sees it (carries R1).</span><span><span class="cell-label">Options</span>A. Studio default 0%, at cost as today; a job sets its own percent; a rider can override; the client sees one delivery figure. B. A studio-wide default percent, e.g. 10%. C. Per-rider only. D. Stay at cost and type an override in the bill.</span><span><span class="cell-label">Recommended default</span><strong>A.</strong> Leah's 10% was reasoned from this job (“a healthy markup on this job”, mtg:306), so it's the Harchess job's setting, not the studio's. Until ruled, D is what works.</span></div></div>
+<div class="vt"><span class="meta">Vision test</span><span>The Document, the paper and the bill · adding delivery · margin, the first dollar · delivery reads as delivery, at a figure chosen on purpose.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="5">See it in the walk · frame 5 →</button></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-13">Next sheet ↓</a></footer></section>
+
+<!-- 13 · R-10 Q-02 -->
+<section class="sheet" id="sheet-13" aria-labelledby="t13"><header class="sheet-head"><p class="meta"><span>R-10 · Q-02 · hazard · NOW-next · L</span><span>13</span></p><h2 id="t13">A buy that can't bill twice</h2><p class="lede">Found while tracing, not asked for. Bought it already with a linked line ticks “Bill the client” by default, so a sold piece could reach the client twice. Fix this before Q-02's “allow” default.</p></header>
+<figure class="fq"><blockquote>“No. No. It would be new.”</blockquote><figcaption>Leah, on freight billed to the client · <span class="meta">F6 · mtg:300 · the closest words; nobody raised this hazard</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today</p><p>The box is ticked even when a line is linked. A purchase bills its whole amount plus tax, premium and shipping. The billing step refuses only a purchase that's already billed, not a piece already billed through its own price. And Bought it already has no deposit check, while the paper does.</p><ul class="anchors"><li><code>purchase-record-form.tsx:84</code> · <code>billableToClient: true</code></li><li><code>purchase-record-form.tsx:319-321</code> · “Bill the client, at cost, on its own line”</li><li><code>invoice-composer.ts:307-318</code> · bills amount, tax, premium, shipping</li><li><code>00822_us36_invoice_line_internal_cost.sql</code> · purchase branch refuses only an already-billed purchase</li><li><code>purchases/purchase-record.ts:166-185</code> · <code>buyableLines</code>, no authorization or deposit check</li></ul></div>
+<div class="draw"><p class="draw-label">Proposed · not built · Bought it already, line linked</p><div class="ds"><p class="dbefore">☑ Bill the client, at cost, on its own line <span class="dm">today</span></p><p>☐ <span class="dk">Bill the client for the shipping and fees on this buy ($—)</span></p><p class="dsub">The piece bills through its line.</p><p class="dnote">Off by default when a line is linked. One rule in the bill: a linked purchase bills shipping and fees only. Verify first.</p></div></div></div>
+<div class="grid-table qt" role="table" aria-label="Ruling Q-02"><div class="gt-row gt-head" role="row"><span role="columnheader">Ruling</span><span role="columnheader">Question</span><span role="columnheader">Options</span><span role="columnheader">Recommended default</span></div>
+<div class="gt-row" role="row"><strong>Q-02</strong><span>Must “Bought it already” respect the deposit gate?</span><span><span class="cell-label">Options</span>A. Allow; warn before (“The deposit (A1) hasn't cleared. If you've already bought it, record it.”); mark after (“Bought before the deposit cleared (A1)”). B. Refuse until the deposit clears. C. Allow for the owner only.</span><span><span class="cell-label">Recommended default</span><strong>A</strong>, since a purchase already made is historical truth (US-50 direction.md:147–149), <strong>on condition that R-10 lands</strong> so the piece can't bill twice.</span></div></div>
+<div class="vt"><span class="meta">Vision test</span><span>The Document · recording a buy against a sold piece · margin · the client is never billed twice.</span></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-14">Next sheet ↓</a></footer></section>
+
+<!-- 14 · R-12 -->
+<section class="sheet" id="sheet-14" aria-labelledby="t14"><header class="sheet-head"><p class="meta"><span>R-12 · F5 · NOW-next entry M · Next block M</span><span>14</span></p><h2 id="t14">Order together</h2><p class="lede">Grouping already exists on the vendor page, and it's hard to find. Bring it to the job now. Give the vendor page a block per job next.</p></header>
+<figure class="fq"><blockquote>“I think it'd be nice to be able to group your orders… these are both from Rejuvenation, right? The Stanton adjustable drapery rod and the Eden swing arm sconce.”</blockquote><figcaption>Leah · <span class="meta">F5 · mtg:462–463</span></figcaption></figure>
+<figure class="fq"><blockquote>“you would have to go through each item and put in probably the order information.”</blockquote><figcaption>Ashley · <span class="meta">F5 · mtg:457</span></figcaption></figure>
+<figure class="fq"><blockquote>“you would come into your vendor page and then you would see everything that was queued up to order with them for a job… a block of items.”</blockquote><figcaption>Kody · <span class="meta">F5 · mtg:489</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today</p><p>One order is one maker and one job. The vendor page's “Order all — N items · ready · unordered” lays one paper per maker and job from ready lines only; lines not yet ready don't appear, the same silence as F1. The way in is Ledgers → Purchase orders → Vendor accounts, whose rows say only terms and “open page →”. On the job, “Prepare a PO” opens a paper with one line.</p><ul class="anchors"><li><code>orders-book-vendors.tsx:614-645, 710-728</code> · VendorOrderAll</li><li><code>orders-book-vendors.tsx:1168</code> · mounted on vendor → Orders</li><li><code>00450_ffe_po_compat_and_media_dedupe.sql</code> · <code>create_purchase_order</code> refuses cross-job or cross-maker lines</li><li><code>purchases/purchase-choices.tsx:25</code> · “Prepare a PO”, one line</li></ul></div>
+<div class="stack"><div class="draw"><p class="draw-label">Proposed · not built · NOW-next · the section head</p><div class="ds"><div class="dline"><p class="dk">2 ready from Rejuvenation</p><span class="dact">Order together →</span></div><p class="dsub">One paper for both. Nothing is sent until you choose how.</p><p class="dnote">Shown when two or more ready lines on a job share a maker and a planned place. Opens the existing queue for this job and maker; a paper is created only when the studio saves or acts on it.</p></div></div>
+<div class="draw"><p class="draw-label">Proposed · not built · Next · the vendor page, one block per job</p><div class="ds"><p class="dm">Rejuvenation · orders</p><div class="dline"><p class="dname">The Harchess job</p><p class="dm">2 ready · 1 waiting</p></div>
+<div><div class="drow"><div class="dline"><span>☑ Stanton adjustable drapery rod</span><span class="dsub">Room —</span></div></div><div class="drow"><div class="dline"><span>☑ Eden swing arm sconce</span><span class="dsub">Room —</span></div></div><div class="drow dbefore"><div class="dline"><span>☐ another piece <span class="dex">example</span></span><span class="dsub">waiting on the client's deposit (A1)</span></div></div></div>
+<p class="dsub">To the Harchess home · one order</p><div class="dsplit"><span class="dbtn">Order these 2 together →</span><span class="dsub">Nothing is sent until you choose how.</span></div>
+<p class="dnote">Ticked lines going to two places: “Two places, so two orders: 2 to the Harchess home, 1 to {place}. Prepare 2 orders →” (F-05). Vendor accounts gains “2 queued · the Harchess job” only when something is queued.</p></div></div></div></div>
+<figure class="fq"><blockquote>“You would do two separate orders.” / “Yep. I would do two separate orders for that, for sure.”</blockquote><figcaption>Kody, then Leah · <span class="meta">F5 · mtg:479–480 · one ship-to per order stands (V26 F-05)</span></figcaption></figure>
+<dl class="flow"><div><dt>What Ashley sees</dt><dd>“2 ready from Rejuvenation · Order together →” on the section head.</dd></div><div><dt>What she does</dt><dd>Opens one paper for both pieces.</dd></div><div><dt>What changes</dt><dd>One order, two lines; each piece keeps its own line.</dd></div><div><dt>Who acts next</dt><dd>Ashley checks out on Rejuvenation's site.</dd></div></dl>
+<div class="vt"><span class="meta">Vision test</span><span>The Document, Pieces &amp; purchasing and the vendor page · the buyer sits down with one maker's cart open · margin · one block instead of N unfolds.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="3">See it in the walk · frame 3 →</button></div>
+<div class="shots"><figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: vendor accounts"><img src="{{IMG:47-orders-vendor-accounts-1440.jpg}}" alt="Local walk screenshot: Purchase orders, Vendor accounts, rows with terms and open page links" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>Vendor accounts: terms and “open page →”, no sign of waiting pieces.</p><small>47-orders-vendor-accounts-1440.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: the order register"><img src="{{IMG:44-orders-book-1440.jpg}}" alt="Local walk screenshot: Purchase orders, the order register grouped by maker" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>The order register: every order, grouped by maker, after the fact.</p><small>44-orders-book-1440.png</small></figcaption></figure></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-15">Next sheet ↓</a></footer></section>
+
+<!-- 15 · R-13 -->
+<section class="sheet" id="sheet-15" aria-labelledby="t15"><header class="sheet-head"><p class="meta"><span>R-13 · Q-03 · F5 · Next · L</span><span>15</span></p><h2 id="t15">Record the checkout</h2><p class="lede">One checkout gives one sheet, one payment, one receipt, and one order number typed once. Each piece keeps its own line.</p></header>
+<figure class="fq"><blockquote>“you would want to do a single money out line because you'd have one receipt for six items or whatever, but still have the ability to kind of, yeah, track the shipping separately.”</blockquote><figcaption>Kody · <span class="meta">F5 · mtg:476</span></figcaption></figure>
+<figure class="fq"><blockquote>“Here's the order number that attaches to this. And then we can still load in the order confirmation.” · “being able to order as a group and then easily saving that order confirmation to all three items”</blockquote><figcaption>Leah · <span class="meta">F5 · mtg:482, 496</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today · three trips, no external-order review</p><ol class="plain" style="list-style:none"><li><strong>1.</strong> Mark the paper placed directly; today only Send opens the review (order-paper/index.tsx:612–647).</li><li><strong>2.</strong> Open the acknowledgment log for their order number, <code>vendorPoNumber</code> (<code>po-preview.tsx:446-460</code>; screens 11–12).</li><li><strong>3.</strong> “Record a payment” from one line (<code>purchase-choices.tsx:36-42</code>); its receipt files to that line only (<code>:42</code>).</li></ol></div>
+<div class="draw"><p class="draw-label">Proposed · not built · Next · on the placed paper</p><div class="ds"><p class="dm">Rejuvenation · the Harchess job · 2 pieces</p><p class="dsub">Placed on their site or by phone · 24 Oct</p><p class="dh">Record the checkout</p>
+<div><div class="drow"><div class="dline"><span>Their order number</span><span class="dk">RJ-— <span class="dsub">also the payment's reference</span></span></div></div><div class="drow"><div class="dline"><span>Card charge</span><span class="dk num">$— <span class="dsub">with Studio card ••—</span></span></div></div><div class="drow"><div class="dline"><span>Stanton adjustable drapery rod</span><span class="num">$— <span class="dsub">from the paper</span></span></div></div><div class="drow"><div class="dline"><span>Eden swing arm sconce</span><span class="num">$— <span class="dsub">from the paper</span></span></div></div><div class="drow"><div class="dline"><span>Freight</span><span class="num">$— <span class="dsub">fills the order's Freight rider</span></span></div></div><div class="drow"><div class="dline"><span>Fees</span><span class="dsub">+ Import tariff, processing fee… (R-07)</span></div></div><div class="drow"><div class="dline"><span>Something else on this charge</span><span class="dsub">+ an expense (R-04)</span></div></div><div class="drow"><div class="dline"><span>Receipts</span><span class="dsub">Attach, or leave it owed (R-09)</span></div></div><div class="drow"><div class="dline"><span>Arrives about</span><span class="dsub">date · for both pieces on this order</span></div></div></div>
+<div class="dsplit"><span class="dbtn">Record the checkout</span><span class="dsub">One payment, one receipt, both pieces.</span></div>
+<p class="dnote">Per-piece amounts come from the paper and open only when the card charge disagrees, which raises R-08's question. Freight fills the existing rider's actual, so one charge never has two writers.</p></div></div></div>
+<div class="grid-table qt" role="table" aria-label="Ruling Q-03"><div class="gt-row gt-head" role="row"><span role="columnheader">Ruling</span><span role="columnheader">Question</span><span role="columnheader">Options</span><span role="columnheader">Recommended default</span></div>
+<div class="gt-row" role="row"><strong>Q-03</strong><span>How is shipping allocated across a grouped buy?</span><span><span class="cell-label">Options</span>A. On the order: one rider, one client line, no piece's price moves. B. A, plus a computed per-piece share. C. On one piece, Leah's “for now” (mtg:483–485).</span><span><span class="cell-label">Recommended default</span><strong>A.</strong> Riders already sit on the order (<code>00704:56-59</code>). B can come later (R-19) without changing any record. C skews one piece's margin and breaks on a return.</span></div></div>
+<div class="vt"><span class="meta">Vision test</span><span>The Document, the paper · the minute after “Pay now” · margin · one entry for one checkout.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="7" data-next-tab="1">See it in the walk · frame 7, Next tab →</button></div>
+<div class="shots"><figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: acknowledgment check"><img src="{{IMG:11-ack-check-1440.jpg}}" alt="Local walk screenshot: the acknowledgment check with vendor order number and confirmed ETA fields" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>Trip 2: the vendor's order number and confirmed ETA, entered on the acknowledgment.</p><small>11-ack-check-1440.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: after the acknowledgment"><img src="{{IMG:12-after-ack-1440.jpg}}" alt="Local walk screenshot: the line after the acknowledgment was logged" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>After it's logged. The payment is still a third trip.</p><small>12-after-ack-1440.png</small></figcaption></figure></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-16">Next sheet ↓</a></footer></section>
+
+<!-- 16 · R-14 -->
+<section class="sheet" id="sheet-16" aria-labelledby="t16"><header class="sheet-head"><p class="meta"><span>R-14 · F9, F5 · Now · S</span><span>16</span></p><h2 id="t16">Ships separately, arrives separately</h2><p class="lede">The order's ETA is the benchmark. A shipment gives each piece its own date. No new ETA field.</p></header>
+<figure class="fq"><blockquote>“I would add 12 weeks on it, and that would be kind of a good benchmark… So I'd say January 15th, we should be getting something.”</blockquote><figcaption>Leah · <span class="meta">F9 · mtg:452 · Kody: “you can always come in and change it.” mtg:453</span></figcaption></figure>
+<figure class="fq"><blockquote>“So you could have separate shipping dates on them, which would be nice.”</blockquote><figcaption>Ashley · <span class="meta">F5 · mtg:475</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today</p><p>The line's “Confirmed ETA” writes the order's ETA and won't save without one. Shipments already carry their own date and per-piece quantities.</p><ul class="anchors"><li><code>line-unfold/movement-cell.tsx:197-221</code> · <code>set_purchase_order_eta</code>, with its history</li><li><code>movement-cell.tsx:216</code> · no PO, no save</li><li><code>00704:122</code> · <code>current_eta</code> per shipment</li><li><code>00704:158-163</code> · per-piece quantities on a shipment</li></ul></div>
+<div class="draw"><p class="draw-label">Proposed · not built · one clause of copy</p><div class="ds"><p class="dm">Movement · the Rejuvenation order</p><p class="dk">Arrives ~ mid-December <span class="dex">example</span> · for both pieces on this order</p><p class="dm">When the sconce ships first · Record dispatch (reused)</p><p>Pieces on this shipment · <span class="dk">1 of 1</span> · Eden swing arm sconce</p><p class="dsub">The rod keeps the order's benchmark.</p></div></div></div>
+<dl class="flow"><div><dt>What Ashley sees</dt><dd>One date that says what it covers.</dd></div><div><dt>What she does</dt><dd>Records the sconce's dispatch when Rejuvenation ships it.</dd></div><div><dt>What changes</dt><dd>The sconce gets its own date; the rod keeps the benchmark.</dd></div><div><dt>Who acts next</dt><dd>Whoever receives it, on the phone.</dd></div></dl>
+<div class="vt"><span class="meta">Vision test</span><span>The Document, Movement · setting the benchmark · margin · one date, said plainly.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="7">See it in the walk · frame 7 →</button><button type="button" class="walk-link" data-goto-frame="13">Frame 13, the sconce arrives →</button></div>
+<div class="shots three-up"><figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: partial shipment form"><img src="{{IMG:48-partial-shipment-form-4of6-1440.jpg}}" alt="Local walk screenshot: the shipment form with Pieces on this shipment, 4 of 6" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>“Pieces on this shipment · 4 of 6” already exists.</p><small>48-partial-shipment-form-4of6-1440.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: partial shipment saved"><img src="{{IMG:49-partial-shipment-saved-1440.jpg}}" alt="Local walk screenshot: the line after a partial shipment was saved" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>After the partial shipment is saved.</p><small>49-partial-shipment-saved-1440.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: receiving on the phone"><img src="{{IMG:26-phone-inspection-drawer-390.jpg}}" alt="Local walk screenshot at phone width: the receiving inspection drawer" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk · 390</span><p>Receiving that piece on the phone.</p><small>26-phone-inspection-drawer-390.png</small></figcaption></figure></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-17">Next sheet ↓</a></footer></section>
+
+<!-- 17 · R-03 -->
+<section class="sheet" id="sheet-17" aria-labelledby="t17"><header class="sheet-head"><p class="meta"><span>R-03 · F7 · NOW-next · L</span><span>17</span></p><h2 id="t17">Places land on the job</h2><p class="lede">The den went studio-wide because the People editor never asks about a job. Ask, fold other jobs' homes away, and name strays.</p></header>
+<figure class="fq"><blockquote>“once you add her address in, then add it to the job. That way, it'll put it on that job specifically and not be global. I forgot to do that with my den.”</blockquote><figcaption>Kody · <span class="meta">F7 · mtg:258–259</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today</p><p>A place made inside a job lands on that job. A place made in People saves studio-wide, with Dock and Liftgate, and never asks about a job. Ship-to puts the job's places first, then every other studio place after them.</p><ul class="anchors"><li><code>destinations/job-destinations-sheet.tsx:82-85</code> · saves, then adds to the job</li><li><code>job-destinations-sheet.tsx:145-157</code> · “Add to job” on existing places</li><li><code>people/studio-locations-editor.tsx:284-285</code> · Dock, Liftgate; no job</li><li><code>order-assistant/ship-to-choice.tsx:68-77</code> · job places first, then all the rest</li><li><code>ship-to-choice.tsx:179, 231</code> · “On this job”, “Private home”; the door into Destinations</li></ul></div>
+<div class="stack"><div class="draw"><p class="draw-label">Proposed · not built · People → a new place</p><div class="ds"><p class="dk">For a job?</p><div class="dgroup"><p>◉ The Harchess job <span class="dsub">the job you came from</span></p><p>○ No job — a studio place (receiver, workroom)</p></div><p class="dnote">A private home always needs a job.</p></div></div>
+<div class="draw"><p class="draw-label">Proposed · not built · ship-to on the Harchess job</p><div class="ds"><p class="dm">On this job</p><p class="dk">The Harchess home <span class="dsub">private home · no dock · needs a liftgate</span></p><p class="dm">Studio places</p><p>The studio · Receiving warehouse <span class="dex">example</span></p><p class="dact">A home on another job…</p></div></div>
+<div class="draw"><p class="draw-label">Proposed · not built · the Destinations sheet, once</p><div class="ds"><p class="dk">Kody's den is a private home on no job. Add it to a job, or make it a studio place.</p></div></div></div></div>
+<dl class="flow"><div><dt>What Leah sees</dt><dd>The Harchess home first; other jobs' homes folded away.</dd></div><div><dt>What she does</dt><dd>Picks it, or answers “For a job?” when adding a place in People.</dd></div><div><dt>What changes</dt><dd>The client's home never shows on another job.</dd></div><div><dt>Who acts next</dt><dd>Whoever finds a stray, from the notice.</dd></div></dl>
+<div class="vt"><span class="meta">Vision test</span><span>The Document · setting up the job's places · margin · the client's home never turns up on another job.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="4">See it in the walk · frame 4 →</button></div>
+<div class="shots three-up"><figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: ship to the workroom"><img src="{{IMG:32-fabric-paper-ship-to-workroom-1440.jpg}}" alt="Local walk screenshot: ship-to with Somewhere else filled for a workroom, seeded test data, addresses redacted" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22 · not production</span><p>Before US-51: a workroom typed into “Somewhere else”. Seeded test data; addresses redacted.</p><small>32-fabric-paper-ship-to-workroom-1440.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: ship to the receiver"><img src="{{IMG:33-chair-paper-receiver-1440.jpg}}" alt="Local walk screenshot: ship-to choosing the receiving warehouse, seeded test data, addresses redacted" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22 · not production</span><p>The receiver chosen for a chair.</p><small>33-chair-paper-receiver-1440.png</small></figcaption></figure>
+<figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: client home as free text"><img src="{{IMG:34-rug-paper-client-home-freetext-1440.jpg}}" alt="Local walk screenshot: a client home typed as free text, seeded test address" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22 · not production</span><p>A client home typed as free text, before job Destinations shipped.</p><small>34-rug-paper-client-home-freetext-1440.png</small></figcaption></figure></div>
+<p class="note">These screens predate US-51's job Destinations; the meeting saw the newer listing. Today's ordering is <code>ship-to-choice.tsx:68-77</code>.</p>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-18">Next sheet ↓</a></footer></section>
+
+<!-- 18 · R-04 R-05 R-06 -->
+<section class="sheet" id="sheet-18" aria-labelledby="t18"><header class="sheet-head"><p class="meta"><span>R-04 · R-05 · R-06 · F8, F10, F12 · NOW-next · M</span><span>18</span></p><h2 id="t18">Expenses where Leah stands, and two small truths</h2><p class="lede">Pass-through expenses already work, four steps deep. Put them first in Add items. Then two copy fixes: no quote is fine for a web buy, and “Released” becomes “mark as placed”.</p></header>
+<figure class="fq"><blockquote>“Oh, shoot, I never ordered her curtain rings to go with this.” · “I'm not going to be like 73.97 for the gallon of paint, approve or deny.”</blockquote><figcaption>Leah · <span class="meta">F8 · mtg:463, 470</span></figcaption></figure>
+<div class="cols"><div class="stack today"><p class="meta">Today · R-04</p><p>Add items → “Bought it already”, the last entry → kind Expense → “No line”, with “Bill the client, at cost, on its own line”. It bills later through “Bill N unbilled purchases”. No client approval, which matches her contract (mtg:468). The same act is also called “Record a purchase already made” on the line.</p><ul class="anchors"><li><code>ffe-section.tsx:2141-2146</code> · Add items</li><li><code>schedule/add-to-project-sheet.tsx:113-116</code> · “Bought it already · Paid for already: retail, a lot, an expense or a sample fee.”</li><li><code>purchase-record-form.tsx:308-322</code> · Expense, No line, Bill the client</li><li><code>ffe-section.tsx:2317-2331</code> · Bill N unbilled purchases</li><li><code>purchase-choices.tsx:31-33</code> · “Record a purchase already made”</li></ul></div>
+<div class="draw"><p class="draw-label">Proposed · not built · Add items</p><div class="ds"><div><div class="drow"><span class="dk">An expense to pass through</span><span class="dsub">Rings, screws, paint. Billed to the client at cost at final billing.</span></div><div class="drow dbefore"><span>From the Library · Paste a link · A custom piece · A find…</span></div><div class="drow"><span class="dk">Bought it already</span><span class="dsub">Paid for already: a store buy, a lot, an expense or a sample fee.</span></div></div>
+<p class="dnote">Opens the existing form preset to Expense, This project, No line, Bill the client at cost. On the line, “Record a purchase already made” becomes “Bought it already”: one name for one act. No new head act.</p>
+<p class="dm">The section's money line</p><p class="dk">Expenses to pass through · 3 · $— · billed at final billing</p></div></div></div>
+<div class="cols even"><div class="stack"><p class="meta">R-05 · F10</p><figure class="fq"><blockquote>“I was able to click that order without getting a quote… I think it had to do with how we set up the wallpaper and who the vendor was on it.”</blockquote><figcaption>Kody · <span class="meta">mtg:199–200</span></figcaption></figure><p class="small">Today: no readiness reason asks for a quote (<code>authorization-derivation.ts:446-472</code>). The wallpaper behaved correctly.</p><div class="draw"><p class="draw-label">Proposed · not built · on the paper</p><div class="ds"><p class="dnote">No quote on file. For a web checkout, the checkout total is the price.</p></div></div></div>
+<div class="stack"><p class="meta">R-06 · F12</p><figure class="fq"><blockquote>“you can just do this release by phone or portal, and then it keeps that on file.” / “That's nice.”</blockquote><figcaption>Kody, then Leah · <span class="meta">mtg:144–147</span></figcaption></figure><p class="small">Today: “Released by phone or portal — mark as sent” (<code>order-paper/index.tsx:1261</code>) and “Released by phone or portal · {day}” (<code>:1346</code>). Since V26 F-03, “released” also means the owner's release to the buyer.</p><div class="draw"><p class="draw-label">Proposed · not built · copy only</p><div class="ds"><p class="dk">Ordered on their site or by phone — mark as placed</p><p class="dsub">Placed on their site or by phone · 24 Oct</p><p class="dsub">NOW-next · new review, pending Q-07: “Nothing is sent to Rejuvenation. This records an order you placed.”</p></div></div></div></div>
+<div class="vt"><span class="meta">Vision test</span><span>The Document · the moment she remembers the rings, the first web buy, the minute after “Pay now” · margin, pass-through at cost · no approve-or-deny ceremony; one word, one meaning.</span></div>
+<div class="row-acts"><button type="button" class="walk-link" data-goto-frame="12">See it in the walk · frame 12 →</button><button type="button" class="walk-link" data-goto-frame="4">Frame 4, no quote →</button><button type="button" class="walk-link" data-goto-frame="6">Frame 6, mark as placed →</button></div>
+<div class="shots"><figure class="shot"><button type="button" class="image-toggle" aria-expanded="false" aria-label="Enlarge: Add items menu"><img src="{{IMG:37b-add-items-menu-1440.jpg}}" alt="Local walk screenshot: the Add to the job menu, with Bought it already below the fold" loading="lazy"></button><figcaption><span class="meta">Today · seeded test data · local walk, Oct 22–23 · not production</span><p>Add to the job: Library, link, photo, quote, schedule, deck, custom, find, store buy… “Bought it already” sits below the fold.</p><small>37b-add-items-menu-1440.png</small></figcaption></figure></div>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-19">Next sheet ↓</a></footer></section>
+
+<!-- 19 · phasing -->
+<section class="sheet" id="sheet-19" aria-labelledby="t19"><header class="sheet-head"><p class="meta"><span>What comes when · recommendations §4</span><span>19</span></p><h2 id="t19">What comes when</h2><p class="lede">A minimal unblock before the next buys: copy and single controls only. NOW-next carries the larger follow-ons in the same push; it is not a next-purchase promise.</p></header>
+<div class="roadmap"><div><p class="meta">NOW · minimal next-purchase unblock</p><ul><li><span>R-01a · S</span>Show the existing held reason in the Next row; no new routing or refresh promise</li><li><span>R-02a · S</span>Prefill the balance on both entry paths</li><li><span>R-04a · S</span>One expense preset in Add items; no new count</li><li><span>R-05 · S</span>No-quote explanation</li><li><span>R-06a · S</span>Rename mark-as-sent only; no new review</li><li><span>R-07a · S</span>Show “amount not known yet” for a blank estimate</li><li><span>R-11 · S</span>Explain cost plus</li><li><span>R-14 · S</span>Say the ETA covers both pieces</li></ul></div><div><p class="meta">NOW-next · follow-ons in the same push</p><ul><li><span>R-01 · M</span>Reason-to-act map, head summary and refresh</li><li><span>R-02 · M</span>Gap and gate feedback with fill action</li><li><span>R-03 · L</span>People and ship-to destination changes</li><li><span>R-04 · M</span>Expense count and naming across surfaces</li><li><span>R-06b · M</span>New external-order review, pending Q-07</li><li><span>R-07 · L</span>Fee naming and new payment-to-Actual link</li><li><span>R-08 · L</span>Released-line actual-cost writer with audit reason</li><li><span>R-09 · L</span>Multi-file append, owed and closeout states</li><li><span>R-10 · L</span>Linked-purchase billing correction; verify first</li><li><span>R-12 entry · M</span>Job-scoped grouped-order entry</li></ul></div><div><p class="meta">NEXT</p><ul><li><span>R-12 block · M</span>Vendor page grouped block</li><li><span>R-13 · L</span>Checkout sheet and write coordination</li><li><span>R-16 · L</span>Freight percent across job, rider and bill; Q-05 first</li><li><span>R-17 · M</span>Purchase fee schema and form</li></ul><p class="meta">LATER · ungated parked ideas</p><ul><li><span>R-18 · L</span>Grouped store buy</li><li><span>R-19 · M</span>Read-only freight share</li><li><span>R-20 · M</span>Desk ETA need; ask Leah</li><li><span>R-21 · M</span>Named rider schema kinds</li></ul><p class="note">R-18–R-21 lack a four-part vision gate. No build commitment until surface, studio moment, money stream and promise are stated and approved.</p></div></div><p class="note">S = copy or one control. M = one bounded interaction. L = several surfaces or coordinated schema/writes. After NOW-next, acceptance includes the grouped paper, audited variance, unconfirmed fee tracking with linked Actual, append-later receipts and job-scoped places. None is promised by the minimal unblock alone.</p>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026</span><a href="#sheet-20">Next sheet ↓</a></footer></section>
+
+<!-- 20 · rulings -->
+<section class="sheet" id="sheet-20" aria-labelledby="t20"><header class="sheet-head"><p class="meta"><span>For you to rule · recommendations §5, §7</span><span>20</span></p><h2 id="t20">For you to rule, and what's parked</h2><p class="lede">Seven questions, each with a recommended default. Nothing here is decided in code.</p></header>
+<div class="grid-table qt" role="table" aria-label="Open rulings Q-01 to Q-07">
+<div class="gt-row gt-head" role="row"><span role="columnheader">Ruling</span><span role="columnheader">Question</span><span role="columnheader">Options</span><span role="columnheader">Recommended default</span></div>
+<div class="gt-row" role="row"><strong>Q-01</strong><span>Who absorbs a checkout price rise, and who decides?</span><span><span class="cell-label">Options</span>A. Preselect nothing; the owner chooses on the flagged line. B. Absorb below a studio threshold. C. Always ask the client.</span><span><span class="cell-label">Recommended default</span><strong>A.</strong> The buyer can leave it flagged; absorbing is the owner's call.</span></div>
+<div class="gt-row" role="row"><strong>Q-02</strong><span>Must “Bought it already” respect the deposit gate?</span><span><span class="cell-label">Options</span>A. Allow, warn before, mark after. B. Refuse until the deposit clears. C. Owner only.</span><span><span class="cell-label">Recommended default</span><strong>A</strong>, on condition that R-10 lands first.</span></div>
+<div class="gt-row" role="row"><strong>Q-03</strong><span>How is shipping allocated across a grouped buy?</span><span><span class="cell-label">Options</span>A. On the order. B. A plus a computed per-piece share. C. On one piece.</span><span><span class="cell-label">Recommended default</span><strong>A.</strong> B later without changing a record.</span></div>
+<div class="gt-row" role="row"><strong>Q-04</strong><span>Is a receipt required before a purchase is “complete”?</span><span><span class="cell-label">Options</span>A. Owed quietly, counted, listed at closeout. B. A plus a Desk need. C. Required before billing or close.</span><span><span class="cell-label">Recommended default</span><strong>A.</strong> Serves “if we ever were to get audited” (mtg:155) without a gate.</span></div>
+<div class="gt-row" role="row"><strong>Q-05</strong><span>Freight markup default, and does the client see it? (R1)</span><span><span class="cell-label">Options</span>A. Studio 0%, job percent, rider override, one delivery figure. B. Studio-wide percent. C. Per rider only. D. At cost, type an override.</span><span><span class="cell-label">Recommended default</span><strong>A.</strong> The Harchess job's 10% is the job's, not the studio's. D works until then.</span></div>
+<div class="gt-row" role="row"><strong>Q-06</strong><span>Which door does a web checkout of a piece that ships use?</span><span><span class="cell-label">Options</span>A. The order paper, marked placed. B. A grouped Bought it already.</span><span><span class="cell-label">Recommended default</span><strong>A.</strong> Only the paper carries ship-to, riders, the ETA and shipments.</span></div>
+<div class="gt-row" role="row"><strong>Q-07</strong><span>Extend the Send review to recording an external order?</span><span><span class="cell-label">Options</span>A. Add a review before mark as placed. B. Keep direct recording with the clearer label.</span><span><span class="cell-label">Recommended default</span><strong>A, proposed.</strong> New behaviour, M, in NOW-next. V26 F-06 covers Send only; founders must rule before extending it.</span></div>
+</div>
+<div class="cols even" style="border:1px solid var(--rule-strong);border-radius:var(--r);padding:20px"><div class="stack"><p class="meta">Parked · P1 · the job mailbox</p><p>A job or purchasing address that takes in receipts and tracking. Vendors keep one email per account, and studios won't hand a platform their mail. R-09's “receipt later” is the manual answer for now.</p><p class="note">Kody: “let's not worry about automation.” mtg:165–172</p></div><div class="stack"><p class="meta">Parked · P2 · visual differentiation</p><p>“Some more lines, some more bold… just some highlights.” Goes to the redesign review. Nothing in this deck changes weight, colour or rules.</p><p class="note">Leah and Ashley, mtg:511–523</p></div></div>
+<blockquote class="fq" style="border:0"><span style="font:italic 400 clamp(22px,2.6vw,30px)/1.4 var(--display);color:var(--ink)">Can Ashley buy the Rejuvenation pair, the bed and the wallpaper on Leah's logins, and can the books explain every dollar later, without anyone asking where a button went?</span></blockquote>
+<footer class="sheet-foot"><span>Proposal only · 24 October 2026 · design-only, nothing built</span><a href="#sheet-1">Back to the start ↑</a></footer></section>
+</main>
+<script>
+(function(){
+const sheets=[...document.querySelectorAll('.sheet')];
+const total=sheets.length;
+const pad=n=>String(n).padStart(2,'0');
+function currentIndex(){let best=0;for(let i=0;i<sheets.length;i++){if(sheets[i].getBoundingClientRect().top<120)best=i;}return best;}
+function go(i){sheets[Math.max(0,Math.min(total-1,i))].scrollIntoView({block:'start'});}
+document.getElementById('previous').addEventListener('click',()=>go(currentIndex()-1));
+document.getElementById('next').addEventListener('click',()=>go(currentIndex()+1));
+document.addEventListener('keydown',e=>{if(e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t&&t.closest&&t.closest('input,textarea,select,[contenteditable],[role="radiogroup"],[role="tablist"]'))return;if(e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();go(currentIndex()+1);}else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(currentIndex()-1);}});
+const count=document.getElementById('count');
+function updateCount(){count.textContent=pad(currentIndex()+1)+' / '+pad(total);}
+window.addEventListener('scroll',updateCount,{passive:true});window.addEventListener('resize',updateCount);updateCount();
+for(const b of document.querySelectorAll('.image-toggle')){b.addEventListener('click',()=>{const f=b.closest('.shot');const x=f.classList.toggle('expanded');b.setAttribute('aria-expanded',String(x));});}
+
+/* ---- mockup ---- */
+const surface=document.getElementById('m-surface');
+const frames=[...surface.querySelectorAll('.frame')];
+const N=frames.length;
+const $=id=>document.getElementById(id);
+let cur=1,hist=[],width=null;
+const resets={
+ 2(){$('m2-amt').value='21,123.19';m2();},
+ 4(){surface.querySelectorAll('input[name="m4-ship"]').forEach(r=>r.checked=false);$('m4-go').classList.remove('hot');$('m4-home').classList.add('hot');$('m4-go').disabled=true;$('m4-hint').textContent='Choose where it ships.';$('m4-fold-note').hidden=true;$('m4-fold').setAttribute('aria-expanded','false');},
+ 5(){$('m5-rider').hidden=true;$('m5-go').classList.remove('hot');$('m5-add').classList.add('hot');$('m5-picker').hidden=true;$('m5-add').setAttribute('aria-expanded','false');$('m5-go').disabled=true;$('m5-rule').value='cost_plus';$('m5-note').hidden=false;},
+ 6(){$('m6-foot').hidden=false;$('m6-review').hidden=true;},
+ 7(){tab7(false);},
+ 8(){const l=$('m8-files');l.innerHTML='<div class="dfile">checkout-screenshot.png</div>';$('m8-add').hidden=false;$('m8-done').hidden=true;},
+ 9(){surface.querySelectorAll('input[name="m9"]').forEach(r=>r.checked=false);$('m9-go').classList.remove('hot');$('m9-bedlab').classList.add('hot');$('m9-go').disabled=true;$('m9-why').value='';$('m9-why').disabled=false;$('m9-hint').textContent='Nothing is preselected.';},
+ 10(){varianceResult();$('m10-note').hidden=true;},
+ 11(){$('m11-later').hidden=true;$('m11-bill').hidden=true;$('m11-billnote').hidden=true;$('m11-pay').hidden=false;$('m11-fee-sub').textContent='Type, rate, payee and amount unconfirmed · waiting for the vendor’s bill';},
+ 12(){$('m12-menu').hidden=false;$('m12-form').hidden=true;},
+ 13(){$('m13-acts').hidden=false;$('m13-done').hidden=true;},
+ 14(){$('m14-draft').hidden=true;$('m14-bill').hidden=false;}
+};
+function setWidth(w){width=w;surface.classList.toggle('is-phone',w==='phone');document.querySelectorAll('#m-widths [data-w]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.w===w)));}
+function render(){const f=frames[cur-1];frames.forEach(x=>x.hidden=x!==f);
+ $('m-count').textContent='Frame '+pad(cur)+' / '+N;$('m-title').textContent=f.dataset.title;$('m-act').textContent='The one act: '+f.dataset.act;$('m-r').textContent=f.dataset.r+(f.dataset.m390?' · drawn for 390':'');
+ $('m-back').disabled=hist.length===0&&cur===1;$('m-next').disabled=cur===N;
+ $('m-widths').hidden=!f.dataset.m390;setWidth(f.dataset.m390?(width&&f.dataset.m390?width:f.dataset.w):'desk');
+ const a=+f.dataset.actN;$('m-act-select').value=String([1,4,9,12][a-1]);document.querySelectorAll('[data-act-jump]').forEach(b=>{const s=+b.dataset.actJump;const nx=[1,4,9,12,99];const idx=nx.indexOf(s);b.setAttribute('aria-current',String(a===idx+1));});}
+function goFrame(n,push=true){n=Math.max(1,Math.min(N,n));if(push&&n!==cur)hist.push(cur);cur=n;width=null;if(resets[n])resets[n]();render();}
+$('m-back').addEventListener('click',()=>{if(hist.length){cur=hist.pop();width=null;if(resets[cur])resets[cur]();render();}else goFrame(cur-1,false);});
+$('m-act-select').addEventListener('change',e=>goFrame(+e.target.value));
+$('m-next').addEventListener('click',()=>goFrame(cur+1));
+$('m-restart').addEventListener('click',()=>{hist=[];goFrame(1,false);});
+document.querySelectorAll('[data-act-jump]').forEach(b=>b.addEventListener('click',()=>goFrame(+b.dataset.actJump)));
+document.querySelectorAll('#m-widths [data-w]').forEach(b=>b.addEventListener('click',()=>setWidth(b.dataset.w)));
+surface.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(g&&!g.disabled){goFrame(+g.dataset.go);const cap=document.querySelector('.mock-cap');if(cap.getBoundingClientRect().top<0)cap.scrollIntoView({block:'start'});}});
+/* deck links into the walk */
+document.querySelectorAll('[data-goto-frame]').forEach(b=>b.addEventListener('click',()=>{hist=[];goFrame(+b.dataset.gotoFrame,false);if(b.dataset.nextTab)tab7(true);$('mock').scrollIntoView({block:'start'});}));
+/* F2 */
+const BAL=2312319;const money=c=>'$'+(c/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+function cents(){const v=parseFloat(String($('m2-amt').value).replace(/[^0-9.]/g,''));return isNaN(v)?0:Math.round(v*100);}
+function m2(){const c=cents(),m=$('m2-msg');$('m2-hint').textContent='';
+ if(c<BAL){const d=money(BAL-c);m.innerHTML='<p><span class="dk">'+d+' less than the balance.</span> '+d+' stays open, and the deposit on A1 isn’t covered, so 2 pieces stay held.</p><button type="button" class="dbtn2 hot" id="m2-use">Use $23,123.19</button>';$('m2-record').classList.remove('hot');}
+ else if(c===BAL){m.innerHTML='<p class="dk">Matches the balance. A1’s deposit is clear, so 2 pieces can be ordered.</p>';$('m2-record').classList.add('hot');}
+ else{m.innerHTML='<p class="dk">Amount exceeds the remaining balance.</p>';$('m2-record').classList.remove('hot');}}
+$('m2-amt').addEventListener('input',m2);
+$('m2-msg').addEventListener('click',e=>{if(e.target.id==='m2-use'){$('m2-amt').value='23,123.19';m2();$('m2-record').focus();}});
+$('m2-record').addEventListener('click',()=>{const c=cents();if(c===BAL)goFrame(3);else $('m2-hint').textContent=c<BAL?'Partials stay allowed. In this walk, use the full balance to go on.':'Fix the amount first.';});
+/* F4 */
+surface.querySelectorAll('input[name="m4-ship"]').forEach(r=>r.addEventListener('change',()=>{const home=r.value==='home';const place={home:'the Harchess home · needs a liftgate',studio:'the studio',recv:'the receiving warehouse'}[r.value];$('m5-ship').textContent='Ships to '+place;$('m6-ship').textContent='Ships to '+place;$('m4-go').disabled=false;$('m4-go').classList.add('hot');$('m4-home').classList.remove('hot');$('m4-hint').textContent=home?'Ships to the Harchess home · one ship-to per order (F-05).':'Ships to a studio place. The walk continues either way.';}));
+$('m4-fold').addEventListener('click',()=>{const n=$('m4-fold-note');n.hidden=!n.hidden;$('m4-fold').setAttribute('aria-expanded',String(!n.hidden));});
+/* F5 */
+$('m5-add').addEventListener('click',()=>{const p=$('m5-picker');p.hidden=!p.hidden;$('m5-add').classList.toggle('hot',p.hidden);$('m5-add').setAttribute('aria-expanded',String(!p.hidden));});
+$('m5-freight').addEventListener('click',()=>{$('m5-rider').hidden=false;$('m5-picker').hidden=true;$('m5-add').setAttribute('aria-expanded','false');$('m5-go').disabled=false;$('m5-go').classList.add('hot');$('m5-add').classList.remove('hot');});
+$('m5-rule').addEventListener('change',()=>{$('m5-note').hidden=$('m5-rule').value!=='cost_plus';});
+/* F6 */
+$('m6-mark').addEventListener('click',()=>{$('m6-foot').hidden=true;$('m6-review').hidden=false;});
+$('m6-back').addEventListener('click',()=>{$('m6-foot').hidden=false;$('m6-review').hidden=true;});
+/* F7 */
+function tab7(next){$('m7-now').hidden=next;$('m7-next').hidden=!next;$('m7-tnow').setAttribute('aria-selected',String(!next));$('m7-tnext').setAttribute('aria-selected',String(next));$('m7-tnow').style.borderColor=next?'':'var(--m-char)';$('m7-tnext').style.borderColor=next?'var(--m-char)':'';}
+$('m7-tnow').addEventListener('click',()=>tab7(false));$('m7-tnext').addEventListener('click',()=>tab7(true));
+/* F8 */
+$('m8-add').addEventListener('click',()=>{const d=document.createElement('div');d.className='dfile';d.textContent='order-confirmation.pdf';$('m8-files').appendChild(d);$('m8-add').hidden=true;$('m8-done').hidden=false;});
+/* F9 */
+const m9fx={bed:'The bed’s cost becomes $3,679.20, with your reason. The line is flagged; the client’s price waits.',fee:'Adds a $230.20 rider to the order. Shown in this walk: the bed path.',else:'Records $230.20 as an expense and takes it off this payment. Shown in this walk: the bed path.',unsure:'Records the payment; the $230.20 waits on the line, flagged.'};
+surface.querySelectorAll('input[name="m9"]').forEach(r=>r.addEventListener('change',()=>{$('m9-go').disabled=false;$('m9-go').classList.add('hot');$('m9-bedlab').classList.remove('hot');$('m9-hint').textContent=m9fx[r.value];$('m9-why').disabled=r.value==='unsure';if(r.value==='unsure')$('m9-why').value='';}));
+/* F10: show only the outcome the buyer actually selected. */
+function varianceResult(){const choice=surface.querySelector('input[name="m9"]:checked')?.value||'unsure';const bed=choice==='bed';const labels={bed:'Sierra bed · cost changed from $3,449.00 to $3,679.20',unsure:'$230.20 unallocated · flagged',fee:'$230.20 allocated to a proposed fee rider · flagged',else:'$230.20 allocated to a separate expense · flagged'};$('m10-cost').textContent=labels[choice];$('m10-reason').textContent=bed?($('m9-why').value.trim()||'No reason entered')+' · recorded by Leah, 23 Oct · margin on this piece down $230.20':'Bed cost stays $3,449.00 · no price-rise reason recorded · client price unchanged';surface.querySelectorAll('[data-m10-pricing]').forEach(x=>x.hidden=!bed);}
+/* F10 */
+surface.querySelectorAll('[data-q01]').forEach(b=>b.addEventListener('click',()=>{$('m10-note').hidden=false;}));
+/* F11 */
+$('m11-pay').addEventListener('click',()=>{$('m11-later').hidden=false;$('m11-pay').hidden=true;});
+$('m11-rec').addEventListener('click',()=>{$('m11-later').hidden=true;$('m11-fee-sub').textContent='Example bill names the courier · paid $— · proposed link fills Actual';$('m11-bill').hidden=false;});
+$('m11-billbtn').addEventListener('click',()=>{$('m11-billnote').hidden=false;});
+/* F12 */
+$('m12-exp').addEventListener('click',()=>{$('m12-menu').hidden=true;$('m12-form').hidden=false;});
+/* F13 */
+$('m13-good').addEventListener('click',()=>{$('m13-acts').hidden=true;$('m13-done').hidden=false;});
+/* F14 */
+$('m14-bill').addEventListener('click',()=>{$('m14-draft').hidden=false;$('m14-bill').hidden=true;});
+$('m14-restart').addEventListener('click',()=>{hist=[];goFrame(1,false);$('mock').scrollIntoView({block:'start'});});
+goFrame(1,false);
+})();
+</script>

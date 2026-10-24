@@ -5,10 +5,10 @@
  * job, and never a word about how the edition was made. Editions are the
  * SQL's own rows (__fixtures__/client-editions) through the hook's normaliser.
  */
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act as reactAct, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ClientEdition, ClientEditions, ClientEditorialAsset } from '@patina/supabase';
 import { PressBand, publishedLine } from '../press-band';
-import { editionDelta, heroCoverCrop } from '../press-band-preview';
+import { editionDelta, PressBandPreview } from '../press-band-preview';
 import {
   CURRENT_ROW,
   EARLIER_ROW,
@@ -17,7 +17,6 @@ import {
   imageRow,
   listEnvelope,
 } from '../__fixtures__/client-editions';
-import { objectPositionOf, plateCropWindow } from '@/lib/document/plate-crop';
 import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending } from '@/lib/document/registry';
 
 const { normalizeClientEditions } = jest.requireActual<typeof import('@patina/supabase')>('@patina/supabase');
@@ -50,13 +49,19 @@ let mockDeadPictures: { itemId: string; name: string }[] = [];
 const act = (mutate: jest.Mock) => ({ mutate, reset: jest.fn(), isPending: false, isSuccess: false, error: null });
 
 jest.mock('@patina/supabase', () => ({
+  useProjectV2: () => ({ data: { name: 'Ridgeline' } }),
+  useProjectPalettes: () => ({ data: [] }),
   useProjectDeadPictureLinks: () => ({ data: mockDeadPictures }),
   useClientEditions: (...args: unknown[]) => {
     mockUseClientEditions(...args);
     return { data: mockData, refetch: mockRefetchEditions, isFetching: false };
   },
   useClientEditorialAssets: (_projectId: string, enabled: boolean) => ({
-    data: enabled ? mockEditorial : undefined,
+    data: enabled === false ? undefined : mockEditorial?.map(asset => ({ ...asset, sha256: asset.id, focal: asset.focal ?? null, caption: { what: "the house", whose: null, when: null }, crops: { piece: { rect: [0,0,asset.width,asset.height], widths: [asset.width] } }, ...asset })) ?? (enabled === undefined ? mockData?.editions[0]?.images.map(image => ({
+      ...image, caption: { what: image.captionWhat, whose: image.captionWhose, when: image.captionWhen }, id: image.assetId, sha256: image.assetId, sourceKind: image.sourceKind ?? image.attributionKind,
+      focal: image.focal, subjectBox: image.subjectBox,
+      crops: { cover_phone: { rect: [0, 0, image.width, image.height], widths: [image.width] }, wide: { rect: [0, 0, image.width, image.height], widths: [image.width] } },
+    })) : undefined),
   }),
   useClientEditionSourceUrls: (images: unknown) => {
     mockSourceUrls(images);
@@ -71,7 +76,29 @@ jest.mock('@patina/supabase', () => ({
   useApproveClientEdition: () => act(mockApprove),
   useHoldClientEdition: () => act(mockHold),
   useUndoClientEdition: () => act(mockUndo),
-  useSetPlateFocal: () => act(mockSetFocal),
+  useSetPlateFocal: () => {
+    const React = require('react');
+    const [state, setState] = React.useState({ isPending: false, isSuccess: false, error: null });
+    return {
+      ...state,
+      reset: () => setState({ isPending: false, isSuccess: false, error: null }),
+      mutate: (input: unknown, options?: { onSuccess?: () => void; onError?: () => void; onSettled?: () => void }) => {
+        setState({ isPending: true, isSuccess: false, error: null });
+        mockSetFocal(input, {
+          onSuccess: () => {
+            setState({ isPending: false, isSuccess: true, error: null });
+            options?.onSuccess?.();
+            options?.onSettled?.();
+          },
+          onError: () => {
+            setState({ isPending: false, isSuccess: false, error: new Error('Crop could not be saved') });
+            options?.onError?.();
+            options?.onSettled?.();
+          },
+        });
+      },
+    };
+  },
   useSetProjectShowMakers: () => act(mockShowMakers),
 }));
 
@@ -98,8 +125,6 @@ function allWords(root: HTMLElement): string {
   return `${root.textContent} ${labels.join(' ')}`;
 }
 
-const coverImage = () => document.querySelector('[data-press-cover]') as HTMLImageElement;
-const coverWindow = () => document.querySelector('[data-press-cover-window]') as HTMLElement;
 
 const frameRect = (frame: HTMLElement) => {
   frame.getBoundingClientRect = () =>
@@ -112,6 +137,8 @@ beforeEach(() => {
   mockDeadPictures = [];
   focusFfeLinePending.request = null;
   jest.clearAllMocks();
+  mockRefetchEditions.mockReset();
+  mockRefetchEditions.mockResolvedValue({ isSuccess: true });
 });
 
 describe('PressBand — the states', () => {
@@ -121,9 +148,9 @@ describe('PressBand — the states', () => {
     expect(screen.getByText(/Approve puts it on June’s page\. Hold keeps edition 4 there\./)).toBeInTheDocument();
     const chapters = screen.getByRole('list', { name: 'Chapters' });
     expect(within(chapters).getByText('The living room')).toBeInTheDocument();
-    expect(within(chapters).getByText('The sofa leaves the workshop on Friday.')).toBeInTheDocument();
-    expect(screen.getByText('Nothing waits on you this week.')).toBeInTheDocument();
-    expect(screen.getByText('Maren has a new issue for you.')).toBeInTheDocument();
+    expect(screen.getByText('The sofa leaves the workshop on Friday.')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing waits on you this week.')).toBeNull();
+    expect(screen.queryByText('Maren has a new issue for you.')).toBeNull();
     // The cover is the hero's SOURCE picture, never the client page's plate route.
     const cover = screen.getByRole('img', { name: 'Picture a-hero' });
     expect(cover).toHaveAttribute('src', expect.stringContaining('https://example.com/hero.jpg'));
@@ -170,28 +197,35 @@ describe('PressBand — the states', () => {
     ];
     renderBand([]);
     expect(
-      screen.getByRole('heading', { name: 'June’s page shows the editorial cover until an edition is approved' }),
+      screen.getByRole('heading', { name: 'The page opens on photographs of the pieces.' }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/drawing/i)).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Add a photograph for the cover' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Add a photograph for the cover' })).toBeInTheDocument();
   });
 
-  it('says the cover is a drawing only when the editorial read has no eligible photograph (R11)', () => {
+  it('uses a small photograph before a drawing when no hero meets the floor', () => {
     mockEditorial = [
-      // A concept render, a small upload and a white-ground clipping: none may open the page.
+      // The concept is excluded; the small studio upload outranks the catalogue.
       { id: 'x-1', sourceKind: 'concept', ground: 'scene', width: 3000, height: 2000, subjectBox: null },
       { id: 'x-2', sourceKind: 'upload', ground: 'scene', width: 900, height: 600, subjectBox: null },
       { id: 'x-3', sourceKind: 'maker', ground: 'white', width: 3000, height: 2000, subjectBox: null },
     ];
     renderBand([]);
     expect(
-      screen.getByRole('heading', { name: 'The cover is a drawing until a photograph arrives' }),
+      screen.getByRole('heading', { name: 'The page opens on photographs of the pieces.' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Add a photograph for the cover' })).toHaveAttribute(
       'href',
       '#doc-section-project',
     );
     expect(screen.queryByRole('list', { name: 'Published editions' })).toBeNull();
+  });
+
+  it('keeps the cover photograph act when an approved edition has no hero', () => {
+    renderBand([{ ...CURRENT_ROW, composition: { ...(CURRENT_ROW.composition as object), hero: null }, images: [] }]);
+    expect(screen.getByText('The page opens on photographs of the pieces.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Add a photograph for the cover' })).toHaveAttribute('href', '#doc-section-project');
+    expect(document.querySelector('[data-gallery-frame]')).toBeNull();
   });
 
   it('a draft that never reached review is still "no edition yet" (R11)', () => {
@@ -464,7 +498,7 @@ describe('PressBand — focal point', () => {
     fireEvent.pointerUp(frame, { clientX: 900, clientY: 50, pointerId: 1 });
 
     // Both frames' handles name the same point.
-    expect(within(tray).getAllByRole('button', { name: /^Focal point at 100 across, 20 down/ })).toHaveLength(2);
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 100 across, 19 down/ })).toHaveLength(2);
 
     fireEvent.click(useCrop);
     expect(mockSetFocal).toHaveBeenCalledTimes(1);
@@ -472,7 +506,7 @@ describe('PressBand — focal point', () => {
     expect({ projectId, assetId }).toEqual({ projectId: 'p-1', assetId: 'a-hero' });
     expect(subjectBox).toBeNull();
     expect(focal[0]).toBeCloseTo(1);
-    expect(focal[1]).toBeCloseTo(0.2);
+    expect(focal[1]).toBeCloseTo(0.2 * (2000 / 1250) / (1440 / 852));
   });
 
   it('keeps the point inside the subject box, and saves that box', () => {
@@ -494,128 +528,341 @@ describe('PressBand — focal point', () => {
     expect(focal).toEqual([0.2, 0.2]);
   });
 
-  it('the frames and the band cover show the crop the worker cuts, subject box first (R8)', () => {
-    // Review reproduction 2: 2000² source, box [.1,.1,.8,.5], focal [.5,.6] → wide [0,200,2000,1250].
-    const square = imageRow('a-hero', {
-      plateRole: 'hero',
-      chapterKey: 'cover',
-      width: 2000,
-      height: 2000,
-      subjectBox: [0.1, 0.1, 0.8, 0.5],
-      focal: [0.5, 0.6],
-    });
-    renderBand([{ ...PENDING_ROW, images: [square] }]);
-    const wide = objectPositionOf({ left: 0, top: 200 / 2000, vx: 1, vy: 1250 / 2000 });
-    expect(coverWindow()).toHaveAttribute('data-press-cover-window', '0 200 2000 1250');
-
-    const tray = openHeroFocal();
-    const frameImage = (key: string) =>
-      tray.querySelector(`[data-focal-frame="${key}"] img`) as HTMLImageElement;
-    expect(frameImage('wide').style.objectPosition).toBe(wide);
-    const source = { width: 2000, height: 2000, focal: [0.5, 0.6], subjectBox: [0.1, 0.1, 0.8, 0.5] };
-    expect(frameImage('cover_phone').style.objectPosition).toBe(
-      objectPositionOf(plateCropWindow(source, 'cover_phone')!),
-    );
-  });
-
-  it('a frame the worker cuts no crop for is shown unavailable, with what those screens draw (N1)', () => {
-    // planCrops on 2000×1250, box [0,0,1,1], focal [1,.2] → wide and piece only.
-    const whole = imageRow('a-hero', {
-      plateRole: 'hero',
-      chapterKey: 'cover',
-      width: 2000,
-      height: 1250,
-      subjectBox: [0, 0, 1, 1],
-      focal: [1, 0.2],
-    });
-    renderBand([{ ...PENDING_ROW, images: [whole] }]);
-    const tray = openHeroFocal();
-    const phone = tray.querySelector('[data-focal-frame="cover_phone"]') as HTMLElement;
-    expect(phone).toHaveAttribute('data-focal-unavailable');
-    expect(phone.querySelector('img')).toBeNull();
-    expect(within(tray).getByText('Phones show the wide cover for this photograph.')).toBeInTheDocument();
-    expect(within(tray).queryByText('The phone cover.')).toBeNull();
-    // The desktop frame is cut, and still shows the picture.
-    const wide = tray.querySelector('[data-focal-frame="wide"]') as HTMLElement;
-    expect(wide).not.toHaveAttribute('data-focal-unavailable');
-    expect(wide.querySelector('img')).not.toBeNull();
-  });
-
-  it('a white-ground picture has no cover frames: the worker cuts it only as a pair and a piece (F1)', () => {
-    // planCrops on 2000×1250, ground white, maker → {pair, piece} only.
-    const clipping = imageRow('a-hero', {
-      plateRole: 'hero',
-      chapterKey: 'cover',
-      sourceKind: 'maker',
-      ground: 'white',
-      width: 2000,
-      height: 1250,
-    });
-    renderBand([{ ...PENDING_ROW, images: [clipping] }]);
-    const tray = openHeroFocal();
-    for (const key of ['wide', 'cover_phone']) {
-      const frame = tray.querySelector(`[data-focal-frame="${key}"]`) as HTMLElement;
-      expect(frame).toHaveAttribute('data-focal-unavailable');
-      expect(frame.querySelector('img')).toBeNull();
-    }
-    expect(within(tray).getAllByText('No cover is cut from this photograph.')).toHaveLength(2);
-    // The same scene-ground picture keeps both frames.
-    expect(heroCoverCrop(one({ ...PENDING_ROW, images: [{ ...clipping, ground: 'scene' }] }).images[0])).not.toBeNull();
-  });
-
-  it('designer photography stays within 120px tall (R10)', () => {
+  it('moving the focal control updates both arrival crops before saving', () => {
     renderBand([PENDING_ROW]);
-    const frame = coverWindow();
-    expect(frame.className).toMatch(/\bmax-h-\[120px\]/);
-    // 2000×1250 draws the 16:10 wide crop: 192px wide at the 120px cap.
-    expect(frame.style.width).toBe('192px');
-    expect(frame.className).not.toMatch(/(^|\s)w-full(\s|$)/);
-  });
-});
-
-/*
- * F2 — the band cover clips the source to the crop's own window: a frame of
- * the crop's aspect, the picture scaled by 1/vx × 1/vy and moved so the
- * window's corner meets the frame's. Values are native planCrops rects.
- */
-describe('PressBand — the cover thumbnail is the crop window (F2)', () => {
-  const coverOn = (over: Record<string, unknown>) =>
-    renderBand([{ ...PENDING_ROW, images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', ...over })] }]);
-  const pct = (value: string) => parseFloat(value);
-
-  it('1400×900 draws the 3:2 wide32 window [25, 0, 1350, 900]', () => {
-    // planCrops 1400×900 → wide32 [25, 0, 1350, 900] (no wide: under its floor).
-    coverOn({ width: 1400, height: 900 });
-    const frame = coverWindow();
-    expect(frame).toHaveAttribute('data-press-cover-window', '25 0 1350 900');
-    expect(frame.style.aspectRatio).toBe('1350 / 900');
-    expect(frame.style.width).toBe('180px');
-    const img = coverImage();
-    expect(pct(img.style.width)).toBeCloseTo((1400 / 1350) * 100, 6);
-    expect(pct(img.style.height)).toBeCloseTo(100, 6);
-    expect(pct(img.style.left)).toBeCloseTo((-25 / 1350) * 100, 6);
-    expect(pct(img.style.top)).toBeCloseTo(0, 6);
-    expect(img.style.objectPosition).toBe('');
+    const tray = openHeroFocal();
+    const handles = within(tray).getAllByRole('button', { name: /^Focal point at/ });
+    fireEvent.keyDown(handles[0], { key: 'ArrowRight' });
+    expect((document.querySelector('[data-gallery-frame="cover_phone"] [data-press-cover]') as HTMLElement).style.objectPosition).toBe('52.9% 50%');
+    expect((document.querySelector('[data-gallery-frame="wide"] [data-press-cover]') as HTMLElement).style.objectPosition).toBe('50% 0%');
+    expect(mockSetFocal).not.toHaveBeenCalled();
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    expect(mockSetFocal).toHaveBeenCalledWith(expect.objectContaining({ focal: [0.52, 0.45] }), expect.any(Object));
   });
 
-  it('a 1100×2000 portrait draws the tall window [90, 0, 920, 2000]', () => {
-    // planCrops 1100×2000 → {tall: [90, 0, 920, 2000], piece}; the page's portrait layout draws tall.
-    coverOn({ width: 1100, height: 2000 });
-    const frame = coverWindow();
-    expect(frame).toHaveAttribute('data-press-cover-window', '90 0 920 2000');
-    expect(frame.style.aspectRatio).toBe('920 / 2000');
-    // 120px tall at 0.46 → 55.2px wide.
-    expect(pct(frame.style.width)).toBeCloseTo(55.2, 6);
-    const img = coverImage();
-    expect(pct(img.style.width)).toBeCloseTo((1100 / 920) * 100, 6);
-    expect(pct(img.style.height)).toBeCloseTo(100, 6);
-    expect(pct(img.style.left)).toBeCloseTo((-90 / 920) * 100, 6);
+  const previewPosition = () => (document.querySelector('[data-gallery-frame="cover_phone"] [data-press-cover]') as HTMLElement).style.objectPosition;
+  const dragHero = (tray: HTMLElement) => {
+    const frame = tray.querySelector('[data-focal-frame="wide"]') as HTMLElement;
+    frameRect(frame);
+    fireEvent.pointerDown(frame, { clientX: 300, clientY: 50, pointerId: 1 });
+    fireEvent.pointerUp(frame, { pointerId: 1 });
+  };
+
+  it.each(['Edit', 'Set the focal point of What a-hero'])('drag then close %s restores the saved preview and reopening stays saved', (close) => {
+    renderBand([PENDING_ROW]);
+    const saved = previewPosition();
+    const tray = openHeroFocal();
+    dragHero(tray);
+    expect(previewPosition()).not.toBe(saved);
+    fireEvent.click(screen.getByRole('button', { name: close }));
+    expect(previewPosition()).toBe(saved);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: close }));
+    expect(previewPosition()).toBe(saved);
+    expect(mockSetFocal).not.toHaveBeenCalled();
   });
 
-  it('a source of unknown size keeps the plain 120px box', () => {
-    coverOn({ width: null, height: null });
-    expect(document.querySelector('[data-press-cover-window]')).toBeNull();
-    expect(coverImage().className).toMatch(/\bh-\[120px\]/);
+  it('drag disables Approve with a reason and does not auto-save', () => {
+    renderBand([PENDING_ROW]);
+    dragHero(openHeroFocal());
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    expect(approve).toBeDisabled();
+    expect(approve).toHaveAccessibleDescription('Use this crop or cancel first');
+    fireEvent.click(approve);
+    expect(mockApprove).not.toHaveBeenCalled();
+    expect(mockSetFocal).not.toHaveBeenCalled();
+  });
+
+  it('clicking the selected default hero keeps its unsaved crop guarded (R2)', () => {
+    renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    dragHero(tray);
+    const dirty = previewPosition();
+    fireEvent.click(within(tray).getByRole('button', { name: 'What a-hero', exact: true }));
+    expect(previewPosition()).toBe(dirty);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(within(tray).getByRole('button', { name: 'Use this crop' })).toBeEnabled();
+    expect(mockSetFocal).not.toHaveBeenCalled();
+  });
+
+  it('a refetch during a pending crop save waits for a post-save authoritative crop read', async () => {
+    const baseline = {
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: null })],
+    };
+    const { rerender } = renderBand([baseline]);
+    const tray = openHeroFocal();
+    dragHero(tray);
+    const savedPosition = previewPosition();
+    let finishRead!: (result: { isSuccess: boolean }) => void;
+    mockRefetchEditions.mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve; }));
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    const savedPoint = mockSetFocal.mock.calls[0][0].focal;
+    const refreshed = (point: number[] | null) => ({
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: point, captionWhen: 'November' })],
+    });
+    mockData = editions([refreshed(null)]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(previewPosition()).toBe(savedPosition);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(previewPosition()).not.toBe(savedPosition);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(within(tray).getByRole('button', { name: 'Use this crop' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(previewPosition()).not.toBe(savedPosition);
+    mockData = editions([refreshed(savedPoint)]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    await reactAct(async () => finishRead({ isSuccess: true }));
+    expect(previewPosition()).toBe(savedPosition);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it.each([false, true])('a delayed crop success cannot overlay an ABA authoritative read, shared=%s (SQ-1943 R6)', async (shared) => {
+    const row = {
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: [0.5, 0.5] })],
+    };
+    const { rerender } = renderBand([row]);
+    const original = previewPosition();
+    const tray = openHeroFocal();
+    dragHero(tray);
+    expect(previewPosition()).not.toBe(original);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    let finishRead!: (result: { isSuccess: boolean }) => void;
+    mockRefetchEditions.mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve; }));
+    // A committed, then editor B restored O before A's response arrived.
+    // An identical read can retain the entire React Query data object.
+    if (!shared) mockData = editions([row]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(previewPosition()).toBe(original);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(mockApprove).not.toHaveBeenCalled();
+    await reactAct(async () => finishRead({ isSuccess: true }));
+    expect(previewPosition()).toBe(original);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 50 across, 50 down/ })).toHaveLength(2);
+  });
+
+  it('a delayed crop success cannot overlay a newer framing, even with structurally shared reads (SQ-1940 R3)', async () => {
+    const row = (focal: number[]) => ({
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal })],
+    });
+    const { rerender } = renderBand([row([0.5, 0.5])]);
+    const tray = openHeroFocal();
+    dragHero(tray);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    let finishRead!: (result: { isSuccess: boolean }) => void;
+    mockRefetchEditions.mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve; }));
+    mockData = editions([row([0.8, 0.7])]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    const authoritative = document.createElement('div');
+    const expected = render(<PressBandPreview edition={mockData.editions[0]} current={null} sourceUrls={{ 'a-hero': 'https://example.com/hero.jpg' }} assets={mockData.editions[0].images.map(image => ({ ...image, id: image.assetId, sha256: image.assetId, crops: { wide: { rect: [0,0,image.width,image.height], widths: [image.width] } } } as unknown as ClientEditorialAsset))} />, { container: authoritative });
+    const position = authoritative.querySelector<HTMLElement>('[data-gallery-frame="cover_phone"] [data-press-cover]')!.style.objectPosition;
+    expected.unmount();
+    expect(previewPosition()).toBe(position);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(mockRefetchEditions).toHaveBeenCalledTimes(1);
+    // React Query can return the exact same data object after a successful read.
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(previewPosition()).toBe(position);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    await reactAct(async () => finishRead({ isSuccess: true }));
+    expect(previewPosition()).toBe(position);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it.each(['failure', 'rejection'])('a conflicting crop stays guarded after refresh %s until a successful retry', async (outcome) => {
+    const { rerender } = renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    dragHero(tray);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    mockData = editions([{
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: [0.8, 0.7] })],
+    }]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    mockRefetchEditions.mockImplementationOnce(() => outcome === 'failure'
+      ? Promise.resolve({ isSuccess: false })
+      : Promise.reject(new Error('Offline')));
+    await reactAct(async () => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription('Refresh the stored crop before approval');
+    // Closing the editor must not clear an unresolved authoritative-read guard.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    mockRefetchEditions.mockResolvedValueOnce({ isSuccess: true });
+    await reactAct(async () => fireEvent.click(screen.getByRole('button', { name: 'Refresh crop' })));
+    expect(mockRefetchEditions).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it('a read already carrying the saved crop still confirms authority after success', async () => {
+    const { rerender } = renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    dragHero(tray);
+    const position = previewPosition();
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    const point = mockSetFocal.mock.calls[0][0].focal;
+    mockData = editions([{
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: point })],
+    }]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    await reactAct(async () => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(previewPosition()).toBe(position);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(mockRefetchEditions).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([false, true])('null framing matches the Gallery default when opening or rebaselining, refresh=%s', (refresh) => {
+    const row = (focal: number[] | null) => ({
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal, subjectBox: null })],
+    });
+    const { rerender } = renderBand([row(refresh ? [0.3, 0.4] : null)]);
+    const tray = openHeroFocal();
+    if (refresh) {
+      mockData = editions([row(null)]);
+      rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    }
+    for (const frame of ['cover_phone', 'wide']) {
+      const preview = document.querySelector(`[data-gallery-frame="${frame}"] [data-press-cover]`) as HTMLElement;
+      const editor = tray.querySelector(`[data-focal-frame="${frame}"] img`) as HTMLElement;
+      expect(editor.style.objectPosition).toBe(preview.style.objectPosition);
+    }
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 50 across, 50 down/ })).toHaveLength(2);
+    expect(within(tray).getByRole('button', { name: 'Use this crop' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it('a second editor refetch replaces the confirmed saved crop (R3)', async () => {
+    const current = { ...CURRENT_ROW, images: PENDING_ROW.images };
+    const { rerender } = renderBand([PENDING_ROW, current]);
+    const tray = openHeroFocal();
+    dragHero(tray);
+    const cropA = previewPosition();
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    const pointA = mockSetFocal.mock.calls[0][0].focal;
+    const withFocal = (row: Record<string, unknown>, point: number[]) => ({
+      ...row,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: point })],
+    });
+    mockData = editions([withFocal(PENDING_ROW, pointA), withFocal(current, pointA)]);
+    await reactAct(async () => rerender(<PressBand projectId="p-1" clientFirstName="June" />));
+    expect(previewPosition()).toBe(cropA);
+
+    const job = document.querySelector('[data-press-job]') as HTMLElement;
+    fireEvent.click(within(job).getByRole('button', { name: 'Set the focal point of What a-hero' }));
+    const handle = within(job).getAllByRole('button', { name: /^Focal point at/ })[0];
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' });
+    fireEvent.click(within(job).getByRole('button', { name: 'Use this crop' }));
+    const pointB = mockSetFocal.mock.calls[1][0].focal;
+    await reactAct(async () => mockSetFocal.mock.calls[1][1].onSuccess());
+    mockData = editions([withFocal(PENDING_ROW, pointB), withFocal(current, pointB)]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(previewPosition()).not.toBe(cropA);
+    expect(within(tray).getAllByRole('button', { name: new RegExp(`^Focal point at ${Math.round(pointB[0] * 100)} across, ${Math.round(pointB[1] * 100)} down`) })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it.each([false, true])('refreshed framing replaces an open editor baseline, dirty=%s (R4)', (dirty) => {
+    const { rerender } = renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    if (dirty) dragHero(tray);
+    mockData = editions([{
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: [0.52, 0.45] })],
+    }]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 52 across, 45 down/ })).toHaveLength(2);
+    expect(within(tray).getByRole('button', { name: 'Use this crop' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    fireEvent.keyDown(within(tray).getAllByRole('button', { name: /^Focal point at/ })[0], { key: 'ArrowLeft' });
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 50 across, 45 down/ })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(mockApprove).not.toHaveBeenCalled();
+    expect(mockSetFocal).not.toHaveBeenCalled();
+  });
+
+  it('save blocks Approve until a post-save read confirms framing and approves supported overrides', async () => {
+    const { rerender } = renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    fireEvent.change(within(tray).getAllByLabelText('Headline')[0], { target: { value: 'New chapter' } });
+    dragHero(tray);
+    const saved = previewPosition();
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    expect(mockSetFocal.mock.calls[0][0]).toEqual(expect.objectContaining({ assetId: 'a-hero', focal: expect.any(Array) }));
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
+    expect(within(tray).getByRole('button', { name: 'Set the focal point of What a-hero' })).toBeDisabled();
+    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    const point = mockSetFocal.mock.calls[0][0].focal;
+    mockData = editions([{
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: point })],
+    }]);
+    await reactAct(async () => rerender(<PressBand projectId="p-1" clientFirstName="June" />));
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(previewPosition()).toBe(saved);
+    const reopened = openHeroFocal();
+    expect(within(reopened).getAllByRole('button', { name: new RegExp(`^Focal point at ${Math.round(point[0] * 100)} across, ${Math.round(point[1] * 100)} down`) })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(mockApprove.mock.calls[0][0]).toEqual({ projectId: 'p-1', editionId: 'e-5', overrides: { chapters: { 'room-living': { headline: 'New chapter' } } } });
+  });
+
+  it('an older post-save read cannot unlock a later crop save', async () => {
+    renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    const reads: ((result: { isSuccess: boolean }) => void)[] = [];
+    mockRefetchEditions.mockImplementation(() => new Promise((resolve) => { reads.push(resolve); }));
+    for (let index = 0; index < 2; index++) {
+      dragHero(tray);
+      fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+      reactAct(() => mockSetFocal.mock.calls[index][1].onSuccess());
+    }
+    expect(reads).toHaveLength(2);
+    await reactAct(async () => reads[0]({ isSuccess: true }));
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    await reactAct(async () => reads[1]({ isSuccess: true }));
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it('unmounting during a crop save leaves the next band on its authoritative read', async () => {
+    const band = renderBand([PENDING_ROW]);
+    const original = previewPosition();
+    const tray = openHeroFocal();
+    dragHero(tray);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    band.unmount();
+    await reactAct(async () => mockSetFocal.mock.calls[0][1].onSuccess());
+    renderBand([PENDING_ROW]);
+    expect(previewPosition()).toBe(original);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(mockApprove).not.toHaveBeenCalled();
+  });
+
+  it('failed save resets the preview and editor while retaining the save error', () => {
+    renderBand([PENDING_ROW]);
+    const saved = previewPosition();
+    const tray = openHeroFocal();
+    dragHero(tray);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    reactAct(() => mockSetFocal.mock.calls[0][1].onError());
+    expect(previewPosition()).toBe(saved);
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 50 across, 45 down/ })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Use this crop' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(screen.getByText(/Crop could not be saved/)).toBeInTheDocument();
   });
 });
 
@@ -642,11 +889,6 @@ describe('PressBand — the delta line', () => {
     expect(editionDelta(PENDING, null)).toBe('The first edition');
   });
 
-  it('frames an unboxed cover on the worker’s thirds crop', () => {
-    expect(heroCoverCrop(CURRENT.images[0])?.window).toEqual(
-      plateCropWindow({ width: 2000, height: 1250 }, 'wide'),
-    );
-  });
 });
 
 describe('PressBand — voice', () => {

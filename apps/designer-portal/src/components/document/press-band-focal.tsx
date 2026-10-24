@@ -1,84 +1,29 @@
 'use client';
 
-/**
- * US-49 Phase 2 — a photograph's focal point: one drag, two crops. Closed it
- * is one act; opened, the source picture stands in the two frames the client
- * page delivers, the desktop cover at 16:10 and the phone cover at 39:34, each
- * cut as the worker cuts it (lib/document/plate-crop: the point, held inside
- * the subject box). A frame the worker cuts no crop for (a white-ground
- * picture, a subject box it cannot hold, a source under the floor) shows no
- * picture and says which crop those screens draw instead. The point is stored once per photograph, so dragging it
- * in either frame moves it in both; the frames re-centre on it when the drag
- * ends. "Use this crop" saves it with the photograph's subject box, or with
- * none when the photograph has none — a box is a hard constraint on every
- * crop, so the studio never invents one.
- *
- * The two frames are the one exception to the 120px cap on designer
- * photography (orchestrator ruling R10): at most 240px tall, and only while
- * the editor is open.
- */
+/** One focal point, live in both Gallery arrival previews; the existing RPC stores it. */
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useSetPlateFocal, type ClientEditionImage } from '@patina/supabase';
+import { GALLERY_DEFAULT_FOCAL } from '@patina/utils';
 import { ActFailLine } from '@/components/feedback/act-fail-line';
 import {
-  COVER_ASPECT,
-  DEFAULT_CENTRE,
-  coverCropShown,
   objectPositionOf,
-  plateCropWindow,
   type PlateBox,
-  type CoverCropKey,
   type PlatePoint,
-  type PlateSource,
   type PlateWindow,
 } from '@/lib/document/plate-crop';
 import { DocumentAction, DocumentActionRow } from './document-action';
 
-const FULL_FRAME: PlateBox = [0, 0, 1, 1];
-const KEY_STEP = 0.02;
+import { GALLERY_FRAMES, galleryCropWindow } from './press-band-preview';
 
-/** The two delivered cover frames; widths keep each under 240px tall. */
-const FRAMES = [
-  {
-    key: 'wide',
-    label: '16:10',
-    aspect: COVER_ASPECT.wide,
-    width: 'w-[min(100%,360px)]',
-    note: 'The desktop cover.',
-    screen: 'desktop',
-    screens: 'Desktops',
-  },
-  {
-    key: 'cover_phone',
-    label: '39:34',
-    aspect: COVER_ASPECT.cover_phone,
-    width: 'w-[min(100%,260px)]',
-    note: 'The phone cover.',
-    screen: 'phone',
-    screens: 'Phones',
-  },
-] as const;
-
-const CROP_WORDS: Record<CoverCropKey, string> = {
-  wide: 'the wide cover',
-  cover_phone: 'the phone cover',
-  wide32: 'the 3:2 cover',
-  tall: 'the tall cover',
+export type FocalEdit = {
+  assetId: string;
+  point: PlatePoint;
+  status: 'dirty' | 'saving' | 'saved';
 };
 
-/**
- * What the client page draws on this frame's screens when the worker cuts no
- * such crop: the crop it falls back to (client-portal crop.ts heroPicture).
- * A subject box or a floor decides it, never the point, so it holds while the
- * point moves.
- */
-function coverInstead(source: PlateSource, frame: (typeof FRAMES)[number]): string {
-  const shown = coverCropShown(source, frame.screen);
-  return shown
-    ? `${frame.screens} show ${CROP_WORDS[shown]} for this photograph.`
-    : 'No cover is cut from this photograph.';
-}
+const FULL_FRAME: PlateBox = [0, 0, 1, 1];
+const KEY_STEP = 0.02;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
@@ -100,12 +45,15 @@ export function PressBandFocal({
   projectId,
   image,
   sourceUrl,
+  onFocalChange,
 }: {
   projectId: string;
   image: ClientEditionImage;
   sourceUrl: string;
+  onFocalChange?: (edit: FocalEdit | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const label = image.captionWhat || image.alt || 'the photograph';
   return (
     <div className="flex flex-col gap-3" data-press-focal={image.assetId}>
@@ -115,12 +63,19 @@ export function PressBandFocal({
           variant="tertiary"
           aria-expanded={open}
           aria-label={`Set the focal point of ${label}`}
-          onClick={() => setOpen((was) => !was)}
+          disabled={saving}
+          onClick={() => {
+            onFocalChange?.(null);
+            setOpen((was) => !was);
+          }}
         >
           Set the focal point
         </DocumentAction>
       </DocumentActionRow>
-      {open && <FocalEditor projectId={projectId} image={image} sourceUrl={sourceUrl} />}
+      {open && <FocalEditor projectId={projectId} image={image} sourceUrl={sourceUrl} onFocalChange={(edit) => {
+        setSaving(edit?.status === 'saving');
+        onFocalChange?.(edit);
+      }} />}
     </div>
   );
 }
@@ -129,10 +84,12 @@ function FocalEditor({
   projectId,
   image,
   sourceUrl,
+  onFocalChange,
 }: {
   projectId: string;
   image: ClientEditionImage;
   sourceUrl: string;
+  onFocalChange?: (edit: FocalEdit | null) => void;
 }) {
   const box = subjectBoxOf(image);
   const hold = box ?? FULL_FRAME;
@@ -141,24 +98,40 @@ function FocalEditor({
       ? inBox([image.focal[0], image.focal[1]], hold)
       : box
         ? [box[0] + box[2] / 2, box[1] + box[3] / 2]
-        : DEFAULT_CENTRE;
+        : [...GALLERY_DEFAULT_FOCAL];
   const [focal, setFocal] = useState<PlatePoint>(initial);
+  const saved = useRef(initial);
   const [moved, setMoved] = useState(false);
   // While a drag runs the frames stand still on the point the drag began at,
   // so the picture never slides under the pointer; the handle moves instead.
   const [dragFrom, setDragFrom] = useState<PlatePoint | null>(null);
   const dragFrame = useRef<number | null>(null);
   const setPlateFocal = useSetPlateFocal();
-  const source = {
-    width: image.width && image.width > 0 ? image.width : 1500,
-    height: image.height && image.height > 0 ? image.height : 1000,
-    subjectBox: box,
-    ground: image.ground,
-  };
+  const framing = JSON.stringify([image.focal, image.subjectBox]);
+  const previousFraming = useRef(framing);
+  const wasSaving = useRef(false);
+  const [initialX, initialY] = initial;
+  useEffect(() => {
+    const finishedSave = wasSaving.current && !setPlateFocal.isPending;
+    wasSaving.current = setPlateFocal.isPending;
+    if (setPlateFocal.isPending || (previousFraming.current === framing && !finishedSave)) return;
+    previousFraming.current = framing;
+    // Read framing wins after a save too, even when ABA leaves its values unchanged.
+    saved.current = [initialX, initialY];
+    setFocal([initialX, initialY]);
+    setMoved(false);
+    setDragFrom(null);
+    dragFrame.current = null;
+    onFocalChange?.(null);
+  }, [framing, initialX, initialY, onFocalChange, setPlateFocal.isPending]);
 
   const moveTo = (next: PlatePoint) => {
-    setFocal(inBox(next, hold));
-    setMoved(true);
+    if (setPlateFocal.isPending) return;
+    const point = inBox(next, hold);
+    const dirty = point[0] !== saved.current[0] || point[1] !== saved.current[1];
+    setFocal(point);
+    onFocalChange?.(dirty ? { assetId: image.assetId, point, status: 'dirty' } : null);
+    setMoved(dirty);
     setPlateFocal.reset();
   };
 
@@ -191,32 +164,16 @@ function FocalEditor({
         Focal point · one drag, two crops
       </p>
       <div className="flex flex-wrap items-start gap-6">
-        {FRAMES.map((frame, index) => {
-          const window = plateCropWindow({ ...source, focal: dragFrom ?? focal }, frame.key);
-          if (!window) {
-            return (
-              <div key={frame.key} className={`flex flex-col gap-2 ${frame.width}`}>
-                <p className="font-mono text-[12px] text-[var(--text-muted)]">{frame.label}</p>
-                <div
-                  className="flex max-h-[240px] w-full items-center justify-center border border-dashed border-[var(--border-subtle)] px-3 text-center text-[15px] text-[var(--text-muted)]"
-                  style={{ aspectRatio: `${frame.aspect}` }}
-                  data-focal-frame={frame.key}
-                  data-focal-unavailable
-                >
-                  Not cut for this photograph
-                </div>
-                <p className="text-[15px] leading-snug text-[var(--text-muted)]">{coverInstead(source, frame)}</p>
-              </div>
-            );
-          }
+        {GALLERY_FRAMES.map((frame, index) => {
+          const window = galleryCropWindow(image, frame.width / frame.height, dragFrom ?? focal);
           const handleX = clamp((focal[0] - window.left) / window.vx, 0, 1) * 100;
           const handleY = clamp((focal[1] - window.top) / window.vy, 0, 1) * 100;
           return (
-            <div key={frame.key} className={`flex flex-col gap-2 ${frame.width}`}>
+            <div key={frame.key} className="flex flex-col gap-2" style={{ width: (240 * frame.width) / frame.height, maxWidth: '100%' }}>
               <p className="font-mono text-[12px] text-[var(--text-muted)]">{frame.label}</p>
               <div
                 className="relative max-h-[240px] w-full touch-none select-none overflow-hidden border border-[var(--border-subtle)]"
-                style={{ aspectRatio: `${frame.aspect}` }}
+                style={{ aspectRatio: `${frame.width} / ${frame.height}` }}
                 data-focal-frame={frame.key}
                 onPointerDown={(event) => {
                   event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -252,7 +209,7 @@ function FocalEditor({
                   onKeyDown={onKeyDown}
                 />
               </div>
-              <p className="text-[15px] leading-snug text-[var(--text-muted)]">{frame.note}</p>
+              <p className="text-[15px] leading-snug text-[var(--text-muted)]">{frame.label} arrival, with the same focal point.</p>
             </div>
           );
         })}
@@ -264,21 +221,34 @@ function FocalEditor({
           disabled={!moved}
           loading={setPlateFocal.isPending}
           loadingLabel="Saving…"
-          onClick={() =>
+          onClick={() => {
+            onFocalChange?.({ assetId: image.assetId, point: focal, status: 'saving' });
             setPlateFocal.mutate({
               projectId,
               assetId: image.assetId,
               subjectBox: box ? [...box] : null,
               focal: [...focal],
-            })
-          }
+            }, {
+              onSuccess: () => {
+                setMoved(false);
+                onFocalChange?.({ assetId: image.assetId, point: focal, status: 'saved' });
+              },
+              onError: () => {
+                setFocal(saved.current);
+                setMoved(false);
+                setDragFrom(null);
+                dragFrame.current = null;
+                onFocalChange?.(null);
+              },
+            });
+          }}
         >
           Use this crop
         </DocumentAction>
       </DocumentActionRow>
       {setPlateFocal.isSuccess && (
         <p className="text-[15px] text-[var(--text-muted)]" role="status">
-          Crop saved. The covers are cut again from this point.
+          Crop saved. Both arrivals use this focal point.
         </p>
       )}
       <ActFailLine error={setPlateFocal.error} />

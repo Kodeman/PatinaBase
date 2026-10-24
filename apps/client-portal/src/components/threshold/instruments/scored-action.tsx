@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -533,6 +534,15 @@ export interface HoldActionProps
   wrapperClassName?: string;
 }
 
+function pointerOutside(
+  target: HTMLButtonElement,
+  point: { clientX: number; clientY: number },
+) {
+  const rect = target.getBoundingClientRect();
+  return point.clientX < rect.left || point.clientX > rect.right ||
+    point.clientY < rect.top || point.clientY > rect.bottom;
+}
+
 export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
   function HoldAction(
     {
@@ -567,6 +577,14 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     const control = useRef<HTMLButtonElement | null>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const running = useRef(false);
+    const heldRect = useRef<DOMRect | null>(null);
+    const heldPointer = useRef<number | null>(null);
+    const heldPoint = useRef<{ clientX: number; clientY: number } | null>(null);
+    const frame = useRef<number | null>(null);
+    const latestOnHold = useRef(onHold);
+    useLayoutEffect(() => {
+      latestOnHold.current = onHold;
+    }, [onHold]);
     const pointerAt = useRef(0);
     const shown = useRef(new Set<string>());
     const shownKey = `${actionKey}:${presentation}`;
@@ -607,19 +625,35 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     const stop = useCallback(() => {
       if (timer.current) clearTimeout(timer.current);
       timer.current = null;
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      frame.current = null;
       running.current = false;
+      heldPointer.current = null;
+      heldPoint.current = null;
       ink(0);
       setHolding(false);
     }, [ink]);
 
-    useEffect(() => stop, [stop]);
-
-    /* A page that scrolls under the thumb was not held. The listener lives
-       exactly as long as the hold does. */
+    /* Scroll events can arrive after focus has already settled the drawer,
+       or from another container. Only movement under the held control cancels. */
     useEffect(() => {
       if (!holding) return;
-      window.addEventListener('scroll', stop, true);
-      return () => window.removeEventListener('scroll', stop, true);
+      const stopIfMoved = () => {
+        const before = heldRect.current;
+        const now = control.current?.getBoundingClientRect();
+        if (before && now && (before.top !== now.top || before.left !== now.left)) stop();
+      };
+      const stopIfHidden = () => {
+        if (document.visibilityState === 'hidden') stop();
+      };
+      window.addEventListener('scroll', stopIfMoved, true);
+      window.addEventListener('blur', stop);
+      document.addEventListener('visibilitychange', stopIfHidden);
+      return () => {
+        window.removeEventListener('scroll', stopIfMoved, true);
+        window.removeEventListener('blur', stop);
+        document.removeEventListener('visibilitychange', stopIfHidden);
+      };
     }, [holding, stop]);
 
     /** The act itself, reported once and always the same way. */
@@ -631,12 +665,11 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
         variant,
         presentation,
       });
-      void Promise.resolve(onHold()).finally(() => {
+      void Promise.resolve(latestOnHold.current()).finally(() => {
         restoreFocus(restoreFocusRef);
       });
     }, [
       actionKey,
-      onHold,
       presentation,
       regionKey,
       restoreFocusRef,
@@ -644,23 +677,50 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       variant,
     ]);
 
-    const start = useCallback(() => {
+    // Consent changes revoke the hold at commit; callback churn alone does not.
+    useLayoutEffect(() => stop, [
+      actionKey, children, disabled, holdMs, loading, presentation, regionKey,
+      rest.id, stop, surfaceKey, variant, verb,
+    ]);
+
+    const heldPointerOutside = useCallback(() => {
+      const point = heldPoint.current;
+      const target = control.current;
+      return point !== null && (!target || pointerOutside(target, point));
+    }, []);
+
+    const start = useCallback((
+      pointerId: number | null = null,
+      point: { clientX: number; clientY: number } | null = null,
+    ) => {
       if (unavailable || running.current) return;
       running.current = true;
+      heldPointer.current = pointerId;
+      heldPoint.current = point;
+      heldRect.current = control.current?.getBoundingClientRect() ?? null;
       setHolding(true);
       control.current?.style.setProperty('--hold-ms', `${holdMs}ms`);
-      // The fill is a CSS transition on the pool, so it is set on the next
-      // frame in a browser and immediately in jsdom; either way the timer,
-      // not the paint, is what decides when the act is taken.
       ink(1);
+      if (point) {
+        const checkPointer = () => {
+          if (!running.current) return;
+          if (heldPointerOutside()) {
+            stop();
+            return;
+          }
+          frame.current = requestAnimationFrame(checkPointer);
+        };
+        frame.current = requestAnimationFrame(checkPointer);
+      }
       timer.current = setTimeout(() => {
-        timer.current = null;
-        running.current = false;
-        setHolding(false);
-        ink(0);
+        if (heldPointerOutside()) {
+          stop();
+          return;
+        }
+        stop();
         take();
       }, holdMs);
-    }, [holdMs, ink, take, unavailable]);
+    }, [heldPointerOutside, holdMs, ink, stop, take, unavailable]);
 
     function onKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
@@ -724,22 +784,31 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
             ].join(' ')}
             onPointerDown={(event) => {
               pointerAt.current = Date.now();
+              if (event.button !== 0) return;
+              if ((event.pointerType === 'touch' || event.pointerType === 'pen') && !event.isPrimary) return;
               markInkPoint(event);
-              start();
+              start(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+            }}
+            onPointerMove={(event) => {
+              if (heldPointer.current === event.pointerId) {
+                heldPoint.current = { clientX: event.clientX, clientY: event.clientY };
+                if ((event.buttons & 1) === 0 || heldPointerOutside()) stop();
+              }
+              rest.onPointerMove?.(event);
             }}
             onPointerUp={(event) => {
               pointerAt.current = Date.now();
-              stop();
+              if (heldPointer.current === event.pointerId) stop();
               rest.onPointerUp?.(event);
             }}
             onPointerLeave={(event) => {
               pointerAt.current = Date.now();
-              stop();
+              if (heldPointer.current === event.pointerId) stop();
               rest.onPointerLeave?.(event);
             }}
             onPointerCancel={(event) => {
               pointerAt.current = Date.now();
-              stop();
+              if (heldPointer.current === event.pointerId) stop();
               rest.onPointerCancel?.(event);
             }}
             onKeyDown={onKeyDown}

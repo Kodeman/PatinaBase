@@ -1,7 +1,7 @@
 /* Plate captions: what · whose · when, three stored fields from the record.
    V23 R3: no "AI" or model wording reaches the page, and alt never says "image of". */
 
-import type { CaptionFields, CaptionTriplet, EditorialAsset, SourceKind } from './types';
+import type { CaptionFields, CaptionTriplet, EditorialAsset, EditorialItem, SourceKind } from './types';
 
 export const CAPTION_SEPARATOR = ' · ';
 
@@ -89,4 +89,17 @@ export function silhouetteCaption(itemName: string): CaptionTriplet {
     whose: 'drawn from the specification',
     when: null,
   };
+}
+
+/** The piece photo needs both a stored rendition and the caption Plate will draw. */
+export function piecePhotoCaption(
+  item: Pick<EditorialItem, 'nameAsSigned' | 'makerName' | 'category'>,
+  asset: EditorialAsset, showMakers: boolean,
+): CaptionTriplet | null {
+  if (!asset.crops.piece?.widths.length) return null;
+  if (asset.sourceKind !== 'maker' || asset.ground !== 'white') return captionTriplet(asset.caption);
+  return catalogueCaption(
+    showMakers ? item.nameAsSigned : asset.caption.what,
+    item.makerName, asset.caption.when, item.category, showMakers,
+  );
 }

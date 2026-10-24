@@ -18,7 +18,7 @@
 
 ## 1. Assignment and intended result
 
-Improve the existing client page for a homeowner invited by their designer who has low confidence using websites. They should be able to find and understand their invoices, respond to approvals, see project progress, and contact their designer without learning Patina's internal terminology.
+Build the Gallery homeowner page so a homeowner can act on the most urgent ask and find the rest of the house record through one Menu.
 
 Implement **CPUX-01 through CPUX-07** below. Preserve the existing single-page architecture, financial authority, approval records, access controls, and design-system conventions. Complete the applicable verification gates and provide the evidence listed in §12.
 
@@ -38,14 +38,17 @@ At 390 × 844, the observed action targets were at least 44 CSS px high and ther
 
 Invitations, full-project navigation, approvals, and progress were also examined in source by separate homeowner-journey and UI/accessibility reviewers. No fresh invitation, binding approval, payment submission, or message was exercised. **Do not assume the full project page lacks navigation or progress:** those capabilities already exist. Source findings must be rechecked against the implementation checkout and runtime.
 
+## Gallery (US-55)
+
+Gallery is the homeowner page direction chosen on 24 October 2026. The ten decisions cover: (1) one urgent-amount band line, (2) permanent anchors and drawer behavior, (3) eligible full-screen photography with a paint-card fallback, (4) constrained editions without forced re-compose, (5) one asks-first drawer, (6) other houses in Menu, (7) no purpose sentence on-page and the invitation-letter clause, (8) a viewport-minus-48px arrival with caption cue, (9) everyone-at-once rollout with end-to-end/accessibility coverage, and (10) piece detail, room chapters, and footer placement. Full rulings: [`artifacts/client-calm-directions-2026-10-24/GALLERY-DECISIONS.md`](../../../artifacts/client-calm-directions-2026-10-24/GALLERY-DECISIONS.md).
+
 ## 3. Decisions already resolved for this implementation
 
 | Topic | Required decision |
 |---|---|
 | Page structure | Keep `/` and `/projects/[projectId]`. Details unfold on the current page. No new invoice, approval, progress, inbox, or dashboard route tree. |
-| Navigation | Evolve the existing `LandmarkLedger` into clearer in-document links. Keep it under the studio/project heading and scrolling with the page. No fixed header, bottom tab bar, utility bar, or moved project switcher. |
-| Primary destinations | Use the visible names **Invoices**, **Approvals**, and **Progress**. Preserve useful existing Updates and Documents access. Keep named designer help nearby. |
-| Invoice discovery | All outstanding invoice rows are visible without expanding history. Payment history may collapse. Processing and payment holds remain visible. |
+| Navigation and primary destinations | One Menu contains asks, the other house, chapters, The house, invoices, documents, and Call Maren Holt. |
+| Invoice discovery | All invoices are in the drawer; asks first, followed by “Also open.” |
 | Confirmation | Retain the current hold interaction in core. Improve its wording, consequence, missing-input explanation, and focus behavior. The click-to-confirm alternative is deferred to §13. |
 | Approval semantics | “Request changes” still records `changes_requested`; “Pause to discuss” still records `needs_discussion`. Asking an ordinary question is a separate action and records neither. |
 | Data model | Reuse current tables, hooks, RPCs, domain types, query keys, and payment/approval contracts. No migration is expected. |
@@ -82,7 +85,7 @@ Recorded from the US-45 interview after the US-44 design canvas (`artifacts/clie
 | A4 | **Hold stays.** The 900 ms hold remains on every binding act (§3 Confirmation row and §13 stand unchanged). | — |
 | A5 | **Designer portal in scope (one slice).** The designer portal's terminal tier (`.da-terminal`: money and signature acts) fills forest green instead of charcoal, and client-response states (Approved verdicts, paid/complete status, recorded approvals, success notices) move from pale sage to the green record treatment. Its buttons' other tiers, navigation, and the US-43 `--focus-ring` stay as they are. | §8 "cross-portal UI changes" (for this slice only). R139 terminal colour in the designer portal. |
 | A6 | **Deploy authorized after review.** Once gates, independent review, and screenshots pass, the founder's go on the screenshots authorizes deploying client-portal and designer-portal under `patina-deploy`. | §1 / §8 / §12 "not deployed" default. |
-| A7 | **Canvas rulings taken as drawn.** F1 literal heads (Invoices, Approvals, Progress); F2 15px quiet tools / 16px ledger links on client pages; F3 the canvas Main order; F6 the studio-only purpose sentence "Pay invoices, review approvals, and follow your project here."; F7 click-to-confirm stays deferred. | Open founders' questions F1–F8 in the canvas brief. |
+| A7 | **Canvas rulings superseded by Gallery.** Rulings F1–F7 no longer govern the homeowner page where decision 11 or decisions 1–10 of `GALLERY-DECISIONS.md` differ; the studio-only purpose sentence is also dropped. Retain only compatible rulings, including the deferred click-to-confirm experiment. | Open founders' questions F1–F8 in the canvas brief; Gallery decisions govern conflicts. |
 
 ## 4. Required behavior
 
@@ -90,16 +93,14 @@ Recorded from the US-45 interview after the US-44 design canvas (`artifacts/clie
 
 **Applies to:** full project `Threshold`, named project routes, and studio-only `LetterboxDoor`.
 
-1. Keep the studio/project identity as the page's introduction. Add one concise purpose sentence where needed: **“Pay invoices, review approvals, and follow your project here.”** A studio-only state must not imply that project information is available when it is not.
-2. Under the doorplate, offer **Invoices**, **Approvals**, and **Progress** as page-local links. Reuse the existing `LandmarkLedger` and action primitives. Use descriptive link text, not icon-only controls or numeric badges.
-3. Preserve existing meaningful sections and anchors, including Updates, Documents, money standing, correspondence, and other houses in the mat. This is not a wholesale page reorder. The current highest-priority ask keeps its prominence.
-4. Invoices targets `#letterbox`. Approvals targets the existing first relevant ask through the current `whatNeedsYou` logic; when no ask is present, provide a truthful empty state at a stable location on the page. Progress targets the progress summary at `#road`, keeping detailed order progress there.
-5. All displayed links must have a rendered destination. Studio-only Approvals can expose pending origin agreements already available in that view. If no project is connected, Progress lands on an explanation, not an empty diagram or broken anchor: **“Your project isn’t connected to this page yet. You can still view and pay your studio invoices.”** Do not claim the designer has not started the project; absence from the page is the fact known.
-6. Never display “Nothing to approve,” “No payment due,” or an all-clear statement until the relevant reads have succeeded. Empty, loading, failure, and incomplete cached data are different states.
-7. Keep the task summary factual and derived. Prefer prose such as **“You have six invoices to review.”** Use existing count-word conventions; do not add notification badges or a separate task system. Do not sum unlike approval types into a count unless each distinct actionable request is represented exactly once.
-8. No onboarding modal, required tour, new account-profile step, new password requirement, or persisted first-visit flag is needed. A short introduction and the actual work are sufficient.
+1. The purpose sentence is dropped from the homeowner page; the invitation letter says it once.
+2. Replace page-level navigation furniture with one Menu: asks, the other house, chapters, The house, invoices, documents, Call Maren Holt.
+3. The band has one line naming the most urgent amount. Do not add three standing lines.
+4. Preserve honest loading, failure, and incomplete-data states; the band's amount and ask are derived from live state.
+5. Keep existing permanent anchors and destinations where compatible with the Gallery drawer; no broken destinations.
+6. No onboarding modal, required tour, new account-profile step, new password requirement, or persisted first-visit flag.
 
-**Acceptance:** a homeowner can find all three destinations from the top of either page state; each link reaches actual content, an honest empty state, or a recovery message without leaving the project. Project switching remains in its existing place.
+**Acceptance:** a homeowner can find the Gallery band and Menu from the top of either page state; the band leads to the most urgent ask and each Menu destination reaches actual content, an honest empty state, or a recovery message without leaving the project. Project switching remains in its existing place.
 
 ### CPUX-02 — One invoice projection; every outstanding invoice discoverable
 
@@ -147,7 +148,7 @@ Sum separately by `invoice.currency`; never convert currencies or display a mixe
 
 #### Layout and interaction
 
-- Outstanding groups are expanded by default. History can collapse. No outstanding row may be hidden solely behind **Earlier invoices** or history.
+- All invoices are in the drawer, with the asks first and then **Also open**; the invoice list opens when both asks are done. No outstanding invoice is omitted.
 - Each row shows invoice number, title if supplied, project/studio origin, remaining amount, and written due/payment status. Use the invoice number as the fallback identifier; do not invent a description.
 - Use **View invoice** for a row's disclosure. The expanded region contains its details and existing payment flow. Keep any existing explicit **Pay {amount}** entry point accurate and nonduplicative.
 - Prefer one expanded payment region per invoice collection, with one set of payment inputs. Opening another invoice closes the old disclosure without submitting or clearing server state. Keep each invoice's draft UI state scoped to its ID where needed. Preserve server-returned holds and uncertain checkout outcomes by invoice ID across close/switch/reopen, either above the disclosure or by preserving the settlement component's state. A reconciliation hold may reflect missing/inconsistent attempt evidence without a `requires_refund` row; a plain invoice refetch is not necessarily proof that the hold cleared. Only an authoritative resolution can release it.
@@ -168,7 +169,7 @@ Sum separately by `invoice.currency`; never convert currencies or display a mixe
 
 An invoice error must not erase origin agreements or working project content. A proposal error must not erase readable invoices. Preserve hydration gating and call hooks before early returns.
 
-**Acceptance:** the mixed-invoice fixture in §10 exposes all six outstanding rows without expanding history; the zero-balance sent row cannot inflate a payable count; adopted-project ownership, currencies, pending evidence, and partial-read states remain correct.
+**Acceptance:** the mixed-invoice fixture in §10 exposes all six outstanding rows in the drawer's asks-first / Also open order without expanding history; the zero-balance sent row cannot inflate a payable count; adopted-project ownership, currencies, pending evidence, and partial-read states remain correct.
 
 ### CPUX-03 — Clear payment language with unchanged payment authority
 
@@ -342,7 +343,7 @@ Paths prefixed with `apps/`, `packages/`, or other top-level directories are rel
 | Area | Starting files / symbols |
 |---|---|
 | Page selection and composition | `apps/client-portal/src/app/page.tsx`; `src/app/projects/[projectId]/page.tsx`; `src/components/threshold/threshold.tsx` (`Threshold`); `letterbox-door.tsx` (`LetterboxDoor`). |
-| Wayfinding | `src/components/threshold/landmark-ledger.tsx` (`LandmarkLedger`); preserve `Mat`, `OtherHouses`, existing identity and ask priority. |
+| Wayfinding | One Menu is the homeowner page furniture, per Gallery (US-55). Keep `Mat`, `OtherHouses`, identity, and ask priority wherever their destinations remain compatible. |
 | Shared invoice projection | `src/lib/threshold/invoice-rollup.ts`; `derive.ts`; `adopted-house.ts`; `dates.ts`; `invoiceBalanceCents` from `@patina/shared`. |
 | Invoice presentation | `src/components/threshold/letterbox.tsx`; `earlier-invoices.tsx`; `settlement.tsx`; `letter-payee.ts`; `instruments/spine-toll.tsx`. |
 | Payment method totals | `src/components/threshold/payment-method-chooser.tsx`; reference `src/app/pay/[token]/payment-method-chooser.tsx`; current fee/receipt helpers. |
@@ -528,10 +529,10 @@ If the checkout changes a load-bearing contract, re-establish the current invari
 
 ### US-49 homeowner-page amendments — 2026-10-21
 
-These dated amendments apply to the homeowner page and do not rewrite the existing rules above.
+These dated amendments apply only where compatible with Gallery (US-55); decisions 1–10 and decision 11 of `GALLERY-DECISIONS.md` govern any conflict.
 
-- **C2 — photography measure.** Photography may fill the page measure, but never exceeds 72svh; one full-measure plate per page. The 120px cap continues to govern designer and admin surfaces.
+- **C2 — photography measure (superseded by Gallery).** Lifted on the homeowner page: viewport minus 48px arrival and hero eligibility per decision 3 of `GALLERY-DECISIONS.md`. The 120px cap remains on studio surfaces.
+- **Q1 — arrival (superseded by Gallery).** Photography may appear above the first money act; Pay is one tap from the band line.
 - **C1 — depth.** No shadows on the homeowner page; hairline and stock-on-paper are the only depth. A3 and F4 are amended accordingly.
-- **Q1 — arrival.** The hero may sit above the first money act at every viewport; the standing rows follow immediately.
 - **Q3 — motion.** Scroll-triggered reveals are allowed: opacity and a 12px rise over 360 ms, no more than three staggered children per chapter, and none under reduced motion.
 - **V2-4 — captions.** Captions are 15px.

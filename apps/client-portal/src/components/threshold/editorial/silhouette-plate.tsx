@@ -11,10 +11,12 @@ import {
 } from '../instruments/piece-silhouette';
 import { PlateCaption } from './plate';
 
-const CATEGORIES: readonly SilhouetteCategory[] = ['chair', 'table', 'case', 'light', 'textile'];
+const CATEGORIES: readonly SilhouetteCategory[] = ['bed', 'chair', 'table', 'case', 'light', 'textile'];
 
 export function silhouetteFor(name: string, kind?: string | null, category?: string | null): SilhouetteCategory {
-  return CATEGORIES.find((c) => c === kind) ?? silhouetteCategory(name, category);
+  const explicit = CATEGORIES.find((c) => c === kind);
+  if (explicit) return explicit;
+  return silhouetteCategory(name, category);
 }
 
 export interface SilhouettePlateProps {

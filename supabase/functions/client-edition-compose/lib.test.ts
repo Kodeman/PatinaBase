@@ -9,6 +9,7 @@ import {
   type DbError,
   type DbResult,
   deterministicHeadlines,
+  meetsHero,
   type EditionOverrides,
   type EditionRequest,
   privacyPageLive,
@@ -17,7 +18,8 @@ import {
   sleepFor,
   sourceHash,
 } from "./lib.ts";
-import type { EditorialFacts, FactsRoom } from "./prompts.ts";
+import { PROMPT_VERSION, type EditorialFacts, type FactsRoom } from "./prompts.ts";
+import { headlineFault } from "./validate.ts";
 
 const PROJECT = "0b7d3c1e-0000-4000-8000-000000000001";
 const REQUEST: EditionRequest = { id: "req-1", project_id: PROJECT, lease_token: "lease-1" };
@@ -316,18 +318,18 @@ function fakeClaude(script: Record<string, Step[]>, tick?: () => void) {
 }
 
 const perceptionOf = (ids: string[]) => ({
-  images: ids.map((_, index) => ({ index, subject_box: [0.1, 0.1, 0.6, 0.6], focal: [0.4, 0.4], flags: [], alt: `A walnut piece, view ${index}` })),
+  images: ids.map((_, index) => ({ index, subject_box: [0.4, 0.3, 0.2, 0.3], focal: [0.4, 0.4], flags: [], alt: `A walnut piece, view ${index}` })),
 });
 
 const perceiveAll: Step = (opts) => ok(perceptionOf(shown(opts)));
 
 const WORDS = {
   chapters: [
-    { key: "cover", headline: "The living room is on its way", standing: "The walnut sofa is in the workshop." },
-    { key: "house", headline: "Two rooms, read from the front door", standing: "The living room leads." },
+    { key: "cover", headline: "The sofa is on its way", standing: "The walnut sofa is in the workshop." },
+    { key: "house", headline: "The house", standing: "The living room leads." },
     { key: "room-1", headline: "Walnut and oak", standing: "The sofa and table are under way." },
     { key: "room-2", headline: "A marble table", standing: "The table is chosen." },
-    { key: "progress", headline: "In the workshop, then here", standing: "Pieces are being made." },
+    { key: "progress", headline: "In the workshop", standing: "Pieces are being made." },
   ],
   doorstep: { standing: "The living room is being made." },
   notice: "The page now opens on the walnut sofa; everything else is where it was.",
@@ -411,7 +413,7 @@ Deno.test("full edition: A1 on sendable unperceived pictures, A2 inside the top 
   assertEquals(calls.map((c) => c.role), ["perceive", "draft", "draft", "judge"]);
   for (const call of calls) {
     assertEquals(call.feature, "client-edition-compose");
-    assertEquals(call.promptVersion, "e1");
+    assertEquals(call.promptVersion, PROMPT_VERSION);
     assertEquals(call.studioId, "studio-1");
     assert(call.timeoutMs <= 60_000);
     const system = call.params.system as { cache_control?: unknown }[];
@@ -426,7 +428,7 @@ Deno.test("full edition: A1 on sendable unperceived pictures, A2 inside the top 
 
   const args = finishArgs(called);
   assertEquals(args.p_lease_token, "lease-1");
-  assertEquals([args.p_status, args.p_kind, args.p_prompt_version, args.p_model], ["awaiting_review", "full", "e1", "claude-sonnet-5-5"]);
+  assertEquals([args.p_status, args.p_kind, args.p_prompt_version, args.p_model], ["awaiting_review", "full", PROMPT_VERSION, "claude-sonnet-5-5"]);
   assertEquals(args.p_cost_usd, 0.031);
   assertEquals(args.p_facts, facts(), "the facts are frozen as read");
   const written = composition(args);
@@ -530,7 +532,7 @@ Deno.test("F4: a flagged picture, flagged before or now, is never the hero, held
   const before = facts();
   Object.assign(before.assets[0], { perceivedPromptVersion: "e1", perceivedFlags: ["people"] });
   const flaggedNow = (ids: string[]) => ({
-    images: ids.map((id, index) => ({ index, subject_box: [0.1, 0.1, 0.6, 0.6], focal: [0.4, 0.4], flags: id === "a-table" ? ["watermark"] : [], alt: "A piece." })),
+    images: ids.map((id, index) => ({ index, subject_box: [0.4, 0.3, 0.2, 0.3], focal: [0.4, 0.4], flags: id === "a-table" ? ["watermark"] : [], alt: "A piece." })),
   });
   for (const [fixture, flagged] of [[before, "a-sofa"], [facts(), "a-table"]] as const) {
     const { db, called } = fakeDb({ facts: fixture });
@@ -696,15 +698,15 @@ Deno.test("F13: a held choice below the held floor is dropped", async () => {
 
 Deno.test("F14: Call B keeps the designer's corrected words; the same words then publish plates only with the overrides kept", async () => {
   const fixture = facts();
-  const overrides = { chapters: { cover: { headline: "The sofa is in the workshop" }, house: { headline: null } } };
+  const overrides = { chapters: { cover: { headline: "The sofa, in the workshop" }, house: { headline: null } } };
   const current = approved({ chapters: ANCHORED, doorstep: WORDS.doorstep, notice: WORDS.notice, hero: { assetId: "a-table" } }, "old-hash", fixture, overrides);
-  const corrected = { ...WORDS, chapters: WORDS.chapters.map((c) => (c.key === "cover" ? { ...c, headline: "The sofa is in the workshop" } : c)) };
+  const corrected = { ...WORDS, chapters: WORDS.chapters.map((c) => (c.key === "cover" ? { ...c, headline: "The sofa, in the workshop" } : c)) };
   const { db, called } = fakeDb({ current });
   const { claude, calls } = claudeOf(respond({ words: corrected }));
   await composeRequest(REQUEST, deps(db, claude));
 
   const body = wordsBody(calls);
-  assertEquals(body.current.chapters.map((c: { headline: string }) => c.headline).slice(0, 2), ["The sofa is in the workshop", WORDS.chapters[1].headline]);
+  assertEquals(body.current.chapters.map((c: { headline: string }) => c.headline).slice(0, 2), ["The sofa, in the workshop", WORDS.chapters[1].headline]);
   const args = finishArgs(called);
   assertEquals([args.p_status, args.p_kind], ["approved", "plates_only"]);
   // The approved edition's own words, so finish_client_edition finds them unchanged and carries the overrides.
@@ -714,17 +716,17 @@ Deno.test("F14: Call B keeps the designer's corrected words; the same words then
 Deno.test("closing: matching studio corrections stay in the full draft instead of reverting to raw prose", async () => {
   const captured = { ...facts(), closing: true };
   captured.project.phase = "final_walkthrough";
-  const overrides = { chapters: { cover: { headline: "The sofa is in the workshop" }, house: { headline: null } } };
+  const overrides = { chapters: { cover: { headline: "The sofa, in the workshop" }, house: { headline: null } } };
   const current = approved({ chapters: ANCHORED, doorstep: WORDS.doorstep, notice: WORDS.notice, hero: { assetId: "a-table" } }, "old-hash", captured, overrides);
-  const corrected = { ...WORDS, chapters: WORDS.chapters.map((c) => (c.key === "cover" ? { ...c, headline: "The sofa is in the workshop" } : c)) };
+  const corrected = { ...WORDS, chapters: WORDS.chapters.map((c) => (c.key === "cover" ? { ...c, headline: "The sofa, in the workshop" } : c)) };
   const { db, called } = fakeDb({ current });
   const { claude, calls } = claudeOf(respond({ words: corrected }));
   await composeRequest({ ...REQUEST, closing: true, closing_facts: captured }, deps(db, claude));
 
-  assertEquals(wordsBody(calls).current.chapters[0].headline, "The sofa is in the workshop");
+  assertEquals(wordsBody(calls).current.chapters[0].headline, "The sofa, in the workshop");
   const args = finishArgs(called);
   assertEquals([args.p_status, args.p_kind], ["awaiting_review", "full"]);
-  assertEquals((composition(args).chapters as { headline: string }[])[0].headline, "The sofa is in the workshop");
+  assertEquals((composition(args).chapters as { headline: string }[])[0].headline, "The sofa, in the workshop");
 });
 
 Deno.test("F15: plates only compares chapters by key and the doorstep, never the notice", async () => {
@@ -910,7 +912,7 @@ Deno.test("N2: with makers hidden, no alt naming a maker of the job reaches the 
       perceive: (ids) => ({
         images: ids.map((id, index) => ({
           index,
-          subject_box: [0.1, 0.1, 0.6, 0.6],
+          subject_box: [0.4, 0.3, 0.2, 0.3],
           focal: [0.4, 0.4],
           flags: [],
           alt: id === "a-installed" ? "The Kettle Joinery sofa, installed in the bay." : `A walnut piece, view ${index}`,
@@ -1181,7 +1183,7 @@ Deno.test("N6: an approved held picture newly flagged composes again, and is not
 
 Deno.test("N6: the frozen facts carry the flags this run recorded, so the next run finds nothing changed", async () => {
   const flagSofa = (ids: string[]) => ({
-    images: ids.map((id, index) => ({ index, subject_box: [0.1, 0.1, 0.6, 0.6], focal: [0.4, 0.4], flags: id === "a-sofa" ? ["text_overlay"] : [], alt: "A piece." })),
+    images: ids.map((id, index) => ({ index, subject_box: [0.4, 0.3, 0.2, 0.3], focal: [0.4, 0.4], flags: id === "a-sofa" ? ["text_overlay"] : [], alt: "A piece." })),
   });
   const first = fakeDb();
   await composeRequest(REQUEST, deps(first.db, claudeOf(respond({ perceive: flagSofa })).claude));
@@ -1195,9 +1197,7 @@ Deno.test("N6: the frozen facts carry the flags this run recorded, so the next r
   assertEquals(second.called("begin_client_edition").length, 0, "the run's own flags are not a change");
 });
 
-// The Phase 1 rule lives in apps/client-portal/src/lib/editorial/chapters.ts.
-// These expectations were produced by running that file; a change to either
-// copy must change this fixture.
+// Gallery fallback copy is intentionally shorter than the historical client page.
 const item = (nameAsSigned: string, status: string | null = null) => ({ id: nameAsSigned, nameAsSigned, status, assetIds: [] });
 const room = (id: string, name: string, items: ReturnType<typeof item>[]): FactsRoom => ({ id, name, anchor: `room-${id}`, items });
 const HEADLINE_FIXTURE: { phase: string; rooms: FactsRoom[]; expected: string[] }[] = [
@@ -1207,30 +1207,31 @@ const HEADLINE_FIXTURE: { phase: string; rooms: FactsRoom[]; expected: string[] 
       room("a", "Living room", [item("Walnut and linen sofa"), item("Oak side table"), item("Brass floor lamp", "in production")]),
       room("b", "Dining room", [item("Marble dining table"), item("Cane chair")]),
     ],
-    expected: ["The living room is on its way", "Two rooms, read from the front door", "Walnut, linen and oak", "Marble and cane", "In production, then on the truck, then here"],
+    expected: ["The pieces are on their way", "The house", "Living room", "Dining room", "On the way"],
   },
   {
     phase: "procurement",
     rooms: [room("c", "Study", [item("Desk", "delivered")])],
-    expected: ["The pieces are on their way", "One room, read from the front door", "Study", "In production, then on the truck, then here"],
+    expected: ["The pieces are on their way", "The house", "The study", "On the way"],
   },
   {
     phase: "installation",
     rooms: [room("d", "Bedroom", [item("Bouclé chair"), item("Boucle ottoman"), item("Velvet headboard"), item("Steel bed frame")])],
-    expected: ["The rooms are going in", "One room, read from the front door", "Bouclé, velvet and steel", "In production, then on the truck, then here"],
+    expected: ["The rooms are going in", "The house", "The bedroom", "On the way"],
   },
-  { phase: "final_walkthrough", rooms: [], expected: ["The house, as finished", "No rooms, read from the front door", "In production, then on the truck, then here"] },
+  { phase: "final_walkthrough", rooms: [], expected: ["The house, as finished", "The house", "On the way"] },
   {
     phase: "design_development",
     rooms: Array.from({ length: 11 }, (_, i) => room(`r${i}`, `Room ${i}`, [])),
-    expected: ["The rooms, as drawn", "The rooms, read from the front door", ...Array.from({ length: 11 }, (_, i) => `Room ${i}`), "In production, then on the truck, then here"],
+    expected: ["The rooms, as drawn", "The house", ...Array.from({ length: 11 }, (_, i) => `Room ${i}`), "On the way"],
   },
 ];
 
-Deno.test("deterministic headlines match the client portal's Phase 1 rule (shared fixture)", () => {
+Deno.test("Gallery deterministic headlines meet band and menu limits for every phase", () => {
   for (const { phase, rooms, expected } of HEADLINE_FIXTURE) {
     const headlines = deterministicHeadlines({ project: { id: "p", name: "P", phase }, rooms, assets: [] });
     assertEquals(headlines.map((h) => h.headline), expected);
+    for (const h of headlines) assertEquals(headlineFault(h.headline, h.key === "cover"), null);
     assertEquals(headlines.slice(2, 2 + rooms.length).map((h) => h.key), rooms.map((r) => r.anchor));
   }
 });
@@ -1273,4 +1274,143 @@ Deno.test("closing: missing or mismatched captured facts fail closed, never read
     assertEquals(called("begin_client_edition").length, 0);
     assertEquals(calls.length, 0);
   }
+});
+
+Deno.test("Gallery hero eligibility excludes a qualifying board and unservable photographs", async () => {
+  const fixture = facts();
+  fixture.assets = fixture.assets.map((a) => a.id === "a-board"
+    ? { ...a, width: 2400, height: 1600, ground: "scene" }
+    : { ...a, ground: "white", crops: {} });
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude, calls } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  const args = finishArgs(called);
+  assertEquals(composition(args).hero, null, "the qualifying board cannot become the hero");
+  assertEquals(wordsBody(calls).opening.now, "the paint card", "no eligible client hero yields the paint card");
+});
+
+Deno.test("Gallery hero: scene, native dimensions and subject fit in both viewport crops", () => {
+  const photo = asset("gallery", "upload", 2000, 1200, { subjectBox: [0.4, 0.35, 0.2, 0.3] });
+  assert(meetsHero(photo), "boundary landscape with a phone-safe subject qualifies despite discarding over half the frame");
+  assert(meetsHero({ ...photo, width: 1200, height: 2000 }), "boundary portrait holds the desktop crop");
+  for (const change of [
+    { width: 1999 }, { height: 1199 }, { width: 0 },
+    { ground: "white" }, { ground: "drawing" }, { ground: null }, { sourceKind: "concept" },
+    { subjectBox: [0.1, 0.35, 0.3, 0.3] },
+    { width: 1200, height: 2000, subjectBox: [0.4, 0.1, 0.2, 0.5] },
+  ]) assertEquals(meetsHero({ ...photo, ...change }), false, JSON.stringify(change));
+});
+
+Deno.test("Gallery hero-less edition finishes with paint card, no image rows and no hero call", async () => {
+  const fixture = facts();
+  fixture.assets = fixture.assets.map(a => ({ ...a, ground: "white", crops: {} }));
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude, calls } = claudeOf(respond());
+  const outcome = await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(outcome.result, "composed");
+  const args = finishArgs(called);
+  assertEquals([composition(args).hero, composition(args).held, args.p_images], [null, [], []]);
+  assertEquals(composition(args).voice, "model");
+  assertEquals(calls.filter(c => c.role === "draft" && shown(c).length > 0).length, 0);
+  assertEquals(wordsBody(calls).opening.now, "the paint card");
+});
+
+Deno.test("Gallery limit miss regenerates once and keeps a corrected second draft", async () => {
+  const tooLong = { ...WORDS, chapters: WORDS.chapters.map(c => c.key === "cover" ? { ...c, headline: "The living room is on its way" } : c) };
+  const { db, called } = fakeDb();
+  const responses = [tooLong, WORDS];
+  const base = respond();
+  const { claude, calls } = claudeOf(opts => opts.role === "draft" && !shown(opts).length ? ok(responses.shift()) : base(opts));
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(calls.filter(c => c.role === "draft" && !shown(c).length).length, 2, "a limit miss earns exactly one regeneration");
+  assertEquals(composition(finishArgs(called)).voice, "model");
+  assertEquals(composition(finishArgs(called)).chapters, ANCHORED);
+});
+
+Deno.test("Gallery second limit miss falls back to bounded deterministic headlines", async () => {
+  const tooLong = { ...WORDS, chapters: WORDS.chapters.map(c => ({ ...c, standing: Array(26).fill("we").join(" ") + "." })) };
+  const { db, called } = fakeDb();
+  const { claude, calls } = claudeOf(respond({ words: tooLong }));
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(calls.filter(c => c.role === "draft" && !shown(c).length).length, 2);
+  const draft = composition(finishArgs(called));
+  assertEquals(draft.voice, "deterministic");
+  assertEquals(draft.chapters, deterministicHeadlines(facts()).map(c => ({ ...c, standing: null })));
+});
+
+Deno.test("Gallery fallback handles long, empty and forbidden room names without overlong copy", () => {
+  for (const name of ["", "A very long room name with an annex", "x".repeat(80), "The curated room", "Study", "Living room"]) {
+    const fixture = facts();
+    fixture.rooms[0].name = name;
+    const headlines = deterministicHeadlines(fixture);
+    for (const c of headlines) assertEquals(headlineFault(c.headline, c.key === "cover"), null, name);
+    assert(!headlines.some(c => /curated/i.test(c.headline)));
+  }
+});
+
+Deno.test("Gallery prompt e2 states the new limits while retaining the voice rules", async () => {
+  const { db } = fakeDb();
+  const { claude, calls } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  const system = JSON.stringify(wordsCall(calls).params.system);
+  assertEquals(PROMPT_VERSION, "e2");
+  for (const text of ["3–6 words", "40 characters", "2–4 word chapter name", "25 words", "No counts", "No money", "AI", "Lexicon.", "meets these Gallery limits"]) {
+    assert(system.includes(text), text);
+  }
+});
+
+Deno.test("Gallery fallback: a bed-only edition picks the bed without an A2 call", async () => {
+  const fixture = facts();
+  fixture.assets = [asset("a-sofa-maker", "maker", 1600, 1600, { ground: "white", subjectBox: [0.1, 0.2, 0.8, 0.5], perceivedPromptVersion: "e1" })];
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude, calls } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(composition(finishArgs(called)).hero?.assetId, "a-sofa-maker");
+  assertEquals(calls.filter(c => c.role === "draft" && shown(c).length > 0).length, 0);
+});
+Deno.test("Gallery fallback: eligible hero wins over a higher-tier fallback", async () => {
+  const fixture = facts();
+  fixture.assets = [
+    asset("a-sofa", "upload", 5000, 4000, { ground: "white", perceivedPromptVersion: "e1" }),
+    asset("a-sofa-maker", "maker", 2400, 1600, { perceivedPromptVersion: "e1" }),
+  ];
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(composition(finishArgs(called)).hero?.assetId, "a-sofa-maker");
+});
+
+Deno.test("Gallery fallback: ranks by tier, pixels and sha independent of input order", async () => {
+  for (const reverse of [false, true]) {
+    const fixture = facts();
+    fixture.rooms[0].items[0].assetIds = ["a-sofa", "a-sofa-maker", "b", "c"];
+    fixture.assets = [
+      asset("a-sofa-maker", "maker", 5000, 5000, { ground: "white" }),
+      asset("a-sofa", "upload", 600, 600, { ground: "white" }),
+      asset("b", "upload", 1600, 1600, { ground: "white", sha256: "b" }),
+      asset("c", "upload", 1600, 1600, { ground: "white", sha256: "a" }),
+    ];
+    if (reverse) fixture.assets.reverse();
+    const { db, called } = fakeDb({ facts: fixture, rows: [...ROWS, row("b", "upload"), row("c", "upload")] });
+    const { claude } = claudeOf(respond());
+    await composeRequest(REQUEST, deps(db, claude));
+    assertEquals(composition(finishArgs(called)).hero?.assetId, "c");
+  }
+});
+
+Deno.test("Gallery fallback: flagged higher-tier photos, concepts, sheets and cut subjects are excluded", async () => {
+  const fixture = facts();
+  fixture.assets = [
+    asset("a-sofa", "upload", 3000, 2000, { perceivedFlags: ["people"], perceivedPromptVersion: "e1" }),
+    asset("a-sofa", "upload", 2900, 1900, { perceivedFlags: ["watermark"], perceivedPromptVersion: "e1" }),
+    asset("a-sofa", "upload", 2800, 1800, { perceivedFlags: ["text_overlay"], perceivedPromptVersion: "e1" }),
+    asset("a-concept", "concept", 3000, 2000),
+    asset("a-sheet", "sheet", 3000, 2000),
+    asset("a-table", "upload", 600, 600, { subjectBox: [0, 0, 1, 1], crops: { piece: { rect: [0, 0, 100, 100], widths: [512] } }, perceivedPromptVersion: "e1" }),
+    asset("a-sofa-maker", "maker", 1600, 1600, { ground: "white", perceivedPromptVersion: "e1" }),
+  ];
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(composition(finishArgs(called)).hero?.assetId, "a-sofa-maker");
 });

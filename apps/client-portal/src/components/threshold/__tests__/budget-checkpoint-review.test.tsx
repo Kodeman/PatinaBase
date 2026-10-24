@@ -10,12 +10,16 @@ import {
   useAcknowledgeBudgetCheckpoint,
   useProjectWorkingBudget,
 } from "@/hooks/use-commercial-client";
-import { BudgetCheckpointReview } from "../budget-checkpoint-review";
+import { BudgetCheckpointReview as PublishedReview } from "../budget-checkpoint-review";
 
 jest.mock("@/hooks/use-commercial-client", () => ({
   useProjectWorkingBudget: jest.fn(),
   useAcknowledgeBudgetCheckpoint: jest.fn(),
 }));
+
+function BudgetCheckpointReview({ projectId }: { projectId: string }) {
+  return <PublishedReview projectId={projectId} query={useProjectWorkingBudget(projectId)} />;
+}
 
 const budget = () =>
   adaptProjectCommercialSummary({

@@ -379,7 +379,7 @@ Deno.test("with neither name the letter has NO NAME, never a placeholder", () =>
   );
   assertEquals(
     letter.standingSentence,
-    "Middle Studio set up a page for your work together on 9 September. It's where the studio keeps the record — the plans, the papers, and the numbers, as they come.",
+    "Middle Studio set up a page for your work together on 9 September. It's where the studio keeps the record — the plans, the papers, and the numbers, as they come. You can pay invoices and approve pieces there, and the studio will write when something needs you.",
   );
   // And nothing anywhere invents a person.
   for (const part of [letter.html, letter.text, letter.subject, letter.preheader]) {
@@ -458,7 +458,7 @@ Deno.test("a project letter degrades to the studio too", () => {
   assertEquals(letter.subject, "Middle Studio added you to the Van Hise kitchen");
   assertEquals(
     letter.standingSentence,
-    "Middle Studio added you to the Van Hise kitchen on 9 September. The page below holds the studio's record of the job — the plans, the papers, and the numbers.",
+    "Middle Studio added you to the Van Hise kitchen on 9 September. The page below holds the studio's record of the job — the plans, the papers, and the numbers. You can pay invoices and approve pieces there, and the studio will write when something needs you.",
   );
   assert(!letter.html.includes("Your designer"));
 });

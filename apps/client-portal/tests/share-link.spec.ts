@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 // Schedule & Boards Wave 2 · C2 — the guest share window is VIEW-ONLY, resolved
 // server-side by token hash, honoring the per-field visibility matrix and
@@ -10,9 +10,8 @@ import { createHash, randomBytes } from 'node:crypto';
 // chromium single-actor spec.
 
 const LOCAL_URL = 'http://127.0.0.1:54321';
-// Well-known supabase-demo service-role JWT (LOCAL only).
-const SERVICE_JWT =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+// Supplied from the local CLI status, never a committed credential.
+const SERVICE_JWT = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 const PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
 const PROPOSAL_TITLE = 'Aspen Loft — Living Room Refresh';
@@ -24,12 +23,12 @@ const admin = createClient(LOCAL_URL, SERVICE_JWT, { auth: { persistSession: fal
 // Insert an active share row directly (service role bypasses RLS) with a known
 // raw token; the guest route resolves it by sha256(token) exactly like a real
 // mint. This stands in for "the designer created a share".
-async function mintShare(visibility: Record<string, boolean>) {
+async function mintShare(visibility: Record<string, boolean>, proposalId = PROPOSAL_ID) {
   const token = randomBytes(32).toString('hex');
   const token_hash = createHash('sha256').update(token).digest('hex');
   const { data, error } = await admin
     .from('document_shares')
-    .insert({ proposal_id: PROPOSAL_ID, token_hash, label: 'e2e', visibility, status: 'active' })
+    .insert({ proposal_id: proposalId, token_hash, label: 'e2e', visibility, status: 'active' })
     .select('id')
     .single();
   if (error) throw error;
@@ -39,12 +38,19 @@ async function mintShare(visibility: Record<string, boolean>) {
 const BOARD_NAME = 'Guest Board (e2e)';
 const BOARD_PIN_NAME = 'Guest Board Sofa';
 
-// Seed an ACTIVE board + one product pin on the proposal, so a guest share with
-// itemDetails on renders it (B3). Returns a cleanup that removes them.
+// Author the board on a disposable draft, never on the immutable sent seed.
 async function seedBoard() {
+  const { data: source, error: sourceError } = await admin.from('proposals')
+    .select('designer_id,client_id,designer_client_id,project_id,title').eq('id', PROPOSAL_ID).single();
+  if (sourceError) throw sourceError;
+  const proposalId = randomUUID();
+  const { error: draftError } = await admin.from('proposals').insert({
+    ...source, id: proposalId, status: 'draft', document_kind: 'legacy',
+  });
+  if (draftError) throw draftError;
   const { data: board, error: boardErr } = await admin
     .from('proposal_boards')
-    .insert({ proposal_id: PROPOSAL_ID, name: BOARD_NAME, status: 'active', sort_order: 999 })
+    .insert({ proposal_id: proposalId, name: BOARD_NAME, status: 'active', sort_order: 999 })
     .select('id')
     .single();
   if (boardErr) throw boardErr;
@@ -60,9 +66,10 @@ async function seedBoard() {
     data: { name: BOARD_PIN_NAME, price_cents: 250000 },
   });
   if (itemErr) throw itemErr;
-  return async () => {
-    await admin.from('proposal_boards').delete().eq('id', boardId); // items cascade
-  };
+  return { proposalId, cleanup: async () => {
+    const { error } = await admin.from('proposals').delete().eq('id', proposalId);
+    if (error) throw error;
+  } };
 }
 
 test.describe('guest share link (C2)', () => {
@@ -112,7 +119,7 @@ test.describe('guest share link (C2)', () => {
   // B3 — a share WITH a board renders it read-only for a guest, and carries NO
   // verdict affordances (feedback is forced off on a guest share).
   test('a share with a board renders it view-only for a guest (B3)', async ({ page }) => {
-    const cleanup = await seedBoard();
+    const { proposalId, cleanup } = await seedBoard();
     try {
       const { token } = await mintShare({
         pricing: true,
@@ -123,7 +130,7 @@ test.describe('guest share link (C2)', () => {
         itemDetails: true, // the gate that lets boards through
         leadTimes: true,
         feedbackEnabled: false,
-      });
+      }, proposalId);
 
       await page.goto(`/share/${token}`);
       await expect(page.getByRole('heading', { name: PROPOSAL_TITLE })).toBeVisible({ timeout: 20000 });

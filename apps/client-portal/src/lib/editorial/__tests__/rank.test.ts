@@ -1,3 +1,4 @@
+import { arrivalFixture } from '../__fixtures__/arrival-fixtures';
 import { TIER, compareAssets, heroEligible, rankHero, roomPlates, tierOf } from '../rank';
 import type { ClientProjectEditorial, EditorialAsset, EditorialItem, EditorialRoom } from '../types';
 
@@ -92,9 +93,10 @@ describe('rank', () => {
     const hero = asset({ sourceKind: 'installed' });
     const scan = asset({ sourceKind: 'scan', width: 2048, height: 1365 });
     const concept = asset({ sourceKind: 'concept' });
-    const catalogue = asset({ sourceKind: 'maker', ground: 'white', width: 800, height: 800 });
+    const catalogue = asset({ sourceKind: 'maker', ground: 'white', width: 800, height: 800, crops: { piece: { rect: [0, 0, 1, 1], widths: [768] } } });
     const tiny = asset({ sourceKind: 'upload', width: 200, height: 200 });
-    const editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms'> = {
+    const editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms' | 'project'> = {
+      project: arrivalFixture().project,
       assets: [hero, scan, concept, catalogue, tiny],
       rooms: [
         room({
@@ -117,6 +119,7 @@ describe('rank', () => {
     const concept = asset({ sourceKind: 'concept' });
     const white = asset({ sourceKind: 'maker', ground: 'white' });
     const [choice] = roomPlates({
+      project: arrivalFixture().project,
       assets: [concept, white],
       rooms: [room({ scanAssetIds: [concept.id], items: [item({ assetIds: [white.id] })] })],
     });
@@ -126,10 +129,10 @@ describe('rank', () => {
 
 // Installed Field photos use the existing room-photo slot, not a new room schema.
 it('chooses an installed photograph ahead of board, scan and maker for hero and room', () => {
-  const installed = asset({ sourceKind: 'installed', width: 1800, height: 1200 });
+  const installed = asset({ sourceKind: 'installed', width: 2000, height: 1200 });
   const others = (['board', 'scan', 'maker', 'concept'] as const).map(sourceKind =>
     asset({ sourceKind, width: 6000, height: 4000 }));
-  const editorial = { assets: [...others, installed], rooms: [room({ scanAssetIds: [...others, installed].map(a => a.id) })] };
+  const editorial = { project: arrivalFixture().project, assets: [...others, installed], rooms: [room({ scanAssetIds: [...others, installed].map(a => a.id) })] };
   expect(rankHero(editorial)).toBe(installed);
   expect(roomPlates(editorial)[0].chapter).toBe(installed);
 });

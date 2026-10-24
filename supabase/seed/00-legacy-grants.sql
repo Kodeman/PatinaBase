@@ -24318,6 +24318,48 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00866_inbound_notice_shipment_quantities.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._compose_receiver_inbound_draft(uuid, uuid, date, date, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00866_inbound_notice_shipment_quantities.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._compose_receiver_inbound_draft(uuid, uuid, date, date, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00867_margin_notes_tenant_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.margin_note_tenant_admits(uuid, uuid, uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00867_margin_notes_tenant_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.margin_note_tenant_admits(uuid, uuid, uuid, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00867_margin_notes_tenant_guard.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.margin_notes TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00867_margin_notes_tenant_guard.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.margin_notes TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00867_margin_notes_tenant_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_designer_client_household() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

@@ -73,6 +73,12 @@ const SELECTION: ClientSelection = {
  * Accepting finished work is held, not tapped (P-18). Fake time covers the
  * hold and is handed back before the mutation's promises are flushed.
  */
+beforeEach(() => {
+  jest.spyOn(HTMLButtonElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    top: 0, left: 0, right: 100, bottom: 44, width: 100, height: 44,
+  } as DOMRect);
+});
+
 async function holdAccept() {
   const target = screen.getByRole('button', { name: /accept/i });
   jest.useFakeTimers();

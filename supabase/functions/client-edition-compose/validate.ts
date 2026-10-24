@@ -15,7 +15,11 @@ export type Checked<T> =
   | { ok: true; value: T }
   | { ok: false; reason: string; /** The banned words, when that is the fault. */ term?: string };
 
-export const LIMITS = { alt: 125, why: 140, headline: 60, standing: 160, notice: 200 } as const;
+export const LIMITS = {
+  alt: 125, why: 140, headline: 60, standing: 160, notice: 200,
+  coverHeadline: 40, coverMinWords: 3, coverMaxWords: 6,
+  chapterMinWords: 2, chapterMaxWords: 4, standingWords: 25,
+} as const;
 export const FLAGS: ReadonlySet<unknown> = new Set(["watermark", "people", "text_overlay"]);
 /** A subject box covers at least 5% of the frame. */
 export const MIN_BOX_AREA = 0.05;
@@ -231,10 +235,30 @@ export interface Words {
   notice: string;
 }
 
+function wordCount(text: string): number {
+  return text.trim().split(/\s+/u).length;
+}
+
+/** Gallery's band line and menu names share this check with deterministic copy. */
+export function headlineFault(value: unknown, cover: boolean): string | null {
+  const [max, minWords, maxWords] = cover
+    ? [LIMITS.coverHeadline, LIMITS.coverMinWords, LIMITS.coverMaxWords]
+    : [LIMITS.headline, LIMITS.chapterMinWords, LIMITS.chapterMaxWords];
+  if (!boundedText(value, max)) return `headline is empty or over ${max} characters`;
+  const count = wordCount(value);
+  return count >= minWords && count <= maxWords ? null : `headline must have ${minWords}–${maxWords} words`;
+}
+
+function standingFault(value: unknown): string | null {
+  if (!boundedText(value, LIMITS.standing)) return `standing is empty or over ${LIMITS.standing} characters`;
+  if (wordCount(value) > LIMITS.standingWords) return `standing is over ${LIMITS.standingWords} words`;
+  return /[.!?]["'”’)]*\s+\S/u.test(value.trim()) ? "standing must be one sentence" : null;
+}
+
 const CHAPTER_CHECKS: readonly Check<ReadonlySet<unknown>>[] = [
   (entry, keys) => (keys.has(entry.key) ? null : "unknown chapter key"),
-  (entry) => (boundedText(entry.headline, LIMITS.headline) ? null : `headline is empty or over ${LIMITS.headline} characters`),
-  (entry) => (boundedText(entry.standing, LIMITS.standing) ? null : `standing is empty or over ${LIMITS.standing} characters`),
+  (entry) => headlineFault(entry.headline, entry.key === "cover"),
+  (entry) => standingFault(entry.standing),
 ];
 
 function chaptersFault(chapters: unknown, keys: readonly string[]): string | null {
@@ -268,7 +292,7 @@ function trimWords(value: Fields, keys: readonly string[]): Words {
   };
 }
 
-/** Call B: {chapters:[{key, headline≤60, standing≤160}], doorstep:{standing≤160}, notice≤200}. */
+/** Call B: Gallery band/menu headline limits, one ≤25-word chapter sentence, doorstep≤160, notice≤200. */
 export function validateWords(answer: ModelAnswer, keys: readonly string[], names: readonly string[] = []): Checked<Words> {
   const read = readAnswer(answer, names);
   if (!read.ok) return read;

@@ -16,7 +16,7 @@
  * its photographs. A closed project's frozen edition offers no act at all.
  */
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,15 +51,15 @@ import {
   pendingEdition,
   wasPublished,
 } from '@/lib/document/client-editions';
-import { heroEligible } from '@/lib/document/plate-crop';
+
 import { DocumentAction, DocumentActionRow } from './document-action';
 import {
-  PressBandPreview,
+  ProjectGalleryPreview,
   editionChapters,
   editionHeroId,
   imageCaption,
 } from './press-band-preview';
-import { PressBandFocal } from './press-band-focal';
+import { PressBandFocal, type FocalEdit } from './press-band-focal';
 import { DEAD_PICTURE_COPY } from './line-unfold/item-pictures';
 import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending } from '@/lib/document/registry';
 
@@ -142,6 +142,7 @@ export function PressBand({
   );
   // Before any edition the client page opens on the editorial cover.
   const { data: editorialAssets } = useClientEditorialAssets(projectId, !!data && !data.refreshRequired && !pending && !current);
+
   const headingId = useId();
   if (!data) return null;
   if (data.refreshRequired) {
@@ -181,6 +182,7 @@ export function PressBand({
           projectId={projectId}
           edition={pending}
           allowEdit={!frozen}
+          refreshEdition={async () => (await refetch()).isSuccess}
           current={current}
           name={name}
           sourceUrls={urls}
@@ -191,10 +193,10 @@ export function PressBand({
         </h2>
       ) : frozen ? (
         <h2 id={headingId} className={HEADING}>Closed</h2>
-      ) : editorialAssets && !editorialAssets.some(heroEligible) ? (
+      ) : editorialAssets ? (
         <div className="flex flex-col gap-1">
           <h2 id={headingId} className={HEADING}>
-            {COVER_IS_A_DRAWING}
+            The page opens on photographs of the pieces.
           </h2>
           <DocumentActionRow surfaceKey="open-document" regionKey="press-band" aria-label="Cover">
             <DocumentAction
@@ -211,6 +213,7 @@ export function PressBand({
           {editorialCoverLine(name)}
         </h2>
       )}
+      <MissingEditionCover frozen={frozen} edition={pending || current} />
       <DeadPictureLinks projectId={projectId} />
       {!frozen && (
         <JobControls
@@ -232,6 +235,18 @@ export function PressBand({
       )}
     </section>
   );
+}
+
+function MissingEditionCover({ frozen, edition }: { frozen: boolean; edition: ClientEdition | null }) {
+  if (frozen || !edition || editionHeroId(edition)) return null;
+  return <div>
+    <p>The page opens on photographs of the pieces.</p>
+    <DocumentActionRow surfaceKey="open-document" regionKey="press-band" aria-label="Cover">
+      <DocumentAction actionKey="press-add-cover-photo" variant="secondary" href={`#${sectionAnchorId('project')}`}>
+        Add a photograph for the cover
+      </DocumentAction>
+    </DocumentActionRow>
+  </div>;
 }
 
 /** Before the first approved edition, when the page has a photograph to open on. */
@@ -292,6 +307,64 @@ function JobControls({
   );
 }
 
+function useEditionFocal(edition: ClientEdition, approving: boolean, refreshEdition: () => Promise<boolean>) {
+  const [focal, setFocal] = useState<FocalEdit | null>(null);
+  const [refreshState, setRefreshState] = useState<'refreshing' | 'failed' | null>(null);
+  const refreshGeneration = useRef(0);
+  const refreshCrop = () => {
+    const generation = ++refreshGeneration.current;
+    const finishRefresh = (success: boolean) => {
+      if (generation === refreshGeneration.current) setRefreshState(success ? null : 'failed');
+    };
+    setRefreshState('refreshing');
+    void refreshEdition().then(finishRefresh, () => finishRefresh(false));
+  };
+  const cropReasonId = useId();
+  const cropBlocked = Boolean(focal ?? refreshState);
+  return {
+    focal,
+    setFocal,
+    cropReasonId,
+    refreshState,
+    refreshCrop,
+    approvalDescriptionId: cropBlocked ? cropReasonId : undefined,
+    approvalDisabled: approving || cropBlocked,
+    savingCrop: focal?.status === 'saving',
+    previewEdition: edition,
+    onFocalChange: (edit: FocalEdit | null) => {
+      if (edit?.status === 'saved') {
+        // A write response cannot identify the current crop, including ABA edits.
+        // Only a successful post-save read unlocks approval.
+        setFocal(null);
+        refreshCrop();
+      } else setFocal(edit);
+    },
+  };
+}
+
+function CropApprovalReason({ edit, id, refreshState, refreshCrop }: {
+  edit: FocalEdit | null;
+  id: string;
+  refreshState: 'refreshing' | 'failed' | null;
+  refreshCrop: () => void;
+}) {
+  if (refreshState) return (
+    <div>
+      <p id={id} role="status" className="text-[15px] text-[var(--text-muted)]">
+        Refresh the stored crop before approval
+      </p>
+      {refreshState === 'failed' && (
+        <DocumentAction actionKey="press-refresh-crop" surfaceKey="open-document" regionKey="press-band" variant="secondary" onClick={refreshCrop}>
+          Refresh crop
+        </DocumentAction>
+      )}
+    </div>
+  );
+  return edit && <p id={id} role="status" className="text-[15px] text-[var(--text-muted)]">
+    {edit.status === 'saving' ? 'Saving this crop before approval' : 'Use this crop or cancel first'}
+  </p>;
+}
+
 function PendingEdition({
   headingId,
   projectId,
@@ -300,9 +373,11 @@ function PendingEdition({
   name,
   sourceUrls,
   allowEdit,
+  refreshEdition,
 }: {
   headingId: string;
   allowEdit: boolean;
+  refreshEdition: () => Promise<boolean>;
   projectId: string;
   edition: ClientEdition;
   current: ClientEdition | null;
@@ -312,6 +387,7 @@ function PendingEdition({
   const [editing, setEditing] = useState(false);
   const [overrides, setOverrides] = useState<ClientEditionOverrides>({});
   const approve = useApproveClientEdition();
+  const { focal, setFocal, previewEdition, savingCrop, cropReasonId, approvalDescriptionId, approvalDisabled, onFocalChange, refreshState, refreshCrop } = useEditionFocal(edition, approve.isPending, refreshEdition);
   const hold = useHoldClientEdition();
   const trayId = useId();
 
@@ -335,7 +411,8 @@ function PendingEdition({
           <DocumentAction
             actionKey="press-approve"
             variant="primary"
-            disabled={approve.isPending}
+            disabled={approvalDisabled}
+            aria-describedby={approvalDescriptionId}
             loading={approve.isPending}
             loadingLabel="Approving…"
             onClick={() =>
@@ -368,15 +445,22 @@ function PendingEdition({
             variant="tertiary"
             aria-expanded={editing}
             aria-controls={trayId}
-            onClick={() => setEditing((open) => !open)}
+            disabled={savingCrop}
+            onClick={() => {
+              setFocal(null);
+              setEditing((open) => !open);
+            }}
           >
             Edit
           </DocumentAction>}
         </DocumentActionRow>
       </div>
+      <CropApprovalReason id={cropReasonId} edit={focal} refreshState={refreshState} refreshCrop={refreshCrop} />
       <ActFailLine error={approve.error ?? hold.error} />
-      <PressBandPreview
-        edition={edition}
+      <ProjectGalleryPreview
+        projectId={projectId}
+        focal={focal}
+        edition={previewEdition}
         current={current}
         overrides={overrides}
         sourceUrls={sourceUrls}
@@ -385,9 +469,14 @@ function PendingEdition({
         <EditTray
           id={trayId}
           projectId={projectId}
-          edition={edition}
+          edition={previewEdition}
           overrides={overrides}
-          onChange={setOverrides}
+          savingCrop={savingCrop}
+          onChange={(next) => {
+            if (editionHeroId(edition, next) !== editionHeroId(edition, overrides)) setFocal(null);
+            setOverrides(next);
+          }}
+          onFocalChange={onFocalChange}
           sourceUrls={sourceUrls}
         />
       )}
@@ -431,6 +520,8 @@ function Counted({
 }
 
 function EditTray({
+  onFocalChange,
+  savingCrop,
   id,
   projectId,
   edition,
@@ -443,6 +534,8 @@ function EditTray({
   edition: ClientEdition;
   overrides: ClientEditionOverrides;
   onChange: (next: ClientEditionOverrides) => void;
+  onFocalChange: (edit: FocalEdit | null) => void;
+  savingCrop: boolean;
   sourceUrls: Record<string, string>;
 }) {
   const heroId = editionHeroId(edition, overrides);
@@ -476,6 +569,7 @@ function EditTray({
                     type="button"
                     aria-pressed={image.assetId === heroId}
                     aria-label={label}
+                    disabled={savingCrop}
                     onClick={() => onChange({ ...overrides, heroAssetId: image.assetId })}
                     className={`block h-[75px] w-[120px] overflow-hidden rounded-[4px] bg-[var(--paper)] p-0 focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${
                       image.assetId === heroId
@@ -498,6 +592,7 @@ function EditTray({
       {hero && sourceUrls[hero.assetId] && (
         <PressBandFocal
           key={hero.assetId}
+          onFocalChange={onFocalChange}
           projectId={projectId}
           image={hero}
           sourceUrl={sourceUrls[hero.assetId]}

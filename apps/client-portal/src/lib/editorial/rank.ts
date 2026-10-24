@@ -2,7 +2,10 @@
    photograph > catalogue > silhouette. A concept render is a room-plate state
    and never the hero. */
 
-import { placeRole } from './floors';
+import { galleryHeroFits, placeRole } from './floors';
+import { piecePhotoCaption } from './caption';
+export { selectArrival } from '@patina/utils';
+import { compareArrivalAssets } from '@patina/utils';
 import type { ClientProjectEditorial, EditorialAsset } from './types';
 
 export const TIER = {
@@ -30,31 +33,15 @@ export function tierOf(asset: Pick<EditorialAsset, 'sourceKind' | 'ground'>): Ti
   return SOURCE_TIER[asset.sourceKind] ?? null;
 }
 
-function rankTier(asset: EditorialAsset): Tier {
-  return tierOf(asset) ?? TIER.silhouette;
-}
-
-/** Better tier first, then more pixels, then sha256 so the order never wobbles. */
-export function compareAssets(a: EditorialAsset, b: EditorialAsset): number {
-  const tier = rankTier(a) - rankTier(b);
-  if (tier !== 0) return tier;
-  const area = b.width * b.height - a.width * a.height;
-  if (area !== 0) return area;
-  return compareCodepoints(a.sha256, b.sha256);
-}
-
-function compareCodepoints(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
+export const compareAssets = compareArrivalAssets;
 
 /**
  * The hero may bleed: never a concept, never a drawing sheet (a cropped
  * drawing misstates its scale), never a white-ground clipping.
  */
 export function heroEligible(asset: EditorialAsset): boolean {
-  if (tierOf(asset) === null || asset.sourceKind === 'sheet' || asset.ground === 'white') return false;
-  return placeRole('hero', asset.width, asset.height, asset.subjectBox) === 'hero';
+  if (!['installed', 'upload', 'scan', 'maker'].includes(asset.sourceKind) || asset.ground !== 'scene') return false;
+  return galleryHeroFits(asset.width, asset.height, asset.subjectBox);
 }
 
 export function rankHero(editorial: Pick<ClientProjectEditorial, 'assets'>): EditorialAsset | null {
@@ -79,7 +66,7 @@ export interface RoomPlateChoice {
 
 /** Each room's plates; a picture in `placed` (the hero, an edition's held plate) stands elsewhere. */
 export function roomPlates(
-  editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms'>,
+  editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms' | 'project'>,
   placed: readonly string[] = [],
 ): RoomPlateChoice[] {
   const byId = new Map(editorial.assets.map((a) => [a.id, a]));
@@ -103,7 +90,8 @@ export function roomPlates(
       itemId: item.id,
       asset:
         lookup(item.assetIds)
-          .filter((a) => tierOf(a) !== null && placeRole('piece', a.width, a.height) === 'piece')
+          .filter((a) => tierOf(a) !== null && placeRole('piece', a.width, a.height) === 'piece'
+            && Boolean(piecePhotoCaption(item, a, editorial.project.showMakers)))
           .sort(compareAssets)[0] ?? null,
     }));
     return {
@@ -113,4 +101,13 @@ export function roomPlates(
       pieces,
     };
   });
+}
+
+/** Renderable piece photographs in room/item order, ranked within each item. */
+export function arrivalPieces(editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms' | 'project'>) {
+  const choices = new Map(roomPlates(editorial).map(room => [room.roomId, room.pieces]));
+  return editorial.rooms.flatMap(room => room.items.flatMap(item => {
+    const asset = choices.get(room.id)?.find(piece => piece.itemId === item.id)?.asset;
+    return asset ? [{ item, asset }] : [];
+  })).slice(0, 4);
 }

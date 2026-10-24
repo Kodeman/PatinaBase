@@ -333,6 +333,7 @@
   aspect-ratio: 1 / 1;
 }
 
+.ed-hero--contained > .ed-plate__frame,
 .ed-piece[data-ground='white'] .ed-plate__frame {
   padding: 10%;
 }
@@ -530,4 +531,40 @@
     transform: none;
     transition: none;
   }
+}
+
+/* Catalogue covers use the piece plate's stock, hairline and tenth inset.
+   The image box is capped at the stored rendition, even for a piece-only cover. */
+.ed-hero-slot:has(.ed-hero--contained) {
+  container-type: inline-size;
+}
+.ed-hero.ed-hero--contained {
+  margin-inline: 0;
+  --ed-hero-frame-height: min(calc((80cqw - 2px) / var(--ed-hero-aspect) + 20cqw + 2px), 72svh);
+}
+.ed-hero--contained > .ed-plate__frame {
+  height: var(--ed-hero-frame-height);
+}
+@media (max-width: 600px) {
+  .ed-hero.ed-hero--contained {
+    --ed-hero-frame-height: min(calc((80cqw - 2px) / var(--ed-hero-aspect) + 20cqw + 2px), calc(100cqw * 34 / 39), 72svh);
+  }
+}
+.ed-hero--contained .ed-plate__frame > picture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ed-hero.ed-hero--contained .ed-plate__img {
+  width: min(100%, var(--ed-hero-max-width), calc((var(--ed-hero-frame-height) - 20cqw - 2px) * var(--ed-hero-aspect)));
+  height: auto;
+  max-height: none;
+  aspect-ratio: var(--ed-hero-aspect);
+  object-fit: contain;
+  object-position: center !important;
+  background: none !important;
+}
+.ed-hero--contained > .ed-caption,
+.ed-hero--contained > .ed-tab {
+  padding-inline: 0;
 }

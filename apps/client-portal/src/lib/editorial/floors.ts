@@ -2,6 +2,7 @@
    crop; below a floor a plate drops one role; nothing is ever upscaled. */
 
 import type { PlateCropKey, Rect } from './types';
+import { galleryCropPosition, GALLERY_PHONE_ASPECT, GALLERY_DESKTOP_ASPECT } from '@patina/utils';
 
 export type PlateRole =
   | 'hero'
@@ -94,8 +95,14 @@ export function heroDesktopLayout(width: number, height: number, subjectBox?: Re
   return null;
 }
 
+export function galleryHeroFits(width: number, height: number, subject?: Rect | null): boolean {
+  return Math.max(width, height) >= 2000 && Math.min(width, height) >= 1200
+    && galleryCropPosition(width, height, GALLERY_PHONE_ASPECT, subject) !== null
+    && galleryCropPosition(width, height, GALLERY_DESKTOP_ASPECT, subject) !== null;
+}
+
 function meetsHero(width: number, height: number, subjectBox?: Rect | null): boolean {
-  return meetsFloor(FLOORS.heroPhone, width, height, subjectBox) && heroDesktopLayout(width, height, subjectBox) !== null;
+  return galleryHeroFits(width, height, subjectBox);
 }
 
 type FlooredRole = 'held' | 'room' | 'pair' | 'piece' | 'sheet' | 'board';

@@ -72,7 +72,7 @@ export interface EditorialRoom {
 export interface EditorialProject {
   id: string;
   name: string;
-  phase: string;
+  phase: string | null;
   targetDate: string | null;
   showMakers: boolean;
   studio: { name: string; town: string | null };

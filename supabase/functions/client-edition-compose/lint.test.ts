@@ -95,7 +95,7 @@ const ok = (value: unknown, model = "claude-sonnet-5-5"): CallClaudeResult => ({
 
 const words = (standing: string) =>
   ok({
-    chapters: ["cover", "house", "room-1", "progress"].map((key) => ({ key, headline: `The ${key}`, standing })),
+    chapters: ["cover", "house", "room-1", "progress"].map((key) => ({ key, headline: key === "cover" ? "The study is going in" : `The ${key}`, standing })),
     doorstep: { standing: "The study is going in." },
     notice: "The page is as it was.",
   });
@@ -123,8 +123,8 @@ Deno.test("a lexicon hit regenerates once naming the term; a second hit leaves t
     draft: [words("A curated desk."), words("A seamless install.")],
   });
   assertEquals(calls.map((c) => c.role), ["draft", "draft"]);
-  assertEquals(draftTexts[0].includes("An earlier draft used"), false);
-  assertEquals(draftTexts[1].includes('An earlier draft used \\"curated\\"'), true);
+  assertEquals(draftTexts[0].includes("An earlier draft failed this check or used this forbidden wording:"), false);
+  assertEquals(draftTexts[1].includes('An earlier draft failed this check or used this forbidden wording: \\"curated\\"'), true);
   assertEquals(composition.voice, "deterministic");
   assertEquals(
     (composition.chapters as { headline: string; standing: null }[]),
@@ -139,7 +139,7 @@ Deno.test("the judge's term earns the one regeneration; a clean second draft kee
     judge: [judge("state of the art"), judge(null)],
   });
   assertEquals(calls.map((c) => c.role), ["draft", "judge", "draft", "judge"]);
-  assertEquals(draftTexts[1].includes('An earlier draft used \\"state of the art\\"'), true);
+  assertEquals(draftTexts[1].includes('An earlier draft failed this check or used this forbidden wording: \\"state of the art\\"'), true);
   assertEquals(composition.voice, "model");
   assertEquals((composition.chapters as { key: string; headline: string; standing: string }[])[2], { key: "room-r1", headline: "The room-1", standing: "The desk is in." });
 });
@@ -149,12 +149,12 @@ Deno.test("a banned word in B's answer is named in the regeneration too", async 
     draft: [words("A generated plan."), words("The desk is in.")],
     judge: [judge(null)],
   });
-  assertEquals(draftTexts[1].includes('An earlier draft used \\"generated\\"'), true);
+  assertEquals(draftTexts[1].includes('An earlier draft failed this check or used this forbidden wording: \\"generated\\"'), true);
   assertEquals(composition.voice, "model");
 });
 
-Deno.test("an over-long answer is not regenerated: deterministic headlines at once", async () => {
-  const { calls, composition } = await compose({ draft: [words("x".repeat(161))] });
-  assertEquals(calls.length, 1);
+Deno.test("Gallery over-long answer regenerates once then uses deterministic headlines", async () => {
+  const { calls, composition } = await compose({ draft: [words("x".repeat(161)), words("x".repeat(161))] });
+  assertEquals(calls.length, 2);
   assertEquals(composition.voice, "deterministic");
 });

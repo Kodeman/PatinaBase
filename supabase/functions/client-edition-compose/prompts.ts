@@ -9,7 +9,7 @@
 import { ERROR_RULES, WARNING_RULES } from "./lint.ts";
 import { LIMITS } from "./validate.ts";
 
-export const PROMPT_VERSION = "e1";
+export const PROMPT_VERSION = "e2";
 export const FEATURE = "client-edition-compose";
 export const A1_BATCH = 8;
 export const A2_CANDIDATES = 6;
@@ -245,10 +245,12 @@ export interface WordsInput {
 }
 
 const WORDS_TASK = `Task: write the page's chapter headlines and standing sentences.
-- For each chapter key asked for: a headline of at most ${LIMITS.headline} characters and one standing sentence of at most ${LIMITS.standing} characters saying where that part of the job stands today.
+- The cover chapter headline is the Gallery band headline: ${LIMITS.coverMinWords}–${LIMITS.coverMaxWords} words and at most ${LIMITS.coverHeadline} characters, a short line such as "Your sideboard, on the bench."
+- Every other chapter headline is a ${LIMITS.chapterMinWords}–${LIMITS.chapterMaxWords} word chapter name, at most ${LIMITS.headline} characters, shown only in Menu ("Living room", "The sofa linen").
+- For each chapter key asked for, write one standing sentence of at most ${LIMITS.standingWords} words and ${LIMITS.standing} characters saying where that part of the job stands today.
 - doorstep.standing: one sentence of at most ${LIMITS.standing} characters for the top of the page, where things stand overall.
 - notice: one sentence of at most ${LIMITS.notice} characters telling the client what changed since the page they last saw, in the studio's voice, for example "The page now opens on the walnut dining table; everything else is where it was." If only pictures inside chapters changed, say so plainly.
-- When the current page is given, keep every headline and sentence that is still true exactly as it is, and the notice too when nothing it describes has changed.`;
+- When the current page is given, keep every headline and sentence that is still true and meets these Gallery limits exactly as it is; shorten older wording that exceeds them. Keep the notice too when nothing it describes has changed.`;
 
 const WORDS_SCHEMA = `{"chapters":[{"key":"cover","headline":"…","standing":"…"}],"doorstep":{"standing":"…"},"notice":"…"}`;
 
@@ -261,7 +263,7 @@ export function buildWordsRequest(input: WordsInput): Record<string, unknown> {
     opening: input.opening,
   };
   const retry = input.avoid
-    ? `\n\nAn earlier draft used "${input.avoid}", which the studio never writes. Write it again without that wording.`
+    ? `\n\nAn earlier draft failed this check or used this forbidden wording: "${input.avoid}". Write it again following all the requirements above.`
     : "";
   return {
     max_tokens: 16_000,

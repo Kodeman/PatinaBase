@@ -1,6 +1,7 @@
 /* Crop geometry the page needs: object-position from a crop rectangle and the
    `<picture>` sources built from an asset's stored crops. */
 
+import { arrivalMode, arrivalRendition, GALLERY_PHONE_ASPECT, GALLERY_DESKTOP_ASPECT } from '@patina/utils';
 import { plateSrcSet, plateUrl, type PlateFormat } from '@/lib/plates';
 
 import { heroDesktopLayout, type HeroDesktopLayout } from './floors';
@@ -107,6 +108,7 @@ const HERO_BOX: Readonly<Record<HeroDesktopLayout, { sizes: string; width: numbe
 
 export interface HeroPicture {
   layout: HeroDesktopLayout;
+  contained: boolean;
   /** The crop at 601 and up, and at every width when there is no phone crop. */
   main: PlateCropKey;
   phone: PlateCropKey | null;
@@ -119,11 +121,51 @@ function holds(asset: EditorialAsset, cropKey: PlateCropKey): boolean {
   return (asset.crops[cropKey]?.widths.length ?? 0) > 0;
 }
 
+const RENDITION_KEYS: readonly PlateCropKey[] = ['pair', 'piece', 'wide', 'wide32', 'tall', 'cover_phone', 'sheet', 'board'];
+
+function bestRendition(asset: EditorialAsset): PlateCropKey | undefined {
+  return RENDITION_KEYS.filter((key) => holds(asset, key))
+    .sort((a, b) => Math.max(...asset.crops[b]!.widths) - Math.max(...asset.crops[a]!.widths))[0];
+}
+
+/** The contained photo's box: 10% inset + hairline, phone 39:34 cap, desktop measure. */
+function containedSizes(width: number, height: number): string {
+  const aspect = width / height;
+  const desk = 'min(1104px, calc(100vw - 48px))';
+  const photo = (frame: string, cap: string) =>
+    `min(${width}px, calc(${frame} * 0.8 - 2px), calc((${cap} - ${frame} * 0.2 - 2px) * ${aspect}))`;
+  const phone = photo('calc(100vw - 32px)', 'min(calc((100vw - 32px) * 34 / 39), 72svh)');
+  return `(max-width: 600px) ${phone}, ${photo(desk, '72svh')}`;
+}
+
+function containedHero(asset: EditorialAsset, main: PlateCropKey): HeroPicture {
+  const crop = asset.crops[main]!;
+  const width = Math.max(...crop.widths);
+  const [, , w, h] = normalised(crop.rect, asset.width, asset.height);
+  const height = Math.round(width * (h * asset.height) / (w * asset.width));
+  return {
+    layout: 'measure', contained: true, main, phone: null, width, height,
+    sizes: containedSizes(width, height),
+  };
+}
+
+function containedCrop(asset: EditorialAsset, main: PlateCropKey | undefined): PlateCropKey | undefined {
+  if (asset.ground === 'white' && asset.sourceKind !== 'concept') {
+    return (['pair', 'piece'] as const).find((key) => holds(asset, key)) ?? bestRendition(asset);
+  }
+  return main ? undefined : bestRendition(asset);
+}
+
+function croppedHero(asset: EditorialAsset, layout: HeroDesktopLayout, main = 'cover_phone' as PlateCropKey): HeroPicture {
+  const phone = main !== 'cover_phone' && holds(asset, 'cover_phone') ? 'cover_phone' : null;
+  return { layout, contained: false, main, phone, ...HERO_BOX[layout] };
+}
+
 export function heroPicture(asset: EditorialAsset): HeroPicture {
   const layout = heroDesktopLayout(asset.width, asset.height, asset.subjectBox) ?? 'bleed';
-  const main = HERO_CROPS[layout].find((key) => holds(asset, key)) ?? 'cover_phone';
-  const phone = main !== 'cover_phone' && holds(asset, 'cover_phone') ? 'cover_phone' : null;
-  return { layout, main, phone, ...HERO_BOX[layout] };
+  const main = HERO_CROPS[layout].find((key) => holds(asset, key));
+  const contained = containedCrop(asset, main);
+  return contained ? containedHero(asset, contained) : croppedHero(asset, layout, main);
 }
 
 /** The phone hero's shorter frame under a long headline (editorial.css `[data-hero-frame='short']`). */
@@ -176,6 +218,32 @@ export interface HeroPreloadSource {
   imageSrcSet: string;
   imageSizes: string;
   media?: string;
+}
+
+export const GALLERY_PHONE_MEDIA = '(max-width: 899px)';
+export const GALLERY_DESK_MEDIA = '(min-width: 900px)';
+
+/** Geometry is evaluated on the served rendition, never on an unavailable original. */
+export function galleryRendition(scope: string, asset: EditorialAsset, aspect: number) {
+  const crop = arrivalRendition(asset, aspect);
+  if (!crop) return null;
+  const picture = platePicture(scope, asset, crop.key as PlateCropKey, '100vw');
+  return picture ? { picture, position: crop.position, pixels: crop.width } : null;
+}
+
+export function galleryHeroPreloadSources(scopeId: string, asset: EditorialAsset): HeroPreloadSource[] {
+  if (arrivalMode(asset) === 'contained') {
+    const crop = arrivalRendition(asset, null);
+    return crop ? [{ imageSrcSet: plateUrl(scopeId, asset.sha256, crop.key as PlateCropKey, crop.width, 'webp', asset.crops[crop.key as PlateCropKey]?.rev), imageSizes: '100vw' }] : [];
+  }
+  return [
+    { aspect: GALLERY_PHONE_ASPECT, media: GALLERY_PHONE_MEDIA },
+    { aspect: GALLERY_DESKTOP_ASPECT, media: GALLERY_DESK_MEDIA },
+  ].flatMap(({ aspect, media }) => {
+    const rendition = galleryRendition(scopeId, asset, aspect);
+    const source = rendition?.picture.sources.find(source => source.type === 'image/avif');
+    return source ? [{ imageSrcSet: source.srcSet, imageSizes: source.sizes, media }] : [];
+  });
 }
 
 /** The hero's preload, one per art-directed source: the crops and `sizes` `heroPicture` draws. */

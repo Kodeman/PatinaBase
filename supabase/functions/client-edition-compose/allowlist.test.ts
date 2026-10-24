@@ -147,7 +147,7 @@ function answer(opts: CallClaudeOptions): CallClaudeResult {
   const blocks = content(opts);
   if (opts.role === "perceive") {
     const count = blocks.filter((b) => b.type === "image").length;
-    return ok({ images: Array.from({ length: count }, (_, index) => ({ index, subject_box: [0.1, 0.1, 0.6, 0.6], focal: [0.4, 0.4], flags: [], alt: "A sofa." })) });
+    return ok({ images: Array.from({ length: count }, (_, index) => ({ index, subject_box: [0.4, 0.3, 0.2, 0.3], focal: [0.4, 0.4], flags: [], alt: "A sofa." })) });
   }
   if (opts.role === "judge") return ok({ ok: true, term: null });
   if (blocks.some((b) => b.type === "image")) return ok({ hero: { index: 0, why: "Calm." }, held: [] });

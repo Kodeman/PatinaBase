@@ -1,0 +1,264 @@
+/* Direction B, "Lookbook": a pinned photograph beside a narrow column of quiet words.
+   Palette is the brief's light palette only; no deep neutral is added. */
+:root {
+  --paper: #FAF7F2;
+  --stock: #FCFAF6;
+  --ink: #2C2926;
+  --oak: #4E4339;
+  --hair: #E8E3DB;
+  --frame: rgba(78, 67, 57, 0.28);
+  --forest: #3E5145;
+  --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --sans: 'Inter', -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'DM Mono', ui-monospace, Menlo, monospace;
+  --gutter: 16px;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 17px/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+img { display: block; max-width: 100%; }
+a { color: inherit; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 400; margin: 0; letter-spacing: -0.01em; }
+p { margin: 0; }
+
+/* ---------- the slim top line ---------- */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 8px;
+  padding: 4px var(--gutter);
+  border-bottom: 1px solid var(--hair);
+}
+.top .studio {
+  font-family: var(--serif);
+  font-size: 19px;
+  text-decoration: none;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.top nav { display: flex; gap: 2px; margin-right: -8px; }
+.top nav a {
+  font-size: 15px;
+  color: var(--oak);
+  text-decoration: none;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.top nav a:hover, .top nav a:focus-visible { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+
+/* ---------- a chapter: one plate, a few words ---------- */
+.chapter { display: flex; flex-direction: column; }
+.plate { margin: 0; background: var(--stock); }
+.plate img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+}
+.plate figcaption, .cap {
+  font: 400 13px/1.5 var(--mono);
+  color: var(--oak);
+  padding: 10px var(--gutter) 12px;
+  background: var(--stock);
+}
+.plate figcaption span, .cap span { display: block; }
+
+.words { padding: 32px var(--gutter) 72px; display: flex; flex-direction: column; gap: 20px; }
+.words h1 { font-size: 40px; line-height: 1.1; }
+.words h2 { font-size: 34px; line-height: 1.15; }
+.words p { max-width: 34em; }
+.words .quiet { color: var(--oak); }
+.money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.lede { display: flex; flex-direction: column; gap: 28px; }
+.arrival .lede .forYou { order: -1; }
+
+/* a quiet text link that is still a 44px target */
+.go {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  text-decoration: underline;
+  text-decoration-color: var(--frame);
+  text-underline-offset: 5px;
+}
+.go::after { content: '\2192'; color: var(--oak); text-decoration: none; }
+
+/* ---------- the For you card ---------- */
+.forYou {
+  border: 1px solid var(--frame);
+  background: var(--stock);
+  padding: 14px 18px 8px;
+}
+.forYou h2, .forYou .label {
+  font: 400 13px/1.4 var(--mono);
+  color: var(--oak);
+  letter-spacing: 0.04em;
+  margin: 0 0 4px;
+}
+.forYou ul { list-style: none; margin: 0; padding: 0; }
+.forYou li { font-size: 16px; }
+.forYou li + li { border-top: 1px solid var(--hair); }
+.forYou a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 52px;
+  padding: 6px 0;
+  text-decoration: none;
+  line-height: 1.4;
+}
+.forYou a::after { content: '\2192'; color: var(--oak); flex: none; }
+.forYou a:hover span, .forYou a:focus-visible span { text-decoration: underline; text-underline-offset: 4px; }
+
+/* ---------- letter, swatches, colophon ---------- */
+[data-letter] {
+  font-family: var(--serif);
+  font-size: 22px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 0;
+}
+[data-letter] p + p { margin-top: 12px; }
+.signed { font-size: 16px; color: var(--oak); }
+
+.swatches { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.swatches li { display: flex; align-items: center; gap: 14px; font-size: 16px; }
+.chip { width: 44px; height: 44px; flex: none; border: 1px solid var(--frame); }
+
+.drawn {
+  background: var(--stock);
+  aspect-ratio: 4 / 5;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.drawn svg { width: 82%; height: auto; }
+.drawn .chips { display: flex; gap: 10px; margin-top: 22px; justify-content: center; }
+.drawn .chips i { width: 44px; height: 44px; border: 1px solid var(--frame); display: block; }
+.drawn .stack { display: flex; flex-direction: column; align-items: center; width: 100%; }
+
+.close { padding: 56px var(--gutter) 40px; border-top: 1px solid var(--hair); display: grid; gap: 28px; }
+.close h2 { font-size: 30px; }
+.colophon { font: 400 16px/1.6 var(--mono); color: var(--oak); padding: 24px var(--gutter) 40px; border-top: 1px solid var(--hair); }
+.colophon p + p { margin-top: 4px; }
+
+/* ---------- papers (pay.html) ---------- */
+.back { color: var(--oak); }
+.back::after { content: none; }
+.back::before { content: '\2190'; }
+.owed {
+  border: 1px solid var(--frame);
+  background: var(--stock);
+  padding: 20px 20px 22px;
+  display: grid;
+  gap: 10px;
+}
+.owed .label { font: 400 16px/1.4 var(--mono); color: var(--oak); }
+.owed .amount { font-family: var(--serif); font-size: 44px; line-height: 1.05; }
+.act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 28px;
+  background: var(--forest);
+  color: #FCFAF6;
+  font-size: 17px;
+  font-weight: 500;
+  text-decoration: none;
+  justify-self: start;
+  margin-top: 6px;
+}
+.act:hover, .act:focus-visible { text-decoration: underline; text-underline-offset: 4px; }
+.rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hair); }
+.rows li { font-size: 16px; border-bottom: 1px solid var(--hair); }
+.rows a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 16px;
+  min-height: 60px;
+  padding: 10px 0;
+  text-decoration: none;
+  align-items: center;
+}
+.rows .no { font: 400 15px/1.4 var(--mono); color: var(--oak); }
+.rows .when { grid-column: 1; font-size: 16px; }
+.rows .money { grid-column: 2; grid-row: 1 / span 2; font-size: 17px; }
+.rows a:hover .when, .rows a:focus-visible .when { text-decoration: underline; text-underline-offset: 4px; }
+.changes { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; }
+.changes li { font-size: 16px; }
+.swatchFig { margin: 0; max-width: 280px; }
+.swatchFig img { aspect-ratio: 1; object-fit: cover; width: 100%; border: 1px solid var(--frame); }
+.swatchFig figcaption { font: 400 13px/1.5 var(--mono); color: var(--oak); padding-top: 8px; }
+.swatchFig figcaption span { display: block; }
+.sofa { display: grid; gap: 16px; padding-top: 12px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .go, .forYou a, .act { transition: color 0.15s ease; }
+}
+
+/* ---------- desktop: the lookbook split ---------- */
+@media (min-width: 900px) {
+  :root { --gutter: 56px; }
+  .top {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 40%;
+    padding: 14px var(--gutter) 0;
+    border-bottom: 0;
+    z-index: 2;
+  }
+  .chapter {
+    display: grid;
+    grid-template-columns: 60% 40%;
+    align-items: start;
+    min-height: 130vh;
+  }
+  .plate {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .plate img { flex: 1; min-height: 0; aspect-ratio: auto; height: 100%; }
+  .plate figcaption { flex: none; padding: 12px 24px 14px; border-top: 1px solid var(--hair); }
+  .drawn { flex: 1; aspect-ratio: auto; }
+  .words { padding: 30vh var(--gutter) 30vh; gap: 22px; }
+  .words h1 { font-size: 54px; }
+  .words h2 { font-size: 42px; }
+  .chapter + .chapter { border-top: 1px solid var(--hair); }
+  .arrival .words { padding-top: 0; }
+  .arrival .lede {
+    min-height: 100vh;
+    justify-content: center;
+    padding-top: 40px;
+  }
+  .arrival .lede .forYou { order: 0; }
+  .close { padding-left: calc(60% + var(--gutter)); padding-right: var(--gutter); }
+  .colophon { display: flex; justify-content: space-between; gap: 24px; padding: 22px 24px 28px; }
+  .colophon p + p { margin-top: 0; }
+  .papers .words { padding-top: 120px; }
+  .words h1 { text-wrap: balance; }
+}
+
+/* The card's label stays a small mono line at every size. */
+.words .forYou h2 { font: 400 13px/1.4 var(--mono); letter-spacing: 0.04em; color: var(--oak); }
+.back { text-decoration: none; }

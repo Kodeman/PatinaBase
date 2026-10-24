@@ -1,4 +1,4 @@
-import { PHONE_MEDIA, SHORT_PHONE_FRAME, objectPositionFromRect, platePicture, shortFramePosition } from '../crop';
+import { heroPicture, heroPreloadSources, PHONE_MEDIA, SHORT_PHONE_FRAME, objectPositionFromRect, platePicture, shortFramePosition } from '../crop';
 import type { EditorialAsset } from '../types';
 
 const SHA = 'a'.repeat(64);
@@ -138,3 +138,28 @@ describe('the shorter phone frame', () => {
     expect(shortFramePosition({ ...nearEdge, crops: {} })).toBeNull();
   });
 });
+
+ describe('contained cover rendition', () => {
+  const pair = { rect: [0, 197, 1600, 1143] as const, widths: [768, 1600, 1024] };
+  const piece = { rect: [0, 0, 1600, 1600] as const, widths: [256, 512, 768] };
+  const bed = { ...asset({ pair, piece }), width: 1600, height: 1600, ground: 'white' as const, subjectBox: [0.12, 0.27, 0.7, 0.4] as const };
+  it('contains the white catalogue pair and preloads exactly that photo', () => {
+    const hero = heroPicture(bed);
+    expect(hero).toMatchObject({ contained: true, layout: 'measure', main: 'pair', phone: null, width: 1600, height: 1143 });
+    expect(platePicture('p', bed, hero.main, hero.sizes)!.src).toContain('/pair-1600.webp');
+    expect(heroPreloadSources('p', bed)[0].imageSrcSet).toContain('/pair-1600.avif 1600w');
+    expect(hero.sizes).toContain('(max-width: 600px) min(1600px, calc(calc(100vw - 32px) * 0.8 - 2px)');
+    expect(hero.sizes).toContain('72svh');
+    expect(hero.sizes).toContain('min(1104px, calc(100vw - 48px))');
+    expect(heroPreloadSources('p', bed)[0].imageSizes).toBe(hero.sizes);
+  });
+  it('uses piece when pair is absent and caps its size at the stored width', () => {
+    expect(heroPicture({ ...bed, crops: { piece } })).toMatchObject({ contained: true, main: 'piece', width: 768, height: 768 });
+  });
+  it('contains white ground even when a hero crop exists', () => {
+    expect(heroPicture({ ...bed, crops: { pair, wide: pair } })).toMatchObject({ contained: true, main: 'pair', phone: null });
+  });
+  it('uses the widest existing rendition for a scene without hero crops', () => {
+    expect(heroPicture({ ...bed, ground: 'scene', crops: { piece, board: pair } })).toMatchObject({ contained: true, main: 'board', width: 1600 });
+  });
+ });

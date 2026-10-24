@@ -3,7 +3,8 @@ import 'server-only';
 import { createServerClient } from '@patina/supabase/server';
 
 import { editionHero, editorialRpc, plateScope, readClientEditorial } from '@/hooks/use-client-editorial';
-import { heroPreloadSources, type HeroPreloadSource } from '@/lib/editorial/crop';
+import { arrivalPieces } from '@/lib/editorial/rank';
+import { platePicture, SIZES, galleryHeroPreloadSources, type HeroPreloadSource } from '@/lib/editorial/crop';
 import type { ClientProjectEditorial } from '@/lib/editorial/types';
 
 /**
@@ -22,13 +23,15 @@ export async function fetchClientEditorial(projectId: string): Promise<ClientPro
 
 export type HeroPreload = HeroPreloadSource;
 
-/**
- * The hero's `<link rel="preload" as="image">` attributes, one per art-directed
- * source: the crops and `sizes` `HeroPlate` draws, from the same `heroPicture`,
- * under the same plate scope.
- */
+/** The Gallery arrival's rendered image requests, under the same plate scope. */
 export function heroPreloads(editorial: ClientProjectEditorial | null): HeroPreload[] {
   const hero = editorial ? editionHero(editorial) : null;
-  if (!editorial || !hero) return [];
-  return heroPreloadSources(plateScope(editorial), hero);
+  if (!editorial) return [];
+  const scope = plateScope(editorial);
+  if (hero) return galleryHeroPreloadSources(scope, hero);
+  const pieces = arrivalPieces(editorial).flatMap(({ asset }) => {
+    const source = platePicture(scope, asset, 'piece', SIZES.piece)?.sources[0];
+    return source ? [{ imageSrcSet: source.srcSet, imageSizes: source.sizes }] : [];
+  });
+  return [...new Map(pieces.map(source => [source.imageSrcSet, source])).values()];
 }

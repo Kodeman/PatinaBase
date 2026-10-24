@@ -30,7 +30,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <HeroPreloadLinks preloads={heroPreloads(editorial)} />
-      <main className="mx-auto w-full max-w-6xl px-6 py-10">
+      <main className="w-full min-w-0">
         {/* The page stays server-side: same fetch, same notFound(). Only the
             surface itself is a client component, because the house reads its
             own data. */}

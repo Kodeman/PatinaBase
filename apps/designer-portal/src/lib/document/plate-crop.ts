@@ -17,6 +17,8 @@
  * `coverCropShown` is the crop the page then draws (crop.ts heroPicture).
  */
 
+export { arrivalMode, arrivalRendition, selectArrival, type ArrivalAsset } from '@patina/utils';
+
 export type PlatePoint = [number, number];
 export type PlateBox = [number, number, number, number];
 export type PlateRect = [number, number, number, number];

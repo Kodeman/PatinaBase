@@ -342,7 +342,7 @@ export function conceptCaption(
  * measure, above the drawing, labelled ON the image — a label that can be
  * cropped off is not a label — and captioned beneath. The drawing stays.
  */
-function ConceptRenderPlate({
+export function ConceptRenderPlate({
   render,
   roomName,
   studioName,
@@ -420,7 +420,7 @@ function lintelLedger(band: RoomBandModel): string | null {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-function floorLine(pieces: ClientSelection[]): string | null {
+export function floorLine(pieces: ClientSelection[]): string | null {
   const agreed = pieces.filter((piece) => !!piece.instrument?.executedAt).length;
   const home = pieces.filter(
     (piece) => journeyStageIndexForStatus(piece.logisticsStatus) >= DELIVERED_STOP,
@@ -436,7 +436,7 @@ function floorLine(pieces: ClientSelection[]): string | null {
   return clauses.length > 0 ? `Settled here — ${joinClauses(clauses)}.` : null;
 }
 
-function stampDetail(piece: ClientSelection): string | null {
+export function stampDetail(piece: ClientSelection): string | null {
   const executed = parseSourceDate(piece.instrument?.executedAt);
   const parts = [
     piece.instrument?.name ?? null,
