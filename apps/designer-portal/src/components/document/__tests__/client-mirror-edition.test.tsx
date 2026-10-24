@@ -36,6 +36,8 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectV2: () => ({ data: { name: 'Ridgeline' } }),
+  useProjectPalettes: () => ({ data: [] }),
   createBrowserClient: () => ({}),
   useClientEditions: () => ({ data: mockEditions }),
   useClientEditionSourceUrls: () => ({

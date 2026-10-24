@@ -51,10 +51,10 @@ import {
   pendingEdition,
   wasPublished,
 } from '@/lib/document/client-editions';
-import { heroEligible } from '@/lib/document/plate-crop';
+import { heroEligible, type PlatePoint } from '@/lib/document/plate-crop';
 import { DocumentAction, DocumentActionRow } from './document-action';
 import {
-  PressBandPreview,
+  ProjectGalleryPreview,
   editionChapters,
   editionHeroId,
   imageCaption,
@@ -310,6 +310,7 @@ function PendingEdition({
   sourceUrls: Record<string, string>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [focal, setFocal] = useState<{ assetId: string; point: PlatePoint } | null>(null);
   const [overrides, setOverrides] = useState<ClientEditionOverrides>({});
   const approve = useApproveClientEdition();
   const hold = useHoldClientEdition();
@@ -375,7 +376,9 @@ function PendingEdition({
         </DocumentActionRow>
       </div>
       <ActFailLine error={approve.error ?? hold.error} />
-      <PressBandPreview
+      <ProjectGalleryPreview
+        projectId={projectId}
+        focal={focal}
         edition={edition}
         current={current}
         overrides={overrides}
@@ -388,6 +391,7 @@ function PendingEdition({
           edition={edition}
           overrides={overrides}
           onChange={setOverrides}
+          onFocalChange={(assetId, point) => setFocal({ assetId, point })}
           sourceUrls={sourceUrls}
         />
       )}
@@ -431,6 +435,7 @@ function Counted({
 }
 
 function EditTray({
+  onFocalChange,
   id,
   projectId,
   edition,
@@ -443,6 +448,7 @@ function EditTray({
   edition: ClientEdition;
   overrides: ClientEditionOverrides;
   onChange: (next: ClientEditionOverrides) => void;
+  onFocalChange: (assetId: string, point: PlatePoint) => void;
   sourceUrls: Record<string, string>;
 }) {
   const heroId = editionHeroId(edition, overrides);
@@ -498,6 +504,7 @@ function EditTray({
       {hero && sourceUrls[hero.assetId] && (
         <PressBandFocal
           key={hero.assetId}
+          onFocalChange={onFocalChange}
           projectId={projectId}
           image={hero}
           sourceUrl={sourceUrls[hero.assetId]}
