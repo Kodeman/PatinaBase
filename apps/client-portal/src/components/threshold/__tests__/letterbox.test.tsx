@@ -213,6 +213,46 @@ describe('Letterbox — every invoice in plain view (US-45 CPUX-02, CPUX-03)', (
     Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
   });
 
+  it('G01 · Gallery puts urgent invoice and its payment act before full approvals, then Also open', () => {
+    render(<Letterbox invoices={MIXED} today={TODAY} gallery={{ approvals: <section data-testid="full-approval">The sofa · Approve $7,480.00</section> }} />);
+    expect(rowIds('invoices-to-pay')).toEqual(['inv-a']);
+    expect(viewInvoice('inv-a')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /continue to secure payment/i })).toBeInTheDocument();
+    const approval = screen.getByTestId('full-approval');
+    expect(row('inv-a').compareDocumentPosition(approval) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(approval.compareDocumentPosition(screen.getByTestId('gallery-also-open')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('gallery-also-open')).toHaveTextContent('Also open, $1,375.00');
+    expect(rowIds('gallery-other-payable')).toEqual(['inv-b', 'inv-e', 'inv-c', 'inv-f', 'inv-d']);
+    expect(screen.getAllByTestId('invoice-row')).toHaveLength(6);
+  });
+
+  it('G02 · Gallery with no asks still opens the invoice list and keeps payment history', async () => {
+    render(<Letterbox invoices={[MIXED[0], MIXED[8]]} today={TODAY} gallery={{ approvals: null }} />);
+    expect(rowIds('invoices-to-pay')).toEqual(['inv-f']);
+    expect(screen.queryByTestId('gallery-also-open')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Payment history' }));
+    expect(rowIds('payment-history')).toEqual(['inv-p2']);
+  });
+
+  it('G03 · Gallery receipt is first and uses the settled server payment amount and date', () => {
+    standAt('?invoice=inv-paid&checkout=success');
+    const paid = invoiceRow({ id: 'inv-paid', status: 'paid', amount_paid_cents: 60_000,
+      payments: [{ id: 'payment-1', invoice_id: 'inv-paid', status: 'succeeded', amount_cents: 60_000,
+        received_at: '2026-10-24T12:00:00Z' }] as Invoice['payments'] });
+    render(<Letterbox invoices={[paid, MIXED[0]]} today={TODAY} gallery={{ approvals: <p>The sofa</p> }} />);
+    const receipt = screen.getByTestId('letterbox-receipt');
+    expect(receipt).toHaveTextContent('Paid $600.00 on 24 October. Thank you.');
+    expect(screen.getByTestId('letterbox').firstElementChild).toBe(receipt);
+    expect(rowIds('invoices-to-pay')).toEqual(['inv-f']);
+  });
+
+  it('G04 · Gallery never fabricates a receipt from success params for an unpaid invoice', () => {
+    standAt('?invoice=inv-f&checkout=success&amount=60000');
+    render(<Letterbox invoices={[MIXED[0]]} today={TODAY} gallery={{ approvals: null }} />);
+    expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent('Confirming payment');
+    expect(screen.getByTestId('letterbox-receipt')).not.toHaveTextContent('Paid $600.00');
+  });
+
   it('A01 · lists all six outstanding invoices, soonest due first, with nothing expanded', () => {
     render(<Letterbox invoices={MIXED} today={TODAY} projectName="Elm Street House" designerName="Maren Holt" />);
 
