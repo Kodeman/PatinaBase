@@ -19,18 +19,22 @@ async function noPageOverflow(page: Page) {
 
 async function unobscured(page: Page, control: Locator) {
   await control.scrollIntoViewIfNeeded();
+  await page.keyboard.press('Tab');
   await control.focus();
-  await page.keyboard.press('Shift');
   await expect(control).toBeFocused();
   await expect.poll(() => control.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
     const hit = document.elementFromPoint(x, y);
-    return rect.left >= 0 && rect.right <= innerWidth + 1 && y > 0 && y < innerHeight
-      && !!hit && (element === hit || element.contains(hit))
-      && getComputedStyle(element).outlineStyle !== 'none';
-  }), { message: 'keyboard focus is painted and not covered by the head or bottom edge' }).toBe(true);
+    return {
+      withinViewport: rect.left >= 0 && rect.right <= innerWidth + 1 && y > 0 && y < innerHeight,
+      uncovered: !!hit && (element === hit || element.contains(hit)),
+      ringPainted: getComputedStyle(element).outlineStyle !== 'none',
+    };
+  }), { message: 'keyboard focus is painted and not covered by the head or bottom edge' }).toEqual({
+    withinViewport: true, uncovered: true, ringPainted: true,
+  });
 }
 
 async function selectFfe(page: Page, width: number) {
@@ -56,7 +60,7 @@ async function selectFfe(page: Page, width: number) {
 async function unfoldAndReturn(page: Page, reducedMotion = false) {
   const room = page.locator(`[data-paper-chapter="ffe"] [data-pieces-room="${LIVING}"]`);
   await room.scrollIntoViewIfNeeded();
-  const toggle = room.getByRole('button', { name: /Living Room/ });
+  const toggle = room.getByRole('button', { name: 'Living Room', exact: true });
   if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
   const door = room.getByRole('link', { name: /Edit room selections/ });
   await unobscured(page, door);
