@@ -306,7 +306,11 @@ test.describe('The Threshold — the client page', () => {
   test('prints the five facts the seed put in the house', async ({ page }) => {
     await signInAsClient(page);
     await openTheHouse(page);
-    await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
+    // Gallery keeps the signed paper in Earlier, separate from the summed ledger.
+    await pressUntilOpen(
+      page.getByTestId('previously-line').filter({ hasText: /Furnishings authorization/i }).getByRole('button'),
+      page.getByTestId('instrument-reading'),
+    );
 
     const body = page.locator('body');
 
@@ -314,6 +318,8 @@ test.describe('The Threshold — the client page', () => {
     //     the studio's live working row.
     await expect(body).toContainText(AUTHORIZATION_TOTAL);
     await expect(body).not.toContainText(LIVE_WORKING_FIGURE);
+    await page.keyboard.press('Escape');
+    await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
     // 2 · the maker whose finished work is waiting on her word
     await expect(body).toContainText(MAKER);
     // 3 · the draw held back until she accepts it
@@ -670,6 +676,7 @@ test.describe('The Threshold — the client page', () => {
     await signInAsClient(page);
     await openTheHouse(page);
 
+    await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
     const doorway = page
       .getByTestId('door-way')
       .filter({ hasText: PER_PHASE_AGREEMENT_TITLE })
@@ -874,6 +881,10 @@ test.describe('The Threshold — the client page', () => {
     await signInAsClient(page);
     await openTheHouse(page);
     await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
+
+    await page.keyboard.press('Escape');
+    await page.getByRole('link', { name: 'Menu', exact: true }).click();
+    await page.getByRole('link', { name: 'The house', exact: true }).click();
 
     // PP-2: the figure with an obligation and a date is the largest true type
     // in the block — the agreed figure no longer outranks it.

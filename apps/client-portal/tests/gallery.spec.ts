@@ -87,7 +87,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
       });
     }
 
-    test('Menu lists asks before other houses before chapters; Every piece opens room rows', async ({ page }) => {
+    test('Menu lists asks before other houses before chapters', async ({ page }) => {
       await signInAsJune(page, `/projects/${ELM.id}`);
       await settled(page);
       await page.getByRole('link', { name: 'Menu', exact: true }).click();
@@ -101,13 +101,21 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
       expect(chapter).toBeGreaterThan(lake);
       expect(links[lake].text).toMatch(/Lake Cottage.+waiting|Lake Cottage.+Nothing/);
       await expect(menu.getByRole('link', { name: 'The house', exact: true })).toHaveAttribute('href', '#key');
-      await page.keyboard.press('Escape');
+    });
+
+    test('Every piece opens the room rows with status in words', async ({ page }) => {
+      await signInAsJune(page, `/projects/${ELM.id}`);
+      await settled(page);
       const pieces = page.getByRole('link', { name: /Every piece in the Living room/i });
       await pieces.click();
       const drawer = page.getByRole('dialog', { name: /Every piece in the Living room/i });
       await expect(drawer).toBeVisible();
-      for (const name of [ELM.sideboard, ELM.sofa]) await expect(drawer.getByText(name, { exact: true })).toBeVisible();
-      await expect(drawer.getByText('Ordered', { exact: true })).toBeVisible();
+      for (const name of [ELM.sideboard, ELM.sofa]) {
+        const piece = drawer.getByRole('listitem').filter({ hasText: name });
+        await expect(piece).toHaveCount(1);
+        await expect(piece.getByText(name, { exact: true }).first()).toBeVisible();
+      }
+      await expect(drawer.getByRole('listitem').filter({ hasText: ELM.sideboard })).toContainText('Released to maker');
     });
 
     test('Pay reaches the existing checkout seam without touching Stripe', async ({ page }) => {
@@ -162,8 +170,9 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
       const terminal = ask.getByTestId('approval-terminal');
       await targetSize(terminal);
       await terminal.scrollIntoViewIfNeeded();
-      const rect = await terminal.boundingBox();
-      await page.mouse.move(rect!.x + rect!.width / 2, rect!.y + rect!.height / 2);
+      await terminal.focus();
+      await terminal.hover();
+      await expect(terminal).not.toHaveAttribute('aria-disabled', 'true');
       await page.mouse.down();
       await expect(terminal).toHaveAttribute('data-hold-state', 'holding');
       await page.mouse.up();
@@ -176,23 +185,30 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
       expect(result.clientConsentMethod).toBe('electronic_signature');
     });
 
-    test('44px controls, no AI word, no overflow, and installed axe checks page and drawer', async ({ page }) => {
-      await signInAsJune(page, `/projects/${ELM.id}`);
-      await settled(page);
-      await injectAxe(page);
-      for (const state of ['page', 'asks', 'menu']) {
-        if (state === 'asks') await page.getByRole('link', { name: /\$600\.00 past due/ }).click();
-        if (state === 'menu') {
-          await page.keyboard.press('Escape');
-          await page.getByRole('link', { name: 'Menu', exact: true }).click();
+    for (const check of ['44px controls', 'no AI word or overflow', 'installed axe accessibility']) {
+      test(`${check} on page, asks and Menu`, async ({ page }) => {
+        await signInAsJune(page, `/projects/${ELM.id}`);
+        await settled(page);
+        if (check === 'installed axe accessibility') await injectAxe(page);
+        for (const state of ['page', 'asks', 'menu']) {
+          if (state === 'asks') await page.getByRole('link', { name: /\$600\.00 past due/ }).click();
+          if (state === 'menu') {
+            await page.keyboard.press('Escape');
+            await page.getByRole('link', { name: 'Menu', exact: true }).click();
+          }
+          if (check === '44px controls') {
+            const controls = (state === 'page' ? page.locator('main') : page.getByRole('dialog'))
+              .locator('a, button, summary, input, select, textarea');
+            for (const control of await controls.all()) if (await control.isVisible()) await targetSize(control);
+          } else if (check === 'no AI word or overflow') {
+            expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+            expect(await page.locator('body').innerText()).not.toMatch(/\bAI\b/i);
+          } else {
+            const violations = await getViolations(page, undefined, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } });
+            expect(violations.map((v: { id: string; nodes: unknown[] }) => ({ id: v.id, nodes: v.nodes })), state).toEqual([]);
+          }
         }
-        const controls = state === 'page' ? page.getByRole('link') : page.getByRole('dialog').locator('a, button, summary, input, select, textarea');
-        for (const control of await controls.all()) if (await control.isVisible()) await targetSize(control);
-        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
-        expect(await page.locator('body').innerText()).not.toMatch(/\bAI\b/i);
-        const violations = await getViolations(page, undefined, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } });
-        expect(violations.map((v: { id: string; nodes: unknown[] }) => ({ id: v.id, nodes: v.nodes })), state).toEqual([]);
-      }
-    });
+      });
+    }
   });
 }

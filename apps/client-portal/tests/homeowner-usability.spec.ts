@@ -9,7 +9,7 @@ import { admin, checked, household, invoice, signIn, row, noOverflow, targetSize
 test.describe.configure({ timeout: 180000 });
 
 test('A01/A02/A04: six outstanding rows, hidden states, separate currencies and history', async ({ page }) => {
-  const house = await household();
+  const house = await household(true);
   const balances = [60000, 10000, 30000, 25000, 5000, 7500];
   const dates = ['2020-01-01', '2026-10-21', '2099-01-01', '2099-02-01', '2099-03-01', null];
   const ids: string[] = [];
@@ -175,7 +175,7 @@ test('A17/A18/A20: empty project progress and studio-only arrival have real dest
   const house = await household();
   await invoice(house, 10000, null);
   await signIn(page, house);
-  await expect(page.getByText('Pay invoices, review approvals, and follow your project here.', { exact: true })).toHaveCount(0);
+  await expect.soft(page.getByText('Pay invoices, review approvals, and follow your project here.', { exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await page.goto('/#road');
   await expect(page.locator('#road')).toContainText('Your project isn’t connected to this page yet. You can still view and pay your studio invoices.');
@@ -187,6 +187,9 @@ test('A17/A18/A20: empty project progress and studio-only arrival have real dest
 test('A17: connected project without stage or note stays honest', async ({ page }) => {
   const connected = await household(true);
   await signIn(page, connected);
+  await page.keyboard.press('Escape');
+  await page.getByRole('link', { name: 'Menu', exact: true }).click();
+  await page.getByRole('link', { name: 'The house', exact: true }).click();
   await expect(page.getByTestId('progress-now')).toContainText('No project stage is shown here yet.');
   await expect(page.getByTestId('progress-update')).toContainText('No current designer update is shown here.');
   await expect(page.getByTestId('project-progress')).not.toContainText('% complete');

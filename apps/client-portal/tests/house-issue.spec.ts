@@ -22,7 +22,9 @@ async function permanentAddresses(page: Page) {
   for (const anchor of ['doorstep', 'ledger', 'letterbox', 'approvals']) {
     await page.goto(`/projects/${ELM.id}#${anchor}`);
     await expect(page.getByRole('dialog', { name: 'Invoices and approvals' })).toBeVisible();
-    await expect(page.locator('#' + anchor)).toHaveCount(1);
+    const drawer = page.getByRole('dialog', { name: 'Invoices and approvals' });
+    if (anchor === 'approvals') await expect(drawer.locator('#approvals')).toBeInViewport();
+    else await expect(drawer.locator('[data-invoice-id]').first()).toHaveAttribute('data-invoice-id', ELM.invoices[0]);
   }
   await page.keyboard.press('Escape');
   for (const anchor of ['note', 'road', 'previously', 'mat', ...ELM.rooms.map(room => `room-${room}`)]) {
@@ -85,8 +87,8 @@ test.describe('The House Issue in Gallery', { tag: '@edition' }, () => {
     await expect(page.getByRole('figure').first().getByRole('img', { name: /Paint for the house|waiting for photographs/ })).toBeVisible();
     await page.getByRole('link', { name: /Every piece in the Living room/i }).click();
     const drawer = page.getByRole('dialog', { name: /Every piece/i });
-    await expect(drawer.getByText(ELM.sofa, { exact: true })).toBeVisible();
-    await expect(drawer.getByText('Ordered', { exact: true })).toBeVisible();
+    await expect(drawer.getByRole('listitem').filter({ hasText: ELM.sofa }).getByText(ELM.sofa, { exact: true }).first()).toBeVisible();
+    await expect(drawer.getByRole('listitem').filter({ hasText: ELM.sideboard })).toContainText('Released to maker');
   });
 
   test('permanent addresses stay unique and resolve without a flag', async ({ page }) => {
