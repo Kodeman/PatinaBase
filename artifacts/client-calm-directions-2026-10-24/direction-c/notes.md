@@ -16,7 +16,7 @@ page, one line away.
 
 ## What it removes or moves
 
-Measured against today's production page (`inputs/today-prod-2026-10-23.png`):
+Measured against today's production page (`inputs/today-prod-2026-10-23-page.jpg`):
 
 - **Purpose sentence** ("Pay invoices, review approvals, and follow your project here."): removed.
   The photograph and the house name say what the page is; the Papers line says what is asked.

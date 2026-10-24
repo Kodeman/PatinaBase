@@ -21,7 +21,7 @@ and 56% photograph at 1440×900.
 
 ## What it removes or moves
 
-Measured against today's page (`inputs/today-prod-2026-10-23.png`):
+Measured against today's page (`inputs/today-prod-2026-10-23-page.jpg`):
 
 - **Letterhead block** (studio, house name, "Prepared for"): shrinks to one slim line with the
   studio name. "Prepared for June Brennan" moves to the colophon; "Elm Street House" moves to the

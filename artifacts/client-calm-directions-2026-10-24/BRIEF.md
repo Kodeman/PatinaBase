@@ -7,7 +7,7 @@ and the page changes only when the job moves. They do not like how the page look
 "way too busy and text forward". They want it to feel **calm and photo-forward**, like the
 awwwards references they gave for the first redesign.
 
-Today's production page (`inputs/today-prod-2026-10-23.png`) opens with a letterhead, a purpose
+Today's production page (`inputs/today-prod-2026-10-23-page.jpg`) opens with a letterhead, a purpose
 sentence, a six-link row, a drawn hero, a large headline, three standing rows and numbered
 chapter heads. That is a dozen distinct elements before the first photograph does any work.
 

@@ -17,7 +17,7 @@ still show the photograph itself.
 
 ## What it removes or moves
 
-Compared with today's page (`inputs/today-prod-2026-10-23.png`):
+Compared with today's page (`inputs/today-prod-2026-10-23-page.jpg`):
 
 - **Letterhead block** (studio, house name, "Prepared for"): reduced to the studio name in a small
   chip at top left. The house name and "Prepared for June Brennan" move to the footer and the Menu.
