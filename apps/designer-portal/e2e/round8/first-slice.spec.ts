@@ -45,6 +45,9 @@ async function openJob(page: Page, search: string) {
 const instrument = (page: Page) =>
   page.locator('[data-paper-chapter="ffe"] [data-unfold-instrument="pieces"]');
 
+const specLineControl = (page: Page, line: string) =>
+  instrument(page).getByTestId('spec-lens').locator(`[data-line-id="${line}"] > button`);
+
 function captureDocumentOpen(page: Page) {
   const reads: Array<{ row?: { engagement_id?: string; project_id?: string }; ids?: { project_id?: string }; kind?: string }> = [];
   page.on('response', async (response) => {
@@ -125,10 +128,19 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
     expect(new URL(page.url()).pathname, 'unfold stays on the job route').toBe(`/doc/${JOB}`);
     expect(new URL(page.url()).searchParams.get('unfold')).toBe('pieces');
     expect(new URL(page.url()).searchParams.get('room')).toBe(LIVING);
-    await expect(instrument(page).locator(`[data-line-id="${line}"] button`)).toHaveAttribute('aria-current', 'true', {
+    const specTab = instrument(page).getByRole('button', { name: 'Specifications' });
+    await specTab.focus();
+    await page.keyboard.press('Enter');
+    await expect(specTab).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => new URL(page.url()).searchParams.get('lens')).toBe('spec');
+    const lineControl = specLineControl(page, line);
+    await lineControl.focus();
+    await page.keyboard.press('Enter');
+    await expect(lineControl).toHaveAttribute('aria-current', 'true', {
       timeout: 30_000,
     });
-    await expect(instrument(page).locator(`[data-line-id="${line}"] button`)).toBeFocused({ timeout: 30_000 });
+    await expect(lineControl).toBeFocused({ timeout: 30_000 });
+    await expect.poll(() => new URL(page.url()).searchParams.get('line')).toBe(line);
     await expect
       .poll(() => page.evaluate(() => {
         const prior = (window as Window & { __firstSliceShell?: Element }).__firstSliceShell;
@@ -140,7 +152,7 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
     await expect(instrument(page), 'Back folds the sheet without leaving the job').toHaveCount(0, { timeout: 30_000 });
     await page.goForward();
     await expect(instrument(page), 'Forward restores the same unfold').toBeVisible({ timeout: 30_000 });
-    await expect(instrument(page).locator(`[data-line-id="${line}"] button`)).toBeFocused({ timeout: 30_000 });
+    await expect(specLineControl(page, line)).toBeFocused({ timeout: 30_000 });
     expect(await page.evaluate(() => {
       const prior = (window as Window & { __firstSliceShell?: Element }).__firstSliceShell;
       return Boolean(prior && prior.isConnected && prior === document.querySelector('[data-document-shell]'));
@@ -271,10 +283,19 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
     await door.focus();
     await page.keyboard.press('Enter');
     await expect(instrument(page)).toBeVisible({ timeout: 30_000 });
-    await expect(instrument(page).locator(`[data-line-id="${line}"] button`)).toHaveAttribute('aria-current', 'true', {
+    const specTab = instrument(page).getByRole('button', { name: 'Specifications' });
+    await specTab.focus();
+    await page.keyboard.press('Enter');
+    await expect(specTab).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => new URL(page.url()).searchParams.get('lens')).toBe('spec');
+    const lineControl = specLineControl(page, line);
+    await lineControl.focus();
+    await page.keyboard.press('Enter');
+    await expect(lineControl).toHaveAttribute('aria-current', 'true', {
       timeout: 30_000,
     });
-    await expect(instrument(page).locator(`[data-line-id="${line}"] button`)).toBeFocused({ timeout: 30_000 });
+    await expect(lineControl).toBeFocused({ timeout: 30_000 });
+    await expect.poll(() => new URL(page.url()).searchParams.get('line')).toBe(line);
     const dimensions = await page.evaluate(() => ({
       viewport: document.documentElement.clientWidth,
       content: document.documentElement.scrollWidth,

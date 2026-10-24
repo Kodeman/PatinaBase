@@ -1,6 +1,6 @@
 # WP-01.9 first vertical slice evidence
 
-Status: the latest authorized browser capture exposed a missing lens-entry step in the test, not a product defect. The spec now scrolls the FF&E chapter into view and waits for the lens root to become full and settled; this test adjustment awaits browser authorization.
+Status: the latest browser rerun exposed a Spec-lens entry gap in the test, not a product defect. The spec now selects “Specifications” and the exact line through their primary controls; the corrected candidate awaits a new browser authorization.
 
 ## Contract and fixture
 
@@ -17,11 +17,11 @@ Status: the latest authorized browser capture exposed a missing lens-entry step 
 
 ## Browser evidence
 
-- The repaired authorized first-slice run — **0 passed, 4 failed**. The saved trace showed the FF&E chapter still quiet: the test queried its room rows without first bringing the chapter into LENS's frame. Offline source tracing confirmed `PaperChapter` provides `data-index-region` (`paper-chapter.tsx:35–39`), `FFESection` exposes `data-density` (`ffe-section.tsx:2459–2460`), desktop ContentsMargin and the mobile chapter sheet both route through `jumpToChapter`, which calls `lens.forceFullThrough` (`page.tsx:2264–2273`, `2527–2538`). The failure was therefore a test gap, not a product or F01 fixture gap. The spec now scrolls the chapter into view and waits for its `data-density="full"` and the document shell's `data-lens-settled="true"` before querying room rows. This adjustment has not yet been browser-tested.
-- The same authorized sequence then ran `pieces-build-room.spec.ts` on port 3413 — **37 passed, 0 skipped** (Chromium, one worker). It logged expected refusal messages from exercised refusal cases and external Sanity-help fetch failures; Playwright reported all tests passed.
-- The F01 setup readback was `{"job":"f0180000-0000-4000-8000-000000000010","studio":"f0180000-0000-4000-8000-000000000001","lines":80,"living":36}`. After both browser runs, the owned F01 project and survey rows were deleted; no DB reset was performed. Shared actor/studio scaffold rows remain as in the existing local fixture convention.
-- Browser slot ports 3426, 3413 and 3424 had no listeners after the runs. `next-env.d.ts` was restored from the pre-run saved baseline. The exact #35 check (`SELECT count(*) FROM public.project_ffe_items WHERE project_id <> 'e6590000-0000-4000-8000-000000000001' AND product_id::text LIKE 'e6590000%';`) returned **0** after cleanup.
-- New browser authorization is pending; SQ-1830 currently owns the slot.
+- The repaired authorized rerun — **0 passed, 4 failed**. It passed the FF&E lens visibility step; the shared assertion at `first-slice.spec.ts:128,274` then looked for `aria-current=true` on any button below the line row. The “Edit room selections” link intentionally opens the Rough lens (`pieces-overview-row.tsx:155–161`), while `parseBuildRoomSearch` defaults missing lens to `rough` (`build-room-url.ts:50–55`); the assertion was expecting the Spec lens without entering it. The broad locator also matched the row-actions menu button instead of SpecLens's primary line button (`spec-lens.tsx:336–343`). This is a test gap, not a product gap. The spec now enters “Specifications” by keyboard, selects the exact line, and uses a direct-child primary-button locator scoped to `data-testid="spec-lens"`; it also checks the address's `lens=spec` and exact `line`. This correction has not been browser-tested.
+- Initial authorized first-slice run — **0 passed, 4 failed** on the test's ambiguous SQL `id` and expected survey caption; the query and caption assertion were repaired. The second authorized sequence ran `pieces-build-room.spec.ts` — **37 passed, 0 skipped** (Chromium, one worker); expected refusal messages and external Sanity-help fetch errors appeared while Playwright reported green.
+- Repaired first-slice rerun — **0 passed, 4 failed** because the test queried FF&E before promoting the chapter into LENS. The subsequent rerun passed that chapter-visibility step, then failed all four cases on the Spec-lens assertion described above.
+- F01 setup readback was `{"job":"f0180000-0000-4000-8000-000000000010","studio":"f0180000-0000-4000-8000-000000000001","lines":80,"living":36}`. No DB reset was performed. The initial sequence's owned F01 project and survey rows were torn down and #35 returned **0**. The latest rerun's F01 project row remains in the shared local DB; per coordinator instruction it is being left untouched. Do not infer a current #35 value from the older result.
+- The local Next.js `next-env.d.ts` was restored from the pre-run baseline after the latest rerun. SQ-1830 now owns the browser slot; no browser or dev server was started during this offline diagnosis.
 
 ## Candidate
 
