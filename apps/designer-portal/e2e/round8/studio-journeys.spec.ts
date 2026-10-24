@@ -7,7 +7,7 @@ const DESIGNER = 'f0180000-0000-4000-8000-000000000002';
 const INQUIRY = 'SQ1970 Fictional Inquiry';
 
 async function settledStudio(page: Page) {
-  if (new URL(page.url()).pathname !== '/desk') await page.goto('/desk');
+  await expect(page).toHaveURL(/\/desk(\?|$)/, { timeout: 60_000 });
   const studio = page.locator('[data-studio="round8"]');
   await expect(studio).toHaveAttribute('data-arrival-ready', '', { timeout: 60_000 });
   await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
@@ -92,10 +92,6 @@ test.describe('A01 studio journeys with live local rows', () => {
   });
 
   test('an unrelated fictional designer sees a truthful empty studio, not the F01 commission', async ({ page }) => {
-    // Playwright's fresh test context never signs in as the primary fixture actor.
-    await page.addInitScript(() => {
-      localStorage.setItem('help-system.welcome-shown.first-project-walkthrough', '1');
-    });
     await page.goto('/auth/signin?callbackUrl=%2Fdesk');
     await page.getByRole('button', { name: /sign in with email|use email and password instead|use a password instead/i }).first().click();
     await page.getByLabel(/email/i).first().fill('f01-outsider@test.invalid');
@@ -103,6 +99,11 @@ test.describe('A01 studio journeys with live local rows', () => {
     await page.getByRole('button', { name: /^sign in$/i }).click();
     await expect(page).toHaveURL(/\/desk(\?|$)/, { timeout: 60_000 });
     await settledStudio(page);
+    if ((page.viewportSize()?.width ?? 0) >= 980) {
+      // The newly seeded outsider gets the native desktop-only first-visit welcome.
+      await page.getByRole('dialog', { name: 'This is your Studio overview' })
+        .getByRole('button', { name: 'Skip for now', exact: true }).click();
+    }
     await expect(page.getByText('No project files yet. Record an inquiry or create a project file to begin.')).toBeVisible();
     await expect(page.locator('[data-studio-register-row]')).toHaveCount(0);
     await expect(page.getByText('No inquiries waiting.')).toBeVisible();
