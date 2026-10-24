@@ -3,6 +3,7 @@
 import { LegacyDocumentFrame } from '@/components/document/frame/legacy-document-frame';
 import type { DocumentFrameSlots } from '@/components/document/frame/frame-slots';
 import { usePaperRenderer } from '@/hooks/use-paper-renderer';
+import { useLandParam } from '@/lib/document/paper/use-land-param';
 
 import { calendarDaysPast } from '@patina/supabase';
 /**
@@ -46,8 +47,6 @@ import {
   useNeedStates,
   useSetNeedState,
   useUnbilledTime,
-  useProjectRoomScans,
-  useGeneratedRoomFilesByScan,
   useProjectVisits,
 } from '@patina/supabase';
 import type { DiscoveryRead } from '@patina/supabase';
@@ -989,18 +988,12 @@ function ladderFactsSignature(input: TicketInput): string {
 // — the page renders the skeleton until hydrated and the latch settles, so the
 // import only ever runs in the browser; the same skeleton covers its load.
 const Round8PaperFrame = lazy(() => import('@/components/document/frame/round8-paper-frame'));
+const DesignChapter = lazy(() => import('@/components/document/paper/chapters/design-chapter').then((module) => ({ default: module.DesignChapter })));
 
 // R8-02 — two chapters carry pieces that print nothing on an empty read. The
 // chapter mounts on the SAME reads its piece makes (one query each, shared
 // through the cache), so it never stands as an empty heading. The page owns
 // the data path; the frame only places these gates around its chapters.
-function WhenRoomFiles({ projectId, children }: { projectId: string; children: ReactNode }) {
-  const { data: scans } = useProjectRoomScans(projectId);
-  const { data: byScan } = useGeneratedRoomFilesByScan((scans ?? []).map((scan) => scan.id));
-  // RoomFilesSection's own rule: a ready scan with a generated Room File.
-  return scans?.some((scan) => byScan?.has(scan.id)) ? children : null;
-}
-
 function WhenVisits({ projectId, children }: { projectId: string; children: ReactNode }) {
   const { data: visits, isError } = useProjectVisits(projectId);
   // VisitsBlock's own rule: a failed read prints "Field data unavailable",
@@ -1008,7 +1001,7 @@ function WhenVisits({ projectId, children }: { projectId: string; children: Reac
   return isError || (visits && visits.length > 0) ? children : null;
 }
 
-const ROUND8_GATES = { design: WhenRoomFiles, site: WhenVisits };
+const ROUND8_GATES = { site: WhenVisits };
 
 // R8-02 — the continuous paper prints no active-section wrapper, so a section
 // landing with no anchor lands on the chapter holding the control it was asked
@@ -1288,7 +1281,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const settledCountRef = useRef(0);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
   const [requestedFfeItemId, setRequestedFfeItemId] = useState<string | null>(null);
+  const hasLandInstruction = useRef(false);
   useEffect(() => {
+    hasLandInstruction.current ||= new URLSearchParams(window.location.search).has('land');
     setRequestedFfeItemId(
       new URLSearchParams(window.location.search).get('ffeItemId'),
     );
@@ -1705,13 +1700,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const arrivalLandingRef = useRef<{ landing: Landing; done: boolean } | null>(null);
   useEffect(() => {
     const token = consumeArriveToken(window.location.pathname, Date.now());
-    if (token?.landing) arrivalLandingRef.current = { landing: token.landing, done: false };
+    if (token?.landing && !hasLandInstruction.current) arrivalLandingRef.current = { landing: token.landing, done: false };
   }, []);
   const landedRef = useRef<{ seen: boolean; done: boolean } | null>(null);
   const landingEngagementId = row?.engagement_id ?? null;
   const landingSection = row?.active_section;
   useEffect(() => {
-    if (!landingEngagementId || arrivalLandingRef.current) return;
+    if (!landingEngagementId || arrivalLandingRef.current || hasLandInstruction.current) return;
     if (!landedRef.current) {
       landedRef.current = {
         seen: readRecentDocumentsInHand().some((d) => d.id === landingEngagementId),
@@ -3174,6 +3169,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       jumpToSection(landing.sectionKey as SectionKey);
     }
   }, [paperSettled, frameCommitted, jumpToRegion, jumpToLine, jumpToSection]);
+  useLandParam(paperSettled && frameCommitted, (landing) => {
+    if (landing.kind === 'ffe') {
+      if (!landAct(ACT_LANDING_EVENTS.ffeAct, { act: 'spec', itemId: landing.ffeItemId })) {
+        setRequestedFfeItemId(landing.ffeItemId);
+      }
+    } else if (landing.kind === 'region') {
+      if (Object.prototype.hasOwnProperty.call(DOCUMENT_INDEX_LABELS, landing.region)) {
+        jumpToRegion(landing.region as DocumentIndexKey);
+      }
+    } else if ((ROSTER_STAGE_ORDER as readonly string[]).includes(landing.sectionKey)) {
+      jumpToSection(landing.sectionKey as SectionKey);
+    }
+  }, round8Continuous);
   const lensLineKind = bandModel?.line2.kind ?? null;
   const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;
@@ -4435,6 +4443,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               {unfoldProposalId ? <ProposalBlocksReadOnly proposalId={unfoldProposalId} /> : null}
             </>
           ) : null,
+        design: (workRoom: import('@/components/document/paper/chapters/ffe-work-room').WorkRoom) => (
+          <Suspense fallback={<p role="status">Reading room evidence…</p>}>
+            <DesignChapter
+              projectId={row.project_id!}
+              routeId={id}
+              onWorkRoom={(room, opener) => workRoom(room, 'spec', opener)}
+            />
+          </Suspense>
+        ),
         roomFiles,
         scheduleSpine,
         visits,

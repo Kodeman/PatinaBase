@@ -33,6 +33,8 @@ import {
   ContentsMargin,
   type ContentsEntry,
 } from '@/components/document/paper/contents-margin';
+import { openUnfold } from '@/components/document/paper/unfold-instrument';
+import type { WorkRoom } from '@/components/document/paper/chapters/ffe-work-room';
 import { FfeChapter } from '@/components/document/paper/chapters/ffe-chapter';
 import { JobHead } from '@/components/document/paper/job-head';
 import { PaperChapter } from '@/components/document/paper/paper-chapter';
@@ -77,6 +79,7 @@ export interface Round8Pieces {
   };
   brief: ReactNode;
   roomFiles: ReactNode;
+  design?: (workRoom: WorkRoom) => ReactNode;
   scheduleSpine: ReactNode;
   visits: ReactNode;
   projectFfe: ReactNode;
@@ -122,12 +125,13 @@ export interface Round8PaperFrameProps {
 function chapterBodies(
   slots: DocumentFrameSlots,
   pieces: Round8Pieces,
+  workRoom: WorkRoom,
 ): Partial<Record<Round8ChapterKey, ReactNode>> {
   const stage = <T,>(project: T, install: T, care: T) =>
     pieces.section === 'install' ? install : pieces.section === 'care' ? care : project;
   return {
     brief: pieces.brief,
-    design: pieces.roomFiles,
+    design: pieces.design ? pieces.design(workRoom) : pieces.roomFiles,
     approvals: slots.approvals,
     schedule: (
       <>
@@ -176,7 +180,14 @@ export default function Round8PaperFrame({
   useEffect(() => {
     onCommitted(true);
   }, [onCommitted]);
-  const chapters = pieces ? chapterBodies(slots, pieces) : {};
+  const workRoom: WorkRoom = (room, lens = 'spec', opener = document.activeElement) => {
+    openUnfold(
+      { kind: 'pieces', lens, room, line: null },
+      { documentId: docId, chapter: 'design', room, lens },
+      opener,
+    );
+  };
+  const chapters = pieces ? chapterBodies(slots, pieces, workRoom) : {};
   // Contents: the ten chapters (the margin filters them to the mounted ones),
   // each sub-labelled with the stage reading DocSpine's ladder printed; a
   // pre-work document lists its own regions.
@@ -254,6 +265,7 @@ export default function Round8PaperFrame({
       >
         <JobHead
           returnTo={{ href: paperOriginHref(origin), label: paperOriginLabel(origin) }}
+          origin={origin}
           jobName={jobName}
           context={context}
         />

@@ -11,7 +11,7 @@
 
 import '../paper/round8.css';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { DeskTodaySkeleton } from '@/components/loading';
 import { DocumentAction, DocumentActionGroup } from '@/components/document/document-action';
 import { EmptyState } from '@/components/document/empty-state';
@@ -36,8 +36,6 @@ export interface Round8DeskProps extends DeskFrameSlots {
   live: readonly DocumentStateRow[];
   /** Holds the Desk's place (F6) with the control she pressed as its anchor. */
   holdPlace: (anchorId: string | null) => void;
-  /** The control a Back traversal returns focus to, when one was held. */
-  backAnchor: string | null;
 }
 
 /** With no holders named, every inquiry reads as hers. */
@@ -79,7 +77,6 @@ export function Round8Desk(props: Round8DeskProps) {
     roster,
     live,
     holdPlace,
-    backAnchor,
   } = props;
 
   const kindOf = useMemo(
@@ -141,18 +138,7 @@ export function Round8Desk(props: Round8DeskProps) {
   };
   const leaveFromAttention = (item: AttentionItem) => leave(item.anchorId, item.docId);
 
-  const settled = !isError && !loading && !arrivalHeld;
-  // Back returns focus to the control she pressed, once its row stands. The
-  // page restores the offset; focus never scrolls.
-  const focusReturned = useRef(false);
-  useEffect(() => {
-    if (!settled || !backAnchor || focusReturned.current) return;
-    const control = document.getElementById(backAnchor);
-    if (!control) return;
-    focusReturned.current = true;
-    control.focus({ preventScroll: true });
-  }, [settled, backAnchor, attention, registerRows]);
-
+  // The Desk page alone restores scroll and focus, yielding to reader intent.
   const body = (loading || arrivalHeld) ? (
     <DeskTodaySkeleton dateLabel={dateLabel} />
   ) : (

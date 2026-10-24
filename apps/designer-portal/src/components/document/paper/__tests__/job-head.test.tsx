@@ -1,6 +1,14 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { JobHead } from '../job-head';
+import { readPaperOrigin, rememberPaperOrigin } from '@/lib/document/paper/paper-origin';
+const mockBack = jest.fn();
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ back: mockBack, push: mockPush }) }));
+
+beforeEach(() => { window.sessionStorage.clear(); jest.clearAllMocks(); });
+afterEach(() => { delete (window as unknown as { navigation?: unknown }).navigation; });
+
 
 describe('JobHead', () => {
   it('is the banner, with a return link named by its origin', () => {
@@ -72,5 +80,36 @@ describe('JobHead', () => {
       expect(node).toHaveClass('min-w-0', '[overflow-wrap:anywhere]');
       expect(node).toHaveTextContent(text);
     }
+  });
+});
+
+describe('Studio return history', () => {
+  function history(previousKey = 'desk-entry', previousUrl = 'http://localhost/desk') {
+    Object.defineProperty(window, 'navigation', { configurable: true, value: {
+      currentEntry: { key: 'desk-entry', index: 2 },
+      entries: () => [{ key: previousKey, index: 2, url: previousUrl }],
+    } });
+    rememberPaperOrigin('job', { path: '/desk', anchorId: 'held-control' });
+    (window as unknown as { navigation: { currentEntry: unknown } }).navigation.currentEntry = { key: 'job-entry', index: 3 };
+  }
+  it('uses Back only for the exact remembered predecessor desk entry', async () => {
+    history();
+    render(<JobHead returnTo={{ href: '/desk', label: 'Studio' }} origin={readPaperOrigin('job')} jobName="Job" />);
+    await userEvent.click(screen.getByRole('link', { name: 'Studio' }));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+  it.each(['unrelated-entry', 'unfold-entry'])('pushes Studio when the predecessor is %s', async (key) => {
+    history(key);
+    render(<JobHead returnTo={{ href: '/desk', label: 'Studio' }} origin={readPaperOrigin('job')} jobName="Job" />);
+    await userEvent.click(screen.getByRole('link', { name: 'Studio' }));
+    expect(mockPush).toHaveBeenCalledWith('/desk');
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+  it('pushes Studio for a deep link without remembered history', async () => {
+    render(<JobHead returnTo={{ href: '/desk', label: 'Studio' }} origin={readPaperOrigin('job')} jobName="Job" />);
+    await userEvent.click(screen.getByRole('link', { name: 'Studio' }));
+    expect(mockPush).toHaveBeenCalledWith('/desk');
+    expect(mockBack).not.toHaveBeenCalled();
   });
 });

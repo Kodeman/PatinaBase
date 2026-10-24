@@ -28,7 +28,7 @@ it('keeps Record an inquiry and Create a project file operable in an empty studi
     loading: false, deskEmpty: true, arrivalHeld: false, arrivalRoot: false, arrivalReady: true,
     deskRead: true, deskRoot: null, deskLine: null, isError: false, firstName: 'Leah', greetingWord: 'Good morning',
     studioName: null, viewerName: null, dateLabel: '24 October', recorded: null, scope: 'mine',
-    oneVoice: true, onScope: jest.fn(), holdPlace: jest.fn(), backAnchor: null, refetch: jest.fn(),
+    oneVoice: true, onScope: jest.fn(), holdPlace: jest.fn(), refetch: jest.fn(),
     captureOpen: false, openProjectOpen: false, setCaptureOpen, setOpenProjectOpen, setRecorded: jest.fn(),
   } as Round8DeskProps;
   const view = render(<Round8Desk {...props} />);

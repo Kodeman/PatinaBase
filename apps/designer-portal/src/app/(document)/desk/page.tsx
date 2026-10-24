@@ -565,36 +565,56 @@ export default function DeskPage() {
   useLayoutEffect(() => {
     const place = placeToRestore;
     if (!arrivalRoot || !place) return;
-    const land = (): boolean => {
+    const initialFocus = document.activeElement;
+    let finished = false;
+    const land = (waitForAnchor = true): boolean => {
+      const anchor = place.anchor ? document.getElementById(place.anchor) : null;
       const room = document.documentElement.scrollHeight - window.innerHeight;
+      if (waitForAnchor && place.anchor && !anchor) return false;
+      if (anchor && !anchor.matches('a, button, input, select, textarea, [tabindex]')) anchor.tabIndex = -1;
       if (place.y <= room) {
         window.scrollTo({ top: place.y, behavior: 'auto' });
+        anchor?.focus({ preventScroll: true });
         return true;
       }
-      const row = place.anchor ? document.getElementById(place.anchor) : null;
-      if (!row) return false;
-      row.scrollIntoView({ block: 'start', behavior: 'auto' });
+      if (!anchor) return false;
+      anchor.scrollIntoView({ block: 'start', behavior: 'auto' });
+      anchor.focus({ preventScroll: true });
       return true;
     };
-    if (land()) {
-      placeToRestore = null;
-      return;
-    }
+    const readerOwnsFocus = () => document.activeElement !== document.body && document.activeElement !== initialFocus;
+    const attempt = (waitForAnchor = true) => {
+      if (finished) return;
+      if (readerOwnsFocus() || land(waitForAnchor)) {
+        finished = true;
+        placeToRestore = null;
+      }
+    };
+    attempt();
+    if (finished) return;
     const hands = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
     const grow = new ResizeObserver(() => {
-      if (land()) settle();
+      attempt();
+      if (finished) settle();
     });
-    const wait = window.setTimeout(settle, 3000);
+    const wait = window.setTimeout(() => { attempt(false); settle(); }, 3000);
     // A cleanup only stops watching: a dev rehearsal remount tries again.
     function stop() {
       grow.disconnect();
       window.clearTimeout(wait);
       hands.forEach((hand) => window.removeEventListener(hand, settle));
+      document.removeEventListener('focusin', onFocusIn);
     }
     function settle() {
+      finished = true;
       placeToRestore = null;
       stop();
     }
+    const onFocusIn = (event: FocusEvent) => {
+      const anchor = place.anchor ? document.getElementById(place.anchor) : null;
+      if (!anchor?.contains(event.target as Node)) settle();
+    };
+    document.addEventListener('focusin', onFocusIn);
     // The Desk's own root grows as the roster fills in; the body does not.
     grow.observe(deskRoot.current ?? document.body);
     hands.forEach((hand) => window.addEventListener(hand, settle, { passive: true }));
@@ -612,7 +632,6 @@ export default function DeskPage() {
     pressedAnchor.current = anchor;
     holdDeskPlace(anchor);
   };
-  const [backAnchor] = useState(() => placeToRestore?.anchor ?? null);
 
   if (paper.renderer === 'pending') return <DeskPending dateLabel={dateLabel} />;
   if (paper.renderer === 'round8') {
@@ -656,7 +675,6 @@ export default function DeskPage() {
           roster={roster}
           live={data?.live ?? []}
           holdPlace={holdPlace}
-          backAnchor={backAnchor}
         />
       </Suspense>
     );

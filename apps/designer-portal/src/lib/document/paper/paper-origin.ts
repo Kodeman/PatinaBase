@@ -38,6 +38,8 @@ export interface PaperOrigin {
   /** `null` where the origin keeps its own place (the Desk). */
   scrollY: number | null;
   focusId: string | null;
+  /** Native entry identity, not a guessed history offset. */
+  historyKey?: string;
 }
 
 export interface PaperOriginInput {
@@ -83,6 +85,7 @@ export function rememberPaperOrigin(
     anchorId: from.anchorId ?? null,
     scrollY: kind === "desk" ? null : window.scrollY,
     focusId: from.focusId ?? null,
+    ...(navigation()?.currentEntry?.key ? { historyKey: navigation()!.currentEntry!.key } : {}),
   };
   try {
     // Most recent last; opening another job never forgets this one's way back.
@@ -128,6 +131,7 @@ function parseHeld(value: unknown): PaperOrigin | null {
     anchorId: nullableString(held.anchorId),
     scrollY: typeof held.scrollY === "number" ? held.scrollY : null,
     focusId: nullableString(held.focusId),
+    ...(typeof held.historyKey === 'string' ? { historyKey: held.historyKey } : {}),
   };
 }
 
@@ -173,4 +177,23 @@ export function paperOriginLabel(origin: PaperOrigin): string {
   if (origin.kind === "desk" || origin.kind === "deep-link") return "Studio";
   if (origin.kind === "people") return "Studio contacts";
   return originLabel(origin.path);
+}
+
+interface PaperNavigation {
+  currentEntry?: { key: string; index: number };
+  entries(): { key: string; url: string | null; index: number }[];
+}
+
+function navigation(): PaperNavigation | undefined {
+  return typeof window === 'undefined' ? undefined :
+    (window as Window & { navigation?: PaperNavigation }).navigation;
+}
+
+/** Back is safe only when the remembered Studio entry is the predecessor. */
+export function canReturnToPaperOrigin(origin: PaperOrigin): boolean {
+  const nav = navigation();
+  if (origin.kind !== 'desk' || !origin.historyKey || !nav?.currentEntry) return false;
+  const previous = nav.entries().find((entry) => entry.index === nav.currentEntry!.index - 1);
+  return previous?.key === origin.historyKey &&
+    previous.url === new URL(paperOriginHref(origin), window.location.origin).href;
 }

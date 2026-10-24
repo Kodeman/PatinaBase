@@ -43,6 +43,10 @@ jest.mock('@patina/supabase', () => ({
   }),
 }));
 
+jest.mock('@/hooks/use-paper-renderer', () => ({
+  usePaperRenderer: () => ({ renderer: 'legacy', source: 'override' }),
+}));
+
 jest.mock('@/hooks/use-desk-engagements', () => ({
   useDeskEngagements: () => ({
     data: { folders: [], chips: [], live: mockLive() },
