@@ -386,13 +386,19 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
      * granted below, so it must hold) a Back the browser makes
      * non-cancelable is the named residual: skip on that observed fact.
      */
+    let traversals = 0;
     const backHeldWhereCancelable = async () => {
-      await page.evaluate(() => {
+      const binding = `__sq1904Cancelable${++traversals}`;
+      let cancelable: unknown = null;
+      // Keep the observation outside the document the traversal may replace.
+      await page.exposeBinding(binding, (_source, value: unknown) => {
+        cancelable = value;
+      });
+      await page.evaluate((binding) => {
         const w = window as unknown as {
           navigation?: EventTarget;
-          __sq1902Cancelable?: boolean | null;
+          [key: string]: unknown;
         };
-        w.__sq1902Cancelable = null;
         const desk = new URL('/desk', window.location.href).href;
         const observe = (event: Event) => {
           const traversal = event as Event & {
@@ -400,21 +406,16 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
             destination: { url: string };
           };
           if (traversal.navigationType !== 'traverse' || traversal.destination.url !== desk) return;
-          w.__sq1902Cancelable = event.cancelable;
+          void (w[binding] as (value: boolean) => Promise<void>)(event.cancelable);
           w.navigation?.removeEventListener('navigate', observe);
         };
         w.navigation?.addEventListener('navigate', observe);
-      });
+      }, binding);
       await pressBack(page);
       await expect.poll(
-        () => page.evaluate(
-          () => typeof (window as unknown as { __sq1902Cancelable?: boolean | null }).__sq1902Cancelable,
-        ),
+        () => typeof cancelable,
         { timeout: 10_000, message: 'the matching desk traverse must report boolean cancelable' },
       ).toBe('boolean');
-      const cancelable = await page.evaluate(
-        () => (window as unknown as { __sq1902Cancelable?: boolean | null }).__sq1902Cancelable,
-      );
       await test.info().attach('back-navigate-cancelable', {
         body: `${browserName}: ${String(cancelable)}`,
         contentType: 'text/plain',
@@ -465,6 +466,15 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await finish.evaluate((el: HTMLElement) => el.blur());
     await expect(finish).toHaveAttribute('aria-invalid', 'true', { timeout: 30_000 });
     const length = await page.evaluate(() => history.length);
+    const documentBefore = await page.evaluate(() => {
+      const w = window as unknown as {
+        __sq1904Document?: Document;
+        navigation?: { currentEntry?: { key: string; id: string; url: string } };
+      };
+      w.__sq1904Document = document;
+      const entry = w.navigation?.currentEntry;
+      return { key: entry?.key, id: entry?.id, url: entry?.url };
+    });
 
     await backHeldWhereCancelable();
     await expect(instrument(page).getByText(/Your changes are not saved yet/)).toBeVisible({
@@ -505,6 +515,18 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     land();
     await expect(page).toHaveURL(/\/desk(\?|$)/, { timeout: 30_000 });
     await expect(studio).toBeVisible({ timeout: 30_000 });
+    const documentAfter = await page.evaluate(() => {
+      const w = window as unknown as {
+        __sq1904Document?: Document;
+        navigation?: { currentEntry?: { key: string; id: string; url: string } };
+      };
+      const entry = w.navigation?.currentEntry;
+      return { sameDocument: w.__sq1904Document === document, key: entry?.key, id: entry?.id, url: entry?.url };
+    });
+    await test.info().attach('desk-traversal-document', {
+      body: JSON.stringify({ before: documentBefore, after: documentAfter }),
+      contentType: 'application/json',
+    });
     expect(await page.evaluate(() => history.length), 'the Back went on without a loop').toBe(length);
     expect(retried, 'the held Back replayed nothing').toBe(1);
     expect(
