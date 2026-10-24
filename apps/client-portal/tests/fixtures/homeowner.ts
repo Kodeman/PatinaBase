@@ -10,7 +10,7 @@ export function admin() {
   expect(process.env.SUPABASE_SERVICE_ROLE_KEY, 'Export the LOCAL service key').toBeTruthy();
   return createClient(LOCAL, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 }
-export async function checked<T>(result: PromiseLike<{ data: T; error: unknown }>): Promise<T> {
+export async function checked<T extends { data: unknown; error: unknown }>(result: PromiseLike<T>): Promise<T["data"]> {
   const { data, error } = await result;
   expect(error).toBeNull();
   return data;
@@ -71,8 +71,9 @@ export async function noOverflow(page: Page) {
 export async function targetSize(control: Locator) {
   const box = await control.boundingBox();
   expect(box).not.toBeNull();
-  expect(box!.height).toBeGreaterThanOrEqual(44);
-  expect(box!.width).toBeGreaterThanOrEqual(44);
+  const name = await control.evaluate(node => node.getAttribute('aria-label') || node.textContent || node.tagName);
+  expect(box!.height, `${name}: target height`).toBeGreaterThanOrEqual(44);
+  expect(box!.width, `${name}: target width`).toBeGreaterThanOrEqual(44);
 }
 export async function approval(house: Household) {
   const db = admin();
