@@ -221,13 +221,14 @@ export function standingSentence(s: ClientLetterSnapshot): string {
   // the person alone, the studio alone, nobody.
   const who = name && house ? `${name} of ${house}` : (name ?? house);
   const project = (s.projectName ?? "").trim();
+  const invitation = `You can pay invoices and approve pieces there, and ${personGiven(s) ?? "the studio"} will write when something needs you.`;
   if (project) {
     const record = house
       ? "The page below holds the studio's record of the job"
       : "The page below holds the record of the job";
     return who
-      ? `${who} added you to the ${project} on ${date}. ${record} — the plans, the papers, and the numbers.`
-      : `You were added to the ${project} on ${date}. ${record} — the plans, the papers, and the numbers.`;
+      ? `${who} added you to the ${project} on ${date}. ${record} — the plans, the papers, and the numbers. ${invitation}`
+      : `You were added to the ${project} on ${date}. ${record} — the plans, the papers, and the numbers. ${invitation}`;
   }
   // Whose record it is degrades with the author: her given name, then "the
   // studio", then no owner at all — never a pronoun for a person we cannot name.
@@ -238,7 +239,7 @@ export function standingSentence(s: ClientLetterSnapshot): string {
   const holds = keeper
     ? `It's where ${keeper} keeps the record`
     : "It's where the record is kept";
-  return `${opening} ${holds} — the plans, the papers, and the numbers, as they come.`;
+  return `${opening} ${holds} — the plans, the papers, and the numbers, as they come. ${invitation}`;
 }
 
 function ctaLabel(s: ClientLetterSnapshot): string {
