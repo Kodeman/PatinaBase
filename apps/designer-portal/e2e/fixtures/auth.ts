@@ -1,4 +1,4 @@
-import { test as base } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
 import { Page } from '@playwright/test';
 
 /**
@@ -98,6 +98,12 @@ export const test = base.extend<AuthFixtures>({
       }
     }, WELCOME_SHOWN_KEY);
     await setupAuthentication(page);
+    // The URL changes before the authenticated Desk has hydrated. Navigating
+    // away now can abort its lazy chunks and race the sign-in redirect in WebKit.
+    if (new URL(page.url()).pathname === '/desk') {
+      await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+      await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/, { timeout: 30_000 });
+    }
     await use(page);
   },
 });
