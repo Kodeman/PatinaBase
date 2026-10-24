@@ -30,6 +30,8 @@ jest.mock('@patina/supabase', () => ({
   useClientEditionSourceUrls: () => ({ data: undefined }),
   useProjectFFEItems: () => ({ data: undefined }),
   useStudioIdentity: () => ({ data: undefined }),
+  useProjectV2: () => ({ data: undefined }),
+  useProjectPalettes: () => ({ data: undefined }),
 }));
 
 const answeredDecision = {

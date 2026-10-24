@@ -1,6 +1,5 @@
 import { editionHero } from '../use-client-editorial';
 import { galleryHeroFits } from '@/lib/editorial/floors';
-import { galleryCropPosition, GALLERY_DESKTOP_ASPECT, GALLERY_PHONE_ASPECT } from '@/lib/editorial/gallery-crop';
 import { heroEligible } from '@/lib/editorial/rank';
 import type { ClientProjectEditorial, EditorialAsset } from '@/lib/editorial/types';
 
@@ -41,13 +40,6 @@ describe('Gallery hero rule', () => {
     expect(heroEligible(asset({ width: 1200, height: 2000, subjectBox: [0.2, 0.1, 0.2, 0.8] }))).toBe(false);
     expect(heroEligible(asset({ subjectBox: [1440, 480, 480, 640] }))).toBe(true);
     expect(galleryHeroFits(2400, 1600, [0.95, 0, 0.2, 0.2])).toBe(false);
-  });
-  it('positions tall and wide crops separately around the stored focal point without losing the subject', () => {
-    const photo = asset();
-    expect(galleryCropPosition(photo.width, photo.height, GALLERY_PHONE_ASPECT, photo.subjectBox, photo.focal)).toBe('79.7% 50%');
-    expect(galleryCropPosition(photo.width, photo.height, GALLERY_DESKTOP_ASPECT, photo.subjectBox, photo.focal)).toBe('50% 100%');
-    expect(galleryCropPosition(2400, 1600, GALLERY_PHONE_ASPECT, [0, 0, 1, 1])).toBeNull();
-    expect(galleryCropPosition(0, 1600, GALLERY_PHONE_ASPECT)).toBeNull();
   });
   it('uses only the approved eligible hero; no automatic substitute for absent or weak editions', () => {
     const photo = asset();

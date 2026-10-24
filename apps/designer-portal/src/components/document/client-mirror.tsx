@@ -32,7 +32,7 @@ import {
   pendingEdition,
   useProjectMakerNames,
 } from '@/lib/document/client-editions';
-import { PressBandPreview } from './press-band-preview';
+import { ProjectGalleryPreview } from './press-band-preview';
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -129,7 +129,8 @@ function MirrorEdition({ projectId, name }: { projectId: string; name: string })
       <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
         {label}
       </p>
-      <PressBandPreview
+      <ProjectGalleryPreview
+        projectId={projectId}
         edition={edition}
         current={null}
         sourceUrls={sourceUrls ?? {}}

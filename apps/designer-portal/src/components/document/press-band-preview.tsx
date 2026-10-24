@@ -1,16 +1,9 @@
 'use client';
 
-/**
- * US-49 Phase 2 — the Press band's preview of one edition: its cover (the
- * hero's SOURCE picture, through the studio's own media helpers — never the
- * client page's plate route), the chapter openers with their headlines and
- * standing sentences, the doorstep standing, the notice sentence, and one line
- * saying what moved against the edition the client sees now.
- *
- * The edition is shown with the studio's pending edits laid over it, so the
- * preview is what Approve would publish.
- */
+/** Gallery arrival and reading words, with the studio’s pending edits laid over them. */
 
+import { useProjectPalettes, useProjectV2 } from '@patina/supabase';
+import { galleryCropPosition, type GalleryPoint, type GalleryRect } from '@patina/utils';
 import type {
   ClientEdition,
   ClientEditionImage,
@@ -18,13 +11,7 @@ import type {
 } from '@patina/supabase';
 import { readerImageContent, type CaptionPolicy } from '@/lib/document/client-editions';
 import { getOptimizedImageUrl } from '@/lib/media-utils';
-import {
-  coverCropShown,
-  plateCrop,
-  plateCropWindow,
-  type PlateRect,
-  type PlateWindow,
-} from '@/lib/document/plate-crop';
+import type { PlatePoint, PlateWindow } from '@/lib/document/plate-crop';
 
 /** The hero asset an edition opens on, the studio's choice first. */
 export function editionHeroId(
@@ -123,167 +110,135 @@ export function editionDelta(
   return [hero, captions, words].join(' · ');
 }
 
-const EYEBROW =
-  'font-mono text-[12px] font-medium uppercase leading-normal tracking-[0.12em] text-[var(--text-muted)]';
+export const GALLERY_FRAMES = [
+  { key: 'cover_phone', label: 'Phone', width: 390, height: 796 },
+  { key: 'wide', label: 'Laptop', width: 1440, height: 852 },
+] as const;
 
-/** PLAN C2: designer-side photography stays within 120px tall. */
-const COVER_HEIGHT = 120;
-
-/**
- * The crop the client page's desktop draws from the hero's source picture,
- * as the worker cuts it (ground, floors, subject box and focal point): its
- * rect in source pixels and the window it shows. Null when the source's size
- * is unknown or the worker cuts no cover from it.
- */
-export function heroCoverCrop(
-  hero: ClientEditionImage,
-): { rect: PlateRect; window: PlateWindow } | null {
-  if (!(hero.width && hero.width > 0 && hero.height && hero.height > 0)) return null;
-  const source = {
-    width: hero.width,
-    height: hero.height,
-    focal: hero.focal,
-    subjectBox: hero.subjectBox,
-    ground: hero.ground,
-  };
-  const shown = coverCropShown(source, 'desktop');
-  const rect = shown ? plateCrop(source, shown) : null;
-  const window = shown ? plateCropWindow(source, shown) : null;
-  return rect && window ? { rect, window } : null;
+/** The same source-space cover crop used by the homeowner's full-source renditions. */
+export function gallerySourcePosition(image: ClientEditionImage, aspect: number, focal = image.focal): string | null {
+  return galleryCropPosition(image.width ?? 0, image.height ?? 0, aspect,
+    image.subjectBox as GalleryRect | null, focal as GalleryPoint | null);
 }
 
-/**
- * The cover thumbnail: the crop's own window of the source, clipped to the
- * crop's aspect and at most 120px tall — the picture scaled so the window
- * fills the frame and moved so the window's corner meets the frame's.
- */
-function CoverThumbnail({ src, alt, hero }: { src: string; alt: string; hero: ClientEditionImage | null }) {
-  const crop = hero ? heroCoverCrop(hero) : null;
-  if (!crop) {
-    return (
-      <img
-        src={src}
-        alt={alt}
-        className="block h-[120px] w-[192px] max-w-full border border-[var(--border-subtle)] object-cover"
-        data-press-cover
-      />
-    );
-  }
-  const [, , cropWidth, cropHeight] = crop.rect;
-  const { left, top, vx, vy } = crop.window;
+/** Pointer coordinates must use the shared crop, not the unadjusted focal percentages. */
+export function galleryCropWindow(image: ClientEditionImage, aspect: number, focal = image.focal): PlateWindow {
+  const ratio = (image.width ?? 1) / (image.height ?? 1);
+  const vx = Math.min(1, aspect / ratio);
+  const vy = Math.min(1, ratio / aspect);
+  const [x, y] = (gallerySourcePosition(image, aspect, focal) ?? '50% 50%').split(' ').map((value) => parseFloat(value) / 100);
+  return { vx, vy, left: (1 - vx) * x, top: (1 - vy) * y };
+}
+
+function galleryDimensions(image: ClientEditionImage): boolean {
+  const edges = [image.width ?? 0, image.height ?? 0];
+  return Math.max(...edges) >= 2000 && Math.min(...edges) >= 1200
+    && GALLERY_FRAMES.every((frame) => gallerySourcePosition(image, frame.width / frame.height) !== null);
+}
+
+export function galleryHeroEligible(image: ClientEditionImage): boolean {
+  const kind = image.attributionKind ?? image.sourceKind ?? '';
+  return ['installed', 'upload', 'scan', 'maker'].includes(kind) && image.ground === 'scene' && galleryDimensions(image);
+}
+
+function GalleryPaintCard({ palette }: { palette: readonly { hex: string; name: string | null }[] }) {
+  const label = palette.length ? 'The house palette: ' + palette.map((swatch) => swatch.name || swatch.hex).join(', ') : 'The paint card; no palette chosen yet';
+  return <div className="flex h-full w-full bg-[#E6DCC8]" role="img" aria-label={label} data-gallery-paint>
+    {palette.map((swatch, index) => <span key={index} className="h-full flex-1" style={{ backgroundColor: swatch.hex }} />)}
+  </div>;
+}
+
+function GalleryBackground({ hero, url, palette, frame }: {
+  hero: ClientEditionImage | null;
+  url?: string;
+  palette: readonly { hex: string; name: string | null }[];
+  frame: (typeof GALLERY_FRAMES)[number];
+}) {
+  return hero && url ? (
+            <img src={getOptimizedImageUrl(url, { width: frame.width })} alt={hero.alt || ''} className="h-full w-full object-cover" style={{ objectPosition: gallerySourcePosition(hero, frame.width / frame.height) ?? undefined }} data-press-cover />
+          ) : (
+            <GalleryPaintCard palette={palette} />);
+}
+
+function GalleryArrival({ hero, url, headline, palette, frame }: {
+  hero: ClientEditionImage | null;
+  url?: string;
+  headline: string;
+  palette: readonly { hex: string; name: string | null }[];
+  frame: (typeof GALLERY_FRAMES)[number];
+}) {
+  const scale = 120 / frame.height;
+  const wide = frame.key === 'wide';
   return (
-    <div
-      className="relative max-h-[120px] max-w-full overflow-hidden border border-[var(--border-subtle)]"
-      style={{
-        // max-w-full may narrow it; the aspect ratio then keeps the window exact.
-        width: `${(COVER_HEIGHT * cropWidth) / cropHeight}px`,
-        aspectRatio: `${cropWidth} / ${cropHeight}`,
-      }}
-      data-press-cover-window={crop.rect.join(' ')}
-    >
-      <img
-        src={src}
-        alt={alt}
-        className="absolute block max-w-none"
-        style={{
-          width: `${100 / vx}%`,
-          height: `${100 / vy}%`,
-          left: `${(-left / vx) * 100}%`,
-          top: `${(-top / vy) * 100}%`,
-        }}
-        data-press-cover
-      />
-    </div>
+    <figure className="m-0 flex min-w-0 flex-col gap-2">
+      <p className="m-0 text-[15px] text-[var(--text-muted)]">{frame.label} · {frame.width} × {frame.height}</p>
+      <div className="relative h-[120px] overflow-hidden border border-[var(--border-subtle)]" style={{ width: frame.width * scale, maxWidth: '100%' }} data-gallery-frame={frame.key} aria-hidden={wide ? true : undefined}>
+        <div className="absolute left-0 top-0 overflow-hidden" style={{ width: frame.width, height: frame.height, transform: 'scale(' + scale + ')', transformOrigin: 'top left' }}>
+          <GalleryBackground hero={hero} url={url} palette={palette} frame={frame} />
+          <div className="absolute inset-x-0 bottom-0 bg-[#2E2A26] text-[#F4EFE7]" style={{ display: wide ? 'flex' : 'block', alignItems: 'end', justifyContent: 'space-between', gap: 48, padding: wide ? '28px 52px' : '24px 22px' }} data-gallery-band>
+            <p className="m-0 font-normal" style={{ fontFamily: 'var(--font-display, "Playfair Display"), serif', fontSize: wide ? 52 : 34, lineHeight: 1.08 }}>{headline}</p>
+            <p className="mb-0 mt-3 text-[#D0C9BE]" style={{ fontFamily: 'Inter, var(--font-inter), sans-serif', fontSize: 16, lineHeight: 1.35 }}>The line about invoices and approvals goes here</p>
+          </div>
+        </div>
+      </div>
+    </figure>
   );
 }
 
-export function PressBandPreview({
-  edition,
-  current,
-  overrides,
-  sourceUrls,
-  delta = true,
-  captionPolicy,
-}: {
+export function ProjectGalleryPreview({ projectId, ...props }: { projectId: string } & Parameters<typeof PressBandPreview>[0]) {
+  const { data: project } = useProjectV2(projectId);
+  const { data: palettes } = useProjectPalettes(projectId);
+  // Match get_client_project_editorial's primary-palette order, not the hook's list order.
+  const chosen = [...(palettes ?? [])].sort((a, b) =>
+    Number(b.is_primary) - Number(a.is_primary) || a.sort_order - b.sort_order ||
+    a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))[0];
+  return <PressBandPreview {...props} houseName={project?.name ?? 'Your house'} palette={chosen?.swatches ?? []} />;
+}
+
+export function PressBandPreview({ edition, current, overrides, sourceUrls, delta = true, captionPolicy, houseName = 'Your house', palette = [], focal }: {
   edition: ClientEdition;
-  /** The approved edition the client sees now; null before the first. */
   current: ClientEdition | null;
   overrides?: ClientEditionOverrides | null;
-  /** Viewable source addresses by asset id (useClientEditionSourceUrls). */
   sourceUrls: Record<string, string>;
-  /** The what-moved line; the client mirror shows the edition alone. */
   delta?: boolean;
-  /** The client mirror's consent policy; the band shows raw editing words. */
   captionPolicy?: CaptionPolicy;
+  houseName?: string;
+  palette?: readonly { hex: string; name: string | null }[];
+  focal?: { assetId: string; point: PlatePoint } | null;
 }) {
   const heroId = editionHeroId(edition, overrides);
-  const hero = edition.images.find((image) => image.assetId === heroId) ?? null;
-  const heroUrl = heroId ? sourceUrls[heroId] : undefined;
-  const content = hero && captionPolicy
-    ? readerImageContent(hero, {
-        whose: overrides?.captions?.[hero.assetId]?.whose ?? edition.overrides?.captions?.[hero.assetId]?.whose,
-        when: overrides?.captions?.[hero.assetId]?.when ?? edition.overrides?.captions?.[hero.assetId]?.when,
-      }, captionPolicy)
-    : null;
-  const heroCaption = content?.caption ?? (hero ? imageCaption(edition, hero, overrides) : null);
-  const heroAlt = content?.alt ?? hero?.alt ?? '';
+  const selected = edition.images.find((image) => image.assetId === heroId);
+  const hero = selected && galleryHeroEligible(selected) ? { ...selected, focal: focal?.assetId === selected.assetId ? focal.point : selected.focal } : null;
+  if (hero && captionPolicy) hero.alt = readerImageContent(hero, { ...edition.overrides?.captions?.[hero.assetId], ...overrides?.captions?.[hero.assetId] }, captionPolicy).alt;
   const chapters = editionChapters(edition, overrides);
-  const doorstep = edition.composition?.doorstep?.standing;
-  const notice = edition.composition?.notice;
-
+  const cover = chapters.find((chapter) => chapter.key === 'cover')?.headline.trim() ?? '';
+  const tooLong = cover.length > 40 || cover.split(/\s+/).length > 6;
+  const headline = cover && !tooLong ? cover : houseName;
+  const colors = palette.filter((swatch) => /^#[0-9a-f]{6}$/i.test(swatch.hex));
+  const photos = [...new Map([...edition.images].sort((a, b) => a.rank - b.rank).map((image) => [image.assetId, image])).values()];
   return (
     <div className="flex flex-col gap-4" data-press-preview={edition.id}>
-      {delta && (
-        <p className="text-[15px] leading-snug text-[var(--text-muted)]" data-press-delta>
-          {editionDelta(edition, current, overrides)}
-        </p>
-      )}
-      <figure className="m-0 flex flex-col gap-2">
-        {heroUrl ? (
-          <CoverThumbnail src={getOptimizedImageUrl(heroUrl, { width: 400 })} alt={heroAlt} hero={hero} />
-        ) : (
-          <div
-            className="flex h-[120px] w-[192px] max-w-full items-center justify-center border border-dashed border-[var(--border-subtle)] px-2 text-center text-[15px] text-[var(--text-muted)]"
-            data-press-drawn-cover
-          >
-            The cover is a drawing
-          </div>
-        )}
-        {heroCaption && (
-          <figcaption className="text-[15px] leading-snug">
-            {Object.values(heroCaption).filter(Boolean).join(' · ')}
-          </figcaption>
-        )}
-      </figure>
-      {doorstep && (
-        <div className="flex flex-col gap-1">
-          <p className={EYEBROW}>Doorstep</p>
-          <p className="text-[15px] leading-snug">{doorstep}</p>
-        </div>
-      )}
-      {chapters.length > 0 && (
-        <ol aria-label="Chapters" className="m-0 list-none border-t border-[var(--border-subtle)] p-0">
-          {chapters.map((chapter, index) => (
-            <li
-              key={chapter.key}
-              className="grid grid-cols-[3ch_minmax(0,1fr)] gap-x-3 border-b border-[var(--border-subtle)] py-2"
-            >
-              <span className="font-mono text-[15px] text-[var(--text-muted)]">
-                {String(index + 1).padStart(2, '0')}
-              </span>
-              <span className="flex flex-col">
-                <span className="font-display text-[18px] leading-tight">{chapter.headline}</span>
-                {chapter.standing && (
-                  <span className="text-[15px] leading-snug text-[var(--text-muted)]">
-                    {chapter.standing}
-                  </span>
-                )}
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
-      {notice && <p className="text-[15px] italic leading-snug">{notice}</p>}
+      {delta && <p className="text-[15px] leading-snug text-[var(--text-muted)]" data-press-delta>{editionDelta(edition, current, overrides)}</p>}
+      <div className="flex flex-wrap items-start gap-6" aria-label="Arrival previews">
+        {GALLERY_FRAMES.map((frame) => <GalleryArrival key={frame.key} frame={frame} hero={hero} url={hero ? sourceUrls[hero.assetId] : undefined} headline={headline} palette={colors} />)}
+      </div>
+      {tooLong && <p className="text-[15px] text-[var(--text-muted)]">The cover headline is too long for the band, so the house name is shown instead.</p>}
+      <p className="text-[15px] text-[var(--text-muted)]">The muted line is a sample; invoices and approvals supply the live words.</p>
+      {chapters.some((chapter) => chapter.key !== 'cover') && <div>
+        <p className="text-[15px] text-[var(--text-muted)]">Chapter names appear only in Menu.</p>
+        <ul aria-label="Chapters" className="m-0 list-none p-0">{chapters.filter((chapter) => chapter.key !== 'cover').map((chapter) => <li key={chapter.key} className="text-[16px] leading-snug">{chapter.headline}</li>)}</ul>
+      </div>}
+      <ul aria-label="Photographs" className="m-0 list-none p-0">
+        {photos.map((image) => {
+          const edit = { ...edition.overrides?.captions?.[image.assetId], ...overrides?.captions?.[image.assetId] };
+          const caption = captionPolicy ? readerImageContent(image, edit, captionPolicy).caption : imageCaption(edition, image, overrides);
+          const sentence = photos.find((photo) => photo.chapterKey === image.chapterKey)?.assetId === image.assetId ? chapters.find((chapter) => chapter.key === image.chapterKey)?.standing : null;
+          return <li key={image.assetId} className="border-t border-[var(--border-subtle)] py-2">
+            <figure className="m-0"><figcaption className="text-[15px] leading-snug text-[var(--text-muted)]">{Object.values(caption).filter(Boolean).join(' · ')}</figcaption></figure>
+            {sentence && <p className="text-[16px] leading-snug">{sentence}</p>}
+          </li>;
+        })}
+      </ul>
     </div>
   );
 }
