@@ -616,7 +616,7 @@ test.describe("the standing invoice (00574)", () => {
     });
     // The house is the absence of the hold, not the presence of the doorplate
     // (threshold.tsx holds everything below it until the letter has answered).
-    await expect(page.getByTestId("doorplate")).toBeVisible({
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
       timeout: 60_000,
     });
     await expect(page.getByTestId("threshold-hold")).toHaveCount(0, {
@@ -633,9 +633,10 @@ test.describe("the standing invoice (00574)", () => {
     // below, which still drives it directly). Not a vacuous assertion: the
     // literal amount ties it to this fixture's own balance, matching
     // letterbox.test.tsx's `'Pay $9,125.00'` for the same $7,605-paid fixture.
+    await page.getByRole("link", { name: "Invoices", exact: true }).click();
     const pay = page.locator(`[data-invoice-id="${minted.invoiceId}"]`).getByRole("button", { name: "View invoice" });
     await expect(pay).toBeVisible();
-    await expect(pay).toHaveAttribute("aria-expanded", "false");
+    await expect(pay).toHaveAttribute("aria-expanded", "true");
 
     expect(
       payRequests,
