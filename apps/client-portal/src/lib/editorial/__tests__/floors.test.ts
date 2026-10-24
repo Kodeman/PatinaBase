@@ -35,8 +35,8 @@ describe('floors', () => {
 
   it('drops a plate one role below its floor', () => {
     expect(placeRole('hero', 2400, 1600)).toBe('hero');
-    // below the bleed floor but wide enough for the 1248 measure plate
-    expect(placeRole('hero', 1400, 960)).toBe('hero');
+    // Gallery never promotes a source below 2000 × 1200 to a hero.
+    expect(placeRole('hero', 1400, 960)).toBe('room');
     // no desktop template, and too narrow for a room plate
     expect(placeRole('hero', 1000, 900)).toBe('silhouette');
     expect(placeRole('held', 1080, 2348)).toBe('held');
