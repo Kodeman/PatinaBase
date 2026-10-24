@@ -61,6 +61,10 @@ jest.mock('@/hooks/use-answered-notes', () => ({
   useAnsweredNotes: () => ({ data: [] }),
 }));
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'me', name: 'Leah' } }) }));
+// WP-01.8 — this suite reads the legacy Desk body; the renderer latch is settled.
+jest.mock('@/hooks/use-paper-renderer', () => ({
+  usePaperRenderer: () => ({ renderer: 'legacy', source: 'override' }),
+}));
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 
 // US-14 — the Desk's arrival ready mark reads the viewer's studio (settled here).

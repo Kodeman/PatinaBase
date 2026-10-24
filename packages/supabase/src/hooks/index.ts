@@ -1886,6 +1886,7 @@ export type {
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   useBoards,
+  signProjectWorkingBoardRow,
   useBoard,
   useBoardsWithItems,
   useUpsertBoard,
