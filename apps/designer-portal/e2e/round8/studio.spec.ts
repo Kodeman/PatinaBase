@@ -10,7 +10,11 @@ const JOB = 'f0180000-0000-4000-8000-000000000010';
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 async function openStudio(page: Page) {
-  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  // Authentication already lands here. Do not abort its first hydrated read
+  // with a second full navigation before the studio has settled.
+  if (new URL(page.url()).pathname !== '/desk') {
+    await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  }
   const studio = page.locator('[data-studio="round8"]');
   // The first next dev compile of /desk and its round-8 chunk is slow.
   await expect(studio, 'the round-8 studio stands on /desk').toBeVisible({ timeout: 60_000 });
@@ -44,6 +48,8 @@ test.describe('F01 round-8 studio', () => {
   });
 
   test('masthead doors open the existing rooms and ledgers', async ({ authenticatedPage: page }) => {
+    // Compact widths use the existing mobile More / command access instead.
+    await page.setViewportSize({ width: 1440, height: 900 });
     const masthead = page.getByRole('navigation', { name: 'Studio', exact: true });
     const door = (key: string) => page.locator(`[data-studio-door="${key}"]`);
 
