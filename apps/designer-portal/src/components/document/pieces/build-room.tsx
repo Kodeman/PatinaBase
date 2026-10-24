@@ -53,6 +53,8 @@ export interface BuildRoomProps extends BuildRoomState {
   line?: string | null;
   /** WP-01.6 — the unfold host's owner: its close waits for spec saves. */
   autosaveOwner?: BoardOwnerRef | null;
+  /** Embedded: the host landing's reader-intent latch (`BuildRoomShell`). */
+  readerHasMoved?: () => boolean;
 }
 
 export function BuildRoom({
@@ -67,6 +69,7 @@ export function BuildRoom({
   onRedirect,
   line = null,
   autosaveOwner = null,
+  readerHasMoved,
 }: BuildRoomProps) {
   const {
     data: resolution,
@@ -169,6 +172,7 @@ export function BuildRoom({
     <BuildRoomShell
       embedded={embedded}
       onRequestClose={onRequestClose}
+      readerHasMoved={readerHasMoved}
       docId={docId}
       jobName={row.title}
       rooms={roomList}

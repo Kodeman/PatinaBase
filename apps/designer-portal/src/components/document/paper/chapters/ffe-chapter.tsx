@@ -27,7 +27,7 @@
  * resolving under both renderers.
  */
 
-import { useIsFetching } from '@tanstack/react-query';
+import { useIsFetching, type Query } from '@tanstack/react-query';
 import {
   lazy,
   Suspense,
@@ -154,7 +154,7 @@ function EmbeddedBuildRoom({
       navigate({ lens: next.lens, room: next.room, line: next.line }),
     [navigate],
   );
-  useSheetLanding(hostRef, { ...address, lens });
+  const readerHasMoved = useSheetLanding(hostRef, { ...address, lens });
   return (
     <div ref={hostRef} className="flex min-h-0 flex-1 flex-col">
       <Suspense fallback={<PiecesSkeleton />}>
@@ -170,6 +170,7 @@ function EmbeddedBuildRoom({
           onReturn={close}
           onRequestClose={close}
           onRedirect={KEEP_ADDRESS}
+          readerHasMoved={readerHasMoved}
         />
       </Suspense>
     </div>
@@ -188,27 +189,55 @@ const SCROLL_KEYS = new Set([
 ]);
 
 /**
+ * The reads that decide where the sheet lands (F10): its rooms, its lines
+ * (and their Spec fields), their placements and their groups. A read
+ * anywhere else on the paper never holds the landing's deadline.
+ */
+const LANDING_READS = new Set([
+  'document-rooms',
+  'project-ffe-items',
+  'project-room-placements',
+  'project-line-groups',
+]);
+const isLandingRead = (query: Query) =>
+  LANDING_READS.has(String(query.queryKey[0]));
+
+const NOT_MOVED = () => false;
+/** The reader's own press or key. */
+const INPUT_EVENTS = ['pointerdown', 'keydown'] as const;
+/** A held pointer let go (a missed `pointerup` is caught by a buttonless move). */
+const POINTER_END_EVENTS = ['pointerup', 'pointercancel', 'pointermove'] as const;
+
+/**
  * Lands the unfolded sheet where its address stands, once its reads have
  * answered: the line (opened by id) when one is named, else the room's
  * heading, else the sheet's top. When the room no longer has the line, the
  * Spec lens says so and the landing takes the line it shows instead.
  *
  * - It waits for the sheet to take focus to its title, then lands from there.
- * - Its deadline starts only once the sheet's code and reads have answered
- *   (F6). When it passes, the sheet lands on the room's heading, else its top.
+ * - Its deadline starts only once the sheet's code and its own reads have
+ *   answered (F6, F10). When it passes, the sheet lands on the room's
+ *   heading, else its top.
  * - It yields to the reader (F7): once she has moved focus or scrolled since
- *   the unfold opened, it neither moves focus nor scrolls.
+ *   the unfold opened, it neither moves focus nor scrolls. A scroll under a
+ *   held pointer (a scrollbar drag) is hers (F8); focus her own press or key
+ *   brings, the title's included, is hers (F9).
  * - The line is read as a landing starts: choosing a line re-addresses the
  *   unfold, and that is the reader's own move, not a landing.
+ *
+ * Returns the landing's reader-intent latch, so a sheet that mounts after
+ * the reader has moved on does not take focus to its title (F5).
  */
 function useSheetLanding(
   hostRef: RefObject<HTMLDivElement | null>,
   { lens, room, line }: UnfoldAddress,
-): void {
-  const settled = useIsFetching() === 0;
+): () => boolean {
+  const settled = useIsFetching({ predicate: isLandingRead }) === 0;
   const settledRef = useRef(settled);
   const lineRef = useRef(line);
   const pokeRef = useRef<(settled: boolean) => void>(() => {});
+  const latchRef = useRef<() => boolean>(NOT_MOVED);
+  const readerHasMoved = useCallback(() => latchRef.current(), []);
   useEffect(() => {
     settledRef.current = settled;
     lineRef.current = line;
@@ -225,6 +254,10 @@ function useSheetLanding(
     const opener = document.activeElement;
     let readerMoved = false;
     let landing = false;
+    // A pointer is held: a scroll now is the reader's (a scrollbar drag).
+    let pressing = false;
+    // The reader's own press or key, heard in this task.
+    let readerInput = false;
     // Where the landing put focus. The sheet can take it back to its title
     // (its own landing effect re-runs, as React does in development); until
     // the wait is over, the title taking it again lands here again.
@@ -308,6 +341,13 @@ function useSheetLanding(
       window.removeEventListener('wheel', onReaderScroll);
       window.removeEventListener('touchmove', onReaderScroll);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      for (const type of INPUT_EVENTS) {
+        window.removeEventListener(type, onInput, true);
+      }
+      for (const type of POINTER_END_EVENTS) {
+        window.removeEventListener(type, onPointerEnd, true);
+      }
       window.clearTimeout(timer);
       pokeRef.current = () => {};
     }
@@ -333,11 +373,15 @@ function useSheetLanding(
       timer = undefined;
     }
     // Focus going anywhere but the sheet's title (or this landing's target)
-    // is the reader's own move.
+    // is the reader's own move; so is focus her own press or key brought,
+    // even to the title (F9): only the sheet's own focusing is not hers.
     function onFocusIn(event: FocusEvent) {
       // This landing's own focus move is not heard as a new one.
       if (landing) return;
-      if (event.target !== title() && event.target !== opener) {
+      if (
+        readerInput ||
+        (event.target !== title() && event.target !== opener)
+      ) {
         readerMoved = true;
       }
       attempt();
@@ -349,6 +393,23 @@ function useSheetLanding(
     function onKey(event: KeyboardEvent) {
       if (SCROLL_KEYS.has(event.key)) onReaderScroll();
     }
+    function onInput(event: Event) {
+      if (event.type === 'pointerdown') pressing = true;
+      readerInput = true;
+      window.setTimeout(() => {
+        readerInput = false;
+      }, 0);
+    }
+    function onPointerEnd(event: Event) {
+      if (event.type !== 'pointermove' || (event as PointerEvent).buttons === 0) {
+        pressing = false;
+      }
+    }
+    // The landing's own scroll, the paper's scroll anchoring or a restored
+    // position move the page with no pointer held; a scrollbar drag does not.
+    function onScroll() {
+      if (pressing) onReaderScroll();
+    }
 
     observer.observe(host, { childList: true, subtree: true });
     // The title taking focus is no DOM change; it is heard here, as is focus
@@ -357,8 +418,21 @@ function useSheetLanding(
     window.addEventListener('wheel', onReaderScroll, { passive: true });
     window.addEventListener('touchmove', onReaderScroll, { passive: true });
     window.addEventListener('keydown', onKey);
+    // Capture: a control that consumes its press or key still tells us.
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    for (const type of INPUT_EVENTS) {
+      window.addEventListener(type, onInput, { capture: true, passive: true });
+    }
+    for (const type of POINTER_END_EVENTS) {
+      window.addEventListener(type, onPointerEnd, { capture: true, passive: true });
+    }
     pokeRef.current = onReads;
+    latchRef.current = yielded;
     attempt();
-    return stop;
+    return () => {
+      stop();
+      latchRef.current = NOT_MOVED;
+    };
   }, [hostRef, lens, room]);
+  return readerHasMoved;
 }
