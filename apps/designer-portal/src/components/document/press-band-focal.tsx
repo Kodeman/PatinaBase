@@ -98,7 +98,7 @@ function FocalEditor({
       ? inBox([image.focal[0], image.focal[1]], hold)
       : box
         ? [box[0] + box[2] / 2, box[1] + box[3] / 2]
-        : GALLERY_DEFAULT_FOCAL;
+        : [...GALLERY_DEFAULT_FOCAL];
   const [focal, setFocal] = useState<PlatePoint>(initial);
   const saved = useRef(initial);
   const [moved, setMoved] = useState(false);
