@@ -28,6 +28,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   globalSetup: './e2e/round8/global-setup.ts',
+  globalTeardown: './e2e/round8/global-teardown.ts',
   outputDir: path.join(evidence, 'test-results'),
   reporter: [['list'], ['html', { outputFolder: path.join(evidence, 'html-report'), open: 'never' }]],
   use: { ...base.use, baseURL },
