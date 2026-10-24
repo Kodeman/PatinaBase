@@ -133,6 +133,8 @@ beforeEach(() => {
   mockDeadPictures = [];
   focusFfeLinePending.request = null;
   jest.clearAllMocks();
+  mockRefetchEditions.mockReset();
+  mockRefetchEditions.mockResolvedValue({ isSuccess: true });
 });
 
 describe('PressBand — the states', () => {
@@ -572,7 +574,7 @@ describe('PressBand — focal point', () => {
     expect(mockSetFocal).not.toHaveBeenCalled();
   });
 
-  it('a refetch during a pending crop save preserves the successful crop against the current read', () => {
+  it('a refetch during a pending crop save waits for a post-save authoritative crop read', async () => {
     const baseline = {
       ...PENDING_ROW,
       images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: null })],
@@ -581,6 +583,8 @@ describe('PressBand — focal point', () => {
     const tray = openHeroFocal();
     dragHero(tray);
     const savedPosition = previewPosition();
+    let finishRead!: (result: { isSuccess: boolean }) => void;
+    mockRefetchEditions.mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve; }));
     fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
     const savedPoint = mockSetFocal.mock.calls[0][0].focal;
     const refreshed = (point: number[] | null) => ({
@@ -592,15 +596,44 @@ describe('PressBand — focal point', () => {
     expect(previewPosition()).toBe(savedPosition);
     expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
     reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
-    expect(previewPosition()).toBe(savedPosition);
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(previewPosition()).not.toBe(savedPosition);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
     expect(within(tray).getByRole('button', { name: 'Use this crop' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    expect(previewPosition()).toBe(savedPosition);
+    expect(previewPosition()).not.toBe(savedPosition);
     mockData = editions([refreshed(savedPoint)]);
     rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    await reactAct(async () => finishRead({ isSuccess: true }));
     expect(previewPosition()).toBe(savedPosition);
     expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it.each([false, true])('a delayed crop success cannot overlay an ABA authoritative read, shared=%s (SQ-1943 R6)', async (shared) => {
+    const row = {
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: [0.5, 0.5] })],
+    };
+    const { rerender } = renderBand([row]);
+    const original = previewPosition();
+    const tray = openHeroFocal();
+    dragHero(tray);
+    expect(previewPosition()).not.toBe(original);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    let finishRead!: (result: { isSuccess: boolean }) => void;
+    mockRefetchEditions.mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve; }));
+    // A committed, then editor B restored O before A's response arrived.
+    // An identical read can retain the entire React Query data object.
+    if (!shared) mockData = editions([row]);
+    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(previewPosition()).toBe(original);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(mockApprove).not.toHaveBeenCalled();
+    await reactAct(async () => finishRead({ isSuccess: true }));
+    expect(previewPosition()).toBe(original);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 50 across, 50 down/ })).toHaveLength(2);
   });
 
   it('a delayed crop success cannot overlay a newer framing, even with structurally shared reads (SQ-1940 R3)', async () => {
@@ -658,7 +691,7 @@ describe('PressBand — focal point', () => {
     expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
   });
 
-  it('a read already carrying the saved crop needs no conflict refresh', () => {
+  it('a read already carrying the saved crop still confirms authority after success', async () => {
     const { rerender } = renderBand([PENDING_ROW]);
     const tray = openHeroFocal();
     dragHero(tray);
@@ -670,10 +703,10 @@ describe('PressBand — focal point', () => {
       images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: point })],
     }]);
     rerender(<PressBand projectId="p-1" clientFirstName="June" />);
-    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    await reactAct(async () => mockSetFocal.mock.calls[0][1].onSuccess());
     expect(previewPosition()).toBe(position);
     expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
-    expect(mockRefetchEditions).not.toHaveBeenCalled();
+    expect(mockRefetchEditions).toHaveBeenCalledTimes(1);
   });
 
   it.each([false, true])('null framing matches the Gallery default when opening or rebaselining, refresh=%s', (refresh) => {
@@ -697,7 +730,7 @@ describe('PressBand — focal point', () => {
     expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
   });
 
-  it('a second editor refetch replaces the temporary saved crop overlay (R3)', () => {
+  it('a second editor refetch replaces the confirmed saved crop (R3)', async () => {
     const current = { ...CURRENT_ROW, images: PENDING_ROW.images };
     const { rerender } = renderBand([PENDING_ROW, current]);
     const tray = openHeroFocal();
@@ -711,7 +744,7 @@ describe('PressBand — focal point', () => {
       images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: point })],
     });
     mockData = editions([withFocal(PENDING_ROW, pointA), withFocal(current, pointA)]);
-    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    await reactAct(async () => rerender(<PressBand projectId="p-1" clientFirstName="June" />));
     expect(previewPosition()).toBe(cropA);
 
     const job = document.querySelector('[data-press-job]') as HTMLElement;
@@ -720,7 +753,7 @@ describe('PressBand — focal point', () => {
     fireEvent.keyDown(handle, { key: 'ArrowLeft' });
     fireEvent.click(within(job).getByRole('button', { name: 'Use this crop' }));
     const pointB = mockSetFocal.mock.calls[1][0].focal;
-    reactAct(() => mockSetFocal.mock.calls[1][1].onSuccess());
+    await reactAct(async () => mockSetFocal.mock.calls[1][1].onSuccess());
     mockData = editions([withFocal(PENDING_ROW, pointB), withFocal(current, pointB)]);
     rerender(<PressBand projectId="p-1" clientFirstName="June" />);
     expect(previewPosition()).not.toBe(cropA);
@@ -748,8 +781,8 @@ describe('PressBand — focal point', () => {
     expect(mockSetFocal).not.toHaveBeenCalled();
   });
 
-  it('save blocks Approve while pending then preserves the saved focal and approves supported overrides', () => {
-    renderBand([PENDING_ROW]);
+  it('save blocks Approve until a post-save read confirms framing and approves supported overrides', async () => {
+    const { rerender } = renderBand([PENDING_ROW]);
     const tray = openHeroFocal();
     fireEvent.change(within(tray).getAllByLabelText('Headline')[0], { target: { value: 'New chapter' } });
     dragHero(tray);
@@ -760,14 +793,51 @@ describe('PressBand — focal point', () => {
     expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
     expect(within(tray).getByRole('button', { name: 'Set the focal point of What a-hero' })).toBeDisabled();
     reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    const point = mockSetFocal.mock.calls[0][0].focal;
+    mockData = editions([{
+      ...PENDING_ROW,
+      images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', focal: point })],
+    }]);
+    await reactAct(async () => rerender(<PressBand projectId="p-1" clientFirstName="June" />));
     expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     expect(previewPosition()).toBe(saved);
     const reopened = openHeroFocal();
-    const point = mockSetFocal.mock.calls[0][0].focal;
     expect(within(reopened).getAllByRole('button', { name: new RegExp(`^Focal point at ${Math.round(point[0] * 100)} across, ${Math.round(point[1] * 100)} down`) })).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
     expect(mockApprove.mock.calls[0][0]).toEqual({ projectId: 'p-1', editionId: 'e-5', overrides: { chapters: { 'room-living': { headline: 'New chapter' } } } });
+  });
+
+  it('an older post-save read cannot unlock a later crop save', async () => {
+    renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    const reads: ((result: { isSuccess: boolean }) => void)[] = [];
+    mockRefetchEditions.mockImplementation(() => new Promise((resolve) => { reads.push(resolve); }));
+    for (let index = 0; index < 2; index++) {
+      dragHero(tray);
+      fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+      reactAct(() => mockSetFocal.mock.calls[index][1].onSuccess());
+    }
+    expect(reads).toHaveLength(2);
+    await reactAct(async () => reads[0]({ isSuccess: true }));
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    await reactAct(async () => reads[1]({ isSuccess: true }));
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it('unmounting during a crop save leaves the next band on its authoritative read', async () => {
+    const band = renderBand([PENDING_ROW]);
+    const original = previewPosition();
+    const tray = openHeroFocal();
+    dragHero(tray);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    band.unmount();
+    await reactAct(async () => mockSetFocal.mock.calls[0][1].onSuccess());
+    renderBand([PENDING_ROW]);
+    expect(previewPosition()).toBe(original);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(mockApprove).not.toHaveBeenCalled();
   });
 
   it('failed save resets the preview and editor while retaining the save error', () => {

@@ -109,11 +109,14 @@ function FocalEditor({
   const setPlateFocal = useSetPlateFocal();
   const framing = JSON.stringify([image.focal, image.subjectBox]);
   const previousFraming = useRef(framing);
+  const wasSaving = useRef(false);
   const [initialX, initialY] = initial;
   useEffect(() => {
-    if (previousFraming.current === framing || setPlateFocal.isPending) return;
+    const finishedSave = wasSaving.current && !setPlateFocal.isPending;
+    wasSaving.current = setPlateFocal.isPending;
+    if (setPlateFocal.isPending || (previousFraming.current === framing && !finishedSave)) return;
     previousFraming.current = framing;
-    // Refreshed framing wins over a local unsaved drag. Do not interrupt a save.
+    // Read framing wins after a save too, even when ABA leaves its values unchanged.
     saved.current = [initialX, initialY];
     setFocal([initialX, initialY]);
     setMoved(false);
@@ -227,7 +230,6 @@ function FocalEditor({
               focal: [...focal],
             }, {
               onSuccess: () => {
-                saved.current = focal;
                 setMoved(false);
                 onFocalChange?.({ assetId: image.assetId, point: focal, status: 'saved' });
               },
