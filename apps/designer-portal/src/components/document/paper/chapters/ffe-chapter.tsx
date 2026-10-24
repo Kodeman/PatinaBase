@@ -19,12 +19,15 @@
  *   `sheet-focus`.
  *
  * Saving inside the sheet is the lenses' own path (`useUpdateProjectFfeSpec`
- * with `expectedRowVersion`). The Spec lens registers those saves under this
- * chapter's `autosaveOwner`, so Return to the room waits for them, and a
- * failed one keeps the sheet open with its alert and the typed value. The
- * `/doc/[id]/pieces` route keeps resolving under both renderers.
+ * with `expectedRowVersion`, and the line's build fields), saved at once. The
+ * Spec pane holds this chapter's `autosaveOwner` while a write is out or a
+ * field shows a failed draft, so Return to the room waits, and stays open on
+ * the field; it never replays a write. Choosing a Spec line re-addresses the
+ * unfold (`line=`, no new entry). The `/doc/[id]/pieces` route keeps
+ * resolving under both renderers.
  */
 
+import { useIsFetching } from '@tanstack/react-query';
 import {
   lazy,
   Suspense,
@@ -60,7 +63,7 @@ import {
   roomHeading,
 } from '@/lib/document/pieces/sheet-focus';
 
-/** How long a landing waits for the sheet's reads to answer. */
+/** How long a landing waits, once the sheet's reads have answered. */
 const LANDING_WAIT_MS = 8000;
 
 // The sheet and its lenses load on the first unfold, never with the paper.
@@ -147,7 +150,8 @@ function EmbeddedBuildRoom({
     : 'rough';
   const hostRef = useRef<HTMLDivElement>(null);
   const onNavigate = useCallback(
-    (next: BuildRoomState) => navigate({ lens: next.lens, room: next.room }),
+    (next: BuildRoomState & { line?: string | null }) =>
+      navigate({ lens: next.lens, room: next.room, line: next.line }),
     [navigate],
   );
   useSheetLanding(hostRef, { ...address, lens });
@@ -172,69 +176,175 @@ function EmbeddedBuildRoom({
   );
 }
 
+/** Keys that scroll the page: pressed, the reader is moving on her own. */
+const SCROLL_KEYS = new Set([
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+  'ArrowUp',
+  'ArrowDown',
+  ' ',
+]);
+
 /**
  * Lands the unfolded sheet where its address stands, once its reads have
  * answered: the line (opened by id) when one is named, else the room's
- * heading, else the sheet's top. Focus the reader has already moved stays
- * where she put it.
+ * heading, else the sheet's top. When the room no longer has the line, the
+ * Spec lens says so and the landing takes the line it shows instead.
+ *
+ * - It waits for the sheet to take focus to its title, then lands from there.
+ * - Its deadline starts only once the sheet's code and reads have answered
+ *   (F6). When it passes, the sheet lands on the room's heading, else its top.
+ * - It yields to the reader (F7): once she has moved focus or scrolled since
+ *   the unfold opened, it neither moves focus nor scrolls.
+ * - The line is read as a landing starts: choosing a line re-addresses the
+ *   unfold, and that is the reader's own move, not a landing.
  */
 function useSheetLanding(
   hostRef: RefObject<HTMLDivElement | null>,
   { lens, room, line }: UnfoldAddress,
 ): void {
+  const settled = useIsFetching() === 0;
+  const settledRef = useRef(settled);
+  const lineRef = useRef(line);
+  const pokeRef = useRef<(settled: boolean) => void>(() => {});
+  useEffect(() => {
+    settledRef.current = settled;
+    lineRef.current = line;
+  });
+  useEffect(() => {
+    pokeRef.current(settled);
+  }, [settled]);
+
   useEffect(() => {
     const found = hostRef.current;
     if (!found) return;
     const host: HTMLDivElement = found;
+    const addressed = lineRef.current;
+    const opener = document.activeElement;
+    let readerMoved = false;
+    let landing = false;
+    let timer: number | undefined;
+    let done = false;
+    const observer = new MutationObserver(() => attempt());
     const title = () =>
       host.querySelector<HTMLElement>(`[${BUILD_ROOM_TITLE_ATTR}]`);
-    // Focus the reader has moved on her own stays where she put it.
-    const free = () => document.activeElement === title();
-    const land = (): boolean => {
-      if (!title()) return false;
-      // The sheet moves focus to its title as it lands (BuildRoomShell), in
-      // an effect that can run after the rows are already on the page. Land
-      // once that has happened, or the title takes the line's focus back.
-      if (document.activeElement === document.body) return false;
-      if (line) {
-        const row = host.querySelector<HTMLElement>(
-          `[data-line-id="${CSS.escape(line)}"]`,
-        );
-        if (!row) return false;
-        row.scrollIntoView?.({ block: 'center' });
-        if (free()) focusLineAct(host, line);
-        return true;
+    // Before the sheet takes focus to its title, focus is on the page or
+    // still on the control that opened it.
+    const waiting = () => {
+      const active = document.activeElement;
+      return (
+        !active ||
+        active === document.body ||
+        (active === opener && active !== title())
+      );
+    };
+    const yielded = () =>
+      readerMoved || (!waiting() && document.activeElement !== title());
+
+    const landOnLine = (id: string) => {
+      const row = host.querySelector<HTMLElement>(
+        `[data-line-id="${CSS.escape(id)}"]`,
+      );
+      if (!row) return false;
+      row.scrollIntoView?.({ block: 'center' });
+      focusLineAct(host, id);
+      return true;
+    };
+    const landOnRoom = () => {
+      const heading = room ? roomHeading(host, room) : null;
+      if (!heading) return false;
+      (heading.closest('section, tbody') ?? heading).scrollIntoView?.({
+        block: 'start',
+      });
+      heading.focus({ preventScroll: true });
+      return true;
+    };
+    /** Lands where the address stands; `fallback` once the wait is over. */
+    const land = (fallback: boolean): boolean => {
+      landing = true;
+      try {
+        return landAt(fallback);
+      } finally {
+        landing = false;
+      }
+    };
+    const landAt = (fallback: boolean): boolean => {
+      if (addressed) {
+        if (landOnLine(addressed)) return true;
+        const shown = host.querySelector('[data-spec-line-missing]:not(:empty)')
+          ? host
+              .querySelector('[data-line-id] [aria-current="true"]')
+              ?.closest('[data-line-id]')
+              ?.getAttribute('data-line-id')
+          : null;
+        if (shown && landOnLine(shown)) return true;
+        if (!fallback) return false;
       }
       if (room) {
-        const heading = roomHeading(host, room);
-        if (!heading) return false;
-        (heading.closest('section, tbody') ?? heading).scrollIntoView?.({
-          block: 'start',
-        });
-        if (free()) heading.focus({ preventScroll: true });
-        return true;
+        if (landOnRoom()) return true;
+        if (!fallback) return false;
       }
       host.scrollIntoView?.({ block: 'start' });
       return true;
     };
-    const observer = new MutationObserver(() => {
-      if (land()) observer.disconnect();
-    });
-    // The title taking focus is no DOM change; it is heard here. The sheet
-    // can take it again after landing (its landing effect re-runs, as React
-    // does in development), so the title is listened to for the whole wait.
-    const onFocus = (event: FocusEvent) => {
-      if (event.target === title() && land()) observer.disconnect();
-    };
-    const timer = window.setTimeout(stop, LANDING_WAIT_MS);
-    function stop() {
-      observer.disconnect();
-      host.removeEventListener('focusin', onFocus);
-      window.clearTimeout(timer);
-    }
-    host.addEventListener('focusin', onFocus);
-    if (!land()) observer.observe(host, { childList: true, subtree: true });
-    return stop;
-  }, [hostRef, lens, room, line]);
-}
 
+    function stop() {
+      done = true;
+      observer.disconnect();
+      document.removeEventListener('focusin', onFocusIn);
+      window.removeEventListener('wheel', onReaderScroll);
+      window.removeEventListener('touchmove', onReaderScroll);
+      window.removeEventListener('keydown', onKey);
+      window.clearTimeout(timer);
+      pokeRef.current = () => {};
+    }
+    function expire() {
+      if (!done && !yielded()) land(true);
+      stop();
+    }
+    function attempt() {
+      if (done || !title()) return;
+      if (yielded()) return stop();
+      if (!waiting() && land(false)) return stop();
+      // The sheet's code is here; the wait starts once its reads answer.
+      if (timer === undefined && settledRef.current) {
+        timer = window.setTimeout(expire, LANDING_WAIT_MS);
+      }
+    }
+    // A read starting (a lens's first fetch can begin just after its rows'
+    // container is on the page) puts the wait back until it answers.
+    function onReads(settled: boolean) {
+      if (settled) return attempt();
+      window.clearTimeout(timer);
+      timer = undefined;
+    }
+    // Focus going anywhere but the sheet's title (or this landing's target)
+    // is the reader's own move.
+    function onFocusIn(event: FocusEvent) {
+      if (!landing && event.target !== title() && event.target !== opener) {
+        readerMoved = true;
+      }
+      attempt();
+    }
+    function onReaderScroll() {
+      readerMoved = true;
+      stop();
+    }
+    function onKey(event: KeyboardEvent) {
+      if (SCROLL_KEYS.has(event.key)) onReaderScroll();
+    }
+
+    observer.observe(host, { childList: true, subtree: true });
+    // The title taking focus is no DOM change; it is heard here, as is focus
+    // the reader moves elsewhere.
+    document.addEventListener('focusin', onFocusIn);
+    window.addEventListener('wheel', onReaderScroll, { passive: true });
+    window.addEventListener('touchmove', onReaderScroll, { passive: true });
+    window.addEventListener('keydown', onKey);
+    pokeRef.current = onReads;
+    attempt();
+    return stop;
+  }, [hostRef, lens, room]);
+}

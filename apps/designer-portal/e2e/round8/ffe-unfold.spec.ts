@@ -180,8 +180,10 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await test.info().attach('spec-line-landing', { body: await page.screenshot(), contentType: 'image/png' });
   });
 
-  // SQ-1891 F3 — a failed save holds Return to the room: the sheet stays
-  // open with its alert and the typed value; the retry lands and folds away.
+  // SQ-1891 F3, SQ-1894 — a failed save holds Return to the room: the sheet
+  // stays open on the field, with its alert and the typed value. Return only
+  // holds, never replays; leaving the field (pressing Return does) is its own
+  // retry of the value it shows, and once that lands the sheet folds away.
   test('a failed Spec save keeps the sheet open until a retry lands', async ({ authenticatedPage: page }) => {
     const line = livingLineId('F01 Living Room selection 09');
     const typed = `Forced-failure finish ${Date.now()}`;
@@ -213,12 +215,13 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await expect(instrument(page).getByText(/Your changes are not saved yet/)).toBeVisible({
       timeout: 30_000,
     });
-    expect(refused, 'the blur save and the close barrier both reached the server').toBeGreaterThan(0);
+    expect(refused, 'the blur save reached the server once; the hold wrote nothing').toBe(1);
     await expect(instrument(page)).toBeVisible();
     expect(unfoldParams(page).unfold).toBe('pieces');
     await expect(pane.getByRole('alert')).toContainText(/Forced failure|not saved/);
     await expect(finish).toHaveValue(typed);
-    await expect(instrument(page).locator(':focus'), 'focus stays in the sheet').toHaveCount(1);
+    await expect(finish).toHaveAttribute('aria-invalid', 'true');
+    await expect(finish, 'the hold focuses the unsaved field').toBeFocused();
     await test.info().attach('spec-save-refused', { body: await page.screenshot(), contentType: 'image/png' });
 
     await page.unroute(specWrite);

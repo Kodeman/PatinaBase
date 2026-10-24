@@ -40,7 +40,11 @@ export interface BuildRoomProps extends BuildRoomState {
   docId: string;
   canSeeMoney: boolean;
   embedded?: boolean;
-  onNavigate: (state: BuildRoomState) => void;
+  /**
+   * Push a lens or room change. Embedded, a chosen Spec line comes too
+   * (`line`), so the unfold's address names what is shown (WP-01.6).
+   */
+  onNavigate: (state: BuildRoomState & { line?: string | null }) => void;
   onReturn: () => void;
   onRequestClose?: () => void;
   /** The host resolves old proposal/lead addresses to their canonical project. */
@@ -194,6 +198,11 @@ export function BuildRoom({
           canSeeMoney={canSeeMoney}
           line={line}
           autosaveOwner={autosaveOwner}
+          onChooseLine={
+            embedded
+              ? (chosen) => onNavigate({ lens, room, line: chosen })
+              : undefined
+          }
         />
       )}
       {lens === "price" && (

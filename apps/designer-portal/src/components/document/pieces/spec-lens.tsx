@@ -69,7 +69,16 @@ export interface SpecLensProps {
   line?: string | null;
   /** WP-01.6 — the unfold host's owner, so its close waits for spec saves. */
   autosaveOwner?: BoardOwnerRef | null;
+  /**
+   * WP-01.6 — the reader chose a line: the unfold's address follows it, so a
+   * reload or a shared link opens what is shown. Absent on the `/pieces`
+   * route, where choosing a line changes no address.
+   */
+  onChooseLine?: (lineId: string) => void;
 }
+
+/** WP-01.6 — said when the address names a line this room no longer has. */
+export const SPEC_LINE_MISSING_SENTENCE = "That line is no longer in this room.";
 
 interface SpecFieldRows {
   specs: Record<string, SpecLensSpec>;
@@ -145,6 +154,7 @@ export function SpecLens({
   canSeeMoney,
   line: addressedLine = null,
   autosaveOwner = null,
+  onChooseLine,
 }: SpecLensProps) {
   const queryClient = useQueryClient();
   const { data: rawLines } = useProjectFFEItems(projectId);
@@ -171,6 +181,7 @@ export function SpecLens({
   /** Shows a line; at 390 its pane sits above the list, so it takes focus. */
   const choose = (id: string) => {
     setChosenId(id);
+    onChooseLine?.(id);
     if (stacked()) setFocusRequest((n) => n + 1);
   };
 
@@ -232,6 +243,15 @@ export function SpecLens({
       ? chosenId
       : (firstUnfinished ?? orderedIds[0] ?? null);
   const active = lines.find((l) => l.id === activeId) ?? null;
+  // The address still names a line the room's answered reads do not hold:
+  // the lens shows its own first unfinished line, and says so (WP-01.6 F4).
+  const lineMissing =
+    addressedLine != null &&
+    chosenId === addressedLine &&
+    rawLines !== undefined &&
+    placements !== undefined &&
+    roomRows !== undefined &&
+    !orderedIds.includes(addressedLine);
   const nextId = nextUnfinishedId(orderedIds, activeId, progressOf);
 
   const onSpecSaved = (saved: ProjectFfeSpec) => {
@@ -376,7 +396,15 @@ export function SpecLens({
         {next}
       </div>
       {active && (
-        <div className="order-1 min-w-0 md:order-none md:col-start-2 md:row-span-2 md:row-start-1">
+        <div className="order-1 flex min-w-0 flex-col gap-4 md:order-none md:col-start-2 md:row-span-2 md:row-start-1">
+          <p
+            role="status"
+            aria-live="polite"
+            data-spec-line-missing=""
+            className="font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)] empty:hidden"
+          >
+            {lineMissing ? SPEC_LINE_MISSING_SENTENCE : ""}
+          </p>
           <SpecFieldsPane
             key={active.id}
             projectId={projectId}

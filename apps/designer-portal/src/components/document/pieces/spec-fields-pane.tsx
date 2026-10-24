@@ -28,6 +28,7 @@ import {
   type DragEvent,
   type ReactNode,
   type Ref,
+  type RefObject,
 } from "react";
 import {
   usePlaceProductInProjectV2,
@@ -45,8 +46,7 @@ import type {
   FfeRoomPlacement,
 } from "@patina/types";
 import { LeadTimeSelect } from "@/components/portal/ffe/lead-time-select";
-import { useBufferedAutosave } from "@/hooks/use-buffered-autosave";
-import { ffeSheetAutosaveOwner } from "../paper/chapters/ffe-work-room";
+import { registerBoardOwnerAutosave } from "@/lib/proposal-autosave-registry";
 import { ProductPickerModal } from "@/components/portal/proposals/product-picker-modal";
 import { leadTimeLabel } from "@/lib/scope/lead-time";
 import { writeErrorMessage } from "@/lib/document/write-error";
@@ -189,7 +189,7 @@ const LABEL_CLS =
 const VALUE_CLS =
   "font-sans text-[15px] leading-[1.5] text-[color:var(--sheet-ink,#1A1816)]";
 const INPUT_CLS =
-  "w-full border-0 border-b border-[color:var(--sheet-rule,#D9D4CC)] bg-transparent px-0 py-1 font-sans text-[15px] leading-[1.5] text-[color:var(--sheet-ink,#1A1816)] placeholder:text-[color:var(--sheet-ink-faint,#6B655E)] focus-visible:border-[color:var(--sheet-rule-strong,#1A1816)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--clay-ink)]";
+  "w-full border-0 border-b border-[color:var(--sheet-rule,#D9D4CC)] bg-transparent px-0 py-1 font-sans text-[15px] leading-[1.5] text-[color:var(--sheet-ink,#1A1816)] placeholder:text-[color:var(--sheet-ink-faint,#6B655E)] focus-visible:border-[color:var(--sheet-rule-strong,#1A1816)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--clay-ink)] aria-[invalid=true]:border-[color:var(--color-terracotta-ink)]";
 const SENTENCE_CLS =
   "max-w-[56ch] font-sans text-[14px] leading-[1.5] text-[color:var(--sheet-ink,#1A1816)]";
 const REASON_CLS =
@@ -238,28 +238,67 @@ function Field({
   );
 }
 
+/**
+ * Decides whether a field's draft is a change worth writing. The base is the
+ * server's value, or, while a write of this field is out, the value that write
+ * sends: a draft put back to the server's value then is still a change, and
+ * is written too. Put back with nothing out, the field is clean again.
+ */
+function useFieldCommit<T>(
+  value: T,
+  same: (a: T, b: T) => boolean,
+  onSave: (next: T) => Promise<unknown>,
+  onRevert: (() => void) | undefined,
+) {
+  const sending = useRef<{ value: T } | null>(null);
+  return (next: T) => {
+    const out = sending.current;
+    if (same(next, out ? out.value : value)) {
+      if (!out) onRevert?.();
+      return;
+    }
+    const sent = { value: next };
+    sending.current = sent;
+    void onSave(next).finally(() => {
+      if (sending.current === sent) sending.current = null;
+    });
+  };
+}
+
 /** A text field written on blur or Enter, only when it changed. */
 function SpecText({
   label,
   value,
   placeholder,
   multiline,
+  unsaved,
   onSave,
+  onRevert,
 }: {
   label: string;
   value: string | null | undefined;
   placeholder?: string;
   multiline?: boolean;
-  onSave: (next: string | null) => void;
+  /** WP-01.6 — its last write failed and the draft still shows. */
+  unsaved?: boolean;
+  onSave: (next: string | null) => Promise<unknown>;
+  /** The draft is the server's value again: nothing is written. */
+  onRevert?: () => void;
 }) {
   const [draft, setDraft] = useState(value ?? "");
+  const write = useFieldCommit<string | null>(
+    value ?? null,
+    (a, b) => (a ?? "").trim() === (b ?? "").trim(),
+    onSave,
+    onRevert,
+  );
   const commit = () => {
     const next = draft.trim();
-    if (next === (value ?? "").trim()) return;
-    onSave(next === "" ? null : next);
+    write(next === "" ? null : next);
   };
   const common = {
     "aria-label": label,
+    "aria-invalid": unsaved || undefined,
     value: draft,
     placeholder,
     onBlur: commit,
@@ -287,6 +326,139 @@ function SpecText({
       )}
     </Field>
   );
+}
+
+/** A failed write the hold reports: the field's group label and its alert. */
+interface HeldField {
+  field: string;
+  message: string;
+}
+
+/**
+ * WP-01.6 — the unfolded sheet's close barrier for this pane. It HOLDS the
+ * fold; it never replays a write. Return, Esc and the sheet's back link wait
+ * while any write from this pane is out, and stay open while a field shows a
+ * failed draft (`unsaved`). Held, it puts the field's alert back and focuses
+ * the first such field: the retry is that field's own save of the value it
+ * shows. A write that fails while a close waits on it holds that close once,
+ * so its alert is seen. Unmounting (a line switch, a lens change) drops the
+ * registration: nothing detached can hold a later Return. Without an owner
+ * (the `/pieces` route) nothing registers, and each write saves at once.
+ */
+function usePaneCloseHold(
+  owner: BoardOwnerRef | null,
+  paneRef: RefObject<HTMLElement | null>,
+  showError: (message: string) => void,
+) {
+  const inFlight = useRef(new Set<Promise<void>>());
+  const unsavedRef = useRef(new Map<string, string>());
+  const [unsaved, setUnsaved] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  const failures = useRef(0);
+  const lastFailure = useRef<HeldField | null>(null);
+  const notify = useRef(() => {});
+  const showErrorRef = useRef(showError);
+  showErrorRef.current = showError;
+
+  const publish = () => {
+    setUnsaved(new Map(unsavedRef.current));
+    notify.current();
+  };
+
+  /**
+   * Tracks a write. `write` rejects with the message its alert shows; a
+   * `sticky` field (its draft stays on screen) holds until it saves or is put
+   * back. The returned promise never rejects.
+   */
+  const track = (
+    field: string,
+    sticky: boolean,
+    write: Promise<unknown>,
+  ): Promise<void> => {
+    const settled: Promise<void> = write
+      .then(
+        () => {
+          if (sticky) unsavedRef.current.delete(field);
+        },
+        (error: unknown) => {
+          const message = errorText(error, "The field was not saved.");
+          failures.current += 1;
+          lastFailure.current = { field, message };
+          if (sticky) unsavedRef.current.set(field, message);
+        },
+      )
+      .finally(() => {
+        inFlight.current.delete(settled);
+        publish();
+      });
+    inFlight.current.add(settled);
+    publish();
+    return settled;
+  };
+
+  /** The field's draft is the server's value again: it no longer holds. */
+  const clear = (field: string): string | null => {
+    const message = unsavedRef.current.get(field) ?? null;
+    if (message === null) return null;
+    unsavedRef.current.delete(field);
+    publish();
+    return message;
+  };
+
+  const ownerKind = owner?.kind;
+  const ownerId = owner?.id;
+  useEffect(() => {
+    if (!ownerKind || !ownerId) return;
+    const firstHeld = (): HeldField | null => {
+      const held = unsavedRef.current;
+      // The first in reading order, not the first to fail.
+      for (const group of paneRef.current?.querySelectorAll<HTMLElement>(
+        '[role="group"][aria-label]',
+      ) ?? []) {
+        const field = group.getAttribute("aria-label")!;
+        const message = held.get(field);
+        if (message !== undefined) return { field, message };
+      }
+      const [first] = held;
+      return first ? { field: first[0], message: first[1] } : null;
+    };
+    const registration = registerBoardOwnerAutosave(
+      { kind: ownerKind, id: ownerId },
+      {
+        getSnapshot: () => ({
+          dirty: inFlight.current.size > 0 || unsavedRef.current.size > 0,
+          flushing: inFlight.current.size > 0,
+          error: unsavedRef.current.values().next().value ?? null,
+        }),
+        flush: async () => {
+          const seen = failures.current;
+          while (inFlight.current.size > 0) {
+            await Promise.all([...inFlight.current]);
+          }
+          const held =
+            firstHeld() ??
+            (failures.current !== seen ? lastFailure.current : null);
+          if (!held) return;
+          showErrorRef.current(held.message);
+          paneRef.current
+            ?.querySelector<HTMLElement>(
+              `[role="group"][aria-label="${held.field}"]`,
+            )
+            ?.querySelector<HTMLElement>("input, select, textarea, button")
+            ?.focus();
+          throw new Error(held.message);
+        },
+      },
+    );
+    notify.current = registration.notify;
+    return () => {
+      notify.current = () => {};
+      registration.unregister();
+    };
+  }, [ownerKind, ownerId, paneRef]);
+
+  return { track, clear, unsaved };
 }
 
 type FillPick = {
@@ -398,66 +570,51 @@ export function SpecFieldsPane({
     ? (line.unit as FfeLineUnit)
     : "each";
 
-  // The latest saved row, so a queued save carries the row_version the last
-  // one answered with, not the one this render was given.
-  const latestSpec = useRef(spec);
-  useEffect(() => {
-    const held = latestSpec.current;
-    if (!spec) return;
-    if (!held || held.id !== spec.id || spec.row_version >= held.row_version) {
-      latestSpec.current = spec;
-    }
-  }, [spec]);
-
-  // WP-01.6 (F3) — in the unfolded sheet, a blur or Enter save is a buffer
-  // under the host's `autosaveOwner`: Return to the room waits for it, and a
-  // failed one holds the sheet open with the typed value and this pane's
-  // alert, retrying on the next Return. The `/pieces` route saves directly.
-  const specAutosave = useBufferedAutosave<string, SpecChanges>({
-    owner: autosaveOwner ?? ffeSheetAutosaveOwner(projectId),
-    save: async (specId, changes) => {
-      const held = latestSpec.current;
-      if (!held || held.id !== specId) {
-        throw new Error("The field was not saved.");
-      }
-      setError(null);
-      try {
-        const saved = await updateSpec.mutateAsync({
-          projectId,
-          specId,
-          expectedRowVersion: held.row_version,
-          changes,
-        });
-        latestSpec.current = { ...held, ...saved };
-        onSpecSaved(saved);
-      } catch (e) {
-        const message = errorText(e, "The field was not saved.");
-        setError(message);
-        throw new Error(message);
-      }
-    },
-  });
-
-  const saveSpec = (changes: SpecChanges) => {
-    if (!spec) return;
-    if (autosaveOwner) {
-      specAutosave.queue(spec.id, changes);
-      void specAutosave.flush(spec.id);
-      return;
-    }
-    setError(null);
-    updateSpec
-      .mutateAsync({
-        projectId,
-        specId: spec.id,
-        expectedRowVersion: spec.row_version,
-        changes,
-      })
-      .then(onSpecSaved)
-      .catch((e: unknown) =>
-        setError(errorText(e, "The field was not saved.")),
-      );
+  const paneRef = useRef<HTMLElement>(null);
+  const hold = usePaneCloseHold(autosaveOwner, paneRef, setError);
+  /** A write's refusal, shown in the pane's alert and handed to the hold. */
+  const refused = (fallback: string, format = errorText) => (e: unknown) => {
+    const message = format(e, fallback);
+    setError(message);
+    throw new Error(message);
   };
+
+  /**
+   * Writes spec columns now, as typed. `field` is the field's label; a field
+   * whose draft stays on screen (`sticky`) holds the unfolded sheet open
+   * until it saves or is put back (WP-01.6).
+   */
+  const saveSpec = (
+    field: string,
+    changes: SpecChanges,
+    sticky = true,
+  ): Promise<void> => {
+    if (!spec) return Promise.resolve();
+    setError(null);
+    return hold.track(
+      field,
+      sticky,
+      updateSpec
+        .mutateAsync({
+          projectId,
+          specId: spec.id,
+          expectedRowVersion: spec.row_version,
+          changes,
+        })
+        .then(onSpecSaved)
+        .catch(refused("The field was not saved.")),
+    );
+  };
+
+  /** A field put back to its saved value: its failure no longer holds. */
+  const revert = (field: string) => {
+    const message = hold.clear(field);
+    if (message !== null) setError((shown) => (shown === message ? null : shown));
+  };
+  const specField = (field: string) => ({
+    unsaved: autosaveOwner != null && hold.unsaved.has(field),
+    onRevert: () => revert(field),
+  });
 
   const leadTimeOverride = line.lead_time_weeks ?? null;
   const leadTimeSuggestion = suggestedLeadTimeText(
@@ -470,19 +627,25 @@ export function SpecFieldsPane({
     setError(null);
     setLeadTimeSaving(true);
     onAnnounce?.("Saving the lead time…");
-    return buildFields
+    const write = buildFields
       .mutateAsync({ projectId, itemId: line.id, leadTimeWeeks })
       .then(
         () => {
           onAnnounce?.("Lead time saved.");
-          return true;
         },
         (err: unknown) => {
           // The alert says why; clear the status so the next save is heard.
           onAnnounce?.("");
-          setError(writeErrorMessage(err, "The lead time was not saved."));
-          return false;
+          return refused("The lead time was not saved.", writeErrorMessage)(
+            err,
+          );
         },
+      );
+    void hold.track("Lead time", false, write);
+    return write
+      .then(
+        () => true,
+        () => false,
       )
       .finally(() => setLeadTimeSaving(false));
   };
@@ -515,13 +678,17 @@ export function SpecFieldsPane({
 
   const setMaker = (vendorId: string) => {
     setError(null);
-    commercials
-      .mutateAsync({ projectId, itemId: line.id, vendorId })
-      .then(() => {
-        setChoosingMaker(false);
-        addMaker.clearMatch();
-      })
-      .catch((e: unknown) => setError(errorText(e, "The maker was not set.")));
+    void hold.track(
+      "Maker",
+      false,
+      commercials
+        .mutateAsync({ projectId, itemId: line.id, vendorId })
+        .then(() => {
+          setChoosingMaker(false);
+          addMaker.clearMatch();
+        })
+        .catch(refused("The maker was not set.")),
+    );
   };
 
   const chooseMaker = (option: MakerOption) => {
@@ -529,14 +696,16 @@ export function SpecFieldsPane({
       setMaker(option.id);
       return;
     }
-    addMaker
-      .add(option.name)
-      .then((made) => {
-        if (made) setMaker(made.id);
-      })
-      .catch((e: unknown) =>
-        setError(errorText(e, "The maker was not added.")),
-      );
+    void hold.track(
+      "Maker",
+      false,
+      addMaker
+        .add(option.name)
+        .catch(refused("The maker was not added."))
+        .then((made) => {
+          if (made) setMaker(made.id);
+        }),
+    );
   };
 
   const choose = (next: {
@@ -559,7 +728,7 @@ export function SpecFieldsPane({
     // Q12: an allowance stays an allowance, ceiling and all. A fill decides
     // any other line, so it becomes fixed.
     const allowance = line.item_type === "allowance";
-    place
+    const write = place
       .mutateAsync({
         projectId,
         productId: pick.productId,
@@ -585,9 +754,8 @@ export function SpecFieldsPane({
         setPick(null);
         onFilled?.(`${needLabel} filled with ${pick.name}.`);
       })
-      .catch((e: unknown) =>
-        setError(errorText(e, "The line was not filled.")),
-      );
+      .catch(refused("The line was not filled."));
+    void hold.track("Product", false, write);
   };
 
   const saveLink = (raw: string) => {
@@ -598,7 +766,8 @@ export function SpecFieldsPane({
     }
     setImageNote(null);
     setLink("");
-    saveSpec({ selected_media: [{ url }] });
+    // The link field empties as it sends, so a refusal leaves no draft.
+    void saveSpec("Image", { selected_media: [{ url }] }, false);
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -618,6 +787,7 @@ export function SpecFieldsPane({
 
   return (
     <section
+      ref={paneRef}
       data-testid="spec-fields-pane"
       aria-label={`Spec for ${needLabel}`}
       className="flex min-w-0 flex-col gap-6"
@@ -843,19 +1013,22 @@ export function SpecFieldsPane({
               key={`finish-${spec.id}`}
               label="Finish"
               value={spec.finish}
-              onSave={(finish) => saveSpec({ finish })}
+              {...specField("Finish")}
+              onSave={(finish) => saveSpec("Finish", { finish })}
             />
             <SpecText
               key={`material-${spec.id}`}
               label="Material"
               value={spec.material}
-              onSave={(material) => saveSpec({ material })}
+              {...specField("Material")}
+              onSave={(material) => saveSpec("Material", { material })}
             />
             <SpecText
               key={`color-${spec.id}`}
               label="Color"
               value={spec.color_fabric}
-              onSave={(color_fabric) => saveSpec({ color_fabric })}
+              {...specField("Color")}
+              onSave={(color_fabric) => saveSpec("Color", { color_fabric })}
             />
             <Field label="Dimensions">
               <DimensionsField
@@ -866,8 +1039,9 @@ export function SpecFieldsPane({
                     unknown
                   > | null) ?? null
                 }
+                {...specField("Dimensions")}
                 onSave={(selected_dimensions) =>
-                  saveSpec({
+                  saveSpec("Dimensions", {
                     selected_dimensions: selected_dimensions as never,
                   })
                 }
@@ -878,14 +1052,16 @@ export function SpecFieldsPane({
               label="Exact location"
               value={spec.exact_location}
               placeholder="See drawings"
-              onSave={(exact_location) => saveSpec({ exact_location })}
+              {...specField("Exact location")}
+              onSave={(exact_location) => saveSpec("Exact location", { exact_location })}
             />
             <SpecText
               key={`notes-${spec.id}`}
               label="Notes"
               value={spec.trade_notes}
               multiline
-              onSave={(trade_notes) => saveSpec({ trade_notes })}
+              {...specField("Notes")}
+              onSave={(trade_notes) => saveSpec("Notes", { trade_notes })}
             />
           </>
         ) : (
@@ -921,15 +1097,17 @@ export function SpecFieldsPane({
             onChange={(e) => {
               if (locked) return;
               setError(null);
-              buildFields
-                .mutateAsync({
-                  projectId,
-                  itemId: line.id,
-                  unit: e.target.value as FfeLineUnit,
-                })
-                .catch((err: unknown) =>
-                  setError(errorText(err, "The unit was not saved.")),
-                );
+              void hold.track(
+                "Unit",
+                false,
+                buildFields
+                  .mutateAsync({
+                    projectId,
+                    itemId: line.id,
+                    unit: e.target.value as FfeLineUnit,
+                  })
+                  .catch(refused("The unit was not saved.")),
+              );
             }}
             className={`${INPUT_CLS} max-w-[160px]`}
           >
@@ -1051,17 +1229,29 @@ export function SpecFieldsPane({
 /** W × D × H, written when focus leaves the three fields. */
 function DimensionsField({
   value,
+  unsaved,
   onSave,
+  onRevert,
 }: {
   value: Record<string, unknown> | null;
-  onSave: (next: Record<string, unknown> | null) => void;
+  /** WP-01.6 — its last write failed and the draft still shows. */
+  unsaved?: boolean;
+  onSave: (next: Record<string, unknown> | null) => Promise<unknown>;
+  onRevert?: () => void;
 }) {
   const [draft, setDraft] = useState(value);
+  const write = useFieldCommit(
+    value,
+    (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    onSave,
+    onRevert,
+  );
   return (
     <div
+      data-unsaved={unsaved || undefined}
       onBlur={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-        if (JSON.stringify(draft) !== JSON.stringify(value)) onSave(draft);
+        write(draft);
       }}
     >
       <DimensionFields value={draft} onChange={setDraft} />
