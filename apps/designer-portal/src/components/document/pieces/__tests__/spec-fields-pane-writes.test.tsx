@@ -92,6 +92,8 @@ jest.mock("@/components/portal/proposals/product-picker-modal", () => ({
 }));
 
 import { SpecFieldsPane, type SpecLensLine, type SpecLensSpec } from "../spec-fields-pane";
+import { BuildRoomShell } from "../build-room-shell";
+import { emptyRoomCounts } from "@/lib/document/pieces/room-counts";
 
 const owner: BoardOwnerRef = { kind: "project", id: "ffe-sheet:sq-1897" };
 
@@ -221,6 +223,121 @@ beforeEach(() => {
     trade_notes: null,
     selected_media: [],
   } as unknown as SpecLensSpec;
+});
+
+function renderSheet(embedded: boolean) {
+  const onLeave = jest.fn();
+  const onRequestClose = jest.fn(() => {
+    void flushBoardOwnerAutosaves(owner).then(onLeave, () => undefined);
+  });
+  render(
+    <BuildRoomShell
+      embedded={embedded}
+      docId="p1"
+      jobName="Test job"
+      rooms={[]}
+      counts={{
+        rooms: {},
+        throughout: emptyRoomCounts(),
+        unassigned: emptyRoomCounts(),
+        job: emptyRoomCounts(),
+      }}
+      removedCount={0}
+      lens="spec"
+      room={null}
+      canSeeMoney
+      onNavigate={jest.fn()}
+      onReturn={onLeave}
+      onRequestClose={onRequestClose}
+    >
+      <Harness held={embedded} />
+    </BuildRoomShell>,
+  );
+  return { onLeave, onRequestClose };
+}
+
+function clearAndEscape(name: string) {
+  const input = field(name);
+  input.focus();
+  fireEvent.change(input, { target: { value: "" } });
+  // No synthetic blur: Esc itself must hand the clear to the pane's writer.
+  fireEvent.keyDown(input, { key: "Escape" });
+}
+
+describe.each([
+  ["standalone", false],
+  ["embedded", true],
+] as const)("clear then Esc — %s", (_mode, embedded) => {
+  it.each([
+    ["Finish", "finish"],
+    ["Notes", "trade_notes"],
+  ])("commits the cleared %s before leaving", async (name, column) => {
+    server = { ...server, [column]: "Old value" };
+    const { onLeave, onRequestClose } = renderSheet(embedded);
+    clearAndEscape(name);
+
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(mockSpecCalls[0].input).toMatchObject({
+      specId: "spec-1",
+      expectedRowVersion: 1,
+      changes: { [column]: null },
+    });
+    expect(onLeave).toHaveBeenCalledTimes(embedded ? 0 : 1);
+    if (embedded) {
+      expect(onRequestClose).toHaveBeenCalledTimes(1);
+      expect(snapshot().flushing).toBe(true);
+    }
+
+    await answer(0);
+    expect(server).toMatchObject({ [column]: null, row_version: 2 });
+    expect(onLeave).toHaveBeenCalledTimes(1);
+    expect(snapshot().dirty).toBe(false);
+    expect(mockSpecCalls).toHaveLength(1);
+  });
+});
+
+it("clear then Esc — embedded refusal keeps the clear focused and holds until its retry saves", async () => {
+  const { onLeave } = renderSheet(true);
+  clearAndEscape("Finish");
+  expect(mockSpecCalls).toHaveLength(1);
+  await refuse(0, "The clear was refused.");
+
+  expect(onLeave).not.toHaveBeenCalled();
+  expect(field("Finish")).toHaveValue("");
+  expect(field("Finish")).toHaveFocus();
+  expect(field("Finish")).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByRole("alert")).toHaveTextContent("The clear was refused.");
+  expect(snapshot().dirty).toBe(true);
+
+  clearAndEscape("Finish");
+  expect(mockSpecCalls).toHaveLength(2);
+  expect(mockSpecCalls[1].input).toMatchObject({
+    expectedRowVersion: 1,
+    changes: { finish: null },
+  });
+  await answer(1);
+  expect(onLeave).toHaveBeenCalledTimes(1);
+  expect(snapshot().dirty).toBe(false);
+});
+
+it("clear then Esc — embedded clear waits for the in-flight row writer on its acknowledged version", async () => {
+  const { onLeave } = renderSheet(true);
+  await type("Finish", "First");
+  clearAndEscape("Finish");
+  expect(mockSpecCalls).toHaveLength(1);
+  expect(onLeave).not.toHaveBeenCalled();
+
+  await answer(0);
+  expect(mockSpecCalls).toHaveLength(2);
+  expect(mockSpecCalls[1].input).toMatchObject({
+    expectedRowVersion: 2,
+    changes: { finish: null },
+  });
+  expect(onLeave).not.toHaveBeenCalled();
+  await answer(1);
+  expect(server).toMatchObject({ finish: null, row_version: 3 });
+  expect(onLeave).toHaveBeenCalledTimes(1);
+  expect(snapshot().dirty).toBe(false);
 });
 
 describe("F6: one writer per row", () => {
