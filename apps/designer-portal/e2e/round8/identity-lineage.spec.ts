@@ -34,6 +34,12 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
         OR EXISTS (SELECT 1 FROM public.leads WHERE id IN ('${id('10')}', '${id('11')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
         THEN RAISE EXCEPTION 'Nonfixture owner: refusing cleanup'; END IF;
       END $$;
+      -- Imported immutable snapshots must be detached before normal cascading cleanup.
+      -- Replica mode is transaction-local and touches only the ownership-checked fixture IDs.
+      SET LOCAL session_replication_role = replica;
+      UPDATE public.proposals SET status = 'draft', project_id = NULL
+        WHERE id IN ('${id('13')}', '${id('23')}', '${id('24')}');
+      SET LOCAL session_replication_role = origin;
       DELETE FROM public.projects WHERE id IN ('${id('15')}', '${id('16')}');
       DELETE FROM public.proposals WHERE id = '${id('24')}';
       DELETE FROM public.proposals WHERE id IN ('${id('13')}', '${id('23')}');
