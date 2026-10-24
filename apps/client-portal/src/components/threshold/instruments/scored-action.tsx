@@ -567,6 +567,7 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     const control = useRef<HTMLButtonElement | null>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const running = useRef(false);
+    const heldRect = useRef<DOMRect | null>(null);
     const pointerAt = useRef(0);
     const shown = useRef(new Set<string>());
     const shownKey = `${actionKey}:${presentation}`;
@@ -614,12 +615,17 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
 
     useEffect(() => stop, [stop]);
 
-    /* A page that scrolls under the thumb was not held. The listener lives
-       exactly as long as the hold does. */
+    /* Scroll events can arrive after focus has already settled the drawer,
+       or from another container. Only movement under the held control cancels. */
     useEffect(() => {
       if (!holding) return;
-      window.addEventListener('scroll', stop, true);
-      return () => window.removeEventListener('scroll', stop, true);
+      const stopIfMoved = () => {
+        const before = heldRect.current;
+        const now = control.current?.getBoundingClientRect();
+        if (before && now && (before.top !== now.top || before.left !== now.left)) stop();
+      };
+      window.addEventListener('scroll', stopIfMoved, true);
+      return () => window.removeEventListener('scroll', stopIfMoved, true);
     }, [holding, stop]);
 
     /** The act itself, reported once and always the same way. */
@@ -647,6 +653,7 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     const start = useCallback(() => {
       if (unavailable || running.current) return;
       running.current = true;
+      heldRect.current = control.current?.getBoundingClientRect() ?? null;
       setHolding(true);
       control.current?.style.setProperty('--hold-ms', `${holdMs}ms`);
       // The fill is a CSS transition on the pool, so it is set on the next

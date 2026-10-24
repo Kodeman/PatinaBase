@@ -103,6 +103,7 @@ describe('HoldAction — the act, held', () => {
     act(() => {
       jest.advanceTimersByTime(200);
     });
+    jest.spyOn(target, 'getBoundingClientRect').mockReturnValue({ top: -20, left: 0 } as DOMRect);
     act(() => {
       window.dispatchEvent(new Event('scroll'));
     });
@@ -111,6 +112,45 @@ describe('HoldAction — the act, held', () => {
     });
     jest.useRealTimers();
 
+    expect(onHold).not.toHaveBeenCalled();
+  });
+
+  it.each(['keyboard', 'pointer'])('keeps a %s hold through queued and unrelated scrolls that do not move the control', (input) => {
+    const { container } = draw();
+    const target = actWord();
+    jest.spyOn(target, 'getBoundingClientRect').mockReturnValue({ top: 200, left: 40 } as DOMRect);
+    const unrelated = document.createElement('div');
+    container.appendChild(unrelated);
+
+    jest.useFakeTimers();
+    if (input === 'keyboard') fireEvent.keyDown(target, { key: 'Enter' });
+    else fireEvent.pointerDown(target);
+    act(() => { jest.advanceTimersByTime(200); });
+    // Scroll events are queued: the drawer may already have settled before
+    // keydown even though its scroll event is only now delivered in capture.
+    fireEvent.scroll(container);
+    fireEvent.scroll(unrelated);
+    fireEvent.scroll(window);
+    expect(target).toHaveAttribute('data-hold-state', 'holding');
+    act(() => { jest.advanceTimersByTime(HOLD_MS - 201); });
+    expect(onHold).not.toHaveBeenCalled();
+    act(() => { jest.advanceTimersByTime(1); });
+    expect(onHold).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['keyboard', 'pointer'])('cancels a %s hold when an ancestor scroll moves the control', (input) => {
+    const { container } = draw();
+    const target = actWord();
+    const rect = jest.spyOn(target, 'getBoundingClientRect')
+      .mockReturnValue({ top: 200, left: 40 } as DOMRect);
+
+    jest.useFakeTimers();
+    if (input === 'keyboard') fireEvent.keyDown(target, { key: 'Enter' });
+    else fireEvent.pointerDown(target);
+    rect.mockReturnValue({ top: 180, left: 40 } as DOMRect);
+    fireEvent.scroll(container);
+    expect(target).toHaveAttribute('data-hold-state', 'idle');
+    act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
     expect(onHold).not.toHaveBeenCalled();
   });
 
