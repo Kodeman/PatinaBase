@@ -18,6 +18,7 @@ import { formatBudgetRange, formatTimeline } from '@/lib/document/brief-chips';
 import { TriageBar } from './triage-bar';
 import { BriefScanStrip } from './brief-scan-strip';
 import { SectionLoadingLine } from './section-loading-line';
+import { DocumentAction, DocumentActionRow } from './document-action';
 
 /** One fact (US-28 S9): a `dt`/`dd` pair, never a boxed tile. */
 function Stat({ label, value }: { label: string; value: string }) {
@@ -44,9 +45,11 @@ export function BriefSection({
    *  and its siblings already use on this page. */
   onEyebrow?: (text: string | null) => void;
 }) {
-  const { data: lead, isLoading } = useLead(leadId) as {
+  const { data: lead, isLoading, isError, refetch } = useLead(leadId) as {
     data: Record<string, any> | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
 
   const eyebrow =
@@ -90,8 +93,20 @@ export function BriefSection({
   if (isLoading) {
     return <SectionLoadingLine label="Opening the brief" className="py-3" />;
   }
+  if (isError) {
+    return (
+      <div role="alert" className="t-body-sm py-3">
+        <p>The original brief could not be read.</p>
+        <DocumentActionRow surfaceKey="brief" regionKey="read-retry">
+          <DocumentAction actionKey="retry-original-brief" variant="secondary" onClick={() => void refetch()}>
+            Retry original brief
+          </DocumentAction>
+        </DocumentActionRow>
+      </div>
+    );
+  }
   if (!lead) {
-    return <p className="py-3 text-[11.5px] text-[var(--text-muted)]">Brief unavailable.</p>;
+    return <p className="t-body-sm py-3 text-[var(--text-muted)]">Brief unavailable.</p>;
   }
 
   // The captured contact — a joined Patina homeowner if the prospect has a
