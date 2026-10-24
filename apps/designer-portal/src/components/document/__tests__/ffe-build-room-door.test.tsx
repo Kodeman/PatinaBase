@@ -95,4 +95,40 @@ describe('a Build room door on the legacy renderer', () => {
       href: buildRoomHref(DOC, { lens: 'rough', room: null }),
     });
   });
+
+  // RegionHead now forwards `onClick` on a link entry. An entry with an href
+  // and no onClick (every legacy and non-FF&E link entry) is unchanged: the
+  // same anchor, and a press of any kind follows its route.
+  it('leaves a link entry without onClick a plain link that follows its route', () => {
+    render(
+      <RegionHead
+        headingId="approvals-heading"
+        name="Approvals"
+        status="Two decisions waiting"
+        surfaceKey="document"
+        regionKey="approvals"
+        actions={[
+          { key: 'lead-act', label: 'Approve', onClick: jest.fn() },
+          { key: 'history-act', label: 'History', variant: 'tertiary', href: '/x' },
+          {
+            key: 'work-the-pieces',
+            label: 'Edit pieces & purchasing',
+            variant: 'secondary',
+            ...buildRoomDoor(DOC, { lens: 'rough', room: null }, undefined),
+          },
+        ]}
+      />,
+    );
+    for (const [name, href, variant] of [
+      ['History', '/x', 'tertiary'],
+      ['Edit pieces & purchasing', buildRoomHref(DOC, { lens: 'rough', room: null }), 'secondary'],
+    ] as const) {
+      const link = screen.getByRole('link', { name });
+      expect(link.tagName).toBe('A');
+      expect(link).toHaveAttribute('href', href);
+      expect(link).toHaveAttribute('data-action-variant', variant);
+      expect(fireEvent.click(link, { button: 0 })).toBe(true);
+      expect(fireEvent.click(link, { button: 0, metaKey: true })).toBe(true);
+    }
+  });
 });
