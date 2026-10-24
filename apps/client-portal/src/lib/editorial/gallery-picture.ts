@@ -1,5 +1,5 @@
 import { normalised, platePicture } from './crop';
-import { galleryCropPosition } from './gallery-crop';
+import { galleryCropPosition } from '@patina/utils';
 import type { EditorialAsset, PlateCropKey, Point, Rect } from './types';
 
 function renditionSubject(asset: EditorialAsset, rect: Rect): Rect | null {

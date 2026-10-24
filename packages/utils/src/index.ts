@@ -32,3 +32,5 @@ export * from './performance';
 // export * from './websocket';
 export * from './user';
 export * from './presence';
+
+export * from './gallery-crop';
