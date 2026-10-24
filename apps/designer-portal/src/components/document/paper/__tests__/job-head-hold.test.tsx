@@ -86,3 +86,44 @@ it('drops a pending Studio departure after the mounted sheet unmounts', async ()
   expect(mockPush).not.toHaveBeenCalled();
   expect(takeDeskReturn()).toBeNull();
 });
+
+
+it('holds Studio during keyed same-route restoration with a folded URL and a failed mounted write', async () => {
+  const unfolded = window.location.href;
+  const entries = [{ key: 'folded', index: 0 }, { key: 'sheet', index: 1 }];
+  let current = entries[1];
+  const navigation = Object.defineProperties(new EventTarget(), {
+    currentEntry: { get: () => current }, entries: { value: () => entries },
+  });
+  Object.defineProperty(window, 'navigation', { value: navigation, configurable: true });
+  const go = jest.spyOn(window.history, 'go').mockImplementation(() => {});
+  registerBoardOwnerAutosave(OWNER, {
+    getSnapshot: () => ({ dirty: true, flushing: false, error: 'Not saved' }),
+    flush: async () => { screen.getByRole('textbox').focus(); throw new Error('Not saved'); },
+  });
+  const view = paper();
+  try {
+    act(() => {
+      // Non-cancelable traverse has reached the folded entry. The reverse
+      // history.go is deliberately outstanding, just as between browser tasks.
+      current = entries[0];
+      window.history.replaceState({}, '', '/doc/p1');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(go).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(UNFOLD_UNSAVED_MESSAGE));
+    expect(window.location.search).toBe('');
+    expect(unfolded).toContain('unfold=pieces');
+    expect(screen.getByRole('textbox')).toHaveValue('Kept finish');
+    fireEvent.click(screen.getByRole('link', { name: 'Studio' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(UNFOLD_UNSAVED_MESSAGE));
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(takeDeskReturn()).toBeNull();
+    expect(screen.getByRole('textbox')).toHaveFocus();
+  } finally {
+    view.unmount();
+    go.mockRestore();
+    delete (window as any).navigation;
+  }
+});

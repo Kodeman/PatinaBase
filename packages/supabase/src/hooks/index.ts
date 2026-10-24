@@ -1905,6 +1905,7 @@ export {
   summarizeBoard,
   normalizeBoardOwner,
   boardOwnerQueryKeys,
+  commissionPlateQueryKeys,
 } from "./use-boards";
 export type {
   BoardOwnerInput,

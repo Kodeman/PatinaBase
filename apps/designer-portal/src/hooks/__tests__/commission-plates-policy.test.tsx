@@ -14,6 +14,7 @@ jest.mock('../../lib/error-handler', () => ({
 
 let mockBoard = { id: 'b1', project_id: null, proposal_id: 'q1', cover_image_url: 'https://cdn/old.jpg', status: 'active', updated_at: '2026-10-01' };
 let mockFailure: Error | null = null;
+let mockProposal = { id: 'q1', cover_image: null as string | null };
 const mockReads = jest.fn();
 const mockSupabase = {
   from: (table: string) => {
@@ -24,6 +25,10 @@ const mockSupabase = {
     query.eq = (key: string, value: unknown) => { filters[key] = value; return query; };
     query.update = (updates: Record<string, unknown>) => { patch = updates; return query; };
     query.single = async () => {
+      if (table === 'proposals') {
+        mockProposal = { ...mockProposal, ...patch };
+        return { data: mockProposal, error: null };
+      }
       mockBoard = { ...mockBoard, ...patch };
       return { data: mockBoard, error: null };
     };
@@ -31,7 +36,7 @@ const mockSupabase = {
       mockReads(table);
       return Promise.resolve({
         data: table === 'proposal_boards' && mockBoard.status === 'active' && mockBoard.cover_image_url &&
-          Object.entries(filters).every(([key, value]) => mockBoard[key as keyof typeof mockBoard] === value) ? [mockBoard] : [],
+          Object.entries(filters).every(([key, value]) => mockBoard[key as keyof typeof mockBoard] === value) ? [mockBoard] : table === 'proposals' && mockProposal.cover_image ? [mockProposal] : [],
         error: mockFailure,
       }).then(resolve);
     };
@@ -41,11 +46,12 @@ const mockSupabase = {
 jest.mock('../../../../../packages/supabase/src/client', () => ({ createBrowserClient: () => mockSupabase }));
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => mockSupabase,
-  boardOwnerQueryKeys: jest.requireActual('../../../../../packages/supabase/src/hooks/use-boards').boardOwnerQueryKeys,
+  commissionPlateQueryKeys: jest.requireActual('../../../../../packages/supabase/src/hooks/use-boards').commissionPlateQueryKeys,
   signBoardMediaValue: jest.requireActual('../../../../../packages/supabase/src/lib/board-storage').signBoardMediaValue,
   signProjectWorkingBoardRow: jest.requireActual('../../../../../packages/supabase/src/hooks/use-boards').signProjectWorkingBoardRow,
 }));
 
+import { useUpdateProposal } from '../../../../../packages/supabase/src/hooks/use-proposals';
 import { useUpsertBoard } from '../../../../../packages/supabase/src/hooks/use-boards';
 import { nextSubjectQueryClient } from '@/lib/react-query';
 import { useCommissionPlates } from '../use-commission-plates';
@@ -67,6 +73,8 @@ describe('commission plates under the real client policy', () => {
   beforeEach(() => {
     mockBoard = { id: 'b1', project_id: null, proposal_id: 'q1', cover_image_url: 'https://cdn/old.jpg', status: 'active', updated_at: '2026-10-01' };
     mockFailure = null;
+    mockProposal = { id: 'q1', cover_image: null };
+    mockReads.mockClear();
     client = nextSubjectQueryClient();
     wrapper = ({ children }) => createElement(QueryClientProvider, { client }, children);
   });
@@ -86,6 +94,19 @@ describe('commission plates under the real client policy', () => {
     const returned = renderHook(() => useCommissionPlates(jobs), { wrapper });
     await waitFor(() => expect(returned.result.current.plates.get('p1')?.url).toBe(expected));
     expect(mockReads.mock.calls.filter(([table]) => table === 'proposal_boards').length).toBeGreaterThan(1);
+  });
+
+  it('refreshes the proposal cover through native useUpdateProposal broad invalidation', async () => {
+    mockBoard.cover_image_url = null as any;
+    mockProposal.cover_image = 'https://cdn/proposal-old.jpg';
+    const first = renderHook(() => useCommissionPlates(jobs), { wrapper });
+    await waitFor(() => expect(first.result.current.plates.get('p1')?.url).toBe(mockProposal.cover_image));
+    first.unmount();
+    const mutation = renderHook(() => useUpdateProposal(), { wrapper });
+    const updates = { title: 'Job', cover_image: 'https://cdn/proposal-new.jpg' };
+    await act(async () => { await mutation.result.current.mutateAsync({ proposalId: 'q1', updates }); });
+    const returned = renderHook(() => useCommissionPlates(jobs), { wrapper });
+    await waitFor(() => expect(returned.result.current.plates.get('p1')?.url).toBe('https://cdn/proposal-new.jpg'));
   });
 
   it('logs an optional plate read failure without a toast and renders the name fallback', async () => {

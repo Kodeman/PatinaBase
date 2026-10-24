@@ -26,6 +26,7 @@ function mockQuery(table: string) {
 
 jest.mock('@patina/supabase', () => ({
   boardOwnerQueryKeys: jest.requireActual('../../../../../packages/supabase/src/hooks/use-boards').boardOwnerQueryKeys,
+  commissionPlateQueryKeys: jest.requireActual('../../../../../packages/supabase/src/hooks/use-boards').commissionPlateQueryKeys,
   createBrowserClient: () => ({
     storage: { from: (bucket: string) => ({ createSignedUrls: (paths: string[]) => mockSign(bucket, paths) }) },
     from: (table: string) => {
@@ -118,6 +119,13 @@ describe('useCommissionPlates', () => {
     }));
     expect(mockSign).toHaveBeenCalledWith('project-ffe-working', [path]);
     expect(mockSign).not.toHaveBeenCalledWith('proposal-mood-boards', expect.anything());
+  });
+
+  it.each([10, 40])('batches %i mixed project/proposal jobs into at most two cold database reads', async (count) => {
+    const jobs = Array.from({ length: count }, (_, index) => job('p' + index, 'p' + index, 'q' + index));
+    const { result } = renderHook(() => useCommissionPlates(jobs), { wrapper });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(mockTables).toEqual(['proposal_boards', 'proposals']);
   });
 
   it('reads nothing for a studio with no jobs', () => {
