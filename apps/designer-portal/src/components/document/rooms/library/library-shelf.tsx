@@ -61,6 +61,7 @@ export function LibraryShelf({
   onPromote,
   onNominate,
   capability = "all",
+  round8 = false,
 }: {
   layer: LibraryShelfLens;
   name: string;
@@ -74,6 +75,7 @@ export function LibraryShelf({
   onPromote?: (productId: string) => void;
   onNominate?: (productId: string) => void;
   capability?: LibraryCapabilityFilter;
+  round8?: boolean;
 }) {
   // One read per shelf, each enabled only when this lens shows it.
   const reads = {
@@ -180,6 +182,7 @@ export function LibraryShelf({
                         : null,
                     }}
                     usedOn={usageByPiece?.[it.id]}
+                    round8={round8}
                     needsTeaching={teachingIds.has(it.id)}
                     needsValidation={validationIds?.has(it.id) ?? false}
                     onDeep={onDeep}
