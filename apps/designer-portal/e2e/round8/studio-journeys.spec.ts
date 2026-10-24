@@ -91,8 +91,11 @@ test.describe('A01 studio journeys with live local rows', () => {
     expect(psqlScalar(`SELECT project_description FROM public.leads WHERE id = '${id}' AND designer_id = '${DESIGNER}';`)).toBe('Fictional studio journey, local test only.');
   });
 
-  test('an unrelated fictional designer sees a truthful empty studio, not the F01 commission', async ({ authenticatedPage: page }) => {
-    await page.context().clearCookies();
+  test('an unrelated fictional designer sees a truthful empty studio, not the F01 commission', async ({ page }) => {
+    // Playwright's fresh test context never signs in as the primary fixture actor.
+    await page.addInitScript(() => {
+      localStorage.setItem('help-system.welcome-shown.first-project-walkthrough', '1');
+    });
     await page.goto('/auth/signin?callbackUrl=%2Fdesk');
     await page.getByRole('button', { name: /sign in with email|use email and password instead|use a password instead/i }).first().click();
     await page.getByLabel(/email/i).first().fill('f01-outsider@test.invalid');
