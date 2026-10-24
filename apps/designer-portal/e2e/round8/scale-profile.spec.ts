@@ -26,38 +26,47 @@ const quantiles = (values: number[]) => {
 function capture(page: Page) {
   let phase = 'cold';
   let last = Date.now();
-  const active = new Set<Request>();
+  const active = new Map<Request, string>();
   const readinessPeak: Record<string, number> = {};
   const pending = new Set<Promise<void>>();
   const records: Array<Record<string, unknown>> = [];
   page.on('request', request => {
     if (new URL(request.url()).origin !== 'http://127.0.0.1:54321') return;
-    active.add(request); last = Date.now();
-    const readiness = [...active].filter(r => new URL(r.url()).pathname.endsWith('/rpc/get_project_ffe_readiness')).length;
+    active.set(request, phase); last = Date.now();
+    const readiness = [...active.keys()].filter(r => new URL(r.url()).pathname.endsWith('/rpc/get_project_ffe_readiness')).length;
     readinessPeak[phase] = Math.max(readinessPeak[phase] ?? 0, readiness);
   });
+  page.on('requestfinished', request => {
+    if (active.delete(request)) last = Date.now();
+  });
   page.on('requestfailed', request => {
+    if (!active.has(request)) return;
+    const atPhase = active.get(request);
     active.delete(request); last = Date.now();
-    records.push({ phase, url: request.url(), failure: request.failure()?.errorText });
+    records.push({ phase: atPhase, endpoint: new URL(request.url()).pathname, method: request.method(),
+      requestUrlBytes: Buffer.byteLength(request.url()), failure: request.failure()?.errorText });
   });
   page.on('response', response => {
     const request = response.request();
     const url = new URL(response.url());
     if (url.origin !== 'http://127.0.0.1:54321') return;
-    const atPhase = phase;
+    const atPhase = active.get(request) ?? phase;
     const work = (async () => {
       let bytes = 0;
       let rows: number | null = null;
+      let itemIds: string[] | undefined;
       let bodyError: string | null = null;
       try {
         const body = await response.body(); bytes = body.length;
         const json = JSON.parse(body.toString());
-        if (Array.isArray(json)) rows = json.length;
+        if (Array.isArray(json)) {
+          rows = json.length;
+          if (url.pathname === '/rest/v1/project_ffe_items') itemIds = json.map(row => row.id).filter(Boolean);
+        }
       } catch (error) { bodyError = String(error); }
       records.push({ phase: atPhase, endpoint: url.pathname, method: request.method(), status: response.status(),
-        bytes, rows, bodyError, durationMs: request.timing().responseEnd,
+        bytes, rows, itemIds, projectFilter: url.searchParams.get('project_id'), bodyError, durationMs: request.timing().responseEnd,
         requestUrlBytes: Buffer.byteLength(request.url()), requestBodyBytes: Buffer.byteLength(request.postData() ?? '') });
-      active.delete(request); last = Date.now();
     })();
     pending.add(work); void work.finally(() => pending.delete(work));
   });
@@ -72,16 +81,18 @@ function capture(page: Page) {
   };
 }
 
-async function dom(page: Page) {
-  return page.evaluate(() => ({ nodes: document.querySelectorAll('*').length,
+async function dom(page: Page, resourceFrom = 0) {
+  return page.evaluate(from => ({ nodes: document.querySelectorAll('*').length,
     mountedSpecRows: document.querySelectorAll('[data-testid="spec-lens"] [data-line-id]').length,
     images: document.images.length,
-    resources: performance.getEntriesByType('resource').map(entry => {
+    resourceCount: performance.getEntriesByType('resource').length,
+    resources: performance.getEntriesByType('resource').slice(from).map(entry => {
       const row = entry as PerformanceResourceTiming;
       return { url: row.name, type: row.initiatorType, transferBytes: row.transferSize, encodedBytes: row.encodedBodySize };
     }),
     vitals: (window as any).__scaleVitals,
-  }));
+    vitalsScope: 'document cumulative; warm is not an independent navigation',
+  }), resourceFrom);
 }
 
 async function chooseRoom(page: Page, name: string) {
@@ -117,11 +128,13 @@ test.describe('C00 native baseline scale profile', () => {
       const roomName = size <= 80 ? 'Living Room' : 'SQ-1975 Room 01';
       const item = JSON.parse(psqlScalar(`SELECT row_to_json(x) FROM (
         SELECT id,name,project_room_id FROM project_ffe_items WHERE project_id='${job}'
-        ${room ? `AND project_room_id='${room}'` : ''} ORDER BY name LIMIT 1) x;`));
+        ${size <= 80 ? `AND project_room_id='${LIVING}'` : ''} ORDER BY name LIMIT 1) x;`));
       const dbLines = Number(psqlScalar(`SELECT count(*) FROM project_ffe_items WHERE project_id='${job}' AND removed_at IS NULL;`));
       expect(dbLines).toBe(size <= 80 ? 80 : size);
+      page.setDefaultTimeout(15_000);
       await page.goto('about:blank');
       await page.addInitScript(() => {
+        performance.setResourceTimingBufferSize(20_000);
         const values = { cls: null as number | null, lcpMs: null as number | null, supported: PerformanceObserver.supportedEntryTypes };
         (window as any).__scaleVitals = values;
         if (values.supported.includes('layout-shift')) {
@@ -156,6 +169,11 @@ test.describe('C00 native baseline scale profile', () => {
         const visible = await sheet(page).getByTestId('spec-lens').locator('[data-line-id]').count();
         report.expectedMountedRows = size;
         report.actualMountedRows = visible;
+        report.fetchedUniqueLines = new Set(network.records
+          .filter(r => r.endpoint === '/rest/v1/project_ffe_items' && r.projectFilter === `eq.${job}`)
+          .flatMap(r => (r.itemIds ?? []) as string[])).size;
+        report.completeness = { db: dbLines, fetched: report.fetchedUniqueLines, rendered: visible, expectedRendered: size };
+        if (report.fetchedUniqueLines !== dbLines) report.failures.push(`Silent truncation: DB ${dbLines}, fetched ${report.fetchedUniqueLines}, rendered ${visible}`);
         if (visible !== size) report.failures.push(`Expected ${size} mounted lines; native view returned ${visible}`);
 
         network.setPhase('interactions');
@@ -173,10 +191,17 @@ test.describe('C00 native baseline scale profile', () => {
         const value = `SQ1975 ${size} ${info.project.name}`;
         const finish = pane(page).getByRole('textbox', { name: 'Finish', exact: true });
         const at = performance.now();
-        await finish.fill(value); await finish.press('Enter');
-        await expect.poll(() => psqlScalar(`SELECT finish FROM project_ffe_specs WHERE ffe_item_id='${item.id}';`),
-          { timeout: 30_000, message: 'stable-ID finish persisted in native DB' }).toBe(value);
-        report.saveToDbMs = performance.now() - at;
+        try {
+          await expect(finish, 'native Finish editor available').toBeVisible({ timeout: 8_000 });
+          await finish.fill(value); await finish.press('Enter');
+          await expect.poll(() => psqlScalar(`SELECT finish FROM project_ffe_specs WHERE ffe_item_id='${item.id}';`),
+            { timeout: 30_000, message: 'stable-ID finish persisted in native DB' }).toBe(value);
+          report.saveToDbMs = performance.now() - at;
+          report.stableIdEdit = 'passed';
+        } catch (error) {
+          report.failures.push(`Native edit unavailable or failed: ${String(error)}`);
+          report.stableIdEdit = 'failed';
+        }
         await network.idle();
         const filteredAt = performance.now();
         await chooseRoom(page, roomName);
@@ -184,9 +209,10 @@ test.describe('C00 native baseline scale profile', () => {
         await expect(lineControl(page, item.id)).toBeAttached();
         report.filterMs = performance.now() - filteredAt;
         await lineControl(page, item.id).click();
-        await expect(finish).toHaveValue(value);
-        report.stableIdEditFilter = 'passed';
+        if (report.stableIdEdit === 'passed') await expect(finish).toHaveValue(value);
+        report.stableIdFilter = 'passed';
         await network.idle();
+        const warmResourceFrom = await page.evaluate(() => performance.getEntriesByType('resource').length);
         network.setPhase('warm');
         const warmAt = performance.now();
         await sheet(page).getByRole('button', { name: /Return to the room/ }).click();
@@ -204,7 +230,7 @@ test.describe('C00 native baseline scale profile', () => {
           else await chooseRoom(page, 'All project selections');
         }
         await network.idle();
-        report.samples.warm = { readyMs: performance.now() - warmAt, ...await dom(page) };
+        report.samples.warm = { readyMs: performance.now() - warmAt, ...await dom(page, warmResourceFrom) };
         report.returnAndHistory = 'passed';
       } catch (error) {
         report.failures.push(String(error));
