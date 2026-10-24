@@ -15,10 +15,11 @@
  *   the unfold parameters away. Focus then returns through `return-context`.
  * - Buffered edits registered under `autosaveOwner` hold the close with a
  *   visible "Saving…" until they persist; a failed save keeps the sheet open.
- *   Back (and Forward) is held exactly like Return (story #40/#41): it is
+ *   Back (and Forward) is held exactly like Return (story #40/#41/#44): it is
  *   cancelled, or the sheet traverses back to its entry, and it completes
  *   once the save lands. A save that finishes after a re-address, a push or
- *   an unmount navigates nowhere.
+ *   an unmount navigates nowhere. Without the Navigation API, traversal
+ *   is not held (legacy parity); Return/Esc and beforeunload still hold.
  *
  * The host is never `role="dialog"` or `aria-modal`: an embedded Build room
  * reads any rendered dialog as holding Esc (SQ-1819 review).
@@ -64,16 +65,12 @@ import {
 
 /** The one key this module owns inside `history.state`. */
 export const UNFOLD_HISTORY_KEY = "__patinaUnfold";
-/** Marks the entry an unfold was pushed over, for a browser with no Navigation API. */
-const UNFOLD_UNDER_KEY = "__patinaUnfoldUnder";
 /** Fired after this module changes the URL itself (pushState fires no event). */
 const UNFOLD_CHANGE = "patina:unfold-change";
 
 interface UnfoldEntry {
   /** True when the unfold pushed this entry, so closing can go Back. */
   pushed: boolean;
-  /** The mark left on the entry it was pushed over, if it could leave one. */
-  under?: string;
   context: ReturnContext | null;
 }
 
@@ -89,35 +86,8 @@ function readEntry(state: unknown = window.history.state): UnfoldEntry | null {
   const entry = held as Partial<UnfoldEntry>;
   return {
     pushed: entry.pushed === true,
-    ...(typeof entry.under === "string" ? { under: entry.under } : null),
     context: isReturnContext(entry.context) ? entry.context : null,
   };
-}
-
-let underMarks = 0;
-/**
- * Marks the current entry as the one an unfold is pushed over. Only a state
- * Next already wrote is extended: a Back to a bare object would reload.
- */
-function markUnder(): string | undefined {
-  const state = stateRecord(window.history.state);
-  if (!state) return undefined;
-  const under = `${Date.now().toString(36)}.${(underMarks += 1)}`;
-  window.history.replaceState({ ...state, [UNFOLD_UNDER_KEY]: under }, "");
-  return under;
-}
-
-/**
- * Which way a traversal off the standing entry went, without the Navigation
- * API: a Back reaches the entry it was pushed over, so from a pushed unfold
- * anything else is a Forward. Unknown (a deep link), a Back is assumed.
- */
-function stepWithoutKeys(standing: unknown): number {
-  const under = readEntry(standing)?.under;
-  if (!under) return -1;
-  return stateRecord(window.history.state)?.[UNFOLD_UNDER_KEY] === under
-    ? -1
-    : 1;
 }
 
 function entryState(entry: UnfoldEntry | null) {
@@ -137,11 +107,9 @@ function subscribeLocation(listener: () => void): () => void {
   };
 }
 
-/** The entry an open sheet stands on: its address and its whole state. */
+/** The entry an open sheet stands on: its address and Navigation API key. */
 interface Standing {
   url: string;
-  /** Next's own keys included, so putting it back goes past Next's patch. */
-  state: unknown;
   /** Its Navigation API key, which survives a replace but not a push. */
   key: string | null;
 }
@@ -195,8 +163,6 @@ interface HeldTraversal {
   url: string;
   /** The destination entry's key: its distance is measured on resuming. */
   key: string | null;
-  /** The distance from the standing entry, where no key can be measured. */
-  delta: number;
 }
 
 /**
@@ -209,7 +175,7 @@ function resumeDistance(
   target: HeldTraversal,
 ): number | null {
   const here = navigationApi()?.currentEntry;
-  if (!target.key || !standingKey || !here?.key) return target.delta;
+  if (!target.key || !standingKey || !here?.key) return null;
   const there = keyedEntry(target.key);
   if (here.key !== standingKey || !there) return null;
   return there.index - here.index;
@@ -272,10 +238,8 @@ export function openUnfold(
     };
     window.history.replaceState(entryState(entry), "", url);
   } else {
-    const under = markUnder();
     const entry: UnfoldEntry = {
       pushed: true,
-      ...(under ? { under } : null),
       context: captureReturnContext(context, opener),
     };
     window.history.pushState(entryState(entry), "", url);
@@ -497,7 +461,6 @@ export function UnfoldInstrument({
     standing.current = address
       ? {
           url: window.location.href,
-          state: window.history.state,
           key: navigationApi()?.currentEntry?.key ?? null,
         }
       : null;
@@ -564,7 +527,6 @@ export function UnfoldInstrument({
       destination.current = {
         url: to.url,
         key: to.key ?? null,
-        delta: to.index - from,
       };
       holdBackRef.current();
     };
@@ -584,17 +546,14 @@ export function UnfoldInstrument({
       }
       const held = heldBack();
       if (held?.hold !== hold) return;
-      event.stopImmediatePropagation();
-      // Which way it went: from the entries' Navigation API indices, else
-      // from the mark left under a pushed unfold.
-      const here = navigationApi()?.currentEntry;
+      const here = navigation?.currentEntry;
       const from = keyedEntry(held.key);
-      const delta =
-        here && from ? here.index - from.index : stepWithoutKeys(held.state);
+      if (!here || !from) return;
+      event.stopImmediatePropagation();
+      const delta = here.index - from.index;
       destination.current = {
         url: window.location.href,
         key: here?.key ?? null,
-        delta,
       };
       restoring.current = true;
       window.history.go(-delta);
@@ -620,9 +579,11 @@ export function UnfoldInstrument({
     };
     guard();
     const unsubscribe = subscribeToProposalAutosaves(owner, guard);
-    backHolds.add(hold);
-    navigation?.addEventListener("navigate", onNavigate);
-    window.addEventListener("popstate", onPop, { capture: true });
+    if (navigation) {
+      backHolds.add(hold);
+      navigation.addEventListener("navigate", onNavigate);
+      window.addEventListener("popstate", onPop, { capture: true });
+    }
     return () => {
       unsubscribe();
       window.removeEventListener("beforeunload", onUnload);

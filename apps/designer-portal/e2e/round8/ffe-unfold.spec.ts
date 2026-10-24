@@ -381,7 +381,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     browserName,
   }) => {
     /**
-     * Story log #41 guarantees this cross-route hold only where the Back's
+     * Story logs #41/#42/#44 guarantee this cross-route hold only where the Back's
      * `navigate` event is cancelable. Outside Chromium (where activation is
      * granted below, so it must hold) a Back the browser makes
      * non-cancelable is the named residual: skip on that observed fact.
@@ -393,25 +393,38 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
           __sq1902Cancelable?: boolean | null;
         };
         w.__sq1902Cancelable = null;
-        w.navigation?.addEventListener(
-          'navigate',
-          (event) => {
-            w.__sq1902Cancelable = event.cancelable;
-          },
-          { once: true },
-        );
+        const desk = new URL('/desk', window.location.href).href;
+        const observe = (event: Event) => {
+          const traversal = event as Event & {
+            navigationType: string;
+            destination: { url: string };
+          };
+          if (traversal.navigationType !== 'traverse' || traversal.destination.url !== desk) return;
+          w.__sq1902Cancelable = event.cancelable;
+          w.navigation?.removeEventListener('navigate', observe);
+        };
+        w.navigation?.addEventListener('navigate', observe);
       });
       await pressBack(page);
+      await expect.poll(
+        () => page.evaluate(
+          () => typeof (window as unknown as { __sq1902Cancelable?: boolean | null }).__sq1902Cancelable,
+        ),
+        { timeout: 10_000, message: 'the matching desk traverse must report boolean cancelable' },
+      ).toBe('boolean');
       const cancelable = await page.evaluate(
-        () => (window as unknown as { __sq1902Cancelable?: boolean | null }).__sq1902Cancelable ?? null,
+        () => (window as unknown as { __sq1902Cancelable?: boolean | null }).__sq1902Cancelable,
       );
       await test.info().attach('back-navigate-cancelable', {
         body: `${browserName}: ${String(cancelable)}`,
         contentType: 'text/plain',
       });
+      if (browserName === 'chromium') {
+        expect(cancelable, 'Chromium desk Back must be cancelable').toBe(true);
+      }
       test.skip(
-        browserName !== 'chromium' && cancelable !== true,
-        `Story log #41: this ${browserName} cross-route Back fired a navigate event with cancelable=${String(cancelable)}, so it cannot be held (accepted residual).`,
+        cancelable === false,
+        `Story logs #41/#42/#44: this ${browserName} cross-route Back observed cancelable=false, so it cannot be held (accepted residual).`,
       );
     };
     const line = livingLineId('F01 Living Room selection 11');

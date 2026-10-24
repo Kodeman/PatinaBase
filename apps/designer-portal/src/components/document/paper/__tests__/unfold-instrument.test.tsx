@@ -565,111 +565,131 @@ describe("UnfoldInstrument", () => {
   // Story #40 rescinds "Back is never blocked by the pending save": Back is
   // never lost. It holds like Return and completes once the save lands.
   it("Back is never lost: a held Back completes once its save lands, in one step", async () => {
-    const { finish } = pendingBuffer();
-    render(<Paper />);
-    const opener = screen.getByRole("button", { name: "Open sofa" });
-    fireEvent.click(opener);
-    const unfolded = window.location.href;
-    const length = window.history.length;
-    fireEvent.click(screen.getByRole("button", { name: "Return to the room" }));
-    expect(await screen.findByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
-    const push = jest.spyOn(window.history, "pushState");
-    const go = jest.spyOn(window.history, "go");
+    const browser = browserNavigation();
+    try {
+      const { finish } = pendingBuffer();
+      render(<Paper />);
+      const opener = screen.getByRole("button", { name: "Open sofa" });
+      fireEvent.click(opener);
+      const unfolded = window.location.href;
+      const length = window.history.length;
+      fireEvent.click(screen.getByRole("button", { name: "Return to the room" }));
+      expect(await screen.findByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+      const push = jest.spyOn(window.history, "pushState").mockClear();
+      const go = jest.spyOn(window.history, "go");
 
-    // Held twice: it goes back to the entry, and history never grows.
-    await heldBack(go, 1);
-    expect(window.location.href).toBe(unfolded);
-    expect(window.history.length).toBe(length);
-    expect(region()).toBeInTheDocument();
-    await heldBack(go, 2);
-    expect(window.location.href).toBe(unfolded);
-    expect(window.history.length).toBe(length);
-    expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+      // Held twice: it goes back to the entry, and history never grows.
+      await heldBack(go, 1);
+      expect(window.location.href).toBe(unfolded);
+      expect(window.history.length).toBe(length);
+      expect(region()).toBeInTheDocument();
+      await heldBack(go, 2);
+      expect(window.location.href).toBe(unfolded);
+      expect(window.history.length).toBe(length);
+      expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
 
-    const backSpy = jest.spyOn(window.history, "back");
-    const landed = popstate();
-    await act(async () => finish());
-    await act(async () => landed);
-    await settle();
+      const backSpy = jest.spyOn(window.history, "back").mockClear();
+      const landed = popstate();
+      await act(async () => finish());
+      await act(async () => landed);
+      await settle();
 
-    // One step back completes it; the earlier Return's answer adds none, and
-    // the completing pop is not held again.
-    expect(go.mock.calls).toEqual([[1], [1], [-1]]);
-    expect(backSpy).not.toHaveBeenCalled();
-    expect(push).not.toHaveBeenCalled();
-    expect(window.location.search).toBe("?sheet=call");
-    expect(region()).toBeNull();
-    expect(document.activeElement).toBe(opener);
+      // One step back completes it; the earlier Return's answer adds none, and
+      // the completing pop is not held again.
+      expect(go.mock.calls).toEqual([[1], [1], [-1]]);
+      expect(backSpy).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+      expect(window.location.search).toBe("?sheet=call");
+      expect(region()).toBeNull();
+      expect(document.activeElement).toBe(opener);
+    } finally {
+      browser.restore();
+    }
   });
 
   it("a held Back whose save fails stays open, says so, and holds again", async () => {
-    const { fail } = pendingBuffer();
-    render(<Paper />);
-    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
-    const unfolded = window.location.href;
-    const go = jest.spyOn(window.history, "go");
-    const backSpy = jest.spyOn(window.history, "back");
+    const browser = browserNavigation();
+    try {
+      const { fail } = pendingBuffer();
+      render(<Paper />);
+      fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+      const unfolded = window.location.href;
+      const go = jest.spyOn(window.history, "go");
+      const backSpy = jest.spyOn(window.history, "back");
 
-    await heldBack(go, 1);
-    expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
-    await act(async () => fail());
+      await heldBack(go, 1);
+      expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+      await act(async () => fail());
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      UNFOLD_UNSAVED_MESSAGE,
-    );
-    expect(window.location.href).toBe(unfolded);
-    expect(region()).toBeInTheDocument();
-    // `back` was called once, by the test; the sheet never completes it.
-    expect(backSpy).toHaveBeenCalledTimes(1);
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        UNFOLD_UNSAVED_MESSAGE,
+      );
+      expect(window.location.href).toBe(unfolded);
+      expect(region()).toBeInTheDocument();
+      // `back` was called once, by the test; the sheet never completes it.
+      expect(backSpy).toHaveBeenCalledTimes(1);
 
-    // Still failed: the next Back holds too.
-    await heldBack(go, 2);
-    expect(window.location.href).toBe(unfolded);
-    expect(region()).toBeInTheDocument();
+      // Still failed: the next Back holds too.
+      await heldBack(go, 2);
+      expect(window.location.href).toBe(unfolded);
+      expect(region()).toBeInTheDocument();
+    } finally {
+      browser.restore();
+    }
   });
 
   it("a held Back to another document completes there once the save lands, without looping", async () => {
-    // Opened straight on the unfold (no earlier in-document entry), over /desk.
-    window.history.replaceState(null, "", "/desk");
-    window.history.pushState(null, "", DEEP_LINK);
-    const { finish } = pendingBuffer();
-    render(<Paper />);
-    expect(region()).toBeInTheDocument();
-    const length = window.history.length;
-    const push = jest.spyOn(window.history, "pushState");
-    const go = jest.spyOn(window.history, "go");
+    const browser = browserNavigation();
+    try {
+      // Opened straight on the unfold (no earlier in-document entry), over /desk.
+      window.history.replaceState(null, "", "/desk");
+      window.history.pushState(null, "", DEEP_LINK);
+      const { finish } = pendingBuffer();
+      render(<Paper />);
+      expect(region()).toBeInTheDocument();
+      const length = window.history.length;
+      const push = jest.spyOn(window.history, "pushState").mockClear();
+      const go = jest.spyOn(window.history, "go");
 
-    await heldBack(go, 1);
-    expect(window.location.pathname).toBe(`/doc/${DOC}`);
-    expect(window.history.length).toBe(length);
-    expect(region()).toBeInTheDocument();
+      await heldBack(go, 1);
+      expect(window.location.pathname).toBe(`/doc/${DOC}`);
+      expect(window.history.length).toBe(length);
+      expect(region()).toBeInTheDocument();
 
-    const landed = popstate();
-    await act(async () => finish());
-    await act(async () => landed);
-    await settle();
-    expect(window.location.pathname).toBe("/desk");
-    expect(go.mock.calls).toEqual([[1], [-1]]);
-    expect(push).not.toHaveBeenCalled();
-    expect(region()).toBeNull();
+      const landed = popstate();
+      await act(async () => finish());
+      await act(async () => landed);
+      await settle();
+      expect(window.location.pathname).toBe("/desk");
+      expect(go.mock.calls).toEqual([[1], [-1]]);
+      expect(push).not.toHaveBeenCalled();
+      expect(region()).toBeNull();
+    } finally {
+      browser.restore();
+    }
   });
 
   it("a held Back whose save finishes after the instrument unmounts navigates nowhere", async () => {
-    const { finish } = pendingBuffer();
-    const { unmount } = render(<Paper />);
-    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
-    const goSpy = jest.spyOn(window.history, "go");
-    await heldBack(goSpy, 1);
-    const before = window.location.href;
-    unmount();
-    const backSpy = jest.spyOn(window.history, "back");
+    const browser = browserNavigation();
+    try {
+      const { finish } = pendingBuffer();
+      const { unmount } = render(<Paper />);
+      fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+      const goSpy = jest.spyOn(window.history, "go");
+      await heldBack(goSpy, 1);
+      const before = window.location.href;
+      unmount();
+      const backSpy = jest.spyOn(window.history, "back").mockClear();
 
-    await act(async () => finish());
-    await settle();
-    expect(backSpy).not.toHaveBeenCalled();
-    // Only the traversal back to the entry; nothing once unmounted.
-    expect(goSpy).toHaveBeenCalledTimes(1);
-    expect(window.location.href).toBe(before);
+      await act(async () => finish());
+      await settle();
+      expect(backSpy).not.toHaveBeenCalled();
+      // Only the traversal back to the entry; nothing once unmounted.
+      expect(goSpy).toHaveBeenCalledTimes(1);
+      expect(window.location.href).toBe(before);
+    } finally {
+      browser.restore();
+    }
   });
 
   // SQ-1901 F1 / story #41 (a): a held same-route traversal the browser will
@@ -713,35 +733,39 @@ describe("UnfoldInstrument", () => {
     }
   });
 
-  it("SQ-1901 F1: with no Navigation API, a door-opened sheet still tells a held Forward from a Back", async () => {
-    // Next writes the closed paper's state, so the door can mark it.
+  it("without Navigation API, Return holds a marked failure but Back folds without manipulating history", async () => {
+    expect((window as { navigation?: unknown }).navigation).toBeUndefined();
     window.history.replaceState({}, "", `/doc/${DOC}?sheet=call`);
+    const flush = jest.fn().mockRejectedValue(new Error("The save failed."));
+    registerBoardOwnerAutosave(OWNER, {
+      getSnapshot: () => ({ dirty: true, flushing: false, error: "The save failed." }),
+      flush,
+    });
     render(<Paper />);
     fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
     const unfolded = window.location.href;
-    window.history.pushState({}, "", `/doc/${DOC}?sheet=later`);
-    const later = window.location.href;
-    await back();
-    const { finish } = pendingBuffer();
     const length = window.history.length;
     const push = jest.spyOn(window.history, "pushState");
+    const replace = jest.spyOn(window.history, "replaceState");
     const go = jest.spyOn(window.history, "go");
+    const backSpy = jest.spyOn(window.history, "back");
 
-    act(() => window.history.forward());
-    await waitFor(() => expect(go.mock.calls).toEqual([[-1]]));
-    await waitFor(() => expect(window.location.href).toBe(unfolded));
-    expect(window.history.length).toBe(length);
+    fireEvent.click(screen.getByRole("button", { name: "Return to the room" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(UNFOLD_UNSAVED_MESSAGE);
     expect(region()).toBeInTheDocument();
+    expect(window.location.href).toBe(unfolded);
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(flush).toHaveBeenCalledTimes(1);
 
-    const landed = popstate();
-    await act(async () => finish());
-    await act(async () => landed);
-    await settle();
-    expect(go.mock.calls).toEqual([[-1], [1]]);
-    expect(window.location.href).toBe(later);
-    expect(window.history.length).toBe(length);
+    act(() => window.history.back());
+    await waitFor(() => expect(region()).toBeNull());
+    expect(go).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    expect(window.history.length).toBe(length);
+    expect(window.location.search).toBe("?sheet=call");
     expect(region()).toBeNull();
+    expect(flush).toHaveBeenCalledTimes(1);
   });
 
   it("SQ-1901 F1: a held Back with no activation goes forward to its entry and goes on Back once", async () => {
@@ -809,7 +833,8 @@ describe("UnfoldInstrument", () => {
     // Its `navigate` event fires ahead of Next's popstate listener, which
     // unmounts the sheet on a Back to another route.
     const navigation = Object.assign(new EventTarget(), {
-      currentEntry: { index: 2 },
+      currentEntry: { index: 2, key: "standing" },
+      entries: () => [{ index: 0, key: "desk" }, { index: 2, key: "standing" }],
     });
     Object.defineProperty(window, "navigation", {
       value: navigation,
@@ -818,7 +843,7 @@ describe("UnfoldInstrument", () => {
     const traverse = (url: string, index: number, cancelable = true) => {
       const event = Object.assign(new Event("navigate", { cancelable }), {
         navigationType: "traverse",
-        destination: { url, index },
+        destination: { url, index, key: "desk" },
       });
       act(() => {
         navigation.dispatchEvent(event);
