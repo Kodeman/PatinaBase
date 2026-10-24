@@ -105,14 +105,14 @@ Deno.test("A2 hero pick: an index outside the candidates, a long why or a bad he
 
 const KEYS = ["cover", "house", "room-1"];
 const words = (overrides: Record<string, unknown> = {}) => ({
-  chapters: KEYS.map((key) => ({ key, headline: `The ${key}`, standing: "It stands." })),
+  chapters: KEYS.map((key) => ({ key, headline: key === "cover" ? "The rooms, as drawn" : `The ${key}`, standing: "It stands." })),
   doorstep: { standing: "Under way." },
   notice: "The page now opens on the sofa; everything else is where it was.",
   ...overrides,
 });
 
 Deno.test("B words: keys, lengths, doorstep and notice", () => {
-  const chapter = (overrides: Record<string, unknown>) => [...words().chapters.slice(0, 2), { key: "room-1", headline: "h", standing: "s", ...overrides }];
+  const chapter = (overrides: Record<string, unknown>) => [...words().chapters.slice(0, 2), { key: "room-1", headline: "The room", standing: "s", ...overrides }];
   const cases: [unknown, string][] = [
     [words({ chapters: words().chapters.slice(0, 2) }), "chapters do not match the keys asked for"],
     [words({ chapters: chapter({ key: "room-9" }) }), "unknown chapter key"],
@@ -161,4 +161,21 @@ Deno.test("F8: the judge's answer is clean, a hit, or unavailable; only ok:true 
   for (const unread of [answer("nonsense"), answer({ verdict: "fine" }), answer({ ok: "yes" }), answer({ ok: true, term: "curated" }), answer({ ok: true, term: null }, "max_tokens"), answer({ ok: false, term: "AI" }, "refusal")]) {
     assertEquals(readJudgement(unread), { verdict: "unavailable" }, JSON.stringify(unread));
   }
+});
+
+Deno.test("Gallery wording: band and menu boundaries and one short standing sentence", () => {
+  const check = (headline: string, key = "cover", standing = "It stands.") =>
+    validateWords(answer({ ...words(), chapters: [{ key, headline, standing }] }), [key]);
+  for (const headline of ["The sofa waits", "The sofa is on its way", "abcdefghijklm abcdefghijklmn abcdefghijk"]) {
+    assert(check(headline).ok, headline);
+  }
+  for (const headline of ["The sofa", "The sofa is now on its way", "abcdefghijklmno abcdefghijklmno abcdefghijk"]) {
+    assertEquals(check(headline).ok, false, headline);
+  }
+  for (const headline of ["Living room", "The living room linen"]) assert(check(headline, "room-1").ok);
+  for (const headline of ["Living", "The living room and linen"]) assertEquals(check(headline, "room-1").ok, false);
+  assert(check("The sofa waits", "cover", Array(25).fill("we").join(" ") + ".").ok);
+  assertEquals(check("The sofa waits", "cover", Array(26).fill("we").join(" ") + ".").ok, false);
+  assertEquals(check("The sofa waits", "cover", "It stands. It waits.").ok, false);
+  assert(check("  The  sofa\twaits  ").ok, "word counting follows whitespace, not empty tokens");
 });
