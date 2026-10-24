@@ -14,6 +14,15 @@ async function openStudio(page: Page) {
   const studio = page.locator('[data-studio="round8"]');
   // The first next dev compile of /desk and its round-8 chunk is slow.
   await expect(studio, 'the round-8 studio stands on /desk').toBeVisible({ timeout: 60_000 });
+  // The flag override also renders on the server; visible doors can precede
+  // hydration and the drawer's listener. Use the Desk's settled read contract.
+  await expect(studio, 'the studio has hydrated and settled its reads').toHaveAttribute('data-arrival-ready', '', {
+    timeout: 60_000,
+  });
+  await expect(page.locator('html'), 'arrival has returned interaction to the studio').not.toHaveClass(
+    /\barr-(?:pre|on|press)\b/,
+    { timeout: 30_000 },
+  );
   return studio;
 }
 
